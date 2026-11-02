@@ -1,9 +1,9 @@
 import {
   EntityDetail,
   type EntityDetailContext,
-  entityDetailBlockType,
 } from '@app/components/entity-detail/EntityDetail';
 import type { EntityDetailTarget } from '@app/components/entity-detail/entity-detail-target';
+import { entityDetailBlockType } from '@app/components/entity-detail/entity-detail-target';
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { channelsSearch } from '@app/features/channels-view/channels-route';
 import { createSearchParams, useParams } from '@app/lib/split-router';

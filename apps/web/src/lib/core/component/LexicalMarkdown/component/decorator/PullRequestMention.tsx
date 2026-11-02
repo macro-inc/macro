@@ -50,7 +50,7 @@ import {
   useContext,
 } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
-import { autoRegister } from '../../plugins';
+import { autoRegister } from '../../plugins/shared/utils';
 import { MentionTooltip } from './MentionTooltip';
 
 const GITHUB_PULL_REQUEST_SOURCE = 'github_pull_request';

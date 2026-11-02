@@ -18,8 +18,7 @@ import {
   SELECTION_CHANGE_COMMAND,
 } from 'lexical';
 import { createStore, type SetStoreFunction } from 'solid-js/store';
-
-export const DRAG_DATA_FORMAT = 'application/x-lexical-drag-block';
+import { DRAG_DATA_FORMAT } from './constants';
 
 export type DraggableBlockState = {
   hoveredElement: HTMLElement | null;

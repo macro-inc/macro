@@ -48,10 +48,17 @@ export function prefetchLatestChannelMessages(channelId: string): void {
   fireAndForget(
     Telemetry.span('channel.timeline.prefetch', async (span) => {
       span.setAttr('channel.id', channelId);
-      await queryClient.prefetchInfiniteQuery(
-        messageTimelineQueryOptions({ type: 'channel', id: channelId }, null)
-      );
+      await prefetchChannelMessages(channelId);
     }),
     'channel-timeline-prefetch'
+  );
+}
+
+/** Shared latest-page preload for block and channel navigation intent. */
+export async function prefetchChannelMessages(
+  channelId: string
+): Promise<void> {
+  await queryClient.prefetchInfiniteQuery(
+    messageTimelineQueryOptions({ type: 'channel', id: channelId }, null)
   );
 }

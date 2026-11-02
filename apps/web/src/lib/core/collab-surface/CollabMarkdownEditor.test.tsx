@@ -34,25 +34,24 @@ vi.mock('@core/component/LexicalMarkdown/constants', () => ({
 }));
 vi.mock(
   '@core/component/LexicalMarkdown/context/LexicalWrapperContext',
-  async () => {
-    const { createContext } = await import('solid-js');
-    return {
-      LexicalWrapperContext: createContext(),
-      createLexicalWrapper: () => ({
-        editor: {
-          _config: { namespace: 'collab-surface' },
-          focus: () => {},
-          registerUpdateListener: () => () => {},
-          setEditable: () => {},
-          setRootElement: () => {},
-        },
-        plugins: fakes.plugins,
-        cleanup: () => {},
-        mapping: {},
-      }),
-    };
-  }
+  async () => ({
+    LexicalWrapperContext: (await import('solid-js')).createContext(),
+  })
 );
+vi.mock('@core/component/LexicalMarkdown/context/createLexicalWrapper', () => ({
+  createLexicalWrapper: () => ({
+    editor: {
+      _config: { namespace: 'collab-surface' },
+      focus: () => {},
+      registerUpdateListener: () => () => {},
+      setEditable: () => {},
+      setRootElement: () => {},
+    },
+    plugins: fakes.plugins,
+    cleanup: () => {},
+    mapping: {},
+  }),
+}));
 vi.mock('@core/component/LexicalMarkdown/editing/entityDrop', () => ({
   useEditorEntityDrop: () => () => {},
 }));

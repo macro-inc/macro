@@ -11,7 +11,7 @@ const config: CodegenConfig = {
     'src/lib/service-clients/service-storage/graphql/generated/graphql.ts': {
       plugins: [
         'typescript-operations',
-        'typed-document-node',
+        './scripts/shared-typed-document-node-codegen.ts',
         {
           './scripts/graphql-cache-only-projection-codegen.ts': {
             // Only hydration consumes a result with cache-only fields removed.

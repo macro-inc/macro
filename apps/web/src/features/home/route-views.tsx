@@ -10,13 +10,14 @@ import {
 } from '@components/app/split-layout/split-router/app-route-shell';
 import { useViewRestoration } from '@components/app/split-layout/view-restoration';
 import { Show } from 'solid-js';
+import { HomePendingView } from './home-pending-view';
 import {
   homeCalendarLegacyTarget,
   homeDetailParamsFromRoute,
   homePreviewLegacyTarget,
 } from './home-route';
 import type { HomePreviewRouteParams } from './home-route-schema';
-import { HomePendingView, HomeView } from './home-view';
+import { HomeView } from './home-view';
 
 type HomeDetailParams = Partial<HomePreviewRouteParams> & {
   channelId?: string;

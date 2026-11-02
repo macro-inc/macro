@@ -69,17 +69,19 @@ vi.mock('../context/AgentSessionContext', () => ({
     registerQuoteInsert: vi.fn(),
   }),
 }));
-vi.mock('../ui', () => ({
+vi.mock('../ui/composer', () => ({
   AgentInput: (props: AgentInputProps) => {
     mocks.input = props;
     return <div>{props.modelControl}</div>;
   },
-  AgentModelSelector: (props: AgentModelSelectorProps) => {
-    mocks.model = props;
-    return null;
-  },
   QueuedPrompts: (props: QueuedPromptsProps) => {
     mocks.queued = props;
+    return null;
+  },
+}));
+vi.mock('../ui', () => ({
+  AgentModelSelector: (props: AgentModelSelectorProps) => {
+    mocks.model = props;
     return null;
   },
   ComposerNotice: () => null,

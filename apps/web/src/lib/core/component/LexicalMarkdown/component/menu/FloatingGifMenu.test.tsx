@@ -3,10 +3,8 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { $createParagraphNode, $getRoot } from 'lexical';
 import { createSignal, onCleanup } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import {
-  createLexicalWrapper,
-  LexicalWrapperContext,
-} from '../../context/LexicalWrapperContext';
+import { createLexicalWrapper } from '../../context/createLexicalWrapper';
+import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { TRY_INSERT_GIF_COMMAND } from '../../plugins/gif';
 import { FloatingGifMenu } from './FloatingGifMenu';
 

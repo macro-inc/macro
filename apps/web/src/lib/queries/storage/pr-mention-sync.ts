@@ -1,12 +1,12 @@
 import { queryClient } from '@queries/client';
 import type { ForeignEntity } from '@service-storage/generated/schemas';
-import { getForeignEntityResponse } from '@service-storage/generated/zod';
+import { getGetForeignEntityResponseSchema } from '@service-storage/generated/zod';
 import { pullRequestMentionKeys } from './keys';
 
 export async function handlePullRequestUpdated(
   payload: unknown
 ): Promise<void> {
-  const parsed = getForeignEntityResponse.safeParse(payload);
+  const parsed = getGetForeignEntityResponseSchema().safeParse(payload);
   if (
     !parsed.success ||
     parsed.data.foreignEntitySource !== 'github_pull_request'

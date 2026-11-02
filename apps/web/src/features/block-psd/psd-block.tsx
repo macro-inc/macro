@@ -1,4 +1,5 @@
 import { reloadApp } from '@app/observability/reload';
+import { getShareDrawerRecipientInput } from '@core/component/TopBar/share-drawer-focus';
 /**
  * The Photoshop block: app chrome (header, file menu, sharing) around the
  * editor, wired to the worker engine, live collaboration, and document
@@ -20,10 +21,7 @@ import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { FileTypeChip } from '@core/component/FileTypeChip';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  getShareDrawerRecipientInput,
-  ShareTrigger,
-} from '@core/component/TopBar/ShareButton';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { useUserId } from '@core/context/user';
 import { blockDataSignal } from '@core/internal/BlockLoader';

@@ -23,8 +23,8 @@ import { COMMAND_PRIORITY_NORMAL, KEY_ENTER_COMMAND } from 'lexical';
 import type { JSX } from 'solid-js';
 import { createMemo, Suspense, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
-import { autoRegister } from '../../plugins';
 import { removeNodeAndRestoreSelection } from '../../plugins/shared/removeNodeAndRestoreSelection';
+import { autoRegister } from '../../plugins/shared/utils';
 import { openDocument } from '../core/BlockLink';
 import { MentionTooltip } from './MentionTooltip';
 

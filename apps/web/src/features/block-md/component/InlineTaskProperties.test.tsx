@@ -64,10 +64,8 @@ vi.mock('@service-connection/websocket', () => ({
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: mocks.projectsEnabled }),
 }));
-vi.mock('@entity', () => ({
-  InlineEntity: () => null,
-  isTaskEntity: () => false,
-}));
+vi.mock('@entity/composed/InlineEntity', () => ({ InlineEntity: () => null }));
+vi.mock('@entity/types/entity', () => ({ isTaskEntity: () => false }));
 vi.mock('@entity/extractors-property', () => ({
   buildTaskProjectDefaultProperty: () => ({
     propertyId: 'pending:project',

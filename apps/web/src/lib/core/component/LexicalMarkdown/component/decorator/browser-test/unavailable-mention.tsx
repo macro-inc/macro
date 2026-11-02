@@ -25,10 +25,8 @@ import { QueryClientProvider } from '@tanstack/solid-query';
 import { $createNodeSelection, $setSelection } from 'lexical';
 import { For, onCleanup } from 'solid-js';
 import { render } from 'solid-js/web';
-import {
-  createLexicalWrapper,
-  LexicalWrapperContext,
-} from '../../../context/LexicalWrapperContext';
+import { createLexicalWrapper } from '../../../context/createLexicalWrapper';
+import { LexicalWrapperContext } from '../../../context/LexicalWrapperContext';
 import { selectionDataPlugin } from '../../../plugins';
 import { channelTheme } from '../../../theme';
 import { setEditorStateFromMarkdown } from '../../../utils';

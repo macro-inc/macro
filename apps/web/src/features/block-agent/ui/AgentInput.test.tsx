@@ -16,7 +16,8 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { Portal } from 'solid-js/web';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AGENT_INPUT_TEXT_AREA_ID, AgentInput } from './AgentInput';
+import { AgentInput } from './AgentInput';
+import { AGENT_INPUT_TEXT_AREA_ID } from './agent-input-constants';
 
 vi.mock('@service-connection/websocket', () => ({
   ws: { addEventListener: vi.fn(), send: vi.fn() },

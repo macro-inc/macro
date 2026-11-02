@@ -1,9 +1,7 @@
 import { blockNameToFileExtensionSet } from '@core/constant/allBlocks';
 import { staticFileIdEndpoint } from '@core/constant/servers';
 import { heicConversionService } from '@core/heic/service';
-import type { FetchError } from '@core/service';
 import { fireAndForget } from '@core/util/fireAndForget';
-import type { ResultError } from '@core/util/result';
 import {
   createStaticUploadFile,
   createUploadFile,
@@ -23,7 +21,6 @@ import {
   VideoNode,
 } from '@macro-inc/lexical-core';
 import { Telemetry } from '@macro-inc/observability';
-import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
 import { fileExtension } from '@service-storage/util/filename';
 import {
   $createNodeSelection,
@@ -35,78 +32,35 @@ import {
   $isRangeSelection,
   $setSelection,
   COMMAND_PRIORITY_NORMAL,
-  createCommand,
   KEY_BACKSPACE_COMMAND,
   KEY_DELETE_COMMAND,
-  type LexicalCommand,
   type LexicalEditor,
   type NodeKey,
   type NodeMutation,
 } from 'lexical';
-import { ok, type Result, ResultAsync } from 'neverthrow';
+import { ResultAsync } from 'neverthrow';
 import { $insertNodesAndSplitList } from '../../utils';
 import { mapRegisterDelete } from '../shared';
 
-type DSSMedia = {
-  type: 'dss';
-  id: string;
-};
+import {
+  INSERT_MEDIA_COMMAND,
+  ON_MEDIA_COMPONENT_MOUNT_COMMAND,
+  TRY_INSERT_MEDIA_UPLOAD_COMMAND,
+  UPDATE_MEDIA_SIZE_COMMAND,
+  UPLOAD_MEDIA_FAILURE_COMMAND,
+  UPLOAD_MEDIA_START_COMMAND,
+  UPLOAD_MEDIA_SUCCESS_COMMAND,
+} from './commands';
 
-type SFSMedia = {
-  type: 'sfs';
-  id: string;
-};
-
-type LocalMedia = {
-  type: 'local';
-  url: string;
-  file: File;
-};
-
-type URLMedia = {
-  type: 'url';
-  url: string;
-};
-
-type MediaSource = DSSMedia | SFSMedia | LocalMedia | URLMedia;
-
-type MediaCreationPayload = Exclude<MediaSource, 'file'> & {
-  alt?: string;
-  mediaType: MediaType;
-  constrainedMediaDimensions?: { width: number; height: number };
-};
-
-export const INSERT_MEDIA_COMMAND: LexicalCommand<MediaCreationPayload> =
-  createCommand('INSERT_MEDIA_COMMAND');
-
-export const UPLOAD_MEDIA_SUCCESS_COMMAND: LexicalCommand<
-  [NodeKey, string, MediaType]
-> = createCommand('UPLOAD_MEDIA_SUCCESS_COMMAND');
-
-export const UPLOAD_MEDIA_FAILURE_COMMAND: LexicalCommand<
-  [NodeKey, MediaType]
-> = createCommand('UPLOAD_MEDIA_FAILURE_COMMAND');
-
-export const UPLOAD_MEDIA_START_COMMAND: LexicalCommand<[NodeKey, MediaType]> =
-  createCommand('UPLOAD_MEDIA_START_COMMAND');
-
-export const ON_MEDIA_COMPONENT_MOUNT_COMMAND: LexicalCommand<
-  [NodeKey, MediaType]
-> = createCommand('ON_MEDIA_COMPONENT_MOUNT_COMMAND');
-
-export const UPDATE_MEDIA_SIZE_COMMAND: LexicalCommand<
-  [NodeKey, { width: number; height: number }, MediaType]
-> = createCommand('UPDATE_MEDIA_SIZE_COMMAND');
-
-type MediaPick = MediaType | 'all';
-
-export const TRY_INSERT_MEDIA_UPLOAD_COMMAND: LexicalCommand<
-  | MediaPick
-  | {
-      mediaType: MediaPick;
-      constrainedMediaDimensions: { width: number; height: number };
-    }
-> = createCommand('TRY_INSERT_MEDIA_UPLOAD_COMMAND');
+export {
+  INSERT_MEDIA_COMMAND,
+  ON_MEDIA_COMPONENT_MOUNT_COMMAND,
+  TRY_INSERT_MEDIA_UPLOAD_COMMAND,
+  UPDATE_MEDIA_SIZE_COMMAND,
+  UPLOAD_MEDIA_FAILURE_COMMAND,
+  UPLOAD_MEDIA_START_COMMAND,
+  UPLOAD_MEDIA_SUCCESS_COMMAND,
+} from './commands';
 
 function validateMediaFile(file: UploadFile, mediaType: MediaType): boolean {
   const ext = fileExtension(file.name);
@@ -131,26 +85,6 @@ export async function addMediaFromFile(
     constrainedMediaDimensions,
   });
   return { success: true };
-}
-
-/**
- * Get the URL for media based on its source type.
- */
-export async function getMediaUrl(src: {
-  type: string;
-  id: string;
-  url: string;
-}): Promise<Result<string, ResultError<FetchError | 'INVALID_DOCUMENT'>[]>> {
-  if (src.type === 'local' || src.type === 'url') return ok(src.url);
-  if (src.type === 'sfs') {
-    const url = staticFileIdEndpoint(src.id);
-    return ok(url);
-  }
-  if (src.type === 'dss') {
-    return (await fetchBinaryDocumentData(src.id)).map((res) => res.blobUrl);
-  }
-  console.warn('Get media url failed for src:', src);
-  return ok('');
 }
 
 /**
@@ -274,24 +208,6 @@ function $safeInsertMediaNode(node: ImageNode | VideoNode) {
     }
   }
   $insertNodesAndSplitList([node]);
-}
-
-/**
- * Upgrade DSS media URL after document checks.
- */
-export function $upgradeDSSMediaUrl(
-  key: NodeKey,
-  url: string,
-  mediaType: MediaType
-) {
-  const node = $getNodeByKey(key);
-  if (!node) return;
-
-  if (mediaType === 'image' && $isImageNode(node)) {
-    node.setUrl(url, false);
-  } else if (mediaType === 'video' && $isVideoNode(node)) {
-    node.setUrl(url, false);
-  }
 }
 
 function registerMediaPlugin(editor: LexicalEditor) {
@@ -608,3 +524,5 @@ function registerMediaPlugin(editor: LexicalEditor) {
 export function mediaPlugin() {
   return (editor: LexicalEditor) => registerMediaPlugin(editor);
 }
+
+export { $upgradeDSSMediaUrl, getMediaUrl } from './source';

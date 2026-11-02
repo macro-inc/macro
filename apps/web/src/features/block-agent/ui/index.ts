@@ -1,8 +1,8 @@
 /**
- * Pure component library for rendering agent sessions.
+ * Presentation components for rendering agent sessions. Interactive editors
+ * live in ./composer so status/activity consumers do not load editing code.
  *
- * Everything here is props-in, JSX-out — no contexts, no queries. Several
- * components are ports from opencode (github.com/sst/opencode, MIT © 2025
+ * Several components are ports from opencode (github.com/sst/opencode, MIT © 2025
  * opencode); see individual file headers.
  */
 
@@ -17,14 +17,11 @@ export {
   type PermissionOptionsProps,
 } from '@app/features/agent-interactions/components/PermissionOptions';
 export { ActionLine, type ActionLineProps } from './ActionLine';
-export {
-  AGENT_INPUT_TEXT_AREA_ID,
-  AgentInput,
-  type AgentInputProps,
-  type QuoteInsert,
-} from './AgentInput';
+// Interactive editors belong to ./composer; presentation consumers stay independent.
+export type { AgentInputProps, QuoteInsert } from './AgentInput';
 export { AgentModelSelector } from './AgentModelSelector';
 export { AnimatedNumber } from './AnimatedNumber';
+export { AGENT_INPUT_TEXT_AREA_ID } from './agent-input-constants';
 export {
   ComposerNotice,
   type ComposerNoticeProps,
@@ -41,11 +38,7 @@ export { FoldedPathList } from './FoldedPathList';
 export { FoldedTerminal } from './FoldedTerminal';
 export { PierreDiff } from './PierreDiff';
 export { QuestionAnswers, type QuestionAnswersProps } from './QuestionAnswers';
-export {
-  type QueuedPromptItem,
-  QueuedPrompts,
-  type QueuedPromptsProps,
-} from './QueuedPrompts';
+export type { QueuedPromptItem, QueuedPromptsProps } from './QueuedPrompts';
 export {
   type SessionStatusLike,
   SessionStatusPill,

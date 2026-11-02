@@ -72,8 +72,8 @@ import { render } from 'solid-js/web';
 import { match } from 'ts-pattern';
 import { CollabProvider } from '../collaboration/CollabProvider';
 import type { MarkdownEditorErrors } from '../constants';
+import { createLexicalWrapper } from '../context/createLexicalWrapper';
 import {
-  createLexicalWrapper,
   isWrapperWithIds,
   LexicalWrapperContext,
 } from '../context/LexicalWrapperContext';

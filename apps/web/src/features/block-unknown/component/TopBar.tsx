@@ -6,14 +6,11 @@ import {
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
-
 import { useBlockId } from '@core/block';
 import { FileTypeChip } from '@core/component/FileTypeChip';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  getShareDrawerRecipientInput,
-  ShareTrigger,
-} from '@core/component/TopBar/ShareButton';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import { getShareDrawerRecipientInput } from '@core/component/TopBar/share-drawer-focus';
 import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,

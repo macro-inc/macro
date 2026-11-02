@@ -30,12 +30,9 @@ import { useIsAuthenticated } from '@core/auth';
 import {
   type BlockAlias,
   type BlockName,
-  createBlockEffect,
-  createBlockResource,
   isInBlock,
   useBlockAliasedName,
   useBlockId,
-  useBlockName,
   useMaybeBlockAliasedName,
   useMaybeBlockId,
 } from '@core/block';
@@ -58,8 +55,6 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
-import { blockEditPermissionEnabledSignal } from '@core/signal/load';
-import { useIsDocumentOwner } from '@core/signal/permissions';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { ResultError } from '@core/util/result';
 import { buildSimpleEntityUrl } from '@core/util/url';
@@ -67,15 +62,11 @@ import { useCopyLink } from '@core/util/useCopyLink';
 import { OwnerLabel } from '@entity/owner/owner-display';
 import IconShared from '@icon/share.svg';
 import ChevronDownIcon from '@icon/system/regular/caret-down.svg';
-import IconComment from '@icon/system/regular/chat-teardrop.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
-import IconEye from '@icon/system/regular/eye.svg';
 import IconLink from '@icon/system/regular/link.svg';
-import IconEdit from '@icon/system/regular/pencil.svg';
 import UserCircle from '@icon/system/regular/user-circle.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
-import IconX from '@icon/system/regular/x.svg';
 import { updateAgentSessionSharePermissions } from '@queries/agent-session/share-permissions';
 import {
   setCallRecordTeamShareCache,
@@ -85,9 +76,8 @@ import {
 } from '@queries/call/call';
 import { updateExternalChatPermissions } from '@queries/external-chats/share-permissions';
 import { updateInitiativeSharePermissions } from '@queries/initiative/share-permissions';
+import { permissionsBlockResource } from '@queries/share/block-share-permissions';
 import {
-  fetchSharePermissions,
-  invalidateSharePermissions,
   prefetchShareChannelNames,
   prefetchSharePermissions,
   shareChannelNamesQueryOptions,
@@ -165,6 +155,8 @@ import {
   teamShareScopeOptionsForItem,
 } from './linkShare';
 import { ShareDialogFrame, ShareDialogTitle } from './ShareDialogFrame';
+import { accessLevelText, ShareOptions } from './ShareOptions';
+import { getShareDrawerRecipientInput } from './share-drawer-focus';
 
 false && clickOutside;
 
@@ -266,64 +258,6 @@ function forwardTarget(
     entity: { entity_type: 'initiative', entity_id: id },
     prepareChannel,
   };
-}
-
-const permissionsBlockResource = createBlockResource(
-  () => {
-    const isOwner = useIsDocumentOwner();
-    return isOwner();
-  },
-  async () => {
-    const id = useBlockId();
-    const blockName = useBlockName();
-    const itemType = blockNameToItemType(blockName);
-    return fetchSharePermissions(id, itemType);
-  },
-  { initialValue: undefined }
-);
-
-createBlockEffect(() => {
-  const [, { refetch }] = permissionsBlockResource;
-  setRefetchArray((prev) => [...prev, refetch]);
-  onCleanup(() => {
-    setRefetchArray((prev) => prev.filter((r) => r !== refetch));
-  });
-});
-
-const accessLevelText = (accessLevel?: AccessLevel | null) => {
-  const blockName = isInBlock() ? useBlockName() : undefined;
-  switch (accessLevel) {
-    case 'comment':
-      if (blockName === 'md' && !ENABLE_MARKDOWN_COMMENTS) {
-        return 'View';
-      }
-      return 'Comment';
-    case 'view':
-      return 'View';
-    case 'edit':
-      return 'Edit';
-    case 'owner':
-      return 'Owner';
-    default:
-      return 'Remove Access';
-  }
-};
-
-const [refetchArray, setRefetchArray] = createSignal<(() => void)[]>([]);
-export const refetchDocumentShareButtonResource = () => {
-  invalidateSharePermissions();
-  const refetchArray_ = refetchArray();
-  if (refetchArray_.length === 0) {
-    console.warn('no document share permission refetch functions initialized');
-    return;
-  }
-  refetchArray_.forEach((refetch) => refetch());
-};
-
-export function getShareDrawerRecipientInput(): HTMLElement | null {
-  return document.querySelector<HTMLElement>(
-    '[data-share-drawer-recipient] input'
-  );
 }
 
 interface ShareModalProps extends ManagedDialogProps {
@@ -2363,160 +2297,5 @@ export function ShareTrigger(props: {
         </CopyButton>
       </div>
     </HeaderActionGroup>
-  );
-}
-
-const PERMISSION_ICONS = {
-  comment: IconComment,
-  view: IconEye,
-  edit: IconEdit,
-} as const;
-
-export function ShareOptions(props: {
-  editPermissionEnabled?: boolean;
-  setPermissions: (accessLevel: AccessLevel | null) => void;
-  permissions?: AccessLevel | null;
-  hideNoAccess?: boolean;
-  label?: string | '';
-  disabled?: boolean;
-  noBorder?: boolean;
-  /** Grants this recipient can hold; removal stays governed by `hideNoAccess`. */
-  allowedAccessLevels?: readonly AccessLevel[];
-}) {
-  const blockEditPermissionEnabled = isInBlock()
-    ? blockEditPermissionEnabledSignal
-    : () => true;
-  const editPermissionEnabled = () =>
-    props.editPermissionEnabled ?? blockEditPermissionEnabled();
-  const blockName = isInBlock() ? useBlockName() : undefined;
-
-  const options = createMemo(() => {
-    const optionsList: { value: string; label: string }[] = [];
-
-    // Always add view option
-    optionsList.push({
-      value: 'view',
-      label: `Can ${accessLevelText('view').toLowerCase()}`,
-    });
-
-    // Add comment option if applicable
-    if (blockName !== 'md' || ENABLE_MARKDOWN_COMMENTS) {
-      optionsList.push({
-        value: 'comment',
-        label: `Can ${accessLevelText('comment').toLowerCase()}`,
-      });
-    }
-
-    // Add edit option if enabled
-    if (editPermissionEnabled()) {
-      optionsList.push({
-        value: 'edit',
-        label: `Can ${accessLevelText('edit').toLowerCase()}`,
-      });
-    }
-
-    // Add no access option if not hidden
-    if (!props.hideNoAccess) {
-      optionsList.push({ value: 'none', label: accessLevelText(null) });
-    }
-
-    const allowed = props.allowedAccessLevels;
-    return allowed
-      ? optionsList.filter(
-          (option) =>
-            option.value === 'none' ||
-            allowed.includes(option.value as AccessLevel)
-        )
-      : optionsList;
-  });
-
-  const currentValue = createMemo(() => {
-    if (props.permissions === null) return 'none';
-    return props.permissions || 'none';
-  });
-
-  const currentValueText = createMemo(() => {
-    const value = currentValue();
-    if (value === 'none') return accessLevelText(null);
-    return (
-      options().find((option) => option.value === value)?.label ??
-      accessLevelText(value as AccessLevel)
-    );
-  });
-
-  const CurrentIcon = createMemo(() => {
-    const value = currentValue();
-    if (value === 'none') return IconX;
-    return PERMISSION_ICONS[value as keyof typeof PERMISSION_ICONS];
-  });
-
-  const [isOpen, setIsOpen] = createSignal(false);
-
-  const handleChange = (value: string) => {
-    setIsOpen(false);
-    if (value === 'none') {
-      props.setPermissions(null);
-    } else {
-      props.setPermissions(value as AccessLevel);
-    }
-  };
-
-  return (
-    <Dropdown modal={false} open={isOpen()} onOpenChange={setIsOpen}>
-      <Dropdown.Trigger
-        variant="secondary"
-        disabled={props.disabled}
-        class={`min-w-16.75 py-1 pl-2 pr-1 flex items-center gap-1 ${props.noBorder ? 'border-0 sm:border' : ''}`}
-        on:keydown={(e: KeyboardEvent) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.stopPropagation();
-            e.preventDefault();
-            setIsOpen((prev) => !prev);
-          }
-        }}
-      >
-        <Dynamic component={CurrentIcon()} class="size-4 shrink-0" />
-        {currentValueText()}
-        <ChevronDownIcon class="size-4 text-ink-extra-muted" />
-      </Dropdown.Trigger>
-      <Dropdown.Content portalScope="local">
-        <Dropdown.RadioGroup value={currentValue()} onChange={handleChange}>
-          <Dropdown.Group>
-            <For each={options().filter((o) => o.value !== 'none')}>
-              {(option) => {
-                const Icon =
-                  PERMISSION_ICONS[
-                    option.value as keyof typeof PERMISSION_ICONS
-                  ];
-                return (
-                  <Dropdown.RadioItem value={option.value}>
-                    <div class="size-4 shrink-0">
-                      {Icon && <Icon class="size-full" />}
-                    </div>
-                    <span class="flex-1 truncate">{option.label}</span>
-                    <Dropdown.ItemIndicator>
-                      <CheckIcon class="size-3.5 text-accent" />
-                    </Dropdown.ItemIndicator>
-                  </Dropdown.RadioItem>
-                );
-              }}
-            </For>
-          </Dropdown.Group>
-          <Show when={!props.hideNoAccess}>
-            <Dropdown.Group>
-              <Dropdown.RadioItem value="none">
-                <div class="size-4 shrink-0">
-                  <IconX class="size-full" />
-                </div>
-                <span class="flex-1 truncate">{accessLevelText(null)}</span>
-                <Dropdown.ItemIndicator>
-                  <CheckIcon class="size-3.5 text-accent" />
-                </Dropdown.ItemIndicator>
-              </Dropdown.RadioItem>
-            </Dropdown.Group>
-          </Show>
-        </Dropdown.RadioGroup>
-      </Dropdown.Content>
-    </Dropdown>
   );
 }

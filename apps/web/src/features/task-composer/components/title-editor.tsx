@@ -1,6 +1,7 @@
 import { EmojiMenu } from '@core/component/LexicalMarkdown/component/menu/EmojiMenu';
 import { TagsMenu } from '@core/component/LexicalMarkdown/component/menu/TagsMenu';
-import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
+import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/createLexicalWrapper';
+
 import {
   autoRegister,
   emojisPlugin,

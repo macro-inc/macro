@@ -212,6 +212,7 @@
         "json-schema-to-zod": "2.6.1",
         "knip": "^6.0.4",
         "lightningcss": "^1.30.2",
+        "magic-string": "^1.4.1",
         "openai": "^6.25.0",
         "orval": "^7.21.0",
         "typedoc": "^0.22.18",
@@ -580,7 +581,9 @@
   "patchedDependencies": {
     "@kobalte/utils@0.9.2": "apps/web/patches/@kobalte%2Futils@0.9.2.patch",
     "@lexical/table@0.45.0": "apps/web/patches/@lexical%2Ftable@0.45.0.patch",
+    "solid-presence@0.2.0": "apps/web/patches/solid-presence-0.2.0.patch",
     "@tanstack/virtual-core@3.17.8": "apps/web/patches/@tanstack%2Fvirtual-core@3.17.8.patch",
+    "solid-presence@0.1.8": "apps/web/patches/solid-presence-0.1.8.patch",
     "@kobalte/core@0.13.11": "apps/web/patches/@kobalte%2Fcore@0.13.11.patch",
     "virtua@0.48.8": "apps/web/patches/virtua@0.48.8.patch",
     "@thisbeyond/solid-dnd@0.7.5": "apps/web/patches/@thisbeyond%2Fsolid-dnd@0.7.5.patch",

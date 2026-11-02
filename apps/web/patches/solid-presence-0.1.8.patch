@@ -1,0 +1,80 @@
+diff --git a/node_modules/@kobalte/core/node_modules/solid-presence/.bun-tag-d3107c0ebdb519e0 b/.bun-tag-d3107c0ebdb519e0
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/dist/index.js b/dist/index.js
+index 6869a2cfc86ca37e0e6d27f0fe38778b92b6bbf8..c7b5656ebfae5c8166831d53127890e349ec430d 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -1,13 +1,13 @@
+ import { access } from '@corvu/utils/reactivity';
+-import { createMemo, createSignal, createEffect, untrack, onCleanup } from 'solid-js';
++import { createSignal, createEffect, untrack, onCleanup } from 'solid-js';
+ 
+ // src/presence.ts
+ var createPresence = (props) => {
+-  const refStyles = createMemo(() => {
++  const refStyles = () => {
+     const element = access(props.element);
+     if (!element) return;
+     return getComputedStyle(element);
+-  });
++  };
+   const getAnimationName = () => {
+     return refStyles()?.animationName ?? "none";
+   };
+@@ -18,10 +18,13 @@ var createPresence = (props) => {
+     untrack(() => {
+       if (prevShow === show) return show;
+       const prevAnimationName = animationName;
+-      const currentAnimationName = getAnimationName();
+       if (show) {
+         setPresentState("present");
+-      } else if (currentAnimationName === "none" || refStyles()?.display === "none") {
++        return;
++      }
++      const styles = refStyles();
++      const currentAnimationName = styles?.animationName ?? "none";
++      if (currentAnimationName === "none" || styles?.display === "none") {
+         setPresentState("hidden");
+       } else {
+         const isAnimating = prevAnimationName !== currentAnimationName;
+diff --git a/dist/index.jsx b/dist/index.jsx
+index d38a3edc9039e8b6fb498eb22e0e2ea971cc8283..7673ea373a08c70b890365f7a126068f7a3f9243 100644
+--- a/dist/index.jsx
++++ b/dist/index.jsx
+@@ -2,17 +2,16 @@
+ import { access } from "@corvu/utils/reactivity";
+ import {
+   createEffect,
+-  createMemo,
+   createSignal,
+   onCleanup,
+   untrack
+ } from "solid-js";
+ var createPresence = (props) => {
+-  const refStyles = createMemo(() => {
++  const refStyles = () => {
+     const element = access(props.element);
+     if (!element) return;
+     return getComputedStyle(element);
+-  });
++  };
+   const getAnimationName = () => {
+     return refStyles()?.animationName ?? "none";
+   };
+@@ -23,10 +22,13 @@ var createPresence = (props) => {
+     untrack(() => {
+       if (prevShow === show) return show;
+       const prevAnimationName = animationName;
+-      const currentAnimationName = getAnimationName();
+       if (show) {
+         setPresentState("present");
+-      } else if (currentAnimationName === "none" || refStyles()?.display === "none") {
++        return;
++      }
++      const styles = refStyles();
++      const currentAnimationName = styles?.animationName ?? "none";
++      if (currentAnimationName === "none" || styles?.display === "none") {
+         setPresentState("hidden");
+       } else {
+         const isAnimating = prevAnimationName !== currentAnimationName;

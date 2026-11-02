@@ -42,9 +42,9 @@ import { createMutedEntitiesQuery } from './queries/muted-entities-query';
 import {
   type CompositeEntity,
   compositeEntity,
+  getUnifiedNotificationSchema,
   notificationEntity,
   type UnifiedNotification,
-  unifiedNotificationSchema,
 } from './types';
 
 export const CHANNEL_EVENT_TYPES = [
@@ -468,7 +468,8 @@ export function createNotificationSource(
       if (!['unseen', 'seen', 'done'].includes(unsafeMapped.state)) {
         throw new Error('Invalid notification state');
       }
-      const parseResult = unifiedNotificationSchema.safeParse(unsafeMapped);
+      const parseResult =
+        getUnifiedNotificationSchema().safeParse(unsafeMapped);
       if (!parseResult.success) {
         console.warn(
           'Failed to parse notification',

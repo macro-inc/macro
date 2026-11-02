@@ -3,7 +3,8 @@ import type { EditorType } from '@macro-inc/lexical-core';
 import { Telemetry } from '@macro-inc/observability';
 import type { SerializedEditorState } from 'lexical';
 import { createSignal } from 'solid-js';
-import { createLexicalWrapper } from '../context/LexicalWrapperContext';
+import { createLexicalWrapper } from '../context/createLexicalWrapper';
+
 import {
   actionsPlugin,
   agentCommandsPlugin,

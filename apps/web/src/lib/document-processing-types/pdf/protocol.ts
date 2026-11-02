@@ -355,15 +355,3 @@ export const PdfCoParseSchema: z.ZodType<PdfCoParse, any> = z.object({
 export const isEmptyPdfCoParse = (coparse: PdfCoParse): boolean => {
   return !coparse.defs;
 };
-
-export const modificationDataReplacer = (key: string, value: any) => {
-  if (key === 'pageRange') {
-    return Array.from(value);
-  }
-
-  if (typeof value === 'number' && !Number.isInteger(value)) {
-    return parseFloat(value.toFixed(12));
-  }
-
-  return value;
-};

@@ -14,6 +14,8 @@ import {
   appRoute,
   baseRoute,
   calendarSplitRoute,
+  channelDetailRoute,
+  channelsSplitRoute,
   homeCalendarRoute,
   homeSplitRoute,
   legacyContentRoute,
@@ -46,6 +48,7 @@ const definitions = {
       ...appRoute,
       children: [
         { ...homeSplitRoute, children: [homeCalendarRoute] },
+        { ...channelsSplitRoute, children: [channelDetailRoute] },
         calendarSplitRoute,
         legacyContentRoute,
         notFoundRoute,
@@ -214,5 +217,44 @@ describe('resolveContentLocation', () => {
     expect(
       resolveContentLocation(routes, { type: 'company', id: 'record' }).search
     ).toBeUndefined();
+  });
+});
+
+it.each([
+  '?channel_message_id=message&channel_thread_id=thread',
+  '?s0.channels.messageId=message&s0.channels.threadId=thread',
+])(
+  'preserves channel targets through link reference and canonical location: %s',
+  (query) => {
+    const channelId = '11111111-1111-4111-8111-111111111111';
+    const reference = createMacroMentionLinkResolver(routes)(
+      new URL(`/app/channels/${channelId}${query}`, window.location.origin).href
+    );
+    expect(reference?.params).toEqual({
+      channel_message_id: 'message',
+      channel_thread_id: 'thread',
+    });
+    const location = resolveContentLocation(routes, {
+      type: 'channel',
+      id: channelId,
+      params: reference?.params,
+    });
+    expect(location.search?.channels).toMatchObject({
+      messageId: ['message'],
+      threadId: ['thread'],
+    });
+  }
+);
+
+it('resolves copied multi-pane channel links from the selected last pane', () => {
+  const channelId = '11111111-1111-4111-8111-111111111111';
+  const url = new URL(
+    `/app/home/~/channels/${channelId}?s0.channels.messageId=other&s1.channels.messageId=last&s1.channels.threadId=thread`,
+    window.location.origin
+  ).href;
+  const mention = createMacroMentionLinkResolver(routes)(url);
+  expect(mention?.params).toEqual({
+    channel_message_id: 'last',
+    channel_thread_id: 'thread',
   });
 });

@@ -14,27 +14,36 @@ export default defineConfig({
   ],
   resolve: {
     dedupe: ['solid-js'],
-    alias: {
-      '@solid-primitives/refs': fileURLToPath(
-        new URL(
-          '../../../../../node_modules/@solid-primitives/refs/dist/index.js',
-          import.meta.url
-        )
-      ),
-      '@solid-primitives/transition-group': fileURLToPath(
-        new URL(
-          '../../../../../node_modules/@solid-primitives/transition-group/dist/index.js',
-          import.meta.url
-        )
-      ),
-      'solid-transition-group': fileURLToPath(
-        new URL(
-          '../../../../../node_modules/solid-transition-group/dist/index.js',
-          import.meta.url
-        )
-      ),
-      'loro-crdt': 'loro-crdt/base64',
-    },
+    alias: [
+      {
+        find: '@solid-primitives/refs',
+        replacement: fileURLToPath(
+          new URL(
+            '../../../../../node_modules/@solid-primitives/refs/dist/index.js',
+            import.meta.url
+          )
+        ),
+      },
+      {
+        find: '@solid-primitives/transition-group',
+        replacement: fileURLToPath(
+          new URL(
+            '../../../../../node_modules/@solid-primitives/transition-group/dist/index.js',
+            import.meta.url
+          )
+        ),
+      },
+      {
+        find: 'solid-transition-group',
+        replacement: fileURLToPath(
+          new URL(
+            '../../../../../node_modules/solid-transition-group/dist/index.js',
+            import.meta.url
+          )
+        ),
+      },
+      { find: /^loro-crdt$/, replacement: 'loro-crdt/base64' },
+    ],
   },
   ssr: {
     resolve: { conditions: ['browser', 'development'] },

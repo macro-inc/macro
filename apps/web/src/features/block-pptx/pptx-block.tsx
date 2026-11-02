@@ -1,4 +1,5 @@
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
+import { getShareDrawerRecipientInput } from '@core/component/TopBar/share-drawer-focus';
 /**
  * The pptx block: app chrome (header, file menu, sharing) around the
  * presentation editor, wired to the worker engine and document storage.
@@ -20,10 +21,7 @@ import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { FileTypeChip } from '@core/component/FileTypeChip';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  getShareDrawerRecipientInput,
-  ShareTrigger,
-} from '@core/component/TopBar/ShareButton';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { useAuthor, useUserId } from '@core/context/user';
 import { blockDataSignal } from '@core/internal/BlockLoader';

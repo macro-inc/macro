@@ -39,33 +39,33 @@ const GetWriterPartsResponse = z.object({
 const AnnotationsSvc = new Svc('Annotations Service')
   .use('fetchErrors', fetchErrorsSvc)
   .fn('getAnchors', {
-    description: schemas.getDocumentAnchorsParams.description!,
+    description: schemas.getGetDocumentAnchorsParamsSchema().description!,
     args: {
-      documentId: schemas.getDocumentAnchorsParams.shape.document_id,
+      documentId: schemas.getGetDocumentAnchorsParamsSchema().shape.document_id,
     },
-    result: schemas.getDocumentAnchorsResponse.shape,
+    result: schemas.getGetDocumentAnchorsResponseSchema().shape,
     throws: withFetchErrors(),
   })
   .fn('createAnchor', {
-    description: schemas.createAnchorParams.description!,
+    description: schemas.getCreateAnchorParamsSchema().description!,
     args: {
-      documentId: schemas.createAnchorParams.shape.document_id,
-      body: schemas.createAnchorBody,
+      documentId: schemas.getCreateAnchorParamsSchema().shape.document_id,
+      body: schemas.getCreateAnchorBodySchema(),
     },
-    result: schemas.createAnchorResponse,
+    result: schemas.getCreateAnchorResponseSchema(),
     throws: withFetchErrors(),
   })
   .fn('deleteAnchor', {
-    description: schemas.deleteAnchorBody.description!,
-    args: { body: schemas.deleteAnchorBody },
-    result: schemas.deleteAnchorResponse,
+    description: schemas.getDeleteAnchorBodySchema().description!,
+    args: { body: schemas.getDeleteAnchorBodySchema() },
+    result: schemas.getDeleteAnchorResponseSchema(),
     throws: withFetchErrors(),
     modifies: true,
   })
   .fn('editAnchor', {
-    description: schemas.editAnchorBody.description!,
-    args: { body: schemas.editAnchorBody },
-    result: schemas.editAnchorResponse,
+    description: schemas.getEditAnchorBodySchema().description!,
+    args: { body: schemas.getEditAnchorBodySchema() },
+    result: schemas.getEditAnchorResponseSchema(),
     throws: withFetchErrors(),
     modifies: true,
   });
@@ -80,7 +80,7 @@ const ProjectsSvc = new Svc('Projects Service')
   .fn('getPending', {
     description: 'Get all pending projects',
     result: {
-      data: schemas.getPendingProjectsHandlerResponse.shape.data,
+      data: schemas.getGetPendingProjectsHandlerResponseSchema().shape.data,
     },
     throws: withFetchErrors(),
   })
@@ -91,14 +91,14 @@ const ProjectsSvc = new Svc('Projects Service')
       projectParentId: z.string(),
       sharePermission: z.null(),
     },
-    result: schemas.createProjectHandlerResponse.shape.data.shape,
+    result: schemas.getCreateProjectHandlerResponseSchema().shape.data.shape,
     modifies: true,
     throws: withFetchErrors(),
   })
   .fn('getProject', {
     description: 'Get a project',
-    args: schemas.getProjectHandlerParams.shape,
-    result: schemas.getProjectHandlerResponse.shape.data.shape,
+    args: schemas.getGetProjectHandlerParamsSchema().shape,
+    result: schemas.getGetProjectHandlerResponseSchema().shape.data.shape,
     throws: withFetchErrors(),
   })
   .fn('delete', {
@@ -110,8 +110,9 @@ const ProjectsSvc = new Svc('Projects Service')
   })
   .fn('edit', {
     description: 'Edit a project',
-    args: schemas.editProjectV2Body.extend(schemas.editProjectV2Params.shape)
-      .shape,
+    args: schemas
+      .getEditProjectV2BodySchema()
+      .extend(schemas.getEditProjectV2ParamsSchema().shape).shape,
     result: { success: z.boolean() },
     modifies: true,
     throws: withFetchErrors(),
@@ -119,52 +120,54 @@ const ProjectsSvc = new Svc('Projects Service')
   .fn('getContent', {
     description: 'Get project content',
     args: { id: z.string() },
-    result: schemas.getProjectContentHandlerResponse.shape,
+    result: schemas.getGetProjectContentHandlerResponseSchema().shape,
     throws: withFetchErrors(),
   })
   .fn('getPermissions', {
     description:
-      schemas.getProjectPermissionsV2Params.description ??
+      schemas.getGetProjectPermissionsV2ParamsSchema().description ??
       'Get project permissions',
-    args: schemas.getProjectPermissionsV2Params.shape,
-    result: schemas.getProjectPermissionsV2Response.shape,
+    args: schemas.getGetProjectPermissionsV2ParamsSchema().shape,
+    result: schemas.getGetProjectPermissionsV2ResponseSchema().shape,
     throws: withFetchErrors(),
   })
   .fn('getUserAccessLevel', {
     description:
-      schemas.getProjectUserAccessLevelParams.description ??
+      schemas.getGetProjectUserAccessLevelParamsSchema().description ??
       'Get project user access level',
-    args: schemas.getProjectUserAccessLevelParams.shape,
-    result: schemas.getProjectUserAccessLevelResponse,
+    args: schemas.getGetProjectUserAccessLevelParamsSchema().shape,
+    result: schemas.getGetProjectUserAccessLevelResponseSchema(),
     throws: withFetchErrors(),
   })
   .fn('getPreview', {
     description: 'Get project preview',
-    args: schemas.getBatchProjectPreviewBody.shape,
-    result: schemas.getBatchProjectPreviewResponse.shape,
+    args: schemas.getGetBatchProjectPreviewBodySchema().shape,
+    result: schemas.getGetBatchProjectPreviewResponseSchema().shape,
     throws: withFetchErrors(),
   })
   .fn('createUploadZipRequest', {
     description: 'Create a request id for uploading a zip file',
-    args: schemas.uploadExtractFolderHandlerBody.shape,
-    result: schemas.uploadExtractFolderHandlerResponse.shape.data.shape,
+    args: schemas.getUploadExtractFolderHandlerBodySchema().shape,
+    result:
+      schemas.getUploadExtractFolderHandlerResponseSchema().shape.data.shape,
     throws: withFetchErrors(),
   })
   .fn('permanentlyDelete', {
     description: 'Permanently delete a project',
     args: {
-      id: schemas.permanentlyDeleteProjectParams.shape.id,
+      id: schemas.getPermanentlyDeleteProjectParamsSchema().shape.id,
     },
-    result: schemas.permanentlyDeleteProjectResponse.shape.data.shape,
+    result:
+      schemas.getPermanentlyDeleteProjectResponseSchema().shape.data.shape,
     modifies: true,
     throws: withFetchErrors(),
   })
   .fn('revertDelete', {
     description: 'Revert the deletion of a project',
     args: {
-      id: schemas.revertDeleteProjectParams.shape.id,
+      id: schemas.getRevertDeleteProjectParamsSchema().shape.id,
     },
-    result: schemas.revertDeleteProjectResponse.shape.data.shape,
+    result: schemas.getRevertDeleteProjectResponseSchema().shape.data.shape,
     modifies: true,
     throws: withFetchErrors(),
   });
@@ -173,27 +176,27 @@ const ViewsSvc = new Svc('Views Service')
   .use('fetchErrors', fetchErrorsSvc)
   .fn('getSavedViews', {
     description: 'Get the list of saved views',
-    result: schemas.getViewsHandlerResponse.shape,
+    result: schemas.getGetViewsHandlerResponseSchema().shape,
     throws: withFetchErrors(),
   })
   .fn('createSavedView', {
     description: 'Create a saved view',
-    args: schemas.createViewHandlerBody.shape,
+    args: schemas.getCreateViewHandlerBodySchema().shape,
     modifies: true,
-    result: schemas.createViewHandlerResponse.shape,
+    result: schemas.getCreateViewHandlerResponseSchema().shape,
     throws: withFetchErrors(),
   })
   .fn('excludeDefaultView', {
     description: 'exclude a default view',
-    args: schemas.excludeDefaultViewHandlerBody.shape,
+    args: schemas.getExcludeDefaultViewHandlerBodySchema().shape,
     modifies: true,
     throws: withFetchErrors(),
   })
   .fn('patchView', {
     description: 'patch a view',
     args: {
-      ...schemas.patchViewHandlerParams.shape,
-      ...schemas.patchViewHandlerBody.shape,
+      ...schemas.getPatchViewHandlerParamsSchema().shape,
+      ...schemas.getPatchViewHandlerBodySchema().shape,
     },
     modifies: true,
     throws: withFetchErrors(),
@@ -211,28 +214,29 @@ const FavoritesSvc = new Svc('Favorites Service')
   .use('fetchErrors', fetchErrorsSvc)
   .fn('getFavorites', {
     description: "Get the user's favorites",
-    result: schemas.listFavoritesResponse.shape,
+    result: schemas.getListFavoritesResponseSchema().shape,
     throws: withFetchErrors(),
   })
   .fn('addFavorite', {
     description: "Favorite an entity in the user's collection",
-    args: schemas.addFavoriteBody.shape,
+    args: schemas.getAddFavoriteBodySchema().shape,
     modifies: true,
-    result: schemas.addFavoriteResponse.shape,
+    result: schemas.getAddFavoriteResponseSchema().shape,
     throws: withFetchErrors(),
   })
   .fn('removeFavoriteByEntity', {
     description: 'Remove a favorite by entity',
     args: {
-      entityType: schemas.removeFavoriteByEntityParams.shape.entity_type,
-      entityId: schemas.removeFavoriteByEntityParams.shape.entity_id,
+      entityType:
+        schemas.getRemoveFavoriteByEntityParamsSchema().shape.entity_type,
+      entityId: schemas.getRemoveFavoriteByEntityParamsSchema().shape.entity_id,
     },
     modifies: true,
     throws: withFetchErrors(),
   })
   .fn('reorderFavorites', {
     description: "Persist a manual order for the user's favorites",
-    args: schemas.reorderFavoritesBody.shape,
+    args: schemas.getReorderFavoritesBodySchema().shape,
     modifies: true,
     throws: withFetchErrors(),
   });
@@ -241,14 +245,14 @@ const PermissionsTokensSvc = new Svc('Permissions Tokens Service')
   .use('fetchErrors', fetchErrorsSvc)
   .fn('createPermissionToken', {
     description: 'creates a permission token for a document',
-    args: schemas.getDocumentPermissionsTokenParams.shape,
-    result: schemas.getDocumentPermissionsTokenResponse.shape,
+    args: schemas.getGetDocumentPermissionsTokenParamsSchema().shape,
+    result: schemas.getGetDocumentPermissionsTokenResponseSchema().shape,
     throws: withFetchErrors(),
   })
   .fn('validatePermissionToken', {
     description: 'gets a permission token for a document',
-    args: schemas.validateDocumentPermissionsTokenBody.shape,
-    result: schemas.validateDocumentPermissionsTokenResponse.shape,
+    args: schemas.getValidateDocumentPermissionsTokenBodySchema().shape,
+    result: schemas.getValidateDocumentPermissionsTokenResponseSchema().shape,
     throws: withFetchErrors(),
   });
 
@@ -257,43 +261,43 @@ const CollabSurfacesSvc = new Svc('Collab Surfaces Service')
   .fn('ensure', {
     description:
       'idempotently ensures a collab surface exists (load-or-create) attached to a parent entity, with its sync-service session initialized',
-    args: schemas.ensureCollabSurfaceBody.extend(
-      schemas.ensureCollabSurfaceParams.shape
-    ).shape,
-    result: schemas.ensureCollabSurfaceResponse.shape,
+    args: schemas
+      .getEnsureCollabSurfaceBodySchema()
+      .extend(schemas.getEnsureCollabSurfaceParamsSchema().shape).shape,
+    result: schemas.getEnsureCollabSurfaceResponseSchema().shape,
     modifies: true,
     throws: withFetchErrors(),
   })
   .fn('get', {
     description: 'fetches a collab surface',
-    args: schemas.getCollabSurfaceParams.shape,
-    result: schemas.getCollabSurfaceResponse.shape,
+    args: schemas.getGetCollabSurfaceParamsSchema().shape,
+    result: schemas.getGetCollabSurfaceResponseSchema().shape,
     throws: withFetchErrors(),
   })
   .fn('createToken', {
     description: 'mints a sync-service connection token for a collab surface',
-    args: schemas.createCollabSurfaceTokenParams.shape,
-    result: schemas.createCollabSurfaceTokenResponse.shape,
+    args: schemas.getCreateCollabSurfaceTokenParamsSchema().shape,
+    result: schemas.getCreateCollabSurfaceTokenResponseSchema().shape,
     throws: withFetchErrors(),
   })
   .fn('delete', {
     description: 'soft-deletes a collab surface',
-    args: schemas.deleteCollabSurfaceParams.shape,
+    args: schemas.getDeleteCollabSurfaceParamsSchema().shape,
     modifies: true,
     throws: withFetchErrors(),
   });
 
 export type GetDocumentPermissionsTokenResponse = z.infer<
-  typeof schemas.getDocumentPermissionsTokenResponse
+  ReturnType<typeof schemas.getGetDocumentPermissionsTokenResponseSchema>
 >;
 export type ValidateDocumentPermissionsTokenResponse = z.infer<
-  typeof schemas.validateDocumentPermissionsTokenResponse
+  ReturnType<typeof schemas.getValidateDocumentPermissionsTokenResponseSchema>
 >;
 export type CollabSurfaceResponse = z.infer<
-  typeof schemas.getCollabSurfaceResponse
+  ReturnType<typeof schemas.getGetCollabSurfaceResponseSchema>
 >;
 export type CollabSurfaceTokenResponse = z.infer<
-  typeof schemas.createCollabSurfaceTokenResponse
+  ReturnType<typeof schemas.getCreateCollabSurfaceTokenResponseSchema>
 >;
 
 export const StorageService = new Svc('Document++ Storage Service API')
@@ -316,136 +320,145 @@ export const StorageService = new Svc('Document++ Storage Service API')
     throws: withFetchErrors(),
   })
   .fn('getUsersHistory', {
-    description: schemas.getHistoryHandlerResponse.description!,
+    description: schemas.getGetHistoryHandlerResponseSchema().description!,
     result: {
-      data: schemas.getHistoryHandlerResponse.shape.data,
+      data: schemas.getGetHistoryHandlerResponseSchema().shape.data,
     },
     throws: withFetchErrors(),
   })
   .fn('upsertItemToUserHistory', {
-    description: schemas.upsertHistoryHandlerResponse.description!,
+    description: schemas.getUpsertHistoryHandlerResponseSchema().description!,
     args: {
-      itemId: schemas.upsertHistoryHandlerParams.shape.item_id,
+      itemId: schemas.getUpsertHistoryHandlerParamsSchema().shape.item_id,
       itemType: z.enum(ITEM_TYPES),
     },
-    result: schemas.upsertHistoryHandlerResponse.shape.data.shape,
+    result: schemas.getUpsertHistoryHandlerResponseSchema().shape.data.shape,
     modifies: true,
     access: { exclude: ['ai'] },
     throws: withFetchErrors(),
   })
   .fn('removeItemFromUserHistory', {
-    description: schemas.deleteHistoryHandlerResponse.description!,
+    description: schemas.getDeleteHistoryHandlerResponseSchema().description!,
     args: {
-      itemId: schemas.deleteHistoryHandlerParams.shape.item_id,
+      itemId: schemas.getDeleteHistoryHandlerParamsSchema().shape.item_id,
       itemType: z.enum(ITEM_TYPES),
     },
-    result: schemas.deleteHistoryHandlerResponse.shape.data.shape,
+    result: schemas.getDeleteHistoryHandlerResponseSchema().shape.data.shape,
     modifies: true,
     access: { exclude: ['ai'] },
     throws: withFetchErrors(),
   })
   .fn('editDocument', {
-    description: schemas.editDocumentParams.description!,
+    description: schemas.getEditDocumentParamsSchema().description!,
     args: {
-      documentId: schemas.editDocumentParams.shape.document_id,
-      ...schemas.editDocumentBody.shape,
+      documentId: schemas.getEditDocumentParamsSchema().shape.document_id,
+      ...schemas.getEditDocumentBodySchema().shape,
     },
-    result: schemas.editDocumentResponse.shape.data.shape,
+    result: schemas.getEditDocumentResponseSchema().shape.data.shape,
     modifies: true,
     throws: withFetchErrors(),
   })
   .fn('getUserDocuments', {
-    description: schemas.getUserDocumentsHandlerResponse.description!,
-    args: schemas.getUserDocumentsHandlerQueryParams.shape,
-    result:
-      schemas.getUserDocumentsHandlerResponse.shape.data.unwrap().options[1]
-        .shape,
+    description:
+      schemas.getGetUserDocumentsHandlerResponseSchema().description!,
+    args: schemas.getGetUserDocumentsHandlerQueryParamsSchema().shape,
+    result: schemas
+      .getGetUserDocumentsHandlerResponseSchema()
+      .shape.data.unwrap().options[1].shape,
     throws: withFetchErrors(),
   })
   .fn('initializeUserDocuments', {
-    description: schemas.initializeUserDocumentsResponse.description ?? '',
+    description:
+      schemas.getInitializeUserDocumentsResponseSchema().description ?? '',
     args: {},
-    result: schemas.initializeUserDocumentsResponse.shape,
+    result: schemas.getInitializeUserDocumentsResponseSchema().shape,
     throws: withFetchErrors(),
   })
   .fn('deleteDocument', {
-    description: schemas.deleteDocumentResponse.description!,
+    description: schemas.getDeleteDocumentResponseSchema().description!,
     args: {
-      documentId: schemas.deleteDocumentParams.shape.document_id,
+      documentId: schemas.getDeleteDocumentParamsSchema().shape.document_id,
     },
-    result: schemas.deleteDocumentResponse.shape,
+    result: schemas.getDeleteDocumentResponseSchema().shape,
     modifies: true,
     access: { exclude: ['ai'] },
     throws: withFetchErrors(),
   })
   .fn('getPins', {
-    description: schemas.getPinsHandlerResponse.description!,
+    description: schemas.getGetPinsHandlerResponseSchema().description!,
     // The pins handler takes no query params: it always returns all pins.
     args: {},
-    result: schemas.getPinsHandlerResponse.shape.data.unwrap().options[1].shape,
+    result: schemas.getGetPinsHandlerResponseSchema().shape.data.unwrap()
+      .options[1].shape,
     throws: withFetchErrors(),
   })
   .fn('pinItem', {
-    description: schemas.addPinHandlerResponse.description!,
+    description: schemas.getAddPinHandlerResponseSchema().description!,
     args: {
       id: z.string().describe('ID of the item to pin'),
-      ...schemas.addPinHandlerBody.shape,
+      ...schemas.getAddPinHandlerBodySchema().shape,
     },
-    result: schemas.addPinHandlerResponse.shape.data.shape,
+    result: schemas.getAddPinHandlerResponseSchema().shape.data.shape,
     modifies: true,
     throws: withFetchErrors(),
   })
   .fn('removePin', {
-    description: schemas.removePinHandlerResponse.description!,
+    description: schemas.getRemovePinHandlerResponseSchema().description!,
     args: {
       id: z.string().describe('ID of the item to unpin'),
-      ...schemas.removePinHandlerBody.shape,
+      ...schemas.getRemovePinHandlerBodySchema().shape,
     },
-    result: schemas.removePinHandlerResponse.shape.data.shape,
+    result: schemas.getRemovePinHandlerResponseSchema().shape.data.shape,
     modifies: true,
     access: { exclude: ['ai'] },
     throws: withFetchErrors(),
   })
   .fn('reorderPins', {
-    description: schemas.reorderPinsHandlerResponse.description!,
+    description: schemas.getReorderPinsHandlerResponseSchema().description!,
     args: {
-      pins: schemas.reorderPinsHandlerBody,
+      pins: schemas.getReorderPinsHandlerBodySchema(),
     },
-    result: schemas.reorderPinsHandlerResponse.shape.data.shape,
+    result: schemas.getReorderPinsHandlerResponseSchema().shape.data.shape,
     modifies: true,
     throws: withFetchErrors(),
   })
   .fn('getDocumentMetadata', {
-    description: schemas.getDocumentVersionResponse.description!,
+    description: schemas.getGetDocumentVersionResponseSchema().description!,
     args: {
-      documentId: schemas.getDocumentVersionParams.shape.document_id,
-      documentVersionId:
-        schemas.getDocumentVersionParams.shape.document_version_id.optional(),
+      documentId: schemas.getGetDocumentVersionParamsSchema().shape.document_id,
+      documentVersionId: schemas
+        .getGetDocumentVersionParamsSchema()
+        .shape.document_version_id.optional(),
     },
-    result: schemas.getDocumentVersionResponse.shape.data.shape,
+    result: schemas.getGetDocumentVersionResponseSchema().shape.data.shape,
     throws: withFetchErrors(),
   })
   .fn('getDocumentGithubPullRequests', {
     description: 'Get GitHub pull requests associated with a task document',
     args: {
-      documentId: schemas.getDocumentGithubPullRequestsParams.shape.document_id,
+      documentId:
+        schemas.getGetDocumentGithubPullRequestsParamsSchema().shape
+          .document_id,
     },
-    result: schemas.getDocumentGithubPullRequestsResponse.shape,
+    result: schemas.getGetDocumentGithubPullRequestsResponseSchema().shape,
     throws: withFetchErrors(),
   })
   .fn('createDocument', {
-    description: schemas.createDocumentResponse.description!,
-    args: schemas.createDocumentBody.shape,
+    description: schemas.getCreateDocumentResponseSchema().description!,
+    args: schemas.getCreateDocumentBodySchema().shape,
     result: {
       metadata:
-        schemas.createDocumentResponse.shape.data._def.left.shape
+        schemas.getCreateDocumentResponseSchema().shape.data._def.left.shape
           .documentMetadata,
       presignedUrl:
-        schemas.createDocumentResponse.shape.data._def.left.shape.presignedUrl,
+        schemas.getCreateDocumentResponseSchema().shape.data._def.left.shape
+          .presignedUrl,
       contentType:
-        schemas.createDocumentResponse.shape.data._def.right.shape.contentType,
+        schemas.getCreateDocumentResponseSchema().shape.data._def.right.shape
+          .contentType,
       fileType:
-        schemas.createDocumentResponse.shape.data._def.right.shape.fileType,
+        schemas.getCreateDocumentResponseSchema().shape.data._def.right.shape
+          .fileType,
     },
     modifies: true,
     throws: withFetchErrors('INVALID_RESPONSE'),
@@ -459,20 +472,21 @@ export const StorageService = new Svc('Document++ Storage Service API')
     },
     result: {
       metadata:
-        schemas.createDocumentResponse.shape.data._def.left.shape
+        schemas.getCreateDocumentResponseSchema().shape.data._def.left.shape
           .documentMetadata,
     },
     modifies: true,
     throws: withFetchErrors('INVALID_RESPONSE'),
   })
   .fn('copyDocument', {
-    description: schemas.copyDocumentResponse.description!,
+    description: schemas.getCopyDocumentResponseSchema().description!,
     args: {
-      documentId: schemas.copyDocumentParams.shape.document_id,
-      ...schemas.copyDocumentQueryParams.shape,
-      ...schemas.copyDocumentBody.shape,
+      documentId: schemas.getCopyDocumentParamsSchema().shape.document_id,
+      ...schemas.getCopyDocumentQueryParamsSchema().shape,
+      ...schemas.getCopyDocumentBodySchema().shape,
     },
-    result: schemas.copyDocumentResponse.shape.data.shape.documentMetadata,
+    result:
+      schemas.getCopyDocumentResponseSchema().shape.data.shape.documentMetadata,
     modifies: true,
     throws: withFetchErrors(),
   })
@@ -486,9 +500,11 @@ export const StorageService = new Svc('Document++ Storage Service API')
     throws: withFetchErrors(),
   })
   .fn('getDocumentProcessingResult', {
-    description: schemas.getDocumentProcessingResultParams.description!,
+    description:
+      schemas.getGetDocumentProcessingResultParamsSchema().description!,
     args: {
-      documentId: schemas.getDocumentProcessingResultParams.shape.document_id,
+      documentId:
+        schemas.getGetDocumentProcessingResultParamsSchema().shape.document_id,
       type: ProcessingResultTypeSchema,
     },
     result: {
@@ -498,10 +514,12 @@ export const StorageService = new Svc('Document++ Storage Service API')
     throws: withFetchErrors('INVALID_RESPONSE'),
   })
   .fn('getJobProcessingResult', {
-    description: schemas.jobProcessingResultHandlerResponse.description!,
+    description:
+      schemas.getJobProcessingResultHandlerResponseSchema().description!,
     args: {
-      documentId: schemas.jobProcessingResultHandlerParams.shape.document_id,
-      jobId: schemas.jobProcessingResultHandlerParams.shape.job_id,
+      documentId:
+        schemas.getJobProcessingResultHandlerParamsSchema().shape.document_id,
+      jobId: schemas.getJobProcessingResultHandlerParamsSchema().shape.job_id,
       type: ProcessingResultTypeSchema,
     },
     result: {
@@ -511,39 +529,42 @@ export const StorageService = new Svc('Document++ Storage Service API')
     throws: withFetchErrors('INVALID_RESPONSE'),
   })
   .fn('listDocuments', {
-    description: schemas.getDocumentListHandlerResponse.description!,
+    description: schemas.getGetDocumentListHandlerResponseSchema().description!,
     result: {
-      documents: schemas.getDocumentListHandlerResponse.shape.data,
+      documents: schemas.getGetDocumentListHandlerResponseSchema().shape.data,
     },
     throws: withFetchErrors(),
   })
   .fn('pdfSave', {
-    description: schemas.saveDocumentHandlerResponse.description!,
+    description: schemas.getSaveDocumentHandlerResponseSchema().description!,
     args: {
-      documentId: schemas.saveDocumentHandlerParams.shape.document_id,
+      documentId:
+        schemas.getSaveDocumentHandlerParamsSchema().shape.document_id,
       modificationData: PdfModificationDataOnServerSchema,
       sha: z.string(),
     },
     result:
-      schemas.saveDocumentHandlerResponse.shape.data.shape.documentMetadata
-        .shape,
+      schemas.getSaveDocumentHandlerResponseSchema().shape.data.shape
+        .documentMetadata.shape,
     modifies: true,
     throws: withFetchErrors('INVALID_RESPONSE', 'INVALID_DATA'),
   })
   .fn('simpleSave', {
-    description: schemas.simpleSaveResponse.description!,
+    description: schemas.getSimpleSaveResponseSchema().description!,
     args: {
-      documentId: schemas.simpleSaveParams.shape.document_id,
+      documentId: schemas.getSimpleSaveParamsSchema().shape.document_id,
       file: z.instanceof(Blob),
     },
-    result: schemas.simpleSaveResponse.shape.data.shape.documentMetadata.shape,
+    result:
+      schemas.getSimpleSaveResponseSchema().shape.data.shape.documentMetadata
+        .shape,
     modifies: true,
     throws: withFetchErrors('INVALID_RESPONSE', 'INVALID_DATA'),
   })
   .fn('simpleSaveText', {
-    description: schemas.simpleSaveResponse.description!,
+    description: schemas.getSimpleSaveResponseSchema().description!,
     args: {
-      documentId: schemas.simpleSaveParams.shape.document_id,
+      documentId: schemas.getSimpleSaveParamsSchema().shape.document_id,
       text: z.string(),
       mimeType: z
         .string()
@@ -552,16 +573,19 @@ export const StorageService = new Svc('Document++ Storage Service API')
           'The mime type of the text, like "text/plain" or "text/markdown"'
         ),
     },
-    result: schemas.simpleSaveResponse.shape.data.shape.documentMetadata.shape,
+    result:
+      schemas.getSimpleSaveResponseSchema().shape.data.shape.documentMetadata
+        .shape,
     modifies: true,
     throws: withFetchErrors('INVALID_RESPONSE', 'INVALID_DATA'),
   })
   .fn('getDocxFile', {
     description: 'Gets the metadata and part information for a docx file',
     args: {
-      documentId: schemas.getDocumentVersionParams.shape.document_id,
-      documentVersionId:
-        schemas.getDocumentVersionParams.shape.document_version_id.optional(),
+      documentId: schemas.getGetDocumentVersionParamsSchema().shape.document_id,
+      documentVersionId: schemas
+        .getGetDocumentVersionParamsSchema()
+        .shape.document_version_id.optional(),
       withoutParts: z
         .boolean()
         .optional()
@@ -570,15 +594,16 @@ export const StorageService = new Svc('Document++ Storage Service API')
     result: {
       parts: GetWriterPartsResponse.shape.presignedUrls,
       metadata: z.object({
-        ...schemas.getDocumentVersionResponse.shape.data.shape.documentMetadata
-          .shape,
+        ...schemas.getGetDocumentVersionResponseSchema().shape.data.shape
+          .documentMetadata.shape,
         documentBom: nonNullShape(
-          schemas.getDocumentVersionResponse.shape.data.shape.documentMetadata
-            .shape.documentBom
+          schemas.getGetDocumentVersionResponseSchema().shape.data.shape
+            .documentMetadata.shape.documentBom
         ),
       }),
-      userAccessLevel:
-        schemas.getDocumentVersionResponse.shape.data.shape.userAccessLevel.describe(
+      userAccessLevel: schemas
+        .getGetDocumentVersionResponseSchema()
+        .shape.data.shape.userAccessLevel.describe(
           'The level of access the user currently has for this document'
         ),
       canEdit: z
@@ -591,9 +616,9 @@ export const StorageService = new Svc('Document++ Storage Service API')
     description:
       'Gets the access level, blob URL, and metadata for a binary document',
     args: {
-      documentId: schemas.getDocumentVersionParams.shape.document_id,
+      documentId: schemas.getGetDocumentVersionParamsSchema().shape.document_id,
     },
-    result: schemas.getDocumentVersionResponse.shape.data.extend({
+    result: schemas.getGetDocumentVersionResponseSchema().shape.data.extend({
       blobUrl: z.string().describe('The presigned url of the binary blob'),
     }).shape,
     throws: withFetchErrors('INVALID_DOCUMENT'),
@@ -602,14 +627,16 @@ export const StorageService = new Svc('Document++ Storage Service API')
     description:
       'Gets the access level, text, and metadata for a non-binary (text) document',
     args: {
-      documentId: schemas.getDocumentVersionParams.shape.document_id,
+      documentId: schemas.getGetDocumentVersionParamsSchema().shape.document_id,
     },
     result: {
       text: z.string().describe('The text of the document'),
       documentMetadata:
-        schemas.getDocumentVersionResponse.shape.data.shape.documentMetadata,
-      userAccessLevel:
-        schemas.getDocumentVersionResponse.shape.data.shape.userAccessLevel.describe(
+        schemas.getGetDocumentVersionResponseSchema().shape.data.shape
+          .documentMetadata,
+      userAccessLevel: schemas
+        .getGetDocumentVersionResponseSchema()
+        .shape.data.shape.userAccessLevel.describe(
           'The level of access the user currently has for this document'
         ),
     },
@@ -628,12 +655,12 @@ export const StorageService = new Svc('Document++ Storage Service API')
   .fn('getDocumentLocation', {
     description: 'Get the presigned URL(s) for the document. aka location',
     args: {
-      documentId:
-        schemas.getLocationHandlerParams.shape.document_id.describe(
-          `Document UUID`
-        ),
-      versionId: schemas.getLocationHandlerQueryParams.shape.document_version_id
-        .optional()
+      documentId: schemas
+        .getGetLocationHandlerParamsSchema()
+        .shape.document_id.describe(`Document UUID`),
+      versionId: schemas
+        .getGetLocationHandlerQueryParamsSchema()
+        .shape.document_version_id.optional()
         .describe(`A specific document version id to get the location for.`),
     },
     result: z.object({ data: z.any() }).shape,
@@ -641,31 +668,34 @@ export const StorageService = new Svc('Document++ Storage Service API')
   })
   .fn('getDocumentPermissions', {
     description: 'Get the document share permissions',
-    args: schemas.getDocumentPermissionsV2Params.shape,
+    args: schemas.getGetDocumentPermissionsV2ParamsSchema().shape,
     result:
-      schemas.getDocumentPermissionsV2Response.shape.documentPermissions.shape,
+      schemas.getGetDocumentPermissionsV2ResponseSchema().shape
+        .documentPermissions.shape,
     throws: withFetchErrors(),
   })
   .fn('getDocumentViewers', {
     description: 'Get the list of users who have viewed a given document',
-    args: schemas.getDocumentViewsHandlerParams.shape,
-    result: schemas.getDocumentViewsHandlerResponse.shape,
+    args: schemas.getGetDocumentViewsHandlerParamsSchema().shape,
+    result: schemas.getGetDocumentViewsHandlerResponseSchema().shape,
     throws: withFetchErrors(),
   })
   .fn('getBatchDocumentPreviews', {
     description: 'Get a list of previews for a list of document',
-    args: schemas.getBatchPreviewHandlerBody.shape,
-    result: schemas.getBatchPreviewHandlerResponse.shape,
+    args: schemas.getGetBatchPreviewHandlerBodySchema().shape,
+    result: schemas.getGetBatchPreviewHandlerResponseSchema().shape,
     throws: withFetchErrors(),
   })
   .fn('upsertDocumentViewLocation', {
     description: 'Set the view location for a document',
     args: {
       documentId:
-        schemas.upsertUserDocumentViewLocationParams.shape.document_id,
-      location: schemas.upsertUserDocumentViewLocationBody.shape.location,
+        schemas.getUpsertUserDocumentViewLocationParamsSchema().shape
+          .document_id,
+      location:
+        schemas.getUpsertUserDocumentViewLocationBodySchema().shape.location,
     },
-    result: schemas.upsertUserDocumentViewLocationResponse.shape,
+    result: schemas.getUpsertUserDocumentViewLocationResponseSchema().shape,
     modifies: true,
     throws: withFetchErrors(),
   })
@@ -673,50 +703,54 @@ export const StorageService = new Svc('Document++ Storage Service API')
     description: 'Delete the view location for a document',
     args: {
       documentId:
-        schemas.deleteUserDocumentViewLocationParams.shape.document_id,
+        schemas.getDeleteUserDocumentViewLocationParamsSchema().shape
+          .document_id,
     },
-    result: schemas.deleteUserDocumentViewLocationResponse.shape,
+    result: schemas.getDeleteUserDocumentViewLocationResponseSchema().shape,
     modifies: true,
     throws: withFetchErrors(),
   })
   .fn('getDeletedItems', {
     description: 'Get the list of deleted items',
-    result: schemas.recentlyDeletedResponse.shape.data.shape,
+    result: schemas.getRecentlyDeletedResponseSchema().shape.data.shape,
     throws: withFetchErrors(),
   })
   .fn('permanentlyDeleteDocument', {
     description: 'Permanently delete a document',
     args: {
-      documentId: schemas.permanentlyDeleteDocumentParams.shape.document_id,
+      documentId:
+        schemas.getPermanentlyDeleteDocumentParamsSchema().shape.document_id,
     },
-    result: schemas.permanentlyDeleteDocumentResponse.shape.data.shape,
+    result:
+      schemas.getPermanentlyDeleteDocumentResponseSchema().shape.data.shape,
     modifies: true,
     throws: withFetchErrors(),
   })
   .fn('revertDocumentDelete', {
     description: 'Revert the deletion of a document',
     args: {
-      documentId: schemas.revertDeleteDocumentParams.shape.document_id,
+      documentId:
+        schemas.getRevertDeleteDocumentParamsSchema().shape.document_id,
     },
-    result: schemas.revertDeleteDocumentResponse.shape.data.shape,
+    result: schemas.getRevertDeleteDocumentResponseSchema().shape.data.shape,
     modifies: true,
     throws: withFetchErrors(),
   })
   .fn('exportDocument', {
     description: 'Export a document',
     args: {
-      documentId: schemas.exportDocumentParams.shape.document_id,
+      documentId: schemas.getExportDocumentParamsSchema().shape.document_id,
     },
-    result: schemas.exportDocumentResponse.shape,
+    result: schemas.getExportDocumentResponseSchema().shape,
     throws: withFetchErrors(),
   })
   .fn('editThread', {
-    description: schemas.editThreadV2Params.description!,
+    description: schemas.getEditThreadV2ParamsSchema().description!,
     args: {
-      threadId: schemas.editThreadV2Params.shape.thread_id,
-      ...schemas.editThreadV2Body.shape,
+      threadId: schemas.getEditThreadV2ParamsSchema().shape.thread_id,
+      ...schemas.getEditThreadV2BodySchema().shape,
     },
-    result: schemas.editThreadV2Response.shape.data.shape,
+    result: schemas.getEditThreadV2ResponseSchema().shape.data.shape,
     modifies: true,
     throws: withFetchErrors(),
   })

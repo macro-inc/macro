@@ -2,10 +2,21 @@ import { lazyNamed } from '@core/util/lazyNamed';
 import { lazy } from 'solid-js';
 
 /**
- * Every view except Home (the default landing) loads as its own chunk. The
- * split router warms a route's chunks while it navigates, and `AppShell`
+ * Every view loads as its own chunk. The split router warms a route's chunks while it navigates, and `AppShell`
  * fetches the likely-next ones once the first screen settles.
  */
+export const HomeRouteView = lazyNamed(
+  () => import('@app/features/home/route-views'),
+  'HomeRouteView'
+);
+export const HomeCalendarRouteView = lazyNamed(
+  () => import('@app/features/home/home-view'),
+  'HomeCalendarRouteView'
+);
+export const HomeDetailRouteView = lazyNamed(
+  () => import('@app/features/home/home-view'),
+  'HomeDetailRouteView'
+);
 export const ActivityRouteView = lazyNamed(
   () => import('@app/features/activity/route-views'),
   'ActivityRouteView'
@@ -132,6 +143,7 @@ export const NotFound = lazy(
  * idle keeps the first navigation as fast as it was with one big bundle.
  */
 export const LIKELY_NEXT_VIEWS = [
+  HomeRouteView,
   HomeEntityDetailRouteView,
   ChannelsRouteView,
   ChannelDetailRouteView,

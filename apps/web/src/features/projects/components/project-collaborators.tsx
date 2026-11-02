@@ -1,4 +1,4 @@
-import { ShareOptions } from '@core/component/TopBar/ShareButton';
+import { ShareOptions } from '@core/component/TopBar/ShareOptions';
 import { UserIcon } from '@core/component/UserIcon';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';

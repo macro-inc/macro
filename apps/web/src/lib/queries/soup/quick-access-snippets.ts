@@ -1,7 +1,7 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableSnippets } from '@core/constant/featureFlags';
-import { isSnippetEntity, type SnippetEntity } from '@entity';
+import { isSnippetEntity, type SnippetEntity } from '@entity/types/entity';
 import { queryReadyGate } from '@queries/gate';
 import { useSoupItemsQuery } from '@queries/soup/items';
 import { createMemo } from 'solid-js';

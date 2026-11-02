@@ -31,3 +31,8 @@ composer imports the URL matcher from this package; do not duplicate it.
 Keep URLs protected from inline formatting during import; matching rendered
 text is too late. Preserve code, mention payloads, existing links, and escaped
 literal URLs. Keep unlink state through both Markdown and Lexical JSON saves.
+
+
+`isSerializedDraftCommentNode` shares the persistence type guard with incremental
+web serialization. Draft marks lift their content while posted marks remain;
+keep cold snapshots and live collaboration exports equivalent.

@@ -1,0 +1,15 @@
+id: ts-block-component-lazy
+language: typescript
+severity: error
+message: Block definitions are eager metadata; load their component with lazy().
+note: See .agents/rules/web/startup-bundle.md. A static block component brings its full editor graph into every startup.
+files:
+  - apps/web/src/features/*/definition.ts
+rule:
+  pattern:
+    context: '({ component: $COMPONENT })'
+    selector: pair
+constraints:
+  COMPONENT:
+    not:
+      pattern: lazy($$$ARGS)

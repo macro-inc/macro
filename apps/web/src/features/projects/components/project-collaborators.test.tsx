@@ -8,7 +8,7 @@ vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => null }));
 vi.mock('@property/editors/selectors/PropertyEntitySelector', () => ({
   PropertyEntitySelector: () => null,
 }));
-vi.mock('@core/component/TopBar/ShareButton', () => ({
+vi.mock('@core/component/TopBar/ShareOptions', () => ({
   ShareOptions: (props: {
     label: string;
     setPermissions(level: null): void;

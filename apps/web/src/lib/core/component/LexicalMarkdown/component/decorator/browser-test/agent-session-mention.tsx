@@ -6,10 +6,8 @@ import { agentSessionKeys } from '@queries/agent-session/keys';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { For, onCleanup } from 'solid-js';
 import { render } from 'solid-js/web';
-import {
-  createLexicalWrapper,
-  LexicalWrapperContext,
-} from '../../../context/LexicalWrapperContext';
+import { createLexicalWrapper } from '../../../context/createLexicalWrapper';
+import { LexicalWrapperContext } from '../../../context/LexicalWrapperContext';
 import { channelTheme } from '../../../theme';
 import {
   StaticMarkdown,

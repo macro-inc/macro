@@ -1,11 +1,9 @@
-import {
-  PdfCoParseSchema as CoParseSchema,
-  type PdfCoParse as ICoParse,
-  type PdfModificationDataOnServer as IModificationDataOnServer,
-  PdfModificationDataOnServerSchema as IModificationDataOnServerSchema,
-  modificationDataReplacer,
-  type PdfSegment as TSegment,
+import type {
+  PdfCoParse as ICoParse,
+  PdfModificationDataOnServer as IModificationDataOnServer,
+  PdfSegment as TSegment,
 } from '@coparse/document-processing-types';
+import { modificationDataReplacer } from '@coparse/document-processing-types/pdf/serialization';
 import { ENABLE_DOCX_TO_PDF } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import {
@@ -26,6 +24,7 @@ import { platformFetch } from '@core/util/platformFetch';
 import type { ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
+import { Telemetry } from '@macro-inc/observability';
 import type { SerializedEditorState } from 'lexical';
 import { err, ok, type Result } from 'neverthrow';
 import type { ApiChannelListPage } from './channel-list-types';
@@ -183,7 +182,7 @@ import type { UserPinsResponse } from './generated/schemas/userPinsResponse';
 import type { UserViewsResponse } from './generated/schemas/userViewsResponse';
 import type { View } from './generated/schemas/view';
 import type { ViewsResponse } from './generated/schemas/viewsResponse';
-import { saveDocumentHandlerResponse } from './generated/zod';
+import { getSaveDocumentHandlerResponseSchema } from './generated/zod';
 import type { ItemType } from './itemType';
 
 export type { HistoryItemType, ItemType } from './itemType';
@@ -2010,7 +2009,10 @@ export const storageServiceClient = {
     }
     switch (params.type) {
       case 'PREPROCESS': {
-        const parseResult = CoParseSchema.safeParse(JSON.parse(data.result));
+        const { PdfCoParseSchema } = await import(
+          '@coparse/document-processing-types/pdf/protocol'
+        );
+        const parseResult = PdfCoParseSchema.safeParse(JSON.parse(data.result));
         return parseResult.success
           ? ok({
               preprocess: parseResult.data,
@@ -2047,7 +2049,10 @@ export const storageServiceClient = {
     }
     switch (params.type) {
       case 'PREPROCESS': {
-        const parseResult = CoParseSchema.safeParse(JSON.parse(data.result));
+        const { PdfCoParseSchema } = await import(
+          '@coparse/document-processing-types/pdf/protocol'
+        );
+        const parseResult = PdfCoParseSchema.safeParse(JSON.parse(data.result));
         return parseResult.success
           ? ok({
               preprocess: parseResult.data,
@@ -2077,12 +2082,16 @@ export const storageServiceClient = {
     modificationData: IModificationDataOnServer;
     sha: string;
   }) {
+    const parent = Telemetry.captureContext();
+    const { PdfModificationDataOnServerSchema } = await import(
+      '@coparse/document-processing-types/pdf/protocol'
+    );
     const { documentId, modificationData, sha } = params;
     const modificationDataString = JSON.stringify(
       modificationData,
       modificationDataReplacer
     );
-    const attemptParse = IModificationDataOnServerSchema.safeParse(
+    const attemptParse = PdfModificationDataOnServerSchema.safeParse(
       JSON.parse(modificationDataString)
     );
     if (!attemptParse.success) {
@@ -2092,19 +2101,18 @@ export const storageServiceClient = {
     }
 
     const body = `{ "sha": "${sha}", "modificationData": ${modificationDataString} }`;
-    const result = await dssFetch<{ data: SaveDocumentResponseData }>(
-      `/documents/${documentId}`,
-      {
+    const result = await parent.run(() =>
+      dssFetch<{ data: SaveDocumentResponseData }>(`/documents/${documentId}`, {
         method: 'PUT',
         body,
-      }
+      })
     );
     if (!result.isOk()) return err(result.error);
 
     const { data } = result.value;
 
     const metadata =
-      saveDocumentHandlerResponse.shape.data.shape.documentMetadata.safeParse(
+      getSaveDocumentHandlerResponseSchema().shape.data.shape.documentMetadata.safeParse(
         data.documentMetadata
       );
     if (!metadata.success) {
@@ -2134,7 +2142,7 @@ export const storageServiceClient = {
     const { data } = result.value;
 
     const metadata =
-      saveDocumentHandlerResponse.shape.data.shape.documentMetadata.safeParse(
+      getSaveDocumentHandlerResponseSchema().shape.data.shape.documentMetadata.safeParse(
         data.documentMetadata
       );
     if (!metadata.success) {
@@ -2375,7 +2383,7 @@ export const storageServiceClient = {
     const { data } = result.value;
 
     const metadata =
-      saveDocumentHandlerResponse.shape.data.shape.documentMetadata.safeParse(
+      getSaveDocumentHandlerResponseSchema().shape.data.shape.documentMetadata.safeParse(
         data.documentMetadata
       );
     if (!metadata.success) {

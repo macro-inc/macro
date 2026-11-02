@@ -36,7 +36,6 @@ import { PreviewPanel } from '@components/app/PreviewPanel';
 import { previewBlockTarget } from '@components/app/previewTarget';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import type { BlockAlias, BlockName } from '@core/block';
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { lazyNamed } from '@core/util/lazyNamed';
 import {
   children,
@@ -47,7 +46,10 @@ import {
   Switch,
   untrack,
 } from 'solid-js';
-import type { EntityDetailTarget } from './entity-detail-target';
+import {
+  type EntityDetailTarget,
+  entityDetailBlockType,
+} from './entity-detail-target';
 
 // PDF.js and its viewer are only needed once a PDF is opened.
 const PdfDetail = lazyNamed(
@@ -104,35 +106,6 @@ function PreviewPanelEntityDetail(props: EntityDetailProps) {
 function markdownKind(kind: BlockName | BlockAlias): MarkdownDocumentKind {
   if (kind === 'task' || kind === 'snippet' || kind === 'skill') return kind;
   return 'document';
-}
-
-export function entityDetailBlockType(
-  target: EntityDetailTarget
-): BlockName | BlockAlias | undefined {
-  if (target.type !== 'document') return;
-
-  const subType = target.subType?.type;
-  const blockType = fileTypeToBlockName(
-    subType === 'task' || subType === 'snippet' || subType === 'skill'
-      ? subType
-      : target.fileType
-  );
-  if (
-    blockType === 'md' ||
-    blockType === 'task' ||
-    blockType === 'snippet' ||
-    blockType === 'skill' ||
-    blockType === 'canvas' ||
-    blockType === 'spreadsheet' ||
-    blockType === 'code' ||
-    blockType === 'csv' ||
-    blockType === 'image' ||
-    blockType === 'pdf' ||
-    blockType === 'video' ||
-    blockType === 'unknown'
-  ) {
-    return blockType;
-  }
 }
 
 type ChannelDetailTarget = {

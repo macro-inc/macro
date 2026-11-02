@@ -2,7 +2,7 @@ import { cn } from '@ui';
 import type { NodeKey } from 'lexical';
 import { createEffect, createSignal, onMount, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
-import { TRY_UPDATE_EQUATION_COMMAND } from '../../plugins';
+import { TRY_UPDATE_EQUATION_COMMAND } from '../../plugins/katex/commands';
 
 // Lazy load katex - will be loaded on first render
 let katexModule: typeof import('katex') | null = null;

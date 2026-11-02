@@ -11,17 +11,6 @@ import { $getNodeByKey, $getRoot } from 'lexical';
 import { createSignal } from 'solid-js';
 import { expect, it, vi } from 'vitest';
 
-const plugin = vi.hoisted(() => ({
-  getMediaUrl: vi.fn(),
-  $upgradeDSSMediaUrl: vi.fn(),
-  ON_MEDIA_COMPONENT_MOUNT_COMMAND: 'ON_MEDIA_COMPONENT_MOUNT_COMMAND',
-  UPDATE_MEDIA_SIZE_COMMAND: 'UPDATE_MEDIA_SIZE_COMMAND',
-  UPLOAD_MEDIA_FAILURE_COMMAND: 'UPLOAD_MEDIA_FAILURE_COMMAND',
-  UPLOAD_MEDIA_START_COMMAND: 'UPLOAD_MEDIA_START_COMMAND',
-  UPLOAD_MEDIA_SUCCESS_COMMAND: 'UPLOAD_MEDIA_SUCCESS_COMMAND',
-}));
-vi.mock('../../plugins/media', () => plugin);
-vi.mock('../../plugins', () => plugin);
 vi.mock('@core/component/Lightbox', () => ({ Lightbox: () => null }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
 

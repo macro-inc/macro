@@ -1,7 +1,7 @@
 import { decodeBase64Utf8 } from '@app/features/email-compose/core/decode-base64';
 import {
-  CreateCalendarEvent,
-  SendEmail,
+  getCreateCalendarEventSchema,
+  getSendEmailSchema,
 } from '@service-cognition/generated/tools/schemas';
 import * as EmailValidator from 'email-validator';
 import { match } from 'ts-pattern';
@@ -25,7 +25,7 @@ export function validateReviewDraft(
 }
 
 function validateEmailDraft(value: unknown): string | undefined {
-  const parsed = SendEmail.safeParse(value);
+  const parsed = getSendEmailSchema().safeParse(value);
   if (!parsed.success)
     return 'This email has invalid fields. Review it before sending.';
   const draft = parsed.data;
@@ -45,7 +45,7 @@ function validateEmailDraft(value: unknown): string | undefined {
 }
 
 function validateCalendarDraft(value: unknown): string | undefined {
-  const parsed = CreateCalendarEvent.safeParse(value);
+  const parsed = getCreateCalendarEventSchema().safeParse(value);
   if (!parsed.success)
     return 'This event has invalid fields. Review it before creating.';
   const draft = parsed.data;

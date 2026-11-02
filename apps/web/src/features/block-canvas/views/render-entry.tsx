@@ -3,7 +3,6 @@ import '@fontsource-variable/inter';
 import '@fontsource-variable/roboto-mono';
 import '@fontsource-variable/playfair-display';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { initializeLexical } from '@core/component/LexicalMarkdown/init';
 import {
   type Bounds,
   canLabel,
@@ -24,7 +23,6 @@ import {
 import { render } from 'solid-js/web';
 import { CanvasTextContent, createCanvasTextMeasurer } from './text-content';
 
-initializeLexical();
 const fontsReady = Promise.all(
   ['Inter Variable', 'Roboto Mono Variable', 'Playfair Display Variable'].map(
     (family) => document.fonts.load(`16px "${family}"`)

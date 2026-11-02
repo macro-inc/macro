@@ -1,5 +1,5 @@
 import { useAgentCodeExecutionQuery } from '@queries/agent-session/code-execution';
-import { ExecutionReceipt } from '@service-cognition/generated/tools/schemas';
+import { getExecutionReceiptSchema } from '@service-cognition/generated/tools/schemas';
 import { createEffect, createMemo, on, Suspense } from 'solid-js';
 import { CodeExecutionToolCall } from '../component/parts/CodeExecutionToolCall';
 import type {
@@ -23,7 +23,7 @@ export function CodeExecutionPart(props: {
         : detail.kind === 'macro'
           ? detail.output
           : undefined;
-    const parsed = ExecutionReceipt.safeParse(raw);
+    const parsed = getExecutionReceiptSchema().safeParse(raw);
     return parsed.success && isExecutionId(parsed.data.executionId)
       ? parsed.data
       : undefined;

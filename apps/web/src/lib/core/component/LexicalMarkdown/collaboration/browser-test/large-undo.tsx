@@ -32,10 +32,8 @@ import { okAsync } from 'neverthrow';
 import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import type { MarkdownEditorErrors } from '../../constants';
-import {
-  createLexicalWrapper,
-  LexicalWrapperContext,
-} from '../../context/LexicalWrapperContext';
+import { createLexicalWrapper } from '../../context/createLexicalWrapper';
+import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { registerMarkdownEditing } from '../../editing/registerMarkdownEditing';
 import { editorFocusSignal } from '../../utils';
 import { CollabProvider } from '../CollabProvider';

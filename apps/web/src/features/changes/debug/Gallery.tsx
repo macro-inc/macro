@@ -6,7 +6,7 @@
  */
 
 import { SAMPLE_PATCH } from '@app/components/diff-view/debug/fixtures';
-import { QueuedPrompts } from '@app/features/block-agent/ui';
+import { QueuedPrompts } from '@app/features/block-agent/ui/composer';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { ChangesControllerProvider } from '../context/changes-controller';

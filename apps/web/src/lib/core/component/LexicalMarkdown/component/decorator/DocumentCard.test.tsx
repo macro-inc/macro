@@ -19,10 +19,8 @@ import { $getNodeByKey, $getRoot } from 'lexical';
 import { createResource, type JSX, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, expect, it, vi } from 'vitest';
-import {
-  createLexicalWrapper,
-  LexicalWrapperContext,
-} from '../../context/LexicalWrapperContext';
+import { createLexicalWrapper } from '../../context/createLexicalWrapper';
+import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { MarkdownHostContext } from '../../context/MarkdownHostContext';
 import { defaultSelectionData } from '../../plugins/selection-data';
 import { DocumentCard } from './DocumentCard';

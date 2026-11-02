@@ -2,10 +2,8 @@ import '@app/index.css';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import {
-  createLexicalWrapper,
-  LexicalWrapperContext,
-} from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
+import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/createLexicalWrapper';
+import { LexicalWrapperContext } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { buildAgentSessionMentionMarkdown } from '@macro-inc/lexical-core';
 import { agentSessionKeys } from '@queries/agent-session/keys';

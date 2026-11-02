@@ -28,14 +28,13 @@ import {
 } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import {
-  $upgradeDSSMediaUrl,
-  getMediaUrl,
   ON_MEDIA_COMPONENT_MOUNT_COMMAND,
   UPDATE_MEDIA_SIZE_COMMAND,
   UPLOAD_MEDIA_FAILURE_COMMAND,
   UPLOAD_MEDIA_START_COMMAND,
   UPLOAD_MEDIA_SUCCESS_COMMAND,
-} from '../../plugins';
+} from '../../plugins/media/commands';
+import { $upgradeDSSMediaUrl, getMediaUrl } from '../../plugins/media/source';
 import { removeNodeAndRestoreSelection } from '../../plugins/shared/removeNodeAndRestoreSelection';
 import { MediaButtons } from './MediaButtons';
 import {

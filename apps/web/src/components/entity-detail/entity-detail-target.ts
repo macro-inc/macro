@@ -1,4 +1,6 @@
 import type { PreviewPanelSelection } from '@components/app/previewTarget';
+import type { BlockAlias, BlockName } from '@core/block';
+import { fileTypeToBlockName } from '@core/constant/allBlocks';
 
 export type EntityDetailTarget = PreviewPanelSelection & {
   fallbackName?: string;
@@ -69,3 +71,32 @@ export type EntityDetailNavigationEntry = {
   value: string;
   data: EntityDetailTarget;
 };
+
+export function entityDetailBlockType(
+  target: EntityDetailTarget
+): BlockName | BlockAlias | undefined {
+  if (target.type !== 'document') return;
+
+  const subType = target.subType?.type;
+  const blockType = fileTypeToBlockName(
+    subType === 'task' || subType === 'snippet' || subType === 'skill'
+      ? subType
+      : target.fileType
+  );
+  if (
+    blockType === 'md' ||
+    blockType === 'task' ||
+    blockType === 'snippet' ||
+    blockType === 'skill' ||
+    blockType === 'canvas' ||
+    blockType === 'spreadsheet' ||
+    blockType === 'code' ||
+    blockType === 'csv' ||
+    blockType === 'image' ||
+    blockType === 'pdf' ||
+    blockType === 'video' ||
+    blockType === 'unknown'
+  ) {
+    return blockType;
+  }
+}

@@ -56,6 +56,9 @@
       "@filesystem/*": [
         "./src/lib/filesystem/*"
       ],
+      "@coparse/document-processing-types/*": [
+        "./src/lib/document-processing-types/*"
+      ],
       "@coparse/document-processing-types": [
         "./src/lib/document-processing-types/index.ts"
       ],

@@ -9,139 +9,235 @@ import * as zod from 'zod';
 /**
  * @summary Health check
  */
-export const healthHandlerResponse = zod
-  .object({})
-  .describe(
-    'Empty response is required due to custom fetch forcing `response.json()`'
-  );
+function _create_healthHandlerResponse() {
+  return zod
+    .object({})
+    .describe(
+      'Empty response is required due to custom fetch forcing `response.json()`'
+    );
+}
+let _cached_healthHandlerResponse:
+  | ReturnType<typeof _create_healthHandlerResponse>
+  | undefined;
+export function getHealthHandlerResponseSchema() {
+  return (_cached_healthHandlerResponse ??= _create_healthHandlerResponse());
+}
 
 /**
  * @summary Gets the users unsubscribe items.
  */
-export const getUnsubscribesResponseItem = zod.object({
-  item_id: zod.string().describe('The item id'),
-  item_type: zod.string().describe('The item type'),
-  snoozed_until: zod.iso
-    .datetime({})
-    .nullish()
-    .describe(
-      'None for permanent mutes; notifications resume automatically at this deadline.'
-    ),
-});
-export const getUnsubscribesResponse = zod.array(getUnsubscribesResponseItem);
+function _create_getUnsubscribesResponseItem() {
+  return zod.object({
+    item_id: zod.string().describe('The item id'),
+    item_type: zod.string().describe('The item type'),
+    snoozed_until: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'None for permanent mutes; notifications resume automatically at this deadline.'
+      ),
+  });
+}
+let _cached_getUnsubscribesResponseItem:
+  | ReturnType<typeof _create_getUnsubscribesResponseItem>
+  | undefined;
+export function getGetUnsubscribesResponseItemSchema() {
+  return (_cached_getUnsubscribesResponseItem ??=
+    _create_getUnsubscribesResponseItem());
+}
+function _create_getUnsubscribesResponse() {
+  return zod.array(getGetUnsubscribesResponseItemSchema());
+}
+let _cached_getUnsubscribesResponse:
+  | ReturnType<typeof _create_getUnsubscribesResponse>
+  | undefined;
+export function getGetUnsubscribesResponseSchema() {
+  return (_cached_getUnsubscribesResponse ??=
+    _create_getUnsubscribesResponse());
+}
 
 /**
  * @summary Unsubscribes a user from receiving emails
  */
-export const unsubscribeEmailResponse = zod
-  .object({})
-  .describe(
-    'Empty response is required due to custom fetch forcing `response.json()`'
-  );
+function _create_unsubscribeEmailResponse() {
+  return zod
+    .object({})
+    .describe(
+      'Empty response is required due to custom fetch forcing `response.json()`'
+    );
+}
+let _cached_unsubscribeEmailResponse:
+  | ReturnType<typeof _create_unsubscribeEmailResponse>
+  | undefined;
+export function getUnsubscribeEmailResponseSchema() {
+  return (_cached_unsubscribeEmailResponse ??=
+    _create_unsubscribeEmailResponse());
+}
 
 /**
  * @summary Unsubscribes a user from a given item for notifications.
  */
-export const unsubscribeItemParams = zod.object({
-  item_type: zod.enum([
-    'user',
-    'chat',
-    'channel',
-    'channel_message',
-    'document',
-    'project',
-    'email_thread',
-    'calendar_event',
-    'team',
-    'call',
-    'foreign_entity',
-    'static_file',
-    'crm_company',
-    'crm_contact',
-    'crm_pipeline',
-    'reminder',
-    'skill',
-    'agent_session',
-    'scheduled_action',
-    'initiative',
-    'database',
-    'database_row',
-    'form',
-    'external_chat',
-  ]),
-  item_id: zod.string(),
-});
+function _create_unsubscribeItemParams() {
+  return zod.object({
+    item_type: zod.enum([
+      'user',
+      'chat',
+      'channel',
+      'channel_message',
+      'document',
+      'project',
+      'email_thread',
+      'calendar_event',
+      'team',
+      'call',
+      'foreign_entity',
+      'static_file',
+      'crm_company',
+      'crm_contact',
+      'crm_pipeline',
+      'reminder',
+      'skill',
+      'agent_session',
+      'scheduled_action',
+      'initiative',
+      'database',
+      'database_row',
+      'form',
+      'external_chat',
+    ]),
+    item_id: zod.string(),
+  });
+}
+let _cached_unsubscribeItemParams:
+  | ReturnType<typeof _create_unsubscribeItemParams>
+  | undefined;
+export function getUnsubscribeItemParamsSchema() {
+  return (_cached_unsubscribeItemParams ??= _create_unsubscribeItemParams());
+}
 
-export const unsubscribeItemQueryParams = zod.object({
-  snoozed_until: zod.iso
-    .datetime({})
-    .nullish()
-    .describe('A future resume time. Omit to mute indefinitely.'),
-});
+function _create_unsubscribeItemQueryParams() {
+  return zod.object({
+    snoozed_until: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('A future resume time. Omit to mute indefinitely.'),
+  });
+}
+let _cached_unsubscribeItemQueryParams:
+  | ReturnType<typeof _create_unsubscribeItemQueryParams>
+  | undefined;
+export function getUnsubscribeItemQueryParamsSchema() {
+  return (_cached_unsubscribeItemQueryParams ??=
+    _create_unsubscribeItemQueryParams());
+}
 
-export const unsubscribeItemResponse = zod
-  .object({})
-  .describe(
-    'Empty response is required due to custom fetch forcing `response.json()`'
-  );
+function _create_unsubscribeItemResponse() {
+  return zod
+    .object({})
+    .describe(
+      'Empty response is required due to custom fetch forcing `response.json()`'
+    );
+}
+let _cached_unsubscribeItemResponse:
+  | ReturnType<typeof _create_unsubscribeItemResponse>
+  | undefined;
+export function getUnsubscribeItemResponseSchema() {
+  return (_cached_unsubscribeItemResponse ??=
+    _create_unsubscribeItemResponse());
+}
 
 /**
  * @summary Removes a unsubscribe item for a user.
  */
-export const removeUnsubscribeItemParams = zod.object({
-  item_type: zod.enum([
-    'user',
-    'chat',
-    'channel',
-    'channel_message',
-    'document',
-    'project',
-    'email_thread',
-    'calendar_event',
-    'team',
-    'call',
-    'foreign_entity',
-    'static_file',
-    'crm_company',
-    'crm_contact',
-    'crm_pipeline',
-    'reminder',
-    'skill',
-    'agent_session',
-    'scheduled_action',
-    'initiative',
-    'database',
-    'database_row',
-    'form',
-    'external_chat',
-  ]),
-  item_id: zod.string(),
-});
+function _create_removeUnsubscribeItemParams() {
+  return zod.object({
+    item_type: zod.enum([
+      'user',
+      'chat',
+      'channel',
+      'channel_message',
+      'document',
+      'project',
+      'email_thread',
+      'calendar_event',
+      'team',
+      'call',
+      'foreign_entity',
+      'static_file',
+      'crm_company',
+      'crm_contact',
+      'crm_pipeline',
+      'reminder',
+      'skill',
+      'agent_session',
+      'scheduled_action',
+      'initiative',
+      'database',
+      'database_row',
+      'form',
+      'external_chat',
+    ]),
+    item_id: zod.string(),
+  });
+}
+let _cached_removeUnsubscribeItemParams:
+  | ReturnType<typeof _create_removeUnsubscribeItemParams>
+  | undefined;
+export function getRemoveUnsubscribeItemParamsSchema() {
+  return (_cached_removeUnsubscribeItemParams ??=
+    _create_removeUnsubscribeItemParams());
+}
 
-export const removeUnsubscribeItemResponse = zod
-  .object({})
-  .describe(
-    'Empty response is required due to custom fetch forcing `response.json()`'
-  );
+function _create_removeUnsubscribeItemResponse() {
+  return zod
+    .object({})
+    .describe(
+      'Empty response is required due to custom fetch forcing `response.json()`'
+    );
+}
+let _cached_removeUnsubscribeItemResponse:
+  | ReturnType<typeof _create_removeUnsubscribeItemResponse>
+  | undefined;
+export function getRemoveUnsubscribeItemResponseSchema() {
+  return (_cached_removeUnsubscribeItemResponse ??=
+    _create_removeUnsubscribeItemResponse());
+}
 
 /**
  * @summary Unsubscribes user from all notifications.
  */
-export const unsubscribeAllResponse = zod
-  .object({})
-  .describe(
-    'Empty response is required due to custom fetch forcing `response.json()`'
-  );
+function _create_unsubscribeAllResponse() {
+  return zod
+    .object({})
+    .describe(
+      'Empty response is required due to custom fetch forcing `response.json()`'
+    );
+}
+let _cached_unsubscribeAllResponse:
+  | ReturnType<typeof _create_unsubscribeAllResponse>
+  | undefined;
+export function getUnsubscribeAllResponseSchema() {
+  return (_cached_unsubscribeAllResponse ??= _create_unsubscribeAllResponse());
+}
 
 /**
  * @summary Unmutes all notifications.
 Existing notifications that were muted manually will remain muted.
  */
-export const removeUnsubscribeAllResponse = zod
-  .object({})
-  .describe(
-    'Empty response is required due to custom fetch forcing `response.json()`'
-  );
+function _create_removeUnsubscribeAllResponse() {
+  return zod
+    .object({})
+    .describe(
+      'Empty response is required due to custom fetch forcing `response.json()`'
+    );
+}
+let _cached_removeUnsubscribeAllResponse:
+  | ReturnType<typeof _create_removeUnsubscribeAllResponse>
+  | undefined;
+export function getRemoveUnsubscribeAllResponseSchema() {
+  return (_cached_removeUnsubscribeAllResponse ??=
+    _create_removeUnsubscribeAllResponse());
+}
 
 /**
  * Rows that fail to deserialize are dropped with a warning log.
@@ -150,23 +246,32 @@ then converts each row to [`UserNotificationRow<NotifEvent>`].
  */
 export const listTypedNotificationsQueryLimitMin = 0;
 
-export const listTypedNotificationsQueryParams = zod.object({
-  states: zod
-    .string()
-    .optional()
-    .describe(
-      'Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states.'
-    ),
-  limit: zod
-    .number()
-    .min(listTypedNotificationsQueryLimitMin)
-    .optional()
-    .describe('Size limit per page.'),
-  cursor: zod
-    .string()
-    .optional()
-    .describe('Cursor value. Base64 encoded timestamp and item id.'),
-});
+function _create_listTypedNotificationsQueryParams() {
+  return zod.object({
+    states: zod
+      .string()
+      .optional()
+      .describe(
+        'Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states.'
+      ),
+    limit: zod
+      .number()
+      .min(listTypedNotificationsQueryLimitMin)
+      .optional()
+      .describe('Size limit per page.'),
+    cursor: zod
+      .string()
+      .optional()
+      .describe('Cursor value. Base64 encoded timestamp and item id.'),
+  });
+}
+let _cached_listTypedNotificationsQueryParams:
+  | ReturnType<typeof _create_listTypedNotificationsQueryParams>
+  | undefined;
+export function getListTypedNotificationsQueryParamsSchema() {
+  return (_cached_listTypedNotificationsQueryParams ??=
+    _create_listTypedNotificationsQueryParams());
+}
 
 export const listTypedNotificationsResponseItemsItemNotificationMetadataContentNumberMin = 0;
 
@@ -192,149 +297,221 @@ export const listTypedNotificationsResponseItemsItemNotificationMetadataContentT
 
 export const listTypedNotificationsResponseItemsItemNotificationMetadataContentTurnMinOne = 0;
 
-export const listTypedNotificationsResponse = zod
-  .object({
-    items: zod
-      .array(
-        zod
-          .object({
-            entity_id: zod.string().describe('The id of that entity'),
-            entity_type: zod
-              .enum([
-                'user',
-                'chat',
-                'channel',
-                'channel_message',
-                'document',
-                'project',
-                'email_thread',
-                'calendar_event',
-                'team',
-                'call',
-                'foreign_entity',
-                'static_file',
-                'crm_company',
-                'crm_contact',
-                'crm_pipeline',
-                'reminder',
-                'skill',
-                'agent_session',
-                'scheduled_action',
-                'initiative',
-                'database',
-                'database_row',
-                'form',
-                'external_chat',
-              ])
-              .describe('The type of an entity in Macro'),
-          })
-          .describe(
-            'The Entity describes the minimum amount of information required to describe a unique thing in Macro\nThis contains the type of the entity [EntityType] and the string id of that entity'
-          )
-          .and(
-            zod.object({
-              created_at: zod.iso
-                .datetime({})
-                .describe('When the notification was created.'),
-              deleted_at: zod.iso
-                .datetime({})
-                .nullish()
-                .describe('When the notification was deleted.'),
-              id: zod.uuid().describe('The notification ID.'),
-              notification_event_type: zod
-                .string()
-                .describe(
-                  'The notification event type string (e.g. \"channel_mention\").\nTODO make this a new type'
-                ),
-              notification_metadata: zod
-                .union([
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          channelName: zod.string().optional(),
-                          channelType: zod.enum([
-                            'public',
-                            'private',
-                            'directMessage',
-                            'team',
-                          ]),
-                        })
-                        .describe(
-                          'Common metadata for notifications on channels'
-                        )
-                        .and(
-                          zod.object({
-                            messageContent: zod
-                              .string()
-                              .describe('The message content'),
-                            messageId: zod
-                              .string()
-                              .describe('The message you were mentioned in'),
-                            senderDisplayName: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'Display name for non-user senders such as bots'
-                              ),
-                            senderProfilePictureUrl: zod.string().nullish(),
-                            threadId: zod
-                              .string()
-                              .nullish()
-                              .describe('the id of the thread'),
+function _create_listTypedNotificationsResponse() {
+  return zod
+    .object({
+      items: zod
+        .array(
+          zod
+            .object({
+              entity_id: zod.string().describe('The id of that entity'),
+              entity_type: zod
+                .enum([
+                  'user',
+                  'chat',
+                  'channel',
+                  'channel_message',
+                  'document',
+                  'project',
+                  'email_thread',
+                  'calendar_event',
+                  'team',
+                  'call',
+                  'foreign_entity',
+                  'static_file',
+                  'crm_company',
+                  'crm_contact',
+                  'crm_pipeline',
+                  'reminder',
+                  'skill',
+                  'agent_session',
+                  'scheduled_action',
+                  'initiative',
+                  'database',
+                  'database_row',
+                  'form',
+                  'external_chat',
+                ])
+                .describe('The type of an entity in Macro'),
+            })
+            .describe(
+              'The Entity describes the minimum amount of information required to describe a unique thing in Macro\nThis contains the type of the entity [EntityType] and the string id of that entity'
+            )
+            .and(
+              zod.object({
+                created_at: zod.iso
+                  .datetime({})
+                  .describe('When the notification was created.'),
+                deleted_at: zod.iso
+                  .datetime({})
+                  .nullish()
+                  .describe('When the notification was deleted.'),
+                id: zod.uuid().describe('The notification ID.'),
+                notification_event_type: zod
+                  .string()
+                  .describe(
+                    'The notification event type string (e.g. \"channel_mention\").\nTODO make this a new type'
+                  ),
+                notification_metadata: zod
+                  .union([
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            channelName: zod.string().optional(),
+                            channelType: zod.enum([
+                              'public',
+                              'private',
+                              'directMessage',
+                              'team',
+                            ]),
                           })
-                        ),
-                      tag: zod.enum(['channel_mention']),
-                    })
-                    .describe('Someone mentioned you in a channel.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          channelName: zod.string().optional(),
-                          channelType: zod.enum([
-                            'public',
-                            'private',
-                            'directMessage',
-                            'team',
-                          ]),
-                        })
-                        .describe(
-                          'Common metadata for notifications on channels'
-                        )
-                        .and(
-                          zod.object({
-                            messageContent: zod
-                              .string()
-                              .describe('The message content'),
-                            messageId: zod
-                              .string()
-                              .describe('The message you were mentioned in'),
-                            senderDisplayName: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'Display name for non-user senders such as bots'
-                              ),
-                            senderProfilePictureUrl: zod.string().nullish(),
-                            threadId: zod
-                              .string()
-                              .nullish()
-                              .describe('the id of the thread'),
+                          .describe(
+                            'Common metadata for notifications on channels'
+                          )
+                          .and(
+                            zod.object({
+                              messageContent: zod
+                                .string()
+                                .describe('The message content'),
+                              messageId: zod
+                                .string()
+                                .describe('The message you were mentioned in'),
+                              senderDisplayName: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'Display name for non-user senders such as bots'
+                                ),
+                              senderProfilePictureUrl: zod.string().nullish(),
+                              threadId: zod
+                                .string()
+                                .nullish()
+                                .describe('the id of the thread'),
+                            })
+                          ),
+                        tag: zod.enum(['channel_mention']),
+                      })
+                      .describe('Someone mentioned you in a channel.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            channelName: zod.string().optional(),
+                            channelType: zod.enum([
+                              'public',
+                              'private',
+                              'directMessage',
+                              'team',
+                            ]),
                           })
-                        )
-                        .and(
-                          zod.object({
+                          .describe(
+                            'Common metadata for notifications on channels'
+                          )
+                          .and(
+                            zod.object({
+                              messageContent: zod
+                                .string()
+                                .describe('The message content'),
+                              messageId: zod
+                                .string()
+                                .describe('The message you were mentioned in'),
+                              senderDisplayName: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'Display name for non-user senders such as bots'
+                                ),
+                              senderProfilePictureUrl: zod.string().nullish(),
+                              threadId: zod
+                                .string()
+                                .nullish()
+                                .describe('the id of the thread'),
+                            })
+                          )
+                          .and(
+                            zod.object({
+                              documentName: zod
+                                .string()
+                                .describe('The name of the document'),
+                              fileType: zod
+                                .string()
+                                .nullish()
+                                .describe('The file type of the document'),
+                              owner: zod
+                                .string()
+                                .describe('The owner of the document'),
+                              subType: zod
+                                .union([
+                                  zod.null(),
+                                  zod
+                                    .union([
+                                      zod.object({
+                                        type: zod.enum(['task']),
+                                      }),
+                                      zod.object({
+                                        type: zod.enum(['snippet']),
+                                      }),
+                                      zod.object({
+                                        type: zod.enum(['skill']),
+                                      }),
+                                      zod.object({
+                                        type: zod.enum([
+                                          'initiative_description',
+                                        ]),
+                                      }),
+                                    ])
+                                    .describe(
+                                      'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                                    ),
+                                ])
+                                .optional(),
+                            })
+                          )
+                          .describe(
+                            'Someone mentioned a document in a channel'
+                          ),
+                        tag: zod.enum(['document_mention']),
+                      })
+                      .describe('Someone mentioned a document in a channel.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            commentId: zod
+                              .union([
+                                zod
+                                  .number()
+                                  .describe(
+                                    'Legacy `Comment.id` or `Thread.id`.'
+                                  ),
+                                zod
+                                  .uuid()
+                                  .describe(
+                                    'Message or root id in the shared message store.'
+                                  ),
+                              ])
+                              .describe(
+                                'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                              ),
                             documentName: zod
                               .string()
-                              .describe('The name of the document'),
+                              .describe('The name of the document.'),
                             fileType: zod
                               .string()
                               .nullish()
-                              .describe('The file type of the document'),
+                              .describe('The file type of the document.'),
+                            mentionId: zod.string().describe('The mention ID.'),
                             owner: zod
                               .string()
-                              .describe('The owner of the document'),
+                              .describe('The owner of the document.'),
+                            senderDisplayName: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Public bot name when the author is an agent rather than a Macro user.'
+                              ),
+                            senderProfilePictureUrl: zod.string().nullish(),
                             subType: zod
                               .union([
                                 zod.null(),
@@ -360,1805 +537,1772 @@ export const listTypedNotificationsResponse = zod
                                   ),
                               ])
                               .optional(),
-                          })
-                        )
-                        .describe('Someone mentioned a document in a channel'),
-                      tag: zod.enum(['document_mention']),
-                    })
-                    .describe('Someone mentioned a document in a channel.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          commentId: zod
-                            .union([
-                              zod
-                                .number()
-                                .describe(
-                                  'Legacy `Comment.id` or `Thread.id`.'
-                                ),
-                              zod
-                                .uuid()
-                                .describe(
-                                  'Message or root id in the shared message store.'
-                                ),
-                            ])
-                            .describe(
-                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
-                            ),
-                          documentName: zod
-                            .string()
-                            .describe('The name of the document.'),
-                          fileType: zod
-                            .string()
-                            .nullish()
-                            .describe('The file type of the document.'),
-                          mentionId: zod.string().describe('The mention ID.'),
-                          owner: zod
-                            .string()
-                            .describe('The owner of the document.'),
-                          senderDisplayName: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'Public bot name when the author is an agent rather than a Macro user.'
-                            ),
-                          senderProfilePictureUrl: zod.string().nullish(),
-                          subType: zod
-                            .union([
-                              zod.null(),
-                              zod
-                                .union([
-                                  zod.object({
-                                    type: zod.enum(['task']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['snippet']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['skill']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['initiative_description']),
-                                  }),
-                                ])
-                                .describe(
-                                  'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
-                                ),
-                            ])
-                            .optional(),
-                          text: zod
-                            .string()
-                            .describe('the text of the comment'),
-                          threadId: zod
-                            .union([
-                              zod
-                                .number()
-                                .describe(
-                                  'Legacy `Comment.id` or `Thread.id`.'
-                                ),
-                              zod
-                                .uuid()
-                                .describe(
-                                  'Message or root id in the shared message store.'
-                                ),
-                            ])
-                            .describe(
-                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
-                            ),
-                        })
-                        .describe(
-                          'Notification sent when a user is mentioned in a document comment.'
-                        ),
-                      tag: zod.enum(['mentioned_in_document_comment']),
-                    })
-                    .describe('User was mentioned in a comment in a document'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          commentId: zod
-                            .union([
-                              zod
-                                .number()
-                                .describe(
-                                  'Legacy `Comment.id` or `Thread.id`.'
-                                ),
-                              zod
-                                .uuid()
-                                .describe(
-                                  'Message or root id in the shared message store.'
-                                ),
-                            ])
-                            .describe(
-                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
-                            ),
-                          documentName: zod
-                            .string()
-                            .describe('The name of the document.'),
-                          fileType: zod
-                            .string()
-                            .nullish()
-                            .describe('The file type of the document.'),
-                          owner: zod
-                            .string()
-                            .describe('The owner of the document.'),
-                          senderDisplayName: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'Public bot name when the author is an agent rather than a Macro user.'
-                            ),
-                          senderProfilePictureUrl: zod.string().nullish(),
-                          subType: zod
-                            .union([
-                              zod.null(),
-                              zod
-                                .union([
-                                  zod.object({
-                                    type: zod.enum(['task']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['snippet']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['skill']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['initiative_description']),
-                                  }),
-                                ])
-                                .describe(
-                                  'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
-                                ),
-                            ])
-                            .optional(),
-                          text: zod
-                            .string()
-                            .describe('the text of the comment'),
-                          threadId: zod
-                            .union([
-                              zod
-                                .number()
-                                .describe(
-                                  'Legacy `Comment.id` or `Thread.id`.'
-                                ),
-                              zod
-                                .uuid()
-                                .describe(
-                                  'Message or root id in the shared message store.'
-                                ),
-                            ])
-                            .describe(
-                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
-                            ),
-                        })
-                        .describe(
-                          'Notification sent when someone replies to a document comment thread.'
-                        ),
-                      tag: zod.enum(['replied_to_document_comment_thread']),
-                    })
-                    .describe(
-                      'Someone replied to a document comment thread the user participated in.'
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          commentId: zod
-                            .union([
-                              zod
-                                .number()
-                                .describe(
-                                  'Legacy `Comment.id` or `Thread.id`.'
-                                ),
-                              zod
-                                .uuid()
-                                .describe(
-                                  'Message or root id in the shared message store.'
-                                ),
-                            ])
-                            .describe(
-                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
-                            ),
-                          documentName: zod
-                            .string()
-                            .describe('The name of the document.'),
-                          fileType: zod
-                            .string()
-                            .nullish()
-                            .describe('The file type of the document.'),
-                          owner: zod
-                            .string()
-                            .describe('The owner of the document.'),
-                          senderDisplayName: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'Public bot name when the author is an agent rather than a Macro user.'
-                            ),
-                          senderProfilePictureUrl: zod.string().nullish(),
-                          subType: zod
-                            .union([
-                              zod.null(),
-                              zod
-                                .union([
-                                  zod.object({
-                                    type: zod.enum(['task']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['snippet']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['skill']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['initiative_description']),
-                                  }),
-                                ])
-                                .describe(
-                                  'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
-                                ),
-                            ])
-                            .optional(),
-                          text: zod
-                            .string()
-                            .describe('the text of the comment'),
-                          threadId: zod
-                            .union([
-                              zod
-                                .number()
-                                .describe(
-                                  'Legacy `Comment.id` or `Thread.id`.'
-                                ),
-                              zod
-                                .uuid()
-                                .describe(
-                                  'Message or root id in the shared message store.'
-                                ),
-                            ])
-                            .describe(
-                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
-                            ),
-                        })
-                        .describe(
-                          'Notification sent when someone comments on a document the user owns.'
-                        ),
-                      tag: zod.enum(['commented_on_document']),
-                    })
-                    .describe('Someone commented on a document the user owns.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          accessLevel: zod
-                            .enum(['view', 'comment', 'edit'])
-                            .describe(
-                              'Permission level used by an access request, excluding ownership.'
-                            ),
-                          entityName: zod
-                            .string()
-                            .describe("Shared item's name."),
-                          fileType: zod
-                            .string()
-                            .nullish()
-                            .describe('Document file type for routing.'),
-                          requestId: zod
-                            .uuid()
-                            .describe('Stable request identity.'),
-                          revision: zod
-                            .number()
-                            .describe(
-                              'Revision that generated this notification.'
-                            ),
-                        })
-                        .describe(
-                          'A person requested access to a shared entity.'
-                        ),
-                      tag: zod.enum(['entity_access_requested']),
-                    })
-                    .describe(
-                      'Someone requested more access to a shared entity.'
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          accessLevel: zod
-                            .enum(['view', 'comment', 'edit'])
-                            .describe(
-                              'Permission level used by an access request, excluding ownership.'
-                            ),
-                          entityName: zod
-                            .string()
-                            .describe("Shared item's name."),
-                          fileType: zod
-                            .string()
-                            .nullish()
-                            .describe('Document file type for routing.'),
-                          requestId: zod
-                            .uuid()
-                            .describe('Stable request identity.'),
-                          revision: zod
-                            .number()
-                            .describe(
-                              'Revision that generated this notification.'
-                            ),
-                        })
-                        .describe(
-                          'A person granted you access to a shared entity.'
-                        ),
-                      tag: zod.enum(['entity_access_granted']),
-                    })
-                    .describe('An owner granted requested access.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          messageId: zod
-                            .uuid()
-                            .describe('Canonical shared message UUID.'),
-                          owner: zod
-                            .string()
-                            .describe('Authenticated project owner.'),
-                          projectName: zod
-                            .string()
-                            .describe('Name displayed in the project header.'),
-                          reason: zod
-                            .enum(['mention', 'reply', 'assignee', 'owner'])
-                            .describe(
-                              'Why a project discussion notification was delivered.'
-                            ),
-                          senderDisplayName: zod
-                            .string()
-                            .nullish()
-                            .describe('Public display name for a bot author.'),
-                          senderProfilePictureUrl: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'Optional avatar for push notification attachments.'
-                            ),
-                          text: zod
-                            .string()
-                            .describe('Posted Markdown content.'),
-                          threadId: zod
-                            .uuid()
-                            .describe('Canonical discussion root UUID.'),
-                        })
-                        .describe(
-                          'Project discussion metadata. The notification entity identifies the initiative;\nmessage and thread UUIDs select the discussion inside that project.'
-                        ),
-                      tag: zod.enum(['initiative_discussion']),
-                    })
-                    .describe(
-                      'Someone commented, replied, or mentioned the recipient on a project.'
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          messageId: zod
-                            .uuid()
-                            .describe('Canonical shared message UUID.'),
-                          reason: zod
-                            .enum(['mention', 'reply', 'owner'])
-                            .describe(
-                              'Why a CRM discussion notification was delivered.'
-                            ),
-                          recordName: zod
-                            .string()
-                            .describe('Company or contact display name.'),
-                          senderDisplayName: zod
-                            .string()
-                            .nullish()
-                            .describe('Public display name for a bot author.'),
-                          senderProfilePictureUrl: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'Optional avatar for push notification attachments.'
-                            ),
-                          text: zod
-                            .string()
-                            .describe('Posted Markdown content.'),
-                          threadId: zod
-                            .uuid()
-                            .describe('Canonical discussion root UUID.'),
-                        })
-                        .describe(
-                          'CRM discussion metadata. The notification entity identifies the company or\ncontact; message and thread UUIDs select the discussion inside it.'
-                        ),
-                      tag: zod.enum(['crm_discussion']),
-                    })
-                    .describe(
-                      'Someone commented, replied, or mentioned the recipient on a CRM company or contact.'
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          channelName: zod
-                            .string()
-                            .optional()
-                            .describe('The name of the channel'),
-                          invitedBy: zod
-                            .string()
-                            .describe('The user who sent the invitation'),
-                          isDirectMessage: zod
-                            .boolean()
-                            .optional()
-                            .describe(
-                              'Whether this is a direct message rather than a channel invitation.\nOlder notification payloads retain channel-invitation wording.'
-                            ),
-                          messageContent: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'Message content to show in the invite email, when the invite was triggered by a message.'
-                            ),
-                          senderProfilePictureUrl: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              "The sender's profile picture URL, if available."
-                            ),
-                        })
-                        .describe(
-                          'Metadata for when a user is invited to a channel.'
-                        ),
-                      tag: zod.enum(['channel_invite']),
-                    })
-                    .describe('The user was invited to a channel.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          channelName: zod.string().optional(),
-                          channelType: zod.enum([
-                            'public',
-                            'private',
-                            'directMessage',
-                            'team',
-                          ]),
-                        })
-                        .describe(
-                          'Common metadata for notifications on channels'
-                        )
-                        .and(
-                          zod.object({
-                            messageContent: zod
+                            text: zod
                               .string()
-                              .optional()
-                              .describe('The content of the message'),
-                            messageId: zod.string().describe('The message id'),
-                            sender: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'The user who sent the message, when sent by a user'
-                              ),
-                            senderDisplayName: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'Display name for non-user senders such as bots'
-                              ),
-                            senderProfilePictureUrl: zod.string().nullish(),
-                          })
-                        ),
-                      tag: zod.enum(['channel_message_send']),
-                    })
-                    .describe('A user sent a message in a channel.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          channelName: zod.string().optional(),
-                          channelType: zod.enum([
-                            'public',
-                            'private',
-                            'directMessage',
-                            'team',
-                          ]),
-                        })
-                        .describe(
-                          'Common metadata for notifications on channels'
-                        )
-                        .and(
-                          zod.object({
-                            messageContent: zod
-                              .string()
-                              .describe('The message content'),
-                            messageId: zod
-                              .string()
-                              .describe('The id of the new message'),
-                            senderDisplayName: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'Display name for non-user senders such as bots'
-                              ),
-                            senderProfilePictureUrl: zod.string().nullish(),
+                              .describe('the text of the comment'),
                             threadId: zod
-                              .string()
+                              .union([
+                                zod
+                                  .number()
+                                  .describe(
+                                    'Legacy `Comment.id` or `Thread.id`.'
+                                  ),
+                                zod
+                                  .uuid()
+                                  .describe(
+                                    'Message or root id in the shared message store.'
+                                  ),
+                              ])
                               .describe(
-                                'The id of the thread that has the reply'
-                              ),
-                            threadParentSenderId: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'The user who sent the root message of the thread'
-                              ),
-                            userId: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'The sender id of the reply, when sent by a user'
+                                'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
                               ),
                           })
-                        ),
-                      tag: zod.enum(['channel_message_reply']),
-                    })
-                    .describe(
-                      'Someone replied to a thread in a channel that the user is part of.'
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          channel_name: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The name of the channel the call started in, when available.'
-                            ),
-                          sender_profile_picture_url: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'Profile picture URL of the user who started the call, when available.'
-                            ),
-                        })
-                        .describe(
-                          'Metadata for a notification that a call has started in a channel.\n\nMirrors the producer-side `CallStartedNotification` in the `call` crate:\nboth serialize the same wire shape (snake_case fields) under the same\n`call_started` [`Notification::TYPE_NAME`]. This type is the read-side\nmodel used by [`crate::NotifEvent`]; the producer keeps its own type\nbecause it additionally builds the incoming-call APNS\/VoIP push.\n\nRows persisted before the type name was normalized used the kebab-case\n`call-started`; the [`crate::NotifEvent::CallStarted`] variant carries a\n`#[serde(alias = \"call-started\")]` so those rows still deserialize.'
-                        ),
-                      tag: zod.enum(['call_started']),
-                    })
-                    .describe(
-                      'A call has started in a channel the user is a member of.\n\nThe `call-started` alias keeps rows persisted before the type name\nwas normalized to snake_case (`call_started`) deserializable.'
-                    ),
-                  zod
-                    .object({
-                      content: zod.object({
-                        sender: zod.string().nullish(),
-                        snippet: zod.string(),
-                        subject: zod.string(),
-                        threadId: zod.string(),
-                        toEmail: zod.string(),
-                      }),
-                      tag: zod.enum(['new_email']),
-                    })
-                    .describe('A new email has been sent to the user.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          emailAddress: zod
-                            .string()
-                            .describe(
-                              'The address of the inbox that needs to be reconnected.'
-                            ),
-                        })
-                        .describe(
-                          "Metadata for a notification that a linked inbox's grant has died and the\ninbox must be reconnected. Fanned out to the inbox owner and every delegate,\nsince any of them holding the Google grant can restore sync."
-                        ),
-                      tag: zod.enum(['inbox_reauth_required']),
-                    })
-                    .describe(
-                      "A linked inbox's grant died and must be reconnected."
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          invitedBy: zod
-                            .string()
-                            .describe('The user who sent the invitation'),
-                          inviteePlan: zod
-                            .enum(['free', 'premium'])
-                            .optional()
-                            .describe('What a team invitee gets by joining.'),
-                          reminder: zod
-                            .boolean()
-                            .optional()
-                            .describe(
-                              'Whether this email reminds the invitee of an invite they have not answered.'
-                            ),
-                          role: zod
-                            .string()
-                            .nullish()
-                            .describe('Role\/permission level in the team'),
-                          senderProfilePictureUrl: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              "The sender's profile picture URL, if available."
-                            ),
-                          teamId: zod
-                            .uuid()
-                            .describe('The unique identifier of the team'),
-                          teamInviteId: zod
-                            .uuid()
-                            .describe(
-                              'The unique identifier of the team invite'
-                            ),
-                          teamName: zod
-                            .string()
-                            .describe('The name of the team being invited to'),
-                        })
-                        .describe(
-                          'Metadata for when a user is invited to a team.'
-                        ),
-                      tag: zod.enum(['invite_to_team']),
-                    })
-                    .describe('A user was invited to a team.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          assignedBy: zod
-                            .string()
-                            .describe('The user who assigned the task'),
-                          senderProfilePictureUrl: zod.string().nullish(),
-                          subType: zod
-                            .union([
-                              zod.null(),
-                              zod
-                                .union([
-                                  zod.object({
-                                    type: zod.enum(['task']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['snippet']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['skill']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['initiative_description']),
-                                  }),
-                                ])
-                                .describe(
-                                  'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
-                                ),
-                            ])
-                            .optional(),
-                          taskId: zod
-                            .string()
-                            .describe('The unique identifier of the task'),
-                          taskName: zod
-                            .string()
-                            .nullish()
-                            .describe('The name of the task (optional)'),
-                        })
-                        .describe(
-                          'Metadata for when a user is assigned to a task'
-                        ),
-                      tag: zod.enum(['task_assigned']),
-                    })
-                    .describe('A user was assigned to a task.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          description: zod
-                            .string()
-                            .describe(
-                              'What the user asked to be reminded about.'
-                            ),
-                          reminderId: zod
-                            .uuid()
-                            .describe('The reminder that fired.'),
-                          scheduledFor: zod.iso
-                            .datetime({})
-                            .nullish()
-                            .describe(
-                              "Which firing this is — the occurrence the reminder came due for.\n\nWhat distinguishes two firings of the same recurring reminder, which are\notherwise identical: same id, same description. The collapse key is\nbuilt from it, so without it Tuesday's alert would replace Monday's\nunread one on the lock screen.\n\nOptional because notifications written before recurring dispatch existed\nhave no such field, and they still have to read back."
-                            ),
-                        })
-                        .describe(
-                          'Metadata for a reminder the user set for themselves coming due.\n\nThere is no sender: a reminder is self-set, so the dispatcher sends it with\n`sender_id: None` (a recipient who is also the sender is filtered out of\ntheir own notification). Every formatter here must therefore work without\none.\n\nThe associated entity, when there is one, lives on the notification row\nrather than in here, and clients resolve its name from that — so the\ndispatcher does not have to look up a name across five entity types.'
-                        ),
-                      tag: zod.enum(['reminder']),
-                    })
-                    .describe(
-                      'A reminder the user set for themselves came due.'
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          chatName: zod.string().describe("The chat's name."),
-                          messageId: zod
-                            .uuid()
-                            .describe(
-                              'Stable message id; retries use it as their notification id.'
-                            ),
-                          provider: zod
-                            .enum(['whatsapp'])
-                            .describe(
-                              'The messaging service an external chat lives in.'
-                            ),
-                        })
-                        .describe(
-                          'A live message in an independently shared external chat.'
-                        ),
-                      tag: zod.enum(['external_chat_message']),
-                    })
-                    .describe('A live message in a shared external chat.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          endsAt: zod.iso
-                            .datetime({})
-                            .nullish()
-                            .describe('Instance end, for timed events.'),
-                          eventId: zod
-                            .uuid()
-                            .describe(
-                              'The calendar event entity the alarm belongs to.'
-                            ),
-                          minutesBefore: zod
-                            .number()
-                            .describe(
-                              'Minutes before the start the alarm was configured to fire.'
-                            ),
-                          occurrenceKey: zod
-                            .string()
-                            .describe(
-                              'Stable occurrence key of the instance that is starting.'
-                            ),
-                          startDate: zod.iso
-                            .date()
-                            .nullish()
-                            .describe(
-                              'Instance start date, for all-day events.'
-                            ),
-                          startsAt: zod.iso
-                            .datetime({})
-                            .nullish()
-                            .describe('Instance start, for timed events.'),
-                          timeZone: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'IANA zone for rendering local clock times, when known.'
-                            ),
-                          title: zod
-                            .string()
-                            .describe('Event display title at dispatch time.'),
-                        })
-                        .describe(
-                          'A calendar event alarm came due. Like [`ReminderMetadata`], these are\nself-notifications: `sender_id` must stay `None` or the only recipient is\nfiltered out. Everything the alert renders rides in here so the\ndispatcher never has to resolve the event again at display time.'
-                        ),
-                      tag: zod.enum(['calendar_event_reminder']),
-                    })
-                    .describe('A calendar event alarm came due.'),
-                  zod
-                    .object({
-                      content: zod.object({
-                        messageId: zod.string(),
-                        summary: zod.string(),
-                      }),
-                      tag: zod.enum(['ai_response']),
-                    })
-                    .describe('An AI assistant responded to a chat.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          displayName: zod
-                            .string()
-                            .describe(
-                              'A compact label suitable for display in the UI.'
-                            ),
-                          foreignEntityId: zod
-                            .uuid()
-                            .describe(
-                              'The source-specific internal foreign entity row id for this pull request.'
-                            ),
-                          githubKey: zod
-                            .string()
-                            .describe(
-                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
-                            ),
-                          number: zod
-                            .number()
-                            .min(
-                              listTypedNotificationsResponseItemsItemNotificationMetadataContentNumberMin
-                            )
-                            .describe('The GitHub pull request number.'),
-                          owner: zod
-                            .string()
-                            .describe(
-                              'The GitHub repository owner or organization.'
-                            ),
-                          repo: zod
-                            .string()
-                            .describe('The GitHub repository name.'),
-                          senderGithubAvatarUrl: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub avatar URL for the sender, when available.'
-                            ),
-                          senderGithubLogin: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub login for the sender, when available.'
-                            ),
-                          senderGithubUserId: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The stable GitHub numeric user id for the sender, serialized as a string.'
-                            ),
-                          title: zod
-                            .string()
-                            .describe(
-                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
-                            ),
-                          url: zod
-                            .string()
-                            .describe(
-                              'The public GitHub URL for the pull request.'
-                            ),
-                        })
-                        .describe(
-                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
-                        )
-                        .and(
-                          zod.object({
-                            action: zod
-                              .enum(['opened', 'reopened', 'closed'])
+                          .describe(
+                            'Notification sent when a user is mentioned in a document comment.'
+                          ),
+                        tag: zod.enum(['mentioned_in_document_comment']),
+                      })
+                      .describe(
+                        'User was mentioned in a comment in a document'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            commentId: zod
+                              .union([
+                                zod
+                                  .number()
+                                  .describe(
+                                    'Legacy `Comment.id` or `Thread.id`.'
+                                  ),
+                                zod
+                                  .uuid()
+                                  .describe(
+                                    'Message or root id in the shared message store.'
+                                  ),
+                              ])
                               .describe(
-                                'The GitHub pull request webhook action that triggered the notification.'
+                                'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
                               ),
-                            baseBranch: zod
+                            documentName: zod
+                              .string()
+                              .describe('The name of the document.'),
+                            fileType: zod
+                              .string()
+                              .nullish()
+                              .describe('The file type of the document.'),
+                            owner: zod
+                              .string()
+                              .describe('The owner of the document.'),
+                            senderDisplayName: zod
                               .string()
                               .nullish()
                               .describe(
-                                'The pull request base branch, when available.'
+                                'Public bot name when the author is an agent rather than a Macro user.'
                               ),
-                            headBranch: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'The pull request head branch, when available.'
-                              ),
-                            mergedAt: zod.iso
-                              .datetime({})
-                              .nullish()
-                              .describe(
-                                'When the pull request was merged, when available.'
-                              ),
-                            previousStatus: zod
+                            senderProfilePictureUrl: zod.string().nullish(),
+                            subType: zod
                               .union([
                                 zod.null(),
                                 zod
-                                  .enum(['open', 'closed', 'merged'])
+                                  .union([
+                                    zod.object({
+                                      type: zod.enum(['task']),
+                                    }),
+                                    zod.object({
+                                      type: zod.enum(['snippet']),
+                                    }),
+                                    zod.object({
+                                      type: zod.enum(['skill']),
+                                    }),
+                                    zod.object({
+                                      type: zod.enum([
+                                        'initiative_description',
+                                      ]),
+                                    }),
+                                  ])
                                   .describe(
-                                    'The normalized lifecycle status for a GitHub pull request notification.'
+                                    'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
                                   ),
                               ])
                               .optional(),
-                            status: zod
-                              .enum(['open', 'closed', 'merged'])
-                              .describe(
-                                'The normalized lifecycle status for a GitHub pull request notification.'
-                              ),
-                          })
-                        )
-                        .describe(
-                          'Metadata for a GitHub pull request lifecycle notification.'
-                        ),
-                      tag: zod.enum(['github_pr_status_changed']),
-                    })
-                    .describe(
-                      'A GitHub pull request changed lifecycle state.\n\nThe `github_pr_event` alias keeps rows and queue messages persisted\nbefore the rename deserializable.'
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          displayName: zod
-                            .string()
-                            .describe(
-                              'A compact label suitable for display in the UI.'
-                            ),
-                          foreignEntityId: zod
-                            .uuid()
-                            .describe(
-                              'The source-specific internal foreign entity row id for this pull request.'
-                            ),
-                          githubKey: zod
-                            .string()
-                            .describe(
-                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
-                            ),
-                          number: zod
-                            .number()
-                            .min(
-                              listTypedNotificationsResponseItemsItemNotificationMetadataContentNumberMinOne
-                            )
-                            .describe('The GitHub pull request number.'),
-                          owner: zod
-                            .string()
-                            .describe(
-                              'The GitHub repository owner or organization.'
-                            ),
-                          repo: zod
-                            .string()
-                            .describe('The GitHub repository name.'),
-                          senderGithubAvatarUrl: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub avatar URL for the sender, when available.'
-                            ),
-                          senderGithubLogin: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub login for the sender, when available.'
-                            ),
-                          senderGithubUserId: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The stable GitHub numeric user id for the sender, serialized as a string.'
-                            ),
-                          title: zod
-                            .string()
-                            .describe(
-                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
-                            ),
-                          url: zod
-                            .string()
-                            .describe(
-                              'The public GitHub URL for the pull request.'
-                            ),
-                        })
-                        .describe(
-                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
-                        )
-                        .and(
-                          zod.object({
-                            checkName: zod
+                            text: zod
                               .string()
-                              .describe(
-                                'The display name GitHub reported for the check run.'
-                              ),
-                            checkRunGithubId: zod
-                              .number()
-                              .min(
-                                listTypedNotificationsResponseItemsItemNotificationMetadataContentCheckRunGithubIdMin
-                              )
-                              .describe(
-                                'The GitHub numeric id of the check run.'
-                              ),
-                            checkStatus: zod
-                              .string()
-                              .describe('The raw GitHub check run status.'),
-                            checkUrl: zod
-                              .string()
-                              .describe(
-                                'The public GitHub URL for the check run.'
-                              ),
-                            completedAt: zod.iso
-                              .datetime({})
-                              .describe(
-                                'When GitHub marked the check run as complete.'
-                              ),
-                            conclusion: zod
-                              .string()
-                              .describe('The raw GitHub check run conclusion.'),
-                            state: zod
-                              .enum(['completed', 'failed'])
-                              .describe(
-                                'The normalized result state for a GitHub pull request check-run notification.'
-                              ),
-                          })
-                        )
-                        .describe(
-                          'Metadata for a notification that a GitHub pull request check run completed.'
-                        ),
-                      tag: zod.enum(['github_pr_check_run']),
-                    })
-                    .describe('A GitHub pull request check run completed.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          displayName: zod
-                            .string()
-                            .describe(
-                              'A compact label suitable for display in the UI.'
-                            ),
-                          foreignEntityId: zod
-                            .uuid()
-                            .describe(
-                              'The source-specific internal foreign entity row id for this pull request.'
-                            ),
-                          githubKey: zod
-                            .string()
-                            .describe(
-                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
-                            ),
-                          number: zod
-                            .number()
-                            .min(
-                              listTypedNotificationsResponseItemsItemNotificationMetadataContentNumberMinTwo
-                            )
-                            .describe('The GitHub pull request number.'),
-                          owner: zod
-                            .string()
-                            .describe(
-                              'The GitHub repository owner or organization.'
-                            ),
-                          repo: zod
-                            .string()
-                            .describe('The GitHub repository name.'),
-                          senderGithubAvatarUrl: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub avatar URL for the sender, when available.'
-                            ),
-                          senderGithubLogin: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub login for the sender, when available.'
-                            ),
-                          senderGithubUserId: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The stable GitHub numeric user id for the sender, serialized as a string.'
-                            ),
-                          title: zod
-                            .string()
-                            .describe(
-                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
-                            ),
-                          url: zod
-                            .string()
-                            .describe(
-                              'The public GitHub URL for the pull request.'
-                            ),
-                        })
-                        .describe(
-                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
-                        )
-                        .and(
-                          zod.object({
-                            requestedReviewerGithubLogin: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'The GitHub login of the requested reviewer, when available.'
-                              ),
-                            requestedReviewerGithubUserId: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'The stable GitHub numeric user id of the requested reviewer, serialized as a string.'
-                              ),
-                          })
-                        )
-                        .describe(
-                          "Metadata for a notification that the user's review was requested on a GitHub pull request."
-                        ),
-                      tag: zod.enum(['github_review_requested']),
-                    })
-                    .describe(
-                      "The user's review was requested on a GitHub pull request."
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          displayName: zod
-                            .string()
-                            .describe(
-                              'A compact label suitable for display in the UI.'
-                            ),
-                          foreignEntityId: zod
-                            .uuid()
-                            .describe(
-                              'The source-specific internal foreign entity row id for this pull request.'
-                            ),
-                          githubKey: zod
-                            .string()
-                            .describe(
-                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
-                            ),
-                          number: zod
-                            .number()
-                            .min(
-                              listTypedNotificationsResponseItemsItemNotificationMetadataContentNumberMinThree
-                            )
-                            .describe('The GitHub pull request number.'),
-                          owner: zod
-                            .string()
-                            .describe(
-                              'The GitHub repository owner or organization.'
-                            ),
-                          repo: zod
-                            .string()
-                            .describe('The GitHub repository name.'),
-                          senderGithubAvatarUrl: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub avatar URL for the sender, when available.'
-                            ),
-                          senderGithubLogin: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub login for the sender, when available.'
-                            ),
-                          senderGithubUserId: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The stable GitHub numeric user id for the sender, serialized as a string.'
-                            ),
-                          title: zod
-                            .string()
-                            .describe(
-                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
-                            ),
-                          url: zod
-                            .string()
-                            .describe(
-                              'The public GitHub URL for the pull request.'
-                            ),
-                        })
-                        .describe(
-                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
-                        )
-                        .and(
-                          zod.object({
-                            commentGithubId: zod
-                              .number()
-                              .min(
-                                listTypedNotificationsResponseItemsItemNotificationMetadataContentCommentGithubIdMin
-                              )
-                              .nullish()
-                              .describe(
-                                'The GitHub numeric id of the comment, when available.'
-                              ),
-                            commentKind: zod
-                              .enum(['issue', 'review_comment'])
-                              .describe(
-                                'The kind of GitHub comment that triggered a [`GithubPrComment`] notification.'
-                              ),
-                            commentSnippet: zod
-                              .string()
-                              .describe(
-                                'A truncated excerpt of the comment body.'
-                              ),
-                            commentUrl: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'The public GitHub URL for the comment, when available.'
-                              ),
-                          })
-                        )
-                        .describe(
-                          'Metadata for a notification that a GitHub pull request was commented on.'
-                        ),
-                      tag: zod.enum(['github_pr_comment']),
-                    })
-                    .describe('A GitHub pull request was commented on.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          displayName: zod
-                            .string()
-                            .describe(
-                              'A compact label suitable for display in the UI.'
-                            ),
-                          foreignEntityId: zod
-                            .uuid()
-                            .describe(
-                              'The source-specific internal foreign entity row id for this pull request.'
-                            ),
-                          githubKey: zod
-                            .string()
-                            .describe(
-                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
-                            ),
-                          number: zod
-                            .number()
-                            .min(
-                              listTypedNotificationsResponseItemsItemNotificationMetadataContentNumberMinFour
-                            )
-                            .describe('The GitHub pull request number.'),
-                          owner: zod
-                            .string()
-                            .describe(
-                              'The GitHub repository owner or organization.'
-                            ),
-                          repo: zod
-                            .string()
-                            .describe('The GitHub repository name.'),
-                          senderGithubAvatarUrl: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub avatar URL for the sender, when available.'
-                            ),
-                          senderGithubLogin: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub login for the sender, when available.'
-                            ),
-                          senderGithubUserId: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The stable GitHub numeric user id for the sender, serialized as a string.'
-                            ),
-                          title: zod
-                            .string()
-                            .describe(
-                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
-                            ),
-                          url: zod
-                            .string()
-                            .describe(
-                              'The public GitHub URL for the pull request.'
-                            ),
-                        })
-                        .describe(
-                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
-                        )
-                        .and(
-                          zod.object({
-                            commentGithubId: zod
-                              .number()
-                              .min(
-                                listTypedNotificationsResponseItemsItemNotificationMetadataContentCommentGithubIdMinOne
-                              )
-                              .nullish()
-                              .describe(
-                                'The GitHub numeric id of the comment or review containing the mention, when available.'
-                              ),
-                            commentUrl: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'The public GitHub URL for the text containing the mention, when available.'
-                              ),
-                            location: zod
-                              .enum([
-                                'pr_body',
-                                'comment',
-                                'review',
-                                'review_comment',
+                              .describe('the text of the comment'),
+                            threadId: zod
+                              .union([
+                                zod
+                                  .number()
+                                  .describe(
+                                    'Legacy `Comment.id` or `Thread.id`.'
+                                  ),
+                                zod
+                                  .uuid()
+                                  .describe(
+                                    'Message or root id in the shared message store.'
+                                  ),
                               ])
                               .describe(
-                                'Where in a GitHub pull request the user was mentioned.'
-                              ),
-                            textSnippet: zod
-                              .string()
-                              .describe(
-                                'A truncated excerpt of the text containing the mention.'
+                                'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
                               ),
                           })
-                        )
-                        .describe(
-                          'Metadata for a notification that the user was mentioned on a GitHub pull request.'
-                        ),
-                      tag: zod.enum(['github_pr_mention']),
-                    })
-                    .describe(
-                      'The user was mentioned on a GitHub pull request.'
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          displayName: zod
-                            .string()
-                            .describe(
-                              'A compact label suitable for display in the UI.'
-                            ),
-                          foreignEntityId: zod
-                            .uuid()
-                            .describe(
-                              'The source-specific internal foreign entity row id for this pull request.'
-                            ),
-                          githubKey: zod
-                            .string()
-                            .describe(
-                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
-                            ),
-                          number: zod
-                            .number()
-                            .min(
-                              listTypedNotificationsResponseItemsItemNotificationMetadataContentNumberMinFive
-                            )
-                            .describe('The GitHub pull request number.'),
-                          owner: zod
-                            .string()
-                            .describe(
-                              'The GitHub repository owner or organization.'
-                            ),
-                          repo: zod
-                            .string()
-                            .describe('The GitHub repository name.'),
-                          senderGithubAvatarUrl: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub avatar URL for the sender, when available.'
-                            ),
-                          senderGithubLogin: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub login for the sender, when available.'
-                            ),
-                          senderGithubUserId: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The stable GitHub numeric user id for the sender, serialized as a string.'
-                            ),
-                          title: zod
-                            .string()
-                            .describe(
-                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
-                            ),
-                          url: zod
-                            .string()
-                            .describe(
-                              'The public GitHub URL for the pull request.'
-                            ),
-                        })
-                        .describe(
-                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
-                        )
-                        .and(
-                          zod.object({
-                            reviewGithubId: zod
-                              .number()
-                              .min(
-                                listTypedNotificationsResponseItemsItemNotificationMetadataContentReviewGithubIdMin
-                              )
-                              .nullish()
-                              .describe(
-                                'The GitHub numeric id of the review, when available.'
-                              ),
-                            reviewSnippet: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'A truncated excerpt of the review body, when any was written.'
-                              ),
-                            reviewUrl: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'The public GitHub URL for the review, when available.'
-                              ),
-                            state: zod
-                              .enum([
-                                'approved',
-                                'changes_requested',
-                                'commented',
+                          .describe(
+                            'Notification sent when someone replies to a document comment thread.'
+                          ),
+                        tag: zod.enum(['replied_to_document_comment_thread']),
+                      })
+                      .describe(
+                        'Someone replied to a document comment thread the user participated in.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            commentId: zod
+                              .union([
+                                zod
+                                  .number()
+                                  .describe(
+                                    'Legacy `Comment.id` or `Thread.id`.'
+                                  ),
+                                zod
+                                  .uuid()
+                                  .describe(
+                                    'Message or root id in the shared message store.'
+                                  ),
                               ])
                               .describe(
-                                'The state of a submitted GitHub pull request review.'
+                                'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
                               ),
-                          })
-                        )
-                        .describe(
-                          "Metadata for a notification that a review was submitted on the user's GitHub pull request."
-                        ),
-                      tag: zod.enum(['github_pr_review']),
-                    })
-                    .describe(
-                      "A review was submitted on the user's GitHub pull request."
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          announcementMessageId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'The magic-chip message for the turn in question, when one was posted.'
-                            ),
-                          botId: zod
-                            .string()
-                            .describe(
-                              'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
-                            ),
-                          botName: zod
-                            .string()
-                            .describe(
-                              "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
-                            ),
-                          channelId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'The channel the session was opened from, when it was opened from a\nchannel thread.'
-                            ),
-                          parent: zod
-                            .union([
-                              zod.null(),
-                              zod
-                                .object({
-                                  id: zod
-                                    .string()
-                                    .describe('The parent entity id.'),
-                                  type: zod
-                                    .string()
-                                    .describe(
-                                      '`channel`, `document`, or `initiative`.'
-                                    ),
-                                })
-                                .describe(
-                                  "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel, document,\nor initiative. Spelled like the message API's parent for client routing."
-                                ),
-                            ])
-                            .optional(),
-                          sessionId: zod
-                            .uuid()
-                            .describe('The session; what a click opens.'),
-                          sessionName: zod
-                            .string()
-                            .describe(
-                              "The session's name at the time of the event."
-                            ),
-                          threadId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'The thread the session was opened from, when it was.'
-                            ),
-                        })
-                        .describe(
-                          'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
-                        )
-                        .and(
-                          zod.object({
-                            actor: zod
+                            documentName: zod
+                              .string()
+                              .describe('The name of the document.'),
+                            fileType: zod
+                              .string()
+                              .nullish()
+                              .describe('The file type of the document.'),
+                            owner: zod
+                              .string()
+                              .describe('The owner of the document.'),
+                            senderDisplayName: zod
                               .string()
                               .nullish()
                               .describe(
-                                "Who prompted the turn, absent when a bot acted on nobody's behalf."
+                                'Public bot name when the author is an agent rather than a Macro user.'
                               ),
-                            excerpt: zod
+                            senderProfilePictureUrl: zod.string().nullish(),
+                            subType: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .union([
+                                    zod.object({
+                                      type: zod.enum(['task']),
+                                    }),
+                                    zod.object({
+                                      type: zod.enum(['snippet']),
+                                    }),
+                                    zod.object({
+                                      type: zod.enum(['skill']),
+                                    }),
+                                    zod.object({
+                                      type: zod.enum([
+                                        'initiative_description',
+                                      ]),
+                                    }),
+                                  ])
+                                  .describe(
+                                    'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                                  ),
+                              ])
+                              .optional(),
+                            text: zod
+                              .string()
+                              .describe('the text of the comment'),
+                            threadId: zod
+                              .union([
+                                zod
+                                  .number()
+                                  .describe(
+                                    'Legacy `Comment.id` or `Thread.id`.'
+                                  ),
+                                zod
+                                  .uuid()
+                                  .describe(
+                                    'Message or root id in the shared message store.'
+                                  ),
+                              ])
+                              .describe(
+                                'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                              ),
+                          })
+                          .describe(
+                            'Notification sent when someone comments on a document the user owns.'
+                          ),
+                        tag: zod.enum(['commented_on_document']),
+                      })
+                      .describe(
+                        'Someone commented on a document the user owns.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            accessLevel: zod
+                              .enum(['view', 'comment', 'edit'])
+                              .describe(
+                                'Permission level used by an access request, excluding ownership.'
+                              ),
+                            entityName: zod
+                              .string()
+                              .describe("Shared item's name."),
+                            fileType: zod
                               .string()
                               .nullish()
-                              .describe(
-                                "The agent's last prose in the turn, whole; `None` when it wrote none."
-                              ),
-                            stopReason: zod
-                              .string()
-                              .describe('The ACP stop reason, or `error`.'),
-                            turn: zod
-                              .number()
-                              .min(
-                                listTypedNotificationsResponseItemsItemNotificationMetadataContentTurnMin
-                              )
-                              .describe('The turn that ended.'),
-                          })
-                        )
-                        .describe(
-                          'An agent finished a turn with nothing queued behind it.'
-                        ),
-                      tag: zod.enum(['agent_session_settled']),
-                    })
-                    .describe(
-                      'An agent finished a turn with nothing queued behind it.'
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          announcementMessageId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'The magic-chip message for the turn in question, when one was posted.'
-                            ),
-                          botId: zod
-                            .string()
-                            .describe(
-                              'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
-                            ),
-                          botName: zod
-                            .string()
-                            .describe(
-                              "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
-                            ),
-                          channelId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'The channel the session was opened from, when it was opened from a\nchannel thread.'
-                            ),
-                          parent: zod
-                            .union([
-                              zod.null(),
-                              zod
-                                .object({
-                                  id: zod
-                                    .string()
-                                    .describe('The parent entity id.'),
-                                  type: zod
-                                    .string()
-                                    .describe(
-                                      '`channel`, `document`, or `initiative`.'
-                                    ),
-                                })
-                                .describe(
-                                  "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel, document,\nor initiative. Spelled like the message API's parent for client routing."
-                                ),
-                            ])
-                            .optional(),
-                          sessionId: zod
-                            .uuid()
-                            .describe('The session; what a click opens.'),
-                          sessionName: zod
-                            .string()
-                            .describe(
-                              "The session's name at the time of the event."
-                            ),
-                          threadId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'The thread the session was opened from, when it was.'
-                            ),
-                        })
-                        .describe(
-                          'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
-                        )
-                        .and(
-                          zod.object({
-                            question: zod
-                              .string()
-                              .describe(
-                                'The question, as the agent phrased it.'
-                              ),
-                            turn: zod
-                              .number()
-                              .min(
-                                listTypedNotificationsResponseItemsItemNotificationMetadataContentTurnMinOne
-                              )
-                              .describe('The turn asking.'),
-                          })
-                        )
-                        .describe(
-                          "An agent is blocked on a question only the session's owner can answer."
-                        ),
-                      tag: zod.enum(['agent_session_waiting_for_input']),
-                    })
-                    .describe(
-                      "An agent is blocked on a question for the session's owner."
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          announcementMessageId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'The magic-chip message for the turn in question, when one was posted.'
-                            ),
-                          botId: zod
-                            .string()
-                            .describe(
-                              'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
-                            ),
-                          botName: zod
-                            .string()
-                            .describe(
-                              "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
-                            ),
-                          channelId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'The channel the session was opened from, when it was opened from a\nchannel thread.'
-                            ),
-                          parent: zod
-                            .union([
-                              zod.null(),
-                              zod
-                                .object({
-                                  id: zod
-                                    .string()
-                                    .describe('The parent entity id.'),
-                                  type: zod
-                                    .string()
-                                    .describe(
-                                      '`channel`, `document`, or `initiative`.'
-                                    ),
-                                })
-                                .describe(
-                                  "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel, document,\nor initiative. Spelled like the message API's parent for client routing."
-                                ),
-                            ])
-                            .optional(),
-                          sessionId: zod
-                            .uuid()
-                            .describe('The session; what a click opens.'),
-                          sessionName: zod
-                            .string()
-                            .describe(
-                              "The session's name at the time of the event."
-                            ),
-                          threadId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'The thread the session was opened from, when it was.'
-                            ),
-                        })
-                        .describe(
-                          'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
-                        )
-                        .and(
-                          zod.object({
-                            actionId: zod
+                              .describe('Document file type for routing.'),
+                            requestId: zod
                               .uuid()
-                              .describe('The action carrying the prompt.'),
-                            mentionedBy: zod
+                              .describe('Stable request identity.'),
+                            revision: zod
+                              .number()
+                              .describe(
+                                'Revision that generated this notification.'
+                              ),
+                          })
+                          .describe(
+                            'A person requested access to a shared entity.'
+                          ),
+                        tag: zod.enum(['entity_access_requested']),
+                      })
+                      .describe(
+                        'Someone requested more access to a shared entity.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            accessLevel: zod
+                              .enum(['view', 'comment', 'edit'])
+                              .describe(
+                                'Permission level used by an access request, excluding ownership.'
+                              ),
+                            entityName: zod
+                              .string()
+                              .describe("Shared item's name."),
+                            fileType: zod
+                              .string()
+                              .nullish()
+                              .describe('Document file type for routing.'),
+                            requestId: zod
+                              .uuid()
+                              .describe('Stable request identity.'),
+                            revision: zod
+                              .number()
+                              .describe(
+                                'Revision that generated this notification.'
+                              ),
+                          })
+                          .describe(
+                            'A person granted you access to a shared entity.'
+                          ),
+                        tag: zod.enum(['entity_access_granted']),
+                      })
+                      .describe('An owner granted requested access.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            messageId: zod
+                              .uuid()
+                              .describe('Canonical shared message UUID.'),
+                            owner: zod
+                              .string()
+                              .describe('Authenticated project owner.'),
+                            projectName: zod
+                              .string()
+                              .describe(
+                                'Name displayed in the project header.'
+                              ),
+                            reason: zod
+                              .enum(['mention', 'reply', 'assignee', 'owner'])
+                              .describe(
+                                'Why a project discussion notification was delivered.'
+                              ),
+                            senderDisplayName: zod
                               .string()
                               .nullish()
                               .describe(
-                                "Who wrote the prompt, absent when a bot acted on nobody's behalf."
+                                'Public display name for a bot author.'
                               ),
-                          })
-                        )
-                        .describe(
-                          'Someone named the recipient in a prompt to an agent session.'
-                        ),
-                      tag: zod.enum(['agent_session_mentioned']),
-                    })
-                    .describe(
-                      'The user was named in a prompt to an agent session.'
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          channelName: zod.string().optional(),
-                          channelType: zod.enum([
-                            'public',
-                            'private',
-                            'directMessage',
-                            'team',
-                          ]),
-                        })
-                        .describe(
-                          'Common metadata for notifications on channels'
-                        )
-                        .and(
-                          zod.object({
-                            emoji: zod
-                              .string()
-                              .describe('The emoji added by the reactor.'),
-                            messageContent: zod
-                              .string()
-                              .describe('The reacted-to message content.'),
-                            messageId: zod
-                              .string()
-                              .describe('The reacted-to message id.'),
                             senderProfilePictureUrl: zod
                               .string()
                               .nullish()
                               .describe(
-                                'Optional reactor profile picture URL.'
+                                'Optional avatar for push notification attachments.'
                               ),
+                            text: zod
+                              .string()
+                              .describe('Posted Markdown content.'),
                             threadId: zod
+                              .uuid()
+                              .describe('Canonical discussion root UUID.'),
+                          })
+                          .describe(
+                            'Project discussion metadata. The notification entity identifies the initiative;\nmessage and thread UUIDs select the discussion inside that project.'
+                          ),
+                        tag: zod.enum(['initiative_discussion']),
+                      })
+                      .describe(
+                        'Someone commented, replied, or mentioned the recipient on a project.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            messageId: zod
+                              .uuid()
+                              .describe('Canonical shared message UUID.'),
+                            reason: zod
+                              .enum(['mention', 'reply', 'owner'])
+                              .describe(
+                                'Why a CRM discussion notification was delivered.'
+                              ),
+                            recordName: zod
+                              .string()
+                              .describe('Company or contact display name.'),
+                            senderDisplayName: zod
                               .string()
                               .nullish()
                               .describe(
-                                'The thread root id when the reacted-to message is a reply.'
+                                'Public display name for a bot author.'
+                              ),
+                            senderProfilePictureUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Optional avatar for push notification attachments.'
+                              ),
+                            text: zod
+                              .string()
+                              .describe('Posted Markdown content.'),
+                            threadId: zod
+                              .uuid()
+                              .describe('Canonical discussion root UUID.'),
+                          })
+                          .describe(
+                            'CRM discussion metadata. The notification entity identifies the company or\ncontact; message and thread UUIDs select the discussion inside it.'
+                          ),
+                        tag: zod.enum(['crm_discussion']),
+                      })
+                      .describe(
+                        'Someone commented, replied, or mentioned the recipient on a CRM company or contact.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            channelName: zod
+                              .string()
+                              .optional()
+                              .describe('The name of the channel'),
+                            invitedBy: zod
+                              .string()
+                              .describe('The user who sent the invitation'),
+                            isDirectMessage: zod
+                              .boolean()
+                              .optional()
+                              .describe(
+                                'Whether this is a direct message rather than a channel invitation.\nOlder notification payloads retain channel-invitation wording.'
+                              ),
+                            messageContent: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Message content to show in the invite email, when the invite was triggered by a message.'
+                              ),
+                            senderProfilePictureUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                "The sender's profile picture URL, if available."
                               ),
                           })
-                        )
-                        .describe(
-                          "Metadata for a reaction added to one of the recipient's channel messages."
-                        ),
-                      tag: zod.enum(['channel_message_reaction']),
-                    })
-                    .describe(
-                      "Someone reacted to one of the user's channel messages."
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          eventId: zod
-                            .uuid()
-                            .describe(
-                              'The shared calendar event entity the request is for.'
-                            ),
-                          requestId: zod
-                            .uuid()
-                            .describe(
-                              "Stable request identity, answered from the event's details."
-                            ),
-                          title: zod
-                            .string()
-                            .describe('Event title when the request was made.'),
-                        })
-                        .describe(
-                          'A channel member who sees a calendar event only through a channel share\nasked the person who shared it to add them as a guest. Sent to the sharer,\nwith the requester as sender.'
-                        ),
-                      tag: zod.enum(['calendar_event_join_request']),
-                    })
-                    .describe(
-                      'A channel member asked to be added as a guest of an event the\nuser shared with the channel.'
-                    ),
-                ])
-                .describe(
-                  'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
-                ),
-              owner_id: zod
-                .string()
-                .describe('The user who owns this notification.'),
-              sender_id: zod
-                .string()
-                .nullish()
-                .describe('The user who triggered the notification.'),
-              sent: zod
-                .boolean()
-                .describe('Whether the notification has been sent.'),
-              state: zod
-                .enum(['unseen', 'seen', 'done'])
-                .describe(
-                  "The mutually exclusive lifecycle states of a user's notification."
-                ),
-              updated_at: zod.iso
-                .datetime({})
-                .describe('When the notification was last updated.'),
-              viewed_at: zod.iso
-                .datetime({})
-                .nullish()
-                .describe('When the notification was viewed\/seen.'),
-            })
-          )
-      )
-      .describe('The list of items returned.'),
-    next_cursor: zod
-      .string()
-      .nullish()
-      .describe('The next page cursor if it exists.'),
-  })
-  .describe('The strongly typed response for listing user notifications.');
+                          .describe(
+                            'Metadata for when a user is invited to a channel.'
+                          ),
+                        tag: zod.enum(['channel_invite']),
+                      })
+                      .describe('The user was invited to a channel.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            channelName: zod.string().optional(),
+                            channelType: zod.enum([
+                              'public',
+                              'private',
+                              'directMessage',
+                              'team',
+                            ]),
+                          })
+                          .describe(
+                            'Common metadata for notifications on channels'
+                          )
+                          .and(
+                            zod.object({
+                              messageContent: zod
+                                .string()
+                                .optional()
+                                .describe('The content of the message'),
+                              messageId: zod
+                                .string()
+                                .describe('The message id'),
+                              sender: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The user who sent the message, when sent by a user'
+                                ),
+                              senderDisplayName: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'Display name for non-user senders such as bots'
+                                ),
+                              senderProfilePictureUrl: zod.string().nullish(),
+                            })
+                          ),
+                        tag: zod.enum(['channel_message_send']),
+                      })
+                      .describe('A user sent a message in a channel.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            channelName: zod.string().optional(),
+                            channelType: zod.enum([
+                              'public',
+                              'private',
+                              'directMessage',
+                              'team',
+                            ]),
+                          })
+                          .describe(
+                            'Common metadata for notifications on channels'
+                          )
+                          .and(
+                            zod.object({
+                              messageContent: zod
+                                .string()
+                                .describe('The message content'),
+                              messageId: zod
+                                .string()
+                                .describe('The id of the new message'),
+                              senderDisplayName: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'Display name for non-user senders such as bots'
+                                ),
+                              senderProfilePictureUrl: zod.string().nullish(),
+                              threadId: zod
+                                .string()
+                                .describe(
+                                  'The id of the thread that has the reply'
+                                ),
+                              threadParentSenderId: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The user who sent the root message of the thread'
+                                ),
+                              userId: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The sender id of the reply, when sent by a user'
+                                ),
+                            })
+                          ),
+                        tag: zod.enum(['channel_message_reply']),
+                      })
+                      .describe(
+                        'Someone replied to a thread in a channel that the user is part of.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            channel_name: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The name of the channel the call started in, when available.'
+                              ),
+                            sender_profile_picture_url: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Profile picture URL of the user who started the call, when available.'
+                              ),
+                          })
+                          .describe(
+                            'Metadata for a notification that a call has started in a channel.\n\nMirrors the producer-side `CallStartedNotification` in the `call` crate:\nboth serialize the same wire shape (snake_case fields) under the same\n`call_started` [`Notification::TYPE_NAME`]. This type is the read-side\nmodel used by [`crate::NotifEvent`]; the producer keeps its own type\nbecause it additionally builds the incoming-call APNS\/VoIP push.\n\nRows persisted before the type name was normalized used the kebab-case\n`call-started`; the [`crate::NotifEvent::CallStarted`] variant carries a\n`#[serde(alias = \"call-started\")]` so those rows still deserialize.'
+                          ),
+                        tag: zod.enum(['call_started']),
+                      })
+                      .describe(
+                        'A call has started in a channel the user is a member of.\n\nThe `call-started` alias keeps rows persisted before the type name\nwas normalized to snake_case (`call_started`) deserializable.'
+                      ),
+                    zod
+                      .object({
+                        content: zod.object({
+                          sender: zod.string().nullish(),
+                          snippet: zod.string(),
+                          subject: zod.string(),
+                          threadId: zod.string(),
+                          toEmail: zod.string(),
+                        }),
+                        tag: zod.enum(['new_email']),
+                      })
+                      .describe('A new email has been sent to the user.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            emailAddress: zod
+                              .string()
+                              .describe(
+                                'The address of the inbox that needs to be reconnected.'
+                              ),
+                          })
+                          .describe(
+                            "Metadata for a notification that a linked inbox's grant has died and the\ninbox must be reconnected. Fanned out to the inbox owner and every delegate,\nsince any of them holding the Google grant can restore sync."
+                          ),
+                        tag: zod.enum(['inbox_reauth_required']),
+                      })
+                      .describe(
+                        "A linked inbox's grant died and must be reconnected."
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            invitedBy: zod
+                              .string()
+                              .describe('The user who sent the invitation'),
+                            inviteePlan: zod
+                              .enum(['free', 'premium'])
+                              .optional()
+                              .describe('What a team invitee gets by joining.'),
+                            reminder: zod
+                              .boolean()
+                              .optional()
+                              .describe(
+                                'Whether this email reminds the invitee of an invite they have not answered.'
+                              ),
+                            role: zod
+                              .string()
+                              .nullish()
+                              .describe('Role\/permission level in the team'),
+                            senderProfilePictureUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                "The sender's profile picture URL, if available."
+                              ),
+                            teamId: zod
+                              .uuid()
+                              .describe('The unique identifier of the team'),
+                            teamInviteId: zod
+                              .uuid()
+                              .describe(
+                                'The unique identifier of the team invite'
+                              ),
+                            teamName: zod
+                              .string()
+                              .describe(
+                                'The name of the team being invited to'
+                              ),
+                          })
+                          .describe(
+                            'Metadata for when a user is invited to a team.'
+                          ),
+                        tag: zod.enum(['invite_to_team']),
+                      })
+                      .describe('A user was invited to a team.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            assignedBy: zod
+                              .string()
+                              .describe('The user who assigned the task'),
+                            senderProfilePictureUrl: zod.string().nullish(),
+                            subType: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .union([
+                                    zod.object({
+                                      type: zod.enum(['task']),
+                                    }),
+                                    zod.object({
+                                      type: zod.enum(['snippet']),
+                                    }),
+                                    zod.object({
+                                      type: zod.enum(['skill']),
+                                    }),
+                                    zod.object({
+                                      type: zod.enum([
+                                        'initiative_description',
+                                      ]),
+                                    }),
+                                  ])
+                                  .describe(
+                                    'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                                  ),
+                              ])
+                              .optional(),
+                            taskId: zod
+                              .string()
+                              .describe('The unique identifier of the task'),
+                            taskName: zod
+                              .string()
+                              .nullish()
+                              .describe('The name of the task (optional)'),
+                          })
+                          .describe(
+                            'Metadata for when a user is assigned to a task'
+                          ),
+                        tag: zod.enum(['task_assigned']),
+                      })
+                      .describe('A user was assigned to a task.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            description: zod
+                              .string()
+                              .describe(
+                                'What the user asked to be reminded about.'
+                              ),
+                            reminderId: zod
+                              .uuid()
+                              .describe('The reminder that fired.'),
+                            scheduledFor: zod.iso
+                              .datetime({})
+                              .nullish()
+                              .describe(
+                                "Which firing this is — the occurrence the reminder came due for.\n\nWhat distinguishes two firings of the same recurring reminder, which are\notherwise identical: same id, same description. The collapse key is\nbuilt from it, so without it Tuesday's alert would replace Monday's\nunread one on the lock screen.\n\nOptional because notifications written before recurring dispatch existed\nhave no such field, and they still have to read back."
+                              ),
+                          })
+                          .describe(
+                            'Metadata for a reminder the user set for themselves coming due.\n\nThere is no sender: a reminder is self-set, so the dispatcher sends it with\n`sender_id: None` (a recipient who is also the sender is filtered out of\ntheir own notification). Every formatter here must therefore work without\none.\n\nThe associated entity, when there is one, lives on the notification row\nrather than in here, and clients resolve its name from that — so the\ndispatcher does not have to look up a name across five entity types.'
+                          ),
+                        tag: zod.enum(['reminder']),
+                      })
+                      .describe(
+                        'A reminder the user set for themselves came due.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            chatName: zod.string().describe("The chat's name."),
+                            messageId: zod
+                              .uuid()
+                              .describe(
+                                'Stable message id; retries use it as their notification id.'
+                              ),
+                            provider: zod
+                              .enum(['whatsapp'])
+                              .describe(
+                                'The messaging service an external chat lives in.'
+                              ),
+                          })
+                          .describe(
+                            'A live message in an independently shared external chat.'
+                          ),
+                        tag: zod.enum(['external_chat_message']),
+                      })
+                      .describe('A live message in a shared external chat.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            endsAt: zod.iso
+                              .datetime({})
+                              .nullish()
+                              .describe('Instance end, for timed events.'),
+                            eventId: zod
+                              .uuid()
+                              .describe(
+                                'The calendar event entity the alarm belongs to.'
+                              ),
+                            minutesBefore: zod
+                              .number()
+                              .describe(
+                                'Minutes before the start the alarm was configured to fire.'
+                              ),
+                            occurrenceKey: zod
+                              .string()
+                              .describe(
+                                'Stable occurrence key of the instance that is starting.'
+                              ),
+                            startDate: zod.iso
+                              .date()
+                              .nullish()
+                              .describe(
+                                'Instance start date, for all-day events.'
+                              ),
+                            startsAt: zod.iso
+                              .datetime({})
+                              .nullish()
+                              .describe('Instance start, for timed events.'),
+                            timeZone: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'IANA zone for rendering local clock times, when known.'
+                              ),
+                            title: zod
+                              .string()
+                              .describe(
+                                'Event display title at dispatch time.'
+                              ),
+                          })
+                          .describe(
+                            'A calendar event alarm came due. Like [`ReminderMetadata`], these are\nself-notifications: `sender_id` must stay `None` or the only recipient is\nfiltered out. Everything the alert renders rides in here so the\ndispatcher never has to resolve the event again at display time.'
+                          ),
+                        tag: zod.enum(['calendar_event_reminder']),
+                      })
+                      .describe('A calendar event alarm came due.'),
+                    zod
+                      .object({
+                        content: zod.object({
+                          messageId: zod.string(),
+                          summary: zod.string(),
+                        }),
+                        tag: zod.enum(['ai_response']),
+                      })
+                      .describe('An AI assistant responded to a chat.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            displayName: zod
+                              .string()
+                              .describe(
+                                'A compact label suitable for display in the UI.'
+                              ),
+                            foreignEntityId: zod
+                              .uuid()
+                              .describe(
+                                'The source-specific internal foreign entity row id for this pull request.'
+                              ),
+                            githubKey: zod
+                              .string()
+                              .describe(
+                                'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                              ),
+                            number: zod
+                              .number()
+                              .min(
+                                listTypedNotificationsResponseItemsItemNotificationMetadataContentNumberMin
+                              )
+                              .describe('The GitHub pull request number.'),
+                            owner: zod
+                              .string()
+                              .describe(
+                                'The GitHub repository owner or organization.'
+                              ),
+                            repo: zod
+                              .string()
+                              .describe('The GitHub repository name.'),
+                            senderGithubAvatarUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub avatar URL for the sender, when available.'
+                              ),
+                            senderGithubLogin: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub login for the sender, when available.'
+                              ),
+                            senderGithubUserId: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The stable GitHub numeric user id for the sender, serialized as a string.'
+                              ),
+                            title: zod
+                              .string()
+                              .describe(
+                                'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                              ),
+                            url: zod
+                              .string()
+                              .describe(
+                                'The public GitHub URL for the pull request.'
+                              ),
+                          })
+                          .describe(
+                            'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                          )
+                          .and(
+                            zod.object({
+                              action: zod
+                                .enum(['opened', 'reopened', 'closed'])
+                                .describe(
+                                  'The GitHub pull request webhook action that triggered the notification.'
+                                ),
+                              baseBranch: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The pull request base branch, when available.'
+                                ),
+                              headBranch: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The pull request head branch, when available.'
+                                ),
+                              mergedAt: zod.iso
+                                .datetime({})
+                                .nullish()
+                                .describe(
+                                  'When the pull request was merged, when available.'
+                                ),
+                              previousStatus: zod
+                                .union([
+                                  zod.null(),
+                                  zod
+                                    .enum(['open', 'closed', 'merged'])
+                                    .describe(
+                                      'The normalized lifecycle status for a GitHub pull request notification.'
+                                    ),
+                                ])
+                                .optional(),
+                              status: zod
+                                .enum(['open', 'closed', 'merged'])
+                                .describe(
+                                  'The normalized lifecycle status for a GitHub pull request notification.'
+                                ),
+                            })
+                          )
+                          .describe(
+                            'Metadata for a GitHub pull request lifecycle notification.'
+                          ),
+                        tag: zod.enum(['github_pr_status_changed']),
+                      })
+                      .describe(
+                        'A GitHub pull request changed lifecycle state.\n\nThe `github_pr_event` alias keeps rows and queue messages persisted\nbefore the rename deserializable.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            displayName: zod
+                              .string()
+                              .describe(
+                                'A compact label suitable for display in the UI.'
+                              ),
+                            foreignEntityId: zod
+                              .uuid()
+                              .describe(
+                                'The source-specific internal foreign entity row id for this pull request.'
+                              ),
+                            githubKey: zod
+                              .string()
+                              .describe(
+                                'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                              ),
+                            number: zod
+                              .number()
+                              .min(
+                                listTypedNotificationsResponseItemsItemNotificationMetadataContentNumberMinOne
+                              )
+                              .describe('The GitHub pull request number.'),
+                            owner: zod
+                              .string()
+                              .describe(
+                                'The GitHub repository owner or organization.'
+                              ),
+                            repo: zod
+                              .string()
+                              .describe('The GitHub repository name.'),
+                            senderGithubAvatarUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub avatar URL for the sender, when available.'
+                              ),
+                            senderGithubLogin: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub login for the sender, when available.'
+                              ),
+                            senderGithubUserId: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The stable GitHub numeric user id for the sender, serialized as a string.'
+                              ),
+                            title: zod
+                              .string()
+                              .describe(
+                                'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                              ),
+                            url: zod
+                              .string()
+                              .describe(
+                                'The public GitHub URL for the pull request.'
+                              ),
+                          })
+                          .describe(
+                            'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                          )
+                          .and(
+                            zod.object({
+                              checkName: zod
+                                .string()
+                                .describe(
+                                  'The display name GitHub reported for the check run.'
+                                ),
+                              checkRunGithubId: zod
+                                .number()
+                                .min(
+                                  listTypedNotificationsResponseItemsItemNotificationMetadataContentCheckRunGithubIdMin
+                                )
+                                .describe(
+                                  'The GitHub numeric id of the check run.'
+                                ),
+                              checkStatus: zod
+                                .string()
+                                .describe('The raw GitHub check run status.'),
+                              checkUrl: zod
+                                .string()
+                                .describe(
+                                  'The public GitHub URL for the check run.'
+                                ),
+                              completedAt: zod.iso
+                                .datetime({})
+                                .describe(
+                                  'When GitHub marked the check run as complete.'
+                                ),
+                              conclusion: zod
+                                .string()
+                                .describe(
+                                  'The raw GitHub check run conclusion.'
+                                ),
+                              state: zod
+                                .enum(['completed', 'failed'])
+                                .describe(
+                                  'The normalized result state for a GitHub pull request check-run notification.'
+                                ),
+                            })
+                          )
+                          .describe(
+                            'Metadata for a notification that a GitHub pull request check run completed.'
+                          ),
+                        tag: zod.enum(['github_pr_check_run']),
+                      })
+                      .describe('A GitHub pull request check run completed.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            displayName: zod
+                              .string()
+                              .describe(
+                                'A compact label suitable for display in the UI.'
+                              ),
+                            foreignEntityId: zod
+                              .uuid()
+                              .describe(
+                                'The source-specific internal foreign entity row id for this pull request.'
+                              ),
+                            githubKey: zod
+                              .string()
+                              .describe(
+                                'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                              ),
+                            number: zod
+                              .number()
+                              .min(
+                                listTypedNotificationsResponseItemsItemNotificationMetadataContentNumberMinTwo
+                              )
+                              .describe('The GitHub pull request number.'),
+                            owner: zod
+                              .string()
+                              .describe(
+                                'The GitHub repository owner or organization.'
+                              ),
+                            repo: zod
+                              .string()
+                              .describe('The GitHub repository name.'),
+                            senderGithubAvatarUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub avatar URL for the sender, when available.'
+                              ),
+                            senderGithubLogin: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub login for the sender, when available.'
+                              ),
+                            senderGithubUserId: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The stable GitHub numeric user id for the sender, serialized as a string.'
+                              ),
+                            title: zod
+                              .string()
+                              .describe(
+                                'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                              ),
+                            url: zod
+                              .string()
+                              .describe(
+                                'The public GitHub URL for the pull request.'
+                              ),
+                          })
+                          .describe(
+                            'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                          )
+                          .and(
+                            zod.object({
+                              requestedReviewerGithubLogin: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The GitHub login of the requested reviewer, when available.'
+                                ),
+                              requestedReviewerGithubUserId: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The stable GitHub numeric user id of the requested reviewer, serialized as a string.'
+                                ),
+                            })
+                          )
+                          .describe(
+                            "Metadata for a notification that the user's review was requested on a GitHub pull request."
+                          ),
+                        tag: zod.enum(['github_review_requested']),
+                      })
+                      .describe(
+                        "The user's review was requested on a GitHub pull request."
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            displayName: zod
+                              .string()
+                              .describe(
+                                'A compact label suitable for display in the UI.'
+                              ),
+                            foreignEntityId: zod
+                              .uuid()
+                              .describe(
+                                'The source-specific internal foreign entity row id for this pull request.'
+                              ),
+                            githubKey: zod
+                              .string()
+                              .describe(
+                                'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                              ),
+                            number: zod
+                              .number()
+                              .min(
+                                listTypedNotificationsResponseItemsItemNotificationMetadataContentNumberMinThree
+                              )
+                              .describe('The GitHub pull request number.'),
+                            owner: zod
+                              .string()
+                              .describe(
+                                'The GitHub repository owner or organization.'
+                              ),
+                            repo: zod
+                              .string()
+                              .describe('The GitHub repository name.'),
+                            senderGithubAvatarUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub avatar URL for the sender, when available.'
+                              ),
+                            senderGithubLogin: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub login for the sender, when available.'
+                              ),
+                            senderGithubUserId: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The stable GitHub numeric user id for the sender, serialized as a string.'
+                              ),
+                            title: zod
+                              .string()
+                              .describe(
+                                'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                              ),
+                            url: zod
+                              .string()
+                              .describe(
+                                'The public GitHub URL for the pull request.'
+                              ),
+                          })
+                          .describe(
+                            'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                          )
+                          .and(
+                            zod.object({
+                              commentGithubId: zod
+                                .number()
+                                .min(
+                                  listTypedNotificationsResponseItemsItemNotificationMetadataContentCommentGithubIdMin
+                                )
+                                .nullish()
+                                .describe(
+                                  'The GitHub numeric id of the comment, when available.'
+                                ),
+                              commentKind: zod
+                                .enum(['issue', 'review_comment'])
+                                .describe(
+                                  'The kind of GitHub comment that triggered a [`GithubPrComment`] notification.'
+                                ),
+                              commentSnippet: zod
+                                .string()
+                                .describe(
+                                  'A truncated excerpt of the comment body.'
+                                ),
+                              commentUrl: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The public GitHub URL for the comment, when available.'
+                                ),
+                            })
+                          )
+                          .describe(
+                            'Metadata for a notification that a GitHub pull request was commented on.'
+                          ),
+                        tag: zod.enum(['github_pr_comment']),
+                      })
+                      .describe('A GitHub pull request was commented on.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            displayName: zod
+                              .string()
+                              .describe(
+                                'A compact label suitable for display in the UI.'
+                              ),
+                            foreignEntityId: zod
+                              .uuid()
+                              .describe(
+                                'The source-specific internal foreign entity row id for this pull request.'
+                              ),
+                            githubKey: zod
+                              .string()
+                              .describe(
+                                'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                              ),
+                            number: zod
+                              .number()
+                              .min(
+                                listTypedNotificationsResponseItemsItemNotificationMetadataContentNumberMinFour
+                              )
+                              .describe('The GitHub pull request number.'),
+                            owner: zod
+                              .string()
+                              .describe(
+                                'The GitHub repository owner or organization.'
+                              ),
+                            repo: zod
+                              .string()
+                              .describe('The GitHub repository name.'),
+                            senderGithubAvatarUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub avatar URL for the sender, when available.'
+                              ),
+                            senderGithubLogin: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub login for the sender, when available.'
+                              ),
+                            senderGithubUserId: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The stable GitHub numeric user id for the sender, serialized as a string.'
+                              ),
+                            title: zod
+                              .string()
+                              .describe(
+                                'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                              ),
+                            url: zod
+                              .string()
+                              .describe(
+                                'The public GitHub URL for the pull request.'
+                              ),
+                          })
+                          .describe(
+                            'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                          )
+                          .and(
+                            zod.object({
+                              commentGithubId: zod
+                                .number()
+                                .min(
+                                  listTypedNotificationsResponseItemsItemNotificationMetadataContentCommentGithubIdMinOne
+                                )
+                                .nullish()
+                                .describe(
+                                  'The GitHub numeric id of the comment or review containing the mention, when available.'
+                                ),
+                              commentUrl: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The public GitHub URL for the text containing the mention, when available.'
+                                ),
+                              location: zod
+                                .enum([
+                                  'pr_body',
+                                  'comment',
+                                  'review',
+                                  'review_comment',
+                                ])
+                                .describe(
+                                  'Where in a GitHub pull request the user was mentioned.'
+                                ),
+                              textSnippet: zod
+                                .string()
+                                .describe(
+                                  'A truncated excerpt of the text containing the mention.'
+                                ),
+                            })
+                          )
+                          .describe(
+                            'Metadata for a notification that the user was mentioned on a GitHub pull request.'
+                          ),
+                        tag: zod.enum(['github_pr_mention']),
+                      })
+                      .describe(
+                        'The user was mentioned on a GitHub pull request.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            displayName: zod
+                              .string()
+                              .describe(
+                                'A compact label suitable for display in the UI.'
+                              ),
+                            foreignEntityId: zod
+                              .uuid()
+                              .describe(
+                                'The source-specific internal foreign entity row id for this pull request.'
+                              ),
+                            githubKey: zod
+                              .string()
+                              .describe(
+                                'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                              ),
+                            number: zod
+                              .number()
+                              .min(
+                                listTypedNotificationsResponseItemsItemNotificationMetadataContentNumberMinFive
+                              )
+                              .describe('The GitHub pull request number.'),
+                            owner: zod
+                              .string()
+                              .describe(
+                                'The GitHub repository owner or organization.'
+                              ),
+                            repo: zod
+                              .string()
+                              .describe('The GitHub repository name.'),
+                            senderGithubAvatarUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub avatar URL for the sender, when available.'
+                              ),
+                            senderGithubLogin: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub login for the sender, when available.'
+                              ),
+                            senderGithubUserId: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The stable GitHub numeric user id for the sender, serialized as a string.'
+                              ),
+                            title: zod
+                              .string()
+                              .describe(
+                                'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                              ),
+                            url: zod
+                              .string()
+                              .describe(
+                                'The public GitHub URL for the pull request.'
+                              ),
+                          })
+                          .describe(
+                            'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                          )
+                          .and(
+                            zod.object({
+                              reviewGithubId: zod
+                                .number()
+                                .min(
+                                  listTypedNotificationsResponseItemsItemNotificationMetadataContentReviewGithubIdMin
+                                )
+                                .nullish()
+                                .describe(
+                                  'The GitHub numeric id of the review, when available.'
+                                ),
+                              reviewSnippet: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'A truncated excerpt of the review body, when any was written.'
+                                ),
+                              reviewUrl: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The public GitHub URL for the review, when available.'
+                                ),
+                              state: zod
+                                .enum([
+                                  'approved',
+                                  'changes_requested',
+                                  'commented',
+                                ])
+                                .describe(
+                                  'The state of a submitted GitHub pull request review.'
+                                ),
+                            })
+                          )
+                          .describe(
+                            "Metadata for a notification that a review was submitted on the user's GitHub pull request."
+                          ),
+                        tag: zod.enum(['github_pr_review']),
+                      })
+                      .describe(
+                        "A review was submitted on the user's GitHub pull request."
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            announcementMessageId: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'The magic-chip message for the turn in question, when one was posted.'
+                              ),
+                            botId: zod
+                              .string()
+                              .describe(
+                                'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
+                              ),
+                            botName: zod
+                              .string()
+                              .describe(
+                                "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
+                              ),
+                            channelId: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'The channel the session was opened from, when it was opened from a\nchannel thread.'
+                              ),
+                            parent: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .object({
+                                    id: zod
+                                      .string()
+                                      .describe('The parent entity id.'),
+                                    type: zod
+                                      .string()
+                                      .describe(
+                                        '`channel`, `document`, or `initiative`.'
+                                      ),
+                                  })
+                                  .describe(
+                                    "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel, document,\nor initiative. Spelled like the message API's parent for client routing."
+                                  ),
+                              ])
+                              .optional(),
+                            sessionId: zod
+                              .uuid()
+                              .describe('The session; what a click opens.'),
+                            sessionName: zod
+                              .string()
+                              .describe(
+                                "The session's name at the time of the event."
+                              ),
+                            threadId: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'The thread the session was opened from, when it was.'
+                              ),
+                          })
+                          .describe(
+                            'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                          )
+                          .and(
+                            zod.object({
+                              actor: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  "Who prompted the turn, absent when a bot acted on nobody's behalf."
+                                ),
+                              excerpt: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  "The agent's last prose in the turn, whole; `None` when it wrote none."
+                                ),
+                              stopReason: zod
+                                .string()
+                                .describe('The ACP stop reason, or `error`.'),
+                              turn: zod
+                                .number()
+                                .min(
+                                  listTypedNotificationsResponseItemsItemNotificationMetadataContentTurnMin
+                                )
+                                .describe('The turn that ended.'),
+                            })
+                          )
+                          .describe(
+                            'An agent finished a turn with nothing queued behind it.'
+                          ),
+                        tag: zod.enum(['agent_session_settled']),
+                      })
+                      .describe(
+                        'An agent finished a turn with nothing queued behind it.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            announcementMessageId: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'The magic-chip message for the turn in question, when one was posted.'
+                              ),
+                            botId: zod
+                              .string()
+                              .describe(
+                                'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
+                              ),
+                            botName: zod
+                              .string()
+                              .describe(
+                                "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
+                              ),
+                            channelId: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'The channel the session was opened from, when it was opened from a\nchannel thread.'
+                              ),
+                            parent: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .object({
+                                    id: zod
+                                      .string()
+                                      .describe('The parent entity id.'),
+                                    type: zod
+                                      .string()
+                                      .describe(
+                                        '`channel`, `document`, or `initiative`.'
+                                      ),
+                                  })
+                                  .describe(
+                                    "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel, document,\nor initiative. Spelled like the message API's parent for client routing."
+                                  ),
+                              ])
+                              .optional(),
+                            sessionId: zod
+                              .uuid()
+                              .describe('The session; what a click opens.'),
+                            sessionName: zod
+                              .string()
+                              .describe(
+                                "The session's name at the time of the event."
+                              ),
+                            threadId: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'The thread the session was opened from, when it was.'
+                              ),
+                          })
+                          .describe(
+                            'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                          )
+                          .and(
+                            zod.object({
+                              question: zod
+                                .string()
+                                .describe(
+                                  'The question, as the agent phrased it.'
+                                ),
+                              turn: zod
+                                .number()
+                                .min(
+                                  listTypedNotificationsResponseItemsItemNotificationMetadataContentTurnMinOne
+                                )
+                                .describe('The turn asking.'),
+                            })
+                          )
+                          .describe(
+                            "An agent is blocked on a question only the session's owner can answer."
+                          ),
+                        tag: zod.enum(['agent_session_waiting_for_input']),
+                      })
+                      .describe(
+                        "An agent is blocked on a question for the session's owner."
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            announcementMessageId: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'The magic-chip message for the turn in question, when one was posted.'
+                              ),
+                            botId: zod
+                              .string()
+                              .describe(
+                                'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
+                              ),
+                            botName: zod
+                              .string()
+                              .describe(
+                                "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
+                              ),
+                            channelId: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'The channel the session was opened from, when it was opened from a\nchannel thread.'
+                              ),
+                            parent: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .object({
+                                    id: zod
+                                      .string()
+                                      .describe('The parent entity id.'),
+                                    type: zod
+                                      .string()
+                                      .describe(
+                                        '`channel`, `document`, or `initiative`.'
+                                      ),
+                                  })
+                                  .describe(
+                                    "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel, document,\nor initiative. Spelled like the message API's parent for client routing."
+                                  ),
+                              ])
+                              .optional(),
+                            sessionId: zod
+                              .uuid()
+                              .describe('The session; what a click opens.'),
+                            sessionName: zod
+                              .string()
+                              .describe(
+                                "The session's name at the time of the event."
+                              ),
+                            threadId: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'The thread the session was opened from, when it was.'
+                              ),
+                          })
+                          .describe(
+                            'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                          )
+                          .and(
+                            zod.object({
+                              actionId: zod
+                                .uuid()
+                                .describe('The action carrying the prompt.'),
+                              mentionedBy: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  "Who wrote the prompt, absent when a bot acted on nobody's behalf."
+                                ),
+                            })
+                          )
+                          .describe(
+                            'Someone named the recipient in a prompt to an agent session.'
+                          ),
+                        tag: zod.enum(['agent_session_mentioned']),
+                      })
+                      .describe(
+                        'The user was named in a prompt to an agent session.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            channelName: zod.string().optional(),
+                            channelType: zod.enum([
+                              'public',
+                              'private',
+                              'directMessage',
+                              'team',
+                            ]),
+                          })
+                          .describe(
+                            'Common metadata for notifications on channels'
+                          )
+                          .and(
+                            zod.object({
+                              emoji: zod
+                                .string()
+                                .describe('The emoji added by the reactor.'),
+                              messageContent: zod
+                                .string()
+                                .describe('The reacted-to message content.'),
+                              messageId: zod
+                                .string()
+                                .describe('The reacted-to message id.'),
+                              senderProfilePictureUrl: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'Optional reactor profile picture URL.'
+                                ),
+                              threadId: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The thread root id when the reacted-to message is a reply.'
+                                ),
+                            })
+                          )
+                          .describe(
+                            "Metadata for a reaction added to one of the recipient's channel messages."
+                          ),
+                        tag: zod.enum(['channel_message_reaction']),
+                      })
+                      .describe(
+                        "Someone reacted to one of the user's channel messages."
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            eventId: zod
+                              .uuid()
+                              .describe(
+                                'The shared calendar event entity the request is for.'
+                              ),
+                            requestId: zod
+                              .uuid()
+                              .describe(
+                                "Stable request identity, answered from the event's details."
+                              ),
+                            title: zod
+                              .string()
+                              .describe(
+                                'Event title when the request was made.'
+                              ),
+                          })
+                          .describe(
+                            'A channel member who sees a calendar event only through a channel share\nasked the person who shared it to add them as a guest. Sent to the sharer,\nwith the requester as sender.'
+                          ),
+                        tag: zod.enum(['calendar_event_join_request']),
+                      })
+                      .describe(
+                        'A channel member asked to be added as a guest of an event the\nuser shared with the channel.'
+                      ),
+                  ])
+                  .describe(
+                    'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
+                  ),
+                owner_id: zod
+                  .string()
+                  .describe('The user who owns this notification.'),
+                sender_id: zod
+                  .string()
+                  .nullish()
+                  .describe('The user who triggered the notification.'),
+                sent: zod
+                  .boolean()
+                  .describe('Whether the notification has been sent.'),
+                state: zod
+                  .enum(['unseen', 'seen', 'done'])
+                  .describe(
+                    "The mutually exclusive lifecycle states of a user's notification."
+                  ),
+                updated_at: zod.iso
+                  .datetime({})
+                  .describe('When the notification was last updated.'),
+                viewed_at: zod.iso
+                  .datetime({})
+                  .nullish()
+                  .describe('When the notification was viewed\/seen.'),
+              })
+            )
+        )
+        .describe('The list of items returned.'),
+      next_cursor: zod
+        .string()
+        .nullish()
+        .describe('The next page cursor if it exists.'),
+    })
+    .describe('The strongly typed response for listing user notifications.');
+}
+let _cached_listTypedNotificationsResponse:
+  | ReturnType<typeof _create_listTypedNotificationsResponse>
+  | undefined;
+export function getListTypedNotificationsResponseSchema() {
+  return (_cached_listTypedNotificationsResponse ??=
+    _create_listTypedNotificationsResponse());
+}
 
 /**
  * Rows that fail to deserialize are dropped with a warning log.
@@ -2167,31 +2311,53 @@ then converts each row to [`UserNotificationRow<NotifEvent>`].
  */
 export const bulkGetTypedNotificationsByEventItemIdsQueryLimitMin = 0;
 
-export const bulkGetTypedNotificationsByEventItemIdsQueryParams = zod.object({
-  states: zod
-    .string()
-    .optional()
-    .describe(
-      'Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states.'
-    ),
-  limit: zod
-    .number()
-    .min(bulkGetTypedNotificationsByEventItemIdsQueryLimitMin)
-    .optional()
-    .describe('Size limit per page. Default 20, max 500.'),
-  cursor: zod
-    .string()
-    .optional()
-    .describe('Cursor value. Base64 encoded timestamp and item id.'),
-});
+function _create_bulkGetTypedNotificationsByEventItemIdsQueryParams() {
+  return zod.object({
+    states: zod
+      .string()
+      .optional()
+      .describe(
+        'Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states.'
+      ),
+    limit: zod
+      .number()
+      .min(bulkGetTypedNotificationsByEventItemIdsQueryLimitMin)
+      .optional()
+      .describe('Size limit per page. Default 20, max 500.'),
+    cursor: zod
+      .string()
+      .optional()
+      .describe('Cursor value. Base64 encoded timestamp and item id.'),
+  });
+}
+let _cached_bulkGetTypedNotificationsByEventItemIdsQueryParams:
+  | ReturnType<
+      typeof _create_bulkGetTypedNotificationsByEventItemIdsQueryParams
+    >
+  | undefined;
+export function getBulkGetTypedNotificationsByEventItemIdsQueryParamsSchema() {
+  return (_cached_bulkGetTypedNotificationsByEventItemIdsQueryParams ??=
+    _create_bulkGetTypedNotificationsByEventItemIdsQueryParams());
+}
 
-export const bulkGetTypedNotificationsByEventItemIdsBody = zod
-  .object({
-    eventItemIds: zod
-      .array(zod.uuid())
-      .describe('The event item IDs to filter notifications by.'),
-  })
-  .describe('Request body for bulk-fetching notifications by event item IDs.');
+function _create_bulkGetTypedNotificationsByEventItemIdsBody() {
+  return zod
+    .object({
+      eventItemIds: zod
+        .array(zod.uuid())
+        .describe('The event item IDs to filter notifications by.'),
+    })
+    .describe(
+      'Request body for bulk-fetching notifications by event item IDs.'
+    );
+}
+let _cached_bulkGetTypedNotificationsByEventItemIdsBody:
+  | ReturnType<typeof _create_bulkGetTypedNotificationsByEventItemIdsBody>
+  | undefined;
+export function getBulkGetTypedNotificationsByEventItemIdsBodySchema() {
+  return (_cached_bulkGetTypedNotificationsByEventItemIdsBody ??=
+    _create_bulkGetTypedNotificationsByEventItemIdsBody());
+}
 
 export const bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentNumberMin = 0;
 
@@ -2217,149 +2383,221 @@ export const bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificatio
 
 export const bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentTurnMinOne = 0;
 
-export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
-  .object({
-    items: zod
-      .array(
-        zod
-          .object({
-            entity_id: zod.string().describe('The id of that entity'),
-            entity_type: zod
-              .enum([
-                'user',
-                'chat',
-                'channel',
-                'channel_message',
-                'document',
-                'project',
-                'email_thread',
-                'calendar_event',
-                'team',
-                'call',
-                'foreign_entity',
-                'static_file',
-                'crm_company',
-                'crm_contact',
-                'crm_pipeline',
-                'reminder',
-                'skill',
-                'agent_session',
-                'scheduled_action',
-                'initiative',
-                'database',
-                'database_row',
-                'form',
-                'external_chat',
-              ])
-              .describe('The type of an entity in Macro'),
-          })
-          .describe(
-            'The Entity describes the minimum amount of information required to describe a unique thing in Macro\nThis contains the type of the entity [EntityType] and the string id of that entity'
-          )
-          .and(
-            zod.object({
-              created_at: zod.iso
-                .datetime({})
-                .describe('When the notification was created.'),
-              deleted_at: zod.iso
-                .datetime({})
-                .nullish()
-                .describe('When the notification was deleted.'),
-              id: zod.uuid().describe('The notification ID.'),
-              notification_event_type: zod
-                .string()
-                .describe(
-                  'The notification event type string (e.g. \"channel_mention\").\nTODO make this a new type'
-                ),
-              notification_metadata: zod
-                .union([
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          channelName: zod.string().optional(),
-                          channelType: zod.enum([
-                            'public',
-                            'private',
-                            'directMessage',
-                            'team',
-                          ]),
-                        })
-                        .describe(
-                          'Common metadata for notifications on channels'
-                        )
-                        .and(
-                          zod.object({
-                            messageContent: zod
-                              .string()
-                              .describe('The message content'),
-                            messageId: zod
-                              .string()
-                              .describe('The message you were mentioned in'),
-                            senderDisplayName: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'Display name for non-user senders such as bots'
-                              ),
-                            senderProfilePictureUrl: zod.string().nullish(),
-                            threadId: zod
-                              .string()
-                              .nullish()
-                              .describe('the id of the thread'),
+function _create_bulkGetTypedNotificationsByEventItemIdsResponse() {
+  return zod
+    .object({
+      items: zod
+        .array(
+          zod
+            .object({
+              entity_id: zod.string().describe('The id of that entity'),
+              entity_type: zod
+                .enum([
+                  'user',
+                  'chat',
+                  'channel',
+                  'channel_message',
+                  'document',
+                  'project',
+                  'email_thread',
+                  'calendar_event',
+                  'team',
+                  'call',
+                  'foreign_entity',
+                  'static_file',
+                  'crm_company',
+                  'crm_contact',
+                  'crm_pipeline',
+                  'reminder',
+                  'skill',
+                  'agent_session',
+                  'scheduled_action',
+                  'initiative',
+                  'database',
+                  'database_row',
+                  'form',
+                  'external_chat',
+                ])
+                .describe('The type of an entity in Macro'),
+            })
+            .describe(
+              'The Entity describes the minimum amount of information required to describe a unique thing in Macro\nThis contains the type of the entity [EntityType] and the string id of that entity'
+            )
+            .and(
+              zod.object({
+                created_at: zod.iso
+                  .datetime({})
+                  .describe('When the notification was created.'),
+                deleted_at: zod.iso
+                  .datetime({})
+                  .nullish()
+                  .describe('When the notification was deleted.'),
+                id: zod.uuid().describe('The notification ID.'),
+                notification_event_type: zod
+                  .string()
+                  .describe(
+                    'The notification event type string (e.g. \"channel_mention\").\nTODO make this a new type'
+                  ),
+                notification_metadata: zod
+                  .union([
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            channelName: zod.string().optional(),
+                            channelType: zod.enum([
+                              'public',
+                              'private',
+                              'directMessage',
+                              'team',
+                            ]),
                           })
-                        ),
-                      tag: zod.enum(['channel_mention']),
-                    })
-                    .describe('Someone mentioned you in a channel.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          channelName: zod.string().optional(),
-                          channelType: zod.enum([
-                            'public',
-                            'private',
-                            'directMessage',
-                            'team',
-                          ]),
-                        })
-                        .describe(
-                          'Common metadata for notifications on channels'
-                        )
-                        .and(
-                          zod.object({
-                            messageContent: zod
-                              .string()
-                              .describe('The message content'),
-                            messageId: zod
-                              .string()
-                              .describe('The message you were mentioned in'),
-                            senderDisplayName: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'Display name for non-user senders such as bots'
-                              ),
-                            senderProfilePictureUrl: zod.string().nullish(),
-                            threadId: zod
-                              .string()
-                              .nullish()
-                              .describe('the id of the thread'),
+                          .describe(
+                            'Common metadata for notifications on channels'
+                          )
+                          .and(
+                            zod.object({
+                              messageContent: zod
+                                .string()
+                                .describe('The message content'),
+                              messageId: zod
+                                .string()
+                                .describe('The message you were mentioned in'),
+                              senderDisplayName: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'Display name for non-user senders such as bots'
+                                ),
+                              senderProfilePictureUrl: zod.string().nullish(),
+                              threadId: zod
+                                .string()
+                                .nullish()
+                                .describe('the id of the thread'),
+                            })
+                          ),
+                        tag: zod.enum(['channel_mention']),
+                      })
+                      .describe('Someone mentioned you in a channel.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            channelName: zod.string().optional(),
+                            channelType: zod.enum([
+                              'public',
+                              'private',
+                              'directMessage',
+                              'team',
+                            ]),
                           })
-                        )
-                        .and(
-                          zod.object({
+                          .describe(
+                            'Common metadata for notifications on channels'
+                          )
+                          .and(
+                            zod.object({
+                              messageContent: zod
+                                .string()
+                                .describe('The message content'),
+                              messageId: zod
+                                .string()
+                                .describe('The message you were mentioned in'),
+                              senderDisplayName: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'Display name for non-user senders such as bots'
+                                ),
+                              senderProfilePictureUrl: zod.string().nullish(),
+                              threadId: zod
+                                .string()
+                                .nullish()
+                                .describe('the id of the thread'),
+                            })
+                          )
+                          .and(
+                            zod.object({
+                              documentName: zod
+                                .string()
+                                .describe('The name of the document'),
+                              fileType: zod
+                                .string()
+                                .nullish()
+                                .describe('The file type of the document'),
+                              owner: zod
+                                .string()
+                                .describe('The owner of the document'),
+                              subType: zod
+                                .union([
+                                  zod.null(),
+                                  zod
+                                    .union([
+                                      zod.object({
+                                        type: zod.enum(['task']),
+                                      }),
+                                      zod.object({
+                                        type: zod.enum(['snippet']),
+                                      }),
+                                      zod.object({
+                                        type: zod.enum(['skill']),
+                                      }),
+                                      zod.object({
+                                        type: zod.enum([
+                                          'initiative_description',
+                                        ]),
+                                      }),
+                                    ])
+                                    .describe(
+                                      'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                                    ),
+                                ])
+                                .optional(),
+                            })
+                          )
+                          .describe(
+                            'Someone mentioned a document in a channel'
+                          ),
+                        tag: zod.enum(['document_mention']),
+                      })
+                      .describe('Someone mentioned a document in a channel.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            commentId: zod
+                              .union([
+                                zod
+                                  .number()
+                                  .describe(
+                                    'Legacy `Comment.id` or `Thread.id`.'
+                                  ),
+                                zod
+                                  .uuid()
+                                  .describe(
+                                    'Message or root id in the shared message store.'
+                                  ),
+                              ])
+                              .describe(
+                                'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                              ),
                             documentName: zod
                               .string()
-                              .describe('The name of the document'),
+                              .describe('The name of the document.'),
                             fileType: zod
                               .string()
                               .nullish()
-                              .describe('The file type of the document'),
+                              .describe('The file type of the document.'),
+                            mentionId: zod.string().describe('The mention ID.'),
                             owner: zod
                               .string()
-                              .describe('The owner of the document'),
+                              .describe('The owner of the document.'),
+                            senderDisplayName: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Public bot name when the author is an agent rather than a Macro user.'
+                              ),
+                            senderProfilePictureUrl: zod.string().nullish(),
                             subType: zod
                               .union([
                                 zod.null(),
@@ -2385,1832 +2623,1817 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                                   ),
                               ])
                               .optional(),
-                          })
-                        )
-                        .describe('Someone mentioned a document in a channel'),
-                      tag: zod.enum(['document_mention']),
-                    })
-                    .describe('Someone mentioned a document in a channel.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          commentId: zod
-                            .union([
-                              zod
-                                .number()
-                                .describe(
-                                  'Legacy `Comment.id` or `Thread.id`.'
-                                ),
-                              zod
-                                .uuid()
-                                .describe(
-                                  'Message or root id in the shared message store.'
-                                ),
-                            ])
-                            .describe(
-                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
-                            ),
-                          documentName: zod
-                            .string()
-                            .describe('The name of the document.'),
-                          fileType: zod
-                            .string()
-                            .nullish()
-                            .describe('The file type of the document.'),
-                          mentionId: zod.string().describe('The mention ID.'),
-                          owner: zod
-                            .string()
-                            .describe('The owner of the document.'),
-                          senderDisplayName: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'Public bot name when the author is an agent rather than a Macro user.'
-                            ),
-                          senderProfilePictureUrl: zod.string().nullish(),
-                          subType: zod
-                            .union([
-                              zod.null(),
-                              zod
-                                .union([
-                                  zod.object({
-                                    type: zod.enum(['task']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['snippet']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['skill']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['initiative_description']),
-                                  }),
-                                ])
-                                .describe(
-                                  'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
-                                ),
-                            ])
-                            .optional(),
-                          text: zod
-                            .string()
-                            .describe('the text of the comment'),
-                          threadId: zod
-                            .union([
-                              zod
-                                .number()
-                                .describe(
-                                  'Legacy `Comment.id` or `Thread.id`.'
-                                ),
-                              zod
-                                .uuid()
-                                .describe(
-                                  'Message or root id in the shared message store.'
-                                ),
-                            ])
-                            .describe(
-                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
-                            ),
-                        })
-                        .describe(
-                          'Notification sent when a user is mentioned in a document comment.'
-                        ),
-                      tag: zod.enum(['mentioned_in_document_comment']),
-                    })
-                    .describe('User was mentioned in a comment in a document'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          commentId: zod
-                            .union([
-                              zod
-                                .number()
-                                .describe(
-                                  'Legacy `Comment.id` or `Thread.id`.'
-                                ),
-                              zod
-                                .uuid()
-                                .describe(
-                                  'Message or root id in the shared message store.'
-                                ),
-                            ])
-                            .describe(
-                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
-                            ),
-                          documentName: zod
-                            .string()
-                            .describe('The name of the document.'),
-                          fileType: zod
-                            .string()
-                            .nullish()
-                            .describe('The file type of the document.'),
-                          owner: zod
-                            .string()
-                            .describe('The owner of the document.'),
-                          senderDisplayName: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'Public bot name when the author is an agent rather than a Macro user.'
-                            ),
-                          senderProfilePictureUrl: zod.string().nullish(),
-                          subType: zod
-                            .union([
-                              zod.null(),
-                              zod
-                                .union([
-                                  zod.object({
-                                    type: zod.enum(['task']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['snippet']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['skill']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['initiative_description']),
-                                  }),
-                                ])
-                                .describe(
-                                  'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
-                                ),
-                            ])
-                            .optional(),
-                          text: zod
-                            .string()
-                            .describe('the text of the comment'),
-                          threadId: zod
-                            .union([
-                              zod
-                                .number()
-                                .describe(
-                                  'Legacy `Comment.id` or `Thread.id`.'
-                                ),
-                              zod
-                                .uuid()
-                                .describe(
-                                  'Message or root id in the shared message store.'
-                                ),
-                            ])
-                            .describe(
-                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
-                            ),
-                        })
-                        .describe(
-                          'Notification sent when someone replies to a document comment thread.'
-                        ),
-                      tag: zod.enum(['replied_to_document_comment_thread']),
-                    })
-                    .describe(
-                      'Someone replied to a document comment thread the user participated in.'
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          commentId: zod
-                            .union([
-                              zod
-                                .number()
-                                .describe(
-                                  'Legacy `Comment.id` or `Thread.id`.'
-                                ),
-                              zod
-                                .uuid()
-                                .describe(
-                                  'Message or root id in the shared message store.'
-                                ),
-                            ])
-                            .describe(
-                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
-                            ),
-                          documentName: zod
-                            .string()
-                            .describe('The name of the document.'),
-                          fileType: zod
-                            .string()
-                            .nullish()
-                            .describe('The file type of the document.'),
-                          owner: zod
-                            .string()
-                            .describe('The owner of the document.'),
-                          senderDisplayName: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'Public bot name when the author is an agent rather than a Macro user.'
-                            ),
-                          senderProfilePictureUrl: zod.string().nullish(),
-                          subType: zod
-                            .union([
-                              zod.null(),
-                              zod
-                                .union([
-                                  zod.object({
-                                    type: zod.enum(['task']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['snippet']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['skill']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['initiative_description']),
-                                  }),
-                                ])
-                                .describe(
-                                  'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
-                                ),
-                            ])
-                            .optional(),
-                          text: zod
-                            .string()
-                            .describe('the text of the comment'),
-                          threadId: zod
-                            .union([
-                              zod
-                                .number()
-                                .describe(
-                                  'Legacy `Comment.id` or `Thread.id`.'
-                                ),
-                              zod
-                                .uuid()
-                                .describe(
-                                  'Message or root id in the shared message store.'
-                                ),
-                            ])
-                            .describe(
-                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
-                            ),
-                        })
-                        .describe(
-                          'Notification sent when someone comments on a document the user owns.'
-                        ),
-                      tag: zod.enum(['commented_on_document']),
-                    })
-                    .describe('Someone commented on a document the user owns.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          accessLevel: zod
-                            .enum(['view', 'comment', 'edit'])
-                            .describe(
-                              'Permission level used by an access request, excluding ownership.'
-                            ),
-                          entityName: zod
-                            .string()
-                            .describe("Shared item's name."),
-                          fileType: zod
-                            .string()
-                            .nullish()
-                            .describe('Document file type for routing.'),
-                          requestId: zod
-                            .uuid()
-                            .describe('Stable request identity.'),
-                          revision: zod
-                            .number()
-                            .describe(
-                              'Revision that generated this notification.'
-                            ),
-                        })
-                        .describe(
-                          'A person requested access to a shared entity.'
-                        ),
-                      tag: zod.enum(['entity_access_requested']),
-                    })
-                    .describe(
-                      'Someone requested more access to a shared entity.'
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          accessLevel: zod
-                            .enum(['view', 'comment', 'edit'])
-                            .describe(
-                              'Permission level used by an access request, excluding ownership.'
-                            ),
-                          entityName: zod
-                            .string()
-                            .describe("Shared item's name."),
-                          fileType: zod
-                            .string()
-                            .nullish()
-                            .describe('Document file type for routing.'),
-                          requestId: zod
-                            .uuid()
-                            .describe('Stable request identity.'),
-                          revision: zod
-                            .number()
-                            .describe(
-                              'Revision that generated this notification.'
-                            ),
-                        })
-                        .describe(
-                          'A person granted you access to a shared entity.'
-                        ),
-                      tag: zod.enum(['entity_access_granted']),
-                    })
-                    .describe('An owner granted requested access.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          messageId: zod
-                            .uuid()
-                            .describe('Canonical shared message UUID.'),
-                          owner: zod
-                            .string()
-                            .describe('Authenticated project owner.'),
-                          projectName: zod
-                            .string()
-                            .describe('Name displayed in the project header.'),
-                          reason: zod
-                            .enum(['mention', 'reply', 'assignee', 'owner'])
-                            .describe(
-                              'Why a project discussion notification was delivered.'
-                            ),
-                          senderDisplayName: zod
-                            .string()
-                            .nullish()
-                            .describe('Public display name for a bot author.'),
-                          senderProfilePictureUrl: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'Optional avatar for push notification attachments.'
-                            ),
-                          text: zod
-                            .string()
-                            .describe('Posted Markdown content.'),
-                          threadId: zod
-                            .uuid()
-                            .describe('Canonical discussion root UUID.'),
-                        })
-                        .describe(
-                          'Project discussion metadata. The notification entity identifies the initiative;\nmessage and thread UUIDs select the discussion inside that project.'
-                        ),
-                      tag: zod.enum(['initiative_discussion']),
-                    })
-                    .describe(
-                      'Someone commented, replied, or mentioned the recipient on a project.'
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          messageId: zod
-                            .uuid()
-                            .describe('Canonical shared message UUID.'),
-                          reason: zod
-                            .enum(['mention', 'reply', 'owner'])
-                            .describe(
-                              'Why a CRM discussion notification was delivered.'
-                            ),
-                          recordName: zod
-                            .string()
-                            .describe('Company or contact display name.'),
-                          senderDisplayName: zod
-                            .string()
-                            .nullish()
-                            .describe('Public display name for a bot author.'),
-                          senderProfilePictureUrl: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'Optional avatar for push notification attachments.'
-                            ),
-                          text: zod
-                            .string()
-                            .describe('Posted Markdown content.'),
-                          threadId: zod
-                            .uuid()
-                            .describe('Canonical discussion root UUID.'),
-                        })
-                        .describe(
-                          'CRM discussion metadata. The notification entity identifies the company or\ncontact; message and thread UUIDs select the discussion inside it.'
-                        ),
-                      tag: zod.enum(['crm_discussion']),
-                    })
-                    .describe(
-                      'Someone commented, replied, or mentioned the recipient on a CRM company or contact.'
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          channelName: zod
-                            .string()
-                            .optional()
-                            .describe('The name of the channel'),
-                          invitedBy: zod
-                            .string()
-                            .describe('The user who sent the invitation'),
-                          isDirectMessage: zod
-                            .boolean()
-                            .optional()
-                            .describe(
-                              'Whether this is a direct message rather than a channel invitation.\nOlder notification payloads retain channel-invitation wording.'
-                            ),
-                          messageContent: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'Message content to show in the invite email, when the invite was triggered by a message.'
-                            ),
-                          senderProfilePictureUrl: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              "The sender's profile picture URL, if available."
-                            ),
-                        })
-                        .describe(
-                          'Metadata for when a user is invited to a channel.'
-                        ),
-                      tag: zod.enum(['channel_invite']),
-                    })
-                    .describe('The user was invited to a channel.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          channelName: zod.string().optional(),
-                          channelType: zod.enum([
-                            'public',
-                            'private',
-                            'directMessage',
-                            'team',
-                          ]),
-                        })
-                        .describe(
-                          'Common metadata for notifications on channels'
-                        )
-                        .and(
-                          zod.object({
-                            messageContent: zod
+                            text: zod
                               .string()
-                              .optional()
-                              .describe('The content of the message'),
-                            messageId: zod.string().describe('The message id'),
-                            sender: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'The user who sent the message, when sent by a user'
-                              ),
-                            senderDisplayName: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'Display name for non-user senders such as bots'
-                              ),
-                            senderProfilePictureUrl: zod.string().nullish(),
-                          })
-                        ),
-                      tag: zod.enum(['channel_message_send']),
-                    })
-                    .describe('A user sent a message in a channel.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          channelName: zod.string().optional(),
-                          channelType: zod.enum([
-                            'public',
-                            'private',
-                            'directMessage',
-                            'team',
-                          ]),
-                        })
-                        .describe(
-                          'Common metadata for notifications on channels'
-                        )
-                        .and(
-                          zod.object({
-                            messageContent: zod
-                              .string()
-                              .describe('The message content'),
-                            messageId: zod
-                              .string()
-                              .describe('The id of the new message'),
-                            senderDisplayName: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'Display name for non-user senders such as bots'
-                              ),
-                            senderProfilePictureUrl: zod.string().nullish(),
+                              .describe('the text of the comment'),
                             threadId: zod
-                              .string()
+                              .union([
+                                zod
+                                  .number()
+                                  .describe(
+                                    'Legacy `Comment.id` or `Thread.id`.'
+                                  ),
+                                zod
+                                  .uuid()
+                                  .describe(
+                                    'Message or root id in the shared message store.'
+                                  ),
+                              ])
                               .describe(
-                                'The id of the thread that has the reply'
-                              ),
-                            threadParentSenderId: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'The user who sent the root message of the thread'
-                              ),
-                            userId: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'The sender id of the reply, when sent by a user'
+                                'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
                               ),
                           })
-                        ),
-                      tag: zod.enum(['channel_message_reply']),
-                    })
-                    .describe(
-                      'Someone replied to a thread in a channel that the user is part of.'
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          channel_name: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The name of the channel the call started in, when available.'
-                            ),
-                          sender_profile_picture_url: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'Profile picture URL of the user who started the call, when available.'
-                            ),
-                        })
-                        .describe(
-                          'Metadata for a notification that a call has started in a channel.\n\nMirrors the producer-side `CallStartedNotification` in the `call` crate:\nboth serialize the same wire shape (snake_case fields) under the same\n`call_started` [`Notification::TYPE_NAME`]. This type is the read-side\nmodel used by [`crate::NotifEvent`]; the producer keeps its own type\nbecause it additionally builds the incoming-call APNS\/VoIP push.\n\nRows persisted before the type name was normalized used the kebab-case\n`call-started`; the [`crate::NotifEvent::CallStarted`] variant carries a\n`#[serde(alias = \"call-started\")]` so those rows still deserialize.'
-                        ),
-                      tag: zod.enum(['call_started']),
-                    })
-                    .describe(
-                      'A call has started in a channel the user is a member of.\n\nThe `call-started` alias keeps rows persisted before the type name\nwas normalized to snake_case (`call_started`) deserializable.'
-                    ),
-                  zod
-                    .object({
-                      content: zod.object({
-                        sender: zod.string().nullish(),
-                        snippet: zod.string(),
-                        subject: zod.string(),
-                        threadId: zod.string(),
-                        toEmail: zod.string(),
-                      }),
-                      tag: zod.enum(['new_email']),
-                    })
-                    .describe('A new email has been sent to the user.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          emailAddress: zod
-                            .string()
-                            .describe(
-                              'The address of the inbox that needs to be reconnected.'
-                            ),
-                        })
-                        .describe(
-                          "Metadata for a notification that a linked inbox's grant has died and the\ninbox must be reconnected. Fanned out to the inbox owner and every delegate,\nsince any of them holding the Google grant can restore sync."
-                        ),
-                      tag: zod.enum(['inbox_reauth_required']),
-                    })
-                    .describe(
-                      "A linked inbox's grant died and must be reconnected."
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          invitedBy: zod
-                            .string()
-                            .describe('The user who sent the invitation'),
-                          inviteePlan: zod
-                            .enum(['free', 'premium'])
-                            .optional()
-                            .describe('What a team invitee gets by joining.'),
-                          reminder: zod
-                            .boolean()
-                            .optional()
-                            .describe(
-                              'Whether this email reminds the invitee of an invite they have not answered.'
-                            ),
-                          role: zod
-                            .string()
-                            .nullish()
-                            .describe('Role\/permission level in the team'),
-                          senderProfilePictureUrl: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              "The sender's profile picture URL, if available."
-                            ),
-                          teamId: zod
-                            .uuid()
-                            .describe('The unique identifier of the team'),
-                          teamInviteId: zod
-                            .uuid()
-                            .describe(
-                              'The unique identifier of the team invite'
-                            ),
-                          teamName: zod
-                            .string()
-                            .describe('The name of the team being invited to'),
-                        })
-                        .describe(
-                          'Metadata for when a user is invited to a team.'
-                        ),
-                      tag: zod.enum(['invite_to_team']),
-                    })
-                    .describe('A user was invited to a team.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          assignedBy: zod
-                            .string()
-                            .describe('The user who assigned the task'),
-                          senderProfilePictureUrl: zod.string().nullish(),
-                          subType: zod
-                            .union([
-                              zod.null(),
-                              zod
-                                .union([
-                                  zod.object({
-                                    type: zod.enum(['task']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['snippet']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['skill']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['initiative_description']),
-                                  }),
-                                ])
-                                .describe(
-                                  'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
-                                ),
-                            ])
-                            .optional(),
-                          taskId: zod
-                            .string()
-                            .describe('The unique identifier of the task'),
-                          taskName: zod
-                            .string()
-                            .nullish()
-                            .describe('The name of the task (optional)'),
-                        })
-                        .describe(
-                          'Metadata for when a user is assigned to a task'
-                        ),
-                      tag: zod.enum(['task_assigned']),
-                    })
-                    .describe('A user was assigned to a task.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          description: zod
-                            .string()
-                            .describe(
-                              'What the user asked to be reminded about.'
-                            ),
-                          reminderId: zod
-                            .uuid()
-                            .describe('The reminder that fired.'),
-                          scheduledFor: zod.iso
-                            .datetime({})
-                            .nullish()
-                            .describe(
-                              "Which firing this is — the occurrence the reminder came due for.\n\nWhat distinguishes two firings of the same recurring reminder, which are\notherwise identical: same id, same description. The collapse key is\nbuilt from it, so without it Tuesday's alert would replace Monday's\nunread one on the lock screen.\n\nOptional because notifications written before recurring dispatch existed\nhave no such field, and they still have to read back."
-                            ),
-                        })
-                        .describe(
-                          'Metadata for a reminder the user set for themselves coming due.\n\nThere is no sender: a reminder is self-set, so the dispatcher sends it with\n`sender_id: None` (a recipient who is also the sender is filtered out of\ntheir own notification). Every formatter here must therefore work without\none.\n\nThe associated entity, when there is one, lives on the notification row\nrather than in here, and clients resolve its name from that — so the\ndispatcher does not have to look up a name across five entity types.'
-                        ),
-                      tag: zod.enum(['reminder']),
-                    })
-                    .describe(
-                      'A reminder the user set for themselves came due.'
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          chatName: zod.string().describe("The chat's name."),
-                          messageId: zod
-                            .uuid()
-                            .describe(
-                              'Stable message id; retries use it as their notification id.'
-                            ),
-                          provider: zod
-                            .enum(['whatsapp'])
-                            .describe(
-                              'The messaging service an external chat lives in.'
-                            ),
-                        })
-                        .describe(
-                          'A live message in an independently shared external chat.'
-                        ),
-                      tag: zod.enum(['external_chat_message']),
-                    })
-                    .describe('A live message in a shared external chat.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          endsAt: zod.iso
-                            .datetime({})
-                            .nullish()
-                            .describe('Instance end, for timed events.'),
-                          eventId: zod
-                            .uuid()
-                            .describe(
-                              'The calendar event entity the alarm belongs to.'
-                            ),
-                          minutesBefore: zod
-                            .number()
-                            .describe(
-                              'Minutes before the start the alarm was configured to fire.'
-                            ),
-                          occurrenceKey: zod
-                            .string()
-                            .describe(
-                              'Stable occurrence key of the instance that is starting.'
-                            ),
-                          startDate: zod.iso
-                            .date()
-                            .nullish()
-                            .describe(
-                              'Instance start date, for all-day events.'
-                            ),
-                          startsAt: zod.iso
-                            .datetime({})
-                            .nullish()
-                            .describe('Instance start, for timed events.'),
-                          timeZone: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'IANA zone for rendering local clock times, when known.'
-                            ),
-                          title: zod
-                            .string()
-                            .describe('Event display title at dispatch time.'),
-                        })
-                        .describe(
-                          'A calendar event alarm came due. Like [`ReminderMetadata`], these are\nself-notifications: `sender_id` must stay `None` or the only recipient is\nfiltered out. Everything the alert renders rides in here so the\ndispatcher never has to resolve the event again at display time.'
-                        ),
-                      tag: zod.enum(['calendar_event_reminder']),
-                    })
-                    .describe('A calendar event alarm came due.'),
-                  zod
-                    .object({
-                      content: zod.object({
-                        messageId: zod.string(),
-                        summary: zod.string(),
-                      }),
-                      tag: zod.enum(['ai_response']),
-                    })
-                    .describe('An AI assistant responded to a chat.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          displayName: zod
-                            .string()
-                            .describe(
-                              'A compact label suitable for display in the UI.'
-                            ),
-                          foreignEntityId: zod
-                            .uuid()
-                            .describe(
-                              'The source-specific internal foreign entity row id for this pull request.'
-                            ),
-                          githubKey: zod
-                            .string()
-                            .describe(
-                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
-                            ),
-                          number: zod
-                            .number()
-                            .min(
-                              bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentNumberMin
-                            )
-                            .describe('The GitHub pull request number.'),
-                          owner: zod
-                            .string()
-                            .describe(
-                              'The GitHub repository owner or organization.'
-                            ),
-                          repo: zod
-                            .string()
-                            .describe('The GitHub repository name.'),
-                          senderGithubAvatarUrl: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub avatar URL for the sender, when available.'
-                            ),
-                          senderGithubLogin: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub login for the sender, when available.'
-                            ),
-                          senderGithubUserId: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The stable GitHub numeric user id for the sender, serialized as a string.'
-                            ),
-                          title: zod
-                            .string()
-                            .describe(
-                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
-                            ),
-                          url: zod
-                            .string()
-                            .describe(
-                              'The public GitHub URL for the pull request.'
-                            ),
-                        })
-                        .describe(
-                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
-                        )
-                        .and(
-                          zod.object({
-                            action: zod
-                              .enum(['opened', 'reopened', 'closed'])
+                          .describe(
+                            'Notification sent when a user is mentioned in a document comment.'
+                          ),
+                        tag: zod.enum(['mentioned_in_document_comment']),
+                      })
+                      .describe(
+                        'User was mentioned in a comment in a document'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            commentId: zod
+                              .union([
+                                zod
+                                  .number()
+                                  .describe(
+                                    'Legacy `Comment.id` or `Thread.id`.'
+                                  ),
+                                zod
+                                  .uuid()
+                                  .describe(
+                                    'Message or root id in the shared message store.'
+                                  ),
+                              ])
                               .describe(
-                                'The GitHub pull request webhook action that triggered the notification.'
+                                'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
                               ),
-                            baseBranch: zod
+                            documentName: zod
+                              .string()
+                              .describe('The name of the document.'),
+                            fileType: zod
+                              .string()
+                              .nullish()
+                              .describe('The file type of the document.'),
+                            owner: zod
+                              .string()
+                              .describe('The owner of the document.'),
+                            senderDisplayName: zod
                               .string()
                               .nullish()
                               .describe(
-                                'The pull request base branch, when available.'
+                                'Public bot name when the author is an agent rather than a Macro user.'
                               ),
-                            headBranch: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'The pull request head branch, when available.'
-                              ),
-                            mergedAt: zod.iso
-                              .datetime({})
-                              .nullish()
-                              .describe(
-                                'When the pull request was merged, when available.'
-                              ),
-                            previousStatus: zod
+                            senderProfilePictureUrl: zod.string().nullish(),
+                            subType: zod
                               .union([
                                 zod.null(),
                                 zod
-                                  .enum(['open', 'closed', 'merged'])
+                                  .union([
+                                    zod.object({
+                                      type: zod.enum(['task']),
+                                    }),
+                                    zod.object({
+                                      type: zod.enum(['snippet']),
+                                    }),
+                                    zod.object({
+                                      type: zod.enum(['skill']),
+                                    }),
+                                    zod.object({
+                                      type: zod.enum([
+                                        'initiative_description',
+                                      ]),
+                                    }),
+                                  ])
                                   .describe(
-                                    'The normalized lifecycle status for a GitHub pull request notification.'
+                                    'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
                                   ),
                               ])
                               .optional(),
-                            status: zod
-                              .enum(['open', 'closed', 'merged'])
-                              .describe(
-                                'The normalized lifecycle status for a GitHub pull request notification.'
-                              ),
-                          })
-                        )
-                        .describe(
-                          'Metadata for a GitHub pull request lifecycle notification.'
-                        ),
-                      tag: zod.enum(['github_pr_status_changed']),
-                    })
-                    .describe(
-                      'A GitHub pull request changed lifecycle state.\n\nThe `github_pr_event` alias keeps rows and queue messages persisted\nbefore the rename deserializable.'
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          displayName: zod
-                            .string()
-                            .describe(
-                              'A compact label suitable for display in the UI.'
-                            ),
-                          foreignEntityId: zod
-                            .uuid()
-                            .describe(
-                              'The source-specific internal foreign entity row id for this pull request.'
-                            ),
-                          githubKey: zod
-                            .string()
-                            .describe(
-                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
-                            ),
-                          number: zod
-                            .number()
-                            .min(
-                              bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentNumberMinOne
-                            )
-                            .describe('The GitHub pull request number.'),
-                          owner: zod
-                            .string()
-                            .describe(
-                              'The GitHub repository owner or organization.'
-                            ),
-                          repo: zod
-                            .string()
-                            .describe('The GitHub repository name.'),
-                          senderGithubAvatarUrl: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub avatar URL for the sender, when available.'
-                            ),
-                          senderGithubLogin: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub login for the sender, when available.'
-                            ),
-                          senderGithubUserId: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The stable GitHub numeric user id for the sender, serialized as a string.'
-                            ),
-                          title: zod
-                            .string()
-                            .describe(
-                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
-                            ),
-                          url: zod
-                            .string()
-                            .describe(
-                              'The public GitHub URL for the pull request.'
-                            ),
-                        })
-                        .describe(
-                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
-                        )
-                        .and(
-                          zod.object({
-                            checkName: zod
+                            text: zod
                               .string()
-                              .describe(
-                                'The display name GitHub reported for the check run.'
-                              ),
-                            checkRunGithubId: zod
-                              .number()
-                              .min(
-                                bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentCheckRunGithubIdMin
-                              )
-                              .describe(
-                                'The GitHub numeric id of the check run.'
-                              ),
-                            checkStatus: zod
-                              .string()
-                              .describe('The raw GitHub check run status.'),
-                            checkUrl: zod
-                              .string()
-                              .describe(
-                                'The public GitHub URL for the check run.'
-                              ),
-                            completedAt: zod.iso
-                              .datetime({})
-                              .describe(
-                                'When GitHub marked the check run as complete.'
-                              ),
-                            conclusion: zod
-                              .string()
-                              .describe('The raw GitHub check run conclusion.'),
-                            state: zod
-                              .enum(['completed', 'failed'])
-                              .describe(
-                                'The normalized result state for a GitHub pull request check-run notification.'
-                              ),
-                          })
-                        )
-                        .describe(
-                          'Metadata for a notification that a GitHub pull request check run completed.'
-                        ),
-                      tag: zod.enum(['github_pr_check_run']),
-                    })
-                    .describe('A GitHub pull request check run completed.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          displayName: zod
-                            .string()
-                            .describe(
-                              'A compact label suitable for display in the UI.'
-                            ),
-                          foreignEntityId: zod
-                            .uuid()
-                            .describe(
-                              'The source-specific internal foreign entity row id for this pull request.'
-                            ),
-                          githubKey: zod
-                            .string()
-                            .describe(
-                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
-                            ),
-                          number: zod
-                            .number()
-                            .min(
-                              bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentNumberMinTwo
-                            )
-                            .describe('The GitHub pull request number.'),
-                          owner: zod
-                            .string()
-                            .describe(
-                              'The GitHub repository owner or organization.'
-                            ),
-                          repo: zod
-                            .string()
-                            .describe('The GitHub repository name.'),
-                          senderGithubAvatarUrl: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub avatar URL for the sender, when available.'
-                            ),
-                          senderGithubLogin: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub login for the sender, when available.'
-                            ),
-                          senderGithubUserId: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The stable GitHub numeric user id for the sender, serialized as a string.'
-                            ),
-                          title: zod
-                            .string()
-                            .describe(
-                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
-                            ),
-                          url: zod
-                            .string()
-                            .describe(
-                              'The public GitHub URL for the pull request.'
-                            ),
-                        })
-                        .describe(
-                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
-                        )
-                        .and(
-                          zod.object({
-                            requestedReviewerGithubLogin: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'The GitHub login of the requested reviewer, when available.'
-                              ),
-                            requestedReviewerGithubUserId: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'The stable GitHub numeric user id of the requested reviewer, serialized as a string.'
-                              ),
-                          })
-                        )
-                        .describe(
-                          "Metadata for a notification that the user's review was requested on a GitHub pull request."
-                        ),
-                      tag: zod.enum(['github_review_requested']),
-                    })
-                    .describe(
-                      "The user's review was requested on a GitHub pull request."
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          displayName: zod
-                            .string()
-                            .describe(
-                              'A compact label suitable for display in the UI.'
-                            ),
-                          foreignEntityId: zod
-                            .uuid()
-                            .describe(
-                              'The source-specific internal foreign entity row id for this pull request.'
-                            ),
-                          githubKey: zod
-                            .string()
-                            .describe(
-                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
-                            ),
-                          number: zod
-                            .number()
-                            .min(
-                              bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentNumberMinThree
-                            )
-                            .describe('The GitHub pull request number.'),
-                          owner: zod
-                            .string()
-                            .describe(
-                              'The GitHub repository owner or organization.'
-                            ),
-                          repo: zod
-                            .string()
-                            .describe('The GitHub repository name.'),
-                          senderGithubAvatarUrl: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub avatar URL for the sender, when available.'
-                            ),
-                          senderGithubLogin: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub login for the sender, when available.'
-                            ),
-                          senderGithubUserId: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The stable GitHub numeric user id for the sender, serialized as a string.'
-                            ),
-                          title: zod
-                            .string()
-                            .describe(
-                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
-                            ),
-                          url: zod
-                            .string()
-                            .describe(
-                              'The public GitHub URL for the pull request.'
-                            ),
-                        })
-                        .describe(
-                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
-                        )
-                        .and(
-                          zod.object({
-                            commentGithubId: zod
-                              .number()
-                              .min(
-                                bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentCommentGithubIdMin
-                              )
-                              .nullish()
-                              .describe(
-                                'The GitHub numeric id of the comment, when available.'
-                              ),
-                            commentKind: zod
-                              .enum(['issue', 'review_comment'])
-                              .describe(
-                                'The kind of GitHub comment that triggered a [`GithubPrComment`] notification.'
-                              ),
-                            commentSnippet: zod
-                              .string()
-                              .describe(
-                                'A truncated excerpt of the comment body.'
-                              ),
-                            commentUrl: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'The public GitHub URL for the comment, when available.'
-                              ),
-                          })
-                        )
-                        .describe(
-                          'Metadata for a notification that a GitHub pull request was commented on.'
-                        ),
-                      tag: zod.enum(['github_pr_comment']),
-                    })
-                    .describe('A GitHub pull request was commented on.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          displayName: zod
-                            .string()
-                            .describe(
-                              'A compact label suitable for display in the UI.'
-                            ),
-                          foreignEntityId: zod
-                            .uuid()
-                            .describe(
-                              'The source-specific internal foreign entity row id for this pull request.'
-                            ),
-                          githubKey: zod
-                            .string()
-                            .describe(
-                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
-                            ),
-                          number: zod
-                            .number()
-                            .min(
-                              bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentNumberMinFour
-                            )
-                            .describe('The GitHub pull request number.'),
-                          owner: zod
-                            .string()
-                            .describe(
-                              'The GitHub repository owner or organization.'
-                            ),
-                          repo: zod
-                            .string()
-                            .describe('The GitHub repository name.'),
-                          senderGithubAvatarUrl: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub avatar URL for the sender, when available.'
-                            ),
-                          senderGithubLogin: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub login for the sender, when available.'
-                            ),
-                          senderGithubUserId: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The stable GitHub numeric user id for the sender, serialized as a string.'
-                            ),
-                          title: zod
-                            .string()
-                            .describe(
-                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
-                            ),
-                          url: zod
-                            .string()
-                            .describe(
-                              'The public GitHub URL for the pull request.'
-                            ),
-                        })
-                        .describe(
-                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
-                        )
-                        .and(
-                          zod.object({
-                            commentGithubId: zod
-                              .number()
-                              .min(
-                                bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentCommentGithubIdMinOne
-                              )
-                              .nullish()
-                              .describe(
-                                'The GitHub numeric id of the comment or review containing the mention, when available.'
-                              ),
-                            commentUrl: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'The public GitHub URL for the text containing the mention, when available.'
-                              ),
-                            location: zod
-                              .enum([
-                                'pr_body',
-                                'comment',
-                                'review',
-                                'review_comment',
+                              .describe('the text of the comment'),
+                            threadId: zod
+                              .union([
+                                zod
+                                  .number()
+                                  .describe(
+                                    'Legacy `Comment.id` or `Thread.id`.'
+                                  ),
+                                zod
+                                  .uuid()
+                                  .describe(
+                                    'Message or root id in the shared message store.'
+                                  ),
                               ])
                               .describe(
-                                'Where in a GitHub pull request the user was mentioned.'
-                              ),
-                            textSnippet: zod
-                              .string()
-                              .describe(
-                                'A truncated excerpt of the text containing the mention.'
+                                'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
                               ),
                           })
-                        )
-                        .describe(
-                          'Metadata for a notification that the user was mentioned on a GitHub pull request.'
-                        ),
-                      tag: zod.enum(['github_pr_mention']),
-                    })
-                    .describe(
-                      'The user was mentioned on a GitHub pull request.'
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          displayName: zod
-                            .string()
-                            .describe(
-                              'A compact label suitable for display in the UI.'
-                            ),
-                          foreignEntityId: zod
-                            .uuid()
-                            .describe(
-                              'The source-specific internal foreign entity row id for this pull request.'
-                            ),
-                          githubKey: zod
-                            .string()
-                            .describe(
-                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
-                            ),
-                          number: zod
-                            .number()
-                            .min(
-                              bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentNumberMinFive
-                            )
-                            .describe('The GitHub pull request number.'),
-                          owner: zod
-                            .string()
-                            .describe(
-                              'The GitHub repository owner or organization.'
-                            ),
-                          repo: zod
-                            .string()
-                            .describe('The GitHub repository name.'),
-                          senderGithubAvatarUrl: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub avatar URL for the sender, when available.'
-                            ),
-                          senderGithubLogin: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub login for the sender, when available.'
-                            ),
-                          senderGithubUserId: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The stable GitHub numeric user id for the sender, serialized as a string.'
-                            ),
-                          title: zod
-                            .string()
-                            .describe(
-                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
-                            ),
-                          url: zod
-                            .string()
-                            .describe(
-                              'The public GitHub URL for the pull request.'
-                            ),
-                        })
-                        .describe(
-                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
-                        )
-                        .and(
-                          zod.object({
-                            reviewGithubId: zod
-                              .number()
-                              .min(
-                                bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentReviewGithubIdMin
-                              )
-                              .nullish()
-                              .describe(
-                                'The GitHub numeric id of the review, when available.'
-                              ),
-                            reviewSnippet: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'A truncated excerpt of the review body, when any was written.'
-                              ),
-                            reviewUrl: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'The public GitHub URL for the review, when available.'
-                              ),
-                            state: zod
-                              .enum([
-                                'approved',
-                                'changes_requested',
-                                'commented',
+                          .describe(
+                            'Notification sent when someone replies to a document comment thread.'
+                          ),
+                        tag: zod.enum(['replied_to_document_comment_thread']),
+                      })
+                      .describe(
+                        'Someone replied to a document comment thread the user participated in.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            commentId: zod
+                              .union([
+                                zod
+                                  .number()
+                                  .describe(
+                                    'Legacy `Comment.id` or `Thread.id`.'
+                                  ),
+                                zod
+                                  .uuid()
+                                  .describe(
+                                    'Message or root id in the shared message store.'
+                                  ),
                               ])
                               .describe(
-                                'The state of a submitted GitHub pull request review.'
+                                'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
                               ),
-                          })
-                        )
-                        .describe(
-                          "Metadata for a notification that a review was submitted on the user's GitHub pull request."
-                        ),
-                      tag: zod.enum(['github_pr_review']),
-                    })
-                    .describe(
-                      "A review was submitted on the user's GitHub pull request."
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          announcementMessageId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'The magic-chip message for the turn in question, when one was posted.'
-                            ),
-                          botId: zod
-                            .string()
-                            .describe(
-                              'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
-                            ),
-                          botName: zod
-                            .string()
-                            .describe(
-                              "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
-                            ),
-                          channelId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'The channel the session was opened from, when it was opened from a\nchannel thread.'
-                            ),
-                          parent: zod
-                            .union([
-                              zod.null(),
-                              zod
-                                .object({
-                                  id: zod
-                                    .string()
-                                    .describe('The parent entity id.'),
-                                  type: zod
-                                    .string()
-                                    .describe(
-                                      '`channel`, `document`, or `initiative`.'
-                                    ),
-                                })
-                                .describe(
-                                  "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel, document,\nor initiative. Spelled like the message API's parent for client routing."
-                                ),
-                            ])
-                            .optional(),
-                          sessionId: zod
-                            .uuid()
-                            .describe('The session; what a click opens.'),
-                          sessionName: zod
-                            .string()
-                            .describe(
-                              "The session's name at the time of the event."
-                            ),
-                          threadId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'The thread the session was opened from, when it was.'
-                            ),
-                        })
-                        .describe(
-                          'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
-                        )
-                        .and(
-                          zod.object({
-                            actor: zod
+                            documentName: zod
+                              .string()
+                              .describe('The name of the document.'),
+                            fileType: zod
+                              .string()
+                              .nullish()
+                              .describe('The file type of the document.'),
+                            owner: zod
+                              .string()
+                              .describe('The owner of the document.'),
+                            senderDisplayName: zod
                               .string()
                               .nullish()
                               .describe(
-                                "Who prompted the turn, absent when a bot acted on nobody's behalf."
+                                'Public bot name when the author is an agent rather than a Macro user.'
                               ),
-                            excerpt: zod
+                            senderProfilePictureUrl: zod.string().nullish(),
+                            subType: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .union([
+                                    zod.object({
+                                      type: zod.enum(['task']),
+                                    }),
+                                    zod.object({
+                                      type: zod.enum(['snippet']),
+                                    }),
+                                    zod.object({
+                                      type: zod.enum(['skill']),
+                                    }),
+                                    zod.object({
+                                      type: zod.enum([
+                                        'initiative_description',
+                                      ]),
+                                    }),
+                                  ])
+                                  .describe(
+                                    'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                                  ),
+                              ])
+                              .optional(),
+                            text: zod
+                              .string()
+                              .describe('the text of the comment'),
+                            threadId: zod
+                              .union([
+                                zod
+                                  .number()
+                                  .describe(
+                                    'Legacy `Comment.id` or `Thread.id`.'
+                                  ),
+                                zod
+                                  .uuid()
+                                  .describe(
+                                    'Message or root id in the shared message store.'
+                                  ),
+                              ])
+                              .describe(
+                                'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                              ),
+                          })
+                          .describe(
+                            'Notification sent when someone comments on a document the user owns.'
+                          ),
+                        tag: zod.enum(['commented_on_document']),
+                      })
+                      .describe(
+                        'Someone commented on a document the user owns.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            accessLevel: zod
+                              .enum(['view', 'comment', 'edit'])
+                              .describe(
+                                'Permission level used by an access request, excluding ownership.'
+                              ),
+                            entityName: zod
+                              .string()
+                              .describe("Shared item's name."),
+                            fileType: zod
                               .string()
                               .nullish()
-                              .describe(
-                                "The agent's last prose in the turn, whole; `None` when it wrote none."
-                              ),
-                            stopReason: zod
-                              .string()
-                              .describe('The ACP stop reason, or `error`.'),
-                            turn: zod
-                              .number()
-                              .min(
-                                bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentTurnMin
-                              )
-                              .describe('The turn that ended.'),
-                          })
-                        )
-                        .describe(
-                          'An agent finished a turn with nothing queued behind it.'
-                        ),
-                      tag: zod.enum(['agent_session_settled']),
-                    })
-                    .describe(
-                      'An agent finished a turn with nothing queued behind it.'
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          announcementMessageId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'The magic-chip message for the turn in question, when one was posted.'
-                            ),
-                          botId: zod
-                            .string()
-                            .describe(
-                              'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
-                            ),
-                          botName: zod
-                            .string()
-                            .describe(
-                              "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
-                            ),
-                          channelId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'The channel the session was opened from, when it was opened from a\nchannel thread.'
-                            ),
-                          parent: zod
-                            .union([
-                              zod.null(),
-                              zod
-                                .object({
-                                  id: zod
-                                    .string()
-                                    .describe('The parent entity id.'),
-                                  type: zod
-                                    .string()
-                                    .describe(
-                                      '`channel`, `document`, or `initiative`.'
-                                    ),
-                                })
-                                .describe(
-                                  "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel, document,\nor initiative. Spelled like the message API's parent for client routing."
-                                ),
-                            ])
-                            .optional(),
-                          sessionId: zod
-                            .uuid()
-                            .describe('The session; what a click opens.'),
-                          sessionName: zod
-                            .string()
-                            .describe(
-                              "The session's name at the time of the event."
-                            ),
-                          threadId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'The thread the session was opened from, when it was.'
-                            ),
-                        })
-                        .describe(
-                          'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
-                        )
-                        .and(
-                          zod.object({
-                            question: zod
-                              .string()
-                              .describe(
-                                'The question, as the agent phrased it.'
-                              ),
-                            turn: zod
-                              .number()
-                              .min(
-                                bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentTurnMinOne
-                              )
-                              .describe('The turn asking.'),
-                          })
-                        )
-                        .describe(
-                          "An agent is blocked on a question only the session's owner can answer."
-                        ),
-                      tag: zod.enum(['agent_session_waiting_for_input']),
-                    })
-                    .describe(
-                      "An agent is blocked on a question for the session's owner."
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          announcementMessageId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'The magic-chip message for the turn in question, when one was posted.'
-                            ),
-                          botId: zod
-                            .string()
-                            .describe(
-                              'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
-                            ),
-                          botName: zod
-                            .string()
-                            .describe(
-                              "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
-                            ),
-                          channelId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'The channel the session was opened from, when it was opened from a\nchannel thread.'
-                            ),
-                          parent: zod
-                            .union([
-                              zod.null(),
-                              zod
-                                .object({
-                                  id: zod
-                                    .string()
-                                    .describe('The parent entity id.'),
-                                  type: zod
-                                    .string()
-                                    .describe(
-                                      '`channel`, `document`, or `initiative`.'
-                                    ),
-                                })
-                                .describe(
-                                  "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel, document,\nor initiative. Spelled like the message API's parent for client routing."
-                                ),
-                            ])
-                            .optional(),
-                          sessionId: zod
-                            .uuid()
-                            .describe('The session; what a click opens.'),
-                          sessionName: zod
-                            .string()
-                            .describe(
-                              "The session's name at the time of the event."
-                            ),
-                          threadId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'The thread the session was opened from, when it was.'
-                            ),
-                        })
-                        .describe(
-                          'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
-                        )
-                        .and(
-                          zod.object({
-                            actionId: zod
+                              .describe('Document file type for routing.'),
+                            requestId: zod
                               .uuid()
-                              .describe('The action carrying the prompt.'),
-                            mentionedBy: zod
+                              .describe('Stable request identity.'),
+                            revision: zod
+                              .number()
+                              .describe(
+                                'Revision that generated this notification.'
+                              ),
+                          })
+                          .describe(
+                            'A person requested access to a shared entity.'
+                          ),
+                        tag: zod.enum(['entity_access_requested']),
+                      })
+                      .describe(
+                        'Someone requested more access to a shared entity.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            accessLevel: zod
+                              .enum(['view', 'comment', 'edit'])
+                              .describe(
+                                'Permission level used by an access request, excluding ownership.'
+                              ),
+                            entityName: zod
+                              .string()
+                              .describe("Shared item's name."),
+                            fileType: zod
+                              .string()
+                              .nullish()
+                              .describe('Document file type for routing.'),
+                            requestId: zod
+                              .uuid()
+                              .describe('Stable request identity.'),
+                            revision: zod
+                              .number()
+                              .describe(
+                                'Revision that generated this notification.'
+                              ),
+                          })
+                          .describe(
+                            'A person granted you access to a shared entity.'
+                          ),
+                        tag: zod.enum(['entity_access_granted']),
+                      })
+                      .describe('An owner granted requested access.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            messageId: zod
+                              .uuid()
+                              .describe('Canonical shared message UUID.'),
+                            owner: zod
+                              .string()
+                              .describe('Authenticated project owner.'),
+                            projectName: zod
+                              .string()
+                              .describe(
+                                'Name displayed in the project header.'
+                              ),
+                            reason: zod
+                              .enum(['mention', 'reply', 'assignee', 'owner'])
+                              .describe(
+                                'Why a project discussion notification was delivered.'
+                              ),
+                            senderDisplayName: zod
                               .string()
                               .nullish()
                               .describe(
-                                "Who wrote the prompt, absent when a bot acted on nobody's behalf."
+                                'Public display name for a bot author.'
                               ),
-                          })
-                        )
-                        .describe(
-                          'Someone named the recipient in a prompt to an agent session.'
-                        ),
-                      tag: zod.enum(['agent_session_mentioned']),
-                    })
-                    .describe(
-                      'The user was named in a prompt to an agent session.'
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          channelName: zod.string().optional(),
-                          channelType: zod.enum([
-                            'public',
-                            'private',
-                            'directMessage',
-                            'team',
-                          ]),
-                        })
-                        .describe(
-                          'Common metadata for notifications on channels'
-                        )
-                        .and(
-                          zod.object({
-                            emoji: zod
-                              .string()
-                              .describe('The emoji added by the reactor.'),
-                            messageContent: zod
-                              .string()
-                              .describe('The reacted-to message content.'),
-                            messageId: zod
-                              .string()
-                              .describe('The reacted-to message id.'),
                             senderProfilePictureUrl: zod
                               .string()
                               .nullish()
                               .describe(
-                                'Optional reactor profile picture URL.'
+                                'Optional avatar for push notification attachments.'
                               ),
+                            text: zod
+                              .string()
+                              .describe('Posted Markdown content.'),
                             threadId: zod
+                              .uuid()
+                              .describe('Canonical discussion root UUID.'),
+                          })
+                          .describe(
+                            'Project discussion metadata. The notification entity identifies the initiative;\nmessage and thread UUIDs select the discussion inside that project.'
+                          ),
+                        tag: zod.enum(['initiative_discussion']),
+                      })
+                      .describe(
+                        'Someone commented, replied, or mentioned the recipient on a project.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            messageId: zod
+                              .uuid()
+                              .describe('Canonical shared message UUID.'),
+                            reason: zod
+                              .enum(['mention', 'reply', 'owner'])
+                              .describe(
+                                'Why a CRM discussion notification was delivered.'
+                              ),
+                            recordName: zod
+                              .string()
+                              .describe('Company or contact display name.'),
+                            senderDisplayName: zod
                               .string()
                               .nullish()
                               .describe(
-                                'The thread root id when the reacted-to message is a reply.'
+                                'Public display name for a bot author.'
+                              ),
+                            senderProfilePictureUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Optional avatar for push notification attachments.'
+                              ),
+                            text: zod
+                              .string()
+                              .describe('Posted Markdown content.'),
+                            threadId: zod
+                              .uuid()
+                              .describe('Canonical discussion root UUID.'),
+                          })
+                          .describe(
+                            'CRM discussion metadata. The notification entity identifies the company or\ncontact; message and thread UUIDs select the discussion inside it.'
+                          ),
+                        tag: zod.enum(['crm_discussion']),
+                      })
+                      .describe(
+                        'Someone commented, replied, or mentioned the recipient on a CRM company or contact.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            channelName: zod
+                              .string()
+                              .optional()
+                              .describe('The name of the channel'),
+                            invitedBy: zod
+                              .string()
+                              .describe('The user who sent the invitation'),
+                            isDirectMessage: zod
+                              .boolean()
+                              .optional()
+                              .describe(
+                                'Whether this is a direct message rather than a channel invitation.\nOlder notification payloads retain channel-invitation wording.'
+                              ),
+                            messageContent: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Message content to show in the invite email, when the invite was triggered by a message.'
+                              ),
+                            senderProfilePictureUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                "The sender's profile picture URL, if available."
                               ),
                           })
-                        )
-                        .describe(
-                          "Metadata for a reaction added to one of the recipient's channel messages."
-                        ),
-                      tag: zod.enum(['channel_message_reaction']),
-                    })
-                    .describe(
-                      "Someone reacted to one of the user's channel messages."
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          eventId: zod
-                            .uuid()
-                            .describe(
-                              'The shared calendar event entity the request is for.'
-                            ),
-                          requestId: zod
-                            .uuid()
-                            .describe(
-                              "Stable request identity, answered from the event's details."
-                            ),
-                          title: zod
-                            .string()
-                            .describe('Event title when the request was made.'),
-                        })
-                        .describe(
-                          'A channel member who sees a calendar event only through a channel share\nasked the person who shared it to add them as a guest. Sent to the sharer,\nwith the requester as sender.'
-                        ),
-                      tag: zod.enum(['calendar_event_join_request']),
-                    })
-                    .describe(
-                      'A channel member asked to be added as a guest of an event the\nuser shared with the channel.'
-                    ),
-                ])
-                .describe(
-                  'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
-                ),
-              owner_id: zod
-                .string()
-                .describe('The user who owns this notification.'),
-              sender_id: zod
-                .string()
-                .nullish()
-                .describe('The user who triggered the notification.'),
-              sent: zod
-                .boolean()
-                .describe('Whether the notification has been sent.'),
-              state: zod
-                .enum(['unseen', 'seen', 'done'])
-                .describe(
-                  "The mutually exclusive lifecycle states of a user's notification."
-                ),
-              updated_at: zod.iso
-                .datetime({})
-                .describe('When the notification was last updated.'),
-              viewed_at: zod.iso
-                .datetime({})
-                .nullish()
-                .describe('When the notification was viewed\/seen.'),
-            })
-          )
-      )
-      .describe('The list of items returned.'),
-    next_cursor: zod
-      .string()
-      .nullish()
-      .describe('The next page cursor if it exists.'),
-  })
-  .describe('The strongly typed response for listing user notifications.');
+                          .describe(
+                            'Metadata for when a user is invited to a channel.'
+                          ),
+                        tag: zod.enum(['channel_invite']),
+                      })
+                      .describe('The user was invited to a channel.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            channelName: zod.string().optional(),
+                            channelType: zod.enum([
+                              'public',
+                              'private',
+                              'directMessage',
+                              'team',
+                            ]),
+                          })
+                          .describe(
+                            'Common metadata for notifications on channels'
+                          )
+                          .and(
+                            zod.object({
+                              messageContent: zod
+                                .string()
+                                .optional()
+                                .describe('The content of the message'),
+                              messageId: zod
+                                .string()
+                                .describe('The message id'),
+                              sender: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The user who sent the message, when sent by a user'
+                                ),
+                              senderDisplayName: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'Display name for non-user senders such as bots'
+                                ),
+                              senderProfilePictureUrl: zod.string().nullish(),
+                            })
+                          ),
+                        tag: zod.enum(['channel_message_send']),
+                      })
+                      .describe('A user sent a message in a channel.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            channelName: zod.string().optional(),
+                            channelType: zod.enum([
+                              'public',
+                              'private',
+                              'directMessage',
+                              'team',
+                            ]),
+                          })
+                          .describe(
+                            'Common metadata for notifications on channels'
+                          )
+                          .and(
+                            zod.object({
+                              messageContent: zod
+                                .string()
+                                .describe('The message content'),
+                              messageId: zod
+                                .string()
+                                .describe('The id of the new message'),
+                              senderDisplayName: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'Display name for non-user senders such as bots'
+                                ),
+                              senderProfilePictureUrl: zod.string().nullish(),
+                              threadId: zod
+                                .string()
+                                .describe(
+                                  'The id of the thread that has the reply'
+                                ),
+                              threadParentSenderId: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The user who sent the root message of the thread'
+                                ),
+                              userId: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The sender id of the reply, when sent by a user'
+                                ),
+                            })
+                          ),
+                        tag: zod.enum(['channel_message_reply']),
+                      })
+                      .describe(
+                        'Someone replied to a thread in a channel that the user is part of.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            channel_name: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The name of the channel the call started in, when available.'
+                              ),
+                            sender_profile_picture_url: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Profile picture URL of the user who started the call, when available.'
+                              ),
+                          })
+                          .describe(
+                            'Metadata for a notification that a call has started in a channel.\n\nMirrors the producer-side `CallStartedNotification` in the `call` crate:\nboth serialize the same wire shape (snake_case fields) under the same\n`call_started` [`Notification::TYPE_NAME`]. This type is the read-side\nmodel used by [`crate::NotifEvent`]; the producer keeps its own type\nbecause it additionally builds the incoming-call APNS\/VoIP push.\n\nRows persisted before the type name was normalized used the kebab-case\n`call-started`; the [`crate::NotifEvent::CallStarted`] variant carries a\n`#[serde(alias = \"call-started\")]` so those rows still deserialize.'
+                          ),
+                        tag: zod.enum(['call_started']),
+                      })
+                      .describe(
+                        'A call has started in a channel the user is a member of.\n\nThe `call-started` alias keeps rows persisted before the type name\nwas normalized to snake_case (`call_started`) deserializable.'
+                      ),
+                    zod
+                      .object({
+                        content: zod.object({
+                          sender: zod.string().nullish(),
+                          snippet: zod.string(),
+                          subject: zod.string(),
+                          threadId: zod.string(),
+                          toEmail: zod.string(),
+                        }),
+                        tag: zod.enum(['new_email']),
+                      })
+                      .describe('A new email has been sent to the user.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            emailAddress: zod
+                              .string()
+                              .describe(
+                                'The address of the inbox that needs to be reconnected.'
+                              ),
+                          })
+                          .describe(
+                            "Metadata for a notification that a linked inbox's grant has died and the\ninbox must be reconnected. Fanned out to the inbox owner and every delegate,\nsince any of them holding the Google grant can restore sync."
+                          ),
+                        tag: zod.enum(['inbox_reauth_required']),
+                      })
+                      .describe(
+                        "A linked inbox's grant died and must be reconnected."
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            invitedBy: zod
+                              .string()
+                              .describe('The user who sent the invitation'),
+                            inviteePlan: zod
+                              .enum(['free', 'premium'])
+                              .optional()
+                              .describe('What a team invitee gets by joining.'),
+                            reminder: zod
+                              .boolean()
+                              .optional()
+                              .describe(
+                                'Whether this email reminds the invitee of an invite they have not answered.'
+                              ),
+                            role: zod
+                              .string()
+                              .nullish()
+                              .describe('Role\/permission level in the team'),
+                            senderProfilePictureUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                "The sender's profile picture URL, if available."
+                              ),
+                            teamId: zod
+                              .uuid()
+                              .describe('The unique identifier of the team'),
+                            teamInviteId: zod
+                              .uuid()
+                              .describe(
+                                'The unique identifier of the team invite'
+                              ),
+                            teamName: zod
+                              .string()
+                              .describe(
+                                'The name of the team being invited to'
+                              ),
+                          })
+                          .describe(
+                            'Metadata for when a user is invited to a team.'
+                          ),
+                        tag: zod.enum(['invite_to_team']),
+                      })
+                      .describe('A user was invited to a team.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            assignedBy: zod
+                              .string()
+                              .describe('The user who assigned the task'),
+                            senderProfilePictureUrl: zod.string().nullish(),
+                            subType: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .union([
+                                    zod.object({
+                                      type: zod.enum(['task']),
+                                    }),
+                                    zod.object({
+                                      type: zod.enum(['snippet']),
+                                    }),
+                                    zod.object({
+                                      type: zod.enum(['skill']),
+                                    }),
+                                    zod.object({
+                                      type: zod.enum([
+                                        'initiative_description',
+                                      ]),
+                                    }),
+                                  ])
+                                  .describe(
+                                    'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                                  ),
+                              ])
+                              .optional(),
+                            taskId: zod
+                              .string()
+                              .describe('The unique identifier of the task'),
+                            taskName: zod
+                              .string()
+                              .nullish()
+                              .describe('The name of the task (optional)'),
+                          })
+                          .describe(
+                            'Metadata for when a user is assigned to a task'
+                          ),
+                        tag: zod.enum(['task_assigned']),
+                      })
+                      .describe('A user was assigned to a task.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            description: zod
+                              .string()
+                              .describe(
+                                'What the user asked to be reminded about.'
+                              ),
+                            reminderId: zod
+                              .uuid()
+                              .describe('The reminder that fired.'),
+                            scheduledFor: zod.iso
+                              .datetime({})
+                              .nullish()
+                              .describe(
+                                "Which firing this is — the occurrence the reminder came due for.\n\nWhat distinguishes two firings of the same recurring reminder, which are\notherwise identical: same id, same description. The collapse key is\nbuilt from it, so without it Tuesday's alert would replace Monday's\nunread one on the lock screen.\n\nOptional because notifications written before recurring dispatch existed\nhave no such field, and they still have to read back."
+                              ),
+                          })
+                          .describe(
+                            'Metadata for a reminder the user set for themselves coming due.\n\nThere is no sender: a reminder is self-set, so the dispatcher sends it with\n`sender_id: None` (a recipient who is also the sender is filtered out of\ntheir own notification). Every formatter here must therefore work without\none.\n\nThe associated entity, when there is one, lives on the notification row\nrather than in here, and clients resolve its name from that — so the\ndispatcher does not have to look up a name across five entity types.'
+                          ),
+                        tag: zod.enum(['reminder']),
+                      })
+                      .describe(
+                        'A reminder the user set for themselves came due.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            chatName: zod.string().describe("The chat's name."),
+                            messageId: zod
+                              .uuid()
+                              .describe(
+                                'Stable message id; retries use it as their notification id.'
+                              ),
+                            provider: zod
+                              .enum(['whatsapp'])
+                              .describe(
+                                'The messaging service an external chat lives in.'
+                              ),
+                          })
+                          .describe(
+                            'A live message in an independently shared external chat.'
+                          ),
+                        tag: zod.enum(['external_chat_message']),
+                      })
+                      .describe('A live message in a shared external chat.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            endsAt: zod.iso
+                              .datetime({})
+                              .nullish()
+                              .describe('Instance end, for timed events.'),
+                            eventId: zod
+                              .uuid()
+                              .describe(
+                                'The calendar event entity the alarm belongs to.'
+                              ),
+                            minutesBefore: zod
+                              .number()
+                              .describe(
+                                'Minutes before the start the alarm was configured to fire.'
+                              ),
+                            occurrenceKey: zod
+                              .string()
+                              .describe(
+                                'Stable occurrence key of the instance that is starting.'
+                              ),
+                            startDate: zod.iso
+                              .date()
+                              .nullish()
+                              .describe(
+                                'Instance start date, for all-day events.'
+                              ),
+                            startsAt: zod.iso
+                              .datetime({})
+                              .nullish()
+                              .describe('Instance start, for timed events.'),
+                            timeZone: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'IANA zone for rendering local clock times, when known.'
+                              ),
+                            title: zod
+                              .string()
+                              .describe(
+                                'Event display title at dispatch time.'
+                              ),
+                          })
+                          .describe(
+                            'A calendar event alarm came due. Like [`ReminderMetadata`], these are\nself-notifications: `sender_id` must stay `None` or the only recipient is\nfiltered out. Everything the alert renders rides in here so the\ndispatcher never has to resolve the event again at display time.'
+                          ),
+                        tag: zod.enum(['calendar_event_reminder']),
+                      })
+                      .describe('A calendar event alarm came due.'),
+                    zod
+                      .object({
+                        content: zod.object({
+                          messageId: zod.string(),
+                          summary: zod.string(),
+                        }),
+                        tag: zod.enum(['ai_response']),
+                      })
+                      .describe('An AI assistant responded to a chat.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            displayName: zod
+                              .string()
+                              .describe(
+                                'A compact label suitable for display in the UI.'
+                              ),
+                            foreignEntityId: zod
+                              .uuid()
+                              .describe(
+                                'The source-specific internal foreign entity row id for this pull request.'
+                              ),
+                            githubKey: zod
+                              .string()
+                              .describe(
+                                'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                              ),
+                            number: zod
+                              .number()
+                              .min(
+                                bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentNumberMin
+                              )
+                              .describe('The GitHub pull request number.'),
+                            owner: zod
+                              .string()
+                              .describe(
+                                'The GitHub repository owner or organization.'
+                              ),
+                            repo: zod
+                              .string()
+                              .describe('The GitHub repository name.'),
+                            senderGithubAvatarUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub avatar URL for the sender, when available.'
+                              ),
+                            senderGithubLogin: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub login for the sender, when available.'
+                              ),
+                            senderGithubUserId: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The stable GitHub numeric user id for the sender, serialized as a string.'
+                              ),
+                            title: zod
+                              .string()
+                              .describe(
+                                'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                              ),
+                            url: zod
+                              .string()
+                              .describe(
+                                'The public GitHub URL for the pull request.'
+                              ),
+                          })
+                          .describe(
+                            'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                          )
+                          .and(
+                            zod.object({
+                              action: zod
+                                .enum(['opened', 'reopened', 'closed'])
+                                .describe(
+                                  'The GitHub pull request webhook action that triggered the notification.'
+                                ),
+                              baseBranch: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The pull request base branch, when available.'
+                                ),
+                              headBranch: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The pull request head branch, when available.'
+                                ),
+                              mergedAt: zod.iso
+                                .datetime({})
+                                .nullish()
+                                .describe(
+                                  'When the pull request was merged, when available.'
+                                ),
+                              previousStatus: zod
+                                .union([
+                                  zod.null(),
+                                  zod
+                                    .enum(['open', 'closed', 'merged'])
+                                    .describe(
+                                      'The normalized lifecycle status for a GitHub pull request notification.'
+                                    ),
+                                ])
+                                .optional(),
+                              status: zod
+                                .enum(['open', 'closed', 'merged'])
+                                .describe(
+                                  'The normalized lifecycle status for a GitHub pull request notification.'
+                                ),
+                            })
+                          )
+                          .describe(
+                            'Metadata for a GitHub pull request lifecycle notification.'
+                          ),
+                        tag: zod.enum(['github_pr_status_changed']),
+                      })
+                      .describe(
+                        'A GitHub pull request changed lifecycle state.\n\nThe `github_pr_event` alias keeps rows and queue messages persisted\nbefore the rename deserializable.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            displayName: zod
+                              .string()
+                              .describe(
+                                'A compact label suitable for display in the UI.'
+                              ),
+                            foreignEntityId: zod
+                              .uuid()
+                              .describe(
+                                'The source-specific internal foreign entity row id for this pull request.'
+                              ),
+                            githubKey: zod
+                              .string()
+                              .describe(
+                                'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                              ),
+                            number: zod
+                              .number()
+                              .min(
+                                bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentNumberMinOne
+                              )
+                              .describe('The GitHub pull request number.'),
+                            owner: zod
+                              .string()
+                              .describe(
+                                'The GitHub repository owner or organization.'
+                              ),
+                            repo: zod
+                              .string()
+                              .describe('The GitHub repository name.'),
+                            senderGithubAvatarUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub avatar URL for the sender, when available.'
+                              ),
+                            senderGithubLogin: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub login for the sender, when available.'
+                              ),
+                            senderGithubUserId: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The stable GitHub numeric user id for the sender, serialized as a string.'
+                              ),
+                            title: zod
+                              .string()
+                              .describe(
+                                'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                              ),
+                            url: zod
+                              .string()
+                              .describe(
+                                'The public GitHub URL for the pull request.'
+                              ),
+                          })
+                          .describe(
+                            'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                          )
+                          .and(
+                            zod.object({
+                              checkName: zod
+                                .string()
+                                .describe(
+                                  'The display name GitHub reported for the check run.'
+                                ),
+                              checkRunGithubId: zod
+                                .number()
+                                .min(
+                                  bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentCheckRunGithubIdMin
+                                )
+                                .describe(
+                                  'The GitHub numeric id of the check run.'
+                                ),
+                              checkStatus: zod
+                                .string()
+                                .describe('The raw GitHub check run status.'),
+                              checkUrl: zod
+                                .string()
+                                .describe(
+                                  'The public GitHub URL for the check run.'
+                                ),
+                              completedAt: zod.iso
+                                .datetime({})
+                                .describe(
+                                  'When GitHub marked the check run as complete.'
+                                ),
+                              conclusion: zod
+                                .string()
+                                .describe(
+                                  'The raw GitHub check run conclusion.'
+                                ),
+                              state: zod
+                                .enum(['completed', 'failed'])
+                                .describe(
+                                  'The normalized result state for a GitHub pull request check-run notification.'
+                                ),
+                            })
+                          )
+                          .describe(
+                            'Metadata for a notification that a GitHub pull request check run completed.'
+                          ),
+                        tag: zod.enum(['github_pr_check_run']),
+                      })
+                      .describe('A GitHub pull request check run completed.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            displayName: zod
+                              .string()
+                              .describe(
+                                'A compact label suitable for display in the UI.'
+                              ),
+                            foreignEntityId: zod
+                              .uuid()
+                              .describe(
+                                'The source-specific internal foreign entity row id for this pull request.'
+                              ),
+                            githubKey: zod
+                              .string()
+                              .describe(
+                                'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                              ),
+                            number: zod
+                              .number()
+                              .min(
+                                bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentNumberMinTwo
+                              )
+                              .describe('The GitHub pull request number.'),
+                            owner: zod
+                              .string()
+                              .describe(
+                                'The GitHub repository owner or organization.'
+                              ),
+                            repo: zod
+                              .string()
+                              .describe('The GitHub repository name.'),
+                            senderGithubAvatarUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub avatar URL for the sender, when available.'
+                              ),
+                            senderGithubLogin: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub login for the sender, when available.'
+                              ),
+                            senderGithubUserId: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The stable GitHub numeric user id for the sender, serialized as a string.'
+                              ),
+                            title: zod
+                              .string()
+                              .describe(
+                                'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                              ),
+                            url: zod
+                              .string()
+                              .describe(
+                                'The public GitHub URL for the pull request.'
+                              ),
+                          })
+                          .describe(
+                            'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                          )
+                          .and(
+                            zod.object({
+                              requestedReviewerGithubLogin: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The GitHub login of the requested reviewer, when available.'
+                                ),
+                              requestedReviewerGithubUserId: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The stable GitHub numeric user id of the requested reviewer, serialized as a string.'
+                                ),
+                            })
+                          )
+                          .describe(
+                            "Metadata for a notification that the user's review was requested on a GitHub pull request."
+                          ),
+                        tag: zod.enum(['github_review_requested']),
+                      })
+                      .describe(
+                        "The user's review was requested on a GitHub pull request."
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            displayName: zod
+                              .string()
+                              .describe(
+                                'A compact label suitable for display in the UI.'
+                              ),
+                            foreignEntityId: zod
+                              .uuid()
+                              .describe(
+                                'The source-specific internal foreign entity row id for this pull request.'
+                              ),
+                            githubKey: zod
+                              .string()
+                              .describe(
+                                'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                              ),
+                            number: zod
+                              .number()
+                              .min(
+                                bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentNumberMinThree
+                              )
+                              .describe('The GitHub pull request number.'),
+                            owner: zod
+                              .string()
+                              .describe(
+                                'The GitHub repository owner or organization.'
+                              ),
+                            repo: zod
+                              .string()
+                              .describe('The GitHub repository name.'),
+                            senderGithubAvatarUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub avatar URL for the sender, when available.'
+                              ),
+                            senderGithubLogin: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub login for the sender, when available.'
+                              ),
+                            senderGithubUserId: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The stable GitHub numeric user id for the sender, serialized as a string.'
+                              ),
+                            title: zod
+                              .string()
+                              .describe(
+                                'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                              ),
+                            url: zod
+                              .string()
+                              .describe(
+                                'The public GitHub URL for the pull request.'
+                              ),
+                          })
+                          .describe(
+                            'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                          )
+                          .and(
+                            zod.object({
+                              commentGithubId: zod
+                                .number()
+                                .min(
+                                  bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentCommentGithubIdMin
+                                )
+                                .nullish()
+                                .describe(
+                                  'The GitHub numeric id of the comment, when available.'
+                                ),
+                              commentKind: zod
+                                .enum(['issue', 'review_comment'])
+                                .describe(
+                                  'The kind of GitHub comment that triggered a [`GithubPrComment`] notification.'
+                                ),
+                              commentSnippet: zod
+                                .string()
+                                .describe(
+                                  'A truncated excerpt of the comment body.'
+                                ),
+                              commentUrl: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The public GitHub URL for the comment, when available.'
+                                ),
+                            })
+                          )
+                          .describe(
+                            'Metadata for a notification that a GitHub pull request was commented on.'
+                          ),
+                        tag: zod.enum(['github_pr_comment']),
+                      })
+                      .describe('A GitHub pull request was commented on.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            displayName: zod
+                              .string()
+                              .describe(
+                                'A compact label suitable for display in the UI.'
+                              ),
+                            foreignEntityId: zod
+                              .uuid()
+                              .describe(
+                                'The source-specific internal foreign entity row id for this pull request.'
+                              ),
+                            githubKey: zod
+                              .string()
+                              .describe(
+                                'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                              ),
+                            number: zod
+                              .number()
+                              .min(
+                                bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentNumberMinFour
+                              )
+                              .describe('The GitHub pull request number.'),
+                            owner: zod
+                              .string()
+                              .describe(
+                                'The GitHub repository owner or organization.'
+                              ),
+                            repo: zod
+                              .string()
+                              .describe('The GitHub repository name.'),
+                            senderGithubAvatarUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub avatar URL for the sender, when available.'
+                              ),
+                            senderGithubLogin: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub login for the sender, when available.'
+                              ),
+                            senderGithubUserId: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The stable GitHub numeric user id for the sender, serialized as a string.'
+                              ),
+                            title: zod
+                              .string()
+                              .describe(
+                                'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                              ),
+                            url: zod
+                              .string()
+                              .describe(
+                                'The public GitHub URL for the pull request.'
+                              ),
+                          })
+                          .describe(
+                            'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                          )
+                          .and(
+                            zod.object({
+                              commentGithubId: zod
+                                .number()
+                                .min(
+                                  bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentCommentGithubIdMinOne
+                                )
+                                .nullish()
+                                .describe(
+                                  'The GitHub numeric id of the comment or review containing the mention, when available.'
+                                ),
+                              commentUrl: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The public GitHub URL for the text containing the mention, when available.'
+                                ),
+                              location: zod
+                                .enum([
+                                  'pr_body',
+                                  'comment',
+                                  'review',
+                                  'review_comment',
+                                ])
+                                .describe(
+                                  'Where in a GitHub pull request the user was mentioned.'
+                                ),
+                              textSnippet: zod
+                                .string()
+                                .describe(
+                                  'A truncated excerpt of the text containing the mention.'
+                                ),
+                            })
+                          )
+                          .describe(
+                            'Metadata for a notification that the user was mentioned on a GitHub pull request.'
+                          ),
+                        tag: zod.enum(['github_pr_mention']),
+                      })
+                      .describe(
+                        'The user was mentioned on a GitHub pull request.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            displayName: zod
+                              .string()
+                              .describe(
+                                'A compact label suitable for display in the UI.'
+                              ),
+                            foreignEntityId: zod
+                              .uuid()
+                              .describe(
+                                'The source-specific internal foreign entity row id for this pull request.'
+                              ),
+                            githubKey: zod
+                              .string()
+                              .describe(
+                                'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                              ),
+                            number: zod
+                              .number()
+                              .min(
+                                bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentNumberMinFive
+                              )
+                              .describe('The GitHub pull request number.'),
+                            owner: zod
+                              .string()
+                              .describe(
+                                'The GitHub repository owner or organization.'
+                              ),
+                            repo: zod
+                              .string()
+                              .describe('The GitHub repository name.'),
+                            senderGithubAvatarUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub avatar URL for the sender, when available.'
+                              ),
+                            senderGithubLogin: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub login for the sender, when available.'
+                              ),
+                            senderGithubUserId: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The stable GitHub numeric user id for the sender, serialized as a string.'
+                              ),
+                            title: zod
+                              .string()
+                              .describe(
+                                'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                              ),
+                            url: zod
+                              .string()
+                              .describe(
+                                'The public GitHub URL for the pull request.'
+                              ),
+                          })
+                          .describe(
+                            'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                          )
+                          .and(
+                            zod.object({
+                              reviewGithubId: zod
+                                .number()
+                                .min(
+                                  bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentReviewGithubIdMin
+                                )
+                                .nullish()
+                                .describe(
+                                  'The GitHub numeric id of the review, when available.'
+                                ),
+                              reviewSnippet: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'A truncated excerpt of the review body, when any was written.'
+                                ),
+                              reviewUrl: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The public GitHub URL for the review, when available.'
+                                ),
+                              state: zod
+                                .enum([
+                                  'approved',
+                                  'changes_requested',
+                                  'commented',
+                                ])
+                                .describe(
+                                  'The state of a submitted GitHub pull request review.'
+                                ),
+                            })
+                          )
+                          .describe(
+                            "Metadata for a notification that a review was submitted on the user's GitHub pull request."
+                          ),
+                        tag: zod.enum(['github_pr_review']),
+                      })
+                      .describe(
+                        "A review was submitted on the user's GitHub pull request."
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            announcementMessageId: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'The magic-chip message for the turn in question, when one was posted.'
+                              ),
+                            botId: zod
+                              .string()
+                              .describe(
+                                'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
+                              ),
+                            botName: zod
+                              .string()
+                              .describe(
+                                "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
+                              ),
+                            channelId: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'The channel the session was opened from, when it was opened from a\nchannel thread.'
+                              ),
+                            parent: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .object({
+                                    id: zod
+                                      .string()
+                                      .describe('The parent entity id.'),
+                                    type: zod
+                                      .string()
+                                      .describe(
+                                        '`channel`, `document`, or `initiative`.'
+                                      ),
+                                  })
+                                  .describe(
+                                    "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel, document,\nor initiative. Spelled like the message API's parent for client routing."
+                                  ),
+                              ])
+                              .optional(),
+                            sessionId: zod
+                              .uuid()
+                              .describe('The session; what a click opens.'),
+                            sessionName: zod
+                              .string()
+                              .describe(
+                                "The session's name at the time of the event."
+                              ),
+                            threadId: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'The thread the session was opened from, when it was.'
+                              ),
+                          })
+                          .describe(
+                            'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                          )
+                          .and(
+                            zod.object({
+                              actor: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  "Who prompted the turn, absent when a bot acted on nobody's behalf."
+                                ),
+                              excerpt: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  "The agent's last prose in the turn, whole; `None` when it wrote none."
+                                ),
+                              stopReason: zod
+                                .string()
+                                .describe('The ACP stop reason, or `error`.'),
+                              turn: zod
+                                .number()
+                                .min(
+                                  bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentTurnMin
+                                )
+                                .describe('The turn that ended.'),
+                            })
+                          )
+                          .describe(
+                            'An agent finished a turn with nothing queued behind it.'
+                          ),
+                        tag: zod.enum(['agent_session_settled']),
+                      })
+                      .describe(
+                        'An agent finished a turn with nothing queued behind it.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            announcementMessageId: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'The magic-chip message for the turn in question, when one was posted.'
+                              ),
+                            botId: zod
+                              .string()
+                              .describe(
+                                'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
+                              ),
+                            botName: zod
+                              .string()
+                              .describe(
+                                "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
+                              ),
+                            channelId: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'The channel the session was opened from, when it was opened from a\nchannel thread.'
+                              ),
+                            parent: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .object({
+                                    id: zod
+                                      .string()
+                                      .describe('The parent entity id.'),
+                                    type: zod
+                                      .string()
+                                      .describe(
+                                        '`channel`, `document`, or `initiative`.'
+                                      ),
+                                  })
+                                  .describe(
+                                    "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel, document,\nor initiative. Spelled like the message API's parent for client routing."
+                                  ),
+                              ])
+                              .optional(),
+                            sessionId: zod
+                              .uuid()
+                              .describe('The session; what a click opens.'),
+                            sessionName: zod
+                              .string()
+                              .describe(
+                                "The session's name at the time of the event."
+                              ),
+                            threadId: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'The thread the session was opened from, when it was.'
+                              ),
+                          })
+                          .describe(
+                            'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                          )
+                          .and(
+                            zod.object({
+                              question: zod
+                                .string()
+                                .describe(
+                                  'The question, as the agent phrased it.'
+                                ),
+                              turn: zod
+                                .number()
+                                .min(
+                                  bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentTurnMinOne
+                                )
+                                .describe('The turn asking.'),
+                            })
+                          )
+                          .describe(
+                            "An agent is blocked on a question only the session's owner can answer."
+                          ),
+                        tag: zod.enum(['agent_session_waiting_for_input']),
+                      })
+                      .describe(
+                        "An agent is blocked on a question for the session's owner."
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            announcementMessageId: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'The magic-chip message for the turn in question, when one was posted.'
+                              ),
+                            botId: zod
+                              .string()
+                              .describe(
+                                'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
+                              ),
+                            botName: zod
+                              .string()
+                              .describe(
+                                "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
+                              ),
+                            channelId: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'The channel the session was opened from, when it was opened from a\nchannel thread.'
+                              ),
+                            parent: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .object({
+                                    id: zod
+                                      .string()
+                                      .describe('The parent entity id.'),
+                                    type: zod
+                                      .string()
+                                      .describe(
+                                        '`channel`, `document`, or `initiative`.'
+                                      ),
+                                  })
+                                  .describe(
+                                    "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel, document,\nor initiative. Spelled like the message API's parent for client routing."
+                                  ),
+                              ])
+                              .optional(),
+                            sessionId: zod
+                              .uuid()
+                              .describe('The session; what a click opens.'),
+                            sessionName: zod
+                              .string()
+                              .describe(
+                                "The session's name at the time of the event."
+                              ),
+                            threadId: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'The thread the session was opened from, when it was.'
+                              ),
+                          })
+                          .describe(
+                            'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                          )
+                          .and(
+                            zod.object({
+                              actionId: zod
+                                .uuid()
+                                .describe('The action carrying the prompt.'),
+                              mentionedBy: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  "Who wrote the prompt, absent when a bot acted on nobody's behalf."
+                                ),
+                            })
+                          )
+                          .describe(
+                            'Someone named the recipient in a prompt to an agent session.'
+                          ),
+                        tag: zod.enum(['agent_session_mentioned']),
+                      })
+                      .describe(
+                        'The user was named in a prompt to an agent session.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            channelName: zod.string().optional(),
+                            channelType: zod.enum([
+                              'public',
+                              'private',
+                              'directMessage',
+                              'team',
+                            ]),
+                          })
+                          .describe(
+                            'Common metadata for notifications on channels'
+                          )
+                          .and(
+                            zod.object({
+                              emoji: zod
+                                .string()
+                                .describe('The emoji added by the reactor.'),
+                              messageContent: zod
+                                .string()
+                                .describe('The reacted-to message content.'),
+                              messageId: zod
+                                .string()
+                                .describe('The reacted-to message id.'),
+                              senderProfilePictureUrl: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'Optional reactor profile picture URL.'
+                                ),
+                              threadId: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The thread root id when the reacted-to message is a reply.'
+                                ),
+                            })
+                          )
+                          .describe(
+                            "Metadata for a reaction added to one of the recipient's channel messages."
+                          ),
+                        tag: zod.enum(['channel_message_reaction']),
+                      })
+                      .describe(
+                        "Someone reacted to one of the user's channel messages."
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            eventId: zod
+                              .uuid()
+                              .describe(
+                                'The shared calendar event entity the request is for.'
+                              ),
+                            requestId: zod
+                              .uuid()
+                              .describe(
+                                "Stable request identity, answered from the event's details."
+                              ),
+                            title: zod
+                              .string()
+                              .describe(
+                                'Event title when the request was made.'
+                              ),
+                          })
+                          .describe(
+                            'A channel member who sees a calendar event only through a channel share\nasked the person who shared it to add them as a guest. Sent to the sharer,\nwith the requester as sender.'
+                          ),
+                        tag: zod.enum(['calendar_event_join_request']),
+                      })
+                      .describe(
+                        'A channel member asked to be added as a guest of an event the\nuser shared with the channel.'
+                      ),
+                  ])
+                  .describe(
+                    'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
+                  ),
+                owner_id: zod
+                  .string()
+                  .describe('The user who owns this notification.'),
+                sender_id: zod
+                  .string()
+                  .nullish()
+                  .describe('The user who triggered the notification.'),
+                sent: zod
+                  .boolean()
+                  .describe('Whether the notification has been sent.'),
+                state: zod
+                  .enum(['unseen', 'seen', 'done'])
+                  .describe(
+                    "The mutually exclusive lifecycle states of a user's notification."
+                  ),
+                updated_at: zod.iso
+                  .datetime({})
+                  .describe('When the notification was last updated.'),
+                viewed_at: zod.iso
+                  .datetime({})
+                  .nullish()
+                  .describe('When the notification was viewed\/seen.'),
+              })
+            )
+        )
+        .describe('The list of items returned.'),
+      next_cursor: zod
+        .string()
+        .nullish()
+        .describe('The next page cursor if it exists.'),
+    })
+    .describe('The strongly typed response for listing user notifications.');
+}
+let _cached_bulkGetTypedNotificationsByEventItemIdsResponse:
+  | ReturnType<typeof _create_bulkGetTypedNotificationsByEventItemIdsResponse>
+  | undefined;
+export function getBulkGetTypedNotificationsByEventItemIdsResponseSchema() {
+  return (_cached_bulkGetTypedNotificationsByEventItemIdsResponse ??=
+    _create_bulkGetTypedNotificationsByEventItemIdsResponse());
+}
 
 /**
  * @summary Typed wrapper for getting notifications by a single event item ID.
  */
-export const getTypedNotificationsByEventItemIdParams = zod.object({
-  event_item_id: zod.uuid().describe('The event item ID'),
-});
+function _create_getTypedNotificationsByEventItemIdParams() {
+  return zod.object({
+    event_item_id: zod.uuid().describe('The event item ID'),
+  });
+}
+let _cached_getTypedNotificationsByEventItemIdParams:
+  | ReturnType<typeof _create_getTypedNotificationsByEventItemIdParams>
+  | undefined;
+export function getGetTypedNotificationsByEventItemIdParamsSchema() {
+  return (_cached_getTypedNotificationsByEventItemIdParams ??=
+    _create_getTypedNotificationsByEventItemIdParams());
+}
 
 export const getTypedNotificationsByEventItemIdQueryLimitMin = 0;
 
-export const getTypedNotificationsByEventItemIdQueryParams = zod.object({
-  states: zod
-    .string()
-    .optional()
-    .describe(
-      'Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states.'
-    ),
-  limit: zod
-    .number()
-    .min(getTypedNotificationsByEventItemIdQueryLimitMin)
-    .optional()
-    .describe('Size limit per page.'),
-  cursor: zod
-    .string()
-    .optional()
-    .describe('Cursor value. Base64 encoded timestamp and item id.'),
-});
+function _create_getTypedNotificationsByEventItemIdQueryParams() {
+  return zod.object({
+    states: zod
+      .string()
+      .optional()
+      .describe(
+        'Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states.'
+      ),
+    limit: zod
+      .number()
+      .min(getTypedNotificationsByEventItemIdQueryLimitMin)
+      .optional()
+      .describe('Size limit per page.'),
+    cursor: zod
+      .string()
+      .optional()
+      .describe('Cursor value. Base64 encoded timestamp and item id.'),
+  });
+}
+let _cached_getTypedNotificationsByEventItemIdQueryParams:
+  | ReturnType<typeof _create_getTypedNotificationsByEventItemIdQueryParams>
+  | undefined;
+export function getGetTypedNotificationsByEventItemIdQueryParamsSchema() {
+  return (_cached_getTypedNotificationsByEventItemIdQueryParams ??=
+    _create_getTypedNotificationsByEventItemIdQueryParams());
+}
 
 export const getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentNumberMin = 0;
 
@@ -4236,149 +4459,221 @@ export const getTypedNotificationsByEventItemIdResponseItemsItemNotificationMeta
 
 export const getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentTurnMinOne = 0;
 
-export const getTypedNotificationsByEventItemIdResponse = zod
-  .object({
-    items: zod
-      .array(
-        zod
-          .object({
-            entity_id: zod.string().describe('The id of that entity'),
-            entity_type: zod
-              .enum([
-                'user',
-                'chat',
-                'channel',
-                'channel_message',
-                'document',
-                'project',
-                'email_thread',
-                'calendar_event',
-                'team',
-                'call',
-                'foreign_entity',
-                'static_file',
-                'crm_company',
-                'crm_contact',
-                'crm_pipeline',
-                'reminder',
-                'skill',
-                'agent_session',
-                'scheduled_action',
-                'initiative',
-                'database',
-                'database_row',
-                'form',
-                'external_chat',
-              ])
-              .describe('The type of an entity in Macro'),
-          })
-          .describe(
-            'The Entity describes the minimum amount of information required to describe a unique thing in Macro\nThis contains the type of the entity [EntityType] and the string id of that entity'
-          )
-          .and(
-            zod.object({
-              created_at: zod.iso
-                .datetime({})
-                .describe('When the notification was created.'),
-              deleted_at: zod.iso
-                .datetime({})
-                .nullish()
-                .describe('When the notification was deleted.'),
-              id: zod.uuid().describe('The notification ID.'),
-              notification_event_type: zod
-                .string()
-                .describe(
-                  'The notification event type string (e.g. \"channel_mention\").\nTODO make this a new type'
-                ),
-              notification_metadata: zod
-                .union([
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          channelName: zod.string().optional(),
-                          channelType: zod.enum([
-                            'public',
-                            'private',
-                            'directMessage',
-                            'team',
-                          ]),
-                        })
-                        .describe(
-                          'Common metadata for notifications on channels'
-                        )
-                        .and(
-                          zod.object({
-                            messageContent: zod
-                              .string()
-                              .describe('The message content'),
-                            messageId: zod
-                              .string()
-                              .describe('The message you were mentioned in'),
-                            senderDisplayName: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'Display name for non-user senders such as bots'
-                              ),
-                            senderProfilePictureUrl: zod.string().nullish(),
-                            threadId: zod
-                              .string()
-                              .nullish()
-                              .describe('the id of the thread'),
+function _create_getTypedNotificationsByEventItemIdResponse() {
+  return zod
+    .object({
+      items: zod
+        .array(
+          zod
+            .object({
+              entity_id: zod.string().describe('The id of that entity'),
+              entity_type: zod
+                .enum([
+                  'user',
+                  'chat',
+                  'channel',
+                  'channel_message',
+                  'document',
+                  'project',
+                  'email_thread',
+                  'calendar_event',
+                  'team',
+                  'call',
+                  'foreign_entity',
+                  'static_file',
+                  'crm_company',
+                  'crm_contact',
+                  'crm_pipeline',
+                  'reminder',
+                  'skill',
+                  'agent_session',
+                  'scheduled_action',
+                  'initiative',
+                  'database',
+                  'database_row',
+                  'form',
+                  'external_chat',
+                ])
+                .describe('The type of an entity in Macro'),
+            })
+            .describe(
+              'The Entity describes the minimum amount of information required to describe a unique thing in Macro\nThis contains the type of the entity [EntityType] and the string id of that entity'
+            )
+            .and(
+              zod.object({
+                created_at: zod.iso
+                  .datetime({})
+                  .describe('When the notification was created.'),
+                deleted_at: zod.iso
+                  .datetime({})
+                  .nullish()
+                  .describe('When the notification was deleted.'),
+                id: zod.uuid().describe('The notification ID.'),
+                notification_event_type: zod
+                  .string()
+                  .describe(
+                    'The notification event type string (e.g. \"channel_mention\").\nTODO make this a new type'
+                  ),
+                notification_metadata: zod
+                  .union([
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            channelName: zod.string().optional(),
+                            channelType: zod.enum([
+                              'public',
+                              'private',
+                              'directMessage',
+                              'team',
+                            ]),
                           })
-                        ),
-                      tag: zod.enum(['channel_mention']),
-                    })
-                    .describe('Someone mentioned you in a channel.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          channelName: zod.string().optional(),
-                          channelType: zod.enum([
-                            'public',
-                            'private',
-                            'directMessage',
-                            'team',
-                          ]),
-                        })
-                        .describe(
-                          'Common metadata for notifications on channels'
-                        )
-                        .and(
-                          zod.object({
-                            messageContent: zod
-                              .string()
-                              .describe('The message content'),
-                            messageId: zod
-                              .string()
-                              .describe('The message you were mentioned in'),
-                            senderDisplayName: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'Display name for non-user senders such as bots'
-                              ),
-                            senderProfilePictureUrl: zod.string().nullish(),
-                            threadId: zod
-                              .string()
-                              .nullish()
-                              .describe('the id of the thread'),
+                          .describe(
+                            'Common metadata for notifications on channels'
+                          )
+                          .and(
+                            zod.object({
+                              messageContent: zod
+                                .string()
+                                .describe('The message content'),
+                              messageId: zod
+                                .string()
+                                .describe('The message you were mentioned in'),
+                              senderDisplayName: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'Display name for non-user senders such as bots'
+                                ),
+                              senderProfilePictureUrl: zod.string().nullish(),
+                              threadId: zod
+                                .string()
+                                .nullish()
+                                .describe('the id of the thread'),
+                            })
+                          ),
+                        tag: zod.enum(['channel_mention']),
+                      })
+                      .describe('Someone mentioned you in a channel.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            channelName: zod.string().optional(),
+                            channelType: zod.enum([
+                              'public',
+                              'private',
+                              'directMessage',
+                              'team',
+                            ]),
                           })
-                        )
-                        .and(
-                          zod.object({
+                          .describe(
+                            'Common metadata for notifications on channels'
+                          )
+                          .and(
+                            zod.object({
+                              messageContent: zod
+                                .string()
+                                .describe('The message content'),
+                              messageId: zod
+                                .string()
+                                .describe('The message you were mentioned in'),
+                              senderDisplayName: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'Display name for non-user senders such as bots'
+                                ),
+                              senderProfilePictureUrl: zod.string().nullish(),
+                              threadId: zod
+                                .string()
+                                .nullish()
+                                .describe('the id of the thread'),
+                            })
+                          )
+                          .and(
+                            zod.object({
+                              documentName: zod
+                                .string()
+                                .describe('The name of the document'),
+                              fileType: zod
+                                .string()
+                                .nullish()
+                                .describe('The file type of the document'),
+                              owner: zod
+                                .string()
+                                .describe('The owner of the document'),
+                              subType: zod
+                                .union([
+                                  zod.null(),
+                                  zod
+                                    .union([
+                                      zod.object({
+                                        type: zod.enum(['task']),
+                                      }),
+                                      zod.object({
+                                        type: zod.enum(['snippet']),
+                                      }),
+                                      zod.object({
+                                        type: zod.enum(['skill']),
+                                      }),
+                                      zod.object({
+                                        type: zod.enum([
+                                          'initiative_description',
+                                        ]),
+                                      }),
+                                    ])
+                                    .describe(
+                                      'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                                    ),
+                                ])
+                                .optional(),
+                            })
+                          )
+                          .describe(
+                            'Someone mentioned a document in a channel'
+                          ),
+                        tag: zod.enum(['document_mention']),
+                      })
+                      .describe('Someone mentioned a document in a channel.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            commentId: zod
+                              .union([
+                                zod
+                                  .number()
+                                  .describe(
+                                    'Legacy `Comment.id` or `Thread.id`.'
+                                  ),
+                                zod
+                                  .uuid()
+                                  .describe(
+                                    'Message or root id in the shared message store.'
+                                  ),
+                              ])
+                              .describe(
+                                'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                              ),
                             documentName: zod
                               .string()
-                              .describe('The name of the document'),
+                              .describe('The name of the document.'),
                             fileType: zod
                               .string()
                               .nullish()
-                              .describe('The file type of the document'),
+                              .describe('The file type of the document.'),
+                            mentionId: zod.string().describe('The mention ID.'),
                             owner: zod
                               .string()
-                              .describe('The owner of the document'),
+                              .describe('The owner of the document.'),
+                            senderDisplayName: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Public bot name when the author is an agent rather than a Macro user.'
+                              ),
+                            senderProfilePictureUrl: zod.string().nullish(),
                             subType: zod
                               .union([
                                 zod.null(),
@@ -4404,1841 +4699,1844 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                                   ),
                               ])
                               .optional(),
-                          })
-                        )
-                        .describe('Someone mentioned a document in a channel'),
-                      tag: zod.enum(['document_mention']),
-                    })
-                    .describe('Someone mentioned a document in a channel.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          commentId: zod
-                            .union([
-                              zod
-                                .number()
-                                .describe(
-                                  'Legacy `Comment.id` or `Thread.id`.'
-                                ),
-                              zod
-                                .uuid()
-                                .describe(
-                                  'Message or root id in the shared message store.'
-                                ),
-                            ])
-                            .describe(
-                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
-                            ),
-                          documentName: zod
-                            .string()
-                            .describe('The name of the document.'),
-                          fileType: zod
-                            .string()
-                            .nullish()
-                            .describe('The file type of the document.'),
-                          mentionId: zod.string().describe('The mention ID.'),
-                          owner: zod
-                            .string()
-                            .describe('The owner of the document.'),
-                          senderDisplayName: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'Public bot name when the author is an agent rather than a Macro user.'
-                            ),
-                          senderProfilePictureUrl: zod.string().nullish(),
-                          subType: zod
-                            .union([
-                              zod.null(),
-                              zod
-                                .union([
-                                  zod.object({
-                                    type: zod.enum(['task']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['snippet']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['skill']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['initiative_description']),
-                                  }),
-                                ])
-                                .describe(
-                                  'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
-                                ),
-                            ])
-                            .optional(),
-                          text: zod
-                            .string()
-                            .describe('the text of the comment'),
-                          threadId: zod
-                            .union([
-                              zod
-                                .number()
-                                .describe(
-                                  'Legacy `Comment.id` or `Thread.id`.'
-                                ),
-                              zod
-                                .uuid()
-                                .describe(
-                                  'Message or root id in the shared message store.'
-                                ),
-                            ])
-                            .describe(
-                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
-                            ),
-                        })
-                        .describe(
-                          'Notification sent when a user is mentioned in a document comment.'
-                        ),
-                      tag: zod.enum(['mentioned_in_document_comment']),
-                    })
-                    .describe('User was mentioned in a comment in a document'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          commentId: zod
-                            .union([
-                              zod
-                                .number()
-                                .describe(
-                                  'Legacy `Comment.id` or `Thread.id`.'
-                                ),
-                              zod
-                                .uuid()
-                                .describe(
-                                  'Message or root id in the shared message store.'
-                                ),
-                            ])
-                            .describe(
-                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
-                            ),
-                          documentName: zod
-                            .string()
-                            .describe('The name of the document.'),
-                          fileType: zod
-                            .string()
-                            .nullish()
-                            .describe('The file type of the document.'),
-                          owner: zod
-                            .string()
-                            .describe('The owner of the document.'),
-                          senderDisplayName: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'Public bot name when the author is an agent rather than a Macro user.'
-                            ),
-                          senderProfilePictureUrl: zod.string().nullish(),
-                          subType: zod
-                            .union([
-                              zod.null(),
-                              zod
-                                .union([
-                                  zod.object({
-                                    type: zod.enum(['task']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['snippet']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['skill']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['initiative_description']),
-                                  }),
-                                ])
-                                .describe(
-                                  'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
-                                ),
-                            ])
-                            .optional(),
-                          text: zod
-                            .string()
-                            .describe('the text of the comment'),
-                          threadId: zod
-                            .union([
-                              zod
-                                .number()
-                                .describe(
-                                  'Legacy `Comment.id` or `Thread.id`.'
-                                ),
-                              zod
-                                .uuid()
-                                .describe(
-                                  'Message or root id in the shared message store.'
-                                ),
-                            ])
-                            .describe(
-                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
-                            ),
-                        })
-                        .describe(
-                          'Notification sent when someone replies to a document comment thread.'
-                        ),
-                      tag: zod.enum(['replied_to_document_comment_thread']),
-                    })
-                    .describe(
-                      'Someone replied to a document comment thread the user participated in.'
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          commentId: zod
-                            .union([
-                              zod
-                                .number()
-                                .describe(
-                                  'Legacy `Comment.id` or `Thread.id`.'
-                                ),
-                              zod
-                                .uuid()
-                                .describe(
-                                  'Message or root id in the shared message store.'
-                                ),
-                            ])
-                            .describe(
-                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
-                            ),
-                          documentName: zod
-                            .string()
-                            .describe('The name of the document.'),
-                          fileType: zod
-                            .string()
-                            .nullish()
-                            .describe('The file type of the document.'),
-                          owner: zod
-                            .string()
-                            .describe('The owner of the document.'),
-                          senderDisplayName: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'Public bot name when the author is an agent rather than a Macro user.'
-                            ),
-                          senderProfilePictureUrl: zod.string().nullish(),
-                          subType: zod
-                            .union([
-                              zod.null(),
-                              zod
-                                .union([
-                                  zod.object({
-                                    type: zod.enum(['task']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['snippet']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['skill']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['initiative_description']),
-                                  }),
-                                ])
-                                .describe(
-                                  'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
-                                ),
-                            ])
-                            .optional(),
-                          text: zod
-                            .string()
-                            .describe('the text of the comment'),
-                          threadId: zod
-                            .union([
-                              zod
-                                .number()
-                                .describe(
-                                  'Legacy `Comment.id` or `Thread.id`.'
-                                ),
-                              zod
-                                .uuid()
-                                .describe(
-                                  'Message or root id in the shared message store.'
-                                ),
-                            ])
-                            .describe(
-                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
-                            ),
-                        })
-                        .describe(
-                          'Notification sent when someone comments on a document the user owns.'
-                        ),
-                      tag: zod.enum(['commented_on_document']),
-                    })
-                    .describe('Someone commented on a document the user owns.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          accessLevel: zod
-                            .enum(['view', 'comment', 'edit'])
-                            .describe(
-                              'Permission level used by an access request, excluding ownership.'
-                            ),
-                          entityName: zod
-                            .string()
-                            .describe("Shared item's name."),
-                          fileType: zod
-                            .string()
-                            .nullish()
-                            .describe('Document file type for routing.'),
-                          requestId: zod
-                            .uuid()
-                            .describe('Stable request identity.'),
-                          revision: zod
-                            .number()
-                            .describe(
-                              'Revision that generated this notification.'
-                            ),
-                        })
-                        .describe(
-                          'A person requested access to a shared entity.'
-                        ),
-                      tag: zod.enum(['entity_access_requested']),
-                    })
-                    .describe(
-                      'Someone requested more access to a shared entity.'
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          accessLevel: zod
-                            .enum(['view', 'comment', 'edit'])
-                            .describe(
-                              'Permission level used by an access request, excluding ownership.'
-                            ),
-                          entityName: zod
-                            .string()
-                            .describe("Shared item's name."),
-                          fileType: zod
-                            .string()
-                            .nullish()
-                            .describe('Document file type for routing.'),
-                          requestId: zod
-                            .uuid()
-                            .describe('Stable request identity.'),
-                          revision: zod
-                            .number()
-                            .describe(
-                              'Revision that generated this notification.'
-                            ),
-                        })
-                        .describe(
-                          'A person granted you access to a shared entity.'
-                        ),
-                      tag: zod.enum(['entity_access_granted']),
-                    })
-                    .describe('An owner granted requested access.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          messageId: zod
-                            .uuid()
-                            .describe('Canonical shared message UUID.'),
-                          owner: zod
-                            .string()
-                            .describe('Authenticated project owner.'),
-                          projectName: zod
-                            .string()
-                            .describe('Name displayed in the project header.'),
-                          reason: zod
-                            .enum(['mention', 'reply', 'assignee', 'owner'])
-                            .describe(
-                              'Why a project discussion notification was delivered.'
-                            ),
-                          senderDisplayName: zod
-                            .string()
-                            .nullish()
-                            .describe('Public display name for a bot author.'),
-                          senderProfilePictureUrl: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'Optional avatar for push notification attachments.'
-                            ),
-                          text: zod
-                            .string()
-                            .describe('Posted Markdown content.'),
-                          threadId: zod
-                            .uuid()
-                            .describe('Canonical discussion root UUID.'),
-                        })
-                        .describe(
-                          'Project discussion metadata. The notification entity identifies the initiative;\nmessage and thread UUIDs select the discussion inside that project.'
-                        ),
-                      tag: zod.enum(['initiative_discussion']),
-                    })
-                    .describe(
-                      'Someone commented, replied, or mentioned the recipient on a project.'
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          messageId: zod
-                            .uuid()
-                            .describe('Canonical shared message UUID.'),
-                          reason: zod
-                            .enum(['mention', 'reply', 'owner'])
-                            .describe(
-                              'Why a CRM discussion notification was delivered.'
-                            ),
-                          recordName: zod
-                            .string()
-                            .describe('Company or contact display name.'),
-                          senderDisplayName: zod
-                            .string()
-                            .nullish()
-                            .describe('Public display name for a bot author.'),
-                          senderProfilePictureUrl: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'Optional avatar for push notification attachments.'
-                            ),
-                          text: zod
-                            .string()
-                            .describe('Posted Markdown content.'),
-                          threadId: zod
-                            .uuid()
-                            .describe('Canonical discussion root UUID.'),
-                        })
-                        .describe(
-                          'CRM discussion metadata. The notification entity identifies the company or\ncontact; message and thread UUIDs select the discussion inside it.'
-                        ),
-                      tag: zod.enum(['crm_discussion']),
-                    })
-                    .describe(
-                      'Someone commented, replied, or mentioned the recipient on a CRM company or contact.'
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          channelName: zod
-                            .string()
-                            .optional()
-                            .describe('The name of the channel'),
-                          invitedBy: zod
-                            .string()
-                            .describe('The user who sent the invitation'),
-                          isDirectMessage: zod
-                            .boolean()
-                            .optional()
-                            .describe(
-                              'Whether this is a direct message rather than a channel invitation.\nOlder notification payloads retain channel-invitation wording.'
-                            ),
-                          messageContent: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'Message content to show in the invite email, when the invite was triggered by a message.'
-                            ),
-                          senderProfilePictureUrl: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              "The sender's profile picture URL, if available."
-                            ),
-                        })
-                        .describe(
-                          'Metadata for when a user is invited to a channel.'
-                        ),
-                      tag: zod.enum(['channel_invite']),
-                    })
-                    .describe('The user was invited to a channel.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          channelName: zod.string().optional(),
-                          channelType: zod.enum([
-                            'public',
-                            'private',
-                            'directMessage',
-                            'team',
-                          ]),
-                        })
-                        .describe(
-                          'Common metadata for notifications on channels'
-                        )
-                        .and(
-                          zod.object({
-                            messageContent: zod
+                            text: zod
                               .string()
-                              .optional()
-                              .describe('The content of the message'),
-                            messageId: zod.string().describe('The message id'),
-                            sender: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'The user who sent the message, when sent by a user'
-                              ),
-                            senderDisplayName: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'Display name for non-user senders such as bots'
-                              ),
-                            senderProfilePictureUrl: zod.string().nullish(),
-                          })
-                        ),
-                      tag: zod.enum(['channel_message_send']),
-                    })
-                    .describe('A user sent a message in a channel.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          channelName: zod.string().optional(),
-                          channelType: zod.enum([
-                            'public',
-                            'private',
-                            'directMessage',
-                            'team',
-                          ]),
-                        })
-                        .describe(
-                          'Common metadata for notifications on channels'
-                        )
-                        .and(
-                          zod.object({
-                            messageContent: zod
-                              .string()
-                              .describe('The message content'),
-                            messageId: zod
-                              .string()
-                              .describe('The id of the new message'),
-                            senderDisplayName: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'Display name for non-user senders such as bots'
-                              ),
-                            senderProfilePictureUrl: zod.string().nullish(),
+                              .describe('the text of the comment'),
                             threadId: zod
-                              .string()
+                              .union([
+                                zod
+                                  .number()
+                                  .describe(
+                                    'Legacy `Comment.id` or `Thread.id`.'
+                                  ),
+                                zod
+                                  .uuid()
+                                  .describe(
+                                    'Message or root id in the shared message store.'
+                                  ),
+                              ])
                               .describe(
-                                'The id of the thread that has the reply'
-                              ),
-                            threadParentSenderId: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'The user who sent the root message of the thread'
-                              ),
-                            userId: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'The sender id of the reply, when sent by a user'
+                                'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
                               ),
                           })
-                        ),
-                      tag: zod.enum(['channel_message_reply']),
-                    })
-                    .describe(
-                      'Someone replied to a thread in a channel that the user is part of.'
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          channel_name: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The name of the channel the call started in, when available.'
-                            ),
-                          sender_profile_picture_url: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'Profile picture URL of the user who started the call, when available.'
-                            ),
-                        })
-                        .describe(
-                          'Metadata for a notification that a call has started in a channel.\n\nMirrors the producer-side `CallStartedNotification` in the `call` crate:\nboth serialize the same wire shape (snake_case fields) under the same\n`call_started` [`Notification::TYPE_NAME`]. This type is the read-side\nmodel used by [`crate::NotifEvent`]; the producer keeps its own type\nbecause it additionally builds the incoming-call APNS\/VoIP push.\n\nRows persisted before the type name was normalized used the kebab-case\n`call-started`; the [`crate::NotifEvent::CallStarted`] variant carries a\n`#[serde(alias = \"call-started\")]` so those rows still deserialize.'
-                        ),
-                      tag: zod.enum(['call_started']),
-                    })
-                    .describe(
-                      'A call has started in a channel the user is a member of.\n\nThe `call-started` alias keeps rows persisted before the type name\nwas normalized to snake_case (`call_started`) deserializable.'
-                    ),
-                  zod
-                    .object({
-                      content: zod.object({
-                        sender: zod.string().nullish(),
-                        snippet: zod.string(),
-                        subject: zod.string(),
-                        threadId: zod.string(),
-                        toEmail: zod.string(),
-                      }),
-                      tag: zod.enum(['new_email']),
-                    })
-                    .describe('A new email has been sent to the user.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          emailAddress: zod
-                            .string()
-                            .describe(
-                              'The address of the inbox that needs to be reconnected.'
-                            ),
-                        })
-                        .describe(
-                          "Metadata for a notification that a linked inbox's grant has died and the\ninbox must be reconnected. Fanned out to the inbox owner and every delegate,\nsince any of them holding the Google grant can restore sync."
-                        ),
-                      tag: zod.enum(['inbox_reauth_required']),
-                    })
-                    .describe(
-                      "A linked inbox's grant died and must be reconnected."
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          invitedBy: zod
-                            .string()
-                            .describe('The user who sent the invitation'),
-                          inviteePlan: zod
-                            .enum(['free', 'premium'])
-                            .optional()
-                            .describe('What a team invitee gets by joining.'),
-                          reminder: zod
-                            .boolean()
-                            .optional()
-                            .describe(
-                              'Whether this email reminds the invitee of an invite they have not answered.'
-                            ),
-                          role: zod
-                            .string()
-                            .nullish()
-                            .describe('Role\/permission level in the team'),
-                          senderProfilePictureUrl: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              "The sender's profile picture URL, if available."
-                            ),
-                          teamId: zod
-                            .uuid()
-                            .describe('The unique identifier of the team'),
-                          teamInviteId: zod
-                            .uuid()
-                            .describe(
-                              'The unique identifier of the team invite'
-                            ),
-                          teamName: zod
-                            .string()
-                            .describe('The name of the team being invited to'),
-                        })
-                        .describe(
-                          'Metadata for when a user is invited to a team.'
-                        ),
-                      tag: zod.enum(['invite_to_team']),
-                    })
-                    .describe('A user was invited to a team.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          assignedBy: zod
-                            .string()
-                            .describe('The user who assigned the task'),
-                          senderProfilePictureUrl: zod.string().nullish(),
-                          subType: zod
-                            .union([
-                              zod.null(),
-                              zod
-                                .union([
-                                  zod.object({
-                                    type: zod.enum(['task']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['snippet']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['skill']),
-                                  }),
-                                  zod.object({
-                                    type: zod.enum(['initiative_description']),
-                                  }),
-                                ])
-                                .describe(
-                                  'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
-                                ),
-                            ])
-                            .optional(),
-                          taskId: zod
-                            .string()
-                            .describe('The unique identifier of the task'),
-                          taskName: zod
-                            .string()
-                            .nullish()
-                            .describe('The name of the task (optional)'),
-                        })
-                        .describe(
-                          'Metadata for when a user is assigned to a task'
-                        ),
-                      tag: zod.enum(['task_assigned']),
-                    })
-                    .describe('A user was assigned to a task.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          description: zod
-                            .string()
-                            .describe(
-                              'What the user asked to be reminded about.'
-                            ),
-                          reminderId: zod
-                            .uuid()
-                            .describe('The reminder that fired.'),
-                          scheduledFor: zod.iso
-                            .datetime({})
-                            .nullish()
-                            .describe(
-                              "Which firing this is — the occurrence the reminder came due for.\n\nWhat distinguishes two firings of the same recurring reminder, which are\notherwise identical: same id, same description. The collapse key is\nbuilt from it, so without it Tuesday's alert would replace Monday's\nunread one on the lock screen.\n\nOptional because notifications written before recurring dispatch existed\nhave no such field, and they still have to read back."
-                            ),
-                        })
-                        .describe(
-                          'Metadata for a reminder the user set for themselves coming due.\n\nThere is no sender: a reminder is self-set, so the dispatcher sends it with\n`sender_id: None` (a recipient who is also the sender is filtered out of\ntheir own notification). Every formatter here must therefore work without\none.\n\nThe associated entity, when there is one, lives on the notification row\nrather than in here, and clients resolve its name from that — so the\ndispatcher does not have to look up a name across five entity types.'
-                        ),
-                      tag: zod.enum(['reminder']),
-                    })
-                    .describe(
-                      'A reminder the user set for themselves came due.'
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          chatName: zod.string().describe("The chat's name."),
-                          messageId: zod
-                            .uuid()
-                            .describe(
-                              'Stable message id; retries use it as their notification id.'
-                            ),
-                          provider: zod
-                            .enum(['whatsapp'])
-                            .describe(
-                              'The messaging service an external chat lives in.'
-                            ),
-                        })
-                        .describe(
-                          'A live message in an independently shared external chat.'
-                        ),
-                      tag: zod.enum(['external_chat_message']),
-                    })
-                    .describe('A live message in a shared external chat.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          endsAt: zod.iso
-                            .datetime({})
-                            .nullish()
-                            .describe('Instance end, for timed events.'),
-                          eventId: zod
-                            .uuid()
-                            .describe(
-                              'The calendar event entity the alarm belongs to.'
-                            ),
-                          minutesBefore: zod
-                            .number()
-                            .describe(
-                              'Minutes before the start the alarm was configured to fire.'
-                            ),
-                          occurrenceKey: zod
-                            .string()
-                            .describe(
-                              'Stable occurrence key of the instance that is starting.'
-                            ),
-                          startDate: zod.iso
-                            .date()
-                            .nullish()
-                            .describe(
-                              'Instance start date, for all-day events.'
-                            ),
-                          startsAt: zod.iso
-                            .datetime({})
-                            .nullish()
-                            .describe('Instance start, for timed events.'),
-                          timeZone: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'IANA zone for rendering local clock times, when known.'
-                            ),
-                          title: zod
-                            .string()
-                            .describe('Event display title at dispatch time.'),
-                        })
-                        .describe(
-                          'A calendar event alarm came due. Like [`ReminderMetadata`], these are\nself-notifications: `sender_id` must stay `None` or the only recipient is\nfiltered out. Everything the alert renders rides in here so the\ndispatcher never has to resolve the event again at display time.'
-                        ),
-                      tag: zod.enum(['calendar_event_reminder']),
-                    })
-                    .describe('A calendar event alarm came due.'),
-                  zod
-                    .object({
-                      content: zod.object({
-                        messageId: zod.string(),
-                        summary: zod.string(),
-                      }),
-                      tag: zod.enum(['ai_response']),
-                    })
-                    .describe('An AI assistant responded to a chat.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          displayName: zod
-                            .string()
-                            .describe(
-                              'A compact label suitable for display in the UI.'
-                            ),
-                          foreignEntityId: zod
-                            .uuid()
-                            .describe(
-                              'The source-specific internal foreign entity row id for this pull request.'
-                            ),
-                          githubKey: zod
-                            .string()
-                            .describe(
-                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
-                            ),
-                          number: zod
-                            .number()
-                            .min(
-                              getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentNumberMin
-                            )
-                            .describe('The GitHub pull request number.'),
-                          owner: zod
-                            .string()
-                            .describe(
-                              'The GitHub repository owner or organization.'
-                            ),
-                          repo: zod
-                            .string()
-                            .describe('The GitHub repository name.'),
-                          senderGithubAvatarUrl: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub avatar URL for the sender, when available.'
-                            ),
-                          senderGithubLogin: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub login for the sender, when available.'
-                            ),
-                          senderGithubUserId: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The stable GitHub numeric user id for the sender, serialized as a string.'
-                            ),
-                          title: zod
-                            .string()
-                            .describe(
-                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
-                            ),
-                          url: zod
-                            .string()
-                            .describe(
-                              'The public GitHub URL for the pull request.'
-                            ),
-                        })
-                        .describe(
-                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
-                        )
-                        .and(
-                          zod.object({
-                            action: zod
-                              .enum(['opened', 'reopened', 'closed'])
+                          .describe(
+                            'Notification sent when a user is mentioned in a document comment.'
+                          ),
+                        tag: zod.enum(['mentioned_in_document_comment']),
+                      })
+                      .describe(
+                        'User was mentioned in a comment in a document'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            commentId: zod
+                              .union([
+                                zod
+                                  .number()
+                                  .describe(
+                                    'Legacy `Comment.id` or `Thread.id`.'
+                                  ),
+                                zod
+                                  .uuid()
+                                  .describe(
+                                    'Message or root id in the shared message store.'
+                                  ),
+                              ])
                               .describe(
-                                'The GitHub pull request webhook action that triggered the notification.'
+                                'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
                               ),
-                            baseBranch: zod
+                            documentName: zod
+                              .string()
+                              .describe('The name of the document.'),
+                            fileType: zod
+                              .string()
+                              .nullish()
+                              .describe('The file type of the document.'),
+                            owner: zod
+                              .string()
+                              .describe('The owner of the document.'),
+                            senderDisplayName: zod
                               .string()
                               .nullish()
                               .describe(
-                                'The pull request base branch, when available.'
+                                'Public bot name when the author is an agent rather than a Macro user.'
                               ),
-                            headBranch: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'The pull request head branch, when available.'
-                              ),
-                            mergedAt: zod.iso
-                              .datetime({})
-                              .nullish()
-                              .describe(
-                                'When the pull request was merged, when available.'
-                              ),
-                            previousStatus: zod
+                            senderProfilePictureUrl: zod.string().nullish(),
+                            subType: zod
                               .union([
                                 zod.null(),
                                 zod
-                                  .enum(['open', 'closed', 'merged'])
+                                  .union([
+                                    zod.object({
+                                      type: zod.enum(['task']),
+                                    }),
+                                    zod.object({
+                                      type: zod.enum(['snippet']),
+                                    }),
+                                    zod.object({
+                                      type: zod.enum(['skill']),
+                                    }),
+                                    zod.object({
+                                      type: zod.enum([
+                                        'initiative_description',
+                                      ]),
+                                    }),
+                                  ])
                                   .describe(
-                                    'The normalized lifecycle status for a GitHub pull request notification.'
+                                    'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
                                   ),
                               ])
                               .optional(),
-                            status: zod
-                              .enum(['open', 'closed', 'merged'])
-                              .describe(
-                                'The normalized lifecycle status for a GitHub pull request notification.'
-                              ),
-                          })
-                        )
-                        .describe(
-                          'Metadata for a GitHub pull request lifecycle notification.'
-                        ),
-                      tag: zod.enum(['github_pr_status_changed']),
-                    })
-                    .describe(
-                      'A GitHub pull request changed lifecycle state.\n\nThe `github_pr_event` alias keeps rows and queue messages persisted\nbefore the rename deserializable.'
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          displayName: zod
-                            .string()
-                            .describe(
-                              'A compact label suitable for display in the UI.'
-                            ),
-                          foreignEntityId: zod
-                            .uuid()
-                            .describe(
-                              'The source-specific internal foreign entity row id for this pull request.'
-                            ),
-                          githubKey: zod
-                            .string()
-                            .describe(
-                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
-                            ),
-                          number: zod
-                            .number()
-                            .min(
-                              getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentNumberMinOne
-                            )
-                            .describe('The GitHub pull request number.'),
-                          owner: zod
-                            .string()
-                            .describe(
-                              'The GitHub repository owner or organization.'
-                            ),
-                          repo: zod
-                            .string()
-                            .describe('The GitHub repository name.'),
-                          senderGithubAvatarUrl: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub avatar URL for the sender, when available.'
-                            ),
-                          senderGithubLogin: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub login for the sender, when available.'
-                            ),
-                          senderGithubUserId: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The stable GitHub numeric user id for the sender, serialized as a string.'
-                            ),
-                          title: zod
-                            .string()
-                            .describe(
-                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
-                            ),
-                          url: zod
-                            .string()
-                            .describe(
-                              'The public GitHub URL for the pull request.'
-                            ),
-                        })
-                        .describe(
-                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
-                        )
-                        .and(
-                          zod.object({
-                            checkName: zod
+                            text: zod
                               .string()
-                              .describe(
-                                'The display name GitHub reported for the check run.'
-                              ),
-                            checkRunGithubId: zod
-                              .number()
-                              .min(
-                                getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentCheckRunGithubIdMin
-                              )
-                              .describe(
-                                'The GitHub numeric id of the check run.'
-                              ),
-                            checkStatus: zod
-                              .string()
-                              .describe('The raw GitHub check run status.'),
-                            checkUrl: zod
-                              .string()
-                              .describe(
-                                'The public GitHub URL for the check run.'
-                              ),
-                            completedAt: zod.iso
-                              .datetime({})
-                              .describe(
-                                'When GitHub marked the check run as complete.'
-                              ),
-                            conclusion: zod
-                              .string()
-                              .describe('The raw GitHub check run conclusion.'),
-                            state: zod
-                              .enum(['completed', 'failed'])
-                              .describe(
-                                'The normalized result state for a GitHub pull request check-run notification.'
-                              ),
-                          })
-                        )
-                        .describe(
-                          'Metadata for a notification that a GitHub pull request check run completed.'
-                        ),
-                      tag: zod.enum(['github_pr_check_run']),
-                    })
-                    .describe('A GitHub pull request check run completed.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          displayName: zod
-                            .string()
-                            .describe(
-                              'A compact label suitable for display in the UI.'
-                            ),
-                          foreignEntityId: zod
-                            .uuid()
-                            .describe(
-                              'The source-specific internal foreign entity row id for this pull request.'
-                            ),
-                          githubKey: zod
-                            .string()
-                            .describe(
-                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
-                            ),
-                          number: zod
-                            .number()
-                            .min(
-                              getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentNumberMinTwo
-                            )
-                            .describe('The GitHub pull request number.'),
-                          owner: zod
-                            .string()
-                            .describe(
-                              'The GitHub repository owner or organization.'
-                            ),
-                          repo: zod
-                            .string()
-                            .describe('The GitHub repository name.'),
-                          senderGithubAvatarUrl: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub avatar URL for the sender, when available.'
-                            ),
-                          senderGithubLogin: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub login for the sender, when available.'
-                            ),
-                          senderGithubUserId: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The stable GitHub numeric user id for the sender, serialized as a string.'
-                            ),
-                          title: zod
-                            .string()
-                            .describe(
-                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
-                            ),
-                          url: zod
-                            .string()
-                            .describe(
-                              'The public GitHub URL for the pull request.'
-                            ),
-                        })
-                        .describe(
-                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
-                        )
-                        .and(
-                          zod.object({
-                            requestedReviewerGithubLogin: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'The GitHub login of the requested reviewer, when available.'
-                              ),
-                            requestedReviewerGithubUserId: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'The stable GitHub numeric user id of the requested reviewer, serialized as a string.'
-                              ),
-                          })
-                        )
-                        .describe(
-                          "Metadata for a notification that the user's review was requested on a GitHub pull request."
-                        ),
-                      tag: zod.enum(['github_review_requested']),
-                    })
-                    .describe(
-                      "The user's review was requested on a GitHub pull request."
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          displayName: zod
-                            .string()
-                            .describe(
-                              'A compact label suitable for display in the UI.'
-                            ),
-                          foreignEntityId: zod
-                            .uuid()
-                            .describe(
-                              'The source-specific internal foreign entity row id for this pull request.'
-                            ),
-                          githubKey: zod
-                            .string()
-                            .describe(
-                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
-                            ),
-                          number: zod
-                            .number()
-                            .min(
-                              getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentNumberMinThree
-                            )
-                            .describe('The GitHub pull request number.'),
-                          owner: zod
-                            .string()
-                            .describe(
-                              'The GitHub repository owner or organization.'
-                            ),
-                          repo: zod
-                            .string()
-                            .describe('The GitHub repository name.'),
-                          senderGithubAvatarUrl: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub avatar URL for the sender, when available.'
-                            ),
-                          senderGithubLogin: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub login for the sender, when available.'
-                            ),
-                          senderGithubUserId: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The stable GitHub numeric user id for the sender, serialized as a string.'
-                            ),
-                          title: zod
-                            .string()
-                            .describe(
-                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
-                            ),
-                          url: zod
-                            .string()
-                            .describe(
-                              'The public GitHub URL for the pull request.'
-                            ),
-                        })
-                        .describe(
-                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
-                        )
-                        .and(
-                          zod.object({
-                            commentGithubId: zod
-                              .number()
-                              .min(
-                                getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentCommentGithubIdMin
-                              )
-                              .nullish()
-                              .describe(
-                                'The GitHub numeric id of the comment, when available.'
-                              ),
-                            commentKind: zod
-                              .enum(['issue', 'review_comment'])
-                              .describe(
-                                'The kind of GitHub comment that triggered a [`GithubPrComment`] notification.'
-                              ),
-                            commentSnippet: zod
-                              .string()
-                              .describe(
-                                'A truncated excerpt of the comment body.'
-                              ),
-                            commentUrl: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'The public GitHub URL for the comment, when available.'
-                              ),
-                          })
-                        )
-                        .describe(
-                          'Metadata for a notification that a GitHub pull request was commented on.'
-                        ),
-                      tag: zod.enum(['github_pr_comment']),
-                    })
-                    .describe('A GitHub pull request was commented on.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          displayName: zod
-                            .string()
-                            .describe(
-                              'A compact label suitable for display in the UI.'
-                            ),
-                          foreignEntityId: zod
-                            .uuid()
-                            .describe(
-                              'The source-specific internal foreign entity row id for this pull request.'
-                            ),
-                          githubKey: zod
-                            .string()
-                            .describe(
-                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
-                            ),
-                          number: zod
-                            .number()
-                            .min(
-                              getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentNumberMinFour
-                            )
-                            .describe('The GitHub pull request number.'),
-                          owner: zod
-                            .string()
-                            .describe(
-                              'The GitHub repository owner or organization.'
-                            ),
-                          repo: zod
-                            .string()
-                            .describe('The GitHub repository name.'),
-                          senderGithubAvatarUrl: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub avatar URL for the sender, when available.'
-                            ),
-                          senderGithubLogin: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub login for the sender, when available.'
-                            ),
-                          senderGithubUserId: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The stable GitHub numeric user id for the sender, serialized as a string.'
-                            ),
-                          title: zod
-                            .string()
-                            .describe(
-                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
-                            ),
-                          url: zod
-                            .string()
-                            .describe(
-                              'The public GitHub URL for the pull request.'
-                            ),
-                        })
-                        .describe(
-                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
-                        )
-                        .and(
-                          zod.object({
-                            commentGithubId: zod
-                              .number()
-                              .min(
-                                getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentCommentGithubIdMinOne
-                              )
-                              .nullish()
-                              .describe(
-                                'The GitHub numeric id of the comment or review containing the mention, when available.'
-                              ),
-                            commentUrl: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'The public GitHub URL for the text containing the mention, when available.'
-                              ),
-                            location: zod
-                              .enum([
-                                'pr_body',
-                                'comment',
-                                'review',
-                                'review_comment',
+                              .describe('the text of the comment'),
+                            threadId: zod
+                              .union([
+                                zod
+                                  .number()
+                                  .describe(
+                                    'Legacy `Comment.id` or `Thread.id`.'
+                                  ),
+                                zod
+                                  .uuid()
+                                  .describe(
+                                    'Message or root id in the shared message store.'
+                                  ),
                               ])
                               .describe(
-                                'Where in a GitHub pull request the user was mentioned.'
-                              ),
-                            textSnippet: zod
-                              .string()
-                              .describe(
-                                'A truncated excerpt of the text containing the mention.'
+                                'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
                               ),
                           })
-                        )
-                        .describe(
-                          'Metadata for a notification that the user was mentioned on a GitHub pull request.'
-                        ),
-                      tag: zod.enum(['github_pr_mention']),
-                    })
-                    .describe(
-                      'The user was mentioned on a GitHub pull request.'
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          displayName: zod
-                            .string()
-                            .describe(
-                              'A compact label suitable for display in the UI.'
-                            ),
-                          foreignEntityId: zod
-                            .uuid()
-                            .describe(
-                              'The source-specific internal foreign entity row id for this pull request.'
-                            ),
-                          githubKey: zod
-                            .string()
-                            .describe(
-                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
-                            ),
-                          number: zod
-                            .number()
-                            .min(
-                              getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentNumberMinFive
-                            )
-                            .describe('The GitHub pull request number.'),
-                          owner: zod
-                            .string()
-                            .describe(
-                              'The GitHub repository owner or organization.'
-                            ),
-                          repo: zod
-                            .string()
-                            .describe('The GitHub repository name.'),
-                          senderGithubAvatarUrl: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub avatar URL for the sender, when available.'
-                            ),
-                          senderGithubLogin: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The GitHub login for the sender, when available.'
-                            ),
-                          senderGithubUserId: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The stable GitHub numeric user id for the sender, serialized as a string.'
-                            ),
-                          title: zod
-                            .string()
-                            .describe(
-                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
-                            ),
-                          url: zod
-                            .string()
-                            .describe(
-                              'The public GitHub URL for the pull request.'
-                            ),
-                        })
-                        .describe(
-                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
-                        )
-                        .and(
-                          zod.object({
-                            reviewGithubId: zod
-                              .number()
-                              .min(
-                                getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentReviewGithubIdMin
-                              )
-                              .nullish()
-                              .describe(
-                                'The GitHub numeric id of the review, when available.'
-                              ),
-                            reviewSnippet: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'A truncated excerpt of the review body, when any was written.'
-                              ),
-                            reviewUrl: zod
-                              .string()
-                              .nullish()
-                              .describe(
-                                'The public GitHub URL for the review, when available.'
-                              ),
-                            state: zod
-                              .enum([
-                                'approved',
-                                'changes_requested',
-                                'commented',
+                          .describe(
+                            'Notification sent when someone replies to a document comment thread.'
+                          ),
+                        tag: zod.enum(['replied_to_document_comment_thread']),
+                      })
+                      .describe(
+                        'Someone replied to a document comment thread the user participated in.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            commentId: zod
+                              .union([
+                                zod
+                                  .number()
+                                  .describe(
+                                    'Legacy `Comment.id` or `Thread.id`.'
+                                  ),
+                                zod
+                                  .uuid()
+                                  .describe(
+                                    'Message or root id in the shared message store.'
+                                  ),
                               ])
                               .describe(
-                                'The state of a submitted GitHub pull request review.'
+                                'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
                               ),
-                          })
-                        )
-                        .describe(
-                          "Metadata for a notification that a review was submitted on the user's GitHub pull request."
-                        ),
-                      tag: zod.enum(['github_pr_review']),
-                    })
-                    .describe(
-                      "A review was submitted on the user's GitHub pull request."
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          announcementMessageId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'The magic-chip message for the turn in question, when one was posted.'
-                            ),
-                          botId: zod
-                            .string()
-                            .describe(
-                              'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
-                            ),
-                          botName: zod
-                            .string()
-                            .describe(
-                              "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
-                            ),
-                          channelId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'The channel the session was opened from, when it was opened from a\nchannel thread.'
-                            ),
-                          parent: zod
-                            .union([
-                              zod.null(),
-                              zod
-                                .object({
-                                  id: zod
-                                    .string()
-                                    .describe('The parent entity id.'),
-                                  type: zod
-                                    .string()
-                                    .describe(
-                                      '`channel`, `document`, or `initiative`.'
-                                    ),
-                                })
-                                .describe(
-                                  "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel, document,\nor initiative. Spelled like the message API's parent for client routing."
-                                ),
-                            ])
-                            .optional(),
-                          sessionId: zod
-                            .uuid()
-                            .describe('The session; what a click opens.'),
-                          sessionName: zod
-                            .string()
-                            .describe(
-                              "The session's name at the time of the event."
-                            ),
-                          threadId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'The thread the session was opened from, when it was.'
-                            ),
-                        })
-                        .describe(
-                          'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
-                        )
-                        .and(
-                          zod.object({
-                            actor: zod
+                            documentName: zod
+                              .string()
+                              .describe('The name of the document.'),
+                            fileType: zod
+                              .string()
+                              .nullish()
+                              .describe('The file type of the document.'),
+                            owner: zod
+                              .string()
+                              .describe('The owner of the document.'),
+                            senderDisplayName: zod
                               .string()
                               .nullish()
                               .describe(
-                                "Who prompted the turn, absent when a bot acted on nobody's behalf."
+                                'Public bot name when the author is an agent rather than a Macro user.'
                               ),
-                            excerpt: zod
+                            senderProfilePictureUrl: zod.string().nullish(),
+                            subType: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .union([
+                                    zod.object({
+                                      type: zod.enum(['task']),
+                                    }),
+                                    zod.object({
+                                      type: zod.enum(['snippet']),
+                                    }),
+                                    zod.object({
+                                      type: zod.enum(['skill']),
+                                    }),
+                                    zod.object({
+                                      type: zod.enum([
+                                        'initiative_description',
+                                      ]),
+                                    }),
+                                  ])
+                                  .describe(
+                                    'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                                  ),
+                              ])
+                              .optional(),
+                            text: zod
+                              .string()
+                              .describe('the text of the comment'),
+                            threadId: zod
+                              .union([
+                                zod
+                                  .number()
+                                  .describe(
+                                    'Legacy `Comment.id` or `Thread.id`.'
+                                  ),
+                                zod
+                                  .uuid()
+                                  .describe(
+                                    'Message or root id in the shared message store.'
+                                  ),
+                              ])
+                              .describe(
+                                'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                              ),
+                          })
+                          .describe(
+                            'Notification sent when someone comments on a document the user owns.'
+                          ),
+                        tag: zod.enum(['commented_on_document']),
+                      })
+                      .describe(
+                        'Someone commented on a document the user owns.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            accessLevel: zod
+                              .enum(['view', 'comment', 'edit'])
+                              .describe(
+                                'Permission level used by an access request, excluding ownership.'
+                              ),
+                            entityName: zod
+                              .string()
+                              .describe("Shared item's name."),
+                            fileType: zod
                               .string()
                               .nullish()
-                              .describe(
-                                "The agent's last prose in the turn, whole; `None` when it wrote none."
-                              ),
-                            stopReason: zod
-                              .string()
-                              .describe('The ACP stop reason, or `error`.'),
-                            turn: zod
-                              .number()
-                              .min(
-                                getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentTurnMin
-                              )
-                              .describe('The turn that ended.'),
-                          })
-                        )
-                        .describe(
-                          'An agent finished a turn with nothing queued behind it.'
-                        ),
-                      tag: zod.enum(['agent_session_settled']),
-                    })
-                    .describe(
-                      'An agent finished a turn with nothing queued behind it.'
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          announcementMessageId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'The magic-chip message for the turn in question, when one was posted.'
-                            ),
-                          botId: zod
-                            .string()
-                            .describe(
-                              'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
-                            ),
-                          botName: zod
-                            .string()
-                            .describe(
-                              "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
-                            ),
-                          channelId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'The channel the session was opened from, when it was opened from a\nchannel thread.'
-                            ),
-                          parent: zod
-                            .union([
-                              zod.null(),
-                              zod
-                                .object({
-                                  id: zod
-                                    .string()
-                                    .describe('The parent entity id.'),
-                                  type: zod
-                                    .string()
-                                    .describe(
-                                      '`channel`, `document`, or `initiative`.'
-                                    ),
-                                })
-                                .describe(
-                                  "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel, document,\nor initiative. Spelled like the message API's parent for client routing."
-                                ),
-                            ])
-                            .optional(),
-                          sessionId: zod
-                            .uuid()
-                            .describe('The session; what a click opens.'),
-                          sessionName: zod
-                            .string()
-                            .describe(
-                              "The session's name at the time of the event."
-                            ),
-                          threadId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'The thread the session was opened from, when it was.'
-                            ),
-                        })
-                        .describe(
-                          'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
-                        )
-                        .and(
-                          zod.object({
-                            question: zod
-                              .string()
-                              .describe(
-                                'The question, as the agent phrased it.'
-                              ),
-                            turn: zod
-                              .number()
-                              .min(
-                                getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentTurnMinOne
-                              )
-                              .describe('The turn asking.'),
-                          })
-                        )
-                        .describe(
-                          "An agent is blocked on a question only the session's owner can answer."
-                        ),
-                      tag: zod.enum(['agent_session_waiting_for_input']),
-                    })
-                    .describe(
-                      "An agent is blocked on a question for the session's owner."
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          announcementMessageId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'The magic-chip message for the turn in question, when one was posted.'
-                            ),
-                          botId: zod
-                            .string()
-                            .describe(
-                              'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
-                            ),
-                          botName: zod
-                            .string()
-                            .describe(
-                              "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
-                            ),
-                          channelId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'The channel the session was opened from, when it was opened from a\nchannel thread.'
-                            ),
-                          parent: zod
-                            .union([
-                              zod.null(),
-                              zod
-                                .object({
-                                  id: zod
-                                    .string()
-                                    .describe('The parent entity id.'),
-                                  type: zod
-                                    .string()
-                                    .describe(
-                                      '`channel`, `document`, or `initiative`.'
-                                    ),
-                                })
-                                .describe(
-                                  "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel, document,\nor initiative. Spelled like the message API's parent for client routing."
-                                ),
-                            ])
-                            .optional(),
-                          sessionId: zod
-                            .uuid()
-                            .describe('The session; what a click opens.'),
-                          sessionName: zod
-                            .string()
-                            .describe(
-                              "The session's name at the time of the event."
-                            ),
-                          threadId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'The thread the session was opened from, when it was.'
-                            ),
-                        })
-                        .describe(
-                          'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
-                        )
-                        .and(
-                          zod.object({
-                            actionId: zod
+                              .describe('Document file type for routing.'),
+                            requestId: zod
                               .uuid()
-                              .describe('The action carrying the prompt.'),
-                            mentionedBy: zod
+                              .describe('Stable request identity.'),
+                            revision: zod
+                              .number()
+                              .describe(
+                                'Revision that generated this notification.'
+                              ),
+                          })
+                          .describe(
+                            'A person requested access to a shared entity.'
+                          ),
+                        tag: zod.enum(['entity_access_requested']),
+                      })
+                      .describe(
+                        'Someone requested more access to a shared entity.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            accessLevel: zod
+                              .enum(['view', 'comment', 'edit'])
+                              .describe(
+                                'Permission level used by an access request, excluding ownership.'
+                              ),
+                            entityName: zod
+                              .string()
+                              .describe("Shared item's name."),
+                            fileType: zod
+                              .string()
+                              .nullish()
+                              .describe('Document file type for routing.'),
+                            requestId: zod
+                              .uuid()
+                              .describe('Stable request identity.'),
+                            revision: zod
+                              .number()
+                              .describe(
+                                'Revision that generated this notification.'
+                              ),
+                          })
+                          .describe(
+                            'A person granted you access to a shared entity.'
+                          ),
+                        tag: zod.enum(['entity_access_granted']),
+                      })
+                      .describe('An owner granted requested access.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            messageId: zod
+                              .uuid()
+                              .describe('Canonical shared message UUID.'),
+                            owner: zod
+                              .string()
+                              .describe('Authenticated project owner.'),
+                            projectName: zod
+                              .string()
+                              .describe(
+                                'Name displayed in the project header.'
+                              ),
+                            reason: zod
+                              .enum(['mention', 'reply', 'assignee', 'owner'])
+                              .describe(
+                                'Why a project discussion notification was delivered.'
+                              ),
+                            senderDisplayName: zod
                               .string()
                               .nullish()
                               .describe(
-                                "Who wrote the prompt, absent when a bot acted on nobody's behalf."
+                                'Public display name for a bot author.'
                               ),
-                          })
-                        )
-                        .describe(
-                          'Someone named the recipient in a prompt to an agent session.'
-                        ),
-                      tag: zod.enum(['agent_session_mentioned']),
-                    })
-                    .describe(
-                      'The user was named in a prompt to an agent session.'
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          channelName: zod.string().optional(),
-                          channelType: zod.enum([
-                            'public',
-                            'private',
-                            'directMessage',
-                            'team',
-                          ]),
-                        })
-                        .describe(
-                          'Common metadata for notifications on channels'
-                        )
-                        .and(
-                          zod.object({
-                            emoji: zod
-                              .string()
-                              .describe('The emoji added by the reactor.'),
-                            messageContent: zod
-                              .string()
-                              .describe('The reacted-to message content.'),
-                            messageId: zod
-                              .string()
-                              .describe('The reacted-to message id.'),
                             senderProfilePictureUrl: zod
                               .string()
                               .nullish()
                               .describe(
-                                'Optional reactor profile picture URL.'
+                                'Optional avatar for push notification attachments.'
                               ),
+                            text: zod
+                              .string()
+                              .describe('Posted Markdown content.'),
                             threadId: zod
+                              .uuid()
+                              .describe('Canonical discussion root UUID.'),
+                          })
+                          .describe(
+                            'Project discussion metadata. The notification entity identifies the initiative;\nmessage and thread UUIDs select the discussion inside that project.'
+                          ),
+                        tag: zod.enum(['initiative_discussion']),
+                      })
+                      .describe(
+                        'Someone commented, replied, or mentioned the recipient on a project.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            messageId: zod
+                              .uuid()
+                              .describe('Canonical shared message UUID.'),
+                            reason: zod
+                              .enum(['mention', 'reply', 'owner'])
+                              .describe(
+                                'Why a CRM discussion notification was delivered.'
+                              ),
+                            recordName: zod
+                              .string()
+                              .describe('Company or contact display name.'),
+                            senderDisplayName: zod
                               .string()
                               .nullish()
                               .describe(
-                                'The thread root id when the reacted-to message is a reply.'
+                                'Public display name for a bot author.'
+                              ),
+                            senderProfilePictureUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Optional avatar for push notification attachments.'
+                              ),
+                            text: zod
+                              .string()
+                              .describe('Posted Markdown content.'),
+                            threadId: zod
+                              .uuid()
+                              .describe('Canonical discussion root UUID.'),
+                          })
+                          .describe(
+                            'CRM discussion metadata. The notification entity identifies the company or\ncontact; message and thread UUIDs select the discussion inside it.'
+                          ),
+                        tag: zod.enum(['crm_discussion']),
+                      })
+                      .describe(
+                        'Someone commented, replied, or mentioned the recipient on a CRM company or contact.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            channelName: zod
+                              .string()
+                              .optional()
+                              .describe('The name of the channel'),
+                            invitedBy: zod
+                              .string()
+                              .describe('The user who sent the invitation'),
+                            isDirectMessage: zod
+                              .boolean()
+                              .optional()
+                              .describe(
+                                'Whether this is a direct message rather than a channel invitation.\nOlder notification payloads retain channel-invitation wording.'
+                              ),
+                            messageContent: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Message content to show in the invite email, when the invite was triggered by a message.'
+                              ),
+                            senderProfilePictureUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                "The sender's profile picture URL, if available."
                               ),
                           })
-                        )
-                        .describe(
-                          "Metadata for a reaction added to one of the recipient's channel messages."
-                        ),
-                      tag: zod.enum(['channel_message_reaction']),
-                    })
-                    .describe(
-                      "Someone reacted to one of the user's channel messages."
-                    ),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          eventId: zod
-                            .uuid()
-                            .describe(
-                              'The shared calendar event entity the request is for.'
-                            ),
-                          requestId: zod
-                            .uuid()
-                            .describe(
-                              "Stable request identity, answered from the event's details."
-                            ),
-                          title: zod
-                            .string()
-                            .describe('Event title when the request was made.'),
-                        })
-                        .describe(
-                          'A channel member who sees a calendar event only through a channel share\nasked the person who shared it to add them as a guest. Sent to the sharer,\nwith the requester as sender.'
-                        ),
-                      tag: zod.enum(['calendar_event_join_request']),
-                    })
-                    .describe(
-                      'A channel member asked to be added as a guest of an event the\nuser shared with the channel.'
-                    ),
-                ])
-                .describe(
-                  'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
-                ),
-              owner_id: zod
-                .string()
-                .describe('The user who owns this notification.'),
-              sender_id: zod
-                .string()
-                .nullish()
-                .describe('The user who triggered the notification.'),
-              sent: zod
-                .boolean()
-                .describe('Whether the notification has been sent.'),
-              state: zod
-                .enum(['unseen', 'seen', 'done'])
-                .describe(
-                  "The mutually exclusive lifecycle states of a user's notification."
-                ),
-              updated_at: zod.iso
-                .datetime({})
-                .describe('When the notification was last updated.'),
-              viewed_at: zod.iso
-                .datetime({})
-                .nullish()
-                .describe('When the notification was viewed\/seen.'),
-            })
-          )
-      )
-      .describe('The list of items returned.'),
-    next_cursor: zod
-      .string()
-      .nullish()
-      .describe('The next page cursor if it exists.'),
-  })
-  .describe('The strongly typed response for listing user notifications.');
+                          .describe(
+                            'Metadata for when a user is invited to a channel.'
+                          ),
+                        tag: zod.enum(['channel_invite']),
+                      })
+                      .describe('The user was invited to a channel.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            channelName: zod.string().optional(),
+                            channelType: zod.enum([
+                              'public',
+                              'private',
+                              'directMessage',
+                              'team',
+                            ]),
+                          })
+                          .describe(
+                            'Common metadata for notifications on channels'
+                          )
+                          .and(
+                            zod.object({
+                              messageContent: zod
+                                .string()
+                                .optional()
+                                .describe('The content of the message'),
+                              messageId: zod
+                                .string()
+                                .describe('The message id'),
+                              sender: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The user who sent the message, when sent by a user'
+                                ),
+                              senderDisplayName: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'Display name for non-user senders such as bots'
+                                ),
+                              senderProfilePictureUrl: zod.string().nullish(),
+                            })
+                          ),
+                        tag: zod.enum(['channel_message_send']),
+                      })
+                      .describe('A user sent a message in a channel.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            channelName: zod.string().optional(),
+                            channelType: zod.enum([
+                              'public',
+                              'private',
+                              'directMessage',
+                              'team',
+                            ]),
+                          })
+                          .describe(
+                            'Common metadata for notifications on channels'
+                          )
+                          .and(
+                            zod.object({
+                              messageContent: zod
+                                .string()
+                                .describe('The message content'),
+                              messageId: zod
+                                .string()
+                                .describe('The id of the new message'),
+                              senderDisplayName: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'Display name for non-user senders such as bots'
+                                ),
+                              senderProfilePictureUrl: zod.string().nullish(),
+                              threadId: zod
+                                .string()
+                                .describe(
+                                  'The id of the thread that has the reply'
+                                ),
+                              threadParentSenderId: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The user who sent the root message of the thread'
+                                ),
+                              userId: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The sender id of the reply, when sent by a user'
+                                ),
+                            })
+                          ),
+                        tag: zod.enum(['channel_message_reply']),
+                      })
+                      .describe(
+                        'Someone replied to a thread in a channel that the user is part of.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            channel_name: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The name of the channel the call started in, when available.'
+                              ),
+                            sender_profile_picture_url: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Profile picture URL of the user who started the call, when available.'
+                              ),
+                          })
+                          .describe(
+                            'Metadata for a notification that a call has started in a channel.\n\nMirrors the producer-side `CallStartedNotification` in the `call` crate:\nboth serialize the same wire shape (snake_case fields) under the same\n`call_started` [`Notification::TYPE_NAME`]. This type is the read-side\nmodel used by [`crate::NotifEvent`]; the producer keeps its own type\nbecause it additionally builds the incoming-call APNS\/VoIP push.\n\nRows persisted before the type name was normalized used the kebab-case\n`call-started`; the [`crate::NotifEvent::CallStarted`] variant carries a\n`#[serde(alias = \"call-started\")]` so those rows still deserialize.'
+                          ),
+                        tag: zod.enum(['call_started']),
+                      })
+                      .describe(
+                        'A call has started in a channel the user is a member of.\n\nThe `call-started` alias keeps rows persisted before the type name\nwas normalized to snake_case (`call_started`) deserializable.'
+                      ),
+                    zod
+                      .object({
+                        content: zod.object({
+                          sender: zod.string().nullish(),
+                          snippet: zod.string(),
+                          subject: zod.string(),
+                          threadId: zod.string(),
+                          toEmail: zod.string(),
+                        }),
+                        tag: zod.enum(['new_email']),
+                      })
+                      .describe('A new email has been sent to the user.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            emailAddress: zod
+                              .string()
+                              .describe(
+                                'The address of the inbox that needs to be reconnected.'
+                              ),
+                          })
+                          .describe(
+                            "Metadata for a notification that a linked inbox's grant has died and the\ninbox must be reconnected. Fanned out to the inbox owner and every delegate,\nsince any of them holding the Google grant can restore sync."
+                          ),
+                        tag: zod.enum(['inbox_reauth_required']),
+                      })
+                      .describe(
+                        "A linked inbox's grant died and must be reconnected."
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            invitedBy: zod
+                              .string()
+                              .describe('The user who sent the invitation'),
+                            inviteePlan: zod
+                              .enum(['free', 'premium'])
+                              .optional()
+                              .describe('What a team invitee gets by joining.'),
+                            reminder: zod
+                              .boolean()
+                              .optional()
+                              .describe(
+                                'Whether this email reminds the invitee of an invite they have not answered.'
+                              ),
+                            role: zod
+                              .string()
+                              .nullish()
+                              .describe('Role\/permission level in the team'),
+                            senderProfilePictureUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                "The sender's profile picture URL, if available."
+                              ),
+                            teamId: zod
+                              .uuid()
+                              .describe('The unique identifier of the team'),
+                            teamInviteId: zod
+                              .uuid()
+                              .describe(
+                                'The unique identifier of the team invite'
+                              ),
+                            teamName: zod
+                              .string()
+                              .describe(
+                                'The name of the team being invited to'
+                              ),
+                          })
+                          .describe(
+                            'Metadata for when a user is invited to a team.'
+                          ),
+                        tag: zod.enum(['invite_to_team']),
+                      })
+                      .describe('A user was invited to a team.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            assignedBy: zod
+                              .string()
+                              .describe('The user who assigned the task'),
+                            senderProfilePictureUrl: zod.string().nullish(),
+                            subType: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .union([
+                                    zod.object({
+                                      type: zod.enum(['task']),
+                                    }),
+                                    zod.object({
+                                      type: zod.enum(['snippet']),
+                                    }),
+                                    zod.object({
+                                      type: zod.enum(['skill']),
+                                    }),
+                                    zod.object({
+                                      type: zod.enum([
+                                        'initiative_description',
+                                      ]),
+                                    }),
+                                  ])
+                                  .describe(
+                                    'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                                  ),
+                              ])
+                              .optional(),
+                            taskId: zod
+                              .string()
+                              .describe('The unique identifier of the task'),
+                            taskName: zod
+                              .string()
+                              .nullish()
+                              .describe('The name of the task (optional)'),
+                          })
+                          .describe(
+                            'Metadata for when a user is assigned to a task'
+                          ),
+                        tag: zod.enum(['task_assigned']),
+                      })
+                      .describe('A user was assigned to a task.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            description: zod
+                              .string()
+                              .describe(
+                                'What the user asked to be reminded about.'
+                              ),
+                            reminderId: zod
+                              .uuid()
+                              .describe('The reminder that fired.'),
+                            scheduledFor: zod.iso
+                              .datetime({})
+                              .nullish()
+                              .describe(
+                                "Which firing this is — the occurrence the reminder came due for.\n\nWhat distinguishes two firings of the same recurring reminder, which are\notherwise identical: same id, same description. The collapse key is\nbuilt from it, so without it Tuesday's alert would replace Monday's\nunread one on the lock screen.\n\nOptional because notifications written before recurring dispatch existed\nhave no such field, and they still have to read back."
+                              ),
+                          })
+                          .describe(
+                            'Metadata for a reminder the user set for themselves coming due.\n\nThere is no sender: a reminder is self-set, so the dispatcher sends it with\n`sender_id: None` (a recipient who is also the sender is filtered out of\ntheir own notification). Every formatter here must therefore work without\none.\n\nThe associated entity, when there is one, lives on the notification row\nrather than in here, and clients resolve its name from that — so the\ndispatcher does not have to look up a name across five entity types.'
+                          ),
+                        tag: zod.enum(['reminder']),
+                      })
+                      .describe(
+                        'A reminder the user set for themselves came due.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            chatName: zod.string().describe("The chat's name."),
+                            messageId: zod
+                              .uuid()
+                              .describe(
+                                'Stable message id; retries use it as their notification id.'
+                              ),
+                            provider: zod
+                              .enum(['whatsapp'])
+                              .describe(
+                                'The messaging service an external chat lives in.'
+                              ),
+                          })
+                          .describe(
+                            'A live message in an independently shared external chat.'
+                          ),
+                        tag: zod.enum(['external_chat_message']),
+                      })
+                      .describe('A live message in a shared external chat.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            endsAt: zod.iso
+                              .datetime({})
+                              .nullish()
+                              .describe('Instance end, for timed events.'),
+                            eventId: zod
+                              .uuid()
+                              .describe(
+                                'The calendar event entity the alarm belongs to.'
+                              ),
+                            minutesBefore: zod
+                              .number()
+                              .describe(
+                                'Minutes before the start the alarm was configured to fire.'
+                              ),
+                            occurrenceKey: zod
+                              .string()
+                              .describe(
+                                'Stable occurrence key of the instance that is starting.'
+                              ),
+                            startDate: zod.iso
+                              .date()
+                              .nullish()
+                              .describe(
+                                'Instance start date, for all-day events.'
+                              ),
+                            startsAt: zod.iso
+                              .datetime({})
+                              .nullish()
+                              .describe('Instance start, for timed events.'),
+                            timeZone: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'IANA zone for rendering local clock times, when known.'
+                              ),
+                            title: zod
+                              .string()
+                              .describe(
+                                'Event display title at dispatch time.'
+                              ),
+                          })
+                          .describe(
+                            'A calendar event alarm came due. Like [`ReminderMetadata`], these are\nself-notifications: `sender_id` must stay `None` or the only recipient is\nfiltered out. Everything the alert renders rides in here so the\ndispatcher never has to resolve the event again at display time.'
+                          ),
+                        tag: zod.enum(['calendar_event_reminder']),
+                      })
+                      .describe('A calendar event alarm came due.'),
+                    zod
+                      .object({
+                        content: zod.object({
+                          messageId: zod.string(),
+                          summary: zod.string(),
+                        }),
+                        tag: zod.enum(['ai_response']),
+                      })
+                      .describe('An AI assistant responded to a chat.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            displayName: zod
+                              .string()
+                              .describe(
+                                'A compact label suitable for display in the UI.'
+                              ),
+                            foreignEntityId: zod
+                              .uuid()
+                              .describe(
+                                'The source-specific internal foreign entity row id for this pull request.'
+                              ),
+                            githubKey: zod
+                              .string()
+                              .describe(
+                                'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                              ),
+                            number: zod
+                              .number()
+                              .min(
+                                getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentNumberMin
+                              )
+                              .describe('The GitHub pull request number.'),
+                            owner: zod
+                              .string()
+                              .describe(
+                                'The GitHub repository owner or organization.'
+                              ),
+                            repo: zod
+                              .string()
+                              .describe('The GitHub repository name.'),
+                            senderGithubAvatarUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub avatar URL for the sender, when available.'
+                              ),
+                            senderGithubLogin: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub login for the sender, when available.'
+                              ),
+                            senderGithubUserId: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The stable GitHub numeric user id for the sender, serialized as a string.'
+                              ),
+                            title: zod
+                              .string()
+                              .describe(
+                                'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                              ),
+                            url: zod
+                              .string()
+                              .describe(
+                                'The public GitHub URL for the pull request.'
+                              ),
+                          })
+                          .describe(
+                            'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                          )
+                          .and(
+                            zod.object({
+                              action: zod
+                                .enum(['opened', 'reopened', 'closed'])
+                                .describe(
+                                  'The GitHub pull request webhook action that triggered the notification.'
+                                ),
+                              baseBranch: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The pull request base branch, when available.'
+                                ),
+                              headBranch: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The pull request head branch, when available.'
+                                ),
+                              mergedAt: zod.iso
+                                .datetime({})
+                                .nullish()
+                                .describe(
+                                  'When the pull request was merged, when available.'
+                                ),
+                              previousStatus: zod
+                                .union([
+                                  zod.null(),
+                                  zod
+                                    .enum(['open', 'closed', 'merged'])
+                                    .describe(
+                                      'The normalized lifecycle status for a GitHub pull request notification.'
+                                    ),
+                                ])
+                                .optional(),
+                              status: zod
+                                .enum(['open', 'closed', 'merged'])
+                                .describe(
+                                  'The normalized lifecycle status for a GitHub pull request notification.'
+                                ),
+                            })
+                          )
+                          .describe(
+                            'Metadata for a GitHub pull request lifecycle notification.'
+                          ),
+                        tag: zod.enum(['github_pr_status_changed']),
+                      })
+                      .describe(
+                        'A GitHub pull request changed lifecycle state.\n\nThe `github_pr_event` alias keeps rows and queue messages persisted\nbefore the rename deserializable.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            displayName: zod
+                              .string()
+                              .describe(
+                                'A compact label suitable for display in the UI.'
+                              ),
+                            foreignEntityId: zod
+                              .uuid()
+                              .describe(
+                                'The source-specific internal foreign entity row id for this pull request.'
+                              ),
+                            githubKey: zod
+                              .string()
+                              .describe(
+                                'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                              ),
+                            number: zod
+                              .number()
+                              .min(
+                                getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentNumberMinOne
+                              )
+                              .describe('The GitHub pull request number.'),
+                            owner: zod
+                              .string()
+                              .describe(
+                                'The GitHub repository owner or organization.'
+                              ),
+                            repo: zod
+                              .string()
+                              .describe('The GitHub repository name.'),
+                            senderGithubAvatarUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub avatar URL for the sender, when available.'
+                              ),
+                            senderGithubLogin: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub login for the sender, when available.'
+                              ),
+                            senderGithubUserId: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The stable GitHub numeric user id for the sender, serialized as a string.'
+                              ),
+                            title: zod
+                              .string()
+                              .describe(
+                                'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                              ),
+                            url: zod
+                              .string()
+                              .describe(
+                                'The public GitHub URL for the pull request.'
+                              ),
+                          })
+                          .describe(
+                            'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                          )
+                          .and(
+                            zod.object({
+                              checkName: zod
+                                .string()
+                                .describe(
+                                  'The display name GitHub reported for the check run.'
+                                ),
+                              checkRunGithubId: zod
+                                .number()
+                                .min(
+                                  getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentCheckRunGithubIdMin
+                                )
+                                .describe(
+                                  'The GitHub numeric id of the check run.'
+                                ),
+                              checkStatus: zod
+                                .string()
+                                .describe('The raw GitHub check run status.'),
+                              checkUrl: zod
+                                .string()
+                                .describe(
+                                  'The public GitHub URL for the check run.'
+                                ),
+                              completedAt: zod.iso
+                                .datetime({})
+                                .describe(
+                                  'When GitHub marked the check run as complete.'
+                                ),
+                              conclusion: zod
+                                .string()
+                                .describe(
+                                  'The raw GitHub check run conclusion.'
+                                ),
+                              state: zod
+                                .enum(['completed', 'failed'])
+                                .describe(
+                                  'The normalized result state for a GitHub pull request check-run notification.'
+                                ),
+                            })
+                          )
+                          .describe(
+                            'Metadata for a notification that a GitHub pull request check run completed.'
+                          ),
+                        tag: zod.enum(['github_pr_check_run']),
+                      })
+                      .describe('A GitHub pull request check run completed.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            displayName: zod
+                              .string()
+                              .describe(
+                                'A compact label suitable for display in the UI.'
+                              ),
+                            foreignEntityId: zod
+                              .uuid()
+                              .describe(
+                                'The source-specific internal foreign entity row id for this pull request.'
+                              ),
+                            githubKey: zod
+                              .string()
+                              .describe(
+                                'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                              ),
+                            number: zod
+                              .number()
+                              .min(
+                                getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentNumberMinTwo
+                              )
+                              .describe('The GitHub pull request number.'),
+                            owner: zod
+                              .string()
+                              .describe(
+                                'The GitHub repository owner or organization.'
+                              ),
+                            repo: zod
+                              .string()
+                              .describe('The GitHub repository name.'),
+                            senderGithubAvatarUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub avatar URL for the sender, when available.'
+                              ),
+                            senderGithubLogin: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub login for the sender, when available.'
+                              ),
+                            senderGithubUserId: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The stable GitHub numeric user id for the sender, serialized as a string.'
+                              ),
+                            title: zod
+                              .string()
+                              .describe(
+                                'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                              ),
+                            url: zod
+                              .string()
+                              .describe(
+                                'The public GitHub URL for the pull request.'
+                              ),
+                          })
+                          .describe(
+                            'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                          )
+                          .and(
+                            zod.object({
+                              requestedReviewerGithubLogin: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The GitHub login of the requested reviewer, when available.'
+                                ),
+                              requestedReviewerGithubUserId: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The stable GitHub numeric user id of the requested reviewer, serialized as a string.'
+                                ),
+                            })
+                          )
+                          .describe(
+                            "Metadata for a notification that the user's review was requested on a GitHub pull request."
+                          ),
+                        tag: zod.enum(['github_review_requested']),
+                      })
+                      .describe(
+                        "The user's review was requested on a GitHub pull request."
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            displayName: zod
+                              .string()
+                              .describe(
+                                'A compact label suitable for display in the UI.'
+                              ),
+                            foreignEntityId: zod
+                              .uuid()
+                              .describe(
+                                'The source-specific internal foreign entity row id for this pull request.'
+                              ),
+                            githubKey: zod
+                              .string()
+                              .describe(
+                                'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                              ),
+                            number: zod
+                              .number()
+                              .min(
+                                getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentNumberMinThree
+                              )
+                              .describe('The GitHub pull request number.'),
+                            owner: zod
+                              .string()
+                              .describe(
+                                'The GitHub repository owner or organization.'
+                              ),
+                            repo: zod
+                              .string()
+                              .describe('The GitHub repository name.'),
+                            senderGithubAvatarUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub avatar URL for the sender, when available.'
+                              ),
+                            senderGithubLogin: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub login for the sender, when available.'
+                              ),
+                            senderGithubUserId: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The stable GitHub numeric user id for the sender, serialized as a string.'
+                              ),
+                            title: zod
+                              .string()
+                              .describe(
+                                'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                              ),
+                            url: zod
+                              .string()
+                              .describe(
+                                'The public GitHub URL for the pull request.'
+                              ),
+                          })
+                          .describe(
+                            'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                          )
+                          .and(
+                            zod.object({
+                              commentGithubId: zod
+                                .number()
+                                .min(
+                                  getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentCommentGithubIdMin
+                                )
+                                .nullish()
+                                .describe(
+                                  'The GitHub numeric id of the comment, when available.'
+                                ),
+                              commentKind: zod
+                                .enum(['issue', 'review_comment'])
+                                .describe(
+                                  'The kind of GitHub comment that triggered a [`GithubPrComment`] notification.'
+                                ),
+                              commentSnippet: zod
+                                .string()
+                                .describe(
+                                  'A truncated excerpt of the comment body.'
+                                ),
+                              commentUrl: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The public GitHub URL for the comment, when available.'
+                                ),
+                            })
+                          )
+                          .describe(
+                            'Metadata for a notification that a GitHub pull request was commented on.'
+                          ),
+                        tag: zod.enum(['github_pr_comment']),
+                      })
+                      .describe('A GitHub pull request was commented on.'),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            displayName: zod
+                              .string()
+                              .describe(
+                                'A compact label suitable for display in the UI.'
+                              ),
+                            foreignEntityId: zod
+                              .uuid()
+                              .describe(
+                                'The source-specific internal foreign entity row id for this pull request.'
+                              ),
+                            githubKey: zod
+                              .string()
+                              .describe(
+                                'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                              ),
+                            number: zod
+                              .number()
+                              .min(
+                                getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentNumberMinFour
+                              )
+                              .describe('The GitHub pull request number.'),
+                            owner: zod
+                              .string()
+                              .describe(
+                                'The GitHub repository owner or organization.'
+                              ),
+                            repo: zod
+                              .string()
+                              .describe('The GitHub repository name.'),
+                            senderGithubAvatarUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub avatar URL for the sender, when available.'
+                              ),
+                            senderGithubLogin: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub login for the sender, when available.'
+                              ),
+                            senderGithubUserId: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The stable GitHub numeric user id for the sender, serialized as a string.'
+                              ),
+                            title: zod
+                              .string()
+                              .describe(
+                                'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                              ),
+                            url: zod
+                              .string()
+                              .describe(
+                                'The public GitHub URL for the pull request.'
+                              ),
+                          })
+                          .describe(
+                            'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                          )
+                          .and(
+                            zod.object({
+                              commentGithubId: zod
+                                .number()
+                                .min(
+                                  getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentCommentGithubIdMinOne
+                                )
+                                .nullish()
+                                .describe(
+                                  'The GitHub numeric id of the comment or review containing the mention, when available.'
+                                ),
+                              commentUrl: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The public GitHub URL for the text containing the mention, when available.'
+                                ),
+                              location: zod
+                                .enum([
+                                  'pr_body',
+                                  'comment',
+                                  'review',
+                                  'review_comment',
+                                ])
+                                .describe(
+                                  'Where in a GitHub pull request the user was mentioned.'
+                                ),
+                              textSnippet: zod
+                                .string()
+                                .describe(
+                                  'A truncated excerpt of the text containing the mention.'
+                                ),
+                            })
+                          )
+                          .describe(
+                            'Metadata for a notification that the user was mentioned on a GitHub pull request.'
+                          ),
+                        tag: zod.enum(['github_pr_mention']),
+                      })
+                      .describe(
+                        'The user was mentioned on a GitHub pull request.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            displayName: zod
+                              .string()
+                              .describe(
+                                'A compact label suitable for display in the UI.'
+                              ),
+                            foreignEntityId: zod
+                              .uuid()
+                              .describe(
+                                'The source-specific internal foreign entity row id for this pull request.'
+                              ),
+                            githubKey: zod
+                              .string()
+                              .describe(
+                                'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                              ),
+                            number: zod
+                              .number()
+                              .min(
+                                getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentNumberMinFive
+                              )
+                              .describe('The GitHub pull request number.'),
+                            owner: zod
+                              .string()
+                              .describe(
+                                'The GitHub repository owner or organization.'
+                              ),
+                            repo: zod
+                              .string()
+                              .describe('The GitHub repository name.'),
+                            senderGithubAvatarUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub avatar URL for the sender, when available.'
+                              ),
+                            senderGithubLogin: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub login for the sender, when available.'
+                              ),
+                            senderGithubUserId: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The stable GitHub numeric user id for the sender, serialized as a string.'
+                              ),
+                            title: zod
+                              .string()
+                              .describe(
+                                'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                              ),
+                            url: zod
+                              .string()
+                              .describe(
+                                'The public GitHub URL for the pull request.'
+                              ),
+                          })
+                          .describe(
+                            'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                          )
+                          .and(
+                            zod.object({
+                              reviewGithubId: zod
+                                .number()
+                                .min(
+                                  getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentReviewGithubIdMin
+                                )
+                                .nullish()
+                                .describe(
+                                  'The GitHub numeric id of the review, when available.'
+                                ),
+                              reviewSnippet: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'A truncated excerpt of the review body, when any was written.'
+                                ),
+                              reviewUrl: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The public GitHub URL for the review, when available.'
+                                ),
+                              state: zod
+                                .enum([
+                                  'approved',
+                                  'changes_requested',
+                                  'commented',
+                                ])
+                                .describe(
+                                  'The state of a submitted GitHub pull request review.'
+                                ),
+                            })
+                          )
+                          .describe(
+                            "Metadata for a notification that a review was submitted on the user's GitHub pull request."
+                          ),
+                        tag: zod.enum(['github_pr_review']),
+                      })
+                      .describe(
+                        "A review was submitted on the user's GitHub pull request."
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            announcementMessageId: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'The magic-chip message for the turn in question, when one was posted.'
+                              ),
+                            botId: zod
+                              .string()
+                              .describe(
+                                'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
+                              ),
+                            botName: zod
+                              .string()
+                              .describe(
+                                "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
+                              ),
+                            channelId: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'The channel the session was opened from, when it was opened from a\nchannel thread.'
+                              ),
+                            parent: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .object({
+                                    id: zod
+                                      .string()
+                                      .describe('The parent entity id.'),
+                                    type: zod
+                                      .string()
+                                      .describe(
+                                        '`channel`, `document`, or `initiative`.'
+                                      ),
+                                  })
+                                  .describe(
+                                    "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel, document,\nor initiative. Spelled like the message API's parent for client routing."
+                                  ),
+                              ])
+                              .optional(),
+                            sessionId: zod
+                              .uuid()
+                              .describe('The session; what a click opens.'),
+                            sessionName: zod
+                              .string()
+                              .describe(
+                                "The session's name at the time of the event."
+                              ),
+                            threadId: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'The thread the session was opened from, when it was.'
+                              ),
+                          })
+                          .describe(
+                            'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                          )
+                          .and(
+                            zod.object({
+                              actor: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  "Who prompted the turn, absent when a bot acted on nobody's behalf."
+                                ),
+                              excerpt: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  "The agent's last prose in the turn, whole; `None` when it wrote none."
+                                ),
+                              stopReason: zod
+                                .string()
+                                .describe('The ACP stop reason, or `error`.'),
+                              turn: zod
+                                .number()
+                                .min(
+                                  getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentTurnMin
+                                )
+                                .describe('The turn that ended.'),
+                            })
+                          )
+                          .describe(
+                            'An agent finished a turn with nothing queued behind it.'
+                          ),
+                        tag: zod.enum(['agent_session_settled']),
+                      })
+                      .describe(
+                        'An agent finished a turn with nothing queued behind it.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            announcementMessageId: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'The magic-chip message for the turn in question, when one was posted.'
+                              ),
+                            botId: zod
+                              .string()
+                              .describe(
+                                'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
+                              ),
+                            botName: zod
+                              .string()
+                              .describe(
+                                "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
+                              ),
+                            channelId: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'The channel the session was opened from, when it was opened from a\nchannel thread.'
+                              ),
+                            parent: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .object({
+                                    id: zod
+                                      .string()
+                                      .describe('The parent entity id.'),
+                                    type: zod
+                                      .string()
+                                      .describe(
+                                        '`channel`, `document`, or `initiative`.'
+                                      ),
+                                  })
+                                  .describe(
+                                    "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel, document,\nor initiative. Spelled like the message API's parent for client routing."
+                                  ),
+                              ])
+                              .optional(),
+                            sessionId: zod
+                              .uuid()
+                              .describe('The session; what a click opens.'),
+                            sessionName: zod
+                              .string()
+                              .describe(
+                                "The session's name at the time of the event."
+                              ),
+                            threadId: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'The thread the session was opened from, when it was.'
+                              ),
+                          })
+                          .describe(
+                            'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                          )
+                          .and(
+                            zod.object({
+                              question: zod
+                                .string()
+                                .describe(
+                                  'The question, as the agent phrased it.'
+                                ),
+                              turn: zod
+                                .number()
+                                .min(
+                                  getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentTurnMinOne
+                                )
+                                .describe('The turn asking.'),
+                            })
+                          )
+                          .describe(
+                            "An agent is blocked on a question only the session's owner can answer."
+                          ),
+                        tag: zod.enum(['agent_session_waiting_for_input']),
+                      })
+                      .describe(
+                        "An agent is blocked on a question for the session's owner."
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            announcementMessageId: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'The magic-chip message for the turn in question, when one was posted.'
+                              ),
+                            botId: zod
+                              .string()
+                              .describe(
+                                'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
+                              ),
+                            botName: zod
+                              .string()
+                              .describe(
+                                "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
+                              ),
+                            channelId: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'The channel the session was opened from, when it was opened from a\nchannel thread.'
+                              ),
+                            parent: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .object({
+                                    id: zod
+                                      .string()
+                                      .describe('The parent entity id.'),
+                                    type: zod
+                                      .string()
+                                      .describe(
+                                        '`channel`, `document`, or `initiative`.'
+                                      ),
+                                  })
+                                  .describe(
+                                    "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel, document,\nor initiative. Spelled like the message API's parent for client routing."
+                                  ),
+                              ])
+                              .optional(),
+                            sessionId: zod
+                              .uuid()
+                              .describe('The session; what a click opens.'),
+                            sessionName: zod
+                              .string()
+                              .describe(
+                                "The session's name at the time of the event."
+                              ),
+                            threadId: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'The thread the session was opened from, when it was.'
+                              ),
+                          })
+                          .describe(
+                            'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                          )
+                          .and(
+                            zod.object({
+                              actionId: zod
+                                .uuid()
+                                .describe('The action carrying the prompt.'),
+                              mentionedBy: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  "Who wrote the prompt, absent when a bot acted on nobody's behalf."
+                                ),
+                            })
+                          )
+                          .describe(
+                            'Someone named the recipient in a prompt to an agent session.'
+                          ),
+                        tag: zod.enum(['agent_session_mentioned']),
+                      })
+                      .describe(
+                        'The user was named in a prompt to an agent session.'
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            channelName: zod.string().optional(),
+                            channelType: zod.enum([
+                              'public',
+                              'private',
+                              'directMessage',
+                              'team',
+                            ]),
+                          })
+                          .describe(
+                            'Common metadata for notifications on channels'
+                          )
+                          .and(
+                            zod.object({
+                              emoji: zod
+                                .string()
+                                .describe('The emoji added by the reactor.'),
+                              messageContent: zod
+                                .string()
+                                .describe('The reacted-to message content.'),
+                              messageId: zod
+                                .string()
+                                .describe('The reacted-to message id.'),
+                              senderProfilePictureUrl: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'Optional reactor profile picture URL.'
+                                ),
+                              threadId: zod
+                                .string()
+                                .nullish()
+                                .describe(
+                                  'The thread root id when the reacted-to message is a reply.'
+                                ),
+                            })
+                          )
+                          .describe(
+                            "Metadata for a reaction added to one of the recipient's channel messages."
+                          ),
+                        tag: zod.enum(['channel_message_reaction']),
+                      })
+                      .describe(
+                        "Someone reacted to one of the user's channel messages."
+                      ),
+                    zod
+                      .object({
+                        content: zod
+                          .object({
+                            eventId: zod
+                              .uuid()
+                              .describe(
+                                'The shared calendar event entity the request is for.'
+                              ),
+                            requestId: zod
+                              .uuid()
+                              .describe(
+                                "Stable request identity, answered from the event's details."
+                              ),
+                            title: zod
+                              .string()
+                              .describe(
+                                'Event title when the request was made.'
+                              ),
+                          })
+                          .describe(
+                            'A channel member who sees a calendar event only through a channel share\nasked the person who shared it to add them as a guest. Sent to the sharer,\nwith the requester as sender.'
+                          ),
+                        tag: zod.enum(['calendar_event_join_request']),
+                      })
+                      .describe(
+                        'A channel member asked to be added as a guest of an event the\nuser shared with the channel.'
+                      ),
+                  ])
+                  .describe(
+                    'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
+                  ),
+                owner_id: zod
+                  .string()
+                  .describe('The user who owns this notification.'),
+                sender_id: zod
+                  .string()
+                  .nullish()
+                  .describe('The user who triggered the notification.'),
+                sent: zod
+                  .boolean()
+                  .describe('Whether the notification has been sent.'),
+                state: zod
+                  .enum(['unseen', 'seen', 'done'])
+                  .describe(
+                    "The mutually exclusive lifecycle states of a user's notification."
+                  ),
+                updated_at: zod.iso
+                  .datetime({})
+                  .describe('When the notification was last updated.'),
+                viewed_at: zod.iso
+                  .datetime({})
+                  .nullish()
+                  .describe('When the notification was viewed\/seen.'),
+              })
+            )
+        )
+        .describe('The list of items returned.'),
+      next_cursor: zod
+        .string()
+        .nullish()
+        .describe('The next page cursor if it exists.'),
+    })
+    .describe('The strongly typed response for listing user notifications.');
+}
+let _cached_getTypedNotificationsByEventItemIdResponse:
+  | ReturnType<typeof _create_getTypedNotificationsByEventItemIdResponse>
+  | undefined;
+export function getGetTypedNotificationsByEventItemIdResponseSchema() {
+  return (_cached_getTypedNotificationsByEventItemIdResponse ??=
+    _create_getTypedNotificationsByEventItemIdResponse());
+}
 
 /**
  * @summary Get the notification types that the user has disabled.
  */
-export const getNotificationTypePreferencesResponse = zod
-  .object({
-    disabled_types: zod
-      .array(zod.string())
-      .describe('The notification types that the user has disabled.'),
-  })
-  .describe('Response for listing disabled notification types.');
+function _create_getNotificationTypePreferencesResponse() {
+  return zod
+    .object({
+      disabled_types: zod
+        .array(zod.string())
+        .describe('The notification types that the user has disabled.'),
+    })
+    .describe('Response for listing disabled notification types.');
+}
+let _cached_getNotificationTypePreferencesResponse:
+  | ReturnType<typeof _create_getNotificationTypePreferencesResponse>
+  | undefined;
+export function getGetNotificationTypePreferencesResponseSchema() {
+  return (_cached_getNotificationTypePreferencesResponse ??=
+    _create_getNotificationTypePreferencesResponse());
+}
 
 /**
  * @summary Disable a notification type for the authenticated user.
  */
-export const disableNotificationTypeParams = zod.object({
-  notification_event_type: zod
-    .string()
-    .describe('The notification event type to disable'),
-});
+function _create_disableNotificationTypeParams() {
+  return zod.object({
+    notification_event_type: zod
+      .string()
+      .describe('The notification event type to disable'),
+  });
+}
+let _cached_disableNotificationTypeParams:
+  | ReturnType<typeof _create_disableNotificationTypeParams>
+  | undefined;
+export function getDisableNotificationTypeParamsSchema() {
+  return (_cached_disableNotificationTypeParams ??=
+    _create_disableNotificationTypeParams());
+}
 
 /**
  * @summary Re-enable a notification type for the authenticated user.
  */
-export const enableNotificationTypeParams = zod.object({
-  notification_event_type: zod
-    .string()
-    .describe('The notification event type to enable'),
-});
+function _create_enableNotificationTypeParams() {
+  return zod.object({
+    notification_event_type: zod
+      .string()
+      .describe('The notification event type to enable'),
+  });
+}
+let _cached_enableNotificationTypeParams:
+  | ReturnType<typeof _create_enableNotificationTypeParams>
+  | undefined;
+export function getEnableNotificationTypeParamsSchema() {
+  return (_cached_enableNotificationTypeParams ??=
+    _create_enableNotificationTypeParams());
+}
 
 /**
  * @summary Typed wrapper for getting a single notification by ID.
  */
-export const getTypedNotificationByIdParams = zod.object({
-  notification_id: zod.uuid().describe('ID of the notification'),
-});
+function _create_getTypedNotificationByIdParams() {
+  return zod.object({
+    notification_id: zod.uuid().describe('ID of the notification'),
+  });
+}
+let _cached_getTypedNotificationByIdParams:
+  | ReturnType<typeof _create_getTypedNotificationByIdParams>
+  | undefined;
+export function getGetTypedNotificationByIdParamsSchema() {
+  return (_cached_getTypedNotificationByIdParams ??=
+    _create_getTypedNotificationByIdParams());
+}
 
 export const getTypedNotificationByIdResponseNotificationMetadataContentNumberMin = 0;
 
@@ -6264,139 +6562,203 @@ export const getTypedNotificationByIdResponseNotificationMetadataContentTurnMin 
 
 export const getTypedNotificationByIdResponseNotificationMetadataContentTurnMinOne = 0;
 
-export const getTypedNotificationByIdResponse = zod
-  .object({
-    entity_id: zod.string().describe('The id of that entity'),
-    entity_type: zod
-      .enum([
-        'user',
-        'chat',
-        'channel',
-        'channel_message',
-        'document',
-        'project',
-        'email_thread',
-        'calendar_event',
-        'team',
-        'call',
-        'foreign_entity',
-        'static_file',
-        'crm_company',
-        'crm_contact',
-        'crm_pipeline',
-        'reminder',
-        'skill',
-        'agent_session',
-        'scheduled_action',
-        'initiative',
-        'database',
-        'database_row',
-        'form',
-        'external_chat',
-      ])
-      .describe('The type of an entity in Macro'),
-  })
-  .describe(
-    'The Entity describes the minimum amount of information required to describe a unique thing in Macro\nThis contains the type of the entity [EntityType] and the string id of that entity'
-  )
-  .and(
-    zod.object({
-      created_at: zod.iso
-        .datetime({})
-        .describe('When the notification was created.'),
-      deleted_at: zod.iso
-        .datetime({})
-        .nullish()
-        .describe('When the notification was deleted.'),
-      id: zod.uuid().describe('The notification ID.'),
-      notification_event_type: zod
-        .string()
-        .describe(
-          'The notification event type string (e.g. \"channel_mention\").\nTODO make this a new type'
-        ),
-      notification_metadata: zod
-        .union([
-          zod
-            .object({
-              content: zod
-                .object({
-                  channelName: zod.string().optional(),
-                  channelType: zod.enum([
-                    'public',
-                    'private',
-                    'directMessage',
-                    'team',
-                  ]),
-                })
-                .describe('Common metadata for notifications on channels')
-                .and(
-                  zod.object({
-                    messageContent: zod
-                      .string()
-                      .describe('The message content'),
-                    messageId: zod
-                      .string()
-                      .describe('The message you were mentioned in'),
-                    senderDisplayName: zod
-                      .string()
-                      .nullish()
-                      .describe(
-                        'Display name for non-user senders such as bots'
-                      ),
-                    senderProfilePictureUrl: zod.string().nullish(),
-                    threadId: zod
-                      .string()
-                      .nullish()
-                      .describe('the id of the thread'),
+function _create_getTypedNotificationByIdResponse() {
+  return zod
+    .object({
+      entity_id: zod.string().describe('The id of that entity'),
+      entity_type: zod
+        .enum([
+          'user',
+          'chat',
+          'channel',
+          'channel_message',
+          'document',
+          'project',
+          'email_thread',
+          'calendar_event',
+          'team',
+          'call',
+          'foreign_entity',
+          'static_file',
+          'crm_company',
+          'crm_contact',
+          'crm_pipeline',
+          'reminder',
+          'skill',
+          'agent_session',
+          'scheduled_action',
+          'initiative',
+          'database',
+          'database_row',
+          'form',
+          'external_chat',
+        ])
+        .describe('The type of an entity in Macro'),
+    })
+    .describe(
+      'The Entity describes the minimum amount of information required to describe a unique thing in Macro\nThis contains the type of the entity [EntityType] and the string id of that entity'
+    )
+    .and(
+      zod.object({
+        created_at: zod.iso
+          .datetime({})
+          .describe('When the notification was created.'),
+        deleted_at: zod.iso
+          .datetime({})
+          .nullish()
+          .describe('When the notification was deleted.'),
+        id: zod.uuid().describe('The notification ID.'),
+        notification_event_type: zod
+          .string()
+          .describe(
+            'The notification event type string (e.g. \"channel_mention\").\nTODO make this a new type'
+          ),
+        notification_metadata: zod
+          .union([
+            zod
+              .object({
+                content: zod
+                  .object({
+                    channelName: zod.string().optional(),
+                    channelType: zod.enum([
+                      'public',
+                      'private',
+                      'directMessage',
+                      'team',
+                    ]),
                   })
-                ),
-              tag: zod.enum(['channel_mention']),
-            })
-            .describe('Someone mentioned you in a channel.'),
-          zod
-            .object({
-              content: zod
-                .object({
-                  channelName: zod.string().optional(),
-                  channelType: zod.enum([
-                    'public',
-                    'private',
-                    'directMessage',
-                    'team',
-                  ]),
-                })
-                .describe('Common metadata for notifications on channels')
-                .and(
-                  zod.object({
-                    messageContent: zod
-                      .string()
-                      .describe('The message content'),
-                    messageId: zod
-                      .string()
-                      .describe('The message you were mentioned in'),
-                    senderDisplayName: zod
-                      .string()
-                      .nullish()
-                      .describe(
-                        'Display name for non-user senders such as bots'
-                      ),
-                    senderProfilePictureUrl: zod.string().nullish(),
-                    threadId: zod
-                      .string()
-                      .nullish()
-                      .describe('the id of the thread'),
+                  .describe('Common metadata for notifications on channels')
+                  .and(
+                    zod.object({
+                      messageContent: zod
+                        .string()
+                        .describe('The message content'),
+                      messageId: zod
+                        .string()
+                        .describe('The message you were mentioned in'),
+                      senderDisplayName: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'Display name for non-user senders such as bots'
+                        ),
+                      senderProfilePictureUrl: zod.string().nullish(),
+                      threadId: zod
+                        .string()
+                        .nullish()
+                        .describe('the id of the thread'),
+                    })
+                  ),
+                tag: zod.enum(['channel_mention']),
+              })
+              .describe('Someone mentioned you in a channel.'),
+            zod
+              .object({
+                content: zod
+                  .object({
+                    channelName: zod.string().optional(),
+                    channelType: zod.enum([
+                      'public',
+                      'private',
+                      'directMessage',
+                      'team',
+                    ]),
                   })
-                )
-                .and(
-                  zod.object({
+                  .describe('Common metadata for notifications on channels')
+                  .and(
+                    zod.object({
+                      messageContent: zod
+                        .string()
+                        .describe('The message content'),
+                      messageId: zod
+                        .string()
+                        .describe('The message you were mentioned in'),
+                      senderDisplayName: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'Display name for non-user senders such as bots'
+                        ),
+                      senderProfilePictureUrl: zod.string().nullish(),
+                      threadId: zod
+                        .string()
+                        .nullish()
+                        .describe('the id of the thread'),
+                    })
+                  )
+                  .and(
+                    zod.object({
+                      documentName: zod
+                        .string()
+                        .describe('The name of the document'),
+                      fileType: zod
+                        .string()
+                        .nullish()
+                        .describe('The file type of the document'),
+                      owner: zod.string().describe('The owner of the document'),
+                      subType: zod
+                        .union([
+                          zod.null(),
+                          zod
+                            .union([
+                              zod.object({
+                                type: zod.enum(['task']),
+                              }),
+                              zod.object({
+                                type: zod.enum(['snippet']),
+                              }),
+                              zod.object({
+                                type: zod.enum(['skill']),
+                              }),
+                              zod.object({
+                                type: zod.enum(['initiative_description']),
+                              }),
+                            ])
+                            .describe(
+                              'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                            ),
+                        ])
+                        .optional(),
+                    })
+                  )
+                  .describe('Someone mentioned a document in a channel'),
+                tag: zod.enum(['document_mention']),
+              })
+              .describe('Someone mentioned a document in a channel.'),
+            zod
+              .object({
+                content: zod
+                  .object({
+                    commentId: zod
+                      .union([
+                        zod
+                          .number()
+                          .describe('Legacy `Comment.id` or `Thread.id`.'),
+                        zod
+                          .uuid()
+                          .describe(
+                            'Message or root id in the shared message store.'
+                          ),
+                      ])
+                      .describe(
+                        'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                      ),
                     documentName: zod
                       .string()
-                      .describe('The name of the document'),
+                      .describe('The name of the document.'),
                     fileType: zod
                       .string()
                       .nullish()
-                      .describe('The file type of the document'),
-                    owner: zod.string().describe('The owner of the document'),
+                      .describe('The file type of the document.'),
+                    mentionId: zod.string().describe('The mention ID.'),
+                    owner: zod.string().describe('The owner of the document.'),
+                    senderDisplayName: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Public bot name when the author is an agent rather than a Macro user.'
+                      ),
+                    senderProfilePictureUrl: zod.string().nullish(),
                     subType: zod
                       .union([
                         zod.null(),
@@ -6420,1694 +6782,1695 @@ export const getTypedNotificationByIdResponse = zod
                           ),
                       ])
                       .optional(),
-                  })
-                )
-                .describe('Someone mentioned a document in a channel'),
-              tag: zod.enum(['document_mention']),
-            })
-            .describe('Someone mentioned a document in a channel.'),
-          zod
-            .object({
-              content: zod
-                .object({
-                  commentId: zod
-                    .union([
-                      zod
-                        .number()
-                        .describe('Legacy `Comment.id` or `Thread.id`.'),
-                      zod
-                        .uuid()
-                        .describe(
-                          'Message or root id in the shared message store.'
-                        ),
-                    ])
-                    .describe(
-                      'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
-                    ),
-                  documentName: zod
-                    .string()
-                    .describe('The name of the document.'),
-                  fileType: zod
-                    .string()
-                    .nullish()
-                    .describe('The file type of the document.'),
-                  mentionId: zod.string().describe('The mention ID.'),
-                  owner: zod.string().describe('The owner of the document.'),
-                  senderDisplayName: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'Public bot name when the author is an agent rather than a Macro user.'
-                    ),
-                  senderProfilePictureUrl: zod.string().nullish(),
-                  subType: zod
-                    .union([
-                      zod.null(),
-                      zod
-                        .union([
-                          zod.object({
-                            type: zod.enum(['task']),
-                          }),
-                          zod.object({
-                            type: zod.enum(['snippet']),
-                          }),
-                          zod.object({
-                            type: zod.enum(['skill']),
-                          }),
-                          zod.object({
-                            type: zod.enum(['initiative_description']),
-                          }),
-                        ])
-                        .describe(
-                          'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
-                        ),
-                    ])
-                    .optional(),
-                  text: zod.string().describe('the text of the comment'),
-                  threadId: zod
-                    .union([
-                      zod
-                        .number()
-                        .describe('Legacy `Comment.id` or `Thread.id`.'),
-                      zod
-                        .uuid()
-                        .describe(
-                          'Message or root id in the shared message store.'
-                        ),
-                    ])
-                    .describe(
-                      'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
-                    ),
-                })
-                .describe(
-                  'Notification sent when a user is mentioned in a document comment.'
-                ),
-              tag: zod.enum(['mentioned_in_document_comment']),
-            })
-            .describe('User was mentioned in a comment in a document'),
-          zod
-            .object({
-              content: zod
-                .object({
-                  commentId: zod
-                    .union([
-                      zod
-                        .number()
-                        .describe('Legacy `Comment.id` or `Thread.id`.'),
-                      zod
-                        .uuid()
-                        .describe(
-                          'Message or root id in the shared message store.'
-                        ),
-                    ])
-                    .describe(
-                      'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
-                    ),
-                  documentName: zod
-                    .string()
-                    .describe('The name of the document.'),
-                  fileType: zod
-                    .string()
-                    .nullish()
-                    .describe('The file type of the document.'),
-                  owner: zod.string().describe('The owner of the document.'),
-                  senderDisplayName: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'Public bot name when the author is an agent rather than a Macro user.'
-                    ),
-                  senderProfilePictureUrl: zod.string().nullish(),
-                  subType: zod
-                    .union([
-                      zod.null(),
-                      zod
-                        .union([
-                          zod.object({
-                            type: zod.enum(['task']),
-                          }),
-                          zod.object({
-                            type: zod.enum(['snippet']),
-                          }),
-                          zod.object({
-                            type: zod.enum(['skill']),
-                          }),
-                          zod.object({
-                            type: zod.enum(['initiative_description']),
-                          }),
-                        ])
-                        .describe(
-                          'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
-                        ),
-                    ])
-                    .optional(),
-                  text: zod.string().describe('the text of the comment'),
-                  threadId: zod
-                    .union([
-                      zod
-                        .number()
-                        .describe('Legacy `Comment.id` or `Thread.id`.'),
-                      zod
-                        .uuid()
-                        .describe(
-                          'Message or root id in the shared message store.'
-                        ),
-                    ])
-                    .describe(
-                      'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
-                    ),
-                })
-                .describe(
-                  'Notification sent when someone replies to a document comment thread.'
-                ),
-              tag: zod.enum(['replied_to_document_comment_thread']),
-            })
-            .describe(
-              'Someone replied to a document comment thread the user participated in.'
-            ),
-          zod
-            .object({
-              content: zod
-                .object({
-                  commentId: zod
-                    .union([
-                      zod
-                        .number()
-                        .describe('Legacy `Comment.id` or `Thread.id`.'),
-                      zod
-                        .uuid()
-                        .describe(
-                          'Message or root id in the shared message store.'
-                        ),
-                    ])
-                    .describe(
-                      'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
-                    ),
-                  documentName: zod
-                    .string()
-                    .describe('The name of the document.'),
-                  fileType: zod
-                    .string()
-                    .nullish()
-                    .describe('The file type of the document.'),
-                  owner: zod.string().describe('The owner of the document.'),
-                  senderDisplayName: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'Public bot name when the author is an agent rather than a Macro user.'
-                    ),
-                  senderProfilePictureUrl: zod.string().nullish(),
-                  subType: zod
-                    .union([
-                      zod.null(),
-                      zod
-                        .union([
-                          zod.object({
-                            type: zod.enum(['task']),
-                          }),
-                          zod.object({
-                            type: zod.enum(['snippet']),
-                          }),
-                          zod.object({
-                            type: zod.enum(['skill']),
-                          }),
-                          zod.object({
-                            type: zod.enum(['initiative_description']),
-                          }),
-                        ])
-                        .describe(
-                          'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
-                        ),
-                    ])
-                    .optional(),
-                  text: zod.string().describe('the text of the comment'),
-                  threadId: zod
-                    .union([
-                      zod
-                        .number()
-                        .describe('Legacy `Comment.id` or `Thread.id`.'),
-                      zod
-                        .uuid()
-                        .describe(
-                          'Message or root id in the shared message store.'
-                        ),
-                    ])
-                    .describe(
-                      'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
-                    ),
-                })
-                .describe(
-                  'Notification sent when someone comments on a document the user owns.'
-                ),
-              tag: zod.enum(['commented_on_document']),
-            })
-            .describe('Someone commented on a document the user owns.'),
-          zod
-            .object({
-              content: zod
-                .object({
-                  accessLevel: zod
-                    .enum(['view', 'comment', 'edit'])
-                    .describe(
-                      'Permission level used by an access request, excluding ownership.'
-                    ),
-                  entityName: zod.string().describe("Shared item's name."),
-                  fileType: zod
-                    .string()
-                    .nullish()
-                    .describe('Document file type for routing.'),
-                  requestId: zod.uuid().describe('Stable request identity.'),
-                  revision: zod
-                    .number()
-                    .describe('Revision that generated this notification.'),
-                })
-                .describe('A person requested access to a shared entity.'),
-              tag: zod.enum(['entity_access_requested']),
-            })
-            .describe('Someone requested more access to a shared entity.'),
-          zod
-            .object({
-              content: zod
-                .object({
-                  accessLevel: zod
-                    .enum(['view', 'comment', 'edit'])
-                    .describe(
-                      'Permission level used by an access request, excluding ownership.'
-                    ),
-                  entityName: zod.string().describe("Shared item's name."),
-                  fileType: zod
-                    .string()
-                    .nullish()
-                    .describe('Document file type for routing.'),
-                  requestId: zod.uuid().describe('Stable request identity.'),
-                  revision: zod
-                    .number()
-                    .describe('Revision that generated this notification.'),
-                })
-                .describe('A person granted you access to a shared entity.'),
-              tag: zod.enum(['entity_access_granted']),
-            })
-            .describe('An owner granted requested access.'),
-          zod
-            .object({
-              content: zod
-                .object({
-                  messageId: zod
-                    .uuid()
-                    .describe('Canonical shared message UUID.'),
-                  owner: zod.string().describe('Authenticated project owner.'),
-                  projectName: zod
-                    .string()
-                    .describe('Name displayed in the project header.'),
-                  reason: zod
-                    .enum(['mention', 'reply', 'assignee', 'owner'])
-                    .describe(
-                      'Why a project discussion notification was delivered.'
-                    ),
-                  senderDisplayName: zod
-                    .string()
-                    .nullish()
-                    .describe('Public display name for a bot author.'),
-                  senderProfilePictureUrl: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'Optional avatar for push notification attachments.'
-                    ),
-                  text: zod.string().describe('Posted Markdown content.'),
-                  threadId: zod
-                    .uuid()
-                    .describe('Canonical discussion root UUID.'),
-                })
-                .describe(
-                  'Project discussion metadata. The notification entity identifies the initiative;\nmessage and thread UUIDs select the discussion inside that project.'
-                ),
-              tag: zod.enum(['initiative_discussion']),
-            })
-            .describe(
-              'Someone commented, replied, or mentioned the recipient on a project.'
-            ),
-          zod
-            .object({
-              content: zod
-                .object({
-                  messageId: zod
-                    .uuid()
-                    .describe('Canonical shared message UUID.'),
-                  reason: zod
-                    .enum(['mention', 'reply', 'owner'])
-                    .describe(
-                      'Why a CRM discussion notification was delivered.'
-                    ),
-                  recordName: zod
-                    .string()
-                    .describe('Company or contact display name.'),
-                  senderDisplayName: zod
-                    .string()
-                    .nullish()
-                    .describe('Public display name for a bot author.'),
-                  senderProfilePictureUrl: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'Optional avatar for push notification attachments.'
-                    ),
-                  text: zod.string().describe('Posted Markdown content.'),
-                  threadId: zod
-                    .uuid()
-                    .describe('Canonical discussion root UUID.'),
-                })
-                .describe(
-                  'CRM discussion metadata. The notification entity identifies the company or\ncontact; message and thread UUIDs select the discussion inside it.'
-                ),
-              tag: zod.enum(['crm_discussion']),
-            })
-            .describe(
-              'Someone commented, replied, or mentioned the recipient on a CRM company or contact.'
-            ),
-          zod
-            .object({
-              content: zod
-                .object({
-                  channelName: zod
-                    .string()
-                    .optional()
-                    .describe('The name of the channel'),
-                  invitedBy: zod
-                    .string()
-                    .describe('The user who sent the invitation'),
-                  isDirectMessage: zod
-                    .boolean()
-                    .optional()
-                    .describe(
-                      'Whether this is a direct message rather than a channel invitation.\nOlder notification payloads retain channel-invitation wording.'
-                    ),
-                  messageContent: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'Message content to show in the invite email, when the invite was triggered by a message.'
-                    ),
-                  senderProfilePictureUrl: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      "The sender's profile picture URL, if available."
-                    ),
-                })
-                .describe('Metadata for when a user is invited to a channel.'),
-              tag: zod.enum(['channel_invite']),
-            })
-            .describe('The user was invited to a channel.'),
-          zod
-            .object({
-              content: zod
-                .object({
-                  channelName: zod.string().optional(),
-                  channelType: zod.enum([
-                    'public',
-                    'private',
-                    'directMessage',
-                    'team',
-                  ]),
-                })
-                .describe('Common metadata for notifications on channels')
-                .and(
-                  zod.object({
-                    messageContent: zod
-                      .string()
-                      .optional()
-                      .describe('The content of the message'),
-                    messageId: zod.string().describe('The message id'),
-                    sender: zod
-                      .string()
-                      .nullish()
-                      .describe(
-                        'The user who sent the message, when sent by a user'
-                      ),
-                    senderDisplayName: zod
-                      .string()
-                      .nullish()
-                      .describe(
-                        'Display name for non-user senders such as bots'
-                      ),
-                    senderProfilePictureUrl: zod.string().nullish(),
-                  })
-                ),
-              tag: zod.enum(['channel_message_send']),
-            })
-            .describe('A user sent a message in a channel.'),
-          zod
-            .object({
-              content: zod
-                .object({
-                  channelName: zod.string().optional(),
-                  channelType: zod.enum([
-                    'public',
-                    'private',
-                    'directMessage',
-                    'team',
-                  ]),
-                })
-                .describe('Common metadata for notifications on channels')
-                .and(
-                  zod.object({
-                    messageContent: zod
-                      .string()
-                      .describe('The message content'),
-                    messageId: zod
-                      .string()
-                      .describe('The id of the new message'),
-                    senderDisplayName: zod
-                      .string()
-                      .nullish()
-                      .describe(
-                        'Display name for non-user senders such as bots'
-                      ),
-                    senderProfilePictureUrl: zod.string().nullish(),
+                    text: zod.string().describe('the text of the comment'),
                     threadId: zod
-                      .string()
-                      .describe('The id of the thread that has the reply'),
-                    threadParentSenderId: zod
-                      .string()
-                      .nullish()
+                      .union([
+                        zod
+                          .number()
+                          .describe('Legacy `Comment.id` or `Thread.id`.'),
+                        zod
+                          .uuid()
+                          .describe(
+                            'Message or root id in the shared message store.'
+                          ),
+                      ])
                       .describe(
-                        'The user who sent the root message of the thread'
-                      ),
-                    userId: zod
-                      .string()
-                      .nullish()
-                      .describe(
-                        'The sender id of the reply, when sent by a user'
+                        'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
                       ),
                   })
-                ),
-              tag: zod.enum(['channel_message_reply']),
-            })
-            .describe(
-              'Someone replied to a thread in a channel that the user is part of.'
-            ),
-          zod
-            .object({
-              content: zod
-                .object({
-                  channel_name: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'The name of the channel the call started in, when available.'
-                    ),
-                  sender_profile_picture_url: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'Profile picture URL of the user who started the call, when available.'
-                    ),
-                })
-                .describe(
-                  'Metadata for a notification that a call has started in a channel.\n\nMirrors the producer-side `CallStartedNotification` in the `call` crate:\nboth serialize the same wire shape (snake_case fields) under the same\n`call_started` [`Notification::TYPE_NAME`]. This type is the read-side\nmodel used by [`crate::NotifEvent`]; the producer keeps its own type\nbecause it additionally builds the incoming-call APNS\/VoIP push.\n\nRows persisted before the type name was normalized used the kebab-case\n`call-started`; the [`crate::NotifEvent::CallStarted`] variant carries a\n`#[serde(alias = \"call-started\")]` so those rows still deserialize.'
-                ),
-              tag: zod.enum(['call_started']),
-            })
-            .describe(
-              'A call has started in a channel the user is a member of.\n\nThe `call-started` alias keeps rows persisted before the type name\nwas normalized to snake_case (`call_started`) deserializable.'
-            ),
-          zod
-            .object({
-              content: zod.object({
-                sender: zod.string().nullish(),
-                snippet: zod.string(),
-                subject: zod.string(),
-                threadId: zod.string(),
-                toEmail: zod.string(),
-              }),
-              tag: zod.enum(['new_email']),
-            })
-            .describe('A new email has been sent to the user.'),
-          zod
-            .object({
-              content: zod
-                .object({
-                  emailAddress: zod
-                    .string()
-                    .describe(
-                      'The address of the inbox that needs to be reconnected.'
-                    ),
-                })
-                .describe(
-                  "Metadata for a notification that a linked inbox's grant has died and the\ninbox must be reconnected. Fanned out to the inbox owner and every delegate,\nsince any of them holding the Google grant can restore sync."
-                ),
-              tag: zod.enum(['inbox_reauth_required']),
-            })
-            .describe("A linked inbox's grant died and must be reconnected."),
-          zod
-            .object({
-              content: zod
-                .object({
-                  invitedBy: zod
-                    .string()
-                    .describe('The user who sent the invitation'),
-                  inviteePlan: zod
-                    .enum(['free', 'premium'])
-                    .optional()
-                    .describe('What a team invitee gets by joining.'),
-                  reminder: zod
-                    .boolean()
-                    .optional()
-                    .describe(
-                      'Whether this email reminds the invitee of an invite they have not answered.'
-                    ),
-                  role: zod
-                    .string()
-                    .nullish()
-                    .describe('Role\/permission level in the team'),
-                  senderProfilePictureUrl: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      "The sender's profile picture URL, if available."
-                    ),
-                  teamId: zod
-                    .uuid()
-                    .describe('The unique identifier of the team'),
-                  teamInviteId: zod
-                    .uuid()
-                    .describe('The unique identifier of the team invite'),
-                  teamName: zod
-                    .string()
-                    .describe('The name of the team being invited to'),
-                })
-                .describe('Metadata for when a user is invited to a team.'),
-              tag: zod.enum(['invite_to_team']),
-            })
-            .describe('A user was invited to a team.'),
-          zod
-            .object({
-              content: zod
-                .object({
-                  assignedBy: zod
-                    .string()
-                    .describe('The user who assigned the task'),
-                  senderProfilePictureUrl: zod.string().nullish(),
-                  subType: zod
-                    .union([
-                      zod.null(),
-                      zod
-                        .union([
-                          zod.object({
-                            type: zod.enum(['task']),
-                          }),
-                          zod.object({
-                            type: zod.enum(['snippet']),
-                          }),
-                          zod.object({
-                            type: zod.enum(['skill']),
-                          }),
-                          zod.object({
-                            type: zod.enum(['initiative_description']),
-                          }),
-                        ])
-                        .describe(
-                          'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
-                        ),
-                    ])
-                    .optional(),
-                  taskId: zod
-                    .string()
-                    .describe('The unique identifier of the task'),
-                  taskName: zod
-                    .string()
-                    .nullish()
-                    .describe('The name of the task (optional)'),
-                })
-                .describe('Metadata for when a user is assigned to a task'),
-              tag: zod.enum(['task_assigned']),
-            })
-            .describe('A user was assigned to a task.'),
-          zod
-            .object({
-              content: zod
-                .object({
-                  description: zod
-                    .string()
-                    .describe('What the user asked to be reminded about.'),
-                  reminderId: zod.uuid().describe('The reminder that fired.'),
-                  scheduledFor: zod.iso
-                    .datetime({})
-                    .nullish()
-                    .describe(
-                      "Which firing this is — the occurrence the reminder came due for.\n\nWhat distinguishes two firings of the same recurring reminder, which are\notherwise identical: same id, same description. The collapse key is\nbuilt from it, so without it Tuesday's alert would replace Monday's\nunread one on the lock screen.\n\nOptional because notifications written before recurring dispatch existed\nhave no such field, and they still have to read back."
-                    ),
-                })
-                .describe(
-                  'Metadata for a reminder the user set for themselves coming due.\n\nThere is no sender: a reminder is self-set, so the dispatcher sends it with\n`sender_id: None` (a recipient who is also the sender is filtered out of\ntheir own notification). Every formatter here must therefore work without\none.\n\nThe associated entity, when there is one, lives on the notification row\nrather than in here, and clients resolve its name from that — so the\ndispatcher does not have to look up a name across five entity types.'
-                ),
-              tag: zod.enum(['reminder']),
-            })
-            .describe('A reminder the user set for themselves came due.'),
-          zod
-            .object({
-              content: zod
-                .object({
-                  chatName: zod.string().describe("The chat's name."),
-                  messageId: zod
-                    .uuid()
-                    .describe(
-                      'Stable message id; retries use it as their notification id.'
-                    ),
-                  provider: zod
-                    .enum(['whatsapp'])
-                    .describe(
-                      'The messaging service an external chat lives in.'
-                    ),
-                })
-                .describe(
-                  'A live message in an independently shared external chat.'
-                ),
-              tag: zod.enum(['external_chat_message']),
-            })
-            .describe('A live message in a shared external chat.'),
-          zod
-            .object({
-              content: zod
-                .object({
-                  endsAt: zod.iso
-                    .datetime({})
-                    .nullish()
-                    .describe('Instance end, for timed events.'),
-                  eventId: zod
-                    .uuid()
-                    .describe(
-                      'The calendar event entity the alarm belongs to.'
-                    ),
-                  minutesBefore: zod
-                    .number()
-                    .describe(
-                      'Minutes before the start the alarm was configured to fire.'
-                    ),
-                  occurrenceKey: zod
-                    .string()
-                    .describe(
-                      'Stable occurrence key of the instance that is starting.'
-                    ),
-                  startDate: zod.iso
-                    .date()
-                    .nullish()
-                    .describe('Instance start date, for all-day events.'),
-                  startsAt: zod.iso
-                    .datetime({})
-                    .nullish()
-                    .describe('Instance start, for timed events.'),
-                  timeZone: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'IANA zone for rendering local clock times, when known.'
-                    ),
-                  title: zod
-                    .string()
-                    .describe('Event display title at dispatch time.'),
-                })
-                .describe(
-                  'A calendar event alarm came due. Like [`ReminderMetadata`], these are\nself-notifications: `sender_id` must stay `None` or the only recipient is\nfiltered out. Everything the alert renders rides in here so the\ndispatcher never has to resolve the event again at display time.'
-                ),
-              tag: zod.enum(['calendar_event_reminder']),
-            })
-            .describe('A calendar event alarm came due.'),
-          zod
-            .object({
-              content: zod.object({
-                messageId: zod.string(),
-                summary: zod.string(),
-              }),
-              tag: zod.enum(['ai_response']),
-            })
-            .describe('An AI assistant responded to a chat.'),
-          zod
-            .object({
-              content: zod
-                .object({
-                  displayName: zod
-                    .string()
-                    .describe(
-                      'A compact label suitable for display in the UI.'
-                    ),
-                  foreignEntityId: zod
-                    .uuid()
-                    .describe(
-                      'The source-specific internal foreign entity row id for this pull request.'
-                    ),
-                  githubKey: zod
-                    .string()
-                    .describe(
-                      'The external GitHub key, in `owner\/repo\/pull\/number` format.'
-                    ),
-                  number: zod
-                    .number()
-                    .min(
-                      getTypedNotificationByIdResponseNotificationMetadataContentNumberMin
-                    )
-                    .describe('The GitHub pull request number.'),
-                  owner: zod
-                    .string()
-                    .describe('The GitHub repository owner or organization.'),
-                  repo: zod.string().describe('The GitHub repository name.'),
-                  senderGithubAvatarUrl: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'The GitHub avatar URL for the sender, when available.'
-                    ),
-                  senderGithubLogin: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'The GitHub login for the sender, when available.'
-                    ),
-                  senderGithubUserId: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'The stable GitHub numeric user id for the sender, serialized as a string.'
-                    ),
-                  title: zod
-                    .string()
-                    .describe(
-                      'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
-                    ),
-                  url: zod
-                    .string()
-                    .describe('The public GitHub URL for the pull request.'),
-                })
-                .describe(
-                  'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
-                )
-                .and(
-                  zod.object({
-                    action: zod
-                      .enum(['opened', 'reopened', 'closed'])
+                  .describe(
+                    'Notification sent when a user is mentioned in a document comment.'
+                  ),
+                tag: zod.enum(['mentioned_in_document_comment']),
+              })
+              .describe('User was mentioned in a comment in a document'),
+            zod
+              .object({
+                content: zod
+                  .object({
+                    commentId: zod
+                      .union([
+                        zod
+                          .number()
+                          .describe('Legacy `Comment.id` or `Thread.id`.'),
+                        zod
+                          .uuid()
+                          .describe(
+                            'Message or root id in the shared message store.'
+                          ),
+                      ])
                       .describe(
-                        'The GitHub pull request webhook action that triggered the notification.'
+                        'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
                       ),
-                    baseBranch: zod
+                    documentName: zod
+                      .string()
+                      .describe('The name of the document.'),
+                    fileType: zod
+                      .string()
+                      .nullish()
+                      .describe('The file type of the document.'),
+                    owner: zod.string().describe('The owner of the document.'),
+                    senderDisplayName: zod
                       .string()
                       .nullish()
                       .describe(
-                        'The pull request base branch, when available.'
+                        'Public bot name when the author is an agent rather than a Macro user.'
                       ),
-                    headBranch: zod
-                      .string()
-                      .nullish()
-                      .describe(
-                        'The pull request head branch, when available.'
-                      ),
-                    mergedAt: zod.iso
-                      .datetime({})
-                      .nullish()
-                      .describe(
-                        'When the pull request was merged, when available.'
-                      ),
-                    previousStatus: zod
+                    senderProfilePictureUrl: zod.string().nullish(),
+                    subType: zod
                       .union([
                         zod.null(),
                         zod
-                          .enum(['open', 'closed', 'merged'])
+                          .union([
+                            zod.object({
+                              type: zod.enum(['task']),
+                            }),
+                            zod.object({
+                              type: zod.enum(['snippet']),
+                            }),
+                            zod.object({
+                              type: zod.enum(['skill']),
+                            }),
+                            zod.object({
+                              type: zod.enum(['initiative_description']),
+                            }),
+                          ])
                           .describe(
-                            'The normalized lifecycle status for a GitHub pull request notification.'
+                            'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
                           ),
                       ])
                       .optional(),
-                    status: zod
-                      .enum(['open', 'closed', 'merged'])
+                    text: zod.string().describe('the text of the comment'),
+                    threadId: zod
+                      .union([
+                        zod
+                          .number()
+                          .describe('Legacy `Comment.id` or `Thread.id`.'),
+                        zod
+                          .uuid()
+                          .describe(
+                            'Message or root id in the shared message store.'
+                          ),
+                      ])
                       .describe(
-                        'The normalized lifecycle status for a GitHub pull request notification.'
+                        'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
                       ),
                   })
-                )
-                .describe(
-                  'Metadata for a GitHub pull request lifecycle notification.'
-                ),
-              tag: zod.enum(['github_pr_status_changed']),
-            })
-            .describe(
-              'A GitHub pull request changed lifecycle state.\n\nThe `github_pr_event` alias keeps rows and queue messages persisted\nbefore the rename deserializable.'
-            ),
-          zod
-            .object({
-              content: zod
-                .object({
-                  displayName: zod
-                    .string()
-                    .describe(
-                      'A compact label suitable for display in the UI.'
-                    ),
-                  foreignEntityId: zod
-                    .uuid()
-                    .describe(
-                      'The source-specific internal foreign entity row id for this pull request.'
-                    ),
-                  githubKey: zod
-                    .string()
-                    .describe(
-                      'The external GitHub key, in `owner\/repo\/pull\/number` format.'
-                    ),
-                  number: zod
-                    .number()
-                    .min(
-                      getTypedNotificationByIdResponseNotificationMetadataContentNumberMinOne
-                    )
-                    .describe('The GitHub pull request number.'),
-                  owner: zod
-                    .string()
-                    .describe('The GitHub repository owner or organization.'),
-                  repo: zod.string().describe('The GitHub repository name.'),
-                  senderGithubAvatarUrl: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'The GitHub avatar URL for the sender, when available.'
-                    ),
-                  senderGithubLogin: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'The GitHub login for the sender, when available.'
-                    ),
-                  senderGithubUserId: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'The stable GitHub numeric user id for the sender, serialized as a string.'
-                    ),
-                  title: zod
-                    .string()
-                    .describe(
-                      'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
-                    ),
-                  url: zod
-                    .string()
-                    .describe('The public GitHub URL for the pull request.'),
-                })
-                .describe(
-                  'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
-                )
-                .and(
-                  zod.object({
-                    checkName: zod
-                      .string()
+                  .describe(
+                    'Notification sent when someone replies to a document comment thread.'
+                  ),
+                tag: zod.enum(['replied_to_document_comment_thread']),
+              })
+              .describe(
+                'Someone replied to a document comment thread the user participated in.'
+              ),
+            zod
+              .object({
+                content: zod
+                  .object({
+                    commentId: zod
+                      .union([
+                        zod
+                          .number()
+                          .describe('Legacy `Comment.id` or `Thread.id`.'),
+                        zod
+                          .uuid()
+                          .describe(
+                            'Message or root id in the shared message store.'
+                          ),
+                      ])
                       .describe(
-                        'The display name GitHub reported for the check run.'
+                        'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
                       ),
-                    checkRunGithubId: zod
+                    documentName: zod
+                      .string()
+                      .describe('The name of the document.'),
+                    fileType: zod
+                      .string()
+                      .nullish()
+                      .describe('The file type of the document.'),
+                    owner: zod.string().describe('The owner of the document.'),
+                    senderDisplayName: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Public bot name when the author is an agent rather than a Macro user.'
+                      ),
+                    senderProfilePictureUrl: zod.string().nullish(),
+                    subType: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .union([
+                            zod.object({
+                              type: zod.enum(['task']),
+                            }),
+                            zod.object({
+                              type: zod.enum(['snippet']),
+                            }),
+                            zod.object({
+                              type: zod.enum(['skill']),
+                            }),
+                            zod.object({
+                              type: zod.enum(['initiative_description']),
+                            }),
+                          ])
+                          .describe(
+                            'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                          ),
+                      ])
+                      .optional(),
+                    text: zod.string().describe('the text of the comment'),
+                    threadId: zod
+                      .union([
+                        zod
+                          .number()
+                          .describe('Legacy `Comment.id` or `Thread.id`.'),
+                        zod
+                          .uuid()
+                          .describe(
+                            'Message or root id in the shared message store.'
+                          ),
+                      ])
+                      .describe(
+                        'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                      ),
+                  })
+                  .describe(
+                    'Notification sent when someone comments on a document the user owns.'
+                  ),
+                tag: zod.enum(['commented_on_document']),
+              })
+              .describe('Someone commented on a document the user owns.'),
+            zod
+              .object({
+                content: zod
+                  .object({
+                    accessLevel: zod
+                      .enum(['view', 'comment', 'edit'])
+                      .describe(
+                        'Permission level used by an access request, excluding ownership.'
+                      ),
+                    entityName: zod.string().describe("Shared item's name."),
+                    fileType: zod
+                      .string()
+                      .nullish()
+                      .describe('Document file type for routing.'),
+                    requestId: zod.uuid().describe('Stable request identity.'),
+                    revision: zod
                       .number()
-                      .min(
-                        getTypedNotificationByIdResponseNotificationMetadataContentCheckRunGithubIdMin
-                      )
-                      .describe('The GitHub numeric id of the check run.'),
-                    checkStatus: zod
-                      .string()
-                      .describe('The raw GitHub check run status.'),
-                    checkUrl: zod
-                      .string()
-                      .describe('The public GitHub URL for the check run.'),
-                    completedAt: zod.iso
-                      .datetime({})
-                      .describe(
-                        'When GitHub marked the check run as complete.'
-                      ),
-                    conclusion: zod
-                      .string()
-                      .describe('The raw GitHub check run conclusion.'),
-                    state: zod
-                      .enum(['completed', 'failed'])
-                      .describe(
-                        'The normalized result state for a GitHub pull request check-run notification.'
-                      ),
+                      .describe('Revision that generated this notification.'),
                   })
-                )
-                .describe(
-                  'Metadata for a notification that a GitHub pull request check run completed.'
-                ),
-              tag: zod.enum(['github_pr_check_run']),
-            })
-            .describe('A GitHub pull request check run completed.'),
-          zod
-            .object({
-              content: zod
-                .object({
-                  displayName: zod
-                    .string()
-                    .describe(
-                      'A compact label suitable for display in the UI.'
-                    ),
-                  foreignEntityId: zod
-                    .uuid()
-                    .describe(
-                      'The source-specific internal foreign entity row id for this pull request.'
-                    ),
-                  githubKey: zod
-                    .string()
-                    .describe(
-                      'The external GitHub key, in `owner\/repo\/pull\/number` format.'
-                    ),
-                  number: zod
-                    .number()
-                    .min(
-                      getTypedNotificationByIdResponseNotificationMetadataContentNumberMinTwo
-                    )
-                    .describe('The GitHub pull request number.'),
-                  owner: zod
-                    .string()
-                    .describe('The GitHub repository owner or organization.'),
-                  repo: zod.string().describe('The GitHub repository name.'),
-                  senderGithubAvatarUrl: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'The GitHub avatar URL for the sender, when available.'
-                    ),
-                  senderGithubLogin: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'The GitHub login for the sender, when available.'
-                    ),
-                  senderGithubUserId: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'The stable GitHub numeric user id for the sender, serialized as a string.'
-                    ),
-                  title: zod
-                    .string()
-                    .describe(
-                      'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
-                    ),
-                  url: zod
-                    .string()
-                    .describe('The public GitHub URL for the pull request.'),
-                })
-                .describe(
-                  'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
-                )
-                .and(
-                  zod.object({
-                    requestedReviewerGithubLogin: zod
+                  .describe('A person requested access to a shared entity.'),
+                tag: zod.enum(['entity_access_requested']),
+              })
+              .describe('Someone requested more access to a shared entity.'),
+            zod
+              .object({
+                content: zod
+                  .object({
+                    accessLevel: zod
+                      .enum(['view', 'comment', 'edit'])
+                      .describe(
+                        'Permission level used by an access request, excluding ownership.'
+                      ),
+                    entityName: zod.string().describe("Shared item's name."),
+                    fileType: zod
                       .string()
                       .nullish()
-                      .describe(
-                        'The GitHub login of the requested reviewer, when available.'
-                      ),
-                    requestedReviewerGithubUserId: zod
-                      .string()
-                      .nullish()
-                      .describe(
-                        'The stable GitHub numeric user id of the requested reviewer, serialized as a string.'
-                      ),
-                  })
-                )
-                .describe(
-                  "Metadata for a notification that the user's review was requested on a GitHub pull request."
-                ),
-              tag: zod.enum(['github_review_requested']),
-            })
-            .describe(
-              "The user's review was requested on a GitHub pull request."
-            ),
-          zod
-            .object({
-              content: zod
-                .object({
-                  displayName: zod
-                    .string()
-                    .describe(
-                      'A compact label suitable for display in the UI.'
-                    ),
-                  foreignEntityId: zod
-                    .uuid()
-                    .describe(
-                      'The source-specific internal foreign entity row id for this pull request.'
-                    ),
-                  githubKey: zod
-                    .string()
-                    .describe(
-                      'The external GitHub key, in `owner\/repo\/pull\/number` format.'
-                    ),
-                  number: zod
-                    .number()
-                    .min(
-                      getTypedNotificationByIdResponseNotificationMetadataContentNumberMinThree
-                    )
-                    .describe('The GitHub pull request number.'),
-                  owner: zod
-                    .string()
-                    .describe('The GitHub repository owner or organization.'),
-                  repo: zod.string().describe('The GitHub repository name.'),
-                  senderGithubAvatarUrl: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'The GitHub avatar URL for the sender, when available.'
-                    ),
-                  senderGithubLogin: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'The GitHub login for the sender, when available.'
-                    ),
-                  senderGithubUserId: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'The stable GitHub numeric user id for the sender, serialized as a string.'
-                    ),
-                  title: zod
-                    .string()
-                    .describe(
-                      'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
-                    ),
-                  url: zod
-                    .string()
-                    .describe('The public GitHub URL for the pull request.'),
-                })
-                .describe(
-                  'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
-                )
-                .and(
-                  zod.object({
-                    commentGithubId: zod
+                      .describe('Document file type for routing.'),
+                    requestId: zod.uuid().describe('Stable request identity.'),
+                    revision: zod
                       .number()
-                      .min(
-                        getTypedNotificationByIdResponseNotificationMetadataContentCommentGithubIdMin
-                      )
-                      .nullish()
-                      .describe(
-                        'The GitHub numeric id of the comment, when available.'
-                      ),
-                    commentKind: zod
-                      .enum(['issue', 'review_comment'])
-                      .describe(
-                        'The kind of GitHub comment that triggered a [`GithubPrComment`] notification.'
-                      ),
-                    commentSnippet: zod
-                      .string()
-                      .describe('A truncated excerpt of the comment body.'),
-                    commentUrl: zod
-                      .string()
-                      .nullish()
-                      .describe(
-                        'The public GitHub URL for the comment, when available.'
-                      ),
+                      .describe('Revision that generated this notification.'),
                   })
-                )
-                .describe(
-                  'Metadata for a notification that a GitHub pull request was commented on.'
-                ),
-              tag: zod.enum(['github_pr_comment']),
-            })
-            .describe('A GitHub pull request was commented on.'),
-          zod
-            .object({
-              content: zod
-                .object({
-                  displayName: zod
-                    .string()
-                    .describe(
-                      'A compact label suitable for display in the UI.'
-                    ),
-                  foreignEntityId: zod
-                    .uuid()
-                    .describe(
-                      'The source-specific internal foreign entity row id for this pull request.'
-                    ),
-                  githubKey: zod
-                    .string()
-                    .describe(
-                      'The external GitHub key, in `owner\/repo\/pull\/number` format.'
-                    ),
-                  number: zod
-                    .number()
-                    .min(
-                      getTypedNotificationByIdResponseNotificationMetadataContentNumberMinFour
-                    )
-                    .describe('The GitHub pull request number.'),
-                  owner: zod
-                    .string()
-                    .describe('The GitHub repository owner or organization.'),
-                  repo: zod.string().describe('The GitHub repository name.'),
-                  senderGithubAvatarUrl: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'The GitHub avatar URL for the sender, when available.'
-                    ),
-                  senderGithubLogin: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'The GitHub login for the sender, when available.'
-                    ),
-                  senderGithubUserId: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'The stable GitHub numeric user id for the sender, serialized as a string.'
-                    ),
-                  title: zod
-                    .string()
-                    .describe(
-                      'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
-                    ),
-                  url: zod
-                    .string()
-                    .describe('The public GitHub URL for the pull request.'),
-                })
-                .describe(
-                  'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
-                )
-                .and(
-                  zod.object({
-                    commentGithubId: zod
-                      .number()
-                      .min(
-                        getTypedNotificationByIdResponseNotificationMetadataContentCommentGithubIdMinOne
-                      )
-                      .nullish()
-                      .describe(
-                        'The GitHub numeric id of the comment or review containing the mention, when available.'
-                      ),
-                    commentUrl: zod
-                      .string()
-                      .nullish()
-                      .describe(
-                        'The public GitHub URL for the text containing the mention, when available.'
-                      ),
-                    location: zod
-                      .enum(['pr_body', 'comment', 'review', 'review_comment'])
-                      .describe(
-                        'Where in a GitHub pull request the user was mentioned.'
-                      ),
-                    textSnippet: zod
-                      .string()
-                      .describe(
-                        'A truncated excerpt of the text containing the mention.'
-                      ),
-                  })
-                )
-                .describe(
-                  'Metadata for a notification that the user was mentioned on a GitHub pull request.'
-                ),
-              tag: zod.enum(['github_pr_mention']),
-            })
-            .describe('The user was mentioned on a GitHub pull request.'),
-          zod
-            .object({
-              content: zod
-                .object({
-                  displayName: zod
-                    .string()
-                    .describe(
-                      'A compact label suitable for display in the UI.'
-                    ),
-                  foreignEntityId: zod
-                    .uuid()
-                    .describe(
-                      'The source-specific internal foreign entity row id for this pull request.'
-                    ),
-                  githubKey: zod
-                    .string()
-                    .describe(
-                      'The external GitHub key, in `owner\/repo\/pull\/number` format.'
-                    ),
-                  number: zod
-                    .number()
-                    .min(
-                      getTypedNotificationByIdResponseNotificationMetadataContentNumberMinFive
-                    )
-                    .describe('The GitHub pull request number.'),
-                  owner: zod
-                    .string()
-                    .describe('The GitHub repository owner or organization.'),
-                  repo: zod.string().describe('The GitHub repository name.'),
-                  senderGithubAvatarUrl: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'The GitHub avatar URL for the sender, when available.'
-                    ),
-                  senderGithubLogin: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'The GitHub login for the sender, when available.'
-                    ),
-                  senderGithubUserId: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'The stable GitHub numeric user id for the sender, serialized as a string.'
-                    ),
-                  title: zod
-                    .string()
-                    .describe(
-                      'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
-                    ),
-                  url: zod
-                    .string()
-                    .describe('The public GitHub URL for the pull request.'),
-                })
-                .describe(
-                  'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
-                )
-                .and(
-                  zod.object({
-                    reviewGithubId: zod
-                      .number()
-                      .min(
-                        getTypedNotificationByIdResponseNotificationMetadataContentReviewGithubIdMin
-                      )
-                      .nullish()
-                      .describe(
-                        'The GitHub numeric id of the review, when available.'
-                      ),
-                    reviewSnippet: zod
-                      .string()
-                      .nullish()
-                      .describe(
-                        'A truncated excerpt of the review body, when any was written.'
-                      ),
-                    reviewUrl: zod
-                      .string()
-                      .nullish()
-                      .describe(
-                        'The public GitHub URL for the review, when available.'
-                      ),
-                    state: zod
-                      .enum(['approved', 'changes_requested', 'commented'])
-                      .describe(
-                        'The state of a submitted GitHub pull request review.'
-                      ),
-                  })
-                )
-                .describe(
-                  "Metadata for a notification that a review was submitted on the user's GitHub pull request."
-                ),
-              tag: zod.enum(['github_pr_review']),
-            })
-            .describe(
-              "A review was submitted on the user's GitHub pull request."
-            ),
-          zod
-            .object({
-              content: zod
-                .object({
-                  announcementMessageId: zod
-                    .uuid()
-                    .nullish()
-                    .describe(
-                      'The magic-chip message for the turn in question, when one was posted.'
-                    ),
-                  botId: zod
-                    .string()
-                    .describe(
-                      'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
-                    ),
-                  botName: zod
-                    .string()
-                    .describe(
-                      "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
-                    ),
-                  channelId: zod
-                    .uuid()
-                    .nullish()
-                    .describe(
-                      'The channel the session was opened from, when it was opened from a\nchannel thread.'
-                    ),
-                  parent: zod
-                    .union([
-                      zod.null(),
-                      zod
-                        .object({
-                          id: zod.string().describe('The parent entity id.'),
-                          type: zod
-                            .string()
-                            .describe(
-                              '`channel`, `document`, or `initiative`.'
-                            ),
-                        })
-                        .describe(
-                          "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel, document,\nor initiative. Spelled like the message API's parent for client routing."
-                        ),
-                    ])
-                    .optional(),
-                  sessionId: zod
-                    .uuid()
-                    .describe('The session; what a click opens.'),
-                  sessionName: zod
-                    .string()
-                    .describe("The session's name at the time of the event."),
-                  threadId: zod
-                    .uuid()
-                    .nullish()
-                    .describe(
-                      'The thread the session was opened from, when it was.'
-                    ),
-                })
-                .describe(
-                  'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
-                )
-                .and(
-                  zod.object({
-                    actor: zod
-                      .string()
-                      .nullish()
-                      .describe(
-                        "Who prompted the turn, absent when a bot acted on nobody's behalf."
-                      ),
-                    excerpt: zod
-                      .string()
-                      .nullish()
-                      .describe(
-                        "The agent's last prose in the turn, whole; `None` when it wrote none."
-                      ),
-                    stopReason: zod
-                      .string()
-                      .describe('The ACP stop reason, or `error`.'),
-                    turn: zod
-                      .number()
-                      .min(
-                        getTypedNotificationByIdResponseNotificationMetadataContentTurnMin
-                      )
-                      .describe('The turn that ended.'),
-                  })
-                )
-                .describe(
-                  'An agent finished a turn with nothing queued behind it.'
-                ),
-              tag: zod.enum(['agent_session_settled']),
-            })
-            .describe(
-              'An agent finished a turn with nothing queued behind it.'
-            ),
-          zod
-            .object({
-              content: zod
-                .object({
-                  announcementMessageId: zod
-                    .uuid()
-                    .nullish()
-                    .describe(
-                      'The magic-chip message for the turn in question, when one was posted.'
-                    ),
-                  botId: zod
-                    .string()
-                    .describe(
-                      'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
-                    ),
-                  botName: zod
-                    .string()
-                    .describe(
-                      "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
-                    ),
-                  channelId: zod
-                    .uuid()
-                    .nullish()
-                    .describe(
-                      'The channel the session was opened from, when it was opened from a\nchannel thread.'
-                    ),
-                  parent: zod
-                    .union([
-                      zod.null(),
-                      zod
-                        .object({
-                          id: zod.string().describe('The parent entity id.'),
-                          type: zod
-                            .string()
-                            .describe(
-                              '`channel`, `document`, or `initiative`.'
-                            ),
-                        })
-                        .describe(
-                          "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel, document,\nor initiative. Spelled like the message API's parent for client routing."
-                        ),
-                    ])
-                    .optional(),
-                  sessionId: zod
-                    .uuid()
-                    .describe('The session; what a click opens.'),
-                  sessionName: zod
-                    .string()
-                    .describe("The session's name at the time of the event."),
-                  threadId: zod
-                    .uuid()
-                    .nullish()
-                    .describe(
-                      'The thread the session was opened from, when it was.'
-                    ),
-                })
-                .describe(
-                  'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
-                )
-                .and(
-                  zod.object({
-                    question: zod
-                      .string()
-                      .describe('The question, as the agent phrased it.'),
-                    turn: zod
-                      .number()
-                      .min(
-                        getTypedNotificationByIdResponseNotificationMetadataContentTurnMinOne
-                      )
-                      .describe('The turn asking.'),
-                  })
-                )
-                .describe(
-                  "An agent is blocked on a question only the session's owner can answer."
-                ),
-              tag: zod.enum(['agent_session_waiting_for_input']),
-            })
-            .describe(
-              "An agent is blocked on a question for the session's owner."
-            ),
-          zod
-            .object({
-              content: zod
-                .object({
-                  announcementMessageId: zod
-                    .uuid()
-                    .nullish()
-                    .describe(
-                      'The magic-chip message for the turn in question, when one was posted.'
-                    ),
-                  botId: zod
-                    .string()
-                    .describe(
-                      'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
-                    ),
-                  botName: zod
-                    .string()
-                    .describe(
-                      "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
-                    ),
-                  channelId: zod
-                    .uuid()
-                    .nullish()
-                    .describe(
-                      'The channel the session was opened from, when it was opened from a\nchannel thread.'
-                    ),
-                  parent: zod
-                    .union([
-                      zod.null(),
-                      zod
-                        .object({
-                          id: zod.string().describe('The parent entity id.'),
-                          type: zod
-                            .string()
-                            .describe(
-                              '`channel`, `document`, or `initiative`.'
-                            ),
-                        })
-                        .describe(
-                          "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel, document,\nor initiative. Spelled like the message API's parent for client routing."
-                        ),
-                    ])
-                    .optional(),
-                  sessionId: zod
-                    .uuid()
-                    .describe('The session; what a click opens.'),
-                  sessionName: zod
-                    .string()
-                    .describe("The session's name at the time of the event."),
-                  threadId: zod
-                    .uuid()
-                    .nullish()
-                    .describe(
-                      'The thread the session was opened from, when it was.'
-                    ),
-                })
-                .describe(
-                  'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
-                )
-                .and(
-                  zod.object({
-                    actionId: zod
-                      .uuid()
-                      .describe('The action carrying the prompt.'),
-                    mentionedBy: zod
-                      .string()
-                      .nullish()
-                      .describe(
-                        "Who wrote the prompt, absent when a bot acted on nobody's behalf."
-                      ),
-                  })
-                )
-                .describe(
-                  'Someone named the recipient in a prompt to an agent session.'
-                ),
-              tag: zod.enum(['agent_session_mentioned']),
-            })
-            .describe('The user was named in a prompt to an agent session.'),
-          zod
-            .object({
-              content: zod
-                .object({
-                  channelName: zod.string().optional(),
-                  channelType: zod.enum([
-                    'public',
-                    'private',
-                    'directMessage',
-                    'team',
-                  ]),
-                })
-                .describe('Common metadata for notifications on channels')
-                .and(
-                  zod.object({
-                    emoji: zod
-                      .string()
-                      .describe('The emoji added by the reactor.'),
-                    messageContent: zod
-                      .string()
-                      .describe('The reacted-to message content.'),
+                  .describe('A person granted you access to a shared entity.'),
+                tag: zod.enum(['entity_access_granted']),
+              })
+              .describe('An owner granted requested access.'),
+            zod
+              .object({
+                content: zod
+                  .object({
                     messageId: zod
+                      .uuid()
+                      .describe('Canonical shared message UUID.'),
+                    owner: zod
                       .string()
-                      .describe('The reacted-to message id.'),
+                      .describe('Authenticated project owner.'),
+                    projectName: zod
+                      .string()
+                      .describe('Name displayed in the project header.'),
+                    reason: zod
+                      .enum(['mention', 'reply', 'assignee', 'owner'])
+                      .describe(
+                        'Why a project discussion notification was delivered.'
+                      ),
+                    senderDisplayName: zod
+                      .string()
+                      .nullish()
+                      .describe('Public display name for a bot author.'),
                     senderProfilePictureUrl: zod
                       .string()
                       .nullish()
-                      .describe('Optional reactor profile picture URL.'),
+                      .describe(
+                        'Optional avatar for push notification attachments.'
+                      ),
+                    text: zod.string().describe('Posted Markdown content.'),
                     threadId: zod
+                      .uuid()
+                      .describe('Canonical discussion root UUID.'),
+                  })
+                  .describe(
+                    'Project discussion metadata. The notification entity identifies the initiative;\nmessage and thread UUIDs select the discussion inside that project.'
+                  ),
+                tag: zod.enum(['initiative_discussion']),
+              })
+              .describe(
+                'Someone commented, replied, or mentioned the recipient on a project.'
+              ),
+            zod
+              .object({
+                content: zod
+                  .object({
+                    messageId: zod
+                      .uuid()
+                      .describe('Canonical shared message UUID.'),
+                    reason: zod
+                      .enum(['mention', 'reply', 'owner'])
+                      .describe(
+                        'Why a CRM discussion notification was delivered.'
+                      ),
+                    recordName: zod
+                      .string()
+                      .describe('Company or contact display name.'),
+                    senderDisplayName: zod
+                      .string()
+                      .nullish()
+                      .describe('Public display name for a bot author.'),
+                    senderProfilePictureUrl: zod
                       .string()
                       .nullish()
                       .describe(
-                        'The thread root id when the reacted-to message is a reply.'
+                        'Optional avatar for push notification attachments.'
+                      ),
+                    text: zod.string().describe('Posted Markdown content.'),
+                    threadId: zod
+                      .uuid()
+                      .describe('Canonical discussion root UUID.'),
+                  })
+                  .describe(
+                    'CRM discussion metadata. The notification entity identifies the company or\ncontact; message and thread UUIDs select the discussion inside it.'
+                  ),
+                tag: zod.enum(['crm_discussion']),
+              })
+              .describe(
+                'Someone commented, replied, or mentioned the recipient on a CRM company or contact.'
+              ),
+            zod
+              .object({
+                content: zod
+                  .object({
+                    channelName: zod
+                      .string()
+                      .optional()
+                      .describe('The name of the channel'),
+                    invitedBy: zod
+                      .string()
+                      .describe('The user who sent the invitation'),
+                    isDirectMessage: zod
+                      .boolean()
+                      .optional()
+                      .describe(
+                        'Whether this is a direct message rather than a channel invitation.\nOlder notification payloads retain channel-invitation wording.'
+                      ),
+                    messageContent: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Message content to show in the invite email, when the invite was triggered by a message.'
+                      ),
+                    senderProfilePictureUrl: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The sender's profile picture URL, if available."
                       ),
                   })
-                )
-                .describe(
-                  "Metadata for a reaction added to one of the recipient's channel messages."
-                ),
-              tag: zod.enum(['channel_message_reaction']),
-            })
-            .describe("Someone reacted to one of the user's channel messages."),
-          zod
-            .object({
-              content: zod
-                .object({
-                  eventId: zod
-                    .uuid()
-                    .describe(
-                      'The shared calendar event entity the request is for.'
-                    ),
-                  requestId: zod
-                    .uuid()
-                    .describe(
-                      "Stable request identity, answered from the event's details."
-                    ),
-                  title: zod
-                    .string()
-                    .describe('Event title when the request was made.'),
-                })
-                .describe(
-                  'A channel member who sees a calendar event only through a channel share\nasked the person who shared it to add them as a guest. Sent to the sharer,\nwith the requester as sender.'
-                ),
-              tag: zod.enum(['calendar_event_join_request']),
-            })
-            .describe(
-              'A channel member asked to be added as a guest of an event the\nuser shared with the channel.'
-            ),
-        ])
-        .describe(
-          'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
-        ),
-      owner_id: zod.string().describe('The user who owns this notification.'),
-      sender_id: zod
-        .string()
-        .nullish()
-        .describe('The user who triggered the notification.'),
-      sent: zod.boolean().describe('Whether the notification has been sent.'),
-      state: zod
-        .enum(['unseen', 'seen', 'done'])
-        .describe(
-          "The mutually exclusive lifecycle states of a user's notification."
-        ),
-      updated_at: zod.iso
-        .datetime({})
-        .describe('When the notification was last updated.'),
-      viewed_at: zod.iso
-        .datetime({})
-        .nullish()
-        .describe('When the notification was viewed\/seen.'),
-    })
-  );
+                  .describe(
+                    'Metadata for when a user is invited to a channel.'
+                  ),
+                tag: zod.enum(['channel_invite']),
+              })
+              .describe('The user was invited to a channel.'),
+            zod
+              .object({
+                content: zod
+                  .object({
+                    channelName: zod.string().optional(),
+                    channelType: zod.enum([
+                      'public',
+                      'private',
+                      'directMessage',
+                      'team',
+                    ]),
+                  })
+                  .describe('Common metadata for notifications on channels')
+                  .and(
+                    zod.object({
+                      messageContent: zod
+                        .string()
+                        .optional()
+                        .describe('The content of the message'),
+                      messageId: zod.string().describe('The message id'),
+                      sender: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'The user who sent the message, when sent by a user'
+                        ),
+                      senderDisplayName: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'Display name for non-user senders such as bots'
+                        ),
+                      senderProfilePictureUrl: zod.string().nullish(),
+                    })
+                  ),
+                tag: zod.enum(['channel_message_send']),
+              })
+              .describe('A user sent a message in a channel.'),
+            zod
+              .object({
+                content: zod
+                  .object({
+                    channelName: zod.string().optional(),
+                    channelType: zod.enum([
+                      'public',
+                      'private',
+                      'directMessage',
+                      'team',
+                    ]),
+                  })
+                  .describe('Common metadata for notifications on channels')
+                  .and(
+                    zod.object({
+                      messageContent: zod
+                        .string()
+                        .describe('The message content'),
+                      messageId: zod
+                        .string()
+                        .describe('The id of the new message'),
+                      senderDisplayName: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'Display name for non-user senders such as bots'
+                        ),
+                      senderProfilePictureUrl: zod.string().nullish(),
+                      threadId: zod
+                        .string()
+                        .describe('The id of the thread that has the reply'),
+                      threadParentSenderId: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'The user who sent the root message of the thread'
+                        ),
+                      userId: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'The sender id of the reply, when sent by a user'
+                        ),
+                    })
+                  ),
+                tag: zod.enum(['channel_message_reply']),
+              })
+              .describe(
+                'Someone replied to a thread in a channel that the user is part of.'
+              ),
+            zod
+              .object({
+                content: zod
+                  .object({
+                    channel_name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The name of the channel the call started in, when available.'
+                      ),
+                    sender_profile_picture_url: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Profile picture URL of the user who started the call, when available.'
+                      ),
+                  })
+                  .describe(
+                    'Metadata for a notification that a call has started in a channel.\n\nMirrors the producer-side `CallStartedNotification` in the `call` crate:\nboth serialize the same wire shape (snake_case fields) under the same\n`call_started` [`Notification::TYPE_NAME`]. This type is the read-side\nmodel used by [`crate::NotifEvent`]; the producer keeps its own type\nbecause it additionally builds the incoming-call APNS\/VoIP push.\n\nRows persisted before the type name was normalized used the kebab-case\n`call-started`; the [`crate::NotifEvent::CallStarted`] variant carries a\n`#[serde(alias = \"call-started\")]` so those rows still deserialize.'
+                  ),
+                tag: zod.enum(['call_started']),
+              })
+              .describe(
+                'A call has started in a channel the user is a member of.\n\nThe `call-started` alias keeps rows persisted before the type name\nwas normalized to snake_case (`call_started`) deserializable.'
+              ),
+            zod
+              .object({
+                content: zod.object({
+                  sender: zod.string().nullish(),
+                  snippet: zod.string(),
+                  subject: zod.string(),
+                  threadId: zod.string(),
+                  toEmail: zod.string(),
+                }),
+                tag: zod.enum(['new_email']),
+              })
+              .describe('A new email has been sent to the user.'),
+            zod
+              .object({
+                content: zod
+                  .object({
+                    emailAddress: zod
+                      .string()
+                      .describe(
+                        'The address of the inbox that needs to be reconnected.'
+                      ),
+                  })
+                  .describe(
+                    "Metadata for a notification that a linked inbox's grant has died and the\ninbox must be reconnected. Fanned out to the inbox owner and every delegate,\nsince any of them holding the Google grant can restore sync."
+                  ),
+                tag: zod.enum(['inbox_reauth_required']),
+              })
+              .describe("A linked inbox's grant died and must be reconnected."),
+            zod
+              .object({
+                content: zod
+                  .object({
+                    invitedBy: zod
+                      .string()
+                      .describe('The user who sent the invitation'),
+                    inviteePlan: zod
+                      .enum(['free', 'premium'])
+                      .optional()
+                      .describe('What a team invitee gets by joining.'),
+                    reminder: zod
+                      .boolean()
+                      .optional()
+                      .describe(
+                        'Whether this email reminds the invitee of an invite they have not answered.'
+                      ),
+                    role: zod
+                      .string()
+                      .nullish()
+                      .describe('Role\/permission level in the team'),
+                    senderProfilePictureUrl: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The sender's profile picture URL, if available."
+                      ),
+                    teamId: zod
+                      .uuid()
+                      .describe('The unique identifier of the team'),
+                    teamInviteId: zod
+                      .uuid()
+                      .describe('The unique identifier of the team invite'),
+                    teamName: zod
+                      .string()
+                      .describe('The name of the team being invited to'),
+                  })
+                  .describe('Metadata for when a user is invited to a team.'),
+                tag: zod.enum(['invite_to_team']),
+              })
+              .describe('A user was invited to a team.'),
+            zod
+              .object({
+                content: zod
+                  .object({
+                    assignedBy: zod
+                      .string()
+                      .describe('The user who assigned the task'),
+                    senderProfilePictureUrl: zod.string().nullish(),
+                    subType: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .union([
+                            zod.object({
+                              type: zod.enum(['task']),
+                            }),
+                            zod.object({
+                              type: zod.enum(['snippet']),
+                            }),
+                            zod.object({
+                              type: zod.enum(['skill']),
+                            }),
+                            zod.object({
+                              type: zod.enum(['initiative_description']),
+                            }),
+                          ])
+                          .describe(
+                            'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                          ),
+                      ])
+                      .optional(),
+                    taskId: zod
+                      .string()
+                      .describe('The unique identifier of the task'),
+                    taskName: zod
+                      .string()
+                      .nullish()
+                      .describe('The name of the task (optional)'),
+                  })
+                  .describe('Metadata for when a user is assigned to a task'),
+                tag: zod.enum(['task_assigned']),
+              })
+              .describe('A user was assigned to a task.'),
+            zod
+              .object({
+                content: zod
+                  .object({
+                    description: zod
+                      .string()
+                      .describe('What the user asked to be reminded about.'),
+                    reminderId: zod.uuid().describe('The reminder that fired.'),
+                    scheduledFor: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        "Which firing this is — the occurrence the reminder came due for.\n\nWhat distinguishes two firings of the same recurring reminder, which are\notherwise identical: same id, same description. The collapse key is\nbuilt from it, so without it Tuesday's alert would replace Monday's\nunread one on the lock screen.\n\nOptional because notifications written before recurring dispatch existed\nhave no such field, and they still have to read back."
+                      ),
+                  })
+                  .describe(
+                    'Metadata for a reminder the user set for themselves coming due.\n\nThere is no sender: a reminder is self-set, so the dispatcher sends it with\n`sender_id: None` (a recipient who is also the sender is filtered out of\ntheir own notification). Every formatter here must therefore work without\none.\n\nThe associated entity, when there is one, lives on the notification row\nrather than in here, and clients resolve its name from that — so the\ndispatcher does not have to look up a name across five entity types.'
+                  ),
+                tag: zod.enum(['reminder']),
+              })
+              .describe('A reminder the user set for themselves came due.'),
+            zod
+              .object({
+                content: zod
+                  .object({
+                    chatName: zod.string().describe("The chat's name."),
+                    messageId: zod
+                      .uuid()
+                      .describe(
+                        'Stable message id; retries use it as their notification id.'
+                      ),
+                    provider: zod
+                      .enum(['whatsapp'])
+                      .describe(
+                        'The messaging service an external chat lives in.'
+                      ),
+                  })
+                  .describe(
+                    'A live message in an independently shared external chat.'
+                  ),
+                tag: zod.enum(['external_chat_message']),
+              })
+              .describe('A live message in a shared external chat.'),
+            zod
+              .object({
+                content: zod
+                  .object({
+                    endsAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('Instance end, for timed events.'),
+                    eventId: zod
+                      .uuid()
+                      .describe(
+                        'The calendar event entity the alarm belongs to.'
+                      ),
+                    minutesBefore: zod
+                      .number()
+                      .describe(
+                        'Minutes before the start the alarm was configured to fire.'
+                      ),
+                    occurrenceKey: zod
+                      .string()
+                      .describe(
+                        'Stable occurrence key of the instance that is starting.'
+                      ),
+                    startDate: zod.iso
+                      .date()
+                      .nullish()
+                      .describe('Instance start date, for all-day events.'),
+                    startsAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('Instance start, for timed events.'),
+                    timeZone: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'IANA zone for rendering local clock times, when known.'
+                      ),
+                    title: zod
+                      .string()
+                      .describe('Event display title at dispatch time.'),
+                  })
+                  .describe(
+                    'A calendar event alarm came due. Like [`ReminderMetadata`], these are\nself-notifications: `sender_id` must stay `None` or the only recipient is\nfiltered out. Everything the alert renders rides in here so the\ndispatcher never has to resolve the event again at display time.'
+                  ),
+                tag: zod.enum(['calendar_event_reminder']),
+              })
+              .describe('A calendar event alarm came due.'),
+            zod
+              .object({
+                content: zod.object({
+                  messageId: zod.string(),
+                  summary: zod.string(),
+                }),
+                tag: zod.enum(['ai_response']),
+              })
+              .describe('An AI assistant responded to a chat.'),
+            zod
+              .object({
+                content: zod
+                  .object({
+                    displayName: zod
+                      .string()
+                      .describe(
+                        'A compact label suitable for display in the UI.'
+                      ),
+                    foreignEntityId: zod
+                      .uuid()
+                      .describe(
+                        'The source-specific internal foreign entity row id for this pull request.'
+                      ),
+                    githubKey: zod
+                      .string()
+                      .describe(
+                        'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                      ),
+                    number: zod
+                      .number()
+                      .min(
+                        getTypedNotificationByIdResponseNotificationMetadataContentNumberMin
+                      )
+                      .describe('The GitHub pull request number.'),
+                    owner: zod
+                      .string()
+                      .describe('The GitHub repository owner or organization.'),
+                    repo: zod.string().describe('The GitHub repository name.'),
+                    senderGithubAvatarUrl: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The GitHub avatar URL for the sender, when available.'
+                      ),
+                    senderGithubLogin: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The GitHub login for the sender, when available.'
+                      ),
+                    senderGithubUserId: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The stable GitHub numeric user id for the sender, serialized as a string.'
+                      ),
+                    title: zod
+                      .string()
+                      .describe(
+                        'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                      ),
+                    url: zod
+                      .string()
+                      .describe('The public GitHub URL for the pull request.'),
+                  })
+                  .describe(
+                    'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                  )
+                  .and(
+                    zod.object({
+                      action: zod
+                        .enum(['opened', 'reopened', 'closed'])
+                        .describe(
+                          'The GitHub pull request webhook action that triggered the notification.'
+                        ),
+                      baseBranch: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'The pull request base branch, when available.'
+                        ),
+                      headBranch: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'The pull request head branch, when available.'
+                        ),
+                      mergedAt: zod.iso
+                        .datetime({})
+                        .nullish()
+                        .describe(
+                          'When the pull request was merged, when available.'
+                        ),
+                      previousStatus: zod
+                        .union([
+                          zod.null(),
+                          zod
+                            .enum(['open', 'closed', 'merged'])
+                            .describe(
+                              'The normalized lifecycle status for a GitHub pull request notification.'
+                            ),
+                        ])
+                        .optional(),
+                      status: zod
+                        .enum(['open', 'closed', 'merged'])
+                        .describe(
+                          'The normalized lifecycle status for a GitHub pull request notification.'
+                        ),
+                    })
+                  )
+                  .describe(
+                    'Metadata for a GitHub pull request lifecycle notification.'
+                  ),
+                tag: zod.enum(['github_pr_status_changed']),
+              })
+              .describe(
+                'A GitHub pull request changed lifecycle state.\n\nThe `github_pr_event` alias keeps rows and queue messages persisted\nbefore the rename deserializable.'
+              ),
+            zod
+              .object({
+                content: zod
+                  .object({
+                    displayName: zod
+                      .string()
+                      .describe(
+                        'A compact label suitable for display in the UI.'
+                      ),
+                    foreignEntityId: zod
+                      .uuid()
+                      .describe(
+                        'The source-specific internal foreign entity row id for this pull request.'
+                      ),
+                    githubKey: zod
+                      .string()
+                      .describe(
+                        'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                      ),
+                    number: zod
+                      .number()
+                      .min(
+                        getTypedNotificationByIdResponseNotificationMetadataContentNumberMinOne
+                      )
+                      .describe('The GitHub pull request number.'),
+                    owner: zod
+                      .string()
+                      .describe('The GitHub repository owner or organization.'),
+                    repo: zod.string().describe('The GitHub repository name.'),
+                    senderGithubAvatarUrl: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The GitHub avatar URL for the sender, when available.'
+                      ),
+                    senderGithubLogin: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The GitHub login for the sender, when available.'
+                      ),
+                    senderGithubUserId: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The stable GitHub numeric user id for the sender, serialized as a string.'
+                      ),
+                    title: zod
+                      .string()
+                      .describe(
+                        'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                      ),
+                    url: zod
+                      .string()
+                      .describe('The public GitHub URL for the pull request.'),
+                  })
+                  .describe(
+                    'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                  )
+                  .and(
+                    zod.object({
+                      checkName: zod
+                        .string()
+                        .describe(
+                          'The display name GitHub reported for the check run.'
+                        ),
+                      checkRunGithubId: zod
+                        .number()
+                        .min(
+                          getTypedNotificationByIdResponseNotificationMetadataContentCheckRunGithubIdMin
+                        )
+                        .describe('The GitHub numeric id of the check run.'),
+                      checkStatus: zod
+                        .string()
+                        .describe('The raw GitHub check run status.'),
+                      checkUrl: zod
+                        .string()
+                        .describe('The public GitHub URL for the check run.'),
+                      completedAt: zod.iso
+                        .datetime({})
+                        .describe(
+                          'When GitHub marked the check run as complete.'
+                        ),
+                      conclusion: zod
+                        .string()
+                        .describe('The raw GitHub check run conclusion.'),
+                      state: zod
+                        .enum(['completed', 'failed'])
+                        .describe(
+                          'The normalized result state for a GitHub pull request check-run notification.'
+                        ),
+                    })
+                  )
+                  .describe(
+                    'Metadata for a notification that a GitHub pull request check run completed.'
+                  ),
+                tag: zod.enum(['github_pr_check_run']),
+              })
+              .describe('A GitHub pull request check run completed.'),
+            zod
+              .object({
+                content: zod
+                  .object({
+                    displayName: zod
+                      .string()
+                      .describe(
+                        'A compact label suitable for display in the UI.'
+                      ),
+                    foreignEntityId: zod
+                      .uuid()
+                      .describe(
+                        'The source-specific internal foreign entity row id for this pull request.'
+                      ),
+                    githubKey: zod
+                      .string()
+                      .describe(
+                        'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                      ),
+                    number: zod
+                      .number()
+                      .min(
+                        getTypedNotificationByIdResponseNotificationMetadataContentNumberMinTwo
+                      )
+                      .describe('The GitHub pull request number.'),
+                    owner: zod
+                      .string()
+                      .describe('The GitHub repository owner or organization.'),
+                    repo: zod.string().describe('The GitHub repository name.'),
+                    senderGithubAvatarUrl: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The GitHub avatar URL for the sender, when available.'
+                      ),
+                    senderGithubLogin: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The GitHub login for the sender, when available.'
+                      ),
+                    senderGithubUserId: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The stable GitHub numeric user id for the sender, serialized as a string.'
+                      ),
+                    title: zod
+                      .string()
+                      .describe(
+                        'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                      ),
+                    url: zod
+                      .string()
+                      .describe('The public GitHub URL for the pull request.'),
+                  })
+                  .describe(
+                    'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                  )
+                  .and(
+                    zod.object({
+                      requestedReviewerGithubLogin: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'The GitHub login of the requested reviewer, when available.'
+                        ),
+                      requestedReviewerGithubUserId: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'The stable GitHub numeric user id of the requested reviewer, serialized as a string.'
+                        ),
+                    })
+                  )
+                  .describe(
+                    "Metadata for a notification that the user's review was requested on a GitHub pull request."
+                  ),
+                tag: zod.enum(['github_review_requested']),
+              })
+              .describe(
+                "The user's review was requested on a GitHub pull request."
+              ),
+            zod
+              .object({
+                content: zod
+                  .object({
+                    displayName: zod
+                      .string()
+                      .describe(
+                        'A compact label suitable for display in the UI.'
+                      ),
+                    foreignEntityId: zod
+                      .uuid()
+                      .describe(
+                        'The source-specific internal foreign entity row id for this pull request.'
+                      ),
+                    githubKey: zod
+                      .string()
+                      .describe(
+                        'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                      ),
+                    number: zod
+                      .number()
+                      .min(
+                        getTypedNotificationByIdResponseNotificationMetadataContentNumberMinThree
+                      )
+                      .describe('The GitHub pull request number.'),
+                    owner: zod
+                      .string()
+                      .describe('The GitHub repository owner or organization.'),
+                    repo: zod.string().describe('The GitHub repository name.'),
+                    senderGithubAvatarUrl: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The GitHub avatar URL for the sender, when available.'
+                      ),
+                    senderGithubLogin: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The GitHub login for the sender, when available.'
+                      ),
+                    senderGithubUserId: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The stable GitHub numeric user id for the sender, serialized as a string.'
+                      ),
+                    title: zod
+                      .string()
+                      .describe(
+                        'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                      ),
+                    url: zod
+                      .string()
+                      .describe('The public GitHub URL for the pull request.'),
+                  })
+                  .describe(
+                    'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                  )
+                  .and(
+                    zod.object({
+                      commentGithubId: zod
+                        .number()
+                        .min(
+                          getTypedNotificationByIdResponseNotificationMetadataContentCommentGithubIdMin
+                        )
+                        .nullish()
+                        .describe(
+                          'The GitHub numeric id of the comment, when available.'
+                        ),
+                      commentKind: zod
+                        .enum(['issue', 'review_comment'])
+                        .describe(
+                          'The kind of GitHub comment that triggered a [`GithubPrComment`] notification.'
+                        ),
+                      commentSnippet: zod
+                        .string()
+                        .describe('A truncated excerpt of the comment body.'),
+                      commentUrl: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'The public GitHub URL for the comment, when available.'
+                        ),
+                    })
+                  )
+                  .describe(
+                    'Metadata for a notification that a GitHub pull request was commented on.'
+                  ),
+                tag: zod.enum(['github_pr_comment']),
+              })
+              .describe('A GitHub pull request was commented on.'),
+            zod
+              .object({
+                content: zod
+                  .object({
+                    displayName: zod
+                      .string()
+                      .describe(
+                        'A compact label suitable for display in the UI.'
+                      ),
+                    foreignEntityId: zod
+                      .uuid()
+                      .describe(
+                        'The source-specific internal foreign entity row id for this pull request.'
+                      ),
+                    githubKey: zod
+                      .string()
+                      .describe(
+                        'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                      ),
+                    number: zod
+                      .number()
+                      .min(
+                        getTypedNotificationByIdResponseNotificationMetadataContentNumberMinFour
+                      )
+                      .describe('The GitHub pull request number.'),
+                    owner: zod
+                      .string()
+                      .describe('The GitHub repository owner or organization.'),
+                    repo: zod.string().describe('The GitHub repository name.'),
+                    senderGithubAvatarUrl: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The GitHub avatar URL for the sender, when available.'
+                      ),
+                    senderGithubLogin: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The GitHub login for the sender, when available.'
+                      ),
+                    senderGithubUserId: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The stable GitHub numeric user id for the sender, serialized as a string.'
+                      ),
+                    title: zod
+                      .string()
+                      .describe(
+                        'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                      ),
+                    url: zod
+                      .string()
+                      .describe('The public GitHub URL for the pull request.'),
+                  })
+                  .describe(
+                    'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                  )
+                  .and(
+                    zod.object({
+                      commentGithubId: zod
+                        .number()
+                        .min(
+                          getTypedNotificationByIdResponseNotificationMetadataContentCommentGithubIdMinOne
+                        )
+                        .nullish()
+                        .describe(
+                          'The GitHub numeric id of the comment or review containing the mention, when available.'
+                        ),
+                      commentUrl: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'The public GitHub URL for the text containing the mention, when available.'
+                        ),
+                      location: zod
+                        .enum([
+                          'pr_body',
+                          'comment',
+                          'review',
+                          'review_comment',
+                        ])
+                        .describe(
+                          'Where in a GitHub pull request the user was mentioned.'
+                        ),
+                      textSnippet: zod
+                        .string()
+                        .describe(
+                          'A truncated excerpt of the text containing the mention.'
+                        ),
+                    })
+                  )
+                  .describe(
+                    'Metadata for a notification that the user was mentioned on a GitHub pull request.'
+                  ),
+                tag: zod.enum(['github_pr_mention']),
+              })
+              .describe('The user was mentioned on a GitHub pull request.'),
+            zod
+              .object({
+                content: zod
+                  .object({
+                    displayName: zod
+                      .string()
+                      .describe(
+                        'A compact label suitable for display in the UI.'
+                      ),
+                    foreignEntityId: zod
+                      .uuid()
+                      .describe(
+                        'The source-specific internal foreign entity row id for this pull request.'
+                      ),
+                    githubKey: zod
+                      .string()
+                      .describe(
+                        'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                      ),
+                    number: zod
+                      .number()
+                      .min(
+                        getTypedNotificationByIdResponseNotificationMetadataContentNumberMinFive
+                      )
+                      .describe('The GitHub pull request number.'),
+                    owner: zod
+                      .string()
+                      .describe('The GitHub repository owner or organization.'),
+                    repo: zod.string().describe('The GitHub repository name.'),
+                    senderGithubAvatarUrl: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The GitHub avatar URL for the sender, when available.'
+                      ),
+                    senderGithubLogin: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The GitHub login for the sender, when available.'
+                      ),
+                    senderGithubUserId: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The stable GitHub numeric user id for the sender, serialized as a string.'
+                      ),
+                    title: zod
+                      .string()
+                      .describe(
+                        'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                      ),
+                    url: zod
+                      .string()
+                      .describe('The public GitHub URL for the pull request.'),
+                  })
+                  .describe(
+                    'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                  )
+                  .and(
+                    zod.object({
+                      reviewGithubId: zod
+                        .number()
+                        .min(
+                          getTypedNotificationByIdResponseNotificationMetadataContentReviewGithubIdMin
+                        )
+                        .nullish()
+                        .describe(
+                          'The GitHub numeric id of the review, when available.'
+                        ),
+                      reviewSnippet: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'A truncated excerpt of the review body, when any was written.'
+                        ),
+                      reviewUrl: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'The public GitHub URL for the review, when available.'
+                        ),
+                      state: zod
+                        .enum(['approved', 'changes_requested', 'commented'])
+                        .describe(
+                          'The state of a submitted GitHub pull request review.'
+                        ),
+                    })
+                  )
+                  .describe(
+                    "Metadata for a notification that a review was submitted on the user's GitHub pull request."
+                  ),
+                tag: zod.enum(['github_pr_review']),
+              })
+              .describe(
+                "A review was submitted on the user's GitHub pull request."
+              ),
+            zod
+              .object({
+                content: zod
+                  .object({
+                    announcementMessageId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        'The magic-chip message for the turn in question, when one was posted.'
+                      ),
+                    botId: zod
+                      .string()
+                      .describe(
+                        'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
+                      ),
+                    botName: zod
+                      .string()
+                      .describe(
+                        "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
+                      ),
+                    channelId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        'The channel the session was opened from, when it was opened from a\nchannel thread.'
+                      ),
+                    parent: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .object({
+                            id: zod.string().describe('The parent entity id.'),
+                            type: zod
+                              .string()
+                              .describe(
+                                '`channel`, `document`, or `initiative`.'
+                              ),
+                          })
+                          .describe(
+                            "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel, document,\nor initiative. Spelled like the message API's parent for client routing."
+                          ),
+                      ])
+                      .optional(),
+                    sessionId: zod
+                      .uuid()
+                      .describe('The session; what a click opens.'),
+                    sessionName: zod
+                      .string()
+                      .describe("The session's name at the time of the event."),
+                    threadId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        'The thread the session was opened from, when it was.'
+                      ),
+                  })
+                  .describe(
+                    'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                  )
+                  .and(
+                    zod.object({
+                      actor: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          "Who prompted the turn, absent when a bot acted on nobody's behalf."
+                        ),
+                      excerpt: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          "The agent's last prose in the turn, whole; `None` when it wrote none."
+                        ),
+                      stopReason: zod
+                        .string()
+                        .describe('The ACP stop reason, or `error`.'),
+                      turn: zod
+                        .number()
+                        .min(
+                          getTypedNotificationByIdResponseNotificationMetadataContentTurnMin
+                        )
+                        .describe('The turn that ended.'),
+                    })
+                  )
+                  .describe(
+                    'An agent finished a turn with nothing queued behind it.'
+                  ),
+                tag: zod.enum(['agent_session_settled']),
+              })
+              .describe(
+                'An agent finished a turn with nothing queued behind it.'
+              ),
+            zod
+              .object({
+                content: zod
+                  .object({
+                    announcementMessageId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        'The magic-chip message for the turn in question, when one was posted.'
+                      ),
+                    botId: zod
+                      .string()
+                      .describe(
+                        'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
+                      ),
+                    botName: zod
+                      .string()
+                      .describe(
+                        "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
+                      ),
+                    channelId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        'The channel the session was opened from, when it was opened from a\nchannel thread.'
+                      ),
+                    parent: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .object({
+                            id: zod.string().describe('The parent entity id.'),
+                            type: zod
+                              .string()
+                              .describe(
+                                '`channel`, `document`, or `initiative`.'
+                              ),
+                          })
+                          .describe(
+                            "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel, document,\nor initiative. Spelled like the message API's parent for client routing."
+                          ),
+                      ])
+                      .optional(),
+                    sessionId: zod
+                      .uuid()
+                      .describe('The session; what a click opens.'),
+                    sessionName: zod
+                      .string()
+                      .describe("The session's name at the time of the event."),
+                    threadId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        'The thread the session was opened from, when it was.'
+                      ),
+                  })
+                  .describe(
+                    'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                  )
+                  .and(
+                    zod.object({
+                      question: zod
+                        .string()
+                        .describe('The question, as the agent phrased it.'),
+                      turn: zod
+                        .number()
+                        .min(
+                          getTypedNotificationByIdResponseNotificationMetadataContentTurnMinOne
+                        )
+                        .describe('The turn asking.'),
+                    })
+                  )
+                  .describe(
+                    "An agent is blocked on a question only the session's owner can answer."
+                  ),
+                tag: zod.enum(['agent_session_waiting_for_input']),
+              })
+              .describe(
+                "An agent is blocked on a question for the session's owner."
+              ),
+            zod
+              .object({
+                content: zod
+                  .object({
+                    announcementMessageId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        'The magic-chip message for the turn in question, when one was posted.'
+                      ),
+                    botId: zod
+                      .string()
+                      .describe(
+                        'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
+                      ),
+                    botName: zod
+                      .string()
+                      .describe(
+                        "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
+                      ),
+                    channelId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        'The channel the session was opened from, when it was opened from a\nchannel thread.'
+                      ),
+                    parent: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .object({
+                            id: zod.string().describe('The parent entity id.'),
+                            type: zod
+                              .string()
+                              .describe(
+                                '`channel`, `document`, or `initiative`.'
+                              ),
+                          })
+                          .describe(
+                            "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel, document,\nor initiative. Spelled like the message API's parent for client routing."
+                          ),
+                      ])
+                      .optional(),
+                    sessionId: zod
+                      .uuid()
+                      .describe('The session; what a click opens.'),
+                    sessionName: zod
+                      .string()
+                      .describe("The session's name at the time of the event."),
+                    threadId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        'The thread the session was opened from, when it was.'
+                      ),
+                  })
+                  .describe(
+                    'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                  )
+                  .and(
+                    zod.object({
+                      actionId: zod
+                        .uuid()
+                        .describe('The action carrying the prompt.'),
+                      mentionedBy: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          "Who wrote the prompt, absent when a bot acted on nobody's behalf."
+                        ),
+                    })
+                  )
+                  .describe(
+                    'Someone named the recipient in a prompt to an agent session.'
+                  ),
+                tag: zod.enum(['agent_session_mentioned']),
+              })
+              .describe('The user was named in a prompt to an agent session.'),
+            zod
+              .object({
+                content: zod
+                  .object({
+                    channelName: zod.string().optional(),
+                    channelType: zod.enum([
+                      'public',
+                      'private',
+                      'directMessage',
+                      'team',
+                    ]),
+                  })
+                  .describe('Common metadata for notifications on channels')
+                  .and(
+                    zod.object({
+                      emoji: zod
+                        .string()
+                        .describe('The emoji added by the reactor.'),
+                      messageContent: zod
+                        .string()
+                        .describe('The reacted-to message content.'),
+                      messageId: zod
+                        .string()
+                        .describe('The reacted-to message id.'),
+                      senderProfilePictureUrl: zod
+                        .string()
+                        .nullish()
+                        .describe('Optional reactor profile picture URL.'),
+                      threadId: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'The thread root id when the reacted-to message is a reply.'
+                        ),
+                    })
+                  )
+                  .describe(
+                    "Metadata for a reaction added to one of the recipient's channel messages."
+                  ),
+                tag: zod.enum(['channel_message_reaction']),
+              })
+              .describe(
+                "Someone reacted to one of the user's channel messages."
+              ),
+            zod
+              .object({
+                content: zod
+                  .object({
+                    eventId: zod
+                      .uuid()
+                      .describe(
+                        'The shared calendar event entity the request is for.'
+                      ),
+                    requestId: zod
+                      .uuid()
+                      .describe(
+                        "Stable request identity, answered from the event's details."
+                      ),
+                    title: zod
+                      .string()
+                      .describe('Event title when the request was made.'),
+                  })
+                  .describe(
+                    'A channel member who sees a calendar event only through a channel share\nasked the person who shared it to add them as a guest. Sent to the sharer,\nwith the requester as sender.'
+                  ),
+                tag: zod.enum(['calendar_event_join_request']),
+              })
+              .describe(
+                'A channel member asked to be added as a guest of an event the\nuser shared with the channel.'
+              ),
+          ])
+          .describe(
+            'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
+          ),
+        owner_id: zod.string().describe('The user who owns this notification.'),
+        sender_id: zod
+          .string()
+          .nullish()
+          .describe('The user who triggered the notification.'),
+        sent: zod.boolean().describe('Whether the notification has been sent.'),
+        state: zod
+          .enum(['unseen', 'seen', 'done'])
+          .describe(
+            "The mutually exclusive lifecycle states of a user's notification."
+          ),
+        updated_at: zod.iso
+          .datetime({})
+          .describe('When the notification was last updated.'),
+        viewed_at: zod.iso
+          .datetime({})
+          .nullish()
+          .describe('When the notification was viewed\/seen.'),
+      })
+    );
+}
+let _cached_getTypedNotificationByIdResponse:
+  | ReturnType<typeof _create_getTypedNotificationByIdResponse>
+  | undefined;
+export function getGetTypedNotificationByIdResponseSchema() {
+  return (_cached_getTypedNotificationByIdResponse ??=
+    _create_getTypedNotificationByIdResponse());
+}
 
 /**
  * @summary Soft-delete multiple user notifications.
  */
-export const bulkDeleteUserNotificationsV2Body = zod
-  .object({
-    notificationIds: zod
-      .array(zod.uuid())
-      .describe('The ids of the notifications to handle'),
-  })
-  .describe('the notification ids that we are bulk updating');
+function _create_bulkDeleteUserNotificationsV2Body() {
+  return zod
+    .object({
+      notificationIds: zod
+        .array(zod.uuid())
+        .describe('The ids of the notifications to handle'),
+    })
+    .describe('the notification ids that we are bulk updating');
+}
+let _cached_bulkDeleteUserNotificationsV2Body:
+  | ReturnType<typeof _create_bulkDeleteUserNotificationsV2Body>
+  | undefined;
+export function getBulkDeleteUserNotificationsV2BodySchema() {
+  return (_cached_bulkDeleteUserNotificationsV2Body ??=
+    _create_bulkDeleteUserNotificationsV2Body());
+}
 
 /**
  * @summary Mark notifications as done.
  */
-export const bulkMarkNotificationsDoneBody = zod
-  .object({
-    notificationIds: zod
-      .array(zod.uuid())
-      .describe('The ids of the notifications to handle'),
-  })
-  .describe('the notification ids that we are bulk updating');
+function _create_bulkMarkNotificationsDoneBody() {
+  return zod
+    .object({
+      notificationIds: zod
+        .array(zod.uuid())
+        .describe('The ids of the notifications to handle'),
+    })
+    .describe('the notification ids that we are bulk updating');
+}
+let _cached_bulkMarkNotificationsDoneBody:
+  | ReturnType<typeof _create_bulkMarkNotificationsDoneBody>
+  | undefined;
+export function getBulkMarkNotificationsDoneBodySchema() {
+  return (_cached_bulkMarkNotificationsDoneBody ??=
+    _create_bulkMarkNotificationsDoneBody());
+}
 
 /**
  * @summary Mark notifications as seen.
  */
-export const bulkMarkNotificationsSeenBody = zod
-  .object({
-    notificationIds: zod
-      .array(zod.uuid())
-      .describe('The ids of the notifications to handle'),
-  })
-  .describe('the notification ids that we are bulk updating');
+function _create_bulkMarkNotificationsSeenBody() {
+  return zod
+    .object({
+      notificationIds: zod
+        .array(zod.uuid())
+        .describe('The ids of the notifications to handle'),
+    })
+    .describe('the notification ids that we are bulk updating');
+}
+let _cached_bulkMarkNotificationsSeenBody:
+  | ReturnType<typeof _create_bulkMarkNotificationsSeenBody>
+  | undefined;
+export function getBulkMarkNotificationsSeenBodySchema() {
+  return (_cached_bulkMarkNotificationsSeenBody ??=
+    _create_bulkMarkNotificationsSeenBody());
+}
 
 /**
  * @summary Mark notifications as not done.
  */
-export const bulkMarkNotificationsUndoneBody = zod
-  .object({
-    notificationIds: zod
-      .array(zod.uuid())
-      .describe('The ids of the notifications to handle'),
-  })
-  .describe('the notification ids that we are bulk updating');
+function _create_bulkMarkNotificationsUndoneBody() {
+  return zod
+    .object({
+      notificationIds: zod
+        .array(zod.uuid())
+        .describe('The ids of the notifications to handle'),
+    })
+    .describe('the notification ids that we are bulk updating');
+}
+let _cached_bulkMarkNotificationsUndoneBody:
+  | ReturnType<typeof _create_bulkMarkNotificationsUndoneBody>
+  | undefined;
+export function getBulkMarkNotificationsUndoneBodySchema() {
+  return (_cached_bulkMarkNotificationsUndoneBody ??=
+    _create_bulkMarkNotificationsUndoneBody());
+}
 
 /**
  * @summary Soft-delete a single user notification.
  */
-export const deleteUserNotificationV2Params = zod.object({
-  notification_id: zod.uuid().describe('ID of the notification'),
-});
+function _create_deleteUserNotificationV2Params() {
+  return zod.object({
+    notification_id: zod.uuid().describe('ID of the notification'),
+  });
+}
+let _cached_deleteUserNotificationV2Params:
+  | ReturnType<typeof _create_deleteUserNotificationV2Params>
+  | undefined;
+export function getDeleteUserNotificationV2ParamsSchema() {
+  return (_cached_deleteUserNotificationV2Params ??=
+    _create_deleteUserNotificationV2Params());
+}

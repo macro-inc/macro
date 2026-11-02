@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({ query: undefined as unknown }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: false }),
 }));
-vi.mock('@entity', () => ({
+vi.mock('@entity/types/entity', () => ({
   isSnippetEntity: (entity: { type: string }) => entity.type === 'snippet',
   isSkillEntity: (entity: { type: string }) => entity.type === 'skill',
 }));

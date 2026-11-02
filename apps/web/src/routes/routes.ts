@@ -9,6 +9,10 @@ import {
 } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { changesSearch } from '@app/features/changes/changes-search';
+import {
+  channelsSearch,
+  channelsSearchCodec,
+} from '@app/features/channels-view/channels-route';
 import { mobileSearchRouteStateSchema } from '@app/features/command/mobile/mobile-search-route-state';
 import {
   crmPipelineParams,
@@ -40,6 +44,7 @@ import {
 } from '@app/features/routines/routine-navigation';
 import { bookingLinksSearch } from '@app/features/scheduling/booking-links-search';
 import { defineRoute, type Entry, routeParams } from '@app/lib/split-router';
+import { parsePaneSearch } from '@app/lib/split-router/routes/search';
 import { callDetailSearch } from '@block-call/call-route';
 import { URL_PARAMS as CALL_URL_PARAMS } from '@block-call/constants';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
@@ -57,6 +62,7 @@ import {
 import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
 import { z } from 'zod';
 import { APP_ROUTE_ID, NOT_FOUND_ROUTE_ID } from './app-route';
+import { preloadRouteReference } from './route-preloads';
 
 export const EMAIL_SIGNUP_CALLBACK_PATH = '/email-signup-callback';
 export const INBOX_LINK_CALLBACK_PATH = '/inbox-link-callback';
@@ -186,7 +192,10 @@ export const authRoute = defineRoute({ id: 'auth' });
 export const publicRoute = defineRoute({ id: 'public' });
 
 /** The split layout; its children are the pane routes. */
-export const appRoute = defineRoute({ id: APP_ROUTE_ID });
+export const appRoute = defineRoute({
+  id: APP_ROUTE_ID,
+  preload: preloadRouteReference,
+});
 
 // Pane routes.
 
@@ -359,7 +368,28 @@ export const channelDetailRoute = defineRoute({
     namespace: 'block',
     id: `channel:${channelId}`,
   }),
-  toReference: ({ channelId }) => uuidRouteReference(channelId, 'channel'),
+  toReference: ({ channelId }, query) => {
+    const reference = uuidRouteReference(channelId, 'channel');
+    if (!reference) return;
+    const scoped = parsePaneSearch(query.toString())[0];
+    const target = channelsSearchCodec.parse(
+      scoped?.[channelsSearch.namespace]
+    ).value;
+    const messageId =
+      target.messageId ||
+      query.get(CHANNEL_URL_PARAMS.message) ||
+      query.get(CHANNEL_URL_PARAMS.thread);
+    const threadId = target.threadId || query.get(CHANNEL_URL_PARAMS.thread);
+    return {
+      ...reference,
+      params: messageId
+        ? {
+            [CHANNEL_URL_PARAMS.message]: messageId,
+            ...(threadId ? { [CHANNEL_URL_PARAMS.thread]: threadId } : {}),
+          }
+        : undefined,
+    };
+  },
 });
 
 export const channelsSplitRoute = defineRoute({

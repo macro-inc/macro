@@ -87,7 +87,8 @@ import {
 } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { useMarkdownHost } from '../../context/MarkdownHostContext';
-import { autoRegister, UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins';
+import { UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins/mentions/commands';
+import { autoRegister } from '../../plugins/shared/utils';
 import { openDocument } from '../core/BlockLink';
 import { MentionTooltip } from './MentionTooltip';
 

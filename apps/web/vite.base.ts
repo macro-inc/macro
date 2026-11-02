@@ -3,7 +3,7 @@ import { unwatchFile, watchFile } from 'node:fs';
 import { resolve } from 'node:path';
 import tailwind from '@tailwindcss/vite';
 import { Features } from 'lightningcss';
-import type { Plugin, Rollup, UserConfigFn } from 'vite';
+import type { Plugin, UserConfigFn } from 'vite';
 import solid from 'vite-plugin-solid';
 import solidSvg from 'vite-plugin-solid-svg';
 import wasm from 'vite-plugin-wasm';
@@ -16,6 +16,9 @@ import { devExternalSourcemaps } from './scripts/dev-sourcemaps';
 import { hostedDevProxy } from './scripts/hosted-dev-proxy';
 import { keepImportMetaDev } from './scripts/keep-import-meta-dev';
 import { localDevServer } from './scripts/local-dev-server';
+import { pureGeneratedZodSchemas } from './scripts/pure-generated-zod-schemas';
+import { sessionBootstrap } from './scripts/session-bootstrap';
+import { startupChunks } from './scripts/startup-chunks';
 
 function readShortSha(): string {
   try {
@@ -74,30 +77,6 @@ function gitBranchHmrPlugin(): Plugin {
       watchFile(headPath, { interval: 100 }, emit);
       server.ws.on('connection', emit);
       server.httpServer?.once('close', () => unwatchFile(headPath));
-    },
-  };
-}
-
-/**
- * Orval's generated schemas are top-level `zod.object(...)` chains. Rollup
- * cannot prove those calls are side-effect free, so every schema (≈700 for the
- * storage service alone) stayed in the entry chunk and was constructed at
- * startup, used or not. Annotating each one pure lets Rollup drop the unused
- * ones; the annotation is applied at build time so regenerated files keep it.
- */
-function pureGeneratedZodSchemas(): Plugin {
-  return {
-    name: 'pure-generated-zod-schemas',
-    enforce: 'pre',
-    transform(code, id) {
-      if (!/[\\/]generated[\\/]zod\.ts$/.test(id)) return;
-      return {
-        code: code.replace(
-          /^(export const [\w$]+ = )(zod\b)/gm,
-          '$1/* @__PURE__ */ $2'
-        ),
-        map: null,
-      };
     },
   };
 }
@@ -167,72 +146,13 @@ function posthogSourceMapLimit(): Plugin {
   };
 }
 
-const isNodeModule = (id: string) => id.includes('/node_modules/');
-const isGeneratedSource = (id: string) =>
-  !isNodeModule(id) && /\/generated\//.test(id);
-
-/**
- * Splits the entry chunk so each source map stays under PostHog's limit: one
- * map with every startup module was 44 MB, most of it library code and the
- * embedded text of generated API clients.
- *
- * Only modules the entry already imports statically move, so startup loads
- * the same code in three files and lazy code stays lazy. A generated module
- * moves only if it imports nothing but libraries and other generated modules;
- * otherwise the chunks would import each other and could read bindings before
- * they are initialized.
- */
-function startupChunks(): Rollup.ManualChunksOption {
-  const plans = new WeakMap<Rollup.GetModuleInfo, Map<string, string>>();
-  const planChunks = (
-    getModuleInfo: Rollup.GetModuleInfo,
-    moduleIds: Iterable<string>
-  ) => {
-    const imports = (id: string) => getModuleInfo(id)?.importedIds ?? [];
-    const startup = new Set<string>();
-    const pending = [...moduleIds].filter((id) => getModuleInfo(id)?.isEntry);
-    for (let id = pending.pop(); id !== undefined; id = pending.pop()) {
-      if (startup.has(id)) continue;
-      startup.add(id);
-      pending.push(...imports(id));
-    }
-    const schemas = new Set([...startup].filter(isGeneratedSource));
-    let changed = true;
-    while (changed) {
-      changed = false;
-      for (const id of schemas) {
-        const importsAppCode = imports(id).some(
-          (imported) => !isNodeModule(imported) && !schemas.has(imported)
-        );
-        if (importsAppCode) {
-          schemas.delete(id);
-          changed = true;
-        }
-      }
-    }
-    const plan = new Map<string, string>();
-    for (const id of startup) {
-      if (isNodeModule(id)) plan.set(id, 'vendor');
-      else if (schemas.has(id)) plan.set(id, 'api-schemas');
-    }
-    return plan;
-  };
-  return (id, { getModuleInfo, getModuleIds }) => {
-    let plan = plans.get(getModuleInfo);
-    if (!plan) {
-      plan = planChunks(getModuleInfo, getModuleIds());
-      plans.set(getModuleInfo, plan);
-    }
-    return plan.get(id);
-  };
-}
-
 /**
  * loro-crdt's `browser` export downloads its 3 MB WASM with a synchronous
  * XMLHttpRequest and compiles it on the main thread, freezing startup for the
  * whole download. Builds use the `bundler` export that dev already resolves
  * through the `development` condition: vite-plugin-wasm streams and compiles it
- * off the main thread (htmlPreloads starts its download with the HTML).
+ * off the main thread. The Markdown code loader admits it alongside UI code
+ * when that editor is requested; boot HTML never preloads it unconditionally.
  */
 function loroAsyncWasm(): Plugin {
   return {
@@ -272,12 +192,6 @@ function esbuildTargets(queries: readonly string[]): string[] {
 
 /** Hashed assets the first screen needs; index.html requests them while it parses. */
 const HTML_PRELOADS = [
-  // The app waits for Loro to initialize before rendering.
-  {
-    file: /(^|\/)loro_wasm_bg-[\w-]+\.wasm$/,
-    as: 'fetch',
-    type: 'application/wasm',
-  },
   // The UI font; otherwise it starts downloading only once text renders.
   {
     file: /(^|\/)inter-latin-wght-normal-[\w-]+\.woff2$/,
@@ -350,6 +264,7 @@ export const createAppViteConfig = (): UserConfigFn => {
         wasm(),
         loroAsyncWasm(),
         htmlPreloads(),
+        sessionBootstrap(),
         tailwind(),
         solidSvg({ defaultAsComponent: true }),
         tsconfigpaths({
@@ -408,12 +323,14 @@ export const createAppViteConfig = (): UserConfigFn => {
                 chunkFileNames: `assets/[name].js`,
                 assetFileNames: `assets/[name].[ext]`,
                 manualChunks: startupChunks(),
+                onlyExplicitManualChunks: true,
               }
             : {
                 format: 'es',
                 chunkFileNames: '[name]-[hash].js',
                 entryFileNames: '[name]-[hash].js',
                 manualChunks: startupChunks(),
+                onlyExplicitManualChunks: true,
               },
         },
         assetsInlineLimit: (filePath) => {

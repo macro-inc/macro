@@ -5,9 +5,9 @@ import { $getNearestNodeFromDOMNode } from 'lexical';
 import { Show, useContext } from 'solid-js';
 import type { SetStoreFunction, Store } from 'solid-js/store';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
+import { DRAG_DATA_FORMAT } from '../../plugins/draggable-block/constants';
 import {
   $collectNestedGroup,
-  DRAG_DATA_FORMAT,
   type DraggableBlockState,
 } from '../../plugins/draggable-block/draggableBlockPlugin';
 

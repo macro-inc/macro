@@ -6,10 +6,8 @@ import { DatabaseCard } from '@core/component/LexicalMarkdown/component/decorato
 import { DatabaseQuery } from '@core/component/LexicalMarkdown/component/decorator/DatabaseQuery';
 import { DocumentMention } from '@core/component/LexicalMarkdown/component/decorator/DocumentMention';
 import { ActionMenu } from '@core/component/LexicalMarkdown/component/menu/ActionsMenu';
-import {
-  createLexicalWrapper,
-  LexicalWrapperContext,
-} from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
+import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/createLexicalWrapper';
+import { LexicalWrapperContext } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import { actionsPlugin } from '@core/component/LexicalMarkdown/plugins/actions/actionsPlugin';
 import { blockDecoratorNavigationPlugin } from '@core/component/LexicalMarkdown/plugins/block-decorator-navigation';
 import {

@@ -33,8 +33,8 @@ import {
   blockUserAccessSignal,
 } from '../signal/load';
 import type { Source, SourcePreload } from '../source';
+import { createLoadOwner } from '../util/createLoadOwner';
 import type { ObjectLike } from '../util/result';
-import { loadBlockDataAfterComponentPreload } from './loadBlockData';
 
 export const blockDataSignal = createBlockSignal<unknown>();
 export const blockLiveTrackingEnabledSignal = createBlockSignal<boolean>();
@@ -63,6 +63,7 @@ export function BlockLoader<
     'block.publish',
     () => !blockDataSignal.get() && !blockErrorSignal.get()
   );
+  const loadOwner = createLoadOwner();
   const setData = blockDataSignal.set;
   const setError = blockErrorSignal.set;
   const setLiveTrackingEnabled = blockLiveTrackingEnabledSignal.set;
@@ -111,6 +112,7 @@ export function BlockLoader<
   );
 
   function clearLoadedDocument() {
+    loadOwner.invalidate();
     untrack(syncSource)?.cleanup();
     setData(undefined);
     setFile(undefined);
@@ -128,10 +130,11 @@ export function BlockLoader<
 
   const retryToken = blockLoadRetrySignal.get;
 
-  const getResult = createAsync(async () => {
+  const getResult = createAsync(() => {
     // Tracked before the first await so a failure view can re-run the load.
     retryToken();
-    const result = await loadBlockDataAfterComponentPreload(
+    const preload = props.definition.component.preload;
+    return loadOwner.run(
       () =>
         flow.task('block.data', async (span) => {
           span.setAttr('block.type', props.definition.name);
@@ -141,31 +144,31 @@ export function BlockLoader<
             'initial',
             span
           );
-          if (result.isErr()) span.error('Block data could not load');
-          return result;
+          if (result.isErr()) {
+            span.error('Block data could not load');
+            return err(result.error);
+          }
+          const data = result.value;
+          if ('type' in data && data.type === 'preload') {
+            span.error('Block loader received a nested preload');
+            return err([
+              {
+                code: 'INVALID' as const,
+                message: 'BlockLoader received a nested preload',
+              },
+            ]);
+          }
+          return ok({ ...data, __block: props.definition.name });
         }),
-      props.definition.component.preload
+      (loaded) => {
+        if (loaded.isOk() && 'syncSource' in loaded.value)
+          loaded.value.syncSource.cleanup();
+      },
+      // Legacy module effect registrations must exist before data is published.
+      preload
+        ? () => flow.task('block.component', async () => preload())
+        : undefined
     );
-    if (result.isErr()) {
-      return err(result.error);
-    }
-    const data = result.value;
-    if ('type' in data && data.type === 'preload') {
-      console.error(
-        `BlockLoader received a nested preload.
-Check that the load function does not return a preload source when the intent is not preload`
-      );
-      return err([
-        {
-          code: 'INVALID' as const,
-          message: 'BlockLoader received a nested preload',
-        },
-      ]);
-    }
-    return ok({
-      ...data,
-      __block: props.definition.name,
-    });
   });
 
   onCleanup(() => {
@@ -175,12 +178,11 @@ Check that the load function does not return a preload source when the intent is
   });
 
   createEffect(() => {
-    const result = getResult();
+    const loaded = getResult();
+    const result = loaded?.value;
 
     // An earlier in-flight load must not restore a document after revocation.
     if (untrack(currentSharedAccess) === null) {
-      if (result?.isOk() && 'syncSource' in result.value)
-        result.value.syncSource.cleanup();
       clearLoadedDocument();
       setError('UNAUTHORIZED');
       return;
@@ -200,6 +202,7 @@ Check that the load function does not return a preload source when the intent is
       return;
     }
 
+    loaded?.adopt();
     if (result.isErr()) {
       setError(() => {
         if (result.error.some((error) => error.code === 'UNAUTHORIZED')) {

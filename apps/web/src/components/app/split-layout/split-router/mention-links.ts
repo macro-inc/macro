@@ -12,6 +12,10 @@ import {
   splitPanePaths,
   useOptionalSplitRouter,
 } from '@app/lib/split-router';
+import {
+  parsePaneSearch,
+  replacePaneSearchParams,
+} from '@app/lib/split-router/routes/search';
 import type { BlockAlias, BlockName } from '@core/block';
 import { parseInternalAppLink } from '@core/util/macroAppUrl';
 import { z } from 'zod';
@@ -69,9 +73,13 @@ export function createMacroMentionLinkResolver(
     if (!leaf) return;
 
     const query = new URLSearchParams(link.query);
+    const paneQuery = new URLSearchParams(query);
+    replacePaneSearchParams(paneQuery, [
+      parsePaneSearch(query.toString())[panes.length - 1],
+    ]);
     const reference = routes.byId
       .get(leaf.id)
-      ?.definition.toReference?.(leaf.params, query);
+      ?.definition.toReference?.(leaf.params, paneQuery);
     if (!isBlockRouteReference(reference)) return;
     const mention: MacroMentionLink = {
       id: reference.id,

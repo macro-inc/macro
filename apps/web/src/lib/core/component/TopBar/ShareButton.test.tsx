@@ -10,12 +10,8 @@ import { err, ok } from 'neverthrow';
 import { createSignal, For, type JSX, onCleanup } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Permissions } from '../SharePermissions';
-import {
-  ShareModal,
-  ShareOptions,
-  ShareTrigger,
-  shareLevelsFor,
-} from './ShareButton';
+import { ShareModal, ShareTrigger, shareLevelsFor } from './ShareButton';
+import { ShareOptions } from './ShareOptions';
 
 vi.mock('@app/features/calendar-notes/document-meeting-notes', () => ({
   DocumentMeetingNotes: (props: {

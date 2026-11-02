@@ -41,14 +41,13 @@ import {
   effortLabel,
 } from '../state/session-config';
 import {
-  AgentInput,
   type AgentInputProps,
   AgentModelSelector,
   ComposerNotice,
   type QueuedPromptItem,
-  QueuedPrompts,
 } from '../ui';
 import type { AgentModelSelectorProps } from '../ui/AgentModelSelector';
+import { AgentInput, QueuedPrompts } from '../ui/composer';
 import { AgentModelMenuItem } from './AgentModelMenuItem';
 import { EffortSelector } from './EffortSelector';
 import { PermissionRequest } from './PermissionRequest';

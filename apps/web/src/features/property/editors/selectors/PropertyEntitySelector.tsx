@@ -5,12 +5,10 @@ import { emailToId, useAugmentUserWithDmActivity } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import { useSelectedFirst } from '@core/util/useSelectedFirst';
-import {
-  createEmailsInfiniteQuery,
-  type EmailEntity,
-  Entity,
-  type EntityData,
-} from '@entity';
+import { EntityIcon } from '@entity/extractors/entity-icon';
+import { EntityTitle } from '@entity/extractors/entity-title';
+import { createEmailsInfiniteQuery } from '@entity/queries/email';
+import type { EmailEntity, EntityData } from '@entity/types/entity';
 import CheckIcon from '@icon/system/regular/check.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { useSearchInputFocus } from '@property/utils';
@@ -593,7 +591,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                                 />
                               }
                             >
-                              <Entity.Icon entity={entity.data as EntityData} />
+                              <EntityIcon entity={entity.data as EntityData} />
                             </Show>
                           </div>
                           <span class="truncate min-w-0 max-w-full">
@@ -617,9 +615,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                                 </Show>
                               }
                             >
-                              <Entity.Title
-                                entity={entity.data as EntityData}
-                              />
+                              <EntityTitle entity={entity.data as EntityData} />
                             </Show>
                           </span>
                           <Show when={isBotPrincipalId(entity.id)}>

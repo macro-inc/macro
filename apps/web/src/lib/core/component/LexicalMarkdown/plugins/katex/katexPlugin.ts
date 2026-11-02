@@ -7,39 +7,27 @@ import {
   $insertNodes,
   $isRootOrShadowRoot,
   COMMAND_PRIORITY_NORMAL,
-  createCommand,
-  type LexicalCommand,
   type LexicalEditor,
 } from 'lexical';
 
-// Type definitions
-type InsertCommandPayload = {
-  equation: string;
-  inline: boolean;
-};
+import {
+  INSERT_EQUATION_COMMAND,
+  TRY_INSERT_EQUATION_COMMAND,
+  TRY_UPDATE_EQUATION_COMMAND,
+  UPDATE_EQUATION_COMMAND,
+} from './commands';
 
-type UpdateCommandPayload = {
-  nodeKey: string;
-  equation: string;
-};
+export {
+  INSERT_EQUATION_COMMAND,
+  TRY_INSERT_EQUATION_COMMAND,
+  TRY_UPDATE_EQUATION_COMMAND,
+  UPDATE_EQUATION_COMMAND,
+} from './commands';
 
 type KatexPluginProps = {
   onClickEquation?: (nodeKey: string) => void;
   onCreateEquation?: () => void;
 };
-
-export const TRY_UPDATE_EQUATION_COMMAND: LexicalCommand<string> =
-  createCommand('TRY_UPDATE_EQUATION_COMMAND');
-
-export const UPDATE_EQUATION_COMMAND: LexicalCommand<UpdateCommandPayload> =
-  createCommand('UPDATE_EQUATION_COMMAND');
-
-export const TRY_INSERT_EQUATION_COMMAND: LexicalCommand<void> = createCommand(
-  'TRY_INSERT_EQUATION_COMMAND'
-);
-
-export const INSERT_EQUATION_COMMAND: LexicalCommand<InsertCommandPayload> =
-  createCommand('INSERT_EQUATION_COMMAND');
 
 // Plugin implementation
 function registerKatexPlugin(editor: LexicalEditor, props: KatexPluginProps) {

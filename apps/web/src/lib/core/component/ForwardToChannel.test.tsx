@@ -64,7 +64,7 @@ vi.mock('@core/component/RecipientSelector', () => ({
     </button>
   ),
 }));
-vi.mock('@core/component/TopBar/ShareButton', () => ({
+vi.mock('@core/component/TopBar/ShareOptions', () => ({
   ShareOptions: (props: { allowedAccessLevels?: readonly string[] }) => {
     mocks.shareOptions(props.allowedAccessLevels);
     return null;

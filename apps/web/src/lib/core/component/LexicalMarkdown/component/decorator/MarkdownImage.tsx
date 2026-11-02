@@ -1,4 +1,5 @@
 import { internalDrag } from '@core/directive/internalDragState';
+import { $upgradeDSSMediaUrl, getMediaUrl } from '../../plugins/media/source';
 
 false && internalDrag;
 
@@ -34,16 +35,14 @@ import {
   useContext,
 } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
-import { DRAG_DATA_FORMAT } from '../../plugins/draggable-block/draggableBlockPlugin';
+import { DRAG_DATA_FORMAT } from '../../plugins/draggable-block/constants';
 import {
-  $upgradeDSSMediaUrl,
-  getMediaUrl,
   ON_MEDIA_COMPONENT_MOUNT_COMMAND,
   UPDATE_MEDIA_SIZE_COMMAND,
   UPLOAD_MEDIA_FAILURE_COMMAND,
   UPLOAD_MEDIA_START_COMMAND,
   UPLOAD_MEDIA_SUCCESS_COMMAND,
-} from '../../plugins/media';
+} from '../../plugins/media/commands';
 import { removeNodeAndRestoreSelection } from '../../plugins/shared/removeNodeAndRestoreSelection';
 import { MediaButtons } from './MediaButtons';
 import { MediaLoadingPlaceholder } from './MediaLoadingPlaceholder';

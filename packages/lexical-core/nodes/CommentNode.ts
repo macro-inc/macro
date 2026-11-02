@@ -278,7 +278,7 @@ export class CommentNode extends MarkNode {
   }
 }
 
-function isSerializedDraftCommentNode(
+export function isSerializedDraftCommentNode(
   node: SerializedLexicalNode
 ): node is SerializedCommentNode {
   return (

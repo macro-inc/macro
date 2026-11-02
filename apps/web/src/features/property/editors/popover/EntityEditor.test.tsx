@@ -63,14 +63,16 @@ vi.mock('@core/context/quickAccess', () => ({
     }),
   }),
 }));
-vi.mock('@entity', () => ({
-  Entity: {
-    Icon: () => <span />,
-    Title: (props: { entity: { name: string } }) => (
-      <span>{props.entity.name}</span>
-    ),
-  },
-  isTaskEntity: () => false,
+vi.mock('@entity/extractors/entity-icon', () => ({
+  EntityIcon: () => <span />,
+}));
+vi.mock('@entity/extractors/entity-title', () => ({
+  EntityTitle: (props: { entity: { name: string } }) => (
+    <span>{props.entity.name}</span>
+  ),
+}));
+vi.mock('@entity/types/entity', () => ({ isTaskEntity: () => false }));
+vi.mock('@entity/queries/email', () => ({
   createEmailsInfiniteQuery: () => ({
     data: [],
     isLoading: false,

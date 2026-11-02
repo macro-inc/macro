@@ -71,7 +71,7 @@ import {
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { useMarkdownHost } from '../../context/MarkdownHostContext';
 import { floatWithElement } from '../../directive/floatWithElement';
-import { UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins';
+import { UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins/mentions/commands';
 import { removeNodeAndRestoreSelection } from '../../plugins/shared/removeNodeAndRestoreSelection';
 import { dispatchInternalLayoutShift } from '../../plugins/shared/utils';
 import { BlockLink, openDocument } from '../core/BlockLink';

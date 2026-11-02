@@ -1,9 +1,9 @@
-import { entityDetailBlockType } from '@app/components/entity-detail/EntityDetail';
 import type {
   EntityDetailNavigationEntry,
   EntityDetailNavigationOptions,
   EntityDetailTarget,
 } from '@app/components/entity-detail/entity-detail-target';
+import { entityDetailBlockType } from '@app/components/entity-detail/entity-detail-target';
 import { useNavigate, useParams, useRouteState } from '@app/lib/split-router';
 import { driveSplitRoute } from '@app/routes/routes';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';

@@ -29,7 +29,7 @@ test('previews expose text once, route clicks to their row, and skip embedded co
   await page.goto(
     '/src/lib/core/component/LexicalMarkdown/component/core/browser-test/preview.html'
   );
-  const text = 'Read Roadmap with Alex';
+  const text = 'Read Roadmap with @Alex';
   let openCount = 0;
   const cdp = await context.newCDPSession(page);
   const layouts =

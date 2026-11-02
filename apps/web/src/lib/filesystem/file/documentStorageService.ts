@@ -1,8 +1,8 @@
+import { makeDocumentKey } from '@coparse/document-processing-types/document-key';
 import { contentHash } from '@core/util/hash';
-import {
+import type {
   DocumentMetadata,
-  PdfDocumentMetadata,
-  makeDocumentKey
+  PdfDocumentMetadata
 } from '@coparse/document-processing-types';
 import { FileSystemError } from '../error';
 import { getFileNameWithExtension } from '../stringUtils';

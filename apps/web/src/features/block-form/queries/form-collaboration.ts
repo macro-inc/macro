@@ -35,7 +35,7 @@ import {
 import type { FilterGroup } from '@service-storage/generated/schemas/filterGroup';
 import type { FormLayout as WireFormLayout } from '@service-storage/generated/schemas/formLayout';
 import type { FormSection } from '@service-storage/generated/schemas/formSection';
-import { putFormLayoutBody } from '@service-storage/generated/zod';
+import { getPutFormLayoutBodySchema } from '@service-storage/generated/zod';
 import type { LoroDoc } from 'loro-crdt';
 import { errAsync, type ResultAsync } from 'neverthrow';
 import {
@@ -252,21 +252,27 @@ type DecodedLayout =
 const NEWER_VERSION = 'This form was edited by a newer version of Macro.';
 const UNREADABLE = 'This form could not be opened.';
 
-type SectionSchema =
-  (typeof putFormLayoutBody.shape.sections.element.options)[number];
+type SectionSchema = ReturnType<
+  typeof getPutFormLayoutBodySchema
+>['shape']['sections']['element']['options'][number];
 type GateSchema = Extract<SectionSchema, { shape: { rules: unknown } }>;
 
 function isGateSchema(section: SectionSchema): section is GateSchema {
   return 'rules' in section.shape;
 }
 
-const gateSchema =
-  putFormLayoutBody.shape.sections.element.options.find(isGateSchema);
-if (!gateSchema) throw new Error('The form layout schema has no gate.');
-/** A gate's rules; the generated schema leaves nested groups unchecked. */
-const gateRules = gateSchema.shape.rules;
+function createGateRules() {
+  const gateSchema =
+    getPutFormLayoutBodySchema().shape.sections.element.options.find(
+      isGateSchema
+    );
+  if (!gateSchema) throw new Error('The form layout schema has no gate.');
+  return gateSchema.shape.rules;
+}
+let gateRules: ReturnType<typeof createGateRules> | undefined;
 
 function isFilterGroup(value: unknown): value is FilterGroup {
+  gateRules ??= createGateRules();
   const parsed = gateRules.safeParse(value);
   return (
     parsed.success &&
@@ -277,7 +283,7 @@ function isFilterGroup(value: unknown): value is FilterGroup {
 }
 
 function decodeSections(value: unknown): FormSection[] | undefined {
-  const parsed = putFormLayoutBody.safeParse(value);
+  const parsed = getPutFormLayoutBodySchema().safeParse(value);
   if (!parsed.success) return undefined;
   const sections: FormSection[] = [];
   for (const section of parsed.data.sections) {

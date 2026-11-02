@@ -3,6 +3,7 @@ import { getAttachmentKindFromFile } from '@channel/Input/utils/file-helpers';
 import { toast } from '@core/component/Toast/Toast';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { IMAGE_INPUT_WARNING } from '../state/image-input';
+import { AGENT_INPUT_TEXT_AREA_ID } from './agent-input-constants';
 /**
  * The agent block's composer: the chat input's look and its markdown editing
  * surface (`MarkdownShell` over a lean `EditorConfigBuilder`), including `@`
@@ -49,12 +50,6 @@ import {
   Show,
 } from 'solid-js';
 import { agentAttachmentItems } from './attachment-menu';
-
-/**
- * Id of the agent input's text-area wrapper. Exposed so callers (e.g. the
- * mobile Create menu) can arm focus on the contenteditable before it mounts.
- */
-export const AGENT_INPUT_TEXT_AREA_ID = 'agent-input-text-area';
 
 /** Quote text into the composer as a referenced paste chip. */
 export type QuoteInsert = (text: string) => void;

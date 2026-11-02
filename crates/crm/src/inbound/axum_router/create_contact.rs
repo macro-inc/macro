@@ -21,7 +21,7 @@ use super::{CrmRouterState, list_company_contacts::CrmContactResponse};
 pub struct CreateCrmContactRequest {
     /// Display name for the contact.
     pub name: String,
-    /// The contact's email address, e.g. "jane@acme.com". Its domain
+    /// The contact's email address, e.g. "jane@example.com". Its domain
     /// must be one of the company's domains (400 otherwise).
     pub email: String,
 }

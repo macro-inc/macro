@@ -1,4 +1,4 @@
-import { getDocumentKeyParts } from '@coparse/document-processing-types';
+import type { getDocumentKeyParts } from '@coparse/document-processing-types/document-key';
 
 /**
  * Note that this is only for DSS documents. Temp files have document keys of a different format, and will be handled in {@link documentOverrideInfoAtom}.

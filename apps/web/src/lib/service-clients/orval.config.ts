@@ -1,4 +1,16 @@
+import { readFile, writeFile } from 'node:fs/promises';
 import { defineConfig } from 'orval';
+import { deferZodSchemaConstruction } from '../../../scripts/lazy-zod-schema-codegen';
+
+function deferServiceSchemas(service: string) {
+  return async () => {
+    const path = new URL(`./${service}/generated/zod.ts`, import.meta.url);
+    await writeFile(
+      path,
+      deferZodSchemaConstruction(await readFile(path, 'utf8'))
+    );
+  };
+}
 
 export default defineConfig({
   authService: {
@@ -81,6 +93,7 @@ export default defineConfig({
   },
 
   notificationService: {
+    hooks: { afterAllFilesWrite: deferServiceSchemas('service-notification') },
     output: {
       client: 'zod',
       mode: 'split',
@@ -165,6 +178,7 @@ export default defineConfig({
     },
   },
   storageService: {
+    hooks: { afterAllFilesWrite: deferServiceSchemas('service-storage') },
     output: {
       client: 'zod',
       mode: 'split',

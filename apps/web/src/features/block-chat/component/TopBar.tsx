@@ -10,10 +10,8 @@ import { BlockItemSplitLabel } from '@components/app/split-layout/components/Spl
 import { useBlockId } from '@core/block';
 import { ProviderIcon } from '@core/component/AI/component/ProviderIcon';
 import { useChatInputContext } from '@core/component/AI/context';
-import {
-  getShareDrawerRecipientInput,
-  ShareTrigger,
-} from '@core/component/TopBar/ShareButton';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import { getShareDrawerRecipientInput } from '@core/component/TopBar/share-drawer-focus';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { blockMetadataSignal } from '@core/signal/load';

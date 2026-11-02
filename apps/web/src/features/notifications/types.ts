@@ -3,16 +3,21 @@ import type {
   ApiUserNotification,
   EntityType as NotificationEntityType,
 } from '@service-notification/generated/schemas';
-import { listTypedNotificationsResponse } from '@service-notification/generated/zod';
+import { getListTypedNotificationsResponseSchema } from '@service-notification/generated/zod';
 
 export type UnifiedNotification = Omit<ApiUserNotification, 'owner_id'>;
 
-const _baseSchema = listTypedNotificationsResponse.shape.items.element;
-const _entitySchema = _baseSchema._def.left;
-const _allOfSchema = _baseSchema._def.right;
-export const unifiedNotificationSchema = _entitySchema.and(
-  _allOfSchema.omit({ owner_id: true })
-);
+function createUnifiedNotificationSchema() {
+  const base = getListTypedNotificationsResponseSchema().shape.items.element;
+  return base._def.left.and(base._def.right.omit({ owner_id: true }));
+}
+let unifiedSchema:
+  | ReturnType<typeof createUnifiedNotificationSchema>
+  | undefined;
+export function getUnifiedNotificationSchema() {
+  unifiedSchema ??= createUnifiedNotificationSchema();
+  return unifiedSchema;
+}
 
 type NotificationEntity = { id: string; type: NotificationEntityType };
 

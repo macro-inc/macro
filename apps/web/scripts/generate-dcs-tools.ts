@@ -13,6 +13,7 @@ import { compile } from 'json-schema-to-typescript';
 import { jsonSchemaToZod } from 'json-schema-to-zod';
 import { z } from 'zod';
 import { documentCognitionBase } from './services';
+import { deferZodSchemaConstruction } from './lazy-zod-schema-codegen';
 
 const rustWorkspaceDir = path.resolve(import.meta.dirname, '../../..');
 const aiToolsDir = path.join(rustWorkspaceDir, 'crates', 'ai_tools');
@@ -148,7 +149,7 @@ async function generateSchemasFile(schema: FrontendSchemas) {
 
   await Bun.write(
     schemasFile,
-    `${warning}\nimport { z } from 'zod/v3';\n\n${content.join('\n\n')}\n`
+    deferZodSchemaConstruction(`${warning}\nimport { z } from 'zod/v3';\n\n${content.join('\n\n')}\n`)
   );
 }
 
@@ -213,7 +214,7 @@ const toolParserMap = {
 ${entries
   .map(
     (t) =>
-      `${t.name}: { call: schemas.${t.inputTitle}, response: schemas.${t.outputTitle} }`
+      `${t.name}: { call: schemas.get${t.inputTitle}Schema, response: schemas.get${t.outputTitle}Schema }`
   )
   .join(',\n')}
 };
@@ -252,7 +253,7 @@ function deserializeTool<T extends NamedTool>(
     return err([{ code: 'not_found', message: \`tool name not found \${tool.name}\` }]);
   }
   const parser = toolParserMap[tool.name as ToolName];
-  const maybeToolCall = parser[direction].safeParse(bookingLinkHistory(tool.name, direction, tool.json));
+  const maybeToolCall = parser[direction]().safeParse(bookingLinkHistory(tool.name, direction, tool.json));
   if (maybeToolCall.success) {
     return ok({
       id: tool.id,

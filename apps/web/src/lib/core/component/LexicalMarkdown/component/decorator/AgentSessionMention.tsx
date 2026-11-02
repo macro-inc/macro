@@ -21,7 +21,7 @@ import {
 } from 'lexical';
 import { createSignal, onMount, Show, Suspense, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
-import { autoRegister } from '../../plugins';
+import { autoRegister } from '../../plugins/shared/utils';
 import { AgentSessionMentionLabel } from './AgentSessionMentionLabel';
 import { MagicChip } from './MagicChip';
 

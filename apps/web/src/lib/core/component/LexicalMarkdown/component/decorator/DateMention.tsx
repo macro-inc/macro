@@ -12,7 +12,7 @@ import { createMemo, createSignal, Show, useContext } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { floatWithElement } from '../../directive/floatWithElement';
-import { autoRegister } from '../../plugins';
+import { autoRegister } from '../../plugins/shared/utils';
 import { MentionTooltip } from './MentionTooltip';
 
 false && floatWithElement;

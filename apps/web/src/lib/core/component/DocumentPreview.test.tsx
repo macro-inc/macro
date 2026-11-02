@@ -66,7 +66,7 @@ vi.mock('@app/features/calendar-view/components/SharedEventActions', () => ({
   ),
 }));
 
-import { DocumentPreviewContent } from './DocumentPreview';
+import { DocumentPreviewContent } from './DocumentPreviewContent';
 import { DocumentPreviewSheet } from './DocumentPreviewSheet';
 
 function calendarItem(event: Partial<CalendarMentionEvent>): PreviewItem {

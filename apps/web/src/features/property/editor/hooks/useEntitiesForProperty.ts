@@ -2,7 +2,7 @@ import { useEmail, useUserId } from '@core/context/user';
 import { type IUser, useAugmentUserWithDmActivity } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
 import type { EmailEntity } from '@entity';
-import { createEmailsInfiniteQuery } from '@entity';
+import { createEmailsInfiniteQuery } from '@entity/queries/email';
 import {
   type CombinedEntity,
   createEntitySearchConfig,

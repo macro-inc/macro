@@ -1,12 +1,10 @@
-import {
-  EntityDetail,
-  entityDetailBlockType,
-} from '@app/components/entity-detail/EntityDetail';
+import { EntityDetail } from '@app/components/entity-detail/EntityDetail';
 import { EntityDetailBreadcrumbItem } from '@app/components/entity-detail/EntityDetailBreadcrumbItem';
 import { EntityDetailBreadcrumbSkeleton } from '@app/components/entity-detail/EntityDetailBreadcrumbSkeleton';
 import {
   type EntityDetailNavigationEntry,
   type EntityDetailTarget,
+  entityDetailBlockType,
   entityDetailTarget,
 } from '@app/components/entity-detail/entity-detail-target';
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';

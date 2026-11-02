@@ -1,5 +1,6 @@
 import type { BlockAlias, BlockName } from '@core/block';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { lazyNamed } from '@core/util/lazyNamed';
 import { queryReadyGate } from '@queries/gate';
 import {
   useDocumentAccessLevelQuery,
@@ -15,7 +16,8 @@ import {
   Suspense,
 } from 'solid-js';
 import { getPermissions } from '../SharePermissions';
-import { ShareModal } from './ShareButton';
+
+const ShareModal = lazyNamed(() => import('./ShareButton'), 'ShareModal');
 
 type ShareModalProps = ComponentProps<typeof ShareModal>;
 

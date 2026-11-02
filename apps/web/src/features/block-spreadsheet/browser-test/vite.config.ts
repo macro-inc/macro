@@ -22,7 +22,7 @@ export default defineConfig({
   ],
   resolve: {
     dedupe: ['solid-js', 'loro-crdt'],
-    alias: { 'loro-crdt': 'loro-crdt/base64' },
+    alias: [{ find: /^loro-crdt$/, replacement: 'loro-crdt/base64' }],
   },
   // Worker-only lazy dependencies otherwise trigger a page reload on the first
   // import, discarding the file chooser's pending request in a cold test run.

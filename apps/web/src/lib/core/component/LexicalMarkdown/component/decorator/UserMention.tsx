@@ -4,7 +4,7 @@ import type { UserMentionDecoratorProps } from '@macro-inc/lexical-core';
 import { cn } from '@ui';
 import { createEffect, createMemo, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
-import { UPDATE_USER_DISPLAY_NAME_COMMAND } from '../../plugins';
+import { UPDATE_USER_DISPLAY_NAME_COMMAND } from '../../plugins/mentions/commands';
 
 function emailLocalPart(email: string): string {
   return email.split('@')[0] || email;

@@ -1,5 +1,5 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
-import { isSkillEntity, type SkillEntity } from '@entity';
+import { isSkillEntity, type SkillEntity } from '@entity/types/entity';
 import { queryReadyGate } from '@queries/gate';
 import { useSoupItemsQuery } from '@queries/soup/items';
 import { createMemo } from 'solid-js';

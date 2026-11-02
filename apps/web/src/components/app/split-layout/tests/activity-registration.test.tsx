@@ -128,10 +128,12 @@ vi.mock('@app/features/email-view/email-view', () => ({}));
 vi.mock('@app/features/email-view/components/EmailDetailView', () => ({
   EmailDetailRouteView: () => null,
 }));
+vi.mock('@app/features/home/home-pending-view', () => ({
+  HomePendingView: () => null,
+}));
 vi.mock('@app/features/home/home-view', () => ({
   HomeDetailRouteView: () => null,
   HomeCalendarRouteView: () => null,
-  HomePendingView: () => null,
 }));
 vi.mock('@app/features/next-soup/filters/filter-store', () => ({}));
 vi.mock('@app/features/next-soup/filters/filter-store/query-store', () => ({}));

@@ -1,6 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
-
-vi.mock('@entity', () => ({ isTaskEntity: () => false }));
+import { describe, expect, it } from 'vitest';
 
 import { entityTypeToItemType, parseEntityType } from './entityConversion';
 

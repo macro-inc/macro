@@ -1,20 +1,30 @@
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
-import { getDocumentVersionResponse } from '@service-storage/generated/zod';
+import { getGetDocumentVersionResponseSchema } from '@service-storage/generated/zod';
 import { z } from 'zod';
 import type { ClearablePerQueryPersistence } from '../../persistence/per-query-idb';
 import { documentLoadKeys } from './keys';
 
 const BUSTER = 'sync-document-open-v1';
-const contextSchema = z.object({
-  syncService: z.literal(true),
-  documentMetadata:
-    getDocumentVersionResponse.shape.data.shape.documentMetadata.omit({
-      documentBom: true,
-      modificationData: true,
-    }),
-  userAccessLevel: getDocumentVersionResponse.shape.data.shape.userAccessLevel,
-});
+function createContextSchema() {
+  return z.object({
+    syncService: z.literal(true),
+    documentMetadata:
+      getGetDocumentVersionResponseSchema().shape.data.shape.documentMetadata.omit(
+        {
+          documentBom: true,
+          modificationData: true,
+        }
+      ),
+    userAccessLevel:
+      getGetDocumentVersionResponseSchema().shape.data.shape.userAccessLevel,
+  });
+}
+let contextSchema: ReturnType<typeof createContextSchema> | undefined;
+function getContextSchema() {
+  contextSchema ??= createContextSchema();
+  return contextSchema;
+}
 
 /** Non-secret, last-authorized context for a ready sync-service document. */
 export type OfflineDocumentContext = {
@@ -69,7 +79,7 @@ export function createOfflineDocumentContextCache(options: {
           JSON.stringify(entry.queryKey) !== hash
         )
           return;
-        const parsed = contextSchema.safeParse(entry.data);
+        const parsed = getContextSchema().safeParse(entry.data);
         if (
           !parsed.success ||
           parsed.data.documentMetadata.documentId !== documentId ||
@@ -87,7 +97,7 @@ export function createOfflineDocumentContextCache(options: {
       context: OfflineDocumentContext
     ): Promise<void> {
       if (!isCurrent(session)) return;
-      const data = contextSchema.parse(context);
+      const data = getContextSchema().parse(context);
       const queryKey = key(session, data.documentMetadata.documentId);
       if (data.documentMetadata.deletedAt != null) {
         options.store.remove(JSON.stringify(queryKey));

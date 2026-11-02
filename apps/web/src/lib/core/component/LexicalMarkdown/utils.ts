@@ -1,4 +1,3 @@
-import { ENABLE_MARKDOWN_SEARCH_TEXT } from '@core/constant/featureFlags';
 import { $isCodeNode } from '@lexical/code';
 import {
   $createListItemNode,
@@ -79,7 +78,8 @@ import { MarkdownEditorErrors } from './constants';
 import {
   $applyDocumentMetadataFromSerialized,
   $getDocumentMetadata,
-} from './plugins';
+} from './plugins/document-metadata';
+import { createLoroStateSerializer } from './utils/create-loro-state-serializer';
 import { MARKDOWN_VERSION_COUNTER } from './version';
 
 /**
@@ -862,26 +862,9 @@ function cleanState(state: SerializedEditorState): SerializedEditorState {
   ]);
 }
 
-/**
- * Transform a serialized editor state into one that is safe to the LORO sync plugin.
- */
+/** Cold export for snapshots; live collaboration owns a reusable serializer. */
 export function loroSyncState(state: EditorState): SerializedEditorState {
-  let serializedState;
-  if (ENABLE_MARKDOWN_SEARCH_TEXT) {
-    serializedState = serializedSateWithSearchText(state);
-  } else {
-    serializedState = state.toJSON();
-  }
-  return transformSerializedEditorState(
-    stripDraftCommentMarks(serializedState),
-    [
-      // completion nodes should not be saved.
-      (node) => {
-        if (node.type === 'completion') return null;
-        return node;
-      },
-    ]
-  );
+  return createLoroStateSerializer()(state);
 }
 
 function serializedSateWithSearchText(

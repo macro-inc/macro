@@ -18,7 +18,7 @@ import {
 } from 'lexical';
 import { createEffect, createMemo, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
-import { autoRegister } from '../../plugins';
+import { autoRegister } from '../../plugins/shared/utils';
 import { MentionTooltip } from './MentionTooltip';
 
 function optionLabel(value: unknown): string | undefined {

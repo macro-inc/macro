@@ -14,7 +14,10 @@ import {
   createNotificationSource,
   setDoneOverride,
 } from '../notification-source';
-import { type UnifiedNotification, unifiedNotificationSchema } from '../types';
+import {
+  getUnifiedNotificationSchema,
+  type UnifiedNotification,
+} from '../types';
 
 const mocks = vi.hoisted(() => ({
   graphqlCacheEnabled: true,
@@ -1285,5 +1288,5 @@ it('accepts the independent external chat notification through the generated wir
       },
     },
   };
-  expect(unifiedNotificationSchema.safeParse(row).success).toBe(true);
+  expect(getUnifiedNotificationSchema().safeParse(row).success).toBe(true);
 });

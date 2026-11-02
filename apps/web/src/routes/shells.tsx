@@ -11,8 +11,8 @@ import { useIsAuthenticated } from '@core/auth';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { releaseNotificationCover } from '@macro/tauri/push-api';
 import { ImperativeDialogHost } from '@ui';
-import { type JSX, onCleanup, onMount, type ParentProps, Show } from 'solid-js';
-import { LIKELY_NEXT_VIEWS } from './lazy-route-views';
+import { type JSX, onMount, type ParentProps, Show } from 'solid-js';
+import { BlockPreloads } from './block-preloads';
 import { PublicBookingShell } from './public-booking-shell';
 
 /** Takes over from index.html's boot shell once this shell has drawn. */
@@ -102,63 +102,17 @@ function AppPage(props: ParentProps) {
   return <AppChrome>{props.children}</AppChrome>;
 }
 
-type PreloadableView = { preload: () => Promise<unknown> };
-type NetworkInformation = { saveData?: boolean };
-
-/**
- * Warms the likely-next view chunks one at a time while the app is open,
- * leaving startup and hidden tabs alone and skipping Save-Data connections.
- */
-function warmRouteViews(views: readonly PreloadableView[]): void {
-  const connection = (
-    navigator as Navigator & { connection?: NetworkInformation }
-  ).connection;
-  if (connection?.saveData) return;
-
-  const queue = [...views];
-  let disposed = false;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-
-  const next = () => {
-    const view = disposed ? undefined : queue.shift();
-    if (!view) return;
-    void view
-      .preload()
-      .catch(() => {})
-      .finally(schedule);
-  };
-  function schedule() {
-    if (disposed || queue.length === 0) return;
-    if (document.visibilityState !== 'visible') {
-      document.addEventListener('visibilitychange', schedule, { once: true });
-      return;
-    }
-    if ('requestIdleCallback' in window) {
-      window.requestIdleCallback(next, { timeout: 5000 });
-    } else {
-      timer = setTimeout(next, 1000);
-    }
-  }
-
-  // Leave the first seconds to the landing view's own data and chunks.
-  timer = setTimeout(schedule, 2500);
-  onCleanup(() => {
-    disposed = true;
-    clearTimeout(timer);
-    document.removeEventListener('visibilitychange', schedule);
-  });
-}
-
 /** The app: its chrome around the split layout, which renders every pane. */
 export function AppShell(): JSX.Element {
-  warmRouteViews(LIKELY_NEXT_VIEWS);
   return (
     <AppProviders>
-      <SplitLayoutProvider>
-        <AppPage>
-          <SplitLayout />
-        </AppPage>
-      </SplitLayoutProvider>
+      <BlockPreloads>
+        <SplitLayoutProvider>
+          <AppPage>
+            <SplitLayout />
+          </AppPage>
+        </SplitLayoutProvider>
+      </BlockPreloads>
     </AppProviders>
   );
 }

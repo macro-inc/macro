@@ -6,6 +6,7 @@ import { makeFileFromBlob } from '@service-storage/util/makeFileFromBlob';
 import { createSyncServiceSource } from '@service-sync/source';
 import { err, ok } from 'neverthrow';
 import { lazy } from 'solid-js';
+import { loadMarkdownComponent } from './load-component';
 
 export const definition = defineBlock({
   name: 'md',
@@ -16,7 +17,7 @@ export const definition = defineBlock({
     { name: 'snippet', defaultFileName: 'New Snippet' },
     { name: 'skill', defaultFileName: 'New Skill' },
   ],
-  component: lazy(() => import('./component/Block')),
+  component: lazy(loadMarkdownComponent),
   accepted: {
     md: 'text/markdown',
   },
@@ -42,13 +43,6 @@ export const definition = defineBlock({
           context.value;
         loadSpan.setAttr('doc.context.cached', context.value.fromCache);
 
-        const { source: syncSource, doInitialSync } = createSyncServiceSource(
-          source.id,
-          token,
-          authorization,
-          parentSpan
-        );
-
         // HACK: unfortunately, most blocks still rely on a dssFile for things like
         // metadata and fileName. so I'm creating an empty blob file to get around that.
         const fileWithoutBlob = await makeFileFromBlob({
@@ -65,6 +59,13 @@ export const definition = defineBlock({
           // @ts-ignore: TODO: fix / replace @macro-inc/document-processing-job-types
           metadata: documentMetadata,
         });
+
+        const { source: syncSource, doInitialSync } = createSyncServiceSource(
+          source.id,
+          token,
+          authorization,
+          parentSpan
+        );
 
         return ok({
           dssFile: fileWithoutBlob,

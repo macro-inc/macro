@@ -9,7 +9,7 @@ import {
   useMaybeBlockName,
 } from '@core/block';
 import { RecipientSelector } from '@core/component/RecipientSelector';
-import { ShareOptions } from '@core/component/TopBar/ShareButton';
+import { ShareOptions } from '@core/component/TopBar/ShareOptions';
 import { resolveBlockAlias } from '@core/constant/allBlocks';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';

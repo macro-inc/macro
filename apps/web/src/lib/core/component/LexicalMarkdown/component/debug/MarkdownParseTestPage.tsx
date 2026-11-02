@@ -10,10 +10,8 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
-import {
-  createLexicalWrapper,
-  LexicalWrapperContext,
-} from '../../context/LexicalWrapperContext';
+import { createLexicalWrapper } from '../../context/createLexicalWrapper';
+import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import {
   codePlugin,
   createAccessoryStore,

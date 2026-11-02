@@ -3,7 +3,8 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
+import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/createLexicalWrapper';
+
 import {
   autoRegister,
   singleLinePlugin,

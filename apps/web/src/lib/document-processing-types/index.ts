@@ -60,10 +60,6 @@ export type {
 // Docx job types
 
 export {
-  getDocumentKeyParts,
-  makeDocumentKey,
-} from './documentProcessing/documentKey';
-export {
   type DocumentProcessResponse,
   type ErrorResponse as DocumentProcessErrorResponse,
   isDocumentProcessResponse,
@@ -133,7 +129,6 @@ export type {
 export {
   isEmptyPdfCoParse,
   isPdfThreadPlaceable,
-  modificationDataReplacer,
   PdfAllowableEditsSchema,
   PdfAnomalySchema,
   PdfColorSchema,
@@ -148,3 +143,5 @@ export {
   PdfSegmentSchema,
   PdfShapeType,
 } from './pdf/protocol';
+
+export { modificationDataReplacer } from './pdf/serialization';

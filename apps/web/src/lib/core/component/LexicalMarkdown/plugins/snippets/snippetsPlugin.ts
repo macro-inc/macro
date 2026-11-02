@@ -33,7 +33,8 @@ import {
   type SerializedEditorState,
 } from 'lexical';
 import { nanoid } from 'nanoid';
-import { createLexicalWrapper } from '../../context/LexicalWrapperContext';
+import { createLexicalWrapper } from '../../context/createLexicalWrapper';
+
 import type { MenuOperations } from '../../shared/inlineMenu';
 import { registerInlineMenuTrigger } from '../../shared/registerInlineMenuTrigger';
 import {

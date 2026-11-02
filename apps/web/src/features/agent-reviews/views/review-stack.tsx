@@ -3,8 +3,8 @@ import { EmailDraftComposer } from '@core/component/AI/component/tool/email/Draf
 import type { UserToolReviewSink } from '@core/component/AI/component/tool/user-tool-review';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
-  CreateCalendarEvent,
-  SendEmail,
+  getCreateCalendarEventSchema,
+  getSendEmailSchema,
 } from '@service-cognition/generated/tools/schemas';
 import { Button } from '@ui/components/Button';
 import { ConfirmDialog } from '@ui/components/ConfirmDialog';
@@ -269,8 +269,10 @@ export function ReviewStack(props: {
           {(_key) => {
             const item = current();
             if (!item) return null;
-            const email = SendEmail.safeParse(item.draft);
-            const calendar = CreateCalendarEvent.safeParse(item.draft);
+            const email = getSendEmailSchema().safeParse(item.draft);
+            const calendar = getCreateCalendarEventSchema().safeParse(
+              item.draft
+            );
             return (
               <Switch>
                 <Match when={record().kind === 'email' && email.success}>
@@ -431,7 +433,7 @@ function reviewSummary(item: ReviewItem, kind: Review['kind']): ReviewSummary {
     .exhaustive();
 }
 function emailSummary(item: ReviewItem, summary: ReviewSummary): ReviewSummary {
-  const email = SendEmail.safeParse(item.draft);
+  const email = getSendEmailSchema().safeParse(item.draft);
   if (!email.success) return summary;
   return {
     ...summary,
@@ -450,7 +452,7 @@ function calendarSummary(
   item: ReviewItem,
   summary: ReviewSummary
 ): ReviewSummary {
-  const calendar = CreateCalendarEvent.safeParse(item.draft);
+  const calendar = getCreateCalendarEventSchema().safeParse(item.draft);
   if (!calendar.success) return summary;
   const time = calendar.data.time;
   const description =

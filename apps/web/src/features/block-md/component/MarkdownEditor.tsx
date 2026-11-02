@@ -15,10 +15,8 @@ import {
   getErrorDescription,
   MarkdownEditorErrors,
 } from '@core/component/LexicalMarkdown/constants';
-import {
-  createLexicalWrapper,
-  LexicalWrapperContext,
-} from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
+import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/createLexicalWrapper';
+import { LexicalWrapperContext } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import { useEditorEntityDrop } from '@core/component/LexicalMarkdown/editing/entityDrop';
 import { MarkdownEditingOverlays } from '@core/component/LexicalMarkdown/editing/MarkdownEditingOverlays';
 import {

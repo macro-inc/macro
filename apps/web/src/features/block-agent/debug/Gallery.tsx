@@ -33,7 +33,6 @@ import { Message } from '../component/AgentMessage';
 import { ReplyToSelection } from '../component/ReplyToSelection';
 import {
   ActionLine,
-  AgentInput,
   AgentModelSelector,
   AnimatedNumber,
   ComposerNotice,
@@ -44,7 +43,6 @@ import {
   PierreDiff,
   QuestionAnswers,
   type QueuedPromptItem,
-  QueuedPrompts,
   type QuoteInsert,
   TextShimmer,
   Thought,
@@ -53,6 +51,7 @@ import {
   ToolErrorCard,
   ToolStatusTitle,
 } from '../ui';
+import { AgentInput, QueuedPrompts } from '../ui/composer';
 import { LiveToolGroup } from '../views/LiveToolGroup';
 
 /**

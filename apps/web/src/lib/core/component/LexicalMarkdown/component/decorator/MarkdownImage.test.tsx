@@ -5,17 +5,6 @@
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { describe, expect, it, vi } from 'vitest';
 
-const mediaPlugin = vi.hoisted(() => ({
-  $upgradeDSSMediaUrl: vi.fn(),
-  getMediaUrl: vi.fn(),
-  ON_MEDIA_COMPONENT_MOUNT_COMMAND: 'ON_MEDIA_COMPONENT_MOUNT_COMMAND',
-  UPDATE_MEDIA_SIZE_COMMAND: 'UPDATE_MEDIA_SIZE_COMMAND',
-  UPLOAD_MEDIA_FAILURE_COMMAND: 'UPLOAD_MEDIA_FAILURE_COMMAND',
-  UPLOAD_MEDIA_START_COMMAND: 'UPLOAD_MEDIA_START_COMMAND',
-  UPLOAD_MEDIA_SUCCESS_COMMAND: 'UPLOAD_MEDIA_SUCCESS_COMMAND',
-}));
-vi.mock('../../plugins/media', () => mediaPlugin);
-vi.mock('../../plugins', () => mediaPlugin);
 vi.mock('@core/component/Lightbox', () => ({
   Lightbox: () => null,
 }));

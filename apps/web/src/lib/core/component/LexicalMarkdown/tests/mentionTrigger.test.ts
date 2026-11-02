@@ -26,7 +26,7 @@ vi.mock('@core/constant/featureFlags', () => ({
   enableSnippets: {},
   isFeatureEnabled: () => true,
 }));
-vi.mock('../context/LexicalWrapperContext', async () => {
+vi.mock('../context/createLexicalWrapper', async () => {
   const { createEditor } = await import('lexical');
   return {
     createLexicalWrapper: () => ({ editor: createEditor(), cleanup: vi.fn() }),

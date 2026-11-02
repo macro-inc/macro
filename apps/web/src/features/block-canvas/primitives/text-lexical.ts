@@ -1,5 +1,6 @@
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
-import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
+import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/createLexicalWrapper';
+
 import { setEditorStateFromMarkdown } from '@core/component/LexicalMarkdown/utils';
 import { $generateNodesFromDOM } from '@lexical/html';
 import type { RichText } from '@macro-inc/graphics';

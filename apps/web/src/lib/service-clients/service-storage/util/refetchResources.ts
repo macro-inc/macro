@@ -1,8 +1,8 @@
-import { refetchDocumentShareButtonResource } from '@core/component/TopBar/ShareButton';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { invalidateUserQuota } from '@queries/auth';
 import { refetchHistory } from '@queries/history/history';
 import { invalidatePreview } from '@queries/preview';
+import { refetchBlockSharePermissions } from '@queries/share/block-share-permissions';
 import { invalidateDeletedItems } from '@queries/storage/deleted';
 import { invalidateProjects } from '@queries/storage/projects';
 
@@ -19,5 +19,5 @@ export function refetchResources() {
 async function refetchProjectResources(_force = false) {
   await invalidateProjects();
 
-  refetchDocumentShareButtonResource();
+  refetchBlockSharePermissions();
 }

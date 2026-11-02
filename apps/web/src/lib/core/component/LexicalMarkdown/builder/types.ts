@@ -6,7 +6,8 @@ import type { HistoryItem } from '@queries/history/history';
 import type { LexicalEditor, SerializedEditorState } from 'lexical';
 import type { Store } from 'solid-js/store';
 import type { MentionBucketId } from '../component/menu/MentionsMenu/MentionsMenuController';
-import type { createLexicalWrapper } from '../context/LexicalWrapperContext';
+import type { createLexicalWrapper } from '../context/createLexicalWrapper';
+
 import type {
   AgentCommandItem,
   AutoLinkMatchMode,

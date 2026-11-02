@@ -1,5 +1,8 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
-import { type CrmCompanyEntity, isCrmCompanyEntity } from '@entity';
+import {
+  type CrmCompanyEntity,
+  isCrmCompanyEntity,
+} from '@entity/types/entity';
 import type { useSoupItemsQuery } from '@queries/soup/items';
 import { type Accessor, createMemo } from 'solid-js';
 

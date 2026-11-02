@@ -468,3 +468,30 @@ it('holds the enclosing view until both data and component code are ready', asyn
   await settled.promise;
   expect(ready).toHaveBeenCalledOnce();
 });
+
+it('cleans up a sync source returned after its load owner leaves', async () => {
+  const pending = Promise.withResolvers<void>();
+  const cleanupSource = vi.fn();
+  const view = render(() => (
+    <BlockLoader
+      id="document"
+      source={{ type: 'dss', id: 'document' }}
+      definition={{
+        name: 'md',
+        description: 'Document',
+        accepted: {},
+        component: () => null,
+        load: async () => {
+          await pending.promise;
+          return ok({ syncSource: { cleanup: cleanupSource } });
+        },
+      }}
+    />
+  ));
+  view.unmount();
+  pending.resolve();
+  await pending.promise;
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(cleanupSource).toHaveBeenCalledOnce();
+});

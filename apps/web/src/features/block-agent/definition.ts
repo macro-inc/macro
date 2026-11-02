@@ -1,11 +1,11 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
 import { ok } from 'neverthrow';
-import Block from './component/Block';
+import { lazy } from 'solid-js';
 
 export const definition = defineBlock({
   name: 'agent',
   description: 'View an agent session',
-  component: Block,
+  component: lazy(() => import('./component/Block')),
   liveTrackingEnabled: false,
   async load(source, _intent) {
     // A just-created session's id is the real one from the first frame

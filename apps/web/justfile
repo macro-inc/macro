@@ -212,6 +212,7 @@ test-watch:
 # The Linux dev shell points LD_LIBRARY_PATH at Nix libraries, which Playwright's
 # system-glibc Chromium can't load; Nix binaries find theirs through RPATH.
 test-signup-browser *ARGS:
+    env -u LD_LIBRARY_PATH bunx playwright test --config src/components/app/browser-test/playwright.config.ts {{ARGS}}
     env -u LD_LIBRARY_PATH bunx playwright test --config src/features/onboarding/browser-test/playwright.config.ts {{ARGS}}
     env -u LD_LIBRARY_PATH bunx playwright test --config src/features/auth/browser-test/playwright.config.ts {{ARGS}}
 

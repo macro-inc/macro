@@ -30,10 +30,7 @@ import {
   VideoNode,
   WatermarkNode,
 } from '@macro-inc/lexical-core';
-import {
-  clearDecorators,
-  setDecorator,
-} from '@macro-inc/lexical-core/decoratorRegistry';
+import { setDecorator } from '@macro-inc/lexical-core/decoratorRegistry';
 import type { HtmlRenderDecoratorProps } from '@macro-inc/lexical-core/nodes/HtmlRenderNode';
 import { createComponent, Suspense } from 'solid-js';
 import { AgentActivity } from './component/decorator/AgentActivity';
@@ -80,10 +77,12 @@ const HtmlRender = (props: HtmlRenderDecoratorProps) =>
   });
 
 /**
- * This has to run once before any Lexicals mount. Currently imported in index.tsx.
+ * The editor factory installs decorators synchronously before creating its first editor.
  */
+let initialized = false;
+
 export function initializeLexical() {
-  clearDecorators();
+  if (initialized) return;
   setDecorator(AgentContextNode, AgentContext);
   setDecorator(AgentActivityNode, AgentActivity);
   setDecorator(HorizontalRuleNode, HorizontalRule);
@@ -114,4 +113,5 @@ export function initializeLexical() {
   setDecorator(MagicChipNode, MagicChip);
   setDecorator(CursorSystemNotificationNode, CursorSystemNotification);
   registerDiffNodeFactory();
+  initialized = true;
 }

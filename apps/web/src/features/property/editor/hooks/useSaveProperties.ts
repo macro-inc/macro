@@ -1,4 +1,4 @@
-import { isTaskEntity } from '@entity';
+import { isTaskEntity } from '@entity/types/entity';
 import type { PropertyEditorEntity } from '@property/editor/state/propertyEditor';
 import type {
   Property,

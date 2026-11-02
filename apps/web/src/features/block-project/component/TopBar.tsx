@@ -28,10 +28,8 @@ import {
   SplitToolbarRight,
 } from '@components/app/split-layout/components/SplitToolbar';
 import { useBlockId } from '@core/block';
-import {
-  getShareDrawerRecipientInput,
-  ShareTrigger,
-} from '@core/component/TopBar/ShareButton';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import { getShareDrawerRecipientInput } from '@core/component/TopBar/share-drawer-focus';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { ENABLE_PROJECT_SHARING } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';

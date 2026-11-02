@@ -108,9 +108,7 @@ export default defineConfig({
   ],
   resolve: {
     dedupe: ['solid-js'],
-    alias: {
-      'loro-crdt': 'loro-crdt/base64',
-    },
+    alias: [{ find: /^loro-crdt$/, replacement: 'loro-crdt/base64' }],
   },
   server: {
     host: '127.0.0.1',

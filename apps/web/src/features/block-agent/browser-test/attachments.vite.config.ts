@@ -11,7 +11,7 @@ export default mergeConfig(base, {
         find: '@core/constant/allBlocks',
         replacement: `${directory}/attachment-blocks.ts`,
       },
-      { find: 'loro-crdt', replacement: 'loro-crdt/base64' },
+      { find: /^loro-crdt$/, replacement: 'loro-crdt/base64' },
     ],
   },
   optimizeDeps: {

@@ -25,11 +25,9 @@ import {
   untrack,
 } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
+import { createLexicalWrapper } from '../../context/createLexicalWrapper';
 import { FloatingMenuGroup } from '../../context/FloatingMenuContext';
-import {
-  createLexicalWrapper,
-  LexicalWrapperContext,
-} from '../../context/LexicalWrapperContext';
+import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import {
   type AutoLinkMatchMode,
   autoRegister,

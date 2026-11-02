@@ -10,7 +10,8 @@ import {
   type ListNavActions,
   useListKeyBindings,
 } from '@core/util/useListKeyBindings';
-import { type EntityData, InlineEntity, isTaskEntity } from '@entity';
+import { InlineEntity } from '@entity/composed/InlineEntity';
+import { type EntityData, isTaskEntity } from '@entity/types/entity';
 import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
 import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import PropertiesIcon from '@icon/system/regular/sliders-horizontal.svg';

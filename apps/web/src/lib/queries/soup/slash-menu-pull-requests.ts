@@ -1,5 +1,5 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
-import { isGithubPrEntity } from '@entity';
+import { isGithubPrEntity } from '@entity/types/entity';
 import { type Accessor, createMemo } from 'solid-js';
 import { queryReadyGate } from '../gate';
 import { useSoupItemsQuery } from './items';
