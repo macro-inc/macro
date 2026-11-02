@@ -16,7 +16,7 @@ const SPLIT_DOWN: &str = include_str!(concat!(
 ));
 const FOLDERS_UP: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../macro_db_client/migrations/20261102030018_databases_in_folders.sql"
+    "/../macro_db_client/migrations/20261102210628_databases_in_folders.sql"
 ));
 const WEBHOOKS_DOWN: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),

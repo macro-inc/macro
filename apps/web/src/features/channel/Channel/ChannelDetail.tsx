@@ -1,3 +1,11 @@
+import {
+  type PriorityCollapser,
+  useRegisterPriorityCollapseItem,
+} from '@app/components/priority-collapse/createPriorityCollapser';
+import {
+  createPriorityCollapseController,
+  PriorityCollapseOverflowSensor,
+} from '@app/components/priority-collapse/PriorityCollapseOverflowSensor';
 import { ViewShell } from '@app/components/view-shell';
 import { ChatWithAgentButton } from '@app/features/chat/ChatWithAgentButton';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
@@ -18,15 +26,9 @@ import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipant
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import {
-  createPriorityCollapseController,
-  PriorityCollapseOverflowSensor,
-} from '@components/app/split-layout/components/PriorityCollapseOverflowSensor';
-import {
-  useRegisterPriorityCollapseItem,
   useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
-import type { PriorityCollapser } from '@components/app/split-layout/utils/createPriorityCollapser';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import {
   useChannel,

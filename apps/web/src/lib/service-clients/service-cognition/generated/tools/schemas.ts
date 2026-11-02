@@ -2539,7 +2539,10 @@ export const CreateChannelResponse = z.object({
   summary: z.string(),
 });
 
-export const CreateCompany = z.object({ name: z.string(), domain: z.string() });
+export const CreateCompany = z.object({
+  name: z.string(),
+  domain: z.union([z.string(), z.null()]).optional(),
+});
 
 export const CreateCompanyResponse = z.object({
   companyId: z.string().uuid(),
@@ -3548,6 +3551,11 @@ export const MutationResult = z.object({
             .union([z.string().datetime({ offset: true }), z.null()])
             .optional(),
           confirmationMessage: z.string(),
+          branding: z.object({
+            logoFileId: z.union([z.string().uuid(), z.null()]).optional(),
+            coverFileId: z.union([z.string().uuid(), z.null()]).optional(),
+            accentColor: z.union([z.string(), z.null()]).optional(),
+          }),
           createdAt: z.string().datetime({ offset: true }),
           updatedAt: z.string().datetime({ offset: true }),
           projectId: z.union([z.string(), z.null()]).optional(),
@@ -9950,6 +9958,25 @@ export const IssueBotCredentialResponse = z.object({
   summary: z.string(),
 });
 
+export const ListAgentUpdates = z.record(z.never());
+
+export const AgentUpdates = z.object({
+  items: z.array(
+    z.object({
+      sessionId: z.string().uuid(),
+      sessionName: z.string(),
+      harness: z.string(),
+      pullRequestUrl: z.union([z.string(), z.null()]).optional(),
+      kind: z.enum(['permission', 'elicitation', 'tool_approval', 'stalled']),
+      summary: z.string(),
+      since: z.string().datetime({ offset: true }),
+      options: z.array(z.string()),
+    })
+  ),
+  truncated: z.boolean(),
+  truncationNotice: z.union([z.string(), z.null()]).optional(),
+});
+
 export const ListAgents = z.record(z.any());
 
 export const ListAgentsResponse = z.object({
@@ -11011,6 +11038,11 @@ export const ListResult = z.object({
           .union([z.string().datetime({ offset: true }), z.null()])
           .optional(),
         confirmationMessage: z.string(),
+        branding: z.object({
+          logoFileId: z.union([z.string().uuid(), z.null()]).optional(),
+          coverFileId: z.union([z.string().uuid(), z.null()]).optional(),
+          accentColor: z.union([z.string(), z.null()]).optional(),
+        }),
         createdAt: z.string().datetime({ offset: true }),
         updatedAt: z.string().datetime({ offset: true }),
         projectId: z.union([z.string(), z.null()]).optional(),
@@ -13757,6 +13789,11 @@ export const ReadResult = z.any().superRefine((x, ctx) => {
             .union([z.string().datetime({ offset: true }), z.null()])
             .optional(),
           confirmationMessage: z.string(),
+          branding: z.object({
+            logoFileId: z.union([z.string().uuid(), z.null()]).optional(),
+            coverFileId: z.union([z.string().uuid(), z.null()]).optional(),
+            accentColor: z.union([z.string(), z.null()]).optional(),
+          }),
           createdAt: z.string().datetime({ offset: true }),
           updatedAt: z.string().datetime({ offset: true }),
           projectId: z.union([z.string(), z.null()]).optional(),
@@ -14371,6 +14408,11 @@ export const ReadResult = z.any().superRefine((x, ctx) => {
             .union([z.string().datetime({ offset: true }), z.null()])
             .optional(),
           confirmationMessage: z.string(),
+          branding: z.object({
+            logoFileId: z.union([z.string().uuid(), z.null()]).optional(),
+            coverFileId: z.union([z.string().uuid(), z.null()]).optional(),
+            accentColor: z.union([z.string(), z.null()]).optional(),
+          }),
           createdAt: z.string().datetime({ offset: true }),
           updatedAt: z.string().datetime({ offset: true }),
           projectId: z.union([z.string(), z.null()]).optional(),

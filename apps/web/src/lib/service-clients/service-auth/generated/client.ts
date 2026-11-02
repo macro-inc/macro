@@ -25,6 +25,9 @@ import type {
   CreateTeamRequest,
   CreditCheckoutRequestBody,
   CreditCheckoutResponse,
+  CreditPurchaseRequestBody,
+  CreditPurchaseResponse,
+  CurrentSystemStatus,
   CursorApiKeyStatus,
   CursorModelsResponse,
   EmailConnectionProviders,
@@ -84,6 +87,7 @@ import type {
   PutUserNameParams,
   RedeemGtmInviteLinkRequest,
   ResendFusionauthVerifyUserEmailRequest,
+  SendDomainNoticeResponse,
   SendInviteBody,
   SendMobileWelcomeEmailRequest,
   SendMobileWelcomeEmailResponse,
@@ -93,8 +97,11 @@ import type {
   SetGithubPullRequestStateResponse,
   SsoLoginParams,
   SsoRequiredResponse,
+  StatusUpdate,
   StripeSessionResponse,
   SubscriptionStatus,
+  SystemStatus,
+  SystemStatusHistory,
   Team,
   TeamInviteLinkResponse,
   TeamInviteLinkTeam,
@@ -468,6 +475,82 @@ export const createAiCreditCheckout = async (
     status: res.status,
     headers: res.headers,
   } as createAiCreditCheckoutResponse;
+};
+
+/**
+ * @summary Buy a credit pack now, charged to the payer's card on file. Any paid team
+member may buy, within the team's monthly credit limit.
+ */
+export type purchaseAiCreditsResponse200 = {
+  data: CreditPurchaseResponse;
+  status: 200;
+};
+
+export type purchaseAiCreditsResponse400 = {
+  data: AiBillingErrorBody;
+  status: 400;
+};
+
+export type purchaseAiCreditsResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type purchaseAiCreditsResponse402 = {
+  data: AiBillingErrorBody;
+  status: 402;
+};
+
+export type purchaseAiCreditsResponse409 = {
+  data: AiBillingErrorBody;
+  status: 409;
+};
+
+export type purchaseAiCreditsResponse500 = {
+  data: AiBillingErrorBody;
+  status: 500;
+};
+
+export type purchaseAiCreditsResponseSuccess = purchaseAiCreditsResponse200 & {
+  headers: Headers;
+};
+export type purchaseAiCreditsResponseError = (
+  | purchaseAiCreditsResponse400
+  | purchaseAiCreditsResponse401
+  | purchaseAiCreditsResponse402
+  | purchaseAiCreditsResponse409
+  | purchaseAiCreditsResponse500
+) & {
+  headers: Headers;
+};
+
+export type purchaseAiCreditsResponse =
+  | purchaseAiCreditsResponseSuccess
+  | purchaseAiCreditsResponseError;
+
+export const getPurchaseAiCreditsUrl = () => {
+  return `/ai-billing/credits/purchase`;
+};
+
+export const purchaseAiCredits = async (
+  creditPurchaseRequestBody: CreditPurchaseRequestBody,
+  options?: RequestInit
+): Promise<purchaseAiCreditsResponse> => {
+  const res = await fetch(getPurchaseAiCreditsUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(creditPurchaseRequestBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: purchaseAiCreditsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as purchaseAiCreditsResponse;
 };
 
 /**
@@ -2578,14 +2661,21 @@ export type emailConnectionProvidersResponse400 = {
   status: 400;
 };
 
+export type emailConnectionProvidersResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
 export type emailConnectionProvidersResponseSuccess =
   emailConnectionProvidersResponse200 & {
     headers: Headers;
   };
-export type emailConnectionProvidersResponseError =
-  emailConnectionProvidersResponse400 & {
-    headers: Headers;
-  };
+export type emailConnectionProvidersResponseError = (
+  | emailConnectionProvidersResponse400
+  | emailConnectionProvidersResponse401
+) & {
+  headers: Headers;
+};
 
 export type emailConnectionProvidersResponse =
   | emailConnectionProvidersResponseSuccess
@@ -4163,6 +4253,196 @@ export const sessionLogin = async (
 };
 
 /**
+ * @summary The status every user sees. Public: the banner shows wherever the app
+runs, signed in or not.
+ */
+export type getSystemStatusResponse200 = {
+  data: CurrentSystemStatus;
+  status: 200;
+};
+
+export type getSystemStatusResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getSystemStatusResponseSuccess = getSystemStatusResponse200 & {
+  headers: Headers;
+};
+export type getSystemStatusResponseError = getSystemStatusResponse500 & {
+  headers: Headers;
+};
+
+export type getSystemStatusResponse =
+  | getSystemStatusResponseSuccess
+  | getSystemStatusResponseError;
+
+export const getGetSystemStatusUrl = () => {
+  return `/system-status`;
+};
+
+export const getSystemStatus = async (
+  options?: RequestInit
+): Promise<getSystemStatusResponse> => {
+  const res = await fetch(getGetSystemStatusUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getSystemStatusResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getSystemStatusResponse;
+};
+
+/**
+ * Authenticate with a Macro session, or from a script with a personal API
+key (Settings → API keys) in the `x-macro-user-api-key` header. The body
+is the new status:
+
+- `{"status": "operational"}` clears the banner. It takes no message.
+- `{"status": "degraded", "message": "Search is slow to update."}`
+- `{"status": "major_outage", "message": "Macro is unavailable. We're on it."}`
+
+Messages are trimmed and must be 1–500 characters. Every call is kept in
+the history, even when it repeats the current status.
+ * @summary Sets the status every user sees and pushes it to every open app. Macro
+staff only.
+ */
+export type setSystemStatusResponse200 = {
+  data: StatusUpdate;
+  status: 200;
+};
+
+export type setSystemStatusResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type setSystemStatusResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type setSystemStatusResponse422 = {
+  data: void;
+  status: 422;
+};
+
+export type setSystemStatusResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type setSystemStatusResponseSuccess = setSystemStatusResponse200 & {
+  headers: Headers;
+};
+export type setSystemStatusResponseError = (
+  | setSystemStatusResponse401
+  | setSystemStatusResponse403
+  | setSystemStatusResponse422
+  | setSystemStatusResponse500
+) & {
+  headers: Headers;
+};
+
+export type setSystemStatusResponse =
+  | setSystemStatusResponseSuccess
+  | setSystemStatusResponseError;
+
+export const getSetSystemStatusUrl = () => {
+  return `/system-status`;
+};
+
+export const setSystemStatus = async (
+  systemStatus: SystemStatus,
+  options?: RequestInit
+): Promise<setSystemStatusResponse> => {
+  const res = await fetch(getSetSystemStatusUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(systemStatus),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setSystemStatusResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as setSystemStatusResponse;
+};
+
+/**
+ * @summary Recent status updates, newest first, with who set each. Macro staff only.
+ */
+export type listSystemStatusHistoryResponse200 = {
+  data: SystemStatusHistory;
+  status: 200;
+};
+
+export type listSystemStatusHistoryResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type listSystemStatusHistoryResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type listSystemStatusHistoryResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type listSystemStatusHistoryResponseSuccess =
+  listSystemStatusHistoryResponse200 & {
+    headers: Headers;
+  };
+export type listSystemStatusHistoryResponseError = (
+  | listSystemStatusHistoryResponse401
+  | listSystemStatusHistoryResponse403
+  | listSystemStatusHistoryResponse500
+) & {
+  headers: Headers;
+};
+
+export type listSystemStatusHistoryResponse =
+  | listSystemStatusHistoryResponseSuccess
+  | listSystemStatusHistoryResponseError;
+
+export const getListSystemStatusHistoryUrl = () => {
+  return `/system-status/history`;
+};
+
+export const listSystemStatusHistory = async (
+  options?: RequestInit
+): Promise<listSystemStatusHistoryResponse> => {
+  const res = await fetch(getListSystemStatusHistoryUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listSystemStatusHistoryResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listSystemStatusHistoryResponse;
+};
+
+/**
  * @summary Gets a team by ID.
  */
 export type getTeamResponse200 = {
@@ -4588,6 +4868,73 @@ export const patchTeamCrmSettings = async (
     status: res.status,
     headers: res.headers,
   } as patchTeamCrmSettingsResponse;
+};
+
+/**
+ * @summary Emails the caller's contacts on the team's auto-join domain that the team
+exists, so they can sign up and join. Contacts already on Macro, on the
+team, invited, or emailed before are skipped, and a team emails at most 25
+people in total. Call it after sending the team's invites. Requires the
+caller to be an Admin or Owner of the team.
+ */
+export type sendTeamDomainNoticeResponse200 = {
+  data: SendDomainNoticeResponse;
+  status: 200;
+};
+
+export type sendTeamDomainNoticeResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type sendTeamDomainNoticeResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type sendTeamDomainNoticeResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type sendTeamDomainNoticeResponseSuccess =
+  sendTeamDomainNoticeResponse200 & {
+    headers: Headers;
+  };
+export type sendTeamDomainNoticeResponseError = (
+  | sendTeamDomainNoticeResponse401
+  | sendTeamDomainNoticeResponse403
+  | sendTeamDomainNoticeResponse500
+) & {
+  headers: Headers;
+};
+
+export type sendTeamDomainNoticeResponse =
+  | sendTeamDomainNoticeResponseSuccess
+  | sendTeamDomainNoticeResponseError;
+
+export const getSendTeamDomainNoticeUrl = () => {
+  return `/team/domain-notice`;
+};
+
+export const sendTeamDomainNotice = async (
+  options?: RequestInit
+): Promise<sendTeamDomainNoticeResponse> => {
+  const res = await fetch(getSendTeamDomainNoticeUrl(), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: sendTeamDomainNoticeResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as sendTeamDomainNoticeResponse;
 };
 
 /**

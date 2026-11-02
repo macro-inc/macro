@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Audience } from './audience';
+import type { FormBranding } from './formBranding';
 import type { FormClosesAt } from './formClosesAt';
 import type { FormProjectId } from './formProjectId';
 import type { FormRespondentColumnId } from './formRespondentColumnId';
@@ -17,6 +18,8 @@ import type { FormSubmittedColumnId } from './formSubmittedColumnId';
 export interface Form {
   /** Who may respond. */
   audience: Audience;
+  /** Its logo, cover image and accent color. */
+  branding: FormBranding;
   /** When it stops taking responses, if it does. */
   closesAt: FormClosesAt;
   /** What a respondent reads once their response is saved; empty for the

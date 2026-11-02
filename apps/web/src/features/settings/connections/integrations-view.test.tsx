@@ -89,7 +89,7 @@ vi.mock('./integration-items', async (importOriginal) => {
   });
   return {
     ...actual,
-    useEmailItems: () => [],
+    useEmailItems: () => () => [],
     useGithubItem: () => item('GitHub', () => null),
     useGranolaItem: () => item('Granola', () => null),
     useAgentProviderItem: (_model: unknown, provider: 'slack' | 'linear') =>

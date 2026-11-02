@@ -19,11 +19,13 @@ use super::{
 };
 use crate::domain::events::{Attribution, FormCreatedMetadata, FormTopicEvent};
 use crate::domain::models::{
-    Audience, ColumnId, DatabaseId, Form, FormAccess, FormCreation, FormDetail, FormError, FormId,
-    FormLayout, FormQuestionId, FormSection, FormSectionId, FormStatus, QuestionLayout, TableId,
+    Audience, ColumnId, DatabaseId, Form, FormAccess, FormBranding, FormCreation, FormDetail,
+    FormError, FormId, FormLayout, FormQuestionId, FormSection, FormSectionId, FormStatus,
+    QuestionLayout, TableId,
 };
 use crate::domain::ports::{
-    Clock, CreateFormCommand, CreateSource, FormAccessDirectory, FormEventPublisher, FormsRepo,
+    Clock, CreateFormCommand, CreateSource, FormAccessDirectory, FormEventPublisher,
+    FormImageFiles, FormsRepo,
 };
 
 /// The name a new database's table takes.
@@ -123,8 +125,8 @@ pub(super) enum CreationPolicy {
     Authoring,
 }
 
-impl<Repository, Databases, Access, Events, Now, Broker, Drafts>
-    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
+impl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images>
+    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images>
 where
     Repository: FormsRepo + FormDraftRepository,
     Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
@@ -133,6 +135,7 @@ where
     Now: Clock,
     Broker: MacroEventBroker,
     Drafts: FormDraftStore,
+    Images: FormImageFiles,
 {
     pub(super) async fn create(
         &self,
@@ -462,6 +465,7 @@ where
             status,
             closes_at: None,
             confirmation_message: String::new(),
+            branding: FormBranding::default(),
             created_at: now,
             updated_at: now,
             project_id: None,

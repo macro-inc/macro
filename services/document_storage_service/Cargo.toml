@@ -115,6 +115,7 @@ forms = { path = "../../crates/forms", features = [
   "gateway",
   "inbound",
   "postgres",
+  "static_files",
 ] }
 document_sub_type = { path = "../../crates/document_sub_type" }
 documents_hex = { path = "../../crates/documents", package = "documents", features = ["purge"] }

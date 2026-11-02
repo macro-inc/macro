@@ -79,6 +79,7 @@ async fn a_form_over_a_new_database_writes_a_passing_response_as_a_row_and_stops
                 status: FormStatus::Open,
                 closes_at: None,
                 confirmation_message: "".into(),
+                branding: FormBranding::default(),
                 created_at: Utc.with_ymd_and_hms(2026, 9, 1, 9, 0, 0).unwrap(),
                 updated_at: Utc.with_ymd_and_hms(2026, 9, 1, 9, 0, 0).unwrap(),
                 project_id: None,

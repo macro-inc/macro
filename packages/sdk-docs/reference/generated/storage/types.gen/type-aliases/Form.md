@@ -1,6 +1,6 @@
 # Type Alias: Form
 
-> **Form** = \{ `audience`: [`Audience`](Audience.md); `closesAt`: `string` \| `null`; `confirmationMessage`: `string`; `createdAt`: `string`; `databaseId`: `string`; `description`: `string`; `id`: `string`; `isHiddenInDrive`: `boolean`; `name`: `string`; `ownerId`: `string`; `projectId`: `string` \| `null`; `respondentColumnId`: `string` \| `null`; `status`: [`FormStatus`](FormStatus.md); `submittedColumnId`: `string` \| `null`; `tableId`: `string`; `tallyVisible`: `boolean`; `updatedAt`: `string`; \}
+> **Form** = \{ `audience`: [`Audience`](Audience.md); `branding`: [`FormBranding`](FormBranding.md); `closesAt`: `string` \| `null`; `confirmationMessage`: `string`; `createdAt`: `string`; `databaseId`: `string`; `description`: `string`; `id`: `string`; `isHiddenInDrive`: `boolean`; `name`: `string`; `ownerId`: `string`; `projectId`: `string` \| `null`; `respondentColumnId`: `string` \| `null`; `status`: [`FormStatus`](FormStatus.md); `submittedColumnId`: `string` \| `null`; `tableId`: `string`; `tallyVisible`: `boolean`; `updatedAt`: `string`; \}
 
 A form: a view of one database table whose rows are its responses.
 
@@ -9,6 +9,7 @@ A form: a view of one database table whose rows are its responses.
 | Property | Type | Description |
 | ------ | ------ | ------ |
 | <a id="property-audience"></a> `audience` | [`Audience`](Audience.md) | Who may respond. |
+| <a id="property-branding"></a> `branding` | [`FormBranding`](FormBranding.md) | Its logo, cover image and accent color. |
 | <a id="property-closesat"></a> `closesAt` | `string` \| `null` | When it stops taking responses, if it does. |
 | <a id="property-confirmationmessage"></a> `confirmationMessage` | `string` | What a respondent reads once their response is saved; empty for the default. |
 | <a id="property-createdat"></a> `createdAt` | `string` | When it was created. |

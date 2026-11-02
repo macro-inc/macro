@@ -15,4 +15,6 @@ pub struct SessionToolContext {
     pub tasks: Arc<dyn SessionTasks>,
     /// Session resolved from the request credential.
     pub session: AgentSessionId,
+    /// The session's page in the Macro app.
+    pub session_url: String,
 }
