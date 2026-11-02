@@ -23,6 +23,7 @@ import {
   tickFormat,
   truncate,
 } from './chart-shapes';
+import { paletteColor } from './drawingml-colors';
 
 /** The extent a value axis spans for the plots drawn on it. */
 function extent(plots: ChartPlotData[], categories: number): [number, number] {
@@ -107,7 +108,7 @@ export function chartScene(
   // Legend entries: slices of a pie, bands of a surface, branches of a
   // tree, a waterfall's directions, otherwise series.
   const first = data.plots[0];
-  const color = (index: number) => data.palette[index % data.palette.length];
+  const color = (index: number) => paletteColor(data.palette, index);
   const entries = round
     ? data.categories.map((name, index) => ({
         name,
@@ -894,7 +895,7 @@ function roundChart(
       // Arcs are centered at the origin.
       d,
       translate: [cx, cy],
-      fill: data.palette[index % data.palette.length],
+      fill: paletteColor(data.palette, index),
       stroke: 'var(--color-surface)',
       strokeWidth: 1,
       tip: `${data.categories[index] ?? ''}: ${Math.round((slice.value / (total || 1)) * 1000) / 10}%`,
@@ -1092,7 +1093,7 @@ function surfaceBands(plot: ChartPlotData, palette: string[]) {
   return {
     entries: Array.from({ length: count }, (_, index) => ({
       name: `${format(ticks[index])}–${format(ticks[index + 1] ?? ticks[index])}`,
-      color: palette[index % palette.length],
+      color: paletteColor(palette, index),
       line: false,
     })),
     band: (value: number) => {

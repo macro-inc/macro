@@ -15,6 +15,7 @@ import { match } from 'ts-pattern';
 import {
   finishColor,
   type PendingColor,
+  paletteColor,
   resolveSchemeColors,
   schemeColor,
   themeAccents,
@@ -1146,7 +1147,7 @@ function generatedChart(chart: SheetChart, values: ChartValues): string {
     const series = plot.series
       .map((value) => {
         const index = seriesIndex++;
-        const color = (value.color ?? palette[index % palette.length]).slice(1);
+        const color = (value.color ?? paletteColor(palette, index)).slice(1);
         const solid = `<a:solidFill><a:srgbClr val="${color}"/></a:solidFill>`;
         const lined =
           plot.kind === 'line' ||

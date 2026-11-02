@@ -8,6 +8,7 @@ import {
   type SheetChart,
 } from '@macro-inc/spreadsheet/sheet-drawings';
 import type { WorkbookCalculation } from './calculation';
+import { paletteColor } from './drawingml-colors';
 import { formatCellAddress } from './spreadsheet-document';
 import type { SpreadsheetWorkbookSheet } from './workbook-document';
 
@@ -188,7 +189,7 @@ export function chartData(
         `Series ${index + 1}`;
       return {
         name,
-        color: series.color ?? palette[index % palette.length],
+        color: series.color ?? paletteColor(palette, index),
         values: points.map((value) => value.number ?? null),
         // Text among the x values numbers the points 1, 2, 3, as in Excel.
         ...(xy && {

@@ -16,6 +16,7 @@ import {
   squarify,
   sunburst,
 } from './chart-statistics';
+import { paletteColor } from './drawingml-colors';
 
 const fits = (text: string, width: number, size: number) =>
   text.length * size * CHARACTER_WIDTH + 4 <= width;
@@ -119,7 +120,7 @@ export function chartTree(plot: ChartPlotData, data: ChartData) {
 /** The color of each top-level branch, from the palette in order. */
 const branchColor = (roots: HierarchyNode[], palette: string[]) => {
   const colors = new Map(
-    roots.map((root, index) => [root, palette[index % palette.length]])
+    roots.map((root, index) => [root, paletteColor(palette, index)])
   );
   return (root: HierarchyNode) => colors.get(root) ?? palette[0];
 };
@@ -342,7 +343,7 @@ export function ofPieChart(
   const total = values.reduce((sum, value) => sum + value, 0);
   const share = (value: number) =>
     `${Math.round((value / (total || 1)) * 1000) / 10}%`;
-  const color = (index: number) => data.palette[index % data.palette.length];
+  const color = (index: number) => paletteColor(data.palette, index);
   const label = (index: number) => data.categories[index] ?? `${index + 1}`;
   const main = values.flatMap((value, index) =>
     second.has(index) ? [] : [{ value, index }]

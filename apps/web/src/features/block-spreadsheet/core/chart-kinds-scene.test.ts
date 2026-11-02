@@ -3,7 +3,14 @@ import type { ChartData } from './chart-data';
 import { chartScene } from './chart-scene';
 import type { ChartShape } from './chart-shapes';
 
-const PALETTE = ['#4472C4', '#ED7D31', '#A5A5A5', '#FFC000'];
+const PALETTE = [
+  '#4472C4',
+  '#ED7D31',
+  '#A5A5A5',
+  '#FFC000',
+  '#5B9BD5',
+  '#70AD47',
+];
 
 const of = <Type extends ChartShape['type']>(
   shapes: ChartShape[],
@@ -360,6 +367,12 @@ describe('pie of pie and bar of pie', () => {
     ].map((center) => center?.split(',').map(Number) ?? []);
     expect(second[0]).toBeGreaterThan(main[0]);
     expect(second[1]).toBeCloseTo(main[1]);
+    // Past the six accents, Excel shades them: the gathered slice is the
+    // seventh color, a darker first accent, not the first again.
+    const fill = (tip: string) =>
+      slices.find((shape) => shape.tip === tip)?.fill;
+    expect(fill('Other: 18%')).toBe('#264478');
+    expect(fill('A: 40%')).toBe('#4472C4');
     // Two lines join the gathered slice to the second pie.
     expect(
       of(shapes, 'path').filter((shape) => !shape.translate && shape.stroke)

@@ -18,6 +18,7 @@ import {
   sumByCategory,
   waterfallSteps,
 } from './chart-statistics';
+import { paletteColor } from './drawingml-colors';
 
 /** A value as its cells show it, to four decimals at most. */
 export const valueText = (sample: string | undefined) =>
@@ -262,7 +263,7 @@ export function histogramChart(
         (share, position) => `${area.center(position)},${area.percent(share)}`
       )
       .join('L')}`,
-    stroke: data.palette[1 % data.palette.length],
+    stroke: paletteColor(data.palette, 1),
     strokeWidth: 2 * zoom,
     tip: 'Cumulative %',
   });
@@ -300,8 +301,8 @@ export function waterfallChart(
   const format = valueText(series.sample);
   const colors = {
     increase: data.palette[0],
-    decrease: data.palette[1 % data.palette.length],
-    total: data.palette[2 % data.palette.length],
+    decrease: paletteColor(data.palette, 1),
+    total: paletteColor(data.palette, 2),
   };
   let previous: { index: number; level: number } | undefined;
   steps.forEach((step, index) => {
