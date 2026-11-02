@@ -23,7 +23,7 @@ main Tasks screen.
 | Contents | Filters, selected layout, grouping, and ordered sorting, including implicit person conditions. No search text or scroll state. |
 | Editing | Explicit Save changes, Reset, and Duplicate. |
 | Navigation | Leaving discards temporary edits without a confirmation prompt. |
-| Creation | Desktop sidebar `+` starts an unsaved view; mobile creates from changed filters, layout, grouping, or sort in the filter drawer. |
+| Creation | Desktop sidebar `+` or the shared empty-state Create view action starts an unsaved view; mobile also captures changed filters, layout, grouping, or sort in the filter drawer. |
 | Capture | Save view appears left of Filters on desktop and in the mobile overlay banner when filters, layout, grouping, or sort differ from built-in tab defaults. |
 | Mobile | Shared picker pill after Filters and before built-in tabs; its drawer browses/manages views, while the filter drawer owns save/create/reset actions. |
 | Initial surfaces | Main Tasks only; not project or CRM embedded task lists. |
@@ -98,9 +98,16 @@ writing or reloading, reject stale completions, and explicitly select created
 views. Mutation dialogs receive a refresh callback, not both query sources.
 Compose the list through compound components and reuse styled menu items across
 its context and overflow menus. The mobile picker shows rows without a duplicate
-section heading or create button; changes from the built-in settings expose creation in
-the filter drawer's overlay banner above the footer and existing-view save/reset
-actions at its footer's right.
+section heading or general create button. The compact sidebar and picker empty
+state show the heading “Your go-to views”, the muted description “Save your setup
+for next time.” and a `secondary`, `sm` Create view button with a leading plus icon, without
+a separate illustration. A subtly bordered, rounded container uses 12px padding,
+inherits the surrounding background, and has no shadow. The sidebar header's
+icon-only plus remains available in every section state, including when the
+empty-state button is visible. The empty-state button starts the existing draft
+flow after closing the picker. Changes from the
+built-in settings expose creation in the filter drawer's overlay banner above the
+footer and existing-view save/reset actions at its footer's right.
 Starting a new view from the desktop sidebar expands the section and shows one
 local, selected New view row labeled Draft in the sidebar and mobile picker.
 Confirmed creation replaces the draft with the named record, including while the

@@ -27,14 +27,14 @@ describe('authored group references', () => {
     const result = buildPostMessageRequest({
       snapshot: snap([
         {
-          itemType: 'whatsapp_group',
+          itemType: 'external_chat',
           itemId: '01a16445-9fdc-7bb1-80b4-8935a1243c98',
         },
       ]),
     });
     expect(result.mentions).toEqual([
       {
-        entity_type: 'whatsapp_group',
+        entity_type: 'external_chat',
         entity_id: '01a16445-9fdc-7bb1-80b4-8935a1243c98',
       },
     ]);

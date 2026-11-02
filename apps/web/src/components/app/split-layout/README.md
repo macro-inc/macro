@@ -19,6 +19,12 @@ Explicit links and new-split actions stay fresh. Native dock navigation still
 resets the pane stack, and dock Search starts a fresh session. Reload, sign-out,
 and account changes retire the saved state. Views still unmount normally.
 
+Desktop app switches skip a retained destination claimed by another pane or
+its inline preview, opening the requested root view in the target pane instead.
+Check router claims, including preview owners, before applying the snapshot;
+do not bypass entity deduplication. Native dock stack replacement still resumes
+the retained destination.
+
 Views retain local context through `useEntryState` or `registerEntryStateCaptor`.
 These slices restore through both pane Back/Forward and opted-in app switches;
 route/schema state stays separate. Restores use the existing router, including

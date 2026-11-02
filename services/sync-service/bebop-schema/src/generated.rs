@@ -545,7 +545,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for InitializeFromSnapshotRequest<'raw> {
 impl<'raw> ::bebop::Record<'raw> for InitializeFromSnapshotRequest<'raw> {}
 
 /// Multiplex envelope between the browser and the sync-router (rides the
-/// connection-gateway socket as binary frames). Inner payloads are the
+/// dedicated DSS /sync/ws socket as binary frames). Inner payloads are the
 /// existing FromPeer/FromRemote unions, already bebop-encoded — the router
 /// forwards them without parsing.
 #[derive(Clone, Debug, PartialEq)]

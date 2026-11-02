@@ -447,9 +447,7 @@ it('keeps an attached image and text unsent while the selected model is text-onl
       attachments={[{ id: 'image', name: 'test.png', kind: 'image' }]}
     />
   ));
-  expect(screen.getByRole('status').textContent).toContain(
-    'does not support images'
-  );
+  expect(screen.queryByText(/This model does not support images/)).toBeNull();
   editor.enter?.();
   expect(send).not.toHaveBeenCalled();
   expect(editor.clear).not.toHaveBeenCalled();

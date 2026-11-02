@@ -3,6 +3,7 @@ import { EventDetails } from '@app/features/calendar/components/EventDetails';
 import { createGuestInviteController } from '@app/features/calendar/hooks/create-guest-invite-controller';
 import {
   useCalendarGuestInvitesFlag,
+  useCalendarInvitationForwardFlag,
   useCalendarMeetingNotesFlag,
 } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import {
@@ -170,7 +171,7 @@ function EveryoneElseDeclinedNotice(props: {
               <Button variant="ghost" size="sm" onClick={props.onDelete}>
                 Delete
               </Button>
-              <Button variant="cta" size="sm" onClick={props.onReschedule}>
+              <Button variant="primary" size="sm" onClick={props.onReschedule}>
                 Reschedule
               </Button>
             </div>
@@ -193,7 +194,8 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
   });
   const invites = createGuestInviteController(
     () => props.event,
-    useCalendarGuestInvitesFlag()
+    useCalendarGuestInvitesFlag(),
+    useCalendarInvitationForwardFlag()
   );
   const canEdit = () => canEditCalendarEvent(props.event);
   const canDelete = () => canDeleteCalendarEvent(props.event);
@@ -215,7 +217,10 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
       onOpenChange={(open) => {
         if (
           !open &&
-          (deleteDialog.isOpen() || invites.editorOpen() || notesOpen())
+          (deleteDialog.isOpen() ||
+            invites.editorOpen() ||
+            invites.forwardEditorOpen() ||
+            notesOpen())
         )
           return;
         props.onOpenChange(open);
@@ -242,66 +247,65 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
               aria-label="Close event details"
               variant="ghost"
               size="icon-md"
-              depth={3}
-              class="size-11 rounded-full bg-ink/6 text-ink-muted [&_svg]:size-5"
+              class="size-11 rounded-full bg-ink/6 text-ink-muted"
             >
-              <CloseIcon />
+              <CloseIcon class="size-5 shrink-0" />
             </MobileDrawer.Close>
             <div class="flex items-center gap-1">
               <Show when={!props.event.teamProjection}>
                 <Button
-                  label="Copy event"
+                  aria-label="Copy event"
+                  tooltip="Copy event"
                   variant="ghost"
                   size="icon-md"
-                  depth={3}
-                  class="size-11 bg-ink/6 text-ink-muted [&_svg]:size-5"
+                  class="size-11 bg-ink/6 text-ink-muted"
                   onClick={() => copyCalendarEventMention(props.event)}
                 >
-                  <LinkIcon />
+                  <LinkIcon class="size-5 shrink-0" />
                 </Button>
                 <Button
-                  label="Download .ics"
+                  aria-label="Download .ics"
+                  tooltip="Download .ics"
                   variant="ghost"
                   size="icon-md"
-                  depth={3}
-                  class="size-11 bg-ink/6 text-ink-muted [&_svg]:size-5"
+                  class="size-11 bg-ink/6 text-ink-muted"
                   onClick={() => downloadCalendarEventIcs(props.event)}
                 >
-                  <DownloadSimpleIcon />
+                  <DownloadSimpleIcon class="size-5 shrink-0" />
                 </Button>
                 <Button
-                  label="Forward by email"
+                  aria-label="Forward by email"
+                  tooltip="Forward by email"
                   variant="ghost"
                   size="icon-md"
-                  depth={3}
-                  class="size-11 bg-ink/6 text-ink-muted [&_svg]:size-5"
+                  class="size-11 bg-ink/6 text-ink-muted"
                   onClick={forwardByEmail}
                 >
-                  <ArrowBendUpRightIcon />
+                  <ArrowBendUpRightIcon class="size-5 shrink-0" />
                 </Button>
               </Show>
               <Show when={canEdit()}>
                 <Button
-                  label="Edit event"
+                  aria-label="Edit event"
+                  tooltip="Edit event"
                   variant="ghost"
                   size="icon-md"
-                  depth={3}
-                  class="size-11 bg-ink/6 text-ink-muted [&_svg]:size-5"
+                  class="size-11 bg-ink/6 text-ink-muted"
                   onClick={openEditor}
                 >
-                  <PencilSimpleIcon />
+                  <PencilSimpleIcon class="size-5 shrink-0" />
                 </Button>
               </Show>
               <Show when={canDelete()}>
                 <Button
-                  label={deleteEventLabel(props.event)}
+                  aria-label={deleteEventLabel(props.event)}
+                  tooltip={deleteEventLabel(props.event)}
                   variant="ghost"
                   size="icon-md"
-                  depth={3}
-                  class="size-11 bg-ink/6 text-ink-muted [&_svg]:size-5"
+                  class="size-11 bg-ink/6 text-ink-muted"
                   onClick={deleteDialog.open}
                 >
-                  <TrashIcon />
+                  <TrashIcon class="size-5 shrink-0" />
                 </Button>
               </Show>
             </div>
@@ -497,7 +501,8 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
   });
   const invites = createGuestInviteController(
     () => props.event,
-    useCalendarGuestInvitesFlag()
+    useCalendarGuestInvitesFlag(),
+    useCalendarInvitationForwardFlag()
   );
   const canEdit = () => canEditCalendarEvent(props.event);
   const canDelete = () => canDeleteCalendarEvent(props.event);
@@ -522,7 +527,10 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
         // is open.
         if (
           !open &&
-          (deleteDialog.isOpen() || invites.editorOpen() || notesOpen())
+          (deleteDialog.isOpen() ||
+            invites.editorOpen() ||
+            invites.forwardEditorOpen() ||
+            notesOpen())
         )
           return;
         props.onOpenChange(open);
@@ -574,72 +582,70 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
               <div class="flex shrink-0 items-center justify-end gap-1 px-2 pt-2">
                 <Show when={!props.event.teamProjection}>
                   <Button
-                    label="Copy event"
+                    aria-label="Copy event"
+                    tooltip="Copy event"
                     variant="ghost"
                     size="icon-sm"
-                    depth={3}
-                    class="text-ink-muted [&_svg]:size-4"
+                    class="text-ink-muted"
                     onClick={() => copyCalendarEventMention(props.event)}
                   >
-                    <LinkIcon />
+                    <LinkIcon class="size-4 shrink-0" />
                   </Button>
                   <Button
-                    label="Download .ics"
+                    aria-label="Download .ics"
+                    tooltip="Download .ics"
                     variant="ghost"
                     size="icon-sm"
-                    depth={3}
-                    class="text-ink-muted [&_svg]:size-4"
+                    class="text-ink-muted"
                     onClick={() => downloadCalendarEventIcs(props.event)}
                   >
-                    <DownloadSimpleIcon />
+                    <DownloadSimpleIcon class="size-4 shrink-0" />
                   </Button>
                   <Button
-                    label="Forward by email"
+                    aria-label="Forward by email"
+                    tooltip="Forward by email"
                     variant="ghost"
                     size="icon-sm"
-                    depth={3}
-                    class="text-ink-muted [&_svg]:size-4"
+                    class="text-ink-muted"
                     onClick={forwardByEmail}
                   >
-                    <ArrowBendUpRightIcon />
+                    <ArrowBendUpRightIcon class="size-4 shrink-0" />
                   </Button>
                 </Show>
                 <Show when={canEdit()}>
                   <Button
-                    label="Edit event"
+                    aria-label="Edit event"
+                    tooltip="Edit event"
                     variant="ghost"
                     size="icon-sm"
-                    depth={3}
-                    class="text-ink-muted [&_svg]:size-4"
+                    class="text-ink-muted"
                     onClick={openEditor}
                   >
-                    <PencilSimpleIcon />
+                    <PencilSimpleIcon class="size-4 shrink-0" />
                   </Button>
                 </Show>
                 <Show when={canDelete()}>
                   <Button
-                    label={deleteEventLabel(props.event)}
+                    aria-label={deleteEventLabel(props.event)}
+                    tooltip={deleteEventLabel(props.event)}
                     variant="ghost"
                     size="icon-sm"
-                    depth={3}
-                    class="text-ink-muted [&_svg]:size-4"
+                    class="text-ink-muted"
                     onClick={deleteDialog.open}
                   >
-                    <TrashIcon />
+                    <TrashIcon class="size-4 shrink-0" />
                   </Button>
                 </Show>
-                {/* Kobalte names the button "Dismiss" unless it gets an
-                    aria-label, which Button prefers over `label`. */}
+                {/* Kobalte names the button "Dismiss" unless it gets an aria-label. */}
                 <Popover.CloseButton
                   as={Button}
                   aria-label="Close event details"
                   tooltip="Close event details"
                   variant="ghost"
                   size="icon-sm"
-                  depth={3}
-                  class="rounded-md text-ink-muted [&_svg]:size-4"
+                  class="rounded-md text-ink-muted"
                 >
-                  <CloseIcon />
+                  <CloseIcon class="size-4 shrink-0" />
                 </Popover.CloseButton>
               </div>
               <div class="min-h-0 flex-auto overflow-y-auto overscroll-contain">

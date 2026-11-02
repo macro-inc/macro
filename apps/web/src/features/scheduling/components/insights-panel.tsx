@@ -2,7 +2,7 @@ import { ListHeader } from '@app/components/view-shell/ListHeader';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import DownloadIcon from '@icon/system/regular/download-simple.svg';
 import InfoIcon from '@icon/system/regular/info.svg';
-import { Button, cn, Tooltip } from '@ui';
+import { Button, ButtonGroup, cn, Tooltip } from '@ui';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
 import {
   type InsightHostOption,
@@ -418,6 +418,7 @@ export function InsightsPanel(props: {
     !props.loading && !props.error && current().bookings.length > 0;
   const filters = () => (
     <SchedulingFilters
+      grouped
       title="Insights filters"
       activeCount={Number(eventId() !== 'all') + Number(hostId() !== 'all')}
       onClear={() => {
@@ -490,14 +491,16 @@ export function InsightsPanel(props: {
       <Show when={props.headerTitle}>
         <ListHeader title={props.headerTitle}>
           <HeaderActionGroup label="Insights actions">
-            <Button
-              size="icon-md"
-              label="Download CSV"
+            <ButtonGroup.Button
+              aria-label="Download CSV"
+              tooltip="Download CSV"
+              variant="ghost"
+              size="icon-sm"
               onClick={download}
               disabled={!canDownload()}
             >
-              <DownloadIcon />
-            </Button>
+              <DownloadIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+            </ButtonGroup.Button>
             {filters()}
           </HeaderActionGroup>
         </ListHeader>
@@ -514,7 +517,7 @@ export function InsightsPanel(props: {
             {props.scopeSelector}
             <div class="ml-auto flex min-w-0 items-center gap-2">
               <Button
-                variant="outline"
+                variant="secondary"
                 onClick={download}
                 disabled={!canDownload()}
               >
@@ -549,7 +552,7 @@ export function InsightsPanel(props: {
             class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-edge-muted p-5"
           >
             <p class="text-sm">{props.error}</p>
-            <Button variant="outline" onClick={props.onRetry}>
+            <Button variant="secondary" onClick={props.onRetry}>
               Try again
             </Button>
           </div>

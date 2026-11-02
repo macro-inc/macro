@@ -2,17 +2,18 @@
 
 use std::collections::HashMap;
 
-use models_properties::db;
 use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
+use models_properties::{EntityType, db};
 use sqlx::{PgExecutor, Pool, Postgres};
 use uuid::Uuid;
 
+use super::entity_property_queries::EntityPropertyMutationRow;
 use super::query_error::PropertyQueryError;
 use crate::domain::database_option_writer::ColorChange;
 
 use crate::domain::model::{
-    GetOrCreatePropertyOptionResult, PropertyOptionReplaceOutcome, PropertyOptionReplacePlan,
-    UpdatePropertyOptionOutcome,
+    EntityPropertyMutationSnapshot, GetOrCreatePropertyOptionResult, PropertyOptionReplaceOutcome,
+    PropertyOptionReplacePlan, UpdatePropertyOptionOutcome,
 };
 
 /// Keep selected options alive until their assignment commits. Validation
@@ -425,27 +426,29 @@ pub async fn clear_emptied_database_row_values(
 /// references it, atomically. Without the cleanup a stored value keeps the
 /// dead id and a later set-value that echoes the full id list fails option
 /// validation.
-/// Returns Ok(true) if the option was deleted, Ok(false) if it didn't exist.
-#[tracing::instrument(skip(pool))]
+/// Returns `None` if the option didn't exist, otherwise one snapshot per entity
+/// value the option was stripped from.
+#[tracing::instrument(skip(pool), err)]
 pub async fn delete_property_option(
     pool: &Pool<Postgres>,
     property_definition_id: Uuid,
     property_option_id: Uuid,
-) -> anyhow::Result<bool> {
+) -> anyhow::Result<Option<Vec<EntityPropertyMutationSnapshot>>> {
     let mut tx = pool.begin().await?;
-    let deleted =
+    let (deleted, mutations) =
         delete_options_in_tx(&mut tx, property_definition_id, &[property_option_id]).await?;
     tx.commit().await?;
-    Ok(deleted == 1)
+    Ok((deleted == 1).then_some(mutations))
 }
 
 /// Deletes the given options in one statement each for the value cleanup and
-/// the delete. Returns how many options were deleted.
+/// the delete. Returns how many options were deleted and the post-write state
+/// of every entity value they were stripped from.
 pub(crate) async fn delete_options_in_tx(
     tx: &mut sqlx::Transaction<'_, Postgres>,
     property_definition_id: Uuid,
     option_ids: &[Uuid],
-) -> Result<u64, PropertyQueryError> {
+) -> Result<(u64, Vec<EntityPropertyMutationSnapshot>), PropertyQueryError> {
     // Serialize removals before their cleanup snapshot. Otherwise an
     // assignment can commit between cleanup and DELETE, leaving a stale id.
     sqlx::query_scalar!(
@@ -462,31 +465,55 @@ pub(crate) async fn delete_options_in_tx(
     .fetch_all(&mut **tx)
     .await?;
     let option_id_strings: Vec<String> = option_ids.iter().map(Uuid::to_string).collect();
-    sqlx::query!(
+    // Lock the rows in a stable order, waiting out value writers so the
+    // returned previous value is the one this statement rewrote.
+    let rows = sqlx::query_as!(
+        EntityPropertyMutationRow,
         r#"
-        UPDATE entity_properties
+        WITH previous AS (
+            SELECT id, values
+            FROM entity_properties
+            WHERE property_definition_id = $1
+              AND values -> 'value' ?| $2::text[]
+            ORDER BY id
+            FOR UPDATE
+        )
+        UPDATE entity_properties AS property
         SET
             values = jsonb_set(
-                values,
+                previous.values,
                 '{value}',
                 COALESCE(
                     (
                         SELECT jsonb_agg(elem)
-                        FROM jsonb_array_elements(values -> 'value') AS elem
+                        FROM jsonb_array_elements(previous.values -> 'value') AS elem
                         WHERE NOT (to_jsonb($2::text[]) @> elem)
                     ),
                     '[]'::jsonb
                 )
             ),
             updated_at = NOW()
-        WHERE property_definition_id = $1
-          AND values -> 'value' ?| $2::text[]
+        FROM previous
+        WHERE property.id = previous.id
+        RETURNING
+            property.id,
+            property.entity_id,
+            property.entity_type as "entity_type: EntityType",
+            property.property_definition_id,
+            property.values as "value: serde_json::Value",
+            previous.values as "previous: serde_json::Value",
+            property.created_at,
+            property.updated_at
         "#,
         property_definition_id,
         &option_id_strings,
     )
-    .execute(&mut **tx)
+    .fetch_all(&mut **tx)
     .await?;
+    let mutations = rows
+        .into_iter()
+        .map(EntityPropertyMutationRow::into_snapshot)
+        .collect::<Result<_, _>>()?;
 
     let result = sqlx::query!(
         "DELETE FROM property_options WHERE property_definition_id = $1 AND id = ANY($2)",
@@ -496,7 +523,7 @@ pub(crate) async fn delete_options_in_tx(
     .execute(&mut **tx)
     .await?;
 
-    Ok(result.rows_affected())
+    Ok((result.rows_affected(), mutations))
 }
 
 /// Applies a [`PropertyOptionReplacePlan`] in one transaction, one statement
@@ -510,12 +537,16 @@ pub async fn replace_property_options(
 ) -> anyhow::Result<PropertyOptionReplaceOutcome> {
     let mut tx = pool.begin().await?;
 
-    if !plan.delete.is_empty() {
-        let deleted = delete_options_in_tx(&mut tx, property_definition_id, &plan.delete).await?;
+    let mutations = if plan.delete.is_empty() {
+        Vec::new()
+    } else {
+        let (deleted, mutations) =
+            delete_options_in_tx(&mut tx, property_definition_id, &plan.delete).await?;
         if deleted != plan.delete.len() as u64 {
             return Ok(PropertyOptionReplaceOutcome::OptionNotFound);
         }
-    }
+        mutations
+    };
 
     if !plan.rewrite.is_empty() {
         let rewrite_ids: Vec<Uuid> = plan.rewrite.iter().map(|r| r.option_id).collect();
@@ -623,8 +654,9 @@ pub async fn replace_property_options(
     .await?;
     tx.commit().await?;
 
-    rows.into_iter()
+    let options = rows
+        .into_iter()
         .map(|row| row.try_into().map_err(anyhow::Error::from))
-        .collect::<anyhow::Result<Vec<_>>>()
-        .map(PropertyOptionReplaceOutcome::Replaced)
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    Ok(PropertyOptionReplaceOutcome::Replaced { options, mutations })
 }

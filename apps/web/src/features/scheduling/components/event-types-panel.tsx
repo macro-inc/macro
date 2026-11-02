@@ -391,12 +391,15 @@ export function EventTypesPanel(props: {
                       </Badge>
                       <Dropdown>
                         <Dropdown.Trigger
+                          aria-label={`Options for ${event.title}`}
+                          tooltip={{
+                            content: `Options for ${event.title}`,
+                            disabled: true,
+                          }}
                           variant="ghost"
                           size="icon-sm"
-                          label={`Options for ${event.title}`}
                           class="shrink-0 touch:hidden"
                           disabled={props.saving}
-                          tooltipDisabled
                         >
                           <Dots class="size-4" />
                         </Dropdown.Trigger>
@@ -427,7 +430,7 @@ export function EventTypesPanel(props: {
                         Keep
                       </Button>
                       <Button
-                        variant="outline"
+                        variant="secondary"
                         disabled={props.saving}
                         onClick={() => props.onDelete(event)}
                       >

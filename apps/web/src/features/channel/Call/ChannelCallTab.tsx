@@ -4,12 +4,10 @@ import { getDisplayName, tryMacroId } from '@core/user';
 import PhoneIcon from '@icon/system/regular/phone-call.svg';
 import { Telemetry } from '@macro-inc/observability';
 import { useActiveCallQuery, useCallRecordQuery } from '@queries/call/call';
-import { useLocation, useNavigate } from '@solidjs/router';
 import { Button } from '@ui';
 import { type Accessor, createMemo, Match, Show, Switch } from 'solid-js';
 import { ActiveCallLink } from './ActiveCallLink';
 import { CallOverlay } from './CallOverlay';
-import { getCallExitPath } from './call-exit';
 import { getCallJoinTab, getCallLeaveTab } from './call-tabs';
 import { useCall } from './use-call';
 
@@ -79,7 +77,7 @@ function JoinCallEmptyState(props: {
       </div>
 
       <Button
-        variant="cta"
+        variant="primary"
         size="lg"
         class="px-5"
         onClick={props.onJoin}
@@ -103,8 +101,6 @@ export function ChannelCallTab(props: {
   pendingJoin?: Accessor<boolean>;
 }) {
   const { setActiveTab } = useChannelTab();
-  const navigate = useNavigate();
-  const location = useLocation();
   let leaving = false;
 
   // Match ChannelCallButton / ChannelCallAutoJoin so leaving from the
@@ -123,35 +119,17 @@ export function ChannelCallTab(props: {
     }
   }
 
+  // Leaving keeps the user in this channel (onLeave switches to Messages),
+  // even when their hangup ends the call.
   async function handleLeave() {
     if (leaving) return;
     leaving = true;
     const callId = call.callCtx.activeCallId();
-    const channelId = props.channelId;
-    const from = location.key;
     try {
       await Telemetry.span('call.leave', async (span) => {
         if (callId) span.setAttr('call.id', callId);
         const result = await call.leaveCall();
         span.setAttr('call.leave.ended', result?.callEnded ?? false);
-        if (
-          props.channelId !== channelId ||
-          location.key !== from ||
-          call.callCtx.isInCall() ||
-          !result?.callEnded
-        )
-          return;
-        // Leaving switches to Messages and unmounts this tab before cleanup
-        // settles. The route key keeps that expected teardown distinct from
-        // the user navigating elsewhere while the server responds.
-        navigate(
-          getCallExitPath({
-            authenticated: true,
-            callId,
-            channelId,
-            callEnded: true,
-          })
-        );
       });
     } finally {
       leaving = false;

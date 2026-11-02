@@ -1,22 +1,21 @@
 import { throwOnErr } from '@core/util/result';
-import type { LinkedAdoptGroup } from '@service-storage/generated/schemas/linkedAdoptGroup';
-import type { LinkedPasskeyBody } from '@service-storage/generated/schemas/linkedPasskeyBody';
+import { sleep } from '@core/util/sleep';
+import { externalChatsClient } from '@service-storage/external-chats';
+import type { ExternalChatKind } from '@service-storage/generated/schemas/externalChatKind';
+import type { WhatsappPasskeyBody } from '@service-storage/generated/schemas/whatsappPasskeyBody';
 import { whatsappLinkedClient as client } from '@service-storage/whatsapp-linked';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
-import { invalidateWhatsappGroupList } from '../whatsapp-groups';
+import { invalidateExternalChatList } from '../external-chats';
 import { whatsappLinkedKeys } from './keys';
 import { whatsappOperation } from './operation';
 
 /** How often an open pairing dialog asks for a rotated QR or a result. */
 export const PAIRING_POLL_MS = 1500;
 
-const configurationOptions = queryOptions({
-  queryKey: whatsappLinkedKeys.configuration.queryKey,
-  queryFn: () => throwOnErr(client.configuration),
-  staleTime: 30_000,
-});
+/** How often a phone-number lookup is read until WhatsApp answers. */
+export const LOOKUP_POLL_MS = 1000;
 
 function accountOptions(userId: string) {
   return queryOptions({
@@ -49,11 +48,6 @@ function chatsOptions(userId: string, enabled: boolean) {
     enabled: !!userId && enabled,
     staleTime: 10_000,
   });
-}
-
-/** Which linked-device operations the backend currently allows. */
-export function useWhatsappLinkedConfigurationQuery() {
-  return useQuery(() => configurationOptions);
 }
 
 /** The signed-in person's own linked account, or `account: null`. */
@@ -119,20 +113,63 @@ export function refreshWhatsappLinkedAccount() {
 
 export function useSubmitWhatsappPasskeyMutation() {
   return useMutation(() => ({
-    mutationFn: (input: { pairingId: string; response: LinkedPasskeyBody }) =>
+    mutationFn: (input: { pairingId: string; response: WhatsappPasskeyBody }) =>
       whatsappOperation('submit_passkey', () =>
         throwOnErr(() => client.passkey(input.pairingId, input.response))
       ),
   }));
 }
 
-export function useAdoptWhatsappGroupMutation() {
+/**
+ * Asks WhatsApp whether a number has an account and waits for the answer
+ * (DSS fails a lookup WhatsApp leaves unanswered). A found number joins the
+ * chat list.
+ */
+export function useLookUpWhatsappNumberMutation() {
   return useMutation(() => ({
-    mutationFn: (request: LinkedAdoptGroup) =>
-      whatsappOperation('adopt_group', () =>
-        throwOnErr(() => client.adopt(request))
+    mutationFn: (phoneNumber: string) =>
+      whatsappOperation('lookup', async () => {
+        let lookup = await throwOnErr(() => client.startLookup(phoneNumber));
+        while (lookup.state === 'pending') {
+          await sleep(LOOKUP_POLL_MS);
+          const id = lookup.id;
+          lookup = await throwOnErr(() => client.lookup(id));
+        }
+        return lookup;
+      }),
+    onSuccess: (lookup) =>
+      lookup.state === 'found' ? invalidateChats() : undefined,
+  }));
+}
+
+/**
+ * Asks the owner's phone for the earlier messages of their chats waiting for
+ * it; the chats show the import as it runs.
+ */
+export function useImportWhatsappHistoryMutation() {
+  return useMutation(() => ({
+    mutationFn: () =>
+      whatsappOperation('import_history', () =>
+        throwOnErr(() => client.importHistory())
+      ),
+    onSettled: invalidateExternalChatList,
+  }));
+}
+
+/** Adds one of the account's WhatsApp chats to Macro as an external chat. */
+export function useAddWhatsappChatMutation() {
+  return useMutation(() => ({
+    mutationFn: (chat: { jid: string; kind: ExternalChatKind }) =>
+      whatsappOperation('add_chat', () =>
+        throwOnErr(() =>
+          externalChatsClient.add({
+            provider: 'whatsapp',
+            remoteId: chat.jid,
+            kind: chat.kind,
+          })
+        )
       ),
     onSuccess: () =>
-      Promise.all([invalidateChats(), invalidateWhatsappGroupList()]),
+      Promise.all([invalidateChats(), invalidateExternalChatList()]),
   }));
 }

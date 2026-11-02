@@ -22,7 +22,7 @@ export function BotDetailActions(props: BotDetailActionsProps) {
           disabled={props.pending}
           onClick={props.onDelete}
         >
-          <TrashIcon />
+          <TrashIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
           Delete bot
         </Button>
       </Show>
@@ -38,7 +38,7 @@ export function BotDetailActions(props: BotDetailActionsProps) {
         </Button>
         <Button
           type="submit"
-          variant="cta"
+          variant="primary"
           size="sm"
           disabled={!props.dirty || props.pending}
         >

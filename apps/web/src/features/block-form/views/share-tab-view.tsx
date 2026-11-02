@@ -211,7 +211,7 @@ export function ShareTabView(props: {
               Posting the form in a channel lets its members respond.
             </span>
           </div>
-          <Button variant="outline" size="sm" onClick={props.onOpenShare}>
+          <Button variant="secondary" size="sm" onClick={props.onOpenShare}>
             Manage access
           </Button>
         </div>

@@ -43,9 +43,12 @@ export function useMcpServersQuery(options?: {
    * flash a fake "nothing connected" success state on first load.
    */
   neverSuspend?: boolean;
+  /** Defer fetching until the surface needs the list. */
+  enabled?: () => boolean;
 }) {
   return useQuery(() => ({
     ...mcpServersQueryOptions(),
+    enabled: options?.enabled?.() ?? true,
     refetchOnMount: 'always' as const,
     refetchOnWindowFocus: 'always' as const,
     refetchInterval: options?.refetchInterval,

@@ -114,6 +114,7 @@ export function NarrowSingleLineLayout(props: LayoutProps) {
 
       <Show
         when={
+          props.referenceProperties ||
           props.scheduleStatus ||
           (!props.hasNotifications &&
             !(isChannelEntity(props.entity) && isSearchEntity(props.entity)))
@@ -123,6 +124,7 @@ export function NarrowSingleLineLayout(props: LayoutProps) {
           placement="timestamp"
           class="flex items-center justify-end gap-1 text-xs text-right text-ink-extra-muted font-light"
         >
+          {props.referenceProperties}
           {props.scheduleStatus}
           <Show when={!props.hasNotifications}>
             <Switch fallback={<Entity.Timestamp entity={props.entity} />}>

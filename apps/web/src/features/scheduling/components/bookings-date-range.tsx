@@ -106,7 +106,7 @@ export function BookingsDateRange(props: {
             Cancel
           </MobileDrawer.Close>
         </Show>
-        <Button type="submit" variant="strong" size="md">
+        <Button type="submit" variant="secondary" size="md">
           Apply dates
         </Button>
       </div>

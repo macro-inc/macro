@@ -39,15 +39,20 @@ impl StoredConnectionEntity {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_millis() as u64;
+        self.is_active_at(current_timestamp, threshold)
+    }
 
-        match (threshold, self.last_ping) {
-            // There is a threshold and the last ping is older than the threshold
-            (Some(t), Some(last_ping)) => (current_timestamp - last_ping) < t,
-            // There is no threshold compare the current timestamp with the created_at
-            (Some(t), None) => (current_timestamp - self.created_at) < t,
-            // No threshold then just return true
-            _ => true,
-        }
+    /// Whether this entry was opened or pinged within `threshold` of `now`.
+    ///
+    /// Gateway instances stamp `last_ping` with their own clocks, so a fresh
+    /// ping can read as slightly in the future on another instance; that
+    /// counts as active rather than wrapping into a huge age.
+    fn is_active_at(&self, now: u64, threshold: Option<u64>) -> bool {
+        let Some(threshold) = threshold else {
+            return true;
+        };
+        let last_seen = self.last_ping.unwrap_or(self.created_at);
+        now.saturating_sub(last_seen) < threshold
     }
 }
 
@@ -91,3 +96,6 @@ impl AsRef<Config> for ConnectionContext<'_> {
         self.config
     }
 }
+
+#[cfg(test)]
+mod tests;

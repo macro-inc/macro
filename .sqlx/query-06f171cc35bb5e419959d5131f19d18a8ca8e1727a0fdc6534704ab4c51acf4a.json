@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p->>'jid' AS \"jid!\" FROM whatsapp_roster r\n        CROSS JOIN LATERAL jsonb_array_elements(r.metadata->'participants') p\n        WHERE r.account_id = $1 AND r.group_jid = $2 AND p->>'alternateJid' = $3\n          AND p->>'jid' LIKE '%@s.whatsapp.net'\n        LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "jid!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "06f171cc35bb5e419959d5131f19d18a8ca8e1727a0fdc6534704ab4c51acf4a"
+}

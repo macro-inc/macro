@@ -254,10 +254,35 @@ export function CommandMenuList<T>(props: {
   );
 }
 
+type CommandInputProps = JSX.InputHTMLAttributes<HTMLInputElement> & {
+  as?: 'input';
+};
+type CommandTextareaProps = JSX.TextareaHTMLAttributes<HTMLTextAreaElement> & {
+  as: 'textarea';
+};
+
+export function CommandMenuSearchInput(props: CommandInputProps): JSX.Element;
 export function CommandMenuSearchInput(
-  props: JSX.InputHTMLAttributes<HTMLInputElement>
+  props: CommandTextareaProps
+): JSX.Element;
+export function CommandMenuSearchInput(
+  props: CommandInputProps | CommandTextareaProps
 ) {
-  const [local, rest] = splitProps(props, ['class']);
+  if (props.as === 'textarea') {
+    const [local, rest] = splitProps(props, ['as', 'class']);
+    return (
+      <textarea
+        rows={1}
+        class={cn(
+          'min-w-0 flex-1 py-0.5 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder',
+          'field-sizing-content max-h-80 resize-none',
+          local.class
+        )}
+        {...rest}
+      />
+    );
+  }
+  const [local, rest] = splitProps(props, ['as', 'class']);
 
   return (
     <input

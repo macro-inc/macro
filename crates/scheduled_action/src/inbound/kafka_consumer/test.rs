@@ -185,7 +185,8 @@ fn subscriptions_are_exact_and_group_is_dedicated() {
             "macro.messages",
             "macro.properties",
             "macro.email",
-            "macro.calls"
+            "macro.calls",
+            "macro.github_webhooks"
         ]
     );
     assert_eq!(

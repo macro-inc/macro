@@ -4,6 +4,7 @@ import { CrmCopyLinkButton as View } from './views/copy-link-button';
 export function CrmCopyLinkButton(props: {
   type: 'company' | 'contact';
   id: string;
+  grouped?: boolean;
 }) {
   return (
     <CrmProvider value={createAppCrmContext()}>

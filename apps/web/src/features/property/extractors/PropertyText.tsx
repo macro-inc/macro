@@ -1,7 +1,8 @@
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import { cn } from '@ui';
-import { type JSX, Show } from 'solid-js';
+import { type JSX, Show, useContext } from 'solid-js';
+import { PropertyRootContext } from '../core/context';
 import { usePropertyEntityDisplay } from '../hooks/usePropertyEntityDisplay';
 import { usePropertyUserDisplay } from '../hooks/usePropertyUserDisplay';
 import type { Property } from '../types';
@@ -76,21 +77,30 @@ export function PropertyText(props: Props) {
   return (
     <Show
       keyed
-      when={singleEntity()}
+      when={singleEntity()?.entity_id}
       fallback={<PropertyTextValue {...props} userId={userId()} />}
     >
-      {(entity) => <EntityPropertyText entity={entity} class={props.class} />}
+      {(entityId) => (
+        <EntityPropertyText
+          entityId={entityId}
+          entityType={singleEntity()?.entity_type}
+          class={props.class}
+        />
+      )}
     </Show>
   );
 }
 
 function EntityPropertyText(props: {
-  entity: EntityReference;
+  entityId: string;
+  entityType: EntityReference['entity_type'] | undefined;
   class?: string;
 }) {
+  const root = useContext(PropertyRootContext);
   const { name, icon } = usePropertyEntityDisplay(
-    () => props.entity.entity_id,
-    () => props.entity.entity_type
+    () => props.entityId,
+    () => props.entityType,
+    { loadingName: () => root?.pickedEntityName(props.entityId) }
   );
   return (
     <span class={cn('inline-flex min-w-0 items-center gap-1.5', props.class)}>

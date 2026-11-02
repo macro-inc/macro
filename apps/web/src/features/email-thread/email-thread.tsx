@@ -1,11 +1,12 @@
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { useEmail, useUserContext } from '@core/context/user';
+import { useUserContext } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useContacts } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { InlineFetchedEntityTagsPill } from '@property/tags';
 import { clearSavedDraftThreadCache } from '@queries/email/draft-cache';
+import { useInboxEmail } from '@queries/email/inbox-email';
 import type { ThreadQueryTransport } from '@queries/email/thread';
 import {
   type Accessor,
@@ -64,12 +65,12 @@ export function EmailThread(props: EmailThreadProps) {
   // mounting the body does not start a second disk read/network request.
   const [calendarPreferences] = useCalendarPreferences();
   const contacts = useContacts();
-  const viewerEmail = useEmail();
   const user = useUserContext();
   const compose = createEmailComposeContext({
     threadTransport: props.threadTransport,
   });
   const source = createOptimisticThreadSend(props.source, compose);
+  const viewerEmail = useInboxEmail(() => source.thread()?.link_id);
   const threadContext: EmailThreadContext = {
     source,
     viewerEmail,

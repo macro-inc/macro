@@ -1637,6 +1637,8 @@ function createCallState() {
     }
   }
 
+  // When this client joined its current call, for time-in-call analytics.
+  let joinedAt: number | undefined;
   const lifecycle = createCallLifecycle({
     shouldRequestToken: callSession.shouldRequestToken,
     prepareToken: prepareNativeCallJoin,
@@ -1679,6 +1681,7 @@ function createCallState() {
         });
       }
       fireAndForget(invalidateActiveCallQueries(), 'call-membership');
+      joinedAt = Date.now();
       analytics.track('call_action', {
         action: 'joined',
         channelId: call.channelId,
@@ -1686,13 +1689,20 @@ function createCallState() {
         trigger: source,
       });
     },
-    onLeft: (call, reason) =>
+    onLeft: (call, reason) => {
+      const secondsInCall =
+        joinedAt === undefined
+          ? undefined
+          : Math.round((Date.now() - joinedAt) / 1000);
+      joinedAt = undefined;
       analytics.track('call_action', {
         action: 'left',
         channelId: call.channelId,
         callId: call.callId ?? undefined,
         leaveReason: reason,
-      }),
+        secondsInCall,
+      });
+    },
     reportError: (error) => console.error('call lifecycle failed', error),
   });
   const [lifecycleSnapshot, setLifecycleSnapshot] = createSignal(

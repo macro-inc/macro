@@ -451,6 +451,7 @@ async fn test_insert_thread_new(pool: Pool<Postgres>) -> anyhow::Result<()> {
         link_id,
         inbox_visible: false,
         is_read: true,
+        has_received_mail: false,
         latest_inbound_message_ts: None,
         latest_outbound_message_ts: None,
         latest_non_spam_message_ts: None,
@@ -474,6 +475,7 @@ async fn test_insert_thread_new(pool: Pool<Postgres>) -> anyhow::Result<()> {
     assert_eq!(fetched.db_id, new_id);
     assert!(!fetched.inbox_visible);
     assert!(fetched.is_read);
+    assert!(!fetched.has_received_mail);
 
     Ok(())
 }
@@ -493,6 +495,7 @@ async fn test_insert_thread_conflict_with_provider_id(pool: Pool<Postgres>) -> a
         link_id,
         inbox_visible: true,
         is_read: false,
+        has_received_mail: true,
         latest_inbound_message_ts: Some(now),
         latest_outbound_message_ts: None,
         latest_non_spam_message_ts: None,
@@ -516,32 +519,120 @@ async fn test_insert_thread_conflict_with_provider_id(pool: Pool<Postgres>) -> a
 
 // ── update_thread_metadata ────────────────────────────────────────
 
+const DRAFT_FIXTURE_LINK: Uuid = uuid::uuid!("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+/// A sent message and a Macro reply draft.
+const SENT_WITH_DRAFT_THREAD: Uuid = uuid::uuid!("11111111-1111-1111-1111-111111111111");
+/// A received message in the inbox.
+const RECEIVED_THREAD: Uuid = uuid::uuid!("22222222-2222-2222-2222-222222222222");
+/// A Macro draft and nothing else.
+const DRAFT_ONLY_THREAD: Uuid = uuid::uuid!("33333333-3333-3333-3333-333333333333");
+
+async fn recompute_inbox_state(
+    pool: &Pool<Postgres>,
+    thread_id: Uuid,
+) -> anyhow::Result<(bool, Option<chrono::DateTime<Utc>>)> {
+    let mut tx = pool.begin().await?;
+    super::super::thread::update_thread_metadata(&mut tx, thread_id, DRAFT_FIXTURE_LINK).await?;
+    tx.commit().await?;
+    let row = sqlx::query!(
+        "SELECT inbox_visible, latest_inbound_message_ts FROM email_threads WHERE id = $1",
+        thread_id
+    )
+    .fetch_one(pool)
+    .await?;
+    Ok((row.inbox_visible, row.latest_inbound_message_ts))
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
-#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
-async fn test_update_thread_metadata_with_inbound_message(
+async fn a_local_draft_only_thread_stays_out_of_the_inbox(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    use sqlx::Row;
+    assert_eq!(
+        recompute_inbox_state(&pool, DRAFT_ONLY_THREAD).await?,
+        (false, None)
+    );
+    Ok(())
+}
 
-    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
-    // Thread 1 has msg1 (sent, INBOX+SENT labels) and msg2 (draft, no provider_id)
-    let thread_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn a_reply_draft_does_not_return_a_sent_only_thread_to_the_inbox(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    assert_eq!(
+        recompute_inbox_state(&pool, SENT_WITH_DRAFT_THREAD).await?,
+        (false, None)
+    );
+    Ok(())
+}
 
-    let mut tx = pool.begin().await?;
-    super::super::thread::update_thread_metadata(&mut tx, thread_id, link_id).await?;
-    tx.commit().await?;
-
-    let row = sqlx::query("SELECT inbox_visible, is_read FROM email_threads WHERE id = $1")
-        .bind(thread_id)
-        .fetch_one(&pool)
+// Offline draft edits rebuild a thread's inbox state from the projection's
+// draft aggregate, so that aggregate must agree with the canonical recompute.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn draft_aggregate_inbox_state_matches_canonical_metadata(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // Archive the received thread, then start a reply draft in it.
+    sqlx::query!(
+        "DELETE FROM email_message_labels WHERE message_id = 'ee000003-0000-0000-0000-000000000003'"
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO email_messages (id, thread_id, link_id, is_draft) VALUES ($1, $2, $3, true)",
+        Uuid::now_v7(),
+        RECEIVED_THREAD,
+        DRAFT_FIXTURE_LINK,
+    )
+    .execute(&pool)
+    .await?;
+    let ids = [SENT_WITH_DRAFT_THREAD, RECEIVED_THREAD, DRAFT_ONLY_THREAD];
+    let mut canonical = std::collections::HashMap::new();
+    for id in ids {
+        canonical.insert(id, recompute_inbox_state(&pool, id).await?);
+    }
+    let owner = sqlx::query_scalar!(
+        "SELECT macro_id FROM email_links WHERE id = $1",
+        DRAFT_FIXTURE_LINK
+    )
+    .fetch_one(&pool)
+    .await?;
+    let projections = EmailPgRepo::new(pool)
+        .thread_mail_projections_by_ids(
+            macro_user_id::user_id::MacroUserIdStr::parse_from_str(&owner)?,
+            &ids,
+        )
         .await?;
-
-    // msg2 is a macro draft (is_draft=true, no provider_id) → inbox_visible = true
-    assert!(row.get::<bool, _>("inbox_visible"));
-
+    assert_eq!(projections.len(), ids.len());
+    for projection in projections {
+        let state = projection.draft_state.as_ref().unwrap();
+        let facts = std::iter::once(&state.baseline).chain(state.drafts.iter().map(|d| &d.facts));
+        let merged = facts.fold((false, None), |(visible, inbound), facts| {
+            (
+                visible || facts.inbox_visible,
+                inbound.max(facts.latest_inbound_message_ts),
+            )
+        });
+        assert_eq!(
+            merged, canonical[&projection.thread_id],
+            "thread {}",
+            projection.thread_id
+        );
+        assert_eq!(
+            merged.0,
+            projection.thread_id == RECEIVED_THREAD,
+            "only a draft replying to received mail keeps thread {} in the inbox",
+            projection.thread_id
+        );
+    }
     Ok(())
 }
 

@@ -48,7 +48,7 @@ const FAVORITE_ENTITY_TYPE_TO_GRAPHQL = {
   database: 'DATABASE',
   database_row: 'DATABASE_ROW',
   form: 'FORM',
-  whatsapp_group: 'WHATSAPP_GROUP',
+  external_chat: 'EXTERNAL_CHAT',
 } satisfies Record<FavoriteEntityType, GraphqlEntityType>;
 
 const GRAPHQL_ENTITY_TYPE_TO_FAVORITE = {
@@ -75,8 +75,12 @@ const GRAPHQL_ENTITY_TYPE_TO_FAVORITE = {
   STATIC_FILE: 'static_file',
   TEAM: 'team',
   USER: 'user',
-  WHATSAPP_GROUP: 'whatsapp_group',
-} satisfies Record<GraphqlEntityType, FavoriteEntityType>;
+  EXTERNAL_CHAT: 'external_chat',
+} satisfies Record<ReturnedGraphqlEntityType, FavoriteEntityType>;
+
+/** `WHATSAPP_GROUP` is a schema-only stub kept for released clients; the
+ * server never returns it. Remove with it after 2026-11-30. */
+type ReturnedGraphqlEntityType = Exclude<GraphqlEntityType, 'WHATSAPP_GROUP'>;
 
 /** Convert a REST favorite entity type into its GraphQL equivalent. */
 export function toGraphqlFavoriteEntityType(
@@ -88,7 +92,9 @@ export function toGraphqlFavoriteEntityType(
 /** Convert one GraphQL favorite into the shared favorites-list shape. */
 export function mapGraphqlFavorite(
   favorite: FavoriteFieldsFragment
-): Favorite & { id: string } {
+): (Favorite & { id: string }) | undefined {
+  const { entityType } = favorite;
+  if (entityType === 'WHATSAPP_GROUP') return undefined;
   return {
     // urql-solid reconciles lists by id. Preserve it so a mounted row's
     // preview/avatar subscriptions keep pointing at the same entity.
@@ -98,7 +104,7 @@ export function mapGraphqlFavorite(
     createdAt: favorite.createdAt,
     documentSubType: favorite.documentSubType,
     entityId: favorite.entityId,
-    entityType: GRAPHQL_ENTITY_TYPE_TO_FAVORITE[favorite.entityType],
+    entityType: GRAPHQL_ENTITY_TYPE_TO_FAVORITE[entityType],
     fileType: favorite.fileType,
     sortOrder: favorite.sortOrder,
   };
@@ -156,7 +162,7 @@ function favoriteSoupEffects(
     // Forms are not favoritable; the service refuses them.
     form: undefined,
     // Standalone groups have no Soup entity.
-    whatsapp_group: undefined,
+    external_chat: undefined,
   } as const satisfies Record<FavoriteEntityType, string | undefined>;
   const typename = typenames[args.entityType];
   return typename
@@ -245,16 +251,19 @@ export function executeGraphqlSetFavoriteMutation(
   ).toPromise();
 }
 
-/** Read an accepted toggle's own payload, never a mounted query's snapshot. */
+/** Whether a favorites write committed remotely or was accepted by the offline queue. */
+export type FavoriteWriteResult =
+  | { kind: 'committed' }
+  | { kind: 'queued'; transactionId: string };
+
 export function graphqlSetFavoriteResult(
   result: OperationResult<SetFavoriteMutation, SetFavoriteMutationVariables>
-): Favorite | undefined {
+): FavoriteWriteResult {
   const disposition = optimisticMutationDispositionOf(result);
   // Superseded operations intentionally carry no data. They are accepted via
   // their replacement, not missing-data errors. Also supports older queued work.
   if (disposition?.kind === 'queued') {
-    const favorite = result.data?.setFavorite.favorite;
-    return favorite ? mapGraphqlFavorite(favorite) : undefined;
+    return { kind: 'queued', transactionId: disposition.transactionId };
   }
   if (disposition?.kind === 'permanently-failed') throw disposition.error;
   if (result.error) throw result.error;
@@ -263,7 +272,7 @@ export function graphqlSetFavoriteResult(
   if (payload.result.__typename === 'GraphqlMutationError') {
     throw new Error(payload.result.message);
   }
-  return payload.favorite ? mapGraphqlFavorite(payload.favorite) : undefined;
+  return { kind: 'committed' };
 }
 
 /**
@@ -272,11 +281,6 @@ export function graphqlSetFavoriteResult(
  */
 const REORDER_FAVORITES_OPTIMISTIC_UUID =
   '86cc4bfe-c45a-4e28-880a-6ba5ca921d35';
-
-/** Whether the reorder committed remotely or was accepted by the offline queue. */
-export type ReorderFavoritesResult =
-  | { kind: 'committed' }
-  | { kind: 'queued'; transactionId: string };
 
 /** Submit a durable optimistic GraphQL favorites reorder. */
 export function executeGraphqlReorderFavoritesMutation(
@@ -339,7 +343,7 @@ export function graphqlReorderFavoritesResult(
     ReorderFavoritesMutation,
     ReorderFavoritesMutationVariables
   >
-): ReorderFavoritesResult {
+): FavoriteWriteResult {
   const disposition = optimisticMutationDispositionOf(result);
   if (disposition?.kind === 'queued') {
     return {

@@ -89,7 +89,7 @@ function InvalidInviteLink() {
         This channel invitation is invalid or no longer available.
       </p>
       <Button
-        variant="outline"
+        variant="secondary"
         size="md"
         class="w-full"
         onClick={() => navigate('/')}
@@ -108,7 +108,7 @@ function UnauthenticatedView(props: { onLogin: () => void }) {
         Sign in or create an account to accept this channel invitation.
       </p>
       <Button
-        variant="outline"
+        variant="secondary"
         size="md"
         class="w-full"
         onClick={props.onLogin}
@@ -131,7 +131,12 @@ function JoinConfirmation(props: { onJoin: () => void }) {
           Confirm that you want to join this channel.
         </p>
       </div>
-      <Button variant="outline" size="md" class="w-full" onClick={props.onJoin}>
+      <Button
+        variant="secondary"
+        size="md"
+        class="w-full"
+        onClick={props.onJoin}
+      >
         Join Channel
       </Button>
     </div>
@@ -146,7 +151,7 @@ function ServerError(props: { onRetry: () => void }) {
         Something went wrong while joining the channel. Please try again.
       </p>
       <Button
-        variant="outline"
+        variant="secondary"
         size="md"
         class="w-full"
         onClick={props.onRetry}

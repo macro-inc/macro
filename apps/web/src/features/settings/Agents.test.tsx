@@ -23,6 +23,7 @@ import { Suspense } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Agents } from './Agents';
+import { agentSettingsRequest, requestAgentDetail } from './agentSettingsState';
 import {
   chooseModelOption,
   chooseSelectOption,
@@ -903,6 +904,34 @@ describe('Agents', () => {
       expect(agentMocks.toastSuccess).toHaveBeenCalledWith('Agent updated');
       expect(screen.queryByRole('dialog')).toBeNull();
     });
+  });
+
+  it("opens an agent's editor when asked to from its user card", () => {
+    agentMocks.query.data = [
+      {
+        bot: {
+          id: 'agent-1',
+          kind: 'owned',
+          owner: { type: 'user', user_id: 'macro|user@example.com' },
+          name: 'Bug fixer',
+          handle: 'bug-fixer',
+          has_agent: true,
+          created_at: '2026-08-27T12:00:00Z',
+          updated_at: '2026-08-27T12:00:00Z',
+        },
+        instructions: 'Fix the root cause.',
+        harness: 'in-memory',
+        default_model: Model.sonnet55,
+        channel_scope: 'all',
+        channel_ids: [],
+      },
+    ];
+    requestAgentDetail('agent-1');
+
+    render(() => <Agents {...agentsPageProps} />);
+
+    expect(screen.getByRole('heading', { name: 'Edit agent' })).toBeTruthy();
+    expect(agentSettingsRequest()).toBeUndefined();
   });
 
   it('lets team members edit without deleting or privatizing another creator agent', () => {

@@ -47,7 +47,7 @@ fn only_the_verified_author_edits_or_deletes() {
         ))
         .unwrap_err()
         .current_context(),
-        LinkedError::Forbidden
+        ExternalChatError::Forbidden
     ));
     // Anyone may react to anyone's message.
     validate_event(&message(
@@ -87,13 +87,15 @@ fn system_line(sender: &str) -> InboundEvent {
     let mut event = message(MessageKind::System, sender, None);
     if let InboundKind::Message(m) = &mut event.kind {
         m.sender.alternate_jid = None;
-        m.rich = Some(RichContent::System(crate::domain::rich::SystemLine {
-            action: crate::domain::rich::SystemAction::SubjectChanged,
-            participants: vec![],
-            value: Some("Launch".into()),
-            call: None,
-            by_whatsapp: true,
-        }));
+        m.rich = Some(RichContent::System(
+            external_chat::domain::rich::SystemLine {
+                action: external_chat::domain::rich::SystemAction::SubjectChanged,
+                participants: vec![],
+                value: Some("Launch".into()),
+                call: None,
+                by_whatsapp: true,
+            },
+        ));
     }
     event
 }

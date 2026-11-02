@@ -3,10 +3,11 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import Funnel from '@icon/system/regular/funnel-simple.svg';
 import { Accordion } from '@kobalte/core/accordion';
 import { Popover } from '@kobalte/core/popover';
-import { Button } from '@ui';
+import { Button, ButtonGroup } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
 
 export function SchedulingFilters(props: {
+  grouped?: boolean;
   title: string;
   activeCount: number;
   onClear: () => void;
@@ -15,20 +16,28 @@ export function SchedulingFilters(props: {
 }) {
   const [trigger, setTrigger] = createSignal<HTMLButtonElement>();
   const [mobileOpen, setMobileOpen] = createSignal(false);
+  const triggerSize = () => {
+    if (props.activeCount > 0) return props.grouped ? 'sm' : 'md';
+    return props.grouped ? 'icon-sm' : 'icon-md';
+  };
   return (
     <Show
       when={isTouchDevice()}
       fallback={
         <Popover placement="bottom-end" gutter={8} modal={false} fitViewport>
           <Popover.Trigger
-            as={Button}
+            aria-label={props.title}
+            tooltip={props.title}
+            as={props.grouped ? ButtonGroup.Button : Button}
             ref={setTrigger}
             type="button"
             variant="ghost"
-            size={props.activeCount > 0 ? 'md' : 'icon-md'}
-            label={props.title}
+            size={triggerSize()}
           >
-            <Funnel aria-hidden="true" />
+            <Funnel
+              class="size-4 touch:size-6 shrink-0 pointer-events-none"
+              aria-hidden="true"
+            />
             <Show when={props.activeCount > 0}>
               <span class="flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-xxs font-medium leading-none text-surface">
                 {props.activeCount}

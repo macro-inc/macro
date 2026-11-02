@@ -1,7 +1,7 @@
 use super::*;
 use agent_runtime_protocol::domain::channel::Channel;
 use agent_runtime_protocol::domain::connection::ServerChannel;
-use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
+use agent_runtime_protocol::domain::schema::v0::{AcpMessage, ToRuntimeMessage, ToServerMessage};
 
 fn harness(command: &str) -> Harness {
     Harness {
@@ -32,6 +32,9 @@ async fn unspawnable_harness_reports_failure() {
         std::path::Path::new("/"),
         runtime,
         None,
+        &ActiveTurns::default(),
+        None,
+        &mut Handoffs::channel().0,
     )
     .await
     .expect_err("a harness that cannot be spawned must not look like success");
@@ -51,7 +54,16 @@ async fn harness_that_exits_immediately_disconnects() {
 
     // `true` spawns cleanly and closes its stdio at once, which is the
     // shutdown path rather than the spawn-failure path above.
-    let _ = bridge(&harness("true"), std::path::Path::new("/"), runtime, None).await;
+    let _ = bridge(
+        &harness("true"),
+        std::path::Path::new("/"),
+        runtime,
+        None,
+        &ActiveTurns::default(),
+        None,
+        &mut Handoffs::channel().0,
+    )
+    .await;
 
     assert_eq!(
         events(service),
@@ -66,9 +78,17 @@ async fn dropped_service_channel_does_not_panic_the_bridge() {
 
     // Announcing readiness into a closed channel is a failure to announce, not
     // a harness failure: nothing was ever spawned.
-    let error = bridge(&harness("true"), std::path::Path::new("/"), runtime, None)
-        .await
-        .expect_err("announcing into a closed channel must fail");
+    let error = bridge(
+        &harness("true"),
+        std::path::Path::new("/"),
+        runtime,
+        None,
+        &ActiveTurns::default(),
+        None,
+        &mut Handoffs::channel().0,
+    )
+    .await
+    .expect_err("announcing into a closed channel must fail");
 
     assert!(matches!(error, BridgeError::Announce(_)), "got {error:?}");
 }
@@ -91,4 +111,92 @@ async fn model_probe_process_failures_are_safely_redacted() {
 
     assert_eq!(error, "the ACP model probe process failed");
     assert!(!error.contains("secret-argument"));
+}
+
+#[tokio::test]
+async fn relay_teaches_a_new_session_on_its_first_prompt() {
+    let (runtime, service) = Channel::duplex();
+    let ServerChannel {
+        tx: to_bridge,
+        rx: mut from_bridge,
+    } = service;
+    // Answers `session/new` with a session id, and every prompt with the
+    // prompt blocks it received.
+    let agent = Harness {
+        command: "python3".to_owned(),
+        args: vec![
+            "-c".to_owned(),
+            r#"
+import json, sys
+for line in sys.stdin:
+    request = json.loads(line)
+    if request["method"] == "session/new":
+        result = {"sessionId": "acp-1"}
+    else:
+        result = {"prompt": request["params"]["prompt"]}
+    print(json.dumps({"jsonrpc": "2.0", "id": request["id"], "result": result}), flush=True)
+"#
+            .to_owned(),
+        ],
+        env: Default::default(),
+    };
+    let send = |value: serde_json::Value| {
+        to_bridge
+            .send(ToRuntimeMessage::Acp(AcpMessage(
+                serde_json::from_value(value).expect("a valid JSON-RPC message"),
+            )))
+            .expect("the bridge is running");
+    };
+    let mut handoffs = Handoffs::channel().0;
+    let turns = ActiveTurns::default();
+    let bridge = bridge(
+        &agent,
+        std::path::Path::new("/"),
+        runtime,
+        None,
+        &turns,
+        None,
+        &mut handoffs,
+    );
+    let conversation = async {
+        let mut next_answer = async || loop {
+            match from_bridge.recv().await.expect("the bridge is running") {
+                ToServerMessage::Acp(AcpMessage(frame)) => {
+                    break serde_json::to_value(frame).expect("a serializable message");
+                }
+                ToServerMessage::Event { .. } => {}
+                other => panic!("unexpected message {other:?}"),
+            }
+        };
+        send(serde_json::json!({
+            "jsonrpc": "2.0", "id": 1, "method": "session/new",
+            "params": {"cwd": "/home/operator/code", "mcpServers": []}
+        }));
+        next_answer().await;
+        send(serde_json::json!({
+            "jsonrpc": "2.0", "id": 2, "method": "session/prompt",
+            "params": {"sessionId": "acp-1", "prompt": [{"type": "text", "text": "hello"}]}
+        }));
+        next_answer().await
+    };
+
+    let answer = tokio::select! {
+        answer = conversation => answer,
+        ended = bridge => panic!("the bridge ended early: {ended:?}"),
+    };
+
+    let blocks = answer["result"]["prompt"]
+        .as_array()
+        .expect("the agent echoed the prompt blocks");
+    assert_eq!(blocks.len(), 2, "got {answer}");
+    assert!(
+        blocks[0]["text"]
+            .as_str()
+            .is_some_and(|text| text.starts_with("<macrod-runtime>")),
+        "got {answer}"
+    );
+    assert_eq!(
+        blocks[1],
+        serde_json::json!({"type": "text", "text": "hello"})
+    );
 }

@@ -81,6 +81,7 @@ export function NarrowEmailLayout(
       >
         <RowEnd actions={props.actions} leadingAction={props.leadingAction}>
           <span class="flex items-center gap-1">
+            {props.referenceProperties}
             {props.scheduleStatus}
             <Show when={!props.hasNotifications}>
               <Entity.Timestamp entity={props.entity} />

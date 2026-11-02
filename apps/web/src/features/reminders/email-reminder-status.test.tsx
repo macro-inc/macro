@@ -22,8 +22,8 @@ vi.mock('@core/hotkey/utils', () => ({
   runCommand: vi.fn(),
 }));
 vi.mock('@ui', () => ({
-  Button: (props: { label: string; onClick: () => void }) => (
-    <button onClick={props.onClick}>{props.label}</button>
+  Button: (props: { 'aria-label': string; onClick: () => void }) => (
+    <button onClick={props.onClick}>{props['aria-label']}</button>
   ),
 }));
 afterEach(cleanup);

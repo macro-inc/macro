@@ -76,6 +76,9 @@ const FIREWORKS_PROVIDER: &str = "fireworks";
 const FIREWORKS_BASE_URL: &str = "https://api.fireworks.ai/inference/v1";
 /// Provider segment Google Gemini is registered under (native GenerateContent).
 const GOOGLE_PROVIDER: &str = "google";
+/// Output cap for OpenAI-compatible Chat Completions hosts, whose limits
+/// differ per host and model.
+const COMPATIBLE_MAX_TOKENS: u64 = 16_000;
 
 /// A routed model id bound to the provider client that serves it.
 pub(crate) enum RoutedModel<'a, H = MeteredHttpClient> {
@@ -136,10 +139,21 @@ impl<'a, H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static> RoutedM
         system_prompt: &SystemPrompt,
         tool_search: &ToolSearch,
         max_turns: usize,
-        max_tokens: u64,
+        max_tokens: Option<u64>,
         telemetry: &GenAiContext,
     ) -> ProviderAgent<H> {
         let joined = system_prompt.joined();
+        // Unset means the model's maximum. Anthropic requires the field, so it
+        // gets the model's cap. The Responses and Gemini APIs default to the
+        // model's maximum when it's left out. OpenAI-compatible hosts default
+        // to their own, often small, limit, so they keep a fixed one.
+        let max_tokens = match &self {
+            RoutedModel::Anthropic(m) => Some(max_tokens.unwrap_or_else(|| m.max_output_tokens())),
+            RoutedModel::OpenAiChatCompletions(_) => {
+                Some(max_tokens.unwrap_or(COMPATIBLE_MAX_TOKENS))
+            }
+            RoutedModel::Gemini(_) | RoutedModel::OpenAiResponses(_) => max_tokens,
+        };
         let system_prompt_text = joined.as_str();
         match self {
             RoutedModel::Anthropic(m) => {
@@ -156,8 +170,8 @@ impl<'a, H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static> RoutedM
                         }),
                 };
                 let (preamble, session_system) = match system_prompt.shared() {
-                    Some(shared) => (shared, Some(system_prompt.rest().to_owned())),
-                    None => (system_prompt.rest(), None),
+                    Some(shared) => (shared, Some(system_prompt.rest())),
+                    None => (system_prompt_text, None),
                 };
                 ProviderAgent::Anthropic(AnthropicAgent {
                     agent: build_agent(
@@ -627,7 +641,7 @@ fn build_agent<M: CompletionModel>(
     handle: ToolServerHandle,
     system_prompt: &str,
     max_turns: usize,
-    max_tokens: u64,
+    max_tokens: Option<u64>,
     telemetry: &GenAiContext,
 ) -> Agent<TracedModel<M>> {
     let mut builder = AgentBuilder::new(TracedModel::new(model, telemetry.clone()))
@@ -635,8 +649,10 @@ fn build_agent<M: CompletionModel>(
         .record_content_telemetry(false)
         .tool_server_handle(handle)
         .default_max_turns(max_turns)
-        .max_tokens(max_tokens)
         .preamble(system_prompt);
+    if let Some(max_tokens) = max_tokens {
+        builder = builder.max_tokens(max_tokens);
+    }
     if let Some(params) = thinking {
         builder = builder.additional_params(params);
     }
@@ -683,7 +699,7 @@ where
         .stream_prompt(prompt)
         .history(history)
         .max_turns(max_turns)
-        .max_invalid_tool_call_retries(crate::hook::MAX_INVALID_TOOL_CALL_RETRIES)
+        .max_invalid_tool_call_retries(crate::hook::RIG_INVALID_TOOL_CALL_RETRIES)
         .add_hook(bridge)
         .add_hook(ChatSpanHook(telemetry.clone()))
         .await;
@@ -1018,7 +1034,7 @@ impl ProviderAgent {
         model: M,
         system_prompt: &str,
         max_turns: usize,
-        max_tokens: u64,
+        max_tokens: Option<u64>,
         handle: ToolServerHandle,
         telemetry: GenAiContext,
     ) -> Self

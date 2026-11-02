@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH RECURSIVE ancestors AS (\n                SELECT id, \"parentId\" FROM \"Project\" WHERE id = $1\n                UNION\n                SELECT p.id, p.\"parentId\"\n                FROM \"Project\" p\n                JOIN ancestors a ON p.id = a.\"parentId\"\n            )\n            UPDATE \"Project\"\n            SET \"createdAt\" = LEAST(\"createdAt\", $2),\n                \"updatedAt\" = GREATEST(\"updatedAt\", $3)\n            WHERE id IN (SELECT id FROM ancestors)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamp",
+        "Timestamp"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "56c77c77c471379c21fda2e70adcba10ac8dba67e9db2e6f75247b98e1534060"
+}

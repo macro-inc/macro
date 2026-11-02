@@ -3,7 +3,7 @@ import type { HotkeyToken } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { EntityData } from '@entity';
 import type { ItemType } from '@service-storage/client';
-import { Button, cn } from '@ui';
+import { Button, ButtonGroup, cn } from '@ui';
 import { type Component, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { HeaderActionGroup } from './HeaderActionGroup';
@@ -33,36 +33,39 @@ export type BlockTool = {
   children?: SplitFileMenuAction[];
   condition?: () => boolean;
   isActive?: () => boolean;
-  buttonComponent?: () => JSX.Element;
+  buttonComponent?: Component<{ grouped?: boolean }>;
   focusTarget?: () => HTMLElement | null;
   hotkeyToken?: HotkeyToken;
   /** Menu section this tool renders in when shown in the title file menu. */
   group?: SplitFileMenuActionGroup;
 };
 
-export function ToolButton(props: { tool: BlockTool }) {
+export function ToolButton(props: { tool: BlockTool; grouped?: boolean }) {
   const label = () =>
     typeof props.tool.label === 'function'
       ? props.tool.label()
       : props.tool.label;
 
+  const Control = props.grouped ? ButtonGroup.Button : Button;
   return (
-    <Button
+    <Control
+      variant="ghost"
+      aria-label={label()}
+      tooltip={{ content: label(), hotkey: props.tool.hotkeyToken }}
       onClick={props.tool.action}
-      label={label()}
-      hotkey={props.tool.hotkeyToken}
       class={cn(
         'px-1',
         props.tool.isActive?.() && 'bg-accent/20 hover:bg-accent/30 text-accent'
       )}
-      size={isTouchDevice() ? 'icon-sm' : 'icon-md'}
+      size={isTouchDevice() || props.grouped ? 'icon-sm' : 'icon-md'}
     >
       <Dynamic
         component={
           props.tool.icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>
         }
+        class="size-4 shrink-0 touch:size-3.5"
       />
-    </Button>
+    </Control>
   );
 }
 
@@ -149,9 +152,9 @@ export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
                   <For each={activeToolbarTools()}>
                     {(tool) =>
                       tool.buttonComponent ? (
-                        <tool.buttonComponent />
+                        <tool.buttonComponent grouped />
                       ) : (
-                        <ToolButton tool={tool} />
+                        <ToolButton tool={tool} grouped />
                       )
                     }
                   </For>

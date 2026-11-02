@@ -230,7 +230,6 @@ export function CommentThreadDrawer() {
             <div class="flex shrink-0 items-center justify-center gap-2 pb-1">
               <Button
                 size="icon-sm"
-                depth={3}
                 variant="ghost"
                 aria-label="Previous comment thread"
                 disabled={pagerIndex() <= 0}
@@ -243,7 +242,6 @@ export function CommentThreadDrawer() {
               </span>
               <Button
                 size="icon-sm"
-                depth={3}
                 variant="ghost"
                 aria-label="Next comment thread"
                 disabled={pagerIndex() >= orderedThreadIds().length - 1}

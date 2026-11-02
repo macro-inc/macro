@@ -721,7 +721,6 @@ export default {
     groupAdmin: 'Quản trị',
     tabTeamGeneral: 'Chung',
     tabTeamMembers: 'Thành viên',
-    tabTeamConnections: 'Kết nối',
     tabEmail: 'Email',
     tabCalendar: 'Lịch',
     tabAgents: 'Tác nhân',

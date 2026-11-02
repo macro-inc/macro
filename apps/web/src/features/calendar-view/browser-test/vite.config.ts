@@ -22,7 +22,9 @@ const previewImports = [
   '@app/features/calendar/hooks/create-guest-invite-controller',
   '@app/features/calendar/hooks/use-calendar-ui-flag',
   '@app/features/calendar-notes/calendar-meeting-notes',
-  '@app/features/calendar-view/components/EventGuests',
+  '@app/features/calendar-view/components/use-open-event-email',
+  '@app/features/calendar-view/copy-guest-emails',
+  '@property/editors/selectors/PropertyEntitySelector',
   '@app/features/calendar-team/components/team-event-details',
   '@app/features/calendar/views/event-replacement',
   '@app/features/calendar-view/copy-event-mention',
@@ -37,7 +39,10 @@ const previewImports = [
   '../../calendar/hooks/create-calendar-rsvp-controller',
 ];
 
-/** The real event details popover and drawer, with sample data and preview services. */
+/**
+ * The real event details popover and drawer, and their guest editors, with
+ * sample data and preview services.
+ */
 export default defineConfig({
   root: directory,
   cacheDir: `${directory}/.vite`,

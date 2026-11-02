@@ -141,7 +141,7 @@ export function UserMessage(props: {
                       size="icon-md"
                       onClick={() => setIsEditing(true)}
                     >
-                      <PencilIcon />
+                      <PencilIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                     </Button>
                   </div>
                 </Show>

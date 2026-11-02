@@ -12,6 +12,8 @@ export type BillingInput = {
   /** Undefined until the server confirms eligibility; never advertise a trial then. */
   trialEligible?: boolean;
   existingSubscription?: boolean;
+  /** The current paid license is still the Pro trial. Max does not inherit it. */
+  trialing?: boolean;
 };
 
 /** The billing summary's tier wins; without it, paid access implies Pro. */

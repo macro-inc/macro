@@ -5,11 +5,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-/// The default corpus directory (inside the crate).
-pub fn default_corpus() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/corpus")
-}
-
 /// A deck in the corpus.
 #[derive(Clone, Debug)]
 pub struct Deck {

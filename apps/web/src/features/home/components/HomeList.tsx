@@ -60,8 +60,8 @@ import {
 } from '../../next-soup/soup-view/soup-navigation-touch-highlight';
 import { InboxListEntity } from '../../next-soup/soup-view/views/inbox/InboxListEntity';
 import {
-  markCalendarNotificationSeenOnOpen,
   markChannelNotificationsSeenOnOpen,
+  markRowNotificationsSeenOnOpen,
   openEntityInSplitFromUnifiedList,
 } from '../../next-soup/utils';
 import { useHomeView } from '../home-view-context';
@@ -169,7 +169,10 @@ export function HomeList(props: HomeListProps) {
     const newSplit =
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
 
-    if (!isTouchDevice() && !newSplit) {
+    // Projects have no Home preview, so activating one opens it in place
+    // instead of selecting a row that shows nothing.
+    const previewable = sourceRow.entity.type !== 'initiative';
+    if (!isTouchDevice() && !newSplit && previewable) {
       markEntitySeen(sourceRow.entity);
       showPreview(sourceRow.entity, { activate: true });
       props.onPreviewActivate?.();
@@ -188,7 +191,7 @@ export function HomeList(props: HomeListProps) {
   }
 
   function markEntitySeen(entity: WithNotification<EntityData>) {
-    markCalendarNotificationSeenOnOpen(entity, notificationSource);
+    markRowNotificationsSeenOnOpen(entity, notificationSource);
     if (!isNonMemberChannelEntity(entity)) {
       markChannelNotificationsSeenOnOpen(entity, notificationSource);
     }
@@ -587,7 +590,7 @@ export function HomeList(props: HomeListProps) {
                 >
                   <span>Home couldn’t be loaded.</span>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     onClick={() => fireAndForget(source.refresh(), 'home')}
                   >
@@ -653,6 +656,9 @@ export function HomeList(props: HomeListProps) {
                               selectedEntities={selectedEntities}
                               viewContext={entityActionViewContext()}
                               markDoneDelegate={source.markDoneDelegate}
+                              createActionNavigationHandler={
+                                createActionNavigationHandler
+                              }
                               onOpenChange={(open) => {
                                 if (!open) return;
                                 focusActionRow({

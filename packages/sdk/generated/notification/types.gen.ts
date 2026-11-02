@@ -613,7 +613,7 @@ export type EntityAccessRequestedMetadata = {
 /**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'whatsapp_group';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 
 /**
  * A plain old json error response for use with axum.
@@ -625,6 +625,29 @@ export type ErrorResponse = {
      */
     message: string;
 };
+
+/**
+ * A live message in an independently shared external chat.
+ */
+export type ExternalChatMessageMetadata = {
+    /**
+     * The chat's name.
+     */
+    chatName: string;
+    /**
+     * Stable message id; retries use it as their notification id.
+     */
+    messageId: string;
+    /**
+     * The messaging service the chat lives in.
+     */
+    provider: ExternalChatProvider;
+};
+
+/**
+ * The messaging service an external chat lives in.
+ */
+export type ExternalChatProvider = 'whatsapp';
 
 /**
  * The strongly typed response for listing user notifications.
@@ -1171,10 +1194,10 @@ export type NotifEvent = {
     tag: 'reminder';
 } | {
     /**
-     * A live message in a shared WhatsApp group.
+     * A live message in a shared external chat.
      */
-    content: WhatsappGroupMessageMetadata;
-    tag: 'whatsapp_group_message';
+    content: ExternalChatMessageMetadata;
+    tag: 'external_chat_message';
 } | {
     /**
      * A calendar event alarm came due.
@@ -1496,20 +1519,6 @@ export type UserUnsubscribe = {
      * None for permanent mutes; notifications resume automatically at this deadline.
      */
     snoozed_until?: string | null;
-};
-
-/**
- * A live message in an independently shared WhatsApp group.
- */
-export type WhatsappGroupMessageMetadata = {
-    /**
-     * Group name, independent of its remote subject.
-     */
-    groupName: string;
-    /**
-     * Stable message id; retries use it as their notification id.
-     */
-    messageId: string;
 };
 
 export type HealthHandlerData = {

@@ -10,7 +10,11 @@ import {
   notificationIsRead,
   toNotificationEntity,
 } from '@entity/utils/notification';
-import type { NotificationSource, UnifiedNotification } from '@notifications';
+import {
+  type NotificationSource,
+  shownUnseenNotificationIds,
+  type UnifiedNotification,
+} from '@notifications';
 import { compositeEntity } from '@notifications/types';
 import {
   type NotificationEntityRef,
@@ -61,6 +65,7 @@ export const makeMarkNotificationsReadAction = (
   const execute = async (entities: EntityData[]) => {
     const notificationsById = new Map<string, UnifiedNotification>();
     const entityRefs: NotificationEntityRef[] = [];
+    const expectedNotificationIds: string[] = [];
     const useEntityMutations = isFeatureEnabled(enableGraphqlSoup);
     let targetCount = 0;
 
@@ -68,6 +73,13 @@ export const makeMarkNotificationsReadAction = (
       const entityRef = toNotificationEntityRef(entity);
       if (useEntityMutations && entityRef) {
         entityRefs.push(entityRef);
+        expectedNotificationIds.push(
+          ...shownUnseenNotificationIds(
+            options.notificationSource(),
+            toNotificationEntity(entity),
+            isWithNotification(entity) ? entity.notifications?.() : undefined
+          )
+        );
         targetCount += 1;
         continue;
       }
@@ -90,6 +102,7 @@ export const makeMarkNotificationsReadAction = (
           ? updateNotificationsForEntities({
               entities: entityRefs,
               operation: 'MARK_SEEN',
+              expectedNotificationIds,
             })
           : Promise.resolve(),
         notifications.length > 0

@@ -25,14 +25,15 @@ export const agentsTour = defineViewTour({
       target: AGENTS_TOUR.modeSwitch,
       entry: APP_TOUR.createMenu,
       entryLabel: 'Choose Create → Agent to start a conversation',
-      title: 'Choose Chat or Code',
+      title: 'Choose Auto, Chat, or Code',
       description:
-        'Chat starts a conversation with an agent that works with your documents and apps. Code starts a coding agent on a repository. Filter the sidebar to find either kind.',
+        'Auto sends each prompt to your usual chat agent, or to your usual coding agent when it needs code work. Chat starts an agent that works with your documents and apps. Code starts a coding agent on a repository. Filter the sidebar to find either kind.',
     },
     {
       target: AGENTS_TOUR.picker,
-      entry: APP_TOUR.createMenu,
-      entryLabel: 'Choose Create → Agent to start a conversation',
+      // Auto has no picker; choosing Chat or Code shows it.
+      entry: [AGENTS_TOUR.modeSwitch, APP_TOUR.createMenu],
+      entryLabel: 'Choose Chat or Code to pick an agent',
       title: 'Choose your agent and model',
       description:
         'Open this picker to choose an agent for the current mode. In Chat, Macro’s models are listed here too; each agent’s submenu lets you choose a model for that conversation.',

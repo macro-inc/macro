@@ -38,6 +38,25 @@ A handle to an agent session by id. Details load on first access.
 
 ***
 
+### chooseMode()
+
+> **chooseMode**(`prompt`): `Promise`\<[`AgentMode`](../../../../../generated/agent-harness/types.gen/type-aliases/AgentMode.md)\>
+
+Whether `prompt` needs a chat agent (`'chat'`) or a coding agent
+(`'code'`), as the app's Auto mode decides before starting a session.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `prompt` | `string` |
+
+#### Returns
+
+`Promise`\<[`AgentMode`](../../../../../generated/agent-harness/types.gen/type-aliases/AgentMode.md)\>
+
+***
+
 ### codingPreferences()
 
 > **codingPreferences**(): `Promise`\<[`CodingPreferencesBody`](../../../../../generated/agent-harness/types.gen/type-aliases/CodingPreferencesBody.md)\>

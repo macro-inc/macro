@@ -43,6 +43,7 @@ function thread(messages: ApiMessage[]): ApiThread {
     created_at: '2026-09-21T00:00:00Z',
     db_id: 'thread',
     inbox_visible: true,
+    has_received_mail: true,
     is_read: true,
     link_id: 'inbox',
     messages,

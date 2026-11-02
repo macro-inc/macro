@@ -18,7 +18,7 @@ vi.mock('@app/features/next-soup/sidebar/soup-filter-presets', () => ({
 }));
 vi.mock('@app/features/next-soup/utils', () => ({
   markChannelNotificationsSeenOnOpen: vi.fn(),
-  markCalendarNotificationSeenOnOpen: vi.fn(),
+  markRowNotificationsSeenOnOpen: vi.fn(),
   openEntityInSplitFromUnifiedList: mocks.open,
 }));
 vi.mock('@app/lib/analytics/analytics-context', () => ({

@@ -17,9 +17,29 @@ A scheduled or event-triggered agent task.
 | <a id="property-owner"></a> `owner` | `readonly` | () => `Promise`\<[`User`](../../../users/user/classes/User.md)\> | Routine owner. | - |
 | <a id="property-revision"></a> `revision` | `readonly` | () => `Promise`\<`number`\> | Configuration revision. | - |
 | <a id="property-runvisibility"></a> `runVisibility` | `readonly` | () => `Promise`\<[`RunVisibility`](../../../../../generated/scheduled-action/types.gen/type-aliases/RunVisibility.md)\> | Whether the routine's runs appear in Home and the Agents list. | - |
+| <a id="property-sourcetemplate"></a> `sourceTemplate` | `readonly` | () => `Promise`\<`Routine` \| `undefined`\> | The shared routine whose template this routine was activated from. | - |
 | <a id="property-trigger"></a> `trigger` | `readonly` | () => `Promise`\<[`ActionTrigger`](../../../../../generated/scheduled-action/types.gen/type-aliases/ActionTrigger.md)\> | Configured triggers. | - |
 
 ## Methods
+
+### activateTemplate()
+
+> **activateTemplate**(`options`): `Promise`\<`Routine`\>
+
+Create the caller's own routine from this routine's shared template, with
+its references already filled in for them.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `options` | [`RoutineOptions`](../interfaces/RoutineOptions.md) |
+
+#### Returns
+
+`Promise`\<`Routine`\>
+
+***
 
 ### delete()
 
@@ -72,6 +92,51 @@ Enable or disable triggering.
 #### Returns
 
 `Promise`\<`void`\>
+
+***
+
+### shareAsTemplate()
+
+> **shareAsTemplate**(`options`): `Promise`\<[`RoutineTemplate`](RoutineTemplate.md)\>
+
+Share this routine as a template, or update its shared snapshot. People
+get the template, never the routine, its runs or its results.
+
+#### Parameters
+
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `options` | \{ `description`: `string`; `variables`: [`TemplateVariable`](../../../../../generated/scheduled-action/types.gen/type-aliases/TemplateVariable.md)[]; \} | - |
+| `options.description` | `string` | What the routine does for someone. |
+| `options.variables` | [`TemplateVariable`](../../../../../generated/scheduled-action/types.gen/type-aliases/TemplateVariable.md)[] | How each user-specific reference fills in when someone activates it. |
+
+#### Returns
+
+`Promise`\<[`RoutineTemplate`](RoutineTemplate.md)\>
+
+***
+
+### stopSharingTemplate()
+
+> **stopSharingTemplate**(): `Promise`\<`void`\>
+
+Stop sharing this routine. Routines already activated keep running.
+
+#### Returns
+
+`Promise`\<`void`\>
+
+***
+
+### template()
+
+> **template**(): `Promise`\<[`RoutineTemplate`](RoutineTemplate.md) \| `undefined`\>
+
+This routine's shared template, or `undefined` when it isn't shared.
+
+#### Returns
+
+`Promise`\<[`RoutineTemplate`](RoutineTemplate.md) \| `undefined`\>
 
 ***
 

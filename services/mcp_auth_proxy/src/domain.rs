@@ -1,5 +1,7 @@
 //! Domain logic for the MCP OAuth broker.
 
+/// Which registered client each issued access token went to.
+pub mod access_token_clients;
 /// Domain models for broker-managed OAuth state and request payloads.
 pub mod models;
 /// Domain port traits for upstream OAuth providers and broker state stores.

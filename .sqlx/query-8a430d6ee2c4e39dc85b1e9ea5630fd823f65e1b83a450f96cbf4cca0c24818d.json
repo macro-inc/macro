@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT app_slug, server_url FROM mcp_overlays WHERE app_slug = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "app_slug",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "server_url",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "8a430d6ee2c4e39dc85b1e9ea5630fd823f65e1b83a450f96cbf4cca0c24818d"
+}

@@ -4,12 +4,13 @@
 
 Shared infrastructure for document/attachment storage: a periodic worker
 that deletes S3 objects whose SHA was placed in the `bucket:sha-delete`
-Redis set, decrementing a shared reference count first.
+Redis set once no `"BomPart"` row references them.
 
 ## Start here
 
-- `src/process.rs`: the cleanup loop — pulls SHAs from Redis, checks the
-  count, deletes from S3 when it hits zero.
+- `src/process.rs`: the cleanup loop — pulls SHAs from Redis, recounts
+  `"BomPart"`, deletes from S3 at zero, and otherwise writes the count back
+  to the `sha:` counter.
 - `src/service/redis/{get_shas,increment,remove_set_member}.rs`: the Redis
   operations this service makes.
 - `src/service/s3/delete.rs`, `src/service/db/get_sha_count.rs`: the S3 delete
@@ -27,6 +28,9 @@ Redis set, decrementing a shared reference count first.
   Postgres and Redis/macrocache up, per `README.md`).
 
 ## Gotchas
+
+- Counters written back here take `macro_sha_count_client::SHA_REFERENCE_TTL`
+  in the same MULTI/EXEC; never write a `sha:` key without an expiry.
 
 - `cargo run --features local` bypasses all AWS calls and returns dummy data
   — use it only for wiring checks, not to verify real deletes.

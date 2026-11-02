@@ -801,7 +801,6 @@ export default {
     groupAdmin: 'Администрирование',
     tabTeamGeneral: 'Общие',
     tabTeamMembers: 'Участники',
-    tabTeamConnections: 'Подключения',
     tabEmail: 'Почта',
     tabCalendar: 'Календарь',
     tabAgents: 'Агенты',

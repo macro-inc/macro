@@ -13,6 +13,7 @@ import {
   type ConnectedCalendarAccount,
   ConnectedCalendars,
 } from './components/connected-calendars';
+import { NextMeetingCountdownSetting } from './components/next-meeting-countdown-setting';
 import {
   TurnOffCalendarDialog,
   type TurnOffCalendarTarget,
@@ -156,6 +157,7 @@ export function CalendarSettings() {
       description="Manage your connected accounts, calendar visibility, and colors."
     >
       <CalendarConnectionSettings />
+      <NextMeetingCountdownSetting />
       <CalendarTeamSettings />
     </SettingsPage>
   );

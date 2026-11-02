@@ -446,10 +446,14 @@ export type CursorModelsResponse = {
 export type DenyReason = 'allowance_exhausted' | 'free_allowance_exhausted' | 'overage_limit_reached' | 'overage_payment_failed';
 
 /**
- * Actual deployment availability for the provider selector.
+ * What the provider selector offers the requesting user.
  */
 export type EmailConnectionProviders = {
     gmail: boolean;
+    /**
+     * Whether this user may start a new Outlook connection: the deployment
+     * switch and their `enable-outlook` flag.
+     */
     outlook: boolean;
     /**
      * Where a Microsoft 365 administrator approves Macro for their whole
@@ -922,6 +926,13 @@ export type GithubPullRequestReview = {
  * What a reviewer's latest review on a pull request said.
  */
 export type GithubPullRequestReviewState = 'approved' | 'changes_requested' | 'commented' | 'dismissed';
+
+/**
+ * Whether a pull request is open or closed, as a user sets it. Merging is a
+ * separate action, so unlike `GithubPullRequestStatus` there is no merged
+ * state.
+ */
+export type GithubPullRequestState = 'open' | 'closed';
 
 /**
  * The normalized lifecycle status for a GitHub pull request.
@@ -1600,6 +1611,39 @@ export type SetGithubPullRequestDraftResponse = {
     pullRequest?: null | EnrichedGithubPullRequest;
 };
 
+/**
+ * A request to close one pull request, or reopen it, on the user's behalf.
+ */
+export type SetGithubPullRequestStateRequest = {
+    /**
+     * The GitHub pull request number.
+     */
+    number: number;
+    /**
+     * The GitHub repository owner or organization.
+     */
+    owner: string;
+    /**
+     * The GitHub repository name.
+     */
+    repo: string;
+    /**
+     * `closed` closes the pull request; `open` reopens it.
+     */
+    state: GithubPullRequestState;
+};
+
+/**
+ * Response body for a pull request that was closed or reopened.
+ */
+export type SetGithubPullRequestStateResponse = {
+    pullRequest?: null | EnrichedGithubPullRequest;
+    /**
+     * Whether the pull request is now open or closed.
+     */
+    state: GithubPullRequestState;
+};
+
 export type SsoRequiredResponse = {
     /**
      * The idp_id you need to perform sso login with.
@@ -1872,6 +1916,26 @@ export type UpdateOverageRequest = {
      * Per-period cap on overage spend, cents. Required when enabling.
      */
     limitCents?: number;
+};
+
+/**
+ * What kind of upstream failure a 502 or 503 reports, for clients that
+ * branch on it.
+ */
+export type UpstreamErrorCode = 'upstream_unavailable' | 'upstream_rate_limited' | 'upstream_invalid_response';
+
+/**
+ * The body of a 502 or 503 caused by a third-party service.
+ */
+export type UpstreamErrorResponse = {
+    /**
+     * The kind of failure.
+     */
+    code: UpstreamErrorCode;
+    /**
+     * What failed and what to do about it, written for the user.
+     */
+    message: string;
 };
 
 /**
@@ -2585,6 +2649,8 @@ export type SetGithubPullRequestDraftErrors = {
     422: ErrorResponse;
     428: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type SetGithubPullRequestDraftError = SetGithubPullRequestDraftErrors[keyof SetGithubPullRequestDraftErrors];
@@ -2607,6 +2673,8 @@ export type EnrichGithubPullRequestsErrors = {
     404: ErrorResponse;
     428: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type EnrichGithubPullRequestsError = EnrichGithubPullRequestsErrors[keyof EnrichGithubPullRequestsErrors];
@@ -2641,6 +2709,8 @@ export type MergeGithubPullRequestErrors = {
     422: ErrorResponse;
     428: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type MergeGithubPullRequestError = MergeGithubPullRequestErrors[keyof MergeGithubPullRequestErrors];
@@ -2670,6 +2740,8 @@ export type GetGithubPullRequestMergeabilityErrors = {
     422: ErrorResponse;
     428: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type GetGithubPullRequestMergeabilityError = GetGithubPullRequestMergeabilityErrors[keyof GetGithubPullRequestMergeabilityErrors];
@@ -2679,6 +2751,41 @@ export type GetGithubPullRequestMergeabilityResponses = {
 };
 
 export type GetGithubPullRequestMergeabilityResponse = GetGithubPullRequestMergeabilityResponses[keyof GetGithubPullRequestMergeabilityResponses];
+
+export type SetGithubPullRequestStateData = {
+    body: SetGithubPullRequestStateRequest;
+    path?: never;
+    query?: never;
+    url: '/github_pull_requests/state';
+};
+
+export type SetGithubPullRequestStateErrors = {
+    401: ErrorResponse;
+    /**
+     * The user cannot change the pull request
+     */
+    403: ErrorResponse;
+    /**
+     * No GitHub link, or the pull request is not visible to the user
+     */
+    404: ErrorResponse;
+    /**
+     * GitHub declined the change
+     */
+    422: ErrorResponse;
+    428: ErrorResponse;
+    500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
+};
+
+export type SetGithubPullRequestStateError = SetGithubPullRequestStateErrors[keyof SetGithubPullRequestStateErrors];
+
+export type SetGithubPullRequestStateResponses = {
+    200: SetGithubPullRequestStateResponse;
+};
+
+export type SetGithubPullRequestStateResponse2 = SetGithubPullRequestStateResponses[keyof SetGithubPullRequestStateResponses];
 
 export type ListGtmInviteLinksData = {
     body?: never;
@@ -2879,7 +2986,7 @@ export type RefreshErrors = {
     400: string;
     401: string;
     /**
-     * Refresh already in progress for this user
+     * Refresh already in progress for this user, or the access token lacks the Macro claims and was issued too recently to refresh
      */
     429: string;
     500: string;
@@ -2929,6 +3036,7 @@ export type EmailConnectionProvidersData = {
 
 export type EmailConnectionProvidersErrors = {
     400: ErrorResponse;
+    401: ErrorResponse;
 };
 
 export type EmailConnectionProvidersError = EmailConnectionProvidersErrors[keyof EmailConnectionProvidersErrors];
@@ -2950,6 +3058,8 @@ export type DeleteGithubLinkErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type DeleteGithubLinkError = DeleteGithubLinkErrors[keyof DeleteGithubLinkErrors];
@@ -2977,6 +3087,8 @@ export type InitGithubLinkErrors = {
     401: ErrorResponse;
     429: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type InitGithubLinkError = InitGithubLinkErrors[keyof InitGithubLinkErrors];
@@ -2999,6 +3111,8 @@ export type CheckGithubLinkStatusErrors = {
     404: ErrorResponse;
     428: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type CheckGithubLinkStatusError = CheckGithubLinkStatusErrors[keyof CheckGithubLinkStatusErrors];

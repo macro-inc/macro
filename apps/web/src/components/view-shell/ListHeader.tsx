@@ -11,9 +11,9 @@ export function ListHeader(props: {
 }) {
   return (
     <ViewShell.TopBar class="gap-2 pr-4">
-      {/* Both regions clip overflow; the padding keeps control rings unclipped. */}
-      <div class="-m-1 min-w-0 flex-1 truncate p-1">{props.title}</div>
-      <div class="-m-1 flex min-w-0 max-w-full items-center gap-2 overflow-x-auto p-1 [scrollbar-width:none]">
+      {/* Reserve title width before actions; padding keeps focus rings unclipped. */}
+      <div class="-m-1 min-w-0 flex-initial truncate p-1">{props.title}</div>
+      <div class="-m-1 flex min-w-0 max-w-full flex-1 items-center justify-end-safe gap-2 overflow-x-auto p-1 [scrollbar-width:none]">
         {props.children}
       </div>
     </ViewShell.TopBar>
@@ -56,10 +56,11 @@ export function ListHeaderSearch(props: {
         when={expanded()}
         fallback={
           <Button
+            aria-label={props.label}
+            tooltip={props.label}
             ref={trigger}
-            variant="outline"
+            variant="secondary"
             size="icon-md"
-            label={props.label}
             aria-expanded="false"
             onClick={focus}
           >

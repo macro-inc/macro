@@ -120,6 +120,10 @@ impl ConnectionRepo for DynamoDbConnectionGatewayPersistence {
             .query()
             .table_name(self.table_exists.as_ref())
             .key_condition_expression("PK = :primary_key") // Just the hash key condition
+            // Read right after the open, ping, or close that prompted it; an
+            // eventually consistent read can miss that write and send viewers
+            // a list without the user who just opened.
+            .consistent_read(true)
             .expression_attribute_values(
                 ":primary_key",
                 AttributeValue::S(format!("#{}#{}", entity.entity_type, entity.entity_id)),
@@ -279,7 +283,7 @@ impl ConnectionRepo for DynamoDbConnectionGatewayPersistence {
         &self,
         entity: &EntityConnection<'_>,
         timestamp: u64,
-    ) -> Result<StoredConnectionEntity> {
+    ) -> Result<Option<StoredConnectionEntity>> {
         let pk = format!("#{}#{}", entity.extra.entity_type, entity.extra.entity_id);
         let sk = entity.connection_id.to_string();
 
@@ -287,7 +291,7 @@ impl ConnectionRepo for DynamoDbConnectionGatewayPersistence {
         names.insert("#last_ping".to_string(), "last_ping".to_string());
         names.insert("#entity_type".to_string(), "entity_type".to_string());
 
-        let res = self
+        let res = match self
             .client
             .update_item()
             .table_name(self.table_exists.as_ref())
@@ -300,17 +304,16 @@ impl ConnectionRepo for DynamoDbConnectionGatewayPersistence {
             .return_values(ReturnValue::AllNew)
             .send()
             .await
-            .map_err(|e| {
-                if e.as_service_error()
-                    .and_then(|se| se.code())
-                    .map(|code| code == "ConditionalCheckFailedException")
-                    .unwrap_or(false)
-                {
-                    anyhow::anyhow!("Connection entity no longer exists, skipping ping update")
-                } else {
-                    anyhow::anyhow!("Failed to update last_ping: {}", e)
-                }
-            })?;
+        {
+            Ok(res) => res,
+            Err(e)
+                if e.as_service_error().and_then(|se| se.code())
+                    == Some("ConditionalCheckFailedException") =>
+            {
+                return Ok(None);
+            }
+            Err(e) => anyhow::bail!("Failed to update last_ping: {}", e),
+        };
 
         let attrs = res
             .attributes
@@ -319,7 +322,7 @@ impl ConnectionRepo for DynamoDbConnectionGatewayPersistence {
         let entity: StoredConnectionEntity =
             serde_dynamo::from_item(attrs).context("Unable to deserialize entity")?;
 
-        Ok(entity)
+        Ok(Some(entity))
     }
 
     async fn update_user_connection_last_ping(

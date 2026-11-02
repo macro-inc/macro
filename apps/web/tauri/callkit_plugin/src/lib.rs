@@ -26,6 +26,7 @@ pub fn init<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
     #[cfg(target_os = "android")]
     let builder = builder
         .invoke_handler(tauri::generate_handler![
+            android::configure_tracing,
             android::get_voip_token,
             android::end_active_call,
             android::get_pending_answered_call,

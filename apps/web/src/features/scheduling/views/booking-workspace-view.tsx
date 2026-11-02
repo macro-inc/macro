@@ -12,14 +12,14 @@ import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
 import ChartIcon from '@icon/system/regular/chart-bar.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
+import PageIcon from '@icon/system/regular/globe.svg';
 import InfoIcon from '@icon/system/regular/info.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import UserIcon from '@icon/system/regular/user.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
-import PageIcon from '@phosphor/browser.svg';
-import { Button, cn, pressHandlers } from '@ui';
+import { Button, ButtonGroup, cn, pressHandlers } from '@ui';
 import {
   batch,
   createEffect,
@@ -385,10 +385,11 @@ export function BookingWorkspaceView(props: {
             createAgentAction={
               <Show when={search.tab === 'links' && owner()?.scope().canEdit}>
                 <Button
+                  aria-label="Create with agent"
+                  tooltip="Create with agent"
                   variant="ghost"
                   size="icon-md"
                   class="size-10 rounded-full"
-                  label="Create with agent"
                   disabled={
                     isSaving() || startingAgent() || !owner()?.source.profile()
                   }
@@ -419,8 +420,9 @@ export function BookingWorkspaceView(props: {
                 <Show when={owner()?.scope().canEdit}>
                   <Show when={search.tab === 'links'}>
                     <HeaderActionGroup label="Booking link tools">
-                      <Button
-                        label="Create with agent"
+                      <ButtonGroup.Button
+                        aria-label="Create with agent"
+                        tooltip="Create with agent"
                         variant="ghost"
                         size="icon-md"
                         disabled={
@@ -433,7 +435,7 @@ export function BookingWorkspaceView(props: {
                         }
                       >
                         <SparkleIcon class="size-4" />
-                      </Button>
+                      </ButtonGroup.Button>
                     </HeaderActionGroup>
                   </Show>
                   <ViewCreateButton
@@ -479,13 +481,13 @@ export function BookingWorkspaceView(props: {
               fallback={
                 <div class="flex min-w-0 flex-1 items-center gap-2">
                   <div class="flex min-w-0 items-center gap-1">
-                    <h1 class="min-w-0 truncate pl-2 text-sm font-semibold">
+                    <ViewSidebar.Title caret={false} class="pl-2">
                       {tab().label}
-                    </h1>
+                    </ViewSidebar.Title>
                     <Button
+                      aria-label={`About ${tab().label.toLowerCase()}`}
                       variant="ghost"
                       size="icon-sm"
-                      label={`About ${tab().label.toLowerCase()}`}
                       tooltip={tab().description}
                     >
                       <InfoIcon class="size-4 text-ink-muted" />
@@ -545,9 +547,9 @@ export function BookingWorkspaceView(props: {
                 <Show when={owner()?.scope().canEdit}>
                   <div class="ml-auto flex shrink-0 items-center gap-2 touch:hidden">
                     <Button
-                      label="Create with agent"
-                      tooltipDisabled
-                      variant="outline"
+                      aria-label="Create with agent"
+                      tooltip={{ content: 'Create with agent', disabled: true }}
+                      variant="secondary"
                       size="md"
                       disabled={
                         !owner()?.source.profile() ||
@@ -562,9 +564,9 @@ export function BookingWorkspaceView(props: {
                       <span>Create with agent</span>
                     </Button>
                     <Button
-                      label="New booking link"
-                      tooltipDisabled
-                      variant="strong"
+                      aria-label="New booking link"
+                      tooltip={{ content: 'New booking link', disabled: true }}
+                      variant="secondary"
                       size="md"
                       disabled={
                         !owner()?.source.profile() ||
@@ -592,9 +594,9 @@ export function BookingWorkspaceView(props: {
                 <Show when={owner()?.scope().canEdit}>
                   <div class="ml-auto shrink-0 touch:hidden">
                     <Button
-                      label="New schedule"
+                      aria-label="New schedule"
                       tooltip="New schedule"
-                      variant="strong"
+                      variant="secondary"
                       size="md"
                       disabled={isSaving() || !owner()?.source.profile()}
                       onClick={(event) =>
@@ -682,9 +684,9 @@ export function BookingWorkspaceView(props: {
                     bookingsTitle={
                       !isTouchDevice() ? (
                         <div class="flex items-center gap-2">
-                          <h1 class="text-sm font-semibold text-ink">
+                          <ViewSidebar.Title caret={false}>
                             Bookings
-                          </h1>
+                          </ViewSidebar.Title>
                           <div class="hidden @min-[900px]/split-header:flex">
                             <OwnerBadge scope={current.scope()} />
                           </div>
@@ -716,9 +718,9 @@ export function BookingWorkspaceView(props: {
                     insightsTitle={
                       !isTouchDevice() ? (
                         <div class="flex items-center gap-2">
-                          <h1 class="text-sm font-semibold text-ink">
+                          <ViewSidebar.Title caret={false}>
                             Insights
-                          </h1>
+                          </ViewSidebar.Title>
                           <div class="hidden @min-[900px]/split-header:flex">
                             <OwnerBadge scope={current.scope()} />
                           </div>
@@ -733,9 +735,9 @@ export function BookingWorkspaceView(props: {
                     owner={current}
                     pageTitle={
                       !isTouchDevice() ? (
-                        <h1 class="text-sm font-semibold text-ink">
+                        <ViewSidebar.Title caret={false}>
                           Booking page
-                        </h1>
+                        </ViewSidebar.Title>
                       ) : undefined
                     }
                   />

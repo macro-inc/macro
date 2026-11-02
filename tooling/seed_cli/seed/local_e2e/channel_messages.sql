@@ -341,10 +341,16 @@ VALUES (
 INSERT INTO user_notification (
     user_id,
     notification_id,
-    created_at
+    created_at,
+    event_item_type,
+    event_item_id,
+    notification_event_type
 )
 VALUES (
     'macro|e2e@macro.local',
     '00000000-0000-0000-0004-000000000001'::uuid,
-    now() + interval '4 hours'
+    now() + interval '4 hours',
+    'channel',
+    '00000000-0000-0000-0000-000000000001',
+    'channel_mention'
 );

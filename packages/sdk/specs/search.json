@@ -335,9 +335,17 @@
           "isReadOnly"
         ],
         "properties": {
+          "calendarName": {
+            "type": ["string", "null"],
+            "description": "Display name of the calendar holding this copy. Absent on an event\nshared with the user, which is on none of their calendars."
+          },
           "conferenceUrl": {
             "type": ["string", "null"],
             "description": "Direct conference join URL when known."
+          },
+          "contributesToAvailability": {
+            "type": ["boolean", "null"],
+            "description": "Whether a calendar holding this copy is on the user's schedule. The\nuser can see calendars that are not theirs, such as a colleague's: a\nrow without this, and that they do not attend, says what that calendar\nshows, not where the user is."
           },
           "createdAt": {
             "type": "string",
@@ -346,6 +354,10 @@
           "description": {
             "type": ["string", "null"],
             "description": "Free-text description, when the event carries one. May contain HTML from\nthe source; clients render a plain-text preview."
+          },
+          "inbox": {
+            "type": ["string", "null"],
+            "description": "The connected inbox syncing that calendar. It stays the user's own\naddress on a colleague's calendar, so it never says whose calendar it\nis."
           },
           "isReadOnly": {
             "type": "boolean",
@@ -373,7 +385,18 @@
               },
               {
                 "$ref": "#/components/schemas/CalendarEventOrganizer",
-                "description": "The event's organizer (creator), when the source names one."
+                "description": "The organizer the provider names, when it names one."
+              }
+            ]
+          },
+          "role": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CalendarEventSearchRole",
+                "description": "Whether the user organizes this copy or is a guest on it. Absent when\nthey are neither, when they can only write that calendar, or when a\nread-only calendar names them organizer."
               }
             ]
           },
@@ -393,7 +416,7 @@
       },
       "CalendarEventOrganizer": {
         "type": "object",
-        "description": "The event's organizer — its creator, in Google's model. Either field can be\nabsent when the source does not name it.",
+        "description": "The organizer the provider names on the event. Either field can be absent\nwhen the source does not name it. On a read-only Outlook calendar, such as\nits holidays, Microsoft names the mailbox owner on every event, so this\ndoes not say the user organized anything: `role` does.",
         "properties": {
           "email": {
             "type": ["string", "null"],
@@ -503,6 +526,11 @@
             "description": "The score of the result"
           }
         }
+      },
+      "CalendarEventSearchRole": {
+        "type": "string",
+        "description": "What the user is on one copy of an event, through the inbox holding it.",
+        "enum": ["organizer", "guest"]
       },
       "CalendarEventSearchScope": {
         "type": "string",
@@ -2770,7 +2798,7 @@
           },
           "include": {
             "type": "boolean",
-            "description": "Opt this query into initiatives at all. Initiatives are off by\ndefault — see [`crate::ast::initiative::InitiativeLiteral::Include`].\nAsking for specific `initiative_ids` or `owners` also opts in."
+            "description": "Opt this query into initiatives at all. Initiatives are off by\ndefault — see [`crate::ast::initiative::InitiativeLiteral::Include`].\nAsking for specific `initiative_ids`, `owners` or `notification_filters`\nalso opts in."
           },
           "initiative_ids": {
             "type": "array",
@@ -2783,12 +2811,16 @@
             "type": ["string", "null"],
             "description": "Case-insensitive name substring."
           },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "Filter by initiative notification state."
+          },
           "owners": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
+            "description": "Filter by initiative owner principal — a user ('macro|user@example.com'), a\nbot ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include\nevery owner."
           }
         }
       },
@@ -3032,6 +3064,22 @@
           }
         }
       },
+      "PropertyDateFilterRange": {
+        "type": "object",
+        "description": "UTC timestamp interval. Lower bounds are inclusive; upper bounds are exclusive.",
+        "properties": {
+          "end": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Exclusive UTC upper bound, omitted for an open end."
+          },
+          "start": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Inclusive UTC lower bound, omitted for an open start."
+          }
+        }
+      },
       "PropertyDefinition": {
         "type": "object",
         "description": "Property definition model (service representation).",
@@ -3097,6 +3145,17 @@
         "description": "A single property-based filter condition.\n\nEach filter targets a specific property definition on entities of a given type,\nmatching against select option UUIDs or entity reference IDs.\nMultiple values within a single filter are OR'd together.\nMultiple filters are AND'd together.",
         "required": ["property_definition_id"],
         "properties": {
+          "date_range": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PropertyDateFilterRange",
+                "description": "UTC range for Soup/search: inclusive start, exclusive end; both open matches any date."
+              }
+            ]
+          },
           "entity_ids": {
             "type": "array",
             "items": {
@@ -3107,6 +3166,10 @@
           "entity_type": {
             "type": ["string", "null"],
             "description": "The entity type for the property lookup (e.g., \"TASK\", \"DOCUMENT\", \"PROJECT\").\nWhen None, matches across all entity types."
+          },
+          "has_date": {
+            "type": ["boolean", "null"],
+            "description": "Flat Soup/search presence filter: true expands to an open date range, false to its negation."
           },
           "option_ids": {
             "type": "array",

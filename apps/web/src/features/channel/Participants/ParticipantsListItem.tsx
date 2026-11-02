@@ -73,7 +73,11 @@ export function ParticipantsListItem(props: {
       <Show when={props.editable}>
         <div class="absolute right-4 top-1/2 -translate-y-1/2">
           <Button
-            label={
+            variant="danger"
+            aria-label={
+              canRemove() ? 'Remove participant' : 'Cannot remove participant'
+            }
+            tooltip={
               canRemove() ? 'Remove participant' : 'Cannot remove participant'
             }
             size="icon-sm"
@@ -85,7 +89,7 @@ export function ParticipantsListItem(props: {
               props.onRemove();
             }}
           >
-            <IconX />
+            <IconX class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
         </div>
       </Show>

@@ -6,17 +6,25 @@ import { usePropertiesContext } from '@property/context/PropertiesContext';
 import { openPropertyEditor } from '@property/editor/state/propertyEditor';
 import type { Property as PropertyT } from '@property/types';
 import { Button } from '@ui';
-import { type Component, createSignal, type JSX, Show } from 'solid-js';
+import {
+  type Component,
+  type ComponentProps,
+  createSignal,
+  type JSX,
+  Show,
+} from 'solid-js';
 
 type InlinePropertyValueProps = {
   property: PropertyT;
-  /** Owning entity ID, when the pill is rendered outside its entity block. */
+  /** Owning entity ID; a composer has no entity yet, so it passes none. */
   entityId?: string;
   /** Label rendered when the property is empty. Defaults to "None". */
   emptyLabel?: JSX.Element;
   class?: string;
   canManage?: boolean;
   canRemove?: boolean;
+  /** The editor the pill opens; see `PropertyValuePill`. */
+  editor?: ComponentProps<typeof PropertyValuePill>['editor'];
 };
 
 /**
@@ -54,6 +62,8 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
   return (
     <PropertyValuePill
       property={props.property}
+      variant="secondary"
+      size="xs"
       showLabel={
         props.property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.STATUS &&
         props.property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.PRIORITY &&
@@ -66,7 +76,6 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
       }
       canEdit={ctx.canEdit}
       onSave={ctx.saveHandler.saveProperty}
-      onRefresh={ctx.onRefresh}
       onEdit={
         props.entityId && usesInlineEditor()
           ? (property, anchor) =>
@@ -86,11 +95,17 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
       }
       class={props.class}
       emptyLabel={props.emptyLabel}
+      opensProject={
+        props.entityId !== undefined &&
+        ctx.entityType === 'TASK' &&
+        props.property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT
+      }
       hoverTrailingAction={
         <Show when={canManage()}>
           <Button
+            variant="ghost"
             size="icon-sm"
-            label="Unpin"
+            aria-label="Unpin"
             disabled={removing()}
             onClick={() =>
               ctx.onPropertyUnpinned?.(
@@ -99,7 +114,7 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
               )
             }
           >
-            <PushPinSlashIcon />
+            <PushPinSlashIcon class="size-3.5 shrink-0" />
           </Button>
         </Show>
       }
@@ -117,6 +132,7 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
         </Show>
       }
       entitySelfFilter={{ entityType: ctx.entityType, blockId: props.entityId }}
+      editor={props.editor}
     />
   );
 };

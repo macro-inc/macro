@@ -134,6 +134,18 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         email: &str,
     ) -> impl Future<Output = Result<DepopulateContactOutcome, CrmError>> + Send;
 
+    /// Whether [`depopulate_contact`] would find a contact to act on for
+    /// `email` in `team_id`; `false` means it is a no-op for every link.
+    /// Callers check this before running an expensive gate that only
+    /// matters when there is something to tear down. Malformed emails
+    /// return `false`, matching `depopulate_contact`. See
+    /// [`crate::domain::companies_repo::CompaniesRepository::has_depopulate_target`].
+    fn has_depopulate_target(
+        &self,
+        team_id: &uuid::Uuid,
+        email: &str,
+    ) -> impl Future<Output = Result<bool, CrmError>> + Send;
+
     /// Filters `(link_id, email)` pairs down to those with a live
     /// `crm_contact_sources` row — the pairs a teardown would actually touch.
     /// See
@@ -479,6 +491,25 @@ fn normalize_company_domain(raw: &str) -> Result<String, CrmError> {
     Ok(domain)
 }
 
+/// Splits an observed address into `(trimmed email, domain)` for the
+/// depopulate path. `None` (logged) when it has no `@`, an empty part, or
+/// more than one `@`.
+fn split_depopulate_email(email: &str) -> Option<(&str, &str)> {
+    let email = email.trim();
+    let Some((local_part, domain)) = email.split_once('@') else {
+        tracing::debug!(email, "skipping malformed email (no '@')");
+        return None;
+    };
+    if local_part.is_empty() || domain.is_empty() || domain.contains('@') {
+        tracing::debug!(
+            email,
+            "skipping malformed email (empty part or multiple '@')"
+        );
+        return None;
+    }
+    Some((email, domain))
+}
+
 /// Implementation of [`CrmService`] backed by a [`CompaniesRepository`]
 /// and a [`CompanyMetadataResolver`].
 #[derive(Debug)]
@@ -712,23 +743,25 @@ where
         link_id: &uuid::Uuid,
         email: &str,
     ) -> Result<DepopulateContactOutcome, CrmError> {
-        let email = email.trim();
-        let Some((local_part, domain)) = email.split_once('@') else {
-            tracing::debug!(
-                email,
-                "depopulate_contact: skipping malformed email (no '@')"
-            );
+        let Some((email, domain)) = split_depopulate_email(email) else {
             return Ok(DepopulateContactOutcome::default());
         };
-        if local_part.is_empty() || domain.is_empty() || domain.contains('@') {
-            tracing::debug!(
-                email,
-                "depopulate_contact: skipping malformed email (empty part or multiple '@')"
-            );
-            return Ok(DepopulateContactOutcome::default());
-        }
         self.companies_repository
             .depopulate_contact(team_id, link_id, domain, email)
+            .await
+    }
+
+    #[tracing::instrument(skip(self, email), err)]
+    async fn has_depopulate_target(
+        &self,
+        team_id: &uuid::Uuid,
+        email: &str,
+    ) -> Result<bool, CrmError> {
+        let Some((email, domain)) = split_depopulate_email(email) else {
+            return Ok(false);
+        };
+        self.companies_repository
+            .has_depopulate_target(team_id, domain, email)
             .await
     }
 
@@ -999,16 +1032,24 @@ where
             .await
     }
 
-    #[tracing::instrument(skip_all, fields(team_id = %access.team_id()), err)]
+    /// Logs by cause rather than with `err`: callers look up whatever address
+    /// they were given, so an invalid or ambiguous address is theirs to fix,
+    /// while a storage failure stays at ERROR.
+    #[tracing::instrument(skip_all, fields(team_id = %access.team_id()))]
     async fn get_contact_by_email(
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
         email: &str,
     ) -> Result<Option<CrmContact>, CrmError> {
-        let email = normalize_contact_email(email)?;
+        let email =
+            normalize_contact_email(email).inspect_err(|error| tracing::info!(error = %error))?;
         self.companies_repository
             .get_contact_by_email_for_team(&access.team_id(), &email, access.include_hidden())
             .await
+            .inspect_err(|error| match error {
+                CrmError::InvalidRequest(_) => tracing::info!(error = %error),
+                _ => tracing::error!(error = %error),
+            })
     }
 
     #[tracing::instrument(skip(self, access), err)]
@@ -1136,6 +1177,14 @@ impl CrmService for NoOpCrmService {
         _email: &str,
     ) -> Result<DepopulateContactOutcome, CrmError> {
         unimplemented!("NoOpCrmService.depopulate_contact")
+    }
+
+    async fn has_depopulate_target(
+        &self,
+        _team_id: &uuid::Uuid,
+        _email: &str,
+    ) -> Result<bool, CrmError> {
+        unimplemented!("NoOpCrmService.has_depopulate_target")
     }
 
     async fn link_contact_pairs_with_sources(

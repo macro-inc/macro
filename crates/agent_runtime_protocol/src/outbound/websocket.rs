@@ -117,7 +117,9 @@ impl WireFrame for TungsteniteMessage {
 
 /// Drive one physical WebSocket until it closes or fails: outgoing JSON text
 /// pulled from `outgoing` is written to the socket, and incoming text frames
-/// are decoded and pushed onto `incoming`.
+/// are decoded and pushed onto `incoming`. When `outgoing` ends, this side
+/// sends its close frame and keeps reading until the peer closes (or goes
+/// silent), so nothing the peer already sent is lost.
 ///
 /// A frame that fails to decode as `Rx` is dropped with a warning rather than
 /// closing the connection - the rest of the logical stream is unaffected by
@@ -137,10 +139,21 @@ async fn run_pump<Rx, Socket, Frame, Error>(
     // however many it slept through.
     ping.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut last_inbound = Instant::now();
+    // Set once this side has nothing more to send: its close frame is out,
+    // and the pump keeps reading until the peer closes too.
+    let mut closing = false;
     loop {
         tokio::select! {
-            next_outgoing = outgoing.recv() => {
-                let Some(payload) = next_outgoing else { break };
+            next_outgoing = outgoing.recv(), if !closing => {
+                let Some(payload) = next_outgoing else {
+                    // Frames the peer sent before it sees the close are still
+                    // delivered; dropping the socket here would discard them.
+                    if sink.close().await.is_err() {
+                        break;
+                    }
+                    closing = true;
+                    continue;
+                };
                 if sink.send(Frame::text(payload)).await.is_err() {
                     break;
                 }
@@ -177,7 +190,7 @@ async fn run_pump<Rx, Socket, Frame, Error>(
                 }
                 // Both halves of a split socket share one connection, so this
                 // is also what flushes any pong the read half queued.
-                if sink.send(Frame::ping()).await.is_err() {
+                if !closing && sink.send(Frame::ping()).await.is_err() {
                     break;
                 }
             }

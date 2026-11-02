@@ -12,4 +12,6 @@ export type RoutineSnapshot = {
   revision: number;
   configurationKey: string;
   draft?: ScheduleDraft;
+  /** The shared template this routine was activated from. */
+  templateId?: string;
 };

@@ -163,6 +163,31 @@ impl<
             result => result,
         }
     }
+
+    /// Download a message's original RFC 822 bytes.
+    pub async fn mime(
+        &self,
+        mailbox: MailboxAccess,
+        message: &ProviderId,
+    ) -> Result<Vec<u8>, EmailApiError> {
+        let token = self
+            .token(
+                mailbox,
+                ApiOperationKind::GetMessage,
+                TokenFreshness::Cached,
+            )
+            .await?;
+        let repository = self.repository.for_mailbox(mailbox);
+        match repository.mime(&token, message).await {
+            Err(EmailApiError::AuthRequired) => {
+                let fresh = self
+                    .token(mailbox, ApiOperationKind::GetMessage, TokenFreshness::Fresh)
+                    .await?;
+                repository.mime(&fresh, message).await
+            }
+            result => result,
+        }
+    }
 }
 
 impl<R: FolderChangeReader + ScopedMailboxRepository, T: MailboxTokenSource, L: ProviderRateLimiter>

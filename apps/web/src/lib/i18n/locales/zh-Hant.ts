@@ -704,7 +704,6 @@ export default {
     groupAdmin: '管理',
     tabTeamGeneral: '一般',
     tabTeamMembers: '成員',
-    tabTeamConnections: '連結',
     tabEmail: '電子郵件',
     tabCalendar: '行事曆',
     tabAgents: '代理程式',

@@ -26,14 +26,15 @@ describe('formatTimeRange', () => {
     ).toBe('Oct 9, 2026');
   });
 
+  // ICU versions differ on the space before AM/PM; the range content is the contract.
   it('shows a timed range on one day as the day and both times', () => {
     expect(
       formatTimeRange({
         allDay: false,
         start: new Date(2026, 9, 9, 9),
         end: new Date(2026, 9, 9, 17),
-      })
-    ).toBe('Oct 9, 9:00\u202fAM\u2009–\u20095:00\u202fPM');
+      }).replaceAll('\u202f', ' ')
+    ).toBe('Oct 9, 9:00 AM\u2009–\u20095:00 PM');
   });
 
   it('shows a timed range over days as each day with its time', () => {
@@ -42,7 +43,7 @@ describe('formatTimeRange', () => {
         allDay: false,
         start: new Date(2026, 9, 9, 9),
         end: new Date(2026, 9, 13, 17),
-      })
-    ).toBe('Oct 9, 9:00\u202fAM\u2009–\u2009Oct 13, 5:00\u202fPM');
+      }).replaceAll('\u202f', ' ')
+    ).toBe('Oct 9, 9:00 AM\u2009–\u2009Oct 13, 5:00 PM');
   });
 });

@@ -8,7 +8,7 @@ import {
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createOpenSections } from '../../whatsapp-linked/primitives/open-sections';
-import { InMacroGroups } from './in-macro-section';
+import { InMacroChats } from './in-macro-section';
 
 beforeEach(() => {
   vi.stubGlobal(
@@ -25,13 +25,15 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it('lists readable groups with unread counts and marks read-only ones', () => {
-  const onOpenGroup = vi.fn();
+it('lists readable chats with unread counts and marks read-only ones', () => {
+  const onOpenChat = vi.fn();
   render(() => (
-    <InMacroGroups
-      groups={[
+    <InMacroChats
+      label="WhatsApp"
+      chats={[
         {
           id: 'group-design',
+          provider: 'whatsapp',
           kind: 'group',
           name: 'Design Crit',
           ownerId: 'macro|me@example.test',
@@ -40,6 +42,7 @@ it('lists readable groups with unread counts and marks read-only ones', () => {
         },
         {
           id: 'group-family',
+          provider: 'whatsapp',
           kind: 'group',
           name: 'Ana, Ben, +2',
           ownerId: 'macro|me@example.test',
@@ -48,6 +51,7 @@ it('lists readable groups with unread counts and marks read-only ones', () => {
         },
         {
           id: 'chat-ana',
+          provider: 'whatsapp',
           kind: 'direct',
           name: 'Ana Ruiz',
           ownerId: 'macro|me@example.test',
@@ -57,10 +61,10 @@ it('lists readable groups with unread counts and marks read-only ones', () => {
       ]}
       isPending={false}
       isError={false}
-      activeGroupId="group-family"
+      activeChatId="group-family"
       isOpen={() => true}
       onOpenChange={vi.fn()}
-      onOpenGroup={onOpenGroup}
+      onOpenChat={onOpenChat}
       onRetry={vi.fn()}
     />
   ));
@@ -82,7 +86,7 @@ it('lists readable groups with unread counts and marks read-only ones', () => {
   ).toBeTruthy();
 
   fireEvent.click(design);
-  expect(onOpenGroup).toHaveBeenCalledWith('group-design');
+  expect(onOpenChat).toHaveBeenCalledWith('group-design');
 });
 
 it('sorts chats into direct messages, groups and one section per community, like Chat', () => {
@@ -91,10 +95,12 @@ it('sorts chats into direct messages, groups and one section per community, like
   );
   const launch = { id: '120363000000000010@g.us', name: 'Launch' };
   render(() => (
-    <InMacroGroups
-      groups={[
+    <InMacroChats
+      label="WhatsApp"
+      chats={[
         {
           id: 'chat-ana',
+          provider: 'whatsapp',
           kind: 'direct',
           name: 'Ana Ruiz',
           ownerId: 'macro|me@example.test',
@@ -103,6 +109,7 @@ it('sorts chats into direct messages, groups and one section per community, like
         },
         {
           id: 'group-notices',
+          provider: 'whatsapp',
           kind: 'group',
           name: 'Launch',
           ownerId: 'macro|me@example.test',
@@ -112,6 +119,7 @@ it('sorts chats into direct messages, groups and one section per community, like
         },
         {
           id: 'group-design',
+          provider: 'whatsapp',
           kind: 'group',
           name: 'Design Crit',
           ownerId: 'macro|me@example.test',
@@ -120,6 +128,7 @@ it('sorts chats into direct messages, groups and one section per community, like
         },
         {
           id: 'group-launch-design',
+          provider: 'whatsapp',
           kind: 'group',
           name: 'Design',
           ownerId: 'macro|me@example.test',
@@ -130,10 +139,10 @@ it('sorts chats into direct messages, groups and one section per community, like
       ]}
       isPending={false}
       isError={false}
-      activeGroupId={undefined}
+      activeChatId={undefined}
       isOpen={sections.isOpen}
       onOpenChange={sections.setOpen}
-      onOpenGroup={vi.fn()}
+      onOpenChat={vi.fn()}
       onRetry={vi.fn()}
     />
   ));

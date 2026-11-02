@@ -203,9 +203,7 @@ impl Client {
                     .map(|info| info.lid.clone())
                     .unwrap_or_default();
                 if to_lid.is_empty() {
-                    return Err(ClientError::Other(
-                        "no LID found for recipient from server".to_owned(),
-                    ));
+                    return Err(ClientError::RecipientNotOnWhatsApp);
                 }
             }
             extra_params.peer_recipient_pn = to.clone();

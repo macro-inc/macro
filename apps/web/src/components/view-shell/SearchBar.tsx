@@ -138,14 +138,15 @@ export function SearchBar(props: SearchBarProps) {
           }
         >
           <Button
+            aria-label={local.onClose ? 'Close search' : 'Clear search'}
+            tooltip={local.onClose ? 'Close search' : 'Clear search'}
             type="button"
-            size={local.size === 'sm' ? 'icon-xs' : 'sm'}
-            square
-            label={local.onClose ? 'Close search' : 'Clear search'}
+            variant="ghost"
+            size="icon-xs"
             onPointerDown={(event) => event.preventDefault()}
             onClick={() => (local.onClose ?? clear)()}
           >
-            <XIcon />
+            <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
         </Show>
       </TextField>

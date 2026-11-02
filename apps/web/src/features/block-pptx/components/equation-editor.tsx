@@ -74,13 +74,14 @@ export function EquationEditorPanel(props: {
         </span>
         <span class="flex-1" />
         <Button
+          aria-label="Close"
+          tooltip="Close"
           size="icon-xs"
           variant="ghost"
-          label="Close"
           data-testid="pptx-equation-close"
           onClick={() => eq.close()}
         >
-          <X />
+          <X class="size-3 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
       <textarea
@@ -148,7 +149,7 @@ export function EquationEditorPanel(props: {
         <span class="flex-1" />
         <Button
           size="xs"
-          variant="cta"
+          variant="primary"
           data-testid="pptx-equation-insert"
           disabled={props.readonly || (isNew() && !eq.latex().trim())}
           onClick={() => fireAndForget(eq.commit(), 'pptx-editor')}

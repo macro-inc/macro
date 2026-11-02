@@ -6,8 +6,11 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use roles_and_permissions::domain::port::UserRolesAndPermissionsService;
-use teams::domain::model::TeamError;
+use teams::domain::model::{Team, TeamError};
 use teams::domain::team_repo::TeamRepository;
+
+#[cfg(test)]
+mod test;
 
 /// [`EntitlementSource`] over the roles service and the teams repository.
 ///
@@ -47,6 +50,36 @@ where
             .map_err(entitlement_err)?;
         Ok(PlanTier::from_roles(&roles))
     }
+
+    /// Whether the team bills its members' seats: an enterprise team, or a
+    /// paying team with a subscription (`TeamService::team_bills_per_seat`).
+    /// A canceled subscription leaves its id on the team, so the id alone
+    /// does not mean the team pays.
+    #[tracing::instrument(
+        skip(self, team),
+        fields(team_id = %team.id(), bills_seats = tracing::field::Empty),
+        err
+    )]
+    async fn team_bills_seats(&self, team: &Team) -> Result<bool> {
+        let bills_seats = if team.enterprise() {
+            true
+        } else {
+            let paying = self
+                .teams
+                .get_team_payment_status(team.id())
+                .await
+                .map_err(entitlement_err)?;
+            paying
+                && self
+                    .teams
+                    .get_team_subscription_id(team.id())
+                    .await
+                    .map_err(entitlement_err)?
+                    .is_some()
+        };
+        tracing::Span::current().record("bills_seats", bills_seats);
+        Ok(bills_seats)
+    }
 }
 
 impl<P, T> PeriodBindingSource for RolesTeamsEntitlementSource<P, T>
@@ -81,14 +114,7 @@ where
                 .await
                 .map_err(entitlement_err)?
             {
-                if team.enterprise()
-                    || self
-                        .teams
-                        .get_team_subscription_id(team.id())
-                        .await
-                        .map_err(entitlement_err)?
-                        .is_some()
-                {
+                if self.team_bills_seats(&team).await? {
                     return Ok(None);
                 }
             }
@@ -150,13 +176,9 @@ where
             return Ok(Entitlement::personal(user_owned, own_tier));
         };
 
-        let subscription = self
-            .teams
-            .get_team_subscription_id(team.id())
-            .await
-            .map_err(entitlement_err)?;
-        if !team.enterprise() && subscription.is_none() {
-            // A free team: everyone pays for themself.
+        if !self.team_bills_seats(&team).await? {
+            // A free team, or one whose subscription ended: everyone pays for
+            // themself.
             return Ok(Entitlement::personal(user_owned, own_tier));
         }
 

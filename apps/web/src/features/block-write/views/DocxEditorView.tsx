@@ -73,14 +73,22 @@ export type DocxEditorViewProps = {
   margin?: (context: DocxMarginContext) => JSX.Element;
   /** Content below the page (discussion, detached comments). */
   footer?: (comments: DocxComments) => JSX.Element;
+  actions?: (download: () => void) => JSX.Element;
   onDownload: (bytes: Uint8Array) => void;
   onError?: (error: unknown) => void;
-  /** Test hook: the mounted editor. */
+  /** The mounted editor, for actions outside its toolbar (file menu Download). */
   onReady?: (editor: DocxEditor) => void;
 };
 
 /** The collaborative DOCX editor: toolbar, pages, collaborators and comments. */
 export function DocxEditorView(props: DocxEditorViewProps) {
+  const download = () => {
+    editor
+      .idle()
+      .then(() => editor.save())
+      .then(props.onDownload)
+      .catch((error: unknown) => props.onError?.(error));
+  };
   const [scroller, setScroller] = createSignal<HTMLDivElement>();
   let input: HTMLTextAreaElement | undefined;
   let selectionTimer: ReturnType<typeof setTimeout> | undefined;
@@ -329,6 +337,7 @@ export function DocxEditorView(props: DocxEditorViewProps) {
 .docx-find-current { background-color: oklch(from var(--color-orange) l c h / 0.6); box-shadow: 0 0 0 1px oklch(from var(--color-orange) l c h / 0.9); }
 .docx-veil { background: rgb(255 255 255 / 0.55); }
 .docx-story-edge { border-color: oklch(from var(--color-accent, #3b82f6) l c h / 0.8); }`}</style>
+      {props.actions?.(download)}
       <DocxToolbar
         canEdit={props.canEdit}
         canComment={
@@ -405,13 +414,6 @@ export function DocxEditorView(props: DocxEditorViewProps) {
         onReject={(all) => editor.run([{ op: 'rejectChanges', all }])}
         onComment={beginComment}
         onFind={() => find.show(false)}
-        onDownload={() => {
-          editor
-            .idle()
-            .then(() => editor.save())
-            .then(props.onDownload)
-            .catch((error: unknown) => props.onError?.(error));
-        }}
       />
       <div class="relative flex min-h-0 flex-1 flex-col">
         <div

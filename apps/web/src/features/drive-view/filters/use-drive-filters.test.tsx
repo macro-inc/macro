@@ -6,7 +6,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import { createSignal, type ParentProps } from 'solid-js';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { DriveState } from '../core/types';
 import { createDriveState } from '../primitives/drive-state';
@@ -26,12 +26,11 @@ vi.mock('@property/tags/use-tag-filter-group', () => ({
 }));
 vi.mock('@queries/contacts/contacts', () => ({ useContacts: () => () => [] }));
 vi.mock('@ui', async () => ({
+  ...(await import('@ui/components/Button')),
+  ...(await import('@ui/components/ButtonGroup')),
   ...(await import('@ui/utils/classname')),
   ...(await import('@ui/components/Dropdown')),
   ...(await import('@ui/components/Layer')),
-}));
-vi.mock('@ui/components/Tooltip', () => ({
-  Tooltip: (props: ParentProps) => props.children,
 }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
 vi.mock('@core/mobile/inputModality', () => ({ isModality: () => false }));

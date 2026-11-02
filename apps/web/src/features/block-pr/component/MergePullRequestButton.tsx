@@ -1,6 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import GitMerge from '@icon/system/regular/git-merge.svg';
-import { Button, type ButtonSize, cn, confirmDialog } from '@ui';
+import { Button, ButtonGroup, type ButtonSize, cn, confirmDialog } from '@ui';
 import { getOwner, type Owner, Show } from 'solid-js';
 import {
   createMergePullRequestAction,
@@ -66,6 +66,7 @@ export function MergePullRequestButton(props: {
   class?: string;
   /** Hide the label and show the icon alone, with the label as its name. */
   iconOnly?: boolean;
+  grouped?: boolean;
   onMerged?: () => void;
 }) {
   const owner = getOwner();
@@ -74,6 +75,7 @@ export function MergePullRequestButton(props: {
     confirm: (target) => confirmMergePullRequest(target, owner),
   });
   const label = () => (action.pending() ? 'Merging…' : 'Merge');
+  const Control = props.grouped ? ButtonGroup.Button : Button;
   return (
     <Show
       when={pullRequestReadyToMerge({
@@ -82,10 +84,9 @@ export function MergePullRequestButton(props: {
         checks: props.checks,
       })}
     >
-      <Button
+      <Control
         variant="success"
         size={props.size ?? 'sm'}
-        noTouchResize
         class={cn('shrink-0', props.class)}
         aria-label={`${label()} pull request #${props.target.number}`}
         disabled={action.pending()}
@@ -99,7 +100,7 @@ export function MergePullRequestButton(props: {
         <Show when={!props.iconOnly}>
           <span>{label()}</span>
         </Show>
-      </Button>
+      </Control>
     </Show>
   );
 }

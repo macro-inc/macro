@@ -67,9 +67,6 @@ pub async fn sync_contacts<B: MacroEventBroker, I: ContactsIngress>(
     Ok(())
 }
 
-/// How many address-book connections go in one contacts message.
-const CONNECTIONS_PER_MESSAGE: usize = 500;
-
 /// The connections from the link's owner to each distinct, non-automated
 /// address in `contacts`.
 fn address_book_connections(link: &Link, contacts: &[Contact]) -> Vec<ContactConnection> {
@@ -107,18 +104,15 @@ async fn connect_address_book<I: ContactsIngress>(
     if cfg!(not(feature = "contacts_sync")) {
         return Ok(());
     }
-    for chunk in address_book_connections(link, contacts).chunks(CONNECTIONS_PER_MESSAGE) {
-        contacts_ingress
-            .enqueue_contact_connections(chunk.to_vec())
-            .await
-            .map_err(|error| {
-                anyhow!("{error:?}").context(format!(
-                    "Unable to connect address book contacts for link_id: {}",
-                    link.id
-                ))
-            })?;
-    }
-    Ok(())
+    contacts_ingress
+        .enqueue_contact_connections(address_book_connections(link, contacts))
+        .await
+        .map_err(|error| {
+            anyhow!("{error:?}").context(format!(
+                "Unable to connect address book contacts for link_id: {}",
+                link.id
+            ))
+        })
 }
 
 /// Retrieves the current contact and other_contact sync tokens from the database for a given link.

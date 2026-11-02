@@ -29,6 +29,7 @@ vi.mock('@core/constant/featureFlags', () => ({
 vi.mock('@core/context/user', () => ({
   usePermissions: () => () => ['write:stripe_subscription'],
   useUserId: () => () => 'macro|returning@example.com',
+  useLicenseStatus: () => () => 'inactive',
 }));
 vi.mock('@queries/team/teams', () => ({
   useCurrentTeamQuery: () => ({
