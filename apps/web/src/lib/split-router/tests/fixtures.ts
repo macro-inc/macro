@@ -120,7 +120,8 @@ export function createTestPolicy(
       const { source, panes, opening } = request;
       const isFull = panes.length + opening >= (options.maxPanes ?? Infinity);
       if (isFull) return { pane: source ?? panes.at(-1)! };
-      if (source && options.split) return { split: source, side: options.split };
+      if (source && options.split)
+        return { split: source, side: options.split };
 
       const insertAt = source ? panes.indexOf(source) + 1 : panes.length;
 

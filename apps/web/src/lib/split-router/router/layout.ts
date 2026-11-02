@@ -1,10 +1,6 @@
 import { batch, untrack } from 'solid-js';
 import { type ChangedPane, changedPanes } from '../panes/diff';
-import {
-  layoutShape,
-  type PaneLayout,
-  rowLayout,
-} from '../panes/layout-tree';
+import { layoutShape, type PaneLayout, rowLayout } from '../panes/layout-tree';
 import type { PaneId } from '../panes/types';
 import { encodePanes, formatLocation } from '../routes/codec';
 import type { SplitRoutesManifest } from '../routes/manifest';

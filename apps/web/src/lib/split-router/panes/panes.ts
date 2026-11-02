@@ -157,7 +157,9 @@ export function createPanes<E extends PaneEntry, D>(
     if ('layout' in arrangement) {
       const fits = paneIds(arrangement.layout).length === landed.length;
 
-      return fits ? reorderPanes(arrangement.layout, landed) : rowLayout(landed);
+      return fits
+        ? reorderPanes(arrangement.layout, landed)
+        : rowLayout(landed);
     }
 
     const { shape } = arrangement;

@@ -44,7 +44,10 @@ function partsOf(layout: PaneLayout & { type: 'split' }): Part[] {
  * The split of `parts` along `axis`, merging child splits along the same axis
  * into it and collapsing to the only child when one is left.
  */
-function joined(axis: SplitAxis, parts: readonly Part[]): PaneLayout | undefined {
+function joined(
+  axis: SplitAxis,
+  parts: readonly Part[]
+): PaneLayout | undefined {
   const flat = parts.flatMap(({ node, share }): Part[] => {
     if (node.type === 'split' && node.axis === axis) {
       return partsOf(node).map((child) => ({
@@ -66,9 +69,7 @@ function joined(axis: SplitAxis, parts: readonly Part[]): PaneLayout | undefined
     type: 'split',
     axis,
     children: flat.map((part) => part.node),
-    shares: flat.map((part) =>
-      valid ? part.share / total : 1 / flat.length
-    ),
+    shares: flat.map((part) => (valid ? part.share / total : 1 / flat.length)),
   };
 }
 
@@ -222,7 +223,10 @@ export function resizeSplit(
     const child = node.children[index];
     if (!child) return node;
 
-    return { ...node, children: node.children.with(index, resize(child, depth + 1)) };
+    return {
+      ...node,
+      children: node.children.with(index, resize(child, depth + 1)),
+    };
   };
 
   return resize(layout, 0);

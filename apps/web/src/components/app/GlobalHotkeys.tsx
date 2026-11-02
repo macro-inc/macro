@@ -207,6 +207,13 @@ async function toggleKeyboardShortcuts(sheet: ShortcutSheet) {
 
 export default function GlobalShortcuts() {
   const canFit = () => globalSplitManager()?.canAppendSplit() ?? true;
+  const canFitBelow = () => {
+    const manager = globalSplitManager();
+    const active = manager?.activeSplitId();
+    if (!manager || !active) return canFit();
+
+    return manager.canSplit(active, 'below');
+  };
 
   const analytics = useAnalytics();
   const undoCtx = useMutationUndoContext();
@@ -385,6 +392,39 @@ export default function GlobalShortcuts() {
     description: () => t('commands.createNewSplit'),
     condition: canFit,
     keyDownHandler: createNewSplit,
+  });
+
+  const createNewSplitBelow = () => {
+    const active = globalSplitManager()?.activeSplitId();
+    analytics.track('split_created', { from: 'global_hotkey', side: 'below' });
+    openWithSplit(
+      { type: 'component', id: 'home' },
+      {
+        referredFrom: 'hotkey',
+        allowDuplicate: true,
+        preferNewSplit: true,
+        beside: active && { split: active, side: 'below' },
+      }
+    );
+    return true;
+  };
+
+  registerHotkey({
+    hotkey: 'shift+cmd+\\',
+    scopeId: 'global',
+    description: () => t('commands.createNewSplitBelow'),
+    condition: canFitBelow,
+    keyDownHandler: createNewSplitBelow,
+    runWithInputFocused: true,
+  });
+
+  registerHotkey({
+    hotkeyToken: TOKENS.global.createNewSplitBelow,
+    hotkey: 'shift+\\',
+    scopeId: 'global',
+    description: () => t('commands.createNewSplitBelow'),
+    condition: canFitBelow,
+    keyDownHandler: createNewSplitBelow,
   });
 
   // Open settings to a specific tab, switching the page in place if settings

@@ -176,11 +176,16 @@ describe('stacked panes', () => {
   });
 
   it('closing a stacked pane collapses its split and the URL key', async () => {
-    const { router, history, pane } = track(setup('/home/~/drive/~/mail?layout=r2pc2pp'));
+    const { router, history, pane } = track(
+      setup('/home/~/drive/~/mail?layout=r2pc2pp')
+    );
 
     await router.close(pane(2));
 
-    expect(router.layout()).toMatchObject({ axis: 'row', children: { length: 2 } });
+    expect(router.layout()).toMatchObject({
+      axis: 'row',
+      children: { length: 2 },
+    });
     expect(lastUrl(history)).toBe('/home/~/drive');
   });
 
