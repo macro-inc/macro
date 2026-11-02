@@ -971,9 +971,12 @@ pub trait AgentCreations: Clone + Send + Sync + 'static {
     type Err: Into<anyhow::Error> + Send;
 
     /// When `person` last wrote in the thread rooted at `thread_root` before
-    /// `before`: the request a bot reply posted then is answering.
+    /// `before`: the request a bot reply posted then is answering. A bot
+    /// message that starts its own thread answers the person's latest message
+    /// in `channel_id` instead.
     fn request_sent_at(
         &self,
+        channel_id: Uuid,
         thread_root: Uuid,
         person: &MacroUserIdStr<'static>,
         before: DateTime<Utc>,

@@ -85,6 +85,7 @@ impl AgentCreations for Creations {
     type Err = anyhow::Error;
     async fn request_sent_at(
         &self,
+        _: Uuid,
         thread_root: Uuid,
         person: &MacroUserIdStr<'static>,
         _: DateTime<Utc>,

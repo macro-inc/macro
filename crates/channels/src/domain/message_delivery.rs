@@ -182,7 +182,7 @@ where
     ) -> anyhow::Result<()> {
         let Some(requested_at) = self
             .creations
-            .request_sent_at(thread_root, &person, replied_at)
+            .request_sent_at(channel_id, thread_root, &person, replied_at)
             .await
             .map_err(Into::into)?
         else {
