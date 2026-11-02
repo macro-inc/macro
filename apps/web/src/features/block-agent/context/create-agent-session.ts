@@ -381,6 +381,7 @@ export function createAgentSession(
       if (!current) throw new Error('The agent session is not ready.');
       await configureSessionModel(
         {
+          id: current.id,
           issue: (action) =>
             issueSessionAction(current, action, { userId: options.userId() }),
           snapshot: () => current.snapshot(),

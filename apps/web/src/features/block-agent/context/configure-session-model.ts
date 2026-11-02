@@ -51,7 +51,7 @@ export function sessionConfigReported(
 export async function configureSessionModel(
   session: Pick<
     AgentSession,
-    'issue' | 'snapshot' | 'subscribe' | 'refresh' | 'retract'
+    'id' | 'issue' | 'snapshot' | 'subscribe' | 'refresh' | 'retract'
   >,
   model: string | undefined,
   effort?: EffortSelection

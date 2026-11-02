@@ -1,5 +1,6 @@
 import type { AgentSession } from '@core/agent-session/AgentSession';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import type { AgentAction } from '@service-agent-harness/generated/schemas';
 import { issueSessionAction } from '../queries/issue-session-action';
 
@@ -16,22 +17,48 @@ const GIVE_UP_AFTER_MS = 60_000;
  * retracted when this gives up, so the selector shows the runtime's own model
  * and accepts another choice rather than holding the change in flight.
  */
-export async function confirmSessionControl(
+export function confirmSessionControl(
+  session: Pick<
+    AgentSession,
+    'id' | 'issue' | 'snapshot' | 'subscribe' | 'refresh' | 'retract'
+  >,
+  action: AgentAction
+): Promise<void> {
+  return Telemetry.span('agent.session.confirm_control', async (span) => {
+    span.setAttr('agent.session.id', session.id);
+    span.setAttr('agent.control.type', action.type);
+    try {
+      await awaitConfirmation(session, action, span);
+    } catch (error) {
+      span.error(error);
+      throw error;
+    }
+  });
+}
+
+async function awaitConfirmation(
   session: Pick<
     AgentSession,
     'issue' | 'snapshot' | 'subscribe' | 'refresh' | 'retract'
   >,
-  action: AgentAction
+  action: AgentAction,
+  span: Span
 ): Promise<void> {
   const result = await issueSessionAction(session, action);
-  if (result.isErr())
+  if (result.isErr()) {
+    span.setAttr('agent.control.outcome', 'refused');
     throw new Error(result.error.map((error) => error.message).join(' '));
+  }
   const actionId = result.value.actionId;
+  span.setAttr('agent.action.id', actionId);
+  let refreshes = 0;
+  let settledBy: 'feed' | 'refresh' = 'feed';
   await new Promise<void>((resolve, reject) => {
     let finished = false;
     const finish = (error?: Error) => {
       if (finished) return;
       finished = true;
+      span.setAttr('agent.control.refreshes', refreshes);
       clearTimeout(refresh);
       clearTimeout(timeout);
       unsubscribe();
@@ -47,6 +74,8 @@ export async function confirmSessionControl(
         if (!message || message.pending) return;
         const part = message.parts.find((part) => part.kind === 'control');
         if (part?.kind !== 'control' || part.outcome.kind === 'pending') return;
+        span.setAttr('agent.control.outcome', part.outcome.kind);
+        span.setAttr('agent.control.settled_by', settledBy);
         finish(
           part.outcome.kind === 'rejected'
             ? new Error(part.outcome.message)
@@ -61,8 +90,11 @@ export async function confirmSessionControl(
       }
     };
     const reread = async () => {
+      refreshes += 1;
       await session.refresh();
+      settledBy = 'refresh';
       await inspect();
+      settledBy = 'feed';
     };
     const giveUp = async () => {
       try {
@@ -70,6 +102,7 @@ export async function confirmSessionControl(
       } finally {
         if (!finished) {
           session.retract(actionId);
+          span.setAttr('agent.control.outcome', 'retracted');
           finish(new Error('The agent did not confirm the selected setting.'));
         }
       }
