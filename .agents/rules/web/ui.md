@@ -51,7 +51,8 @@ Components, styling, and interaction conventions.
 
 - Place skeletons at the loaded content's position and dimensions; use the shared
   Macro `LoadingSpinner` when that geometry is unknown.
-- Keep idle motion cheap: long-running status indicators and brand loaders animate in discrete CSS
+- Keep idle motion cheap: skeletons stay still after one entrance shimmer;
+  long-running status indicators and brand loaders animate in discrete CSS
   poses (loader keyframes live once in `index.css`, never inline), with phase-related dots/cells on one shared cadence; infinite
   decorations pause offscreen through `pauseOffscreenAnimations` (their
   utilities inherit `--animation-play-state`) and honor reduced motion. Leave

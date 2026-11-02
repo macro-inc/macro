@@ -89,6 +89,31 @@ test('agent spin and pulse utilities pause offscreen and resume in view', async 
     .poll(() => page.evaluate(() => document.getAnimations().length))
     .toBe(0);
 });
+test('pending skeletons become still after their entrance without removing placeholders', async ({
+  page,
+}) => {
+  await page.goto('/?kind=skeleton&count=3');
+  await expect(page.locator('.skeleton-shimmer')).toHaveCount(3);
+  const states = await page.evaluate(async () => {
+    const animations = document
+      .getAnimations()
+      .filter(
+        (animation) =>
+          animation instanceof CSSAnimation &&
+          animation.animationName === 'skeleton-shimmer'
+      );
+    if (animations.length !== 3)
+      throw new Error('Skeleton entrance did not start');
+    await Promise.all(animations.map((animation) => animation.finished));
+    return animations.map((animation) => ({
+      state: animation.playState,
+      attached:
+        animation.effect instanceof KeyframeEffect &&
+        animation.effect.target?.isConnected,
+    }));
+  });
+  expect(states).toEqual(Array(3).fill({ state: 'finished', attached: true }));
+});
 
 test('legacy brand loader retains a visible static pose with reduced motion', async ({
   page,
