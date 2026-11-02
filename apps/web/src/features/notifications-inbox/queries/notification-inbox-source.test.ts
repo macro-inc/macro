@@ -1,7 +1,10 @@
 import { createFakeAttentionFeedClient } from '@queries/attention-feed/tests/fake-client';
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { InboxFeedSource } from '../context/notifications-inbox-context';
+import type {
+  InboxFeedSource,
+  InboxScope,
+} from '../context/notifications-inbox-context';
 import { ALL_INBOX_ROW_TYPES } from '../core/inbox-filters';
 import {
   inboxEntry,
@@ -67,7 +70,10 @@ const docC = inboxEntry({
   ],
 });
 
-function setup(mutationData: Record<string, unknown> = {}) {
+function setup(
+  mutationData: Record<string, unknown> = {},
+  scope: () => InboxScope = () => ({ rowTypes: ALL_INBOX_ROW_TYPES })
+) {
   const fake = createFakeAttentionFeedClient(mutationData);
   const revalidateNotifications = vi.fn(async () => {});
   const restoreNotifications = vi.fn();
@@ -77,7 +83,7 @@ function setup(mutationData: Record<string, unknown> = {}) {
     feed = createNotificationInboxSource({
       client: () => fake.client,
       cacheHost: () => fake.host,
-      scope: () => ({ rowTypes: ALL_INBOX_ROW_TYPES }),
+      scope,
       enabled: () => true,
       overrideNotificationsDone,
       revalidateNotifications,
@@ -245,6 +251,36 @@ describe('createNotificationInboxSource', () => {
     });
     expect(restoreNotifications).toHaveBeenCalled();
     expect(rowIds()).toContain('document:doc-b#top_level');
+  });
+
+  it('undoes into the filter showing now, not the one the done came from', async () => {
+    vi.useFakeTimers();
+    const [scope, setScope] = createSignal<InboxScope>({
+      rowTypes: ALL_INBOX_ROW_TYPES,
+    });
+    const { fake, feed, row } = setup(
+      {
+        ...doneResult,
+        UndoNotificationInboxRowsDone: {
+          undoNotificationInboxRowsDone: { patches: [] },
+        },
+      },
+      scope
+    );
+    await flush();
+    fake.queries[0].resolve(inboxPage([docA, docB]));
+    await flush();
+    const done = await feed.markDone([row('document:doc-b#top_level')]);
+
+    setScope({ rowTypes: ['email'] });
+    await done.undo();
+
+    expect(fake.mutations[1]).toEqual({
+      name: 'UndoNotificationInboxRowsDone',
+      variables: {
+        input: { undoToken: 'undo-1', scope: { rowTypes: ['EMAIL'] } },
+      },
+    });
   });
 
   it('reads a row as seen at once and marks it seen by row', async () => {

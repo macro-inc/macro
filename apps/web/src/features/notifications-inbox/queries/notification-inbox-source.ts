@@ -177,7 +177,6 @@ export function createNotificationInboxSource(
 
   const markDone = async (targets: readonly NotificationInboxRow[]) => {
     const client = options.client();
-    const scope = scopeInput();
     const ids = targets.map((row) => row.id);
     setDone((current) => markRows(current, targets));
     const restoreNotifications = options.overrideNotificationsDone?.(
@@ -196,7 +195,12 @@ export function createNotificationInboxSource(
     revalidate(client);
     return {
       undo: async () => {
-        const patches = await undoInboxRowsDone(client, undoToken, scope);
+        // The filter may have changed since the done; restore into this one.
+        const patches = await undoInboxRowsDone(
+          client,
+          undoToken,
+          scopeInput()
+        );
         restoreNotifications?.();
         setDone((current) => unmarkRows(current, ids));
         revalidate(client);
