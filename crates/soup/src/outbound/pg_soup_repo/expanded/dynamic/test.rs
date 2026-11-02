@@ -222,8 +222,11 @@ fn initiatives_are_opt_in_and_share_the_existing_sql_pagination() {
             &filter,
             false,
             SimpleSortMethod::UpdatedAt,
+            ItemSource::SourceItems,
+            "macro|viewer@example.com",
             &mut DocumentIdArrays::starting_at(9),
         )
+        .0
         .sql()
         .contains("FROM initiative")
     );
@@ -235,16 +238,21 @@ fn initiatives_are_opt_in_and_share_the_existing_sql_pagination() {
             &filter,
             false,
             SimpleSortMethod::UpdatedAt,
+            ItemSource::SourceItems,
+            "macro|viewer@example.com",
             &mut DocumentIdArrays::starting_at(9),
         )
+        .0
         .sql()
         .contains("FROM initiative")
     );
     filter.initiative_filter = Some(Arc::new(Expr::val(InitiativeLiteral::Include)));
-    let query = build_query(
+    let (query, _) = build_query(
         &filter,
         false,
         SimpleSortMethod::UpdatedAt,
+        ItemSource::SourceItems,
+        "macro|viewer@example.com",
         &mut DocumentIdArrays::starting_at(9),
     );
     let (candidates, details) = query.sql().split_once("Combined AS").unwrap();
@@ -294,4 +302,19 @@ fn notification_conjunction_folds_to_the_side_that_implies_the_other() {
     // Neither side implies the other: different rows may witness each.
     assert!(strip(&Expr::and(state(Unseen), state(Seen))).is_none());
     assert!(strip(&Expr::and(inbox(), state(Done))).is_none());
+}
+
+#[test]
+fn scan_bound_limits_source_scans_only() {
+    let bound = |sources, utc| ScanBound { sources, utc };
+    assert!(bound(SOURCE_SCAN_SOURCES, true).allows(OrderedScans::Sources, 12));
+    assert!(!bound(SOURCE_SCAN_SOURCES + 1, true).allows(OrderedScans::Sources, 1));
+    assert!(bound(50, true).allows(OrderedScans::Sources, 100));
+    assert!(!bound(51, true).allows(OrderedScans::Sources, 100));
+    assert!(
+        bound(SOURCE_SCAN_SOURCES + 1, true).allows(OrderedScans::Owner, 500),
+        "owner scans do not read sources"
+    );
+    assert!(!bound(1, false).allows(OrderedScans::Owner, 1));
+    assert!(!bound(1, false).allows(OrderedScans::Sources, 1));
 }

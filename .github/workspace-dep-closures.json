@@ -13464,6 +13464,15 @@
       "crates/user_quota",
       "crates/workspace-hack"
     ],
+    "source_items": [
+      "crates/cowlike",
+      "crates/macro_entrypoint",
+      "crates/macro_env",
+      "crates/macro_env_var",
+      "crates/model-entity",
+      "crates/source_items",
+      "crates/workspace-hack"
+    ],
     "sqs_client": [
       "crates/activity",
       "crates/agent",

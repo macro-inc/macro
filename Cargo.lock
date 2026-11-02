@@ -18770,6 +18770,7 @@ dependencies = [
  "schemars 1.2.1",
  "serde",
  "serde_json",
+ "source_items",
  "sqlx",
  "system_properties",
  "thiserror 2.0.18",
@@ -18854,6 +18855,23 @@ dependencies = [
  "tokio-retry",
  "tracing",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "source_items"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "macro_db_migrator",
+ "macro_entrypoint",
+ "macro_env_var",
+ "model-entity",
+ "rand 0.9.4",
+ "rootcause",
+ "sqlx",
+ "tokio",
+ "tracing",
  "workspace-hack",
 ]
 

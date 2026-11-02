@@ -36,12 +36,25 @@ mod work_feed;
 /// PostgreSQL implementation of [`SoupRepo`].
 pub struct PgSoupRepo {
     pool: ReadOnlyPool,
+    source_items_enabled: bool,
 }
 
 impl PgSoupRepo {
-    /// Creates a PostgreSQL soup repository using the provided read-only pool.
+    /// Creates a PostgreSQL soup repository with the item-table listing path.
     pub fn new(pool: ReadOnlyPool) -> Self {
-        PgSoupRepo { pool }
+        PgSoupRepo {
+            pool,
+            source_items_enabled: false,
+        }
+    }
+
+    /// Enables source-item listings after the projection is backfilled and verified.
+    ///
+    /// Disabling this leaves projection maintenance running and restores the
+    /// item-table query without changing authorization or cursor semantics.
+    pub fn with_source_items_enabled(mut self, enabled: bool) -> Self {
+        self.source_items_enabled = enabled;
+        self
     }
 }
 
@@ -79,6 +92,7 @@ impl SoupRepo for PgSoupRepo {
                         cursor: query.map_filter(|(_, ast)| ast),
                         exclude_frecency: true,
                     },
+                    self.source_items_enabled,
                 )
                 .await?
             }
@@ -91,6 +105,7 @@ impl SoupRepo for PgSoupRepo {
                         cursor: ast,
                         exclude_frecency: false,
                     },
+                    self.source_items_enabled,
                 )
                 .await?
             }
@@ -112,6 +127,7 @@ impl SoupRepo for PgSoupRepo {
                         cursor: f.map_filter(|_| EntityFilterAst::default()),
                         exclude_frecency: true,
                     },
+                    self.source_items_enabled,
                 )
                 .await?
             }
@@ -124,6 +140,7 @@ impl SoupRepo for PgSoupRepo {
                         cursor: f.map_filter(|_| EntityFilterAst::default()),
                         exclude_frecency: false,
                     },
+                    self.source_items_enabled,
                 )
                 .await?
             }
@@ -171,6 +188,7 @@ impl SoupRepo for PgSoupRepo {
                         cursor: f.map_filter(|_| EntityFilterAst::default()),
                         exclude_frecency: true,
                     },
+                    self.source_items_enabled,
                 )
                 .await?
                 .into_iter()
