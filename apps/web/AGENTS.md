@@ -33,7 +33,13 @@ and cache writes; mutation ownership comes from the execute-time
 Login closes this source gate until a fresh auth query succeeds, without clearing
 the app shell's retained identity. Legacy unscoped channel lists are not restored.
 The settings signature browser suite also exercises real channel/link observers
-across account switches with delayed responses (`account-sources.browser.e2e.ts`).
+and the contact context publisher across account switches with delayed responses
+(`account-sources.browser.e2e.ts`). `queries/contacts/context-source.ts` reuses
+those keyed queries through ownership-tagged selectors; gate missing inputs rather
+than publishing an empty snapshot. `context-publisher.ts` caps pending IDs and
+write batches at 500, replaces overflowing/uncertain snapshots with a new epoch,
+and never writes directory names or membership. `useContactContextPublisher`
+shares Soup's leader, rollout and generation lifecycle; do not add another leader.
 
 ## Verifying a change in a real browser
 

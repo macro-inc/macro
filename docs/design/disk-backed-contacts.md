@@ -14,8 +14,9 @@ storage generation, and mutation success/rollback use their captured account.
 A replacement login clears these sources and gates them until fresh identity
 confirmation, while retaining the shell's identity. This closes a prerequisite
 for safely publishing local DM/inbox facts.
-**Next step:** publish channel/inbox context in bounded batches, then cut
-Quick Access/shared recipients over to the bounded host API. Their old full-list source remains until that wiring lands.
+The context publisher now shares Soup's leader/rollout/generation lifecycle,
+uses the scoped channel/activity/link queries, and emits bounded snapshot/delta writes.
+**Next step:** cut Quick Access/shared recipients over to the bounded host API. Their old full-list source remains until that wiring lands.
 Soup/CRM owner filters and Tasks' AI-filter catalog also remain.
 
 ## Goal and scope
@@ -145,8 +146,15 @@ The API is now exposed through browser/native `CacheHost.people`, with generated
 Rust/Zod contracts, coordinator protocol 12, and dedicated native commands. Missing
 capabilities return unsupported on reads and reject writes; scope/storage failures
 never downgrade to legacy hydration. Successful context writes send only person
-hydration hints. **Quick Access still does not use it**; context publishing and
-consumer cutover remain pending.
+hydration hints. The leader publisher now sends complete snapshots before commit,
+then only changed/removed peer facts. Writes and pending IDs cap at 500; queue
+overflow or uncertain persistence starts a fresh compare-and-set epoch. Missing
+inputs never mean an empty snapshot. Three exponential retries follow a transient
+failure, with source changes/reconnection able to wake later attempts.
+**Quick Access still does not use the reader**; consumer cutover remains pending.
+Publisher input maps scale with existing DM peers/inboxes, not the personal contact
+directory. The existing full channel sources remain in memory; this is not a claim
+of constant whole-app memory or of completed 100k UI verification.
 Its joined-record scan is slower than ordinary covering-only title search; do not
 claim the UI cutover or whole-app memory goal complete from these engine tests.
 
@@ -170,8 +178,8 @@ claim the UI cutover or whole-app memory goal complete from these engine tests.
   `directory.ts` maps returned names directly without populating the global name store.
 - [ ] Wire DM recency, deduplication, and secondary-inbox exclusions end to end.
   The core policy, scoped context lifecycle and before-limit tests are implemented;
-  browser/native transport is verified. The channel/inbox context producer and
-  consumer wiring remain pending.
+  browser/native transport and the scoped channel/inbox context publisher are
+  implemented. Consumer reader wiring remains pending.
   Relationship `updated_at` is not equivalent to DM activity.
 - [x] Add bounded search/browse under `apps/web/src/lib/queries/contacts`, with
   pending/error, snapshot/partial/cold, and offline/source status. Cursors bind to

@@ -1246,7 +1246,16 @@ commands/older WASM report unsupported reads and reject writes. Scope and storag
 errors are never swallowed. Context updates publish person hydration hints only.
 Host/worker/native spans record operation, counts and opaque correlation metadata,
 never names, addresses or search text; live trace connectivity remains unverified.
-The channel/inbox context publisher and Quick Access/recipient source cutover remain pending.
+The channel/inbox context publisher now runs under Soup's existing leader and
+rollout/generation gate. Ownership-tagged selectors reuse scoped query data without
+contact-directory reads or app suspension. A committed snapshot is followed by
+changed/removed-peer patches, at most 500 rows per write and 500 pending IDs. Changes
+to an in-flight ID survive its earlier ack; overflow and uncertain writes start a
+new epoch. Missing inputs pause rather than publish emptiness. Source changes
+coalesce for 250 ms, with three exponential retries and reconnect wakeup; lost
+scope or unsupported hosts stop until the lifecycle changes. Context maps scale
+with existing DM peers/inboxes; full channel sources are still in memory.
+Quick Access/recipient reader cutover and whole-app memory verification remain pending.
 
 ## Cached email Quick Access
 

@@ -78,11 +78,29 @@ export function releaseAccountSources() {
   for (const resolve of sourceWaiters.splice(0)) resolve();
 }
 export const storageServiceClient = {
+  async getActivity() {
+    return ok([]);
+  },
   async getChannels() {
+    const owner = activeViewer();
     const name =
       activeViewer() === link.macro_id ? 'First channel' : 'Second channel';
     await holdSourceResponse();
-    return ok({ items: [{ id: 'shared-channel', name }], next_cursor: null });
+    return ok({
+      items: [
+        {
+          id: '00000000-0000-4000-8000-000000000001',
+          name,
+          channel_type: 'direct_message',
+          updated_at: '2026-01-01T00:00:00Z',
+          participants: [
+            { user_id: owner },
+            { user_id: 'macro|peer@example.com' },
+          ],
+        },
+      ],
+      next_cursor: null,
+    });
   },
 };
 export const useIsAuthenticated = () => () => true;
@@ -127,7 +145,9 @@ export const emailClient = {
         ? 'first@example.com'
         : 'second@example.com';
     await holdSourceResponse();
-    return ok({ links: [{ ...link, email_address: email }] });
+    return ok({
+      links: [{ ...link, email_address: email, is_primary: false }],
+    });
   },
   async patchSettings(input: { settings: Settings }) {
     patches.push(structuredClone(input.settings));

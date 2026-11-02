@@ -16,7 +16,7 @@ import {
 import { useQueryAccount } from '../auth/use-query-account';
 import { channelKeys } from './keys';
 
-function channelActivityQueryOptions(
+export function channelActivityQueryOptions(
   account: QueryAccount | undefined,
   enabled: boolean
 ) {

@@ -17,7 +17,8 @@ Context-aware person search also needs a rebuild for `graphql_cache_people_conte
 `graphql_cache_people_update`, and `graphql_cache_people_search`. OTA clients detect
 missing commands as unavailable, never as an empty directory or a successful write.
 These commands keep account/generation admission and ranking inside the shared
-engine lock. The context publisher and UI source migration are still pending.
+engine lock. The leader context publisher is implemented; UI reader migration
+is still pending.
 
 ## Native authentication cookies
 

@@ -8,11 +8,22 @@ test('account-scoped lists ignore old in-flight channel and inbox responses', as
   const channels = page.getByTestId('account-channels');
   await expect(inboxes).toHaveText('first@example.com');
   await expect(channels).toHaveText('First channel');
+  await expect(page.getByTestId('contact-context-state')).toHaveText('ready');
+  await expect(page.getByTestId('contact-context-rows')).toContainText(
+    'First channel'
+  );
   await page.getByRole('button', { name: 'Hold refresh' }).click();
   await page.evaluate(() => window.signatureFixture.waitForHeldSources());
   await page.getByRole('button', { name: 'Switch account' }).click();
   await expect(inboxes).toHaveText('second@example.com');
   await expect(channels).toHaveText('Second channel');
+  await expect(page.getByTestId('contact-context-state')).toHaveText('ready');
+  await expect(page.getByTestId('contact-context-rows')).toContainText(
+    'macro|other@example.com'
+  );
+  await expect(page.getByTestId('contact-context-rows')).toContainText(
+    'Second channel'
+  );
   await page.getByRole('button', { name: 'Release old responses' }).click();
   expect(
     await page.evaluate(
@@ -21,4 +32,7 @@ test('account-scoped lists ignore old in-flight channel and inbox responses', as
   ).toBe(0);
   await expect(inboxes).toHaveText('second@example.com');
   await expect(channels).toHaveText('Second channel');
+  await expect(page.getByTestId('contact-context-rows')).not.toContainText(
+    'First channel'
+  );
 });

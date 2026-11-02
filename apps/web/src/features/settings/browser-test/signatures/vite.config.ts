@@ -38,7 +38,8 @@ export default defineConfig({
           return boundary;
         if (
           source === '@service-storage/client' &&
-          importer?.endsWith('/queries/channel/channels.ts')
+          (importer?.endsWith('/queries/channel/channels.ts') ||
+            importer?.endsWith('/queries/channel/activity.ts'))
         )
           return boundary;
         if (

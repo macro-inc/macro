@@ -319,8 +319,9 @@ deduplication before a bounded heap. Generic title search remains covering-only.
 This uses schema 12 without adding a database or physical table; native/browser
 hosts now expose state/update/search through dedicated commands. Rust-derived
 transport schemas are checked in `src/people/schema.json` and regenerated from
-`apps/web` with `bun run gen-cache-people-schema --rust`. Context publication by
-the channel/inbox sources and Quick Access/recipient migration are still pending.
+`apps/web` with `bun run gen-cache-people-schema --rust`. The frontend now publishes
+channel/inbox context under Soup's leader in bounded snapshot/delta batches;
+Quick Access/recipient reader migration is still pending.
 
 ## Browser OPFS writes
 

@@ -14,7 +14,7 @@ import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import type { CreateChannelRequest } from '@service-storage/generated/schemas/createChannelRequest';
 import type { CreateChannelResponse } from '@service-storage/generated/schemas/createChannelResponse';
 import type { PatchChannelRequest } from '@service-storage/generated/schemas/patchChannelRequest';
-import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
+import { useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import {
   assertQueryAccount,
@@ -68,11 +68,12 @@ export function listChannelsQueryOptions(
   account: QueryAccount | undefined,
   enabled: boolean
 ) {
-  return queryOptions({
+  return {
     queryKey: channelKeys.listChannels(account?.userId).queryKey,
-    queryFn: ({ signal }) => fetchAllChannels(signal, account),
+    queryFn: ({ signal }: { signal: AbortSignal }) =>
+      fetchAllChannels(signal, account),
     enabled: !!account && enabled,
-  });
+  };
 }
 
 export function useListChannelsQuery(enabled: Accessor<boolean> = () => true) {
@@ -95,13 +96,17 @@ export function cachedGraphqlChannelsQueryOptions(
   account: QueryAccount | undefined,
   generation: number
 ) {
-  return queryOptions({
+  return {
     queryKey: channelKeys.quickAccessGraphql(
       cacheHost?.clientId ?? 'disabled',
       account?.userId,
       generation
     ).queryKey,
-    queryFn: async ({ signal }): Promise<CachedGraphqlChannel[]> => {
+    queryFn: async ({
+      signal,
+    }: {
+      signal: AbortSignal;
+    }): Promise<CachedGraphqlChannel[]> => {
       assertQueryAccount(account);
       if (!cacheHost) return [];
       const scope = await readContactCacheScope(
@@ -119,7 +124,7 @@ export function cachedGraphqlChannelsQueryOptions(
     staleTime: Infinity,
     gcTime: 0,
     retry: false,
-  });
+  };
 }
 
 /** Reads the recent Quick Access channel list from the normalized GraphQL cache. */
