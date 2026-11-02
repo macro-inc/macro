@@ -35,10 +35,3 @@ export function retainRecentlyViewed(id: string): void {
 export function isRecentlyViewed(id: string): boolean {
   return retained.has(id);
 }
-
-/** Let go of every held session. */
-export function releaseRecentlyViewed(): void {
-  const sessions = [...retained.values()];
-  retained.clear();
-  for (const session of sessions) session.release();
-}

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const sessions = vi.hoisted(() => ({ open: new Map<string, number>() }));
 
@@ -17,13 +17,12 @@ vi.mock('./AgentSession', () => ({
   },
 }));
 
-const { releaseRecentlyViewed, retainRecentlyViewed } = await import(
-  './recently-viewed'
-);
-
-afterEach(() => {
-  releaseRecentlyViewed();
+// A fresh module per test, so no test inherits another's held sessions.
+let retainRecentlyViewed: (id: string) => void;
+beforeEach(async () => {
+  vi.resetModules();
   sessions.open.clear();
+  ({ retainRecentlyViewed } = await import('./recently-viewed'));
 });
 
 describe('retainRecentlyViewed', () => {
