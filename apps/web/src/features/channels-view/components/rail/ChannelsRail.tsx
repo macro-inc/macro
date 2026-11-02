@@ -949,12 +949,16 @@ export function ChannelsRail(props: ChannelsRailProps) {
       .all()
       .filter((row) => row.kind === 'section' || row.kind === 'label');
     const current = list.focus.item();
-    const currentKey =
-      current?.kind === 'conversation' && current.labelId
-        ? rowKeyForLabel(current.labelId)
-        : current?.group
-          ? rowKeyForSection(current.group)
-          : current?.id;
+    let currentKey = current?.id;
+
+    if (current?.kind === 'label' || current?.kind === 'section') {
+      currentKey = current.id;
+    } else if (current?.kind === 'conversation' && current.labelId) {
+      currentKey = rowKeyForLabel(current.labelId);
+    } else if (current?.group) {
+      currentKey = rowKeyForSection(current.group);
+    }
+
     const currentIndex = headers.findIndex((row) => row.id === currentKey);
     const origin = currentIndex === -1 ? (offset === 1 ? -1 : 0) : currentIndex;
     const nextIndex = (origin + offset + headers.length) % headers.length;

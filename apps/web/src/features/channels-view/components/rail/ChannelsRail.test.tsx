@@ -53,6 +53,10 @@ const mocks = vi.hoisted(() => ({
   tab: 'browse' as 'browse' | 'threads',
   scrollBrowse: vi.fn(),
   scroll: (_index: number) => {},
+  focusedRow: undefined as ChannelRailRow | undefined,
+  listRows: undefined as ChannelRailRow[] | undefined,
+  focusSet: vi.fn(),
+  hotkeys: new Map<string, () => unknown>(),
 }));
 vi.mock('@app/components/list', () => ({
   createListController: (options: {
@@ -85,7 +89,19 @@ vi.mock('@app/components/list', () => ({
             },
         metadata: { event },
       });
-    return { items: { at: (index: number) => options.items()[index] } };
+    const items = () => mocks.listRows ?? options.items();
+
+    return {
+      items: { at: (index: number) => items()[index], all: items },
+      focus: {
+        item: () => mocks.focusedRow,
+        set: (id: string, options: { reason: string }) => {
+          mocks.focusSet(id, options);
+          const index = items().findIndex((row) => row.id === id);
+          return index < 0 ? undefined : { index };
+        },
+      },
+    };
   },
   listOwnedSlotName: (name: string) => name,
   useListInteractions: (options: { scrollHandle: () => ListScrollHandle }) => {
@@ -146,7 +162,13 @@ vi.mock('@channel/queries/prefetch-channel-target', () => ({
 }));
 vi.mock('@core/hotkey/hotkeys', () => ({
   createHotkeyGroup: () => ({ dispose: vi.fn() }),
-  registerHotkey: () => ({ withGroup: vi.fn() }),
+  registerHotkey: (options: {
+    hotkey: string;
+    keyDownHandler: () => unknown;
+  }) => {
+    mocks.hotkeys.set(options.hotkey, options.keyDownHandler);
+    return { withGroup: vi.fn() };
+  },
 }));
 vi.mock('@entity', () => ({
   isChannelEntity: (entity: { type: string }) => entity.type === 'channel',
@@ -301,6 +323,9 @@ const mount = () =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.focusedRow = undefined;
+  mocks.listRows = undefined;
+  mocks.hotkeys.clear();
   mocks.userId = 'viewer';
   mocks.source.muteEntity.mockResolvedValue(undefined);
   mocks.source.unmuteEntity.mockResolvedValue(undefined);
@@ -320,6 +345,64 @@ it('delegates keyboard scrolling to the sectioned renderer instead of global ind
   mocks.scroll(0);
   expect(mocks.scrollBrowse).toHaveBeenCalledExactlyOnceWith(0, undefined);
 });
+
+describe('section heading navigation', () => {
+  it.each([
+    ['label:first', ']', 'label:second'],
+    ['label:second', '[', 'label:first'],
+    ['section:team_channels', ']', 'section:channels'],
+    ['channel:one:label:first', ']', 'label:second'],
+  ])('jumps from %s with %s to %s', (from, hotkey, to) => {
+    const first: ChannelLabel = {
+      id: 'first',
+      name: 'First',
+      channelIds: ['one'],
+      channelCount: 1,
+      sortOrder: 0,
+      createdAt: '2026-01-01',
+      updatedAt: '2026-01-01',
+    };
+    mocks.listRows = [
+      { kind: 'section', id: 'section:team_channels', group: 'team_channels' },
+      { kind: 'section', id: 'section:channels', group: 'channels' },
+      {
+        kind: 'label',
+        id: 'label:first',
+        group: 'team_channels',
+        localIndex: 2,
+        label: first,
+      },
+      {
+        kind: 'conversation',
+        id: 'channel:one:label:first',
+        group: 'team_channels',
+        scope: 'team_channels',
+        localIndex: 3,
+        channel,
+        labelId: 'first',
+      },
+      {
+        kind: 'label',
+        id: 'label:second',
+        group: 'team_channels',
+        localIndex: 4,
+        label: { ...first, id: 'second', name: 'Second' },
+      },
+    ];
+    mocks.focusedRow = mocks.listRows.find((row) => row.id === from);
+    mount();
+
+    expect(mocks.hotkeys.get(hotkey)?.()).toBe(true);
+    expect(mocks.focusSet).toHaveBeenCalledExactlyOnceWith(to, {
+      reason: 'keyboard',
+    });
+    expect(mocks.scrollBrowse).toHaveBeenCalledExactlyOnceWith(
+      mocks.listRows.findIndex((row) => row.id === to),
+      undefined
+    );
+  });
+});
+
 describe('explicit channel activation read marking', () => {
   it('resolves an uncached favorite before opening a split with top-level read marking', async () => {
     mocks.favoriteId = 'uncached';

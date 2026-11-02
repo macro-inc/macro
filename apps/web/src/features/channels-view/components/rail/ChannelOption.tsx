@@ -50,6 +50,12 @@ function createChannelLabelDnd(props: {
       dndScope: rail.railId,
       channelId: props.channel.id,
       get labelId() {
+        const labelId = props.labelId();
+
+        if (labelId !== undefined) {
+          return labelId;
+        }
+
         return rail
           .labels()
           .find(

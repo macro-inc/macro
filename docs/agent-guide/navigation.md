@@ -596,8 +596,10 @@ controls use the rounded, bordered button groups from the email thread toolbar;
 New and Search have their own rounded, bordered backgrounds. Search starts as an
 icon and expands into a compact field when clicked or opened with Cmd/Ctrl+F.
 Closing it clears the query and returns to the icon. The action stays specific to
-the view: Home returns to its starting pane, Email composes mail, and Chat opens
-one picker for existing conversations, new channels, and direct messages.
+the view: Home returns to its starting pane and Email composes mail. With
+`enable-chat-sidebar-sections` enabled, Chat opens one picker for existing
+conversations, new channels, and direct messages; when disabled, Chat offers
+separate channel and direct-message creation actions.
 Calendar offers an event or call. Tasks offers
 **Task**, **Project** (when enabled), and **Tag** in both the Tasks and Projects
 lists. Customers offers Company, Contact, and enabled Pipeline creation. Reviews

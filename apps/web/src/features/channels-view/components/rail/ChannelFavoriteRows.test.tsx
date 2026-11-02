@@ -1,4 +1,5 @@
 import type { ChannelEntity } from '@entity';
+import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import {
   cleanup,
@@ -18,6 +19,7 @@ import {
 } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChannelFavoriteRow } from './ChannelFavoriteRows';
+import { ChannelOption } from './ChannelOption';
 import { ChannelFavoriteRow as DraggableFavoriteRow } from './next/ChannelFavoriteRow';
 import { ResizableRailSection } from './next/ResizableRailSection';
 import {
@@ -34,6 +36,10 @@ const rail = vi.hoisted(() => ({
   railId: 'rail',
   sectionPreferences: () => ({ sort: 'manual' }),
   setSectionPreferences: vi.fn(),
+  labels: (): ChannelLabel[] => [],
+  labelsAvailable: () => true,
+  sectionsEnabled: () => true,
+  activeDropTarget: () => undefined,
 }));
 
 const drag = vi.hoisted(() => ({
@@ -47,6 +53,7 @@ const drag = vi.hoisted(() => ({
     }) => void
   >,
   favorites: [] as Favorite[],
+  draggables: new Map<string, Record<string, unknown>>(),
   reorder: vi.fn(
     async (_args: {
       favorites: { entityId: string; entityType: string }[];
@@ -77,11 +84,14 @@ vi.mock('@solid-primitives/resize-observer', () => ({
   }),
 }));
 vi.mock('@thisbeyond/solid-dnd', () => ({
-  createDraggable: () => ({
-    ref() {},
-    dragActivators: {},
-    isActiveDraggable: false,
-  }),
+  createDraggable: (id: string, data: Record<string, unknown>) => {
+    drag.draggables.set(id, data);
+    return {
+      ref() {},
+      dragActivators: {},
+      isActiveDraggable: false,
+    };
+  },
   createDroppable: () => ({ ref() {}, isActiveDroppable: false }),
   useDragDropContext: () => [
     { active: {} },
@@ -100,6 +110,12 @@ vi.mock('./ChannelsRailContext', async (importOriginal) => ({
 }));
 vi.mock('./ChannelsRailSection', () => ({}));
 vi.mock('./hooks/useChannelRailState', () => ({
+  useChannelRailItemState: () => () => ({
+    domId: 'rail-channel-row',
+    selected: false,
+    focused: false,
+    muted: false,
+  }),
   useChannelRailFavoriteItemState: () => () => ({
     domId: 'rail-favorite-row',
     selected: false,
@@ -115,6 +131,9 @@ vi.mock('./hooks/useChannelRailState', () => ({
   }),
 }));
 vi.mock('./ChannelRailItems', () => ({
+  ChannelAvatar: () => <span />,
+  ChannelCallIndicator: () => null,
+  IncomingCallActions: () => null,
   isPrimaryMouseDown: (event: MouseEvent) => event.button === 0,
   ChannelRailItemContextMenu: (
     props: ParentProps<{
@@ -194,6 +213,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   drag.starts.length = 0;
   drag.ends.length = 0;
+  drag.draggables.clear();
+  rail.labels = () => [];
   drag.favorites = [];
   const [loaded, update] = createSignal<ChannelEntity | undefined>(undefined);
   [measurements.contentHeight] = createSignal(400);
@@ -202,6 +223,62 @@ beforeEach(() => {
     loaded()?.id === channelId ? loaded() : undefined;
 });
 afterEach(cleanup);
+
+describe('channel section drag sources', () => {
+  it('keeps each rendered section as the drag source when a channel belongs to both scopes', () => {
+    rail.labels = () => [
+      {
+        id: 'shared',
+        name: 'Shared',
+        teamId: 'team',
+        channelIds: ['design'],
+        channelCount: 1,
+        sortOrder: 0,
+        createdAt: '2026-01-01',
+        updatedAt: '2026-01-01',
+      },
+      {
+        id: 'personal',
+        name: 'Personal',
+        channelIds: ['design'],
+        channelCount: 1,
+        sortOrder: 0,
+        createdAt: '2026-01-01',
+        updatedAt: '2026-01-01',
+      },
+    ];
+    render(() => (
+      <>
+        <ChannelOption
+          channel={channel}
+          rowId="channel:design:label:shared"
+          labelId="shared"
+          draggable
+        />
+        <ChannelOption
+          channel={channel}
+          rowId="channel:design:label:personal"
+          labelId="personal"
+          draggable
+        />
+        <ChannelOption channel={channel} draggable />
+      </>
+    ));
+
+    expect(
+      drag.draggables.get('rail:channel-label:drag:channel:design:label:shared')
+        ?.labelId
+    ).toBe('shared');
+    expect(
+      drag.draggables.get(
+        'rail:channel-label:drag:channel:design:label:personal'
+      )?.labelId
+    ).toBe('personal');
+    expect(
+      drag.draggables.get('rail:channel-label:drag:channel:design')?.labelId
+    ).toBe('shared');
+  });
+});
 
 describe('favorite rows in the chat rail', () => {
   it('gives a favorited channel its channel actions, aimed at the favorite row', () => {

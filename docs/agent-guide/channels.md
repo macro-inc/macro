@@ -1048,12 +1048,16 @@ empty sections, assignment failures, and one channel in both scopes. Check the
 New menu, both dialog switches, keyboard access, edit-dialog focus, destructive
 deletion, and per-section unread and sort preferences after reload. Confirm
 unread filtering does not change section
-membership or another section's rows. Scroll a
-long sidebar with many sections and confirm that the DM heading remains
-available at the bottom. Keyboard navigation and section shortcuts must follow
+membership or another section's rows. Scroll a long sidebar with many sections
+and confirm that Direct messages remains immediately below Favorites. Keyboard
+navigation and section shortcuts must follow
 the same order as the rendered rows.
 Drag a channel between sections and confirm the sidebar stays visible while
 lookups refetch, including with a slow or paused connection.
+When a channel belongs to both a personal and a shared section, drag its
+personal-section row into the ungrouped list. Only the personal assignment is
+removed; the shared assignment remains. Repeat from the shared-section row to
+verify the opposite scope.
 
 ### New conversation
 
@@ -1115,14 +1119,18 @@ service results, deduplicates by channel ID, and retains loaded unread metadata.
 Clearing the query restores ordinary pagination.
 
 Each primary channel list and the DM panel keeps its own persisted sort:
-last viewed, last updated, or date created. Custom section channels remain
-alphabetical. Loading failures show Retry without hiding already loaded rows.
+last viewed, last updated, or date created. Custom section channels follow that
+section's selected sort, defaulting to alphabetical order. Loading failures show
+Retry without hiding already loaded rows.
 Loading another page must preserve keyboard focus and scroll position.
 
 Arrow Down / `j` follows visible rows, including section headings. `h` / `l`
 collapse or expand the focused section. `[` / `]` jump between primary and custom
 section headings, including the DM heading. Paging at the last loaded channel
 retains focus until the next page arrives.
+From a custom-section heading in the middle of the list, use both `[` and `]`;
+each shortcut must move to the adjacent heading rather than the Team channels
+heading.
 
 On touch layouts, Channels shows only the Recent conversation feed, with channel
 and DM message previews. Rows use Home's touch row: the unread dot in the left
