@@ -65,15 +65,21 @@ function triggerBody(trigger: RoutineTriggerOptions): ActionTrigger {
 export interface RoutineOptions {
   /** Display name. */
   name: string;
-  /** Schedules or Macro events that start the routine. */
+  /**
+   * Schedules or Macro events that start the routine. A cron `schedule` has 6
+   * or 7 fields: `sec min hour day-of-month month day-of-week [year]`.
+   */
   trigger: RoutineTriggerOptions;
   /** Instructions delivered to the agent. */
   prompt: string;
   /** Original user instructions. */
   userPrompt: string;
-  /** Model override. */
+  /**
+   * Model to run the task, e.g. `anthropic/claude-sonnet-5-5`, or the model
+   * override for `agent`. Set `model`, `agent`, or both.
+   */
   model?: RoutineModelId;
-  /** Agent to run the task. */
+  /** Agent to run the task. Set `model`, `agent`, or both. */
   agent?: Agent;
   /** Whether triggers can start executions. Defaults to true on creation. */
   enabled?: boolean;

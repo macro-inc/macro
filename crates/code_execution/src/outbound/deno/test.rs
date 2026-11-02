@@ -282,6 +282,32 @@ async fn denies_ambient_io_and_external_module_imports() {
 
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
+async fn rejects_sleeping_and_points_at_routines() {
+    let (_root, service) = setup(Limits::default()).await;
+    let sources = [
+        "export async function main() { await new Promise(resolve => setTimeout(resolve, 20000)); }",
+        "export function main() { setInterval(() => {}, 1000); }",
+        "export function main() { setImmediate(() => {}); }",
+        "export async function main() { await new Promise(resolve => AbortSignal.timeout(1000).addEventListener('abort', resolve)); }",
+        "export function main() { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000); }",
+        "export async function main() { await Atomics.waitAsync(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000).value; }",
+        "export function main() { new Worker('data:text/javascript,setTimeout(() => postMessage(1), 1000)', {type: 'module'}); }",
+        "export async function main() { const { setTimeout } = await import('node:timers/promises'); await setTimeout(1000); }",
+        "import { setTimeout } from 'node:timers'; export async function main() { await new Promise(resolve => setTimeout(resolve, 1000)); }",
+        "import { Worker } from 'worker_threads'; export function main() { return Worker; }",
+    ];
+    for source in sources {
+        let (_, outcome) = run(&service, source, 5000).await;
+        assert!(
+            matches!(&outcome, Outcome::Failed { error } if error.code == FailureCode::Runtime && error.message.contains("create a routine with macro.routines.create")),
+            "{source}: {outcome:?}"
+        );
+    }
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
 async fn denies_unlisted_destinations_including_redirects() {
     let (_root, service) = setup(Limits::default()).await;
     let forbidden = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -479,7 +505,7 @@ async fn total_output_budget_applies_across_small_frames() {
         ..Limits::default()
     })
     .await;
-    let (_, outcome) = run(&service, "export async function main() { for(let i = 0; i < 20; i++) { console.log('x'.repeat(500)); await new Promise(resolve => setTimeout(resolve, 1)); } return null; }", 5000).await;
+    let (_, outcome) = run(&service, "export async function main() { for(let i = 0; i < 20; i++) { console.log('x'.repeat(500)); } return null; }", 5000).await;
     assert!(
         matches!(outcome, Outcome::Failed { error } if error.code == FailureCode::Limit && error.message == "process output limit exceeded")
     );

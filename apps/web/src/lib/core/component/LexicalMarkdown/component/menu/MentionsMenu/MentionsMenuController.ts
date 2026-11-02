@@ -11,7 +11,7 @@ export type MentionBucketId =
   | 'routines'
   | 'agentSessions'
   | 'channels'
-  | 'companies'
+  | 'crm'
   | 'emails'
   | 'dates'
   | 'openTabs'
