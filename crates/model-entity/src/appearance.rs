@@ -3,6 +3,10 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+mod icons {
+    include!("appearance_icons.generated.rs");
+}
+
 /// An entity's optional icon and tint overrides; absent values retain type defaults.
 #[derive(
     Debug,
@@ -93,10 +97,7 @@ impl EntityAppearance {
         match &self.icon {
             None => Ok(()),
             Some(AppearanceIcon::Macro { name }) => {
-                if include_str!("appearance-icons.txt")
-                    .lines()
-                    .any(|allowed| allowed == name)
-                {
+                if icons::ICON_NAMES.contains(&name.as_str()) {
                     Ok(())
                 } else {
                     Err("Unknown Macro icon".into())
