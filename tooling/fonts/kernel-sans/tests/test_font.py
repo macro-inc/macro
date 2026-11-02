@@ -58,6 +58,74 @@ def setUpModule():
     glyphs.load_modules(strict=True)
 
 
+def _corner_gaps(shape, turn=25):
+    """Length of outline between consecutive corners (turns of at least
+    `turn` degrees), for each contour."""
+    import itertools
+    import math
+
+    from fontTools.pens.recordingPen import RecordingPen
+
+    rp = RecordingPen()
+    shape.path.draw(rp)
+    contours, cur = [], None
+    for op, args in rp.value:
+        if op == "moveTo":
+            cur = [args[0]]
+            segs = []
+        elif op == "lineTo":
+            segs.append((cur[-1], cur[-1], args[0], args[0]))
+            cur.append(args[0])
+        elif op == "curveTo":
+            segs.append((cur[-1], *args))
+            cur.append(args[-1])
+        elif op == "closePath":
+            if cur[-1] != cur[0]:
+                segs.append((cur[-1], cur[-1], cur[0], cur[0]))
+            contours.append([q for q in segs if q[0] != q[3]])
+
+    def direction(a, b):
+        return math.atan2(b[1] - a[1], b[0] - a[0])
+
+    def length(q):
+        pts = [q[0]]
+        for i in range(1, 9):
+            t, m = i / 8, 1 - i / 8
+            pts.append(
+                tuple(
+                    m**3 * q[0][k]
+                    + 3 * m * m * t * q[1][k]
+                    + 3 * m * t * t * q[2][k]
+                    + t**3 * q[3][k]
+                    for k in (0, 1)
+                )
+            )
+        return sum(math.dist(a, b) for a, b in itertools.pairwise(pts))
+
+    for segs in contours:
+        n = len(segs)
+        if n < 3:
+            continue
+        corners = []
+        for i in range(n):
+            a, b = segs[i], segs[(i + 1) % n]
+            d_in = direction(a[2] if a[2] != a[3] else a[0], a[3])
+            d_out = direction(b[0], b[1] if b[1] != b[0] else b[3])
+            if (
+                abs(math.degrees((d_out - d_in + math.pi) % (2 * math.pi) - math.pi))
+                >= turn
+            ):
+                corners.append(i)
+        for c0, c1 in zip(corners, corners[1:] + corners[:1], strict=False):
+            j, gap = (c0 + 1) % n, 0.0
+            while True:
+                gap += length(segs[j])
+                if j == c1:
+                    break
+                j = (j + 1) % n
+            yield gap
+
+
 class _Drawn:
     cache: ClassVar[dict] = {}
 
@@ -113,6 +181,17 @@ class OutlineTest(unittest.TestCase):
                         abs(bold[name].shape.path.area),
                         abs(light[name].shape.path.area),
                     )
+
+    def test_no_tiny_notches_or_steps(self):
+        """Consecutive corners of an outline sit at least MIN_FEATURE units
+        apart along it. Closer corners are a notch, step or sliver: invisible
+        on a proof sheet, a visible defect at display sizes."""
+        min_feature = 12
+        for w in (300, 400, 800):
+            for name, g in _Drawn.at(w).items():
+                for gap in _corner_gaps(g.shape):
+                    with self.subTest(w=w, glyph=name):
+                        self.assertGreaterEqual(round(gap, 1), min_feature)
 
     def test_masters_are_interpolation_compatible(self):
         drawn = {w: _Drawn.at(w) for w in MASTERS}

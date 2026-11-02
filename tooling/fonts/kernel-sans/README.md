@@ -3,8 +3,7 @@
 A neo-grotesque sans close to Inter and SF Pro, with a technical edge:
 
 - **Squircle curves.** Round letters are superellipses, squarer than SF Pro.
-- **45° chamfers** on free stem tops and curve terminals.
-- **Ink traps** at acute joins, which grow with weight.
+- **45° chamfers** on free stem ends; curve terminals are cut clean.
 - **Square dots** with two opposing chamfers on i, j and punctuation.
 
 Open `specimen/index.html` in a browser for a live specimen: weight slider, type

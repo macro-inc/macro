@@ -3,7 +3,7 @@
 ## What it is
 
 A font family generated from Python: a neo-grotesque close to Inter and SF Pro
-with squircle curves, chamfered stroke ends, ink traps and square dots. Six
+with squircle curves, chamfered stem ends and square dots. Six
 static weights (300–800) and a variable font are built into `fonts/`.
 
 ## How it works
@@ -57,8 +57,7 @@ its named instances equal the statics.
   curve differently per weight. pathops works in float32, so when the curve
   was moved or rotated take the join height from its `bounds()` (see `five`
   and `florin`); a float64 value can miss it by 1e-5 and leave two contours.
-- `geom.chamfer`, `trap` and `notch` return regions to subtract, not shapes
-  to add.
+- `geom.chamfer` returns a region to subtract, not a shape to add.
 - pathops outlines are counter-clockwise (PostScript order); `fontbuild.py`
   reverses them for TrueType. `Shape.transform` reverses mirrored shapes
   back, so `flip_x` / `flip_y` keep that direction.

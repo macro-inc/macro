@@ -1,7 +1,7 @@
 # Kernel Sans design rules
 
 Kernel Sans is a neo-grotesque in the Inter / SF Pro mould with a cyber edge:
-large x-height, flat horizontal terminals, near-monolinear strokes, plus four
+large x-height, flat horizontal terminals, near-monolinear strokes, plus three
 details that make it read as engineered rather than written. Every glyph
 follows these rules. When a rule and a glyph's legibility conflict, legibility
 wins; note the exception in a comment.
@@ -50,30 +50,13 @@ wins; note the exception in a comment.
      bottoms: left stem `sw` (p), right stem `se` (q).
    - Corners where a stem turns into an arm or bar (E, F, L, T joins, the
      baseline of l and i) stay square.
-   - Curve terminals are cut horizontally (vertically when the stroke ends
-     travelling horizontally, as in the hooks of f, t, j, r) and their outer
-     corner is chamfered (`parts.open_bowl` does this; see `c`).
+   - Curve terminals are cut clean, with no chamfer: horizontally, or
+     vertically when the stroke ends travelling horizontally (the hooks of
+     f, t, j, r). A chamfer on a curve terminal reads as a beak
+     (`parts.open_bowl`; see `c`).
    - Free ends of arms and bars (E, F, T, Z, t and f bars) stay square, and
      so do the ends of diagonals (they are already angled).
-3. **Ink traps** at acute crotches where a curve or diagonal joins a stem or
-   another stroke: n h m r u (shoulder), b d p q a g (bowl joins), k K (arm
-   and leg), and the inner vertices of v w y V W M N A and the figures.
-   - Where a curve leaves a stem (shoulders, bowls): `geom.stem_trap`, depth
-     `1.3 * p.trap`.
-   - Where a straight stroke leaves a stem (M N Æ K k ™, the flag of 1, the
-     diagonal of 4): `geom.stem_trap` along the stem edge, like n, at depth
-     `p.trap`. At these narrow crotches a deeper trap punches a hole
-     through the join; M and N also drop its anchor `0.6 * depth` into the
-     wedge.
-   - At the inner vertex of two diagonals (v w y A V W Y, the figures):
-     `geom.crotch_trap`, depth `p.trap`, which ends in a flat floor and
-     blunts the vertex. Never a long slit or a needle cut, and no trap at
-     crotches wider than about 70 degrees (R's leg, K's leg, @). Where one
-     edge is a bar that runs on past the vertex (the bars of 2 and 4), use
-     half depth, or the trap reads as a slit along the bar.
-   `p.trap` is about 6 at Light, 12 at Regular and 41 at ExtraBold. Traps
-   must open into the white cleanly and never leave slivers.
-4. **Square dots.** Dots of i, j, and punctuation are squares of side `p.dot`
+3. **Square dots.** Dots of i, j, and punctuation are squares of side `p.dot`
    (0.8 × stem + 44) with `nw` + `se` chamfers of 0.22 × side (`geom.dot`).
    Accent dots use the same side or very nearly. The i dot's top sits at the
    ascender (760); comma, quote and semicolon tails grow from the same square.
@@ -93,6 +76,13 @@ wins; note the exception in a comment.
   `nnxnnoxoo`, `HHXHHOXOO`. Even colour beats exact numbers.
 
 ## Construction
+
+- Joins are clean: no ink traps, notches or steps. Where an arch or bowl
+  overshoots a stem that ends flat at x-height or the baseline (n m r u p q b
+  d g a @), the stem end runs straight on into the curve (`parts.flush_end`)
+  instead of dipping into a V-notch. Proof every join large (`--zoom` at
+  cell 500 or more); a defect a few units wide is invisible on a glyph sheet
+  but obvious at display sizes.
 
 - Build with the boolean shape API in `src/kernel_sans/geom.py` and the parts in
   `glyphs/parts.py`. Look at `glyphs/core.py` (n, o, c, H, O, period) first;
