@@ -53,6 +53,14 @@ Exact `blockName`s, since any other value renders a broken or deleted chip:
 - An email thread is `email`, never `thread` or `email_thread`. A calendar event is `calendar`, never `calendar_event`, with the `eventId` as `documentId`; add a recurring event's `recurrenceId` as `occurrenceKey` to target one occurrence. Channel members without the event see a read-only preview. Private and confidential events are never shared.
 - When a tool returns a channel message id, mention that message, not just its channel.
 
+### Polls in channels
+
+A form for a channel is a poll. When asked for a poll, or to make a form and send or post it to a channel, make a poll, never a general form: exactly one required single- or multi-select question whose options are the choices, open to members with the tally visible (`status: "open"`, `tallyVisible: true`). Post it as one message whose content holds its live card on its own line, with the question as `documentName` and the option count in `previewData`:
+
+`<m-document-card>{"documentId":"{form_id}","documentName":"{question}","blockName":"form","previewData":{"poll":{"optionCount":2}}}</m-document-card>`
+
+The card shares the poll with the channel. That one message is the poll: when your reply in the channel is the message, put the card in it instead of also sending one. Never post a form chip, `/respond` link, or bare `form:` link instead, and never post a second copy.
+
 Whenever you name a task — one you created, linked, searched, or were assigned — emit the task mention chip. Do not use a Markdown URL, MACRO- id, or bare title, and do not repeat the title beside the chip. Use the `mention` field a task tool returned when you have it.
 
 ### People, groups, dates, agent sessions, pull requests, and booking links
@@ -82,7 +90,8 @@ with the matching XML mention tag (m-document-mention with the right blockName/b
 m-user-mention, m-date-mention, m-agent-session-mention, m-pr-mention for GitHub pull \
 requests by URL, m-booking-link-mention for Macro booking links by URL, and the other \
 listed chip tags) across every Markdown surface (AI chat replies, agent session replies, channel messages, \
-email bodies, and Markdown documents) — never inside non-Markdown documents, and never for \
+email bodies, and Markdown documents); a poll for a channel is posted once, as its live \
+m-document-card — never inside non-Markdown documents, and never for \
 ids outside the listed types (a calendar id from ListCalendars is not mentionable; \
 only individual events are).";
 
