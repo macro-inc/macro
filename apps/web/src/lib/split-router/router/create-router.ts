@@ -130,6 +130,11 @@ export function createSplitRouter(options: SplitRouterOptions) {
     claims: claims.registry,
     ready,
     panes: panes.ids,
+    /** How the panes tile; its panes in order are `panes()`. */
+    layout: panes.layout,
+    /** Sizes the split at a path; sizes stay out of the URL and history. */
+    resizeLayout: panes.resize,
+    resetLayoutSizes: panes.resetShares,
     navigate: urlNavigation.navigate,
     navigatePane: paneNavigation.navigate,
     /** Cancels pending navigation and new panes requested from this pane. */

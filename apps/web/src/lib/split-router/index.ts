@@ -13,6 +13,12 @@ export type {
   HistoryAdapter,
   InterceptHandler,
 } from './history/types';
+export type {
+  PaneLayout,
+  SplitAxis,
+  SplitPath,
+  SplitSide,
+} from './panes/layout-tree';
 export { createMemoryPaneStore } from './panes/memory-store';
 export type {
   OpenIntent,

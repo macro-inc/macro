@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { SplitSide } from '../panes/layout-tree';
 import type { SplitCloseAction, SplitPanePolicy } from '../router/types';
 import { defineRoute, defineRoutes } from '../routes/define';
 import type { PaneId, SplitLocation } from '../routes/types';
@@ -105,6 +106,8 @@ export function createTestPolicy(
     maxPanes?: number;
     pinned?: readonly PaneId[];
     closeLast?: SplitCloseAction;
+    /** New panes split their source on this side. */
+    split?: SplitSide;
   } = {}
 ) {
   const activated: PaneId[] = [];
@@ -117,6 +120,7 @@ export function createTestPolicy(
       const { source, panes, opening } = request;
       const isFull = panes.length + opening >= (options.maxPanes ?? Infinity);
       if (isFull) return { pane: source ?? panes.at(-1)! };
+      if (source && options.split) return { split: source, side: options.split };
 
       const insertAt = source ? panes.indexOf(source) + 1 : panes.length;
 

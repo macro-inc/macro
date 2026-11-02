@@ -1,5 +1,10 @@
 import { batch, untrack } from 'solid-js';
 import { type ChangedPane, changedPanes } from '../panes/diff';
+import {
+  layoutShape,
+  type PaneLayout,
+  rowLayout,
+} from '../panes/layout-tree';
 import type { PaneId } from '../panes/types';
 import { encodePanes, formatLocation } from '../routes/codec';
 import type { SplitRoutesManifest } from '../routes/manifest';
@@ -23,9 +28,11 @@ export type LayoutPane = {
   index: number;
 };
 
-/** A whole layout: every open pane with its history, in order. */
+/** A whole layout: every open pane with its history, in order, and how they tile. */
 export type LayoutSnapshot = {
   panes: readonly LayoutPane[];
+  /** The tiles and their sizes; absent, the panes sit side by side. */
+  layout?: PaneLayout;
 };
 
 export type RestoreLayoutOptions = {
@@ -56,14 +63,21 @@ export function createLayout(options: {
   const { routes, panes, url, runner } = options;
 
   /** The open panes with their histories; entries are shared, not copied. */
-  const snapshot = (): LayoutSnapshot => ({
-    panes: untrack(panes.ids).flatMap((pane) => {
+  const snapshot = (): LayoutSnapshot => {
+    const captured = untrack(panes.ids).flatMap((pane) => {
       const stored = untrack(() => panes.read(pane));
       if (!stored) return [];
 
       return [{ pane, entries: stored.entries, index: stored.index }];
-    }),
-  });
+    });
+    const layout = untrack(panes.layout);
+
+    return layout ? { panes: captured, layout } : { panes: captured };
+  };
+
+  /** The tiles `layout` shows its panes in, in order. */
+  const tilesOf = (layout: LayoutSnapshot): PaneLayout | undefined =>
+    layout.layout ?? rowLayout(layout.panes.map(({ pane }) => pane));
 
   /**
    * Makes the captured layout the open panes in one guarded navigation: leave
@@ -83,8 +97,10 @@ export function createLayout(options: {
     const diff = panes.diff(incoming, { same: sameVisit });
 
     const apply = (entries: readonly Entry[]): NavigationResult => {
+      const tiles = tilesOf(layout);
+
       batch(() => {
-        panes.applyDiff(diff, entries);
+        panes.applyDiff(diff, entries, tiles ? { layout: tiles } : {});
 
         // Put each captured history back; the shown entry may have been
         // amended by middleware, so the live one replaces it at the cursor.
@@ -126,7 +142,12 @@ export function createLayout(options: {
       entry: shownEntry(pane),
     }));
 
-    return formatLocation(encodePanes(routes, shown, untrack(url.lastKnown)));
+    const tiles = tilesOf(layout);
+    const encoded = encodePanes(routes, shown, untrack(url.lastKnown), {
+      layout: tiles && layoutShape(tiles),
+    });
+
+    return formatLocation(encoded);
   };
 
   return { snapshot, restore, href };
