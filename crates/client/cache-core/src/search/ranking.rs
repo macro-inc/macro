@@ -2,8 +2,8 @@
 //! results are cloned; the heap retains at most limit + 1 references.
 
 use super::{
-    SearchCursor, SearchDocument, SearchPage, SearchRequest, compare_recent, normalize_search_text,
-    score_normalized_query,
+    SearchCursor, SearchDocument, SearchPage, SearchRequest, compare_recent,
+    normalize_search_query, score_normalized_query,
 };
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
@@ -39,7 +39,7 @@ pub(crate) fn rank_documents<'a>(
     request: &SearchRequest,
     documents: impl IntoIterator<Item = &'a SearchDocument>,
 ) -> SearchPage {
-    let query = normalize_search_text(request.query.trim());
+    let query = normalize_search_query(request.query.trim());
     let capacity = request.limit + 1;
     let mut best = BinaryHeap::with_capacity(capacity);
     for document in documents {

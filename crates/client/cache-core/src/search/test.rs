@@ -83,6 +83,25 @@ fn fuzzy_matching_rewards_prefix_and_freshness() {
 }
 
 #[test]
+fn commas_separate_query_tokens_in_any_order() {
+    let group = SearchDocument {
+        profile: SearchProfile::QuickAccessV1,
+        record_key: EntityKey::entity("GraphqlSoupChannel", &["1"]),
+        bucket: "channel".into(),
+        search_text: "avery morgan, blair chen".into(),
+        timestamp_ms: 990,
+        source_hash: "a".into(),
+    };
+    for query in ["avery, blair", "blair, avery", "blair,avery", "blair, ave"] {
+        assert!(
+            fuzzy_freshness_score(&group, query, 1_000).is_some(),
+            "{query} must match"
+        );
+    }
+    assert!(fuzzy_freshness_score(&group, "blair, casey", 1_000).is_none());
+}
+
+#[test]
 fn soup_entity_recency_prefers_viewed_at_over_newer_activity() {
     for typename in [
         "GraphqlSoupDocument",
