@@ -5226,7 +5226,7 @@
           },
           "view": {
             "type": "object",
-            "description": "A dynamic-UI view: the object the `PresentView` tool takes as `view`."
+            "description": "A dynamic-UI view, in the format of the PresentView schema in\nExecuteCode's description."
           }
         },
         "additionalProperties": false

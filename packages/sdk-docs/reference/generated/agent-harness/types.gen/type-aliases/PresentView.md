@@ -9,4 +9,4 @@ A view to present.
 | Property | Type | Description |
 | ------ | ------ | ------ |
 | <a id="property-executionid"></a> `executionId?` | `null` \| [`ExecutionId`](ExecutionId.md) | - |
-| <a id="property-view"></a> `view` | \{\[`key`: `string`\]: `unknown`; \} | A dynamic-UI view: the object the `PresentView` tool takes as `view`. |
+| <a id="property-view"></a> `view` | \{\[`key`: `string`\]: `unknown`; \} | A dynamic-UI view, in the format of the PresentView schema in ExecuteCode's description. |

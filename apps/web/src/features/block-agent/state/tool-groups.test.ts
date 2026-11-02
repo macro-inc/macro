@@ -521,7 +521,7 @@ describe('presented views', () => {
       { kind: 'tools', start: 2, end: 3 },
     ]);
   });
-  it('leaves the agent’s own call as its receipt, and ignores other servers', () => {
+  it('draws only the harness’s view_ calls, and ignores other servers', () => {
     expect(
       presentedView(presentation('macro_internal', 'ordinary-call'))
     ).toBeUndefined();

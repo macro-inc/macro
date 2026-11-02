@@ -289,7 +289,7 @@ fn the_agent_session_host_keeps_chats_user_tools_with_the_review_prompt() {
                 .filter(|schema| schema.name != "DisplayResults")
                 .count()),
         "the same tools as chat except agent-session connector discovery and \
-         chat's DisplayResults, which sessions replace with the harness's PresentView"
+         chat's DisplayResults, which sessions replace with the harness's execution.views.present"
     );
 }
 

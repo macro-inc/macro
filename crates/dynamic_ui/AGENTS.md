@@ -2,7 +2,7 @@
 
 ## What it is
 
-The view an agent presents in agent sessions (`PresentView`), as the web's
+The view an agent presents in agent sessions (`execution.views.present`), as the web's
 dynamic-UI renderer draws it: the generated model-facing schema and
 `view_problems`, which finds what the renderer would reject before a view is
 presented.
@@ -16,7 +16,8 @@ presented.
 ## Boundaries
 
 - Depends on: nothing but `serde_json`.
-- Used by: `agent_code_mode` (the `PresentView` tool and `execution.views.present`).
+- Used by: `agent_code_mode` (`execution.views.present`; ExecuteCode's
+  description includes the generated schema).
 
 ## Recipes
 

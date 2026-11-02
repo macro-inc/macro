@@ -113,7 +113,7 @@ interrupted), a label such as `Ran`, `Read`, `Edited`, or `Searching`, and a
 short detail like the command or file name for readers with session access.
 Stored activity snapshots keep the status and label but omit commands and tool
 input details, in both shared threads and DMs. A view the agent presents
-(`PresentView`) is part of the reply: it is stored with its run and drawn under
+(`execution.views.present`) is part of the reply: it is stored with its run and drawn under
 the run's steps, never folded away, and each item it shows loads with the
 reader's own access. A long run shows its latest six steps behind an
 `N earlier steps` control. Rows tick live while the run is

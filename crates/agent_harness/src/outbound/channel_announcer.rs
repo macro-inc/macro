@@ -111,7 +111,7 @@ fn reply_segments(turn: TurnId, segments: &[ProjectedSegment]) -> Vec<AgentReply
                             ActivityStatus::Interrupted => AgentActivityStatus::Interrupted,
                         },
                         // A view is part of the reply, as its passages are,
-                        // and PresentView caps it at 32 KiB. Its widgets name
+                        // and presenting caps it at 32 KiB. Its widgets name
                         // items, which each reader loads with their own access.
                         card: row.card.clone(),
                     })

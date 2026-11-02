@@ -79,7 +79,7 @@ fn chat_advertises_the_complete_contract() {
 
 #[test]
 fn display_results_is_chat_only() {
-    // Agent sessions present views with the harness's PresentView instead.
+    // Agent sessions present views with the harness's execution.views.present instead.
     for host in [AiHost::AgentSession, AiHost::ChannelBot, AiHost::Mcp] {
         let toolset = tools_for(host);
         assert!(

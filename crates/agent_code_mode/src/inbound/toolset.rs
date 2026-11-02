@@ -75,7 +75,9 @@ enum CodeHost {
         "\n",
         include_str!("toolset/shared/program.md"),
         "\n",
-        include_str!("toolset/shared/runtime.md")
+        include_str!("toolset/shared/runtime.md"),
+        "\nPresentView schema; execution.views.present(view) takes its view property:\n",
+        include_str!("../../../dynamic_ui/src/present_view.schema.generated.json")
     )
 )]
 pub struct ExecuteCode {

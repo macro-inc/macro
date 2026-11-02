@@ -1,6 +1,7 @@
 /**
  * A view is message content, rendered directly from the call's view: a
- * DisplayResults call, or the call the harness presents for PresentView.
+ * DisplayResults call, or the call the harness presents for
+ * `execution.views.present`.
  */
 
 import { DashboardToolView } from '@app/features/dynamic-ui/DashboardToolView.lazy';

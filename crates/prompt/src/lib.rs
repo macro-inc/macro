@@ -232,9 +232,8 @@ mod tests {
             SESSION_TOOL_USE_PROMPT.to_string(),
             CODE_MODE_SESSION_TOOL_USE_PROMPT.to_string(),
         ] {
-            assert!(prompt.contains("presenting them with `PresentView`"));
             assert!(prompt.contains("the user will not ask"));
-            assert!(prompt.contains("`execution.views.present`"));
+            assert!(prompt.contains("presenting them with `execution.views.present`"));
             // The mention rule says IMPORTANT twice; a view's items are its
             // one exception, or the agent names them again under the view.
             assert!(prompt.contains("view opens it, so do not mention it again in your reply"));

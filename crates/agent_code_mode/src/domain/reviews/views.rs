@@ -23,7 +23,8 @@ const PROBLEMS_LISTED: usize = 10;
 #[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PresentView {
-    /// A dynamic-UI view: the object the `PresentView` tool takes as `view`.
+    /// A dynamic-UI view, in the format of the PresentView schema in
+    /// ExecuteCode's description.
     #[schema(value_type = Object)]
     pub view: Value,
     /// The code execution presenting it, when one does.
@@ -50,17 +51,6 @@ impl ReviewService {
     ) -> Result<(), CodeModeError> {
         let session = self.authorize(access, actor).await?;
         self.present_view_owned(session, input).await
-    }
-
-    /// Present a view from an authenticated agent session, including non-code agents.
-    pub async fn present_view_for_session(
-        &self,
-        session: &agent_session::domain::model::AgentSession,
-        actor: &MacroUserIdStr<'static>,
-        input: PresentView,
-    ) -> Result<(), CodeModeError> {
-        self.authorize_session(session, actor).await?;
-        self.present_view_owned(session.id, input).await
     }
 
     /// The span records how big the view was and how many problems turned it

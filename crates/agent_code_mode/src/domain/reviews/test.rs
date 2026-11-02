@@ -959,25 +959,5 @@ async fn a_view_is_presented_only_by_its_session_and_execution() {
             .await,
         Err(CodeModeError::NotFound)
     ));
-    let mut session = agent_session::testing::test_agent_session(f.session);
-    // The test session's owner differs from the authoritative session owner.
-    assert!(matches!(
-        f.service
-            .present_view_for_session(&session, &f.actions.owner, input(None))
-            .await,
-        Err(CodeModeError::Forbidden)
-    ));
-    session.owner_id = f.actions.owner.clone().into();
-    f.service
-        .present_view_for_session(&session, &f.actions.owner, input(None))
-        .await
-        .unwrap();
-    f.actions.archived.store(true, Ordering::SeqCst);
-    assert!(matches!(
-        f.service
-            .present_view_for_session(&session, &f.actions.owner, input(None))
-            .await,
-        Err(CodeModeError::Forbidden)
-    ));
-    assert_eq!(f.actions.views.lock().unwrap().len(), 1);
+    assert!(f.actions.views.lock().unwrap().is_empty());
 }

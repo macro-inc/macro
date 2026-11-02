@@ -927,7 +927,7 @@ For Macro's in-process agent, the backend evaluates the session owner's
 `ai-code-mode` flag once per conversational turn. Enabled users get a smaller
 direct toolset: SDK-supported searches, reads, listing, and data operations run
 through the SDK. Document editing keeps the direct `EditDocument` tool, and
-`PresentView` remains available for presenting results. Workspace feeds and
+results are presented with `execution.views.present`. Workspace feeds and
 mixed-entity name searches keep the direct `ListEntities` and `NameSearch` tools,
 including agent sessions. `ContentSearch` supports session history. The legacy
 chat and workspace SDK namespaces are excluded from agent documentation. Methods
@@ -1463,18 +1463,17 @@ row opens; syntax highlighting may appear after the diff text. Opening a session
 or expanding a group should leave the app responsive, even when the session
 contains many file edits.
 
-Agent sessions present views with `PresentView`, a review with nothing saved.
+Agent sessions present views from code with `execution.views.present(view)`,
+a review with nothing saved; there is no direct view tool.
 The agent decides when to present one without being asked, usually at the end
 of a turn that made, changed or sent something, or to answer a question about
 workspace data, and it does not mention again in its reply what the view shows.
 The view is checked against the renderer's schema before it is drawn: a view
 that does not match is never presented, and the agent is told what to fix.
-The agent's own call is a receipt row; the call the harness presents
-(`view_<id>`) draws the view directly in the reply and stays visible without
-opening a tool row. Code presents the same view with
-`execution.views.present(view)` while the program runs. Every agent chain,
-including external coding agents connected through Macro's MCP server, gets
-the tool. Older sessions' `DisplayResults` calls, and AI chat's, still render
+The call the harness presents (`view_<id>`) draws the view directly in the
+reply and stays visible without opening a tool row. Every agent chain with
+`ExecuteCode`, including external coding agents connected through Macro's MCP
+server, can present one. Older sessions' `DisplayResults` calls, and AI chat's, still render
 the same way.
 
 A presented view breaks tool groups before and after itself; later calls start

@@ -549,8 +549,8 @@ const PRESENTED_VIEW = {
   ],
 };
 
-/** A PresentView call as the session holds it: the agent's own call, or the
- * one the harness presents (`view_<id>`). */
+/** The PresentView call the harness presents (`view_<id>`) for
+ * `execution.views.present`. */
 function presentViewPart(id: string): MessagePart {
   return {
     kind: 'tool_use',
@@ -568,8 +568,7 @@ function presentViewPart(id: string): MessagePart {
   };
 }
 
-/** The agent's PresentView call is its receipt; the call the harness
- * presents draws the view between collapsed runs. */
+/** The call the harness presents draws the view between collapsed runs. */
 function PresentViewDemo() {
   const message: FoldedMessage = {
     agentSessionId: 'present-view-demo',
@@ -584,7 +583,6 @@ function PresentViewDemo() {
     parts: [
       ...TOOL_REPLAY_PARTS.slice(0, 2),
       { kind: 'text', text: 'Here is where the launch stands:' },
-      presentViewPart('present-view-call'),
       presentViewPart('view_present-view-demo'),
     ],
   };
@@ -606,11 +604,6 @@ function PresentViewDmDemo() {
         sealed
         rows={[
           { id: 'search', label: 'Searched', status: 'completed' },
-          {
-            id: 'present-view-call',
-            label: 'Present view',
-            status: 'completed',
-          },
           {
             id: 'view_present-view-demo',
             label: 'Present view',
@@ -1182,7 +1175,7 @@ export default function AgentUiGallery() {
           <Item label="DisplayResults (inline between groups)">
             <DisplayResultsDemo />
           </Item>
-          <Item label="PresentView (receipt, then the presented view)">
+          <Item label="Presented view">
             <PresentViewDemo />
           </Item>
           <Item label="PresentView in a DM reply">

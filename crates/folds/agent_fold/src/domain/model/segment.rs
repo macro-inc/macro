@@ -419,8 +419,8 @@ fn tool_row(
 }
 
 /// The view a presented `PresentView` call shows. Only the call the harness
-/// presents, `view_<id>`, carries one: the agent's own call is its receipt,
-/// and a view it turned back was never presented.
+/// presents for `execution.views.present`, `view_<id>`, carries one; a view
+/// it turned back was never presented.
 fn presented_view(
     id: &str,
     name: &ToolName,

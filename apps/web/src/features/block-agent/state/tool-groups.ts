@@ -141,8 +141,8 @@ export function presentedReviewId(part: MessagePart): string | undefined {
   return part.id === `review_${input.reviewId}` ? input.reviewId : undefined;
 }
 
-/** The view a server-authored PresentView call presents, as the model wrote
- * it. The agent's own PresentView call is its receipt, like PresentReview's.
+/** The view a server-authored PresentView call (`view_<id>`) presents, as
+ * the model passed it to `execution.views.present`.
  */
 export function presentedView(part: MessagePart): object | undefined {
   if (

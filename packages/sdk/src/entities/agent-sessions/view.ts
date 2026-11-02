@@ -4,7 +4,7 @@ import type { MacroClient } from '../../utils/client';
 import type { AgentSession } from './agent-session';
 import type { CodeExecution } from './code-execution';
 
-/** A dynamic-UI view: the object the `PresentView` tool takes as `view`. */
+/** A dynamic-UI view, in the format of the PresentView schema in ExecuteCode's description. */
 export type SessionView = PresentView['view'];
 
 /**

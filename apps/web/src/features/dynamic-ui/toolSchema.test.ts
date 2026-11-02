@@ -100,8 +100,8 @@ describe('DisplayResults tool contract', () => {
   });
 });
 
-describe('PresentView tool contract', () => {
-  it('matches the complete schema included by the Rust tool', () => {
+describe('PresentView contract', () => {
+  it('matches the complete schema ExecuteCode includes', () => {
     expect(readFileSync(PRESENT_VIEW_GENERATED, 'utf8')).toBe(
       `${JSON.stringify(presentViewToolSchema(), null, 2)}\n`
     );
@@ -119,6 +119,7 @@ describe('PresentView tool contract', () => {
     expect(schema.title).toBe('PresentView');
     expect(schema.description).toContain('the user will not ask');
     expect(schema.description).toContain('never invent ids');
+    expect(schema.description).toContain('execution.views.present(view)');
     expect(schema.description).toContain('checked against this schema');
     expect(schema.required).toEqual(['view']);
   });

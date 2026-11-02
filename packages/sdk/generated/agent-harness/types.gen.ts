@@ -1719,7 +1719,8 @@ export type PermissionAnswer = {
 export type PresentView = {
     executionId?: null | ExecutionId;
     /**
-     * A dynamic-UI view: the object the `PresentView` tool takes as `view`.
+     * A dynamic-UI view, in the format of the PresentView schema in
+     * ExecuteCode's description.
      */
     view: {
         [key: string]: unknown;

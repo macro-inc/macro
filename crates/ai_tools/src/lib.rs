@@ -214,7 +214,7 @@ pub enum AiHost {
     /// agent loop's finisher puts the call to the user over ACP and the tool
     /// returns the outcome - so the prompt describes a review card the agent
     /// waits on, never a pending composer. It presents views with the
-    /// harness's `PresentView` instead of `DisplayResults`.
+    /// harness's `execution.views.present` instead of `DisplayResults`.
     AgentSession,
     /// The channel-mention bot: no composer, so `CreateCalendarEvent`
     /// executes directly in the agent loop and `SendEmail` is omitted. Replies
@@ -315,8 +315,8 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
             .add_tool::<LoadTools, ToolServiceContext>(),
         AiHost::Mcp => toolset,
     };
-    // Agent sessions present views with the harness's `PresentView`, which
-    // checks a view before it is drawn and posts it with a DM reply.
+    // Agent sessions present views with the harness's `execution.views.present`,
+    // which checks a view before it is drawn and posts it with a DM reply.
     let toolset = match host {
         AiHost::Chat => toolset.add_tool::<DisplayResults, ToolServiceContext>(),
         AiHost::AgentSession | AiHost::ChannelBot | AiHost::Mcp => toolset,
@@ -398,7 +398,7 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
 pub fn all_tool_frontend_schemas() -> FrontendSchemas {
     frontend_schemas_builder()
         .merge(&tools_for(AiHost::AgentSession))
-        // Chat's view tool, which agent sessions also used before PresentView.
+        // Chat's view tool, which agent sessions also used before `execution.views.present`.
         .merge(&AsyncToolCollection::new().add_tool::<DisplayResults, ToolServiceContext>())
         .merge(&agent_code_mode::inbound::toolset::toolset())
         // Persisted legacy calls still render, but are never executable or advertised.
