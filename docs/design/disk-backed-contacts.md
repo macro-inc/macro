@@ -9,9 +9,8 @@ The contact debug inspector, Calendar search's organizer/attendee pickers,
 Drive creator filters and CRM Notes creator filters now use bounded windows. Explicit selected ID/email lookup reads viewer-scoped
 keys offline and authoritative bounded batches online; selected values remain
 independent of suggestions. Other product menus still retain legacy arrays.
-**Next step:** expose the new core person-policy API through native/browser hosts,
-publish channel/inbox context in bounded batches, and cut Quick Access/shared
-recipients over to it. Their old full-list source remains until that wiring lands.
+**Next step:** publish channel/inbox context in bounded batches, then cut
+Quick Access/shared recipients over to the bounded host API. Their old full-list source remains until that wiring lands.
 Soup/CRM owner filters and Tasks' AI-filter catalog also remain.
 
 ## Goal and scope
@@ -137,7 +136,12 @@ normalized keys. It fences context publication by account, storage generation
 and compare-and-set epochs; incomplete snapshots report pending. Context-only
 stubs cannot become contacts. SQL-filtered records stream into at most `limit + 1`
 unique winners, with exclusions and DM deduplication applied before the limit.
-This core API is **not yet exposed through host transports or used by Quick Access**.
+The API is now exposed through browser/native `CacheHost.people`, with generated
+Rust/Zod contracts, coordinator protocol 12, and dedicated native commands. Missing
+capabilities return unsupported on reads and reject writes; scope/storage failures
+never downgrade to legacy hydration. Successful context writes send only person
+hydration hints. **Quick Access still does not use it**; context publishing and
+consumer cutover remain pending.
 Its joined-record scan is slower than ordinary covering-only title search; do not
 claim the UI cutover or whole-app memory goal complete from these engine tests.
 
@@ -161,7 +165,8 @@ claim the UI cutover or whole-app memory goal complete from these engine tests.
   `directory.ts` maps returned names directly without populating the global name store.
 - [ ] Wire DM recency, deduplication, and secondary-inbox exclusions end to end.
   The core policy, scoped context lifecycle and before-limit tests are implemented;
-  the channel/inbox context producer and host/consumer wiring are pending.
+  browser/native transport is verified. The channel/inbox context producer and
+  consumer wiring remain pending.
   Relationship `updated_at` is not equivalent to DM activity.
 - [x] Add bounded search/browse under `apps/web/src/lib/queries/contacts`, with
   pending/error, snapshot/partial/cold, and offline/source status. Cursors bind to

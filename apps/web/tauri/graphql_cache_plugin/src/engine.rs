@@ -35,6 +35,7 @@ mod access;
 use access::EngineAccess;
 
 mod calendar;
+mod people;
 mod soup;
 pub use calendar::CalendarRangeResultWire;
 pub use soup::{

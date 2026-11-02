@@ -141,6 +141,77 @@ describe('createTauriCacheHost', () => {
     host.dispose();
   });
 
+  it('uses dedicated person commands and never turns a missing writer into success', async () => {
+    const scope = {
+      identity: 'macro|viewer@example.com',
+      storageGeneration: '00000000-0000-4000-8000-000000000001',
+    };
+    const update = {
+      scope,
+      epoch: '00000000-0000-4000-8000-000000000002',
+      action: { kind: 'commit' },
+    } as const;
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'graphql_cache_people_context')
+        throw new Error(`Command ${command} not found`);
+      return null;
+    });
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    if (!host.people) throw new Error('Missing person transport');
+    await expect(host.people.context(scope)).resolves.toEqual({
+      kind: 'unsupported',
+    });
+    await expect(host.people.update(update)).rejects.toThrow('unsupported');
+    expect(
+      invokeMock.mock.calls.some(
+        ([command]) =>
+          command === 'graphql_cache_write' ||
+          command === 'graphql_cache_hydrate' ||
+          command === 'graphql_cache_people_update'
+      )
+    ).toBe(false);
+    host.dispose();
+  });
+
+  it('keeps person scope errors fatal and emits only committed hydration hints', async () => {
+    const scope = {
+      identity: 'macro|viewer@example.com',
+      storageGeneration: '00000000-0000-4000-8000-000000000001',
+    };
+    const update = {
+      scope,
+      epoch: '00000000-0000-4000-8000-000000000002',
+      action: { kind: 'commit' },
+    } as const;
+    let stale = true;
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'graphql_cache_people_update') {
+        if (stale) throw new Error('cache hydration scope changed');
+        return { revision: '8', revisionAdvanced: true };
+      }
+      return null;
+    });
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    if (!host.people) throw new Error('Missing person transport');
+    await expect(host.people.update(update)).rejects.toThrow(
+      'cache hydration scope changed'
+    );
+    expect(emitMock).not.toHaveBeenCalled();
+    stale = false;
+    await expect(host.people.update(update)).resolves.toBe('8');
+    expect(invokeMock).toHaveBeenLastCalledWith('graphql_cache_people_update', {
+      update,
+      traceparent: undefined,
+    });
+    expect(emitMock).toHaveBeenCalledWith('graphql-cache://cache-hydrated', {
+      revision: '8',
+      searchChangedBuckets: ['person'],
+    });
+    await host.people.update(update);
+    expect(emitMock).toHaveBeenCalledTimes(1);
+    host.dispose();
+  });
+
   it('never sends scoped hydration to an older native engine', async () => {
     invokeMock.mockImplementation(async (command: string) =>
       command === 'graphql_cache_search'

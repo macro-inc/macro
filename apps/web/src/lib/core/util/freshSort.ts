@@ -12,7 +12,6 @@ import {
 } from './dateSearch/dateParser';
 import { fuzzyScoreCommaSpaceSeparated } from './fuzzy';
 
-
 interface FuzzyFilterResult<T> {
   original: T;
   string: string;
@@ -220,8 +219,16 @@ function filterNameMatches<T>(
   return items.flatMap((item) => {
     const text = getName(item);
     const label = getDisplayName === getName ? text : getDisplayName(item);
-    const quality = nameMatchQuality(label, text, query, gapPenaltyWeight, startBonusDecay);
-    return quality === undefined ? [] : [{ original: item, string: text, score: quality * 100 }];
+    const quality = nameMatchQuality(
+      label,
+      text,
+      query,
+      gapPenaltyWeight,
+      startBonusDecay
+    );
+    return quality === undefined
+      ? []
+      : [{ original: item, string: text, score: quality * 100 }];
   });
 }
 

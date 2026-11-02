@@ -2142,6 +2142,59 @@ describe('CacheWorkerCore', () => {
     expect(onStorageResetRequired).not.toHaveBeenCalled();
   });
 
+  it('forwards person context through the worker without foreground invalidation or stale-write publication', async () => {
+    const engine = {
+      peopleContext: vi.fn().mockResolvedValue({ kind: 'missing' }),
+      peopleSearch: vi.fn().mockResolvedValue({ kind: 'contextPending' }),
+      peopleUpdate: vi
+        .fn()
+        .mockResolvedValue({ revision: '9', revisionAdvanced: true }),
+    };
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue(engine),
+    });
+    const port = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore();
+    core.addPort(port);
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+    const scope = {
+      identity: 'macro|viewer@example.com',
+      storageGeneration: '00000000-0000-4000-8000-000000000001',
+    };
+    const update = {
+      scope,
+      epoch: '00000000-0000-4000-8000-000000000002',
+      action: { kind: 'commit' },
+    } as const;
+    await core.handleRequest(port, { id: 2, kind: 'people-context', scope });
+    expect(engine.peopleContext).toHaveBeenCalledWith(scope);
+    await core.handleRequest(port, { id: 3, kind: 'people-update', update });
+    expect(engine.peopleUpdate).toHaveBeenCalledWith(update);
+    expect(port.postMessage).toHaveBeenCalledWith({
+      kind: 'cache-hydrated',
+      revision: '9',
+      searchChangedBuckets: ['person'],
+    });
+    expect(port.postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'cache-changed' })
+    );
+    port.postMessage.mockClear();
+    engine.peopleUpdate.mockRejectedValue(
+      new Error('cache hydration scope changed')
+    );
+    await core.handleRequest(port, { id: 4, kind: 'people-update', update });
+    expect(port.postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'cache-hydrated' })
+    );
+    expect(port.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 4,
+        ok: false,
+        error: 'cache hydration scope changed',
+      })
+    );
+  });
+
   it('forwards a guarded hydration and publishes nothing on scope rejection', async () => {
     const hydrateQuery = vi
       .fn()

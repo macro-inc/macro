@@ -48,7 +48,7 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
 
 - Email send persistence and cancellation belong to the frontend email journal, not the normalized cache or its mutation queue.
 
-- Projection 6 includes the visible local-part fallback in contact matching; storage schema remains 12. It is independent of the new core-only person-policy API.
+- Projection 6 includes the visible local-part fallback in contact matching; storage schema remains 12. It is independent of the context-aware person-policy API.
 - Projection 5 adds viewer-scoped contacts and removes public-profile membership; retention version 2 shares the bounded viewer-page budget with contact search/lookup snapshots. Neither changes storage schema 12 or clears durable data.
 - Quick Access projection version upgrades rebuild derived rows from retained normalized records; preserve the mutation queue and storage generation (covered by `src/storage/test/search_projection.rs`). Storage schema 12 is a separate, intentionally incompatible covering-index cutover: native reset drops queued writes; browser versioning opens a fresh file. See `../README.md#streaming-text-search`.
 

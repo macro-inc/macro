@@ -1,3 +1,10 @@
+import type {
+  PeopleContextState,
+  PeopleContextUpdate,
+  PeopleScope,
+  PeopleSearch,
+  PeopleSearchResult,
+} from '../people/generated';
 import type { IdentityBindingWire, MutationInspection } from '../protocol';
 /**
  * Typed surface of the generated wasm package (`cache-wasm`), loaded
@@ -104,6 +111,9 @@ export interface CacheEngine {
   search(
     request: SearchCacheArgs & { nowMs: number }
   ): Promise<SearchCachePage>;
+  peopleContext?(scope: PeopleScope): Promise<PeopleContextState>;
+  peopleUpdate?(update: PeopleContextUpdate): Promise<WriteResult>;
+  peopleSearch?(request: PeopleSearch): Promise<PeopleSearchResult>;
   entityFilter(
     request: EntityFilterCacheArgs
   ): Promise<EntityFilterCacheResult>;

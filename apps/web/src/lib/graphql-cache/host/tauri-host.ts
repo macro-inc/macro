@@ -85,7 +85,13 @@ type CacheChangedPayload = {
 } & CacheChangeHints;
 
 // Older native binaries omit the advancement bit and still receive OTA JS.
+import { createPeopleCache } from '../people/host';
+import { PEOPLE_UNSUPPORTED } from '../people/protocol';
+
 type NativeHydrationResult = HydrationResult & { revisionAdvanced?: boolean };
+const PEOPLE_CONTEXT_COMMAND = 'graphql_cache_people_context';
+const PEOPLE_SEARCH_COMMAND = 'graphql_cache_people_search';
+const PEOPLE_UPDATE_COMMAND = 'graphql_cache_people_update';
 
 export interface TauriHostOptions {
   scope: string;
@@ -175,6 +181,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   let entityFilterUnavailable = false;
   // Binaries before incremental watches still serve full reads.
   let watchUnavailable = false;
+  let peopleUnavailable = false;
   let scopedHydrationSupported: Promise<boolean> | undefined;
   // Native binaries before the calendar range index answer `unsupported`, so
   // the calendar keeps reading from the network until the app updates.
@@ -403,11 +410,77 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     'graphql-cache-host'
   );
 
+  async function publishHydration(
+    revision: CacheRevision,
+    advanced: boolean | undefined,
+    searchChangedBuckets: string[] | undefined,
+    unchangedViews?: string[]
+  ): Promise<void> {
+    const newlyObserved = observeRevision(parseCacheRevision(revision));
+    if (advanced === false || !newlyObserved) return;
+    try {
+      await emit(CACHE_HYDRATED_EVENT, {
+        revision,
+        ...(unchangedViews !== undefined ? { unchangedViews } : {}),
+        ...(searchChangedBuckets !== undefined ? { searchChangedBuckets } : {}),
+      });
+    } catch (error) {
+      // Notification failure must not turn a committed write into a retry.
+      console.warn('graphql cache hydration notification failed', error);
+    }
+  }
+
   const opId = (opKey: number) => `${clientId}:${opKey}`;
 
   return {
     clientId,
     liveQueries: true,
+    people: createPeopleCache({
+      async context(scope, traceparent) {
+        await ready;
+        if (peopleUnavailable) return { kind: 'unsupported' };
+        try {
+          return await request(PEOPLE_CONTEXT_COMMAND, { scope, traceparent });
+        } catch (error) {
+          if (!isMissingCommand(error, PEOPLE_CONTEXT_COMMAND)) throw error;
+          peopleUnavailable = true;
+          return { kind: 'unsupported' };
+        }
+      },
+      async search(args, traceparent) {
+        await ready;
+        if (peopleUnavailable) return { kind: 'unsupported' };
+        try {
+          return await request(PEOPLE_SEARCH_COMMAND, {
+            request: args,
+            traceparent,
+          });
+        } catch (error) {
+          if (!isMissingCommand(error, PEOPLE_SEARCH_COMMAND)) throw error;
+          peopleUnavailable = true;
+          return { kind: 'unsupported' };
+        }
+      },
+      async update(update, traceparent) {
+        await ready;
+        if (peopleUnavailable) throw new Error(PEOPLE_UNSUPPORTED);
+        let result: WriteResult;
+        try {
+          result = await request<WriteResult>(PEOPLE_UPDATE_COMMAND, {
+            update,
+            traceparent,
+          });
+        } catch (error) {
+          if (!isMissingCommand(error, PEOPLE_UPDATE_COMMAND)) throw error;
+          peopleUnavailable = true;
+          throw new Error(PEOPLE_UNSUPPORTED);
+        }
+        await publishHydration(result.revision, result.revisionAdvanced, [
+          'person',
+        ]);
+        return result.revision;
+      },
+    }),
 
     async currentRevision(): Promise<CacheRevision> {
       await ready;
@@ -659,24 +732,12 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
             'graphql_cache_hydrate',
             payload
           );
-      const newlyObserved = observeRevision(
-        parseCacheRevision(result.revision)
+      await publishHydration(
+        result.revision,
+        result.revisionAdvanced,
+        result.searchChangedBuckets,
+        result.unchangedViews
       );
-      if (result.revisionAdvanced === false || !newlyObserved) return result;
-      try {
-        await emit(CACHE_HYDRATED_EVENT, {
-          ...(result.unchangedViews !== undefined
-            ? { unchangedViews: result.unchangedViews }
-            : {}),
-          revision: result.revision,
-          ...(result.searchChangedBuckets !== undefined
-            ? { searchChangedBuckets: result.searchChangedBuckets }
-            : {}),
-        });
-      } catch (error) {
-        // Notification failure must not turn a committed hydration into a retry.
-        console.warn('graphql cache hydration notification failed', error);
-      }
       return result;
     },
 

@@ -1198,7 +1198,7 @@ Contact synchronization shares Soup's authenticated leader and rollout gate.
 Fetch-only transport returns one 500-row page for explicit scoped admission:
 the core checks the captured generation and expected/response identities under
 the same engine lock as the write, without switching accounts. Coordinator
-protocol 11 forwards that scope; native hosts refuse guarded writes on older
+protocol 12 forwards that scope; native hosts refuse guarded writes on older
 engines. Checkpoints advance only after persistence and a generation recheck.
 Invalidations coalesce on a 15-minute cadence without interrupting active scans;
 hourly passes refresh names. Scan omissions never delete records.
@@ -1239,8 +1239,14 @@ compare-and-set begin/patch/commit epochs; patches cap at 500 and incomplete
 snapshots report pending, not an empty directory. Search streams matching records
 into at most `limit + 1` unique winners, applying exclusions and DM deduplication
 before that limit. This joined-record path costs more than ordinary covering-only
-search; it does not change storage schema 12. Native/browser host transport and
-Quick Access/recipient source cutover remain pending.
+search; it does not change storage schema 12. `CacheHost.people` now exposes state,
+update and search through coordinator protocol 12 and dedicated native commands.
+Rust-derived Zod contracts validate ingress and bounded replies; missing native
+commands/older WASM report unsupported reads and reject writes. Scope and storage
+errors are never swallowed. Context updates publish person hydration hints only.
+Host/worker/native spans record operation, counts and opaque correlation metadata,
+never names, addresses or search text; live trace connectivity remains unverified.
+The channel/inbox context publisher and Quick Access/recipient source cutover remain pending.
 
 ## Cached email Quick Access
 

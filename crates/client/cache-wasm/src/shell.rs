@@ -41,6 +41,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
 mod calendar;
+mod people;
 #[cfg(test)]
 mod test;
 #[cfg(test)]

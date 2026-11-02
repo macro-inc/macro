@@ -8,6 +8,11 @@ export type IdentityBindingWire = {
 };
 
 import type { EntityResolverWire } from './exchange/entity-resolvers';
+import type {
+  PeopleContextUpdate,
+  PeopleScope,
+  PeopleSearch,
+} from './people/generated';
 
 /**
  * Wire protocol between page contexts and the cache worker (the `CacheHost`
@@ -90,6 +95,11 @@ export function isStaleHydrationScopeError(error: unknown): boolean {
     error instanceof Error && error.message === 'cache hydration scope changed'
   );
 }
+
+export type PeopleRequest =
+  | { kind: 'people-context'; scope: PeopleScope; traceparent?: string }
+  | { kind: 'people-update'; update: PeopleContextUpdate; traceparent?: string }
+  | { kind: 'people-search'; request: PeopleSearch; traceparent?: string };
 
 export type SearchProfile = 'quick-access-v1';
 
@@ -896,6 +906,7 @@ export type CacheRequest = { id: number } & (
       fragmentName: string;
       keys: string[];
     }
+  | PeopleRequest
   | {
       kind: 'search';
       request: SearchCacheArgs & { nowMs: number };

@@ -6,6 +6,7 @@ use super::*;
 /// switches identity or restores a response into a different storage generation.
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(any(test, feature = "schema"), derive(schemars::JsonSchema))]
 pub struct HydrationScope {
     /// Durable data generation observed before the network request.
     pub storage_generation: Uuid,

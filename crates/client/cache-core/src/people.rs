@@ -14,6 +14,7 @@ pub const MAX_PEOPLE_BATCH: usize = 500;
 /// and viewed-first recency. Group DMs do not occupy this slot.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(any(test, feature = "schema"), derive(schemars::JsonSchema))]
 pub struct DirectMessageFacts {
     /// Conversation identity.
     pub id: Uuid,
@@ -26,6 +27,7 @@ pub struct DirectMessageFacts {
 /// Client-owned ranking facts from the existing channels and email-link sources.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(any(test, feature = "schema"), derive(schemars::JsonSchema))]
 pub struct PersonFacts {
     /// Legacy user/recipient interaction timestamp, not relationship updated_at.
     pub last_interaction_ms: Option<i64>,
@@ -38,8 +40,13 @@ pub struct PersonFacts {
 /// One bounded, explicit fact update. The server still owns contact names/membership.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(any(test, feature = "schema"), derive(schemars::JsonSchema))]
 pub struct PersonFactPatch {
     /// Canonical target user identity.
+    #[cfg_attr(
+        any(test, feature = "schema"),
+        schemars(with = "String", length(min = 1, max = 1024))
+    )]
     pub user_id: MacroUserIdStr<'static>,
     /// Complete replacement of this person's local facts.
     pub facts: PersonFacts,
@@ -48,6 +55,7 @@ pub struct PersonFactPatch {
 /// Publication is separate from batching, so incomplete snapshots never look ready.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(any(test, feature = "schema"), derive(schemars::JsonSchema))]
 pub enum ContextAction {
     /// Start a full snapshot. Old per-record epochs are ignored after publication.
     Begin {
@@ -58,6 +66,7 @@ pub enum ContextAction {
     /// Apply at most 500 updates. Ready epochs also accept serial incremental patches.
     Patch {
         /// Explicit bounded updates.
+        #[cfg_attr(any(test, feature = "schema"), schemars(length(max = MAX_PEOPLE_BATCH)))]
         updates: Vec<PersonFactPatch>,
     },
     /// Publish the complete snapshot.
@@ -67,6 +76,7 @@ pub enum ContextAction {
 /// A serial producer must start a new epoch after an uncertain write outcome.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(any(test, feature = "schema"), derive(schemars::JsonSchema))]
 pub struct ContextUpdate {
     /// Account/storage admission fence.
     pub scope: HydrationScope,
@@ -79,6 +89,7 @@ pub struct ContextUpdate {
 /// Surface-specific priorities applied before limiting results.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(any(test, feature = "schema"), derive(schemars::JsonSchema))]
 pub enum PeopleMode {
     /// Exact/prefix labels, then deterministic relevance/recency and DM boosts.
     Command,
@@ -91,6 +102,7 @@ pub enum PeopleMode {
 /// Cursorless top-K query over the current cached directory, not a corpus-completeness claim.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(any(test, feature = "schema"), derive(schemars::JsonSchema))]
 pub struct PeopleSearch {
     /// Account/storage fence.
     pub scope: HydrationScope,
@@ -99,10 +111,12 @@ pub struct PeopleSearch {
     /// Shared subsequence input, capped at 512 UTF-8 bytes.
     pub query: String,
     /// Explicit exclusions, applied before ranking (for example self).
+    #[cfg_attr(any(test, feature = "schema"), schemars(with = "Vec<String>", length(max = MAX_PEOPLE_BATCH)))]
     pub excluded: Vec<MacroUserIdStr<'static>>,
     /// Sending-account domain for recipient/mention preference.
     pub sender_domain: Option<String>,
     /// At most 500 winners.
+    #[cfg_attr(any(test, feature = "schema"), schemars(range(min = 1, max = MAX_PEOPLE_BATCH)))]
     pub limit: usize,
     /// Injected wall clock for reproducible scoring.
     pub now_ms: i64,
@@ -111,10 +125,13 @@ pub struct PeopleSearch {
 /// Fully materialized winning person; neither the cache key nor DM id replaces user_id.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(any(test, feature = "schema"), derive(schemars::JsonSchema))]
 pub struct PersonHit {
     /// Viewer-scoped normalized key.
+    #[cfg_attr(any(test, feature = "schema"), schemars(with = "String"))]
     pub record_key: EntityKey<'static>,
     /// Target user identity.
+    #[cfg_attr(any(test, feature = "schema"), schemars(with = "String"))]
     pub user_id: MacroUserIdStr<'static>,
     /// Visible resolved contact name, with local-part email fallback.
     pub name: String,
@@ -135,6 +152,7 @@ pub struct PersonHit {
 /// Local search can be temporarily unavailable without asserting an empty directory.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
+#[cfg_attr(any(test, feature = "schema"), derive(schemars::JsonSchema))]
 pub enum PeopleSearchResult {
     /// No complete local ranking-context snapshot is published.
     ContextPending,
@@ -169,6 +187,7 @@ pub(crate) struct StoredFacts {
 /// Publication state of the cache-local context snapshot.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
+#[cfg_attr(any(test, feature = "schema"), derive(schemars::JsonSchema))]
 pub enum ContextState {
     /// No context has been written in this storage generation.
     Missing,
@@ -202,3 +221,9 @@ pub(crate) fn contact_key(viewer: &str, user: &str) -> EntityKey<'static> {
 }
 
 pub(crate) mod ranking;
+
+#[cfg(any(test, feature = "schema"))]
+pub mod schema;
+
+#[cfg(test)]
+mod test;

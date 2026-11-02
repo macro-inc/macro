@@ -1,4 +1,9 @@
 import {
+  isPeopleContextUpdate,
+  isPeopleScope,
+  isPeopleSearch,
+} from '../people/protocol';
+import {
   type CachePush,
   type CacheRequest,
   type CacheResponse,
@@ -24,8 +29,16 @@ import {
 
 export { isCachePush, isCacheResponse, isWorkerMessage };
 
+function isPeopleTraceparent(value: unknown): boolean {
+  return (
+    value === undefined ||
+    (typeof value === 'string' &&
+      /^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/.test(value))
+  );
+}
+
 /** Version of the topology envelope and routed cache RPC surface. */
-export const CACHE_COORDINATOR_PROTOCOL_VERSION = 11 as const;
+export const CACHE_COORDINATOR_PROTOCOL_VERSION = 12 as const;
 /**
  * Startup phases in order. The engine may touch storage only in
  * `opening-database`, which begins once it holds the database owner lock. It
@@ -733,6 +746,24 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
         Array.isArray(value.keys) &&
         value.keys.length <= MAX_RECORD_SELECTION_PAGE_SIZE &&
         value.keys.every(isValidNormalizedRecordKey)
+      );
+    case 'people-context':
+      return (
+        hasOnlyKeys(value, ['id', 'kind', 'scope', 'traceparent']) &&
+        isPeopleScope(value.scope) &&
+        isPeopleTraceparent(value.traceparent)
+      );
+    case 'people-update':
+      return (
+        hasOnlyKeys(value, ['id', 'kind', 'update', 'traceparent']) &&
+        isPeopleContextUpdate(value.update) &&
+        isPeopleTraceparent(value.traceparent)
+      );
+    case 'people-search':
+      return (
+        hasOnlyKeys(value, ['id', 'kind', 'request', 'traceparent']) &&
+        isPeopleSearch(value.request) &&
+        isPeopleTraceparent(value.traceparent)
       );
     case 'search':
       return (

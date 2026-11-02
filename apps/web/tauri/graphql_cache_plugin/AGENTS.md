@@ -9,6 +9,7 @@ one locked engine across webviews; cache policy belongs in `cache-core`.
 
 - `src/commands.rs`: IPC parsing and change notifications.
 - `src/engine.rs`: engine locking, schema installation, and shared-core calls.
+- `src/engine/people.rs`: scoped context and bounded person search; the three distinct `graphql_cache_people_*` commands make native capability explicit. JS emits only hydration hints after committed context writes; it never substitutes an unscoped write.
 - `src/engine/soup.rs`: composition of Soup-specific projection adapters.
 - `src/engine/test.rs` and `src/engine/test/`: native persistence and IPC contracts.
 

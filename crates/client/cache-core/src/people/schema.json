@@ -1,0 +1,518 @@
+{
+  "maxBatch": 500,
+  "maxQueryBytes": 512,
+  "schemas": {
+    "PeopleContextState": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "Publication state of the cache-local context snapshot.",
+      "oneOf": [
+        {
+          "description": "No context has been written in this storage generation.",
+          "properties": {
+            "kind": {
+              "const": "missing",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "A full snapshot is being assembled in bounded batches.",
+          "properties": {
+            "epoch": {
+              "description": "Snapshot identity.",
+              "format": "uuid",
+              "type": "string"
+            },
+            "kind": {
+              "const": "building",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "epoch"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "A complete snapshot is available for ranking.",
+          "properties": {
+            "epoch": {
+              "description": "Snapshot identity.",
+              "format": "uuid",
+              "type": "string"
+            },
+            "kind": {
+              "const": "ready",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "epoch"
+          ],
+          "type": "object"
+        }
+      ],
+      "title": "ContextState"
+    },
+    "PeopleContextUpdate": {
+      "$defs": {
+        "ContextAction": {
+          "description": "Publication is separate from batching, so incomplete snapshots never look ready.",
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "description": "Start a full snapshot. Old per-record epochs are ignored after publication.",
+              "properties": {
+                "kind": {
+                  "const": "begin",
+                  "type": "string"
+                },
+                "previousEpoch": {
+                  "description": "Compare-and-set predecessor; a delayed begin cannot supersede newer work.",
+                  "format": "uuid",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Apply at most 500 updates. Ready epochs also accept serial incremental patches.",
+              "properties": {
+                "kind": {
+                  "const": "patch",
+                  "type": "string"
+                },
+                "updates": {
+                  "description": "Explicit bounded updates.",
+                  "items": {
+                    "$ref": "#/$defs/PersonFactPatch"
+                  },
+                  "maxItems": 500,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "kind",
+                "updates"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Publish the complete snapshot.",
+              "properties": {
+                "kind": {
+                  "const": "commit",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "DirectMessageFacts": {
+          "additionalProperties": false,
+          "description": "The one-to-one conversation a command result opens, with its visible name\nand viewed-first recency. Group DMs do not occupy this slot.",
+          "properties": {
+            "id": {
+              "description": "Conversation identity.",
+              "format": "uuid",
+              "type": "string"
+            },
+            "name": {
+              "description": "Visible conversation label, independent of the contact's private name.",
+              "type": "string"
+            },
+            "timestampMs": {
+              "description": "Viewed-first command ordering timestamp.",
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "timestampMs"
+          ],
+          "type": "object"
+        },
+        "HydrationScope": {
+          "additionalProperties": false,
+          "description": "Scope captured before starting a background request. Guarded hydration never\nswitches identity or restores a response into a different storage generation.",
+          "properties": {
+            "identity": {
+              "description": "Expected authenticated response identity, not a record identifier.",
+              "type": "string"
+            },
+            "storageGeneration": {
+              "description": "Durable data generation observed before the network request.",
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "storageGeneration",
+            "identity"
+          ],
+          "type": "object"
+        },
+        "PersonFactPatch": {
+          "additionalProperties": false,
+          "description": "One bounded, explicit fact update. The server still owns contact names/membership.",
+          "properties": {
+            "facts": {
+              "$ref": "#/$defs/PersonFacts",
+              "description": "Complete replacement of this person's local facts."
+            },
+            "userId": {
+              "description": "Canonical target user identity.",
+              "maxLength": 1024,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "userId",
+            "facts"
+          ],
+          "type": "object"
+        },
+        "PersonFacts": {
+          "additionalProperties": false,
+          "description": "Client-owned ranking facts from the existing channels and email-link sources.",
+          "properties": {
+            "directMessage": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DirectMessageFacts"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional command-row substitution."
+            },
+            "lastInteractionMs": {
+              "description": "Legacy user/recipient interaction timestamp, not relationship updated_at.",
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "secondaryInbox": {
+              "description": "Connected secondary inboxes do not appear as recipient/person suggestions.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "secondaryInbox"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "A serial producer must start a new epoch after an uncertain write outcome.",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/ContextAction",
+          "description": "Snapshot lifecycle operation."
+        },
+        "epoch": {
+          "description": "Producer snapshot identity; stale patches cannot change a newer snapshot.",
+          "format": "uuid",
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/HydrationScope",
+          "description": "Account/storage admission fence."
+        }
+      },
+      "required": [
+        "scope",
+        "epoch",
+        "action"
+      ],
+      "title": "ContextUpdate",
+      "type": "object"
+    },
+    "PeopleScope": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Scope captured before starting a background request. Guarded hydration never\nswitches identity or restores a response into a different storage generation.",
+      "properties": {
+        "identity": {
+          "description": "Expected authenticated response identity, not a record identifier.",
+          "type": "string"
+        },
+        "storageGeneration": {
+          "description": "Durable data generation observed before the network request.",
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "storageGeneration",
+        "identity"
+      ],
+      "title": "HydrationScope",
+      "type": "object"
+    },
+    "PeopleSearch": {
+      "$defs": {
+        "HydrationScope": {
+          "additionalProperties": false,
+          "description": "Scope captured before starting a background request. Guarded hydration never\nswitches identity or restores a response into a different storage generation.",
+          "properties": {
+            "identity": {
+              "description": "Expected authenticated response identity, not a record identifier.",
+              "type": "string"
+            },
+            "storageGeneration": {
+              "description": "Durable data generation observed before the network request.",
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "storageGeneration",
+            "identity"
+          ],
+          "type": "object"
+        },
+        "PeopleMode": {
+          "description": "Surface-specific priorities applied before limiting results.",
+          "oneOf": [
+            {
+              "const": "command",
+              "description": "Exact/prefix labels, then deterministic relevance/recency and DM boosts.",
+              "type": "string"
+            },
+            {
+              "const": "recipient",
+              "description": "Exact addresses, address prefixes, word prefixes, then recipient weights.",
+              "type": "string"
+            },
+            {
+              "const": "mention",
+              "description": "Name/email relevance and user interaction recency for mentions.",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Cursorless top-K query over the current cached directory, not a corpus-completeness claim.",
+      "properties": {
+        "excluded": {
+          "description": "Explicit exclusions, applied before ranking (for example self).",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 500,
+          "type": "array"
+        },
+        "limit": {
+          "description": "At most 500 winners.",
+          "format": "uint",
+          "maximum": 500,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "mode": {
+          "$ref": "#/$defs/PeopleMode",
+          "description": "Surface ranking policy."
+        },
+        "nowMs": {
+          "description": "Injected wall clock for reproducible scoring.",
+          "format": "int64",
+          "type": "integer"
+        },
+        "query": {
+          "description": "Shared subsequence input, capped at 512 UTF-8 bytes.",
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/HydrationScope",
+          "description": "Account/storage fence."
+        },
+        "senderDomain": {
+          "description": "Sending-account domain for recipient/mention preference.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "scope",
+        "mode",
+        "query",
+        "excluded",
+        "limit",
+        "nowMs"
+      ],
+      "title": "PeopleSearch",
+      "type": "object"
+    },
+    "PeopleSearchResult": {
+      "$defs": {
+        "DirectMessageFacts": {
+          "additionalProperties": false,
+          "description": "The one-to-one conversation a command result opens, with its visible name\nand viewed-first recency. Group DMs do not occupy this slot.",
+          "properties": {
+            "id": {
+              "description": "Conversation identity.",
+              "format": "uuid",
+              "type": "string"
+            },
+            "name": {
+              "description": "Visible conversation label, independent of the contact's private name.",
+              "type": "string"
+            },
+            "timestampMs": {
+              "description": "Viewed-first command ordering timestamp.",
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "timestampMs"
+          ],
+          "type": "object"
+        },
+        "PersonHit": {
+          "description": "Fully materialized winning person; neither the cache key nor DM id replaces user_id.",
+          "properties": {
+            "directMessage": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DirectMessageFacts"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One-to-one command target, when present."
+            },
+            "email": {
+              "description": "Target email address.",
+              "type": "string"
+            },
+            "lastInteractionMs": {
+              "description": "User interaction timestamp for non-command surfaces.",
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "matchRank": {
+              "description": "Priority tier; larger ranks precede smaller ones.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "name": {
+              "description": "Visible resolved contact name, with local-part email fallback.",
+              "type": "string"
+            },
+            "recordKey": {
+              "description": "Viewer-scoped normalized key.",
+              "type": "string"
+            },
+            "score": {
+              "description": "Corpus-independent blended score within a priority tier.",
+              "format": "double",
+              "type": "number"
+            },
+            "timestampMs": {
+              "description": "Final recency tie-breaker.",
+              "format": "int64",
+              "type": "integer"
+            },
+            "userId": {
+              "description": "Target user identity.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "recordKey",
+            "userId",
+            "name",
+            "email",
+            "matchRank",
+            "score",
+            "timestampMs"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "Local search can be temporarily unavailable without asserting an empty directory.",
+      "oneOf": [
+        {
+          "description": "No complete local ranking-context snapshot is published.",
+          "properties": {
+            "kind": {
+              "const": "contextPending",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Bounded ranked results from the cache snapshot.",
+          "properties": {
+            "kind": {
+              "const": "page",
+              "type": "string"
+            },
+            "people": {
+              "description": "Fully materialized winners only.",
+              "items": {
+                "$ref": "#/$defs/PersonHit"
+              },
+              "type": "array"
+            },
+            "truncated": {
+              "description": "Additional matches were seen; refining the query may reveal them.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "kind",
+            "people",
+            "truncated"
+          ],
+          "type": "object"
+        }
+      ],
+      "title": "PeopleSearchResult"
+    }
+  }
+}

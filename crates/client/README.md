@@ -317,7 +317,10 @@ Search joins the existing person projection to normalized records one row at a
 time, applying secondary-inbox/explicit exclusions, per-surface scores and DM
 deduplication before a bounded heap. Generic title search remains covering-only.
 This uses schema 12 without adding a database or physical table; native/browser
-host commands and Quick Access/recipient source migration are still pending.
+hosts now expose state/update/search through dedicated commands. Rust-derived
+transport schemas are checked in `src/people/schema.json` and regenerated from
+`apps/web` with `bun run gen-cache-people-schema --rust`. Context publication by
+the channel/inbox sources and Quick Access/recipient migration are still pending.
 
 ## Browser OPFS writes
 
