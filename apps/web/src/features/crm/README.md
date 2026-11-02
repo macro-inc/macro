@@ -18,7 +18,7 @@ crm/
   crm-create.tsx / crm-link.tsx
   crm-actions.ts / crm-hide-action.ts / crm-action-items.ts / crm-user-action.tsx
   crm-search.ts / crm-tool-renderers.tsx
-  crm-route.ts  Route params, record trail, and legacy pipeline link decoding
+  crm-route.ts  Route params, record and item trails, and legacy pipeline link decoding
   route-views.tsx  Authenticated route and shared-view decoding
   crm-hosted-content.ts  Split content that opens Customers on a pipeline or record
   *-adapter.*   Production sources, navigation, persistence, download, collection wiring
@@ -115,6 +115,25 @@ a record independently of the row; additional values use the shared overflow men
 Email still matches visible company domains and contact addresses for feed
 membership, but the row displays only stored properties, not inferred matches.
 No separate CRM association metadata lookup or row footer runs during paging.
+Linked Tasks, Email, Notes, Calls and Databases open through nested Customers
+routes from workspace activity and record sections. Tasks, Emails, Calls and
+Databases record sections append only `<item-id>` because their section determines
+the renderer; Tasks also omit the redundant `md/task` suffix. These sections reject
+redundant typed item URLs rather than retaining fallback routes. Workspace activity
+retains `<item-type>/<item-id>` and document metadata; record Files and overview
+notes use document-metadata routes restricted to those sections. The route stores
+the item name and record trail in entry state. Route params retain the record and
+section; pane search retains the workspace tab. `route-adapter.ts` owns item
+navigation and close/history restoration. Keep workspace/pipeline item variants
+in its shared route-family table and identify history entries through merged route
+params instead of enumerating item route IDs.
+`views/item-detail.tsx` renders authorized details in the existing CRM shell
+with source, record trail and item breadcrumbs, omitting section labels such as
+Tasks and Files. The current record breadcrumb returns to the captured section
+and entry state. Preview headers append their own live title and menu after the
+source trail without an extra separator; do not duplicate the selected title in
+the prefix. Modified clicks keep their existing split behavior.
+Standalone record previews retain their normal navigation outside the workspace.
 Record-detail lists and activity membership remain unchanged.
 Sidebar Tasks reuse the production Tasks filters, sort, grouping, and list/board/Gantt
 layouts (subject to the normal feature flags and touch fallback). They use a separate

@@ -796,7 +796,6 @@ export default {
     goForward: 'आगे जाएं',
     createNewSplit: 'नया स्प्लिट बनाएं',
     close: 'बंद करें',
-    returnToList: 'सूची पर वापस जाएं',
     previousItem: 'पिछला आइटम',
     nextItem: 'अगला आइटम',
     itemNavigation: 'आइटम नेविगेशन',
