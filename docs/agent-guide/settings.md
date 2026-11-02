@@ -85,6 +85,9 @@ same rows. Outlook appears only once `/link/email/providers` offers it to the
 account (the `enable-outlook` flag); Integrations keeps an Outlook row with
 Manage alone for an account that already has an Outlook inbox. Its **Email settings**
 gear opens the dedicated page, and Email links to Notifications and Calendar.
+Outlook is in beta: the Connect email chooser's Outlook option, each Outlook
+inbox row, **Connect an Outlook account**, and the Integrations Outlook row
+carry a **Beta** badge (`OutlookBetaBadge`).
 With a composer open, save a changed signature or reply-signature preference and
 verify its preview updates. Once the account refresh completes, reopen a composer
 offline and confirm it uses the saved settings.
