@@ -86,8 +86,8 @@ keeps the meeting link last. Start an empty form by adding a section, then its q
   Selecting the question puts its Required switch at the bottom right, with
   duplicate, remove, and more actions on the left.
 - Drag by the six-dot handle (mouse: move 4 px; touch: hold 200 ms). A line
-  shows where it lands; a red line with a note means a gate checks that
-  question and it must stay above the gate. Escape cancels; nothing saves
+  shows where it lands; a red line with a note means a gate or a section's
+  condition checks that question and it must stay above it. Escape cancels; nothing saves
   until the drop. Keyboard: focus a handle, **Space**, **↑/↓**, **Space** to
   drop, **Escape** to cancel, **Tab** leaves (cancelling).
 - Sections drag by their own handle. A gate section's **Add rule / Edit rules**
@@ -96,6 +96,14 @@ keeps the meeting link last. Start an empty form by adding a section, then its q
   Rules are sent to respondents' browsers, so keep confidential criteria out.
   A gate whose rule tests a question that is gone shows **Remove broken
   rules**.
+- A questions section after another one has **Show only when…** in its
+  **⋯** menu. It opens the same condition editor, over questions of earlier
+  sections, in a **Show this section only** row under the section header; the
+  row then reads the rule (`IF Team is Contractor`) with **Edit** and
+  **Remove**, and the routing footer above it says where a skipped section
+  leads ("Continue to section 2, or skip to section 3"). Removing the last
+  question a condition tests removes the condition, and a condition naming a
+  question that went in the grid shows **Remove broken rules**.
 - "N columns not on this form" at the bottom lists table columns that are not
   questions; **Add** puts one on the form.
 - Layout edits collaborate live through Loro. Other editors' selections appear
@@ -165,7 +173,13 @@ form is open; anonymous visitors cannot. The response page has no top bar:
 it uses the builder’s centered 768px content column, plain title and description,
 and questions grouped within a single section card. Public sign-in guidance
 sits below the form. One section per screen with
-**Back / Next**, **Submit** on the last. Required fields keep their asterisks;
+**Back / Next**, **Submit** on the last. A section with a condition is shown
+only when the answers of the sections shown before it pass it, and skipped
+otherwise: Back and Next skip it, "Section N of M" counts only the sections
+shown, its required questions are not required, and its answers are not
+sent (an edited response clears them). Answers typed into a section that a
+changed earlier answer later skips stay on screen if the respondent goes back
+and chooses it again. Required fields keep their asterisks;
 the legend and response-editing guidance sit below the questions. Next checks required answers and any
 gate locally; a failing gate shows "This form can't take your response" with
 the gate's message (never its rules), **Check my answers** and, signed in,
