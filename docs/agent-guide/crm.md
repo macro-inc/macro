@@ -19,8 +19,9 @@ stage or outcome preserves its links. Linking requires edit access to the CRM
 target and view access to the source database. It never shares the source.
 Inaccessible and trashed sources are omitted; restoring access or the database
 reveals existing links again. Previews refresh while mounted and use current
-names and cells. Deleting a source row/table/database or the target permanently
-cleans up its links; undoing a source deletion does not recreate the CRM links.
+names and cells. Permanently deleting a source row, table, database, or target
+removes its links. Trashing a database hides its links; restoring it reveals
+the existing links again.
 Each company or entry supports up to 100 links.
 
 Verify company/deal isolation, multiple links, source rename/delete/revocation,
