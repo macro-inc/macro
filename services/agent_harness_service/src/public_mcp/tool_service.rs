@@ -46,17 +46,17 @@ fn definitions<Context>(toolset: &AsyncToolCollection<Context>) -> impl Iterator
 /// A tool context that runs its tools for the caller the request authenticated.
 pub trait CalledBy {
     /// Run mutating tools for `caller`, still on the authenticated user's behalf.
-    fn called_by(self, caller: &ToolCaller) -> Self;
+    fn called_by(self, caller: &ToolCaller) -> impl Future<Output = Self> + Send;
 }
 
 impl CalledBy for ai_tools::ToolServiceContext {
-    fn called_by(self, caller: &ToolCaller) -> Self {
-        self.for_caller(caller)
+    async fn called_by(self, caller: &ToolCaller) -> Self {
+        self.for_caller(caller).await
     }
 }
 
 impl CalledBy for () {
-    fn called_by(self, _caller: &ToolCaller) -> Self {}
+    async fn called_by(self, _caller: &ToolCaller) -> Self {}
 }
 
 /// Code mode for flagged users: `tools/list` is the SDK entrypoints only.
@@ -356,7 +356,7 @@ where
         let result = match self
             .toolset
             .try_tool_call(
-                self.context.clone().called_by(&caller),
+                self.context.clone().called_by(&caller).await,
                 request_context,
                 &request.name,
                 &arguments,

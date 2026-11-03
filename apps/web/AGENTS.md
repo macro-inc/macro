@@ -23,6 +23,10 @@
 
 ## Verifying a change in a real browser
 
+ID-only user mention rendering, name lookup failure, and composer save/reopen
+are covered on desktop/tablet/phone by `user-mentions.browser.e2e.ts` in the
+LexicalMarkdown core browser suite (see its README).
+
 During iterative visual tweaks, use focused browser verification; defer full typechecks and CI checks until the batch is ready or the user requests them.
 
 Any user-visible change should be exercised in a browser before you call it fixed — type-check, biome, and vitest all pass on code that still has the interaction bug.
@@ -314,7 +318,9 @@ feature code to cover a remount.
 Project identity chips use cache-first reads and the shared `GraphqlUser.initiative`
 entity resolver to reuse complete authorized records from project lists or details.
 Keep cold row metadata reads non-suspending so virtual scrolling never detaches
-its list; permission revalidation remains independent of row mounts.
+its list; permission revalidation remains independent of row mounts. Project
+reads retain client-scoped denial state across remounts and immediately reauthorize
+previous-viewer cache hits; older requests never clear newer denial decisions.
 
 Resolve server date-group keys through the shared `DATE_GROUP_BUCKETS` metadata
 in `lib/queries/soup/grouped/api.ts` for labels and display order; cached Mail
@@ -512,7 +518,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   for checkbox, row, Only, keyboard, and touch behavior.
 - Keep added external chats (WhatsApp today) in External at `/external/chat/:chatId` with their own queries (`features/external-chat`); sharing controls viewing and the viewer's own provider membership controls sending. Never route them through channel context or services.
 - All API/network calls live in service-clients.
-- Open projects through `openProject` (`features/projects/open-project.ts`): it
+- Preview Home project rows with the shared `ProjectDetail`; preserve its project
+  search namespace, comment target, and Home breadcrumb. Touch and explicit split
+  activation use the full project route. Open other projects through `openProject` (`features/projects/open-project.ts`): it
   retargets an already-open project split to the section or comment in place.
   Shared open paths (unified list rows) use its `projectHostedContent`, whose
   identity is the project itself, so the router focuses the split already
