@@ -120,7 +120,7 @@ async fn company_name_prefers_custom_then_directory_then_primary_domain(pool: Pg
     assert_eq!(directory.name, "Dir Directory");
     let bare_parent = read(&pool, MessageParent::CrmCompany(bare)).await.unwrap();
     assert_eq!(bare_parent.name, "first.test");
-    assert_eq!(bare_parent.company_id, bare);
+    assert_eq!(bare_parent.company_id, Some(bare));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -135,7 +135,7 @@ async fn contact_resolves_its_company_and_falls_back_to_email(pool: PgPool) {
         named,
         CrmParentFacts {
             team_id,
-            company_id,
+            company_id: Some(company_id),
             name: "Ada".into(),
         }
     );

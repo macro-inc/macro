@@ -64,6 +64,9 @@ async function resolveActorName(
   ) {
     return meta.content.botName;
   }
+  if (meta.tag === 'routine_run_finished') {
+    return meta.content.routineName;
+  }
   if ('senderDisplayName' in meta.content && meta.content.senderDisplayName) {
     return meta.content.senderDisplayName;
   }
@@ -160,10 +163,11 @@ export async function maybeHandlePlatformNotification(
   delivery: { silent?: boolean } = {}
 ) {
   // Ignore notification types that should not show as browser notifications.
-  // GitHub PR notifications should remain visible in-app, but should not
-  // render as browser/system popups.
+  // GitHub PR and routine run notifications should remain visible in-app, but
+  // should not render as browser/system popups.
   if (
     notification.notification_metadata.tag === 'document_mention' ||
+    notification.notification_metadata.tag === 'routine_run_finished' ||
     (GITHUB_EVENT_TYPES as readonly string[]).includes(
       notification.notification_metadata.tag
     )

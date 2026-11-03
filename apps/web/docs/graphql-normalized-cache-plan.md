@@ -783,8 +783,13 @@ unrelated fields.
 ### Adoption and mutation coverage
 
 Mounted project details, project identity chips, and agent-session mentions use
-this live path as well. Mention lookups share stable batches: adding another
-visible item does not clear an existing item's data or restart its request.
+this live path as well. Project identity reads are cache-first; the shared
+`GraphqlUser.initiative` entity resolver lets them reuse complete authorized
+project records loaded by Soup or detail queries, without fetching on row remount.
+Missing fields still require an authorized network read. Detail reads retain
+cache-and-network behavior, and identity reads retain explicit permission
+revalidation. Mention lookups share stable batches: adding another visible item
+does not clear an existing item's data or restart its request.
 Project creation links the complete server-normalized record to its detail query,
 including when the user root is not cached yet. Async creation stops publishing
 after viewer changes, cache replacement, or storage reset.
@@ -795,11 +800,14 @@ property in its ordinary create request. Project descriptions use the project's
 collaborative surface, provisioned by an authoritative ensure mutation.
 
 Permissions and server-owned membership still revalidate on activity, focus, and
-the existing project polling interval. A denied mounted read stays hidden across
-cache hits until an authorized network response succeeds. Disabled detail reads
-and results for another viewer are not exposed. Mentions also refresh on session
-rename, deletion, metadata updates, and reconnect when the normalized cache is
-unavailable.
+the existing project polling interval. Project denials are scoped to the client,
+viewer, project, and operation, surviving row remounts until a fresh authorized
+network response succeeds. Recovery requests capture the current denial version;
+older responses and cache updates cannot clear a newer denial. A rejected
+previous-viewer cache hit triggers one immediate network recovery per activation.
+Disabled reads and results for another viewer are not exposed. Other query
+consumers retain mount-local denial state. Mentions also refresh on session rename,
+deletion, metadata updates, and reconnect when the normalized cache is unavailable.
 Invalidations arriving during a refresh cause a trailing authorized read instead
 of being discarded; simultaneous refresh requests share one read.
 

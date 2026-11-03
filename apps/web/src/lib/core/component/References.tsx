@@ -9,7 +9,7 @@ import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { toast } from '@core/component/Toast/Toast';
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { itemToBlockName } from '@core/constant/allBlocks';
 import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
 import { getDisplayNameParts, tryMacroId } from '@core/user';
 import { compareDateDesc, type DateValue } from '@core/util/date';
@@ -389,12 +389,10 @@ export function References(props: ReferenceProps) {
     event?: KeyboardEvent | MouseEvent
   ) => {
     if (isAccessiblePreviewItem(item) && item.type === 'document') {
-      const blockId = item.id;
-      const blockType = fileTypeToBlockName(item.fileType);
       navigateToItem({
         event,
-        blockName: blockType,
-        blockId,
+        blockName: itemToBlockName(item),
+        blockId: item.id,
       });
     } else {
       toast.failure('Failed to open reference');

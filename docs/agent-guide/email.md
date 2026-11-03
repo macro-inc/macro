@@ -131,7 +131,10 @@ further reloads, even while an offline edit is still queued.
 Opening an attachment opens it in a split from its Drive copy, except a
 calendar file: it opens its event (see the calendar invitations section of the
 calendar guide), or downloads when Macro could not read one, and creates no
-Drive file.
+Drive file. Every received attachment chip, of any file type, has a download
+button joined to the filename that saves the file without opening it. Images
+and videos keep their previews and get the same chip. Cloud-reference chips
+stay open-only.
 
 Imported Outlook attachments keep their provider identity, including inline
 images. Cloud-reference attachment chips open the original Outlook message.
@@ -870,8 +873,8 @@ open shadow root: Playwright text locators can reach them, but a card's ordinary
 
 ### Read receipts
 
-With `enable-email-read-receipts` on and read receipts turned on for an inbox
-(see [Settings](settings.md#email-read-receipts)), messages sent from that
+With `enable-email-read-receipts` on and read receipts on for an inbox, which
+is the default (see [Settings](settings.md#email-read-receipts)), messages sent from that
 inbox show **Opened** or **Not opened** beside the date in the expanded
 message header. The desktop tooltip and the expanded header details (tap the
 header caret on touch) give the count and first and last open times. Only
