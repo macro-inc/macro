@@ -18,7 +18,9 @@ let
         printf 'app:x:%s:\n' "$(id -g)" > /tmp/group
         export NSS_WRAPPER_PASSWD=/tmp/passwd NSS_WRAPPER_GROUP=/tmp/group
         export LD_PRELOAD=${pkgs.nss_wrapper}/lib/libnss_wrapper.so
-        exec "$@"
+        # PID 1 ignores signals it has no handler for; without an init the
+        # kubelet waits out the whole grace period on every rollout.
+        exec ${pkgs.dumb-init}/bin/dumb-init -- "$@"
       ''}"
     ]
     ++ entrypoint;
@@ -122,7 +124,7 @@ rec {
                   { exec.command = w.readiness.exec; }
               )
               // {
-                periodSeconds = w.readiness.period or 5;
+                periodSeconds = w.readiness.period or 2;
                 timeoutSeconds = 10;
                 failureThreshold = 3;
               };
@@ -137,7 +139,19 @@ rec {
         metadata = { inherit labels; };
         spec = {
           replicas = instance.size.replicas.${name} or 1;
-          strategy.type = "Recreate";
+          # Single-writer volumes must never see two pods; everything else
+          # rolls without downtime, the new pod ready before the old one stops.
+          strategy =
+            if volumes != { } || (w.singleton or false) then
+              { type = "Recreate"; }
+            else
+              {
+                type = "RollingUpdate";
+                rollingUpdate = {
+                  maxSurge = 1;
+                  maxUnavailable = 0;
+                };
+              };
           progressDeadlineSeconds = 1800;
           selector.matchLabels = selector;
           template = {

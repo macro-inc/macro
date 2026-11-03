@@ -152,7 +152,6 @@ let
       readiness = {
         http = health;
         port = 8080;
-        period = 10;
       };
     };
 
