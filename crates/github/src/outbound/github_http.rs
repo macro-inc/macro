@@ -2,28 +2,25 @@
 //!
 //! GitHub limits each token: 5,000 requests an hour (the primary limit,
 //! shared by every app the user authorized) and short-term secondary limits
-//! on bursts. Every request here is paced per token, holds briefly when
-//! GitHub says it will work again within [`MAX_HOLD`], retries once, and only
-//! then fails as [`UpstreamFailure::RateLimited`] with when to retry.
-//! Identical reads in flight together share one request, and GETs revalidate
-//! with their `ETag`: a 304 costs no quota.
+//! on bursts. Requests are paced per token by [`outbound_pacing`]; this
+//! module reads GitHub's rate limit headers into its answers, shares
+//! identical in-flight reads, and revalidates GETs with their `ETag`: a 304
+//! costs no quota.
 //! See https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api
 
 use std::{
-    collections::HashMap,
     num::{NonZeroU32, NonZeroUsize},
     sync::{Arc, Mutex, PoisonError},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use bytes::Bytes;
-use governor::{DefaultKeyedRateLimiter, Quota, RateLimiter};
+use outbound_pacing::{Answer, PaceError, Pacer, PacingConfig, SingleFlight, Throttled};
 use reqwest::{
     Method, StatusCode,
     header::{ETAG, HeaderMap, HeaderValue, IF_NONE_MATCH, RETRY_AFTER},
 };
 use sha2::{Digest, Sha256};
-use tokio::{sync::OnceCell, time::Instant};
 use upstream_error::{UpstreamError, UpstreamFailure};
 
 use crate::domain::models::GithubError;
@@ -36,19 +33,18 @@ const GITHUB_API_BASE_URL: &str = "https://api.github.com";
 const GITHUB: &str = "GitHub";
 const USER_AGENT: &str = "Macro-Auth-Service";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
-/// The longest a request waits for its turn or for GitHub to accept requests
-/// again. Past it, the caller gets the rate limit error at once.
-const MAX_HOLD: Duration = Duration::from_secs(1);
-/// How long GitHub asks to wait after a secondary limit that names no time.
-const UNNAMED_SECONDARY_LIMIT_WAIT: Duration = Duration::from_secs(60);
 /// Responses kept for `ETag` revalidation, across all tokens.
 const ETAG_CACHE_ENTRIES: NonZeroUsize = NonZeroUsize::new(1024).expect("non-zero");
-/// GitHub's secondary limit allows 900 REST points a minute per token.
-const PACED_REQUESTS_PER_MINUTE: NonZeroU32 = NonZeroU32::new(900).expect("non-zero");
-/// ... and at most 100 concurrent requests.
-const PACED_BURST: NonZeroU32 = NonZeroU32::new(100).expect("non-zero");
-/// Tokens tracked before idle ones are forgotten.
-const TRACKED_TOKENS: usize = 10_000;
+const PACING: PacingConfig = PacingConfig {
+    // GitHub's secondary limit: 900 REST points a minute and 100 concurrent
+    // requests per token.
+    per_minute: NonZeroU32::new(900).expect("non-zero"),
+    burst: NonZeroU32::new(100).expect("non-zero"),
+    max_hold: Duration::from_secs(1),
+    // GitHub asks for at least a minute after a secondary limit that names
+    // no time.
+    unnamed_wait: Duration::from_secs(60),
+};
 
 /// A token, hashed so the shared maps never hold credentials.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -60,50 +56,54 @@ impl TokenKey {
     }
 }
 
-/// Whether a request only reads, so identical concurrent ones may share an
-/// answer.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum GithubAccess {
-    Read,
-    Write,
-}
-
 /// A request to GitHub's API.
-pub(crate) struct GithubRequest<'a> {
+pub(crate) struct GithubRequest {
     method: Method,
     /// The path after the API base URL, with its query.
     path: String,
-    access_token: &'a str,
+    access_token: String,
     body: Option<serde_json::Value>,
-    access: GithubAccess,
+    /// Only reads: identical ones in flight together may share one answer.
+    shareable: bool,
 }
 
-impl<'a> GithubRequest<'a> {
-    pub(crate) fn get(access_token: &'a str, path: String) -> Self {
+impl GithubRequest {
+    pub(crate) fn get(access_token: &str, path: String) -> Self {
         Self {
             method: Method::GET,
             path,
-            access_token,
+            access_token: access_token.to_owned(),
             body: None,
-            access: GithubAccess::Read,
+            shareable: true,
         }
     }
 
-    /// A request with a JSON body. GraphQL queries are reads sent as POST.
+    /// A GraphQL operation. Queries are reads; mutations change GitHub.
     #[cfg(feature = "link")]
-    pub(crate) fn with_body(
+    pub(crate) fn graphql(access_token: &str, query: &str, variables: serde_json::Value) -> Self {
+        Self {
+            method: Method::POST,
+            path: "/graphql".to_string(),
+            access_token: access_token.to_owned(),
+            body: Some(serde_json::json!({ "query": query, "variables": variables })),
+            shareable: !query.trim_start().starts_with("mutation"),
+        }
+    }
+
+    /// A REST request that changes GitHub.
+    #[cfg(feature = "link")]
+    pub(crate) fn change(
         method: Method,
-        access_token: &'a str,
+        access_token: &str,
         path: String,
         body: serde_json::Value,
-        access: GithubAccess,
     ) -> Self {
         Self {
             method,
             path,
-            access_token,
+            access_token: access_token.to_owned(),
             body: Some(body),
-            access,
+            shareable: false,
         }
     }
 }
@@ -156,18 +156,14 @@ struct ReadKey {
     body: Option<String>,
 }
 
-type SharedRead = Arc<OnceCell<Result<GithubResponse, UpstreamFailure>>>;
-
 struct CachedResponse {
     etag: HeaderValue,
     response: GithubResponse,
 }
 
 struct GithubHttpState {
-    pacing: DefaultKeyedRateLimiter<TokenKey>,
-    /// Tokens GitHub has throttled, and when it accepts requests again.
-    throttled_until: Mutex<HashMap<TokenKey, Instant>>,
-    reads_in_flight: Mutex<HashMap<ReadKey, SharedRead>>,
+    pacer: Pacer<TokenKey>,
+    reads: SingleFlight<ReadKey, Result<GithubResponse, UpstreamFailure>>,
     etag_cache: Mutex<lru::LruCache<(TokenKey, String), CachedResponse>>,
 }
 
@@ -176,7 +172,7 @@ struct GithubHttpState {
 #[derive(Clone)]
 pub(crate) struct GithubHttp {
     client: reqwest::Client,
-    api_base_url: String,
+    api_base_url: Arc<str>,
     state: Arc<GithubHttpState>,
 }
 
@@ -186,14 +182,12 @@ impl GithubHttp {
     }
 
     pub(crate) fn with_api_base_url(client: reqwest::Client, api_base_url: String) -> Self {
-        let quota = Quota::per_minute(PACED_REQUESTS_PER_MINUTE).allow_burst(PACED_BURST);
         Self {
             client,
-            api_base_url,
+            api_base_url: api_base_url.into(),
             state: Arc::new(GithubHttpState {
-                pacing: RateLimiter::keyed(quota),
-                throttled_until: Mutex::new(HashMap::new()),
-                reads_in_flight: Mutex::new(HashMap::new()),
+                pacer: Pacer::new(PACING),
+                reads: SingleFlight::default(),
                 etag_cache: Mutex::new(lru::LruCache::new(ETAG_CACHE_ENTRIES)),
             }),
         }
@@ -201,13 +195,10 @@ impl GithubHttp {
 
     /// Sends the request. Errors are only GitHub failing or throttling;
     /// every other status is the caller's to interpret.
-    pub(crate) async fn send(
-        &self,
-        request: GithubRequest<'_>,
-    ) -> Result<GithubResponse, GithubError> {
-        let token = TokenKey::of(request.access_token);
-        if request.access == GithubAccess::Write {
-            return self.send_paced(token, &request).await.map_err(upstream);
+    pub(crate) async fn send(&self, request: GithubRequest) -> Result<GithubResponse, GithubError> {
+        let token = TokenKey::of(&request.access_token);
+        if !request.shareable {
+            return self.send_paced(token, request).await.map_err(upstream);
         }
 
         let key = ReadKey {
@@ -216,36 +207,14 @@ impl GithubHttp {
             path: request.path.clone(),
             body: request.body.as_ref().map(serde_json::Value::to_string),
         };
-        let shared = self
-            .state
-            .reads_in_flight
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .entry(key.clone())
-            .or_default()
-            .clone();
-        // A caller dropped mid-request leaves the cell empty, and the next
-        // waiter sends it instead.
-        let result = shared
-            .get_or_init(|| self.send_paced(token, &request))
+        let http = self.clone();
+        self.state
+            .reads
+            .run(key, async move { http.send_paced(token, request).await })
             .await
-            .clone();
-        let mut reads_in_flight = self
-            .state
-            .reads_in_flight
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
-        if reads_in_flight
-            .get(&key)
-            .is_some_and(|current| Arc::ptr_eq(current, &shared))
-        {
-            reads_in_flight.remove(&key);
-        }
-        result.map_err(upstream)
+            .map_err(upstream)
     }
 
-    /// Waits for the token's turn, sends, and retries once when GitHub
-    /// throttles with a wait inside [`MAX_HOLD`].
     #[tracing::instrument(
         name = "github.request",
         skip_all,
@@ -255,68 +224,30 @@ impl GithubHttp {
             path = %request.path,
             status = tracing::field::Empty,
             etag_hit = false,
-            throttled_retry = false,
         )
     )]
     async fn send_paced(
         &self,
         token: TokenKey,
-        request: &GithubRequest<'_>,
+        request: GithubRequest,
     ) -> Result<GithubResponse, UpstreamFailure> {
-        self.wait_turn(token).await?;
-        let retry_after = match self.send_once(token, request).await? {
-            Sent::Answered(response) => return Ok(response),
-            Sent::Throttled(Throttled { retry_after }) => retry_after,
-        };
-        let Some(wait) = retry_after.filter(|wait| *wait <= MAX_HOLD) else {
-            return Err(UpstreamFailure::RateLimited { retry_after });
-        };
-
-        tracing::Span::current().record("throttled_retry", true);
-        tokio::time::sleep(wait).await;
-        match self.send_once(token, request).await? {
-            Sent::Answered(response) => Ok(response),
-            Sent::Throttled(Throttled { retry_after }) => {
-                Err(UpstreamFailure::RateLimited { retry_after })
-            }
-        }
-    }
-
-    /// Holds the request until GitHub accepts the token's requests again and
-    /// the pacing quota has room, or fails when that is past [`MAX_HOLD`].
-    async fn wait_turn(&self, token: TokenKey) -> Result<(), UpstreamFailure> {
-        let throttled_for = self
-            .state
-            .throttled_until
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .get(&token)
-            .map(|until| until.saturating_duration_since(Instant::now()))
-            .filter(|wait| !wait.is_zero());
-        if let Some(wait) = throttled_for {
-            if wait > MAX_HOLD {
-                return Err(UpstreamFailure::RateLimited {
-                    retry_after: Some(wait),
-                });
-            }
-            tokio::time::sleep(wait).await;
-        }
-
-        if self.state.pacing.len() > TRACKED_TOKENS {
-            self.state.pacing.retain_recent();
-        }
-        tokio::time::timeout(MAX_HOLD, self.state.pacing.until_key_ready(&token))
+        self.state
+            .pacer
+            .call(&token, || self.send_once(token, &request))
             .await
-            .map_err(|_| UpstreamFailure::RateLimited {
-                retry_after: Some(MAX_HOLD),
+            .map_err(|error| match error {
+                PaceError::Throttled(Throttled { retry_after }) => {
+                    UpstreamFailure::RateLimited { retry_after }
+                }
+                PaceError::Failed(failure) => failure,
             })
     }
 
     async fn send_once(
         &self,
         token: TokenKey,
-        request: &GithubRequest<'_>,
-    ) -> Result<Sent, UpstreamFailure> {
+        request: &GithubRequest,
+    ) -> Result<Answer<GithubResponse>, UpstreamFailure> {
         let cache_key = (request.method == Method::GET).then(|| (token, request.path.clone()));
         let cached = cache_key.as_ref().and_then(|key| {
             self.state
@@ -351,18 +282,23 @@ impl GithubHttp {
         let body = response.bytes().await.map_err(transport_failure)?;
         tracing::Span::current().record("status", status.as_u16());
 
-        let throttled = throttling(status, &headers, &body);
-        self.remember_quota(token, throttled, &headers);
-        if let Some(throttled) = throttled {
+        if let Some(retry_after) = throttled(status, &headers, &body) {
             tracing::warn!(status=%status, path=%request.path, "github is throttling");
-            return Ok(Sent::Throttled(throttled));
+            return Ok(Answer::Throttled { retry_after });
+        }
+        // The primary quota can run out on an accepted request; hold the
+        // token back until it refills instead of spending requests on 403s.
+        if quota_exhausted(&headers)
+            && let Some(reset) = rate_limit_reset(&headers)
+        {
+            self.state.pacer.block(&token, reset);
         }
 
         if status == StatusCode::NOT_MODIFIED
             && let Some((_, response)) = cached
         {
             tracing::Span::current().record("etag_hit", true);
-            return Ok(Sent::Answered(response));
+            return Ok(Answer::Accepted(response));
         }
         let response = GithubResponse {
             status,
@@ -390,44 +326,8 @@ impl GithubHttp {
                 }
             }
         }
-        Ok(Sent::Answered(response))
+        Ok(Answer::Accepted(response))
     }
-
-    /// Records when GitHub accepts the token's requests again: after the wait
-    /// a throttled answer asks for, or at `x-ratelimit-reset` once the
-    /// primary quota is spent.
-    fn remember_quota(&self, token: TokenKey, throttled: Option<Throttled>, headers: &HeaderMap) {
-        let wait = match throttled {
-            Some(Throttled { retry_after }) => {
-                Some(retry_after.unwrap_or(UNNAMED_SECONDARY_LIMIT_WAIT))
-            }
-            None if quota_exhausted(headers) => rate_limit_reset(headers),
-            None => None,
-        };
-        let Some(wait) = wait else {
-            return;
-        };
-        let now = Instant::now();
-        let mut throttled_until = self
-            .state
-            .throttled_until
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
-        throttled_until.retain(|_, until| *until > now);
-        throttled_until.insert(token, now + wait);
-    }
-}
-
-/// GitHub refused the request for its rate limit.
-#[derive(Clone, Copy)]
-struct Throttled {
-    /// How long GitHub asked to wait, when it said.
-    retry_after: Option<Duration>,
-}
-
-enum Sent {
-    Answered(GithubResponse),
-    Throttled(Throttled),
 }
 
 fn upstream(failure: UpstreamFailure) -> GithubError {
@@ -455,12 +355,13 @@ fn quota_exhausted(headers: &HeaderMap) -> bool {
         .is_some_and(|remaining| remaining == "0")
 }
 
-/// GitHub throttling. A 429, or a 403 that carries `Retry-After`, exhausts
+/// Whether GitHub throttled the request, and how long it asked to wait. A
+/// 429, or a 403 that carries `Retry-After`, exhausts
 /// `x-ratelimit-remaining` (primary limit), or says it hit a secondary rate
 /// limit, which GitHub may send without either header; any other 403 is a
 /// real refusal.
 /// See https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api
-fn throttling(status: StatusCode, headers: &HeaderMap, body: &[u8]) -> Option<Throttled> {
+fn throttled(status: StatusCode, headers: &HeaderMap, body: &[u8]) -> Option<Option<Duration>> {
     let quota_exhausted = quota_exhausted(headers);
     let throttled = status == StatusCode::TOO_MANY_REQUESTS
         || (status == StatusCode::FORBIDDEN
@@ -471,9 +372,9 @@ fn throttling(status: StatusCode, headers: &HeaderMap, body: &[u8]) -> Option<Th
                     .contains("secondary rate limit")));
     // `x-ratelimit-reset` is when the primary quota refills, so it only says
     // when to retry once that quota is spent.
-    throttled.then(|| Throttled {
-        retry_after: upstream_error::retry_after(headers)
-            .or_else(|| quota_exhausted.then(|| rate_limit_reset(headers)).flatten()),
+    throttled.then(|| {
+        upstream_error::retry_after(headers)
+            .or_else(|| quota_exhausted.then(|| rate_limit_reset(headers)).flatten())
     })
 }
 

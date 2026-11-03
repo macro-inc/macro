@@ -1,0 +1,16 @@
+[package]
+edition = "2024"
+name = "outbound_pacing"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+futures = { workspace = true }
+governor = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "test-util"] }

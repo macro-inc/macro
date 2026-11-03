@@ -35,7 +35,7 @@ link flow, following the hexagonal architecture pattern.
 
 ## Boundaries
 
-- Depends on: `github_pull_requests` (ports/schema), `foreign_entity`,
+- Depends on: `github_pull_requests` (ports/schema), `outbound_pacing`, `foreign_entity`,
   `documents`, `fusionauth`, `connection_gateway_client`, `macro_service_urls`,
   `notification`/`model_notifications`.
 - Used by: `agent_harness_service`, `agent_harness`, `agent_egress`,
@@ -87,14 +87,15 @@ link flow, following the hexagonal architecture pattern.
   The sync client's setup-code exchange, App-JWT and installation-admin
   calls, user-installation and authenticated-user lookups (user tokens), PR
   comments, and branch lists still use `reqwest` directly, unpaced and
-  uncached. `GithubHttp` paces each token with `governor`, holds up to a
-  second and retries once when GitHub says it will accept requests again
-  within that, remembers a throttled token so later calls fail fast with when
-  to retry, shares identical in-flight reads, and revalidates GETs by `ETag`
-  (a 304 costs no quota). Mark GraphQL queries `GithubAccess::Read` and
-  anything that changes GitHub `Write`. Build one per process and clone it;
-  its state is per instance. A user's quota is shared with every other app
-  they authorized, including the `gh` CLI.
+  uncached. `GithubHttp` paces each token through `crates/outbound_pacing`
+  (hold up to a second, retry once, fail fast while a token is throttled),
+  shares identical in-flight reads, and revalidates GETs by `ETag` (a 304
+  costs no quota); it only turns GitHub's status and rate limit headers into
+  `outbound_pacing` answers. Build requests with `GithubRequest::get`,
+  `graphql` (a `mutation` is never shared), or `change`. Build one
+  `GithubHttp` per process and clone it; its state is per instance. A user's
+  quota is shared with every other app they authorized, including the `gh`
+  CLI.
 - `GithubError::Forbidden`, `SetupUserNotLinked`, and `RepositoryUnavailable`
   all map to the same 403 deliberately — don't let a response distinguish
   "app not installed" from "installed somewhere you have no claim to".

@@ -5,9 +5,7 @@ use std::time::Duration;
 use reqwest::{Method, StatusCode};
 
 use super::{
-    github_http::{
-        GithubAccess, GithubHttp, GithubRequest, GithubResponse, transport_error, unexpected,
-    },
+    github_http::{GithubHttp, GithubRequest, GithubResponse, transport_error, unexpected},
     pull_request_metadata::fetch_pull_request_metadata,
 };
 
@@ -205,17 +203,10 @@ impl GithubOauthImpl {
         access_token: &str,
         query: &str,
         variables: serde_json::Value,
-        access: GithubAccess,
     ) -> Result<GraphqlResponse<T>, GithubError> {
         let response = self
             .http
-            .send(GithubRequest::with_body(
-                Method::POST,
-                access_token,
-                "/graphql".to_string(),
-                serde_json::json!({ "query": query, "variables": variables }),
-                access,
-            ))
+            .send(GithubRequest::graphql(access_token, query, variables))
             .await?;
 
         if !response.status.is_success() {
@@ -451,12 +442,11 @@ impl GithubOauth for GithubOauthImpl {
         // refusal.
         let response = self
             .http
-            .send(GithubRequest::with_body(
+            .send(GithubRequest::change(
                 Method::PUT,
                 access_token,
                 format!("/repos/{owner}/{repo}/pulls/{number}/merge"),
                 serde_json::json!(MergeRequest { merge_method }),
-                GithubAccess::Write,
             ))
             .await?;
 
@@ -499,7 +489,6 @@ impl GithubOauth for GithubOauthImpl {
                 access_token,
                 DRAFT_STATE_QUERY,
                 serde_json::json!({ "owner": owner, "repo": repo, "number": number }),
-                GithubAccess::Read,
             )
             .await?;
         let pull_request = state
@@ -532,7 +521,6 @@ impl GithubOauth for GithubOauthImpl {
                 access_token,
                 mutation,
                 serde_json::json!({ "id": pull_request.id }),
-                GithubAccess::Write,
             )
             .await?;
         if let Some(error) = changed.errors.into_iter().next() {
@@ -565,12 +553,11 @@ impl GithubOauth for GithubOauthImpl {
         // refusal.
         let response = self
             .http
-            .send(GithubRequest::with_body(
+            .send(GithubRequest::change(
                 Method::PATCH,
                 access_token,
                 format!("/repos/{owner}/{repo}/pulls/{number}"),
                 serde_json::json!(PullRequestState { state }),
-                GithubAccess::Write,
             ))
             .await?;
 
@@ -612,12 +599,7 @@ impl GithubOauth for GithubOauthImpl {
         let response: GraphqlResponse<
             std::collections::HashMap<String, Option<MergeabilityRepository>>,
         > = self
-            .graphql(
-                access_token,
-                &query,
-                serde_json::Value::Object(variables),
-                GithubAccess::Read,
-            )
+            .graphql(access_token, &query, serde_json::Value::Object(variables))
             .await?;
         let Some(mut data) = response.data else {
             let message = response
