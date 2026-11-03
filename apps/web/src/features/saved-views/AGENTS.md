@@ -2,20 +2,23 @@
 
 ## What it is
 
-Reusable named view definitions. The first consumer is main Tasks; the generic feature does not interpret consumer configuration.
+Reusable named view definitions. Consumers are main Tasks and Email; the generic feature does not interpret consumer configuration.
 
 ## Start here
 
 - `core/saved-view.ts`: resource vocabulary, without transport or UI types.
 - `context/saved-views-source.ts`: independent list and detail read contracts.
 - `queries/saved-views.ts`: `useSavedViews` for cursor paging and `useSavedView` for one definition; compose them at the host.
-- `queries/saved-view-actions.ts`: independent create, update, and delete hooks using the shared GraphQL client, native mutation state, authoritative confirmation, and cursor reconciliation.
+- `queries/saved-view-actions.ts`: independent create, update, delete, and reorder hooks using the shared GraphQL client, native mutation state, authoritative confirmation, and cursor reconciliation.
 - `views/saved-view-dialogs.tsx`: one create/edit dialog owns separate mutation hooks, a shared wide responsive form, and lifetime checks; deletion keeps its confirmation.
 - `components/`: presentational forms/confirmation, compound list, shared styled context/overflow items, and mobile picker.
 
 ## Boundaries
 
-- Keep Task filters, navigation, and configuration decoding in `features/tasks-view`.
+- Keep Task filters, navigation, and configuration decoding in `features/tasks-view`, and Email's in `features/email-view`.
+- Order is personal and server-owned (`reorderSavedViews`); consumers show a pending move locally only until the list itself changes, never by splicing the cache.
+- Consumers pass the list's accessible label, row status (`trailing` plus `statusLabel`), drag wiring, and Move up/Move down handlers; rows never create drag items themselves, since only a desktop list mounts the drag provider.
+- A consumer that edits definitions in the dialog passes `fields`, `invalid`, and a replacement `config`; edit without `config` keeps renaming and sharing only.
 - Do not migrate CRM's legacy personal views or team settings into this consumer.
 - Share definitions, not access to their matching entities; the backend owns authorization.
 - Rebuild loaded cursor chains after confirmed membership changes; never invent permission state or splice a full page.

@@ -1,4 +1,4 @@
-# Saved views: reusable storage, Tasks first
+# Saved views: reusable storage, Tasks and Email
 
 **Status:** Approved design, implemented on the task-saved-views branch. The
 starting point below describes the code before this change; rollout requires
@@ -29,8 +29,10 @@ main Tasks screen.
 | Initial surfaces | Main Tasks only; not project or CRM embedded task lists. |
 | Owner departure | Team sharing stops while the owner is absent and resumes if they rejoin the shared team. |
 
-No default-view selection, saved-view list reordering, individual recipients,
-public links, new task filter categories, or CRM migration are included.
+No default-view selection, individual recipients, public links, new task
+filter categories, or CRM migration are included. Lists have a personal order
+(see Persistence); Email uses it, Tasks keeps creation order until it adds a
+reorder control.
 In particular, the current Tasks implementation has no due-date filter;
 this feature does not add one.
 
@@ -273,6 +275,15 @@ the views fetched for access checks.
 
 ## Persistence and GraphQL
 
+Each viewer's order is personal: `saved_view_position` holds a position per
+viewer and visible view, outside the definition and its revision, so a viewer
+can also place teammates' shared views. Lists return placed views first, then
+the rest by creation time and ID; the cursor carries all three.
+`reorderSavedViews(kind, ids)` replaces that kind's order whole for the
+authenticated viewer (views left out become unplaced), accepts only views the
+viewer can currently see, and returns them in the new order. Repeating it is
+harmless.
+
 Add an internal integer revision, starting at one, to `saved_view`. All writes,
 including existing REST writes, advance it. Add owner and shared-team indexes
 with stable created-time/ID ordering; keep optional kind filtering without
@@ -290,6 +301,7 @@ Expose reads under the authenticated `user`, following the
 | `createSavedView` | Stable client-generated ID, name, config, and optional team share; private by default. |
 | `updateSavedView` | ID, expected revision, and optional name, replacement config, or explicit sharing change. |
 | `deleteSavedView` | ID and expected revision; returns the deleted ID. |
+| `reorderSavedViews` | Kind and ordered IDs; sets the viewer's order and returns the views. |
 
 The normalized output object has `id: ID!`, owner ID, name, config, effective
 shared team ID, revision, and timestamps. Generate the GraphQL envelope types and
@@ -455,3 +467,49 @@ contents, or person identifiers.
   sharing patterns rather than introducing membership lifetimes.
 - Cross-client changes revalidate rather than using a new realtime subscription.
 - No existing CRM views are migrated or reinterpreted in this feature.
+
+## Email consumer
+
+Email is the second consumer (`kind: "email"`, `version: 1`), behind the
+`enable-email-saved-views` flag. Its definition is consumer-owned like Tasks':
+
+```json
+{
+  "kind": "email",
+  "version": 1,
+  "filters": {
+    "inboxIds": ["<inbox-uuid>"],
+    "importance": "signal",
+    "participants": [{ "type": "viewer" }, { "type": "address", "email": "person@example.com" }, { "type": "domain", "domain": "example.com" }],
+    "participantFields": ["from", "to", "cc"],
+    "subject": ["FYI"],
+    "receivedWithinDays": 7,
+    "starred": false,
+    "read": "unread",
+    "done": "not-done",
+    "attachments": ["attachment-pdf"],
+    "calendarInvite": false,
+    "tags": [{ "propertyDefinitionId": "<uuid>", "optionId": "<uuid>" }]
+  }
+}
+```
+
+- Empty `inboxIds` means every inbox; an inbox no longer linked matches nothing
+  rather than widening. `viewer` resolves at query time to the viewer's inbox
+  addresses; a view naming it waits for them. `receivedWithinDays` resolves to
+  a day boundary so the query stays stable while open.
+- Values within one condition are alternatives; conditions all apply, as in
+  Tasks. Shared threads are excluded, like Signal and Noise.
+- Opening a view selects All and restores Status, Done, attachments, calendar,
+  tags and inboxes into the normal Filters controls; the other conditions have
+  no menu control and are edited in the builder dialog, which also offers
+  Principals, FYI and Action required templates. Dirty state, Save changes,
+  Reset, skipped-setting diagnostics and the unavailable state follow the Task
+  rules above. Leaving returns to the tab and inboxes the view was opened from.
+- The definition compiles into the existing Soup `ef` filter at execution time
+  (balanced OR trees, GraphQL transport). Subject and attachment-kind literals
+  were added to that filter for this consumer. Text search keeps only hits the
+  view's own predicate admits, as alias filters do.
+- Sidebar rows show an unread dot from each view's first unread page (presence,
+  never a count), drag to reorder on desktop, and offer Move up/Move down in
+  every list, including the mobile picker.

@@ -43,7 +43,8 @@ flags on, a `Focus` tab leads them. Selecting Inbox from another mailbox opens
 Signal; selecting it while in Focus or Noise keeps that tab.
 The desktop sidebar continues with `Favorites`, `Drafts`, `Sent`, `Scheduled`,
 and `Reminders` (when reminders are enabled), followed by a **Library** section containing `All mail`,
-`Archived`, and `Shared`, then **Tags**. Sidebar number shortcuts follow that
+`Archived`, and `Shared`, then **Saved views** (flagged, see
+[Saved email views](#saved-email-views)), then **Tags**. Sidebar number shortcuts follow that
 order; `Tab` and `Shift+Tab` move between the Inbox tabs (from another mailbox,
 `Tab` opens the first, Focus when it shows, else Signal, and `Shift+Tab` Noise).
 While the email list itself has focus, `Tab` moves browser focus instead; use
@@ -1373,6 +1374,42 @@ Storage/schema failures that cannot prove preservation show recovery/update
 instructions instead of repeatedly reopening potentially damaged storage.
 
 Date-grouped email lists start directly with today's messages; Today is not shown as a leading group heading. Older date headings remain visible and ordering still uses the server's thread activity timestamp.
+
+## Saved email views
+
+Behind `enable-email-saved-views` (on in dev). A saved view is a named
+`kind: "email"` definition in the shared saved-view store; opening it queries
+live mail with the viewer's access. See `docs/design/saved-views.md`.
+
+- **Create.** The sidebar **Saved views** `+` (or the empty state's Create view)
+  opens the builder: name, then **Start from** templates (**Principals**, which
+  leaves the people to choose; **FYI**, subject contains FYI; **Action
+  required**, Signal + Unread + Me in To), People (contacts or typed
+  addresses), Domains, Me, Look in (From/To/Cc/Bcc), Subject contains,
+  Importance, Status, Done, Latest activity, Inboxes (with two or more linked),
+  and Starred, calendar invite and attachment requirements. Values within one
+  condition are alternatives; conditions all apply. On a filtered Signal, Noise,
+  All, Archived, Favorites or Calendar tab, **Save view** left of Filters opens
+  the builder prefilled; Sent, Drafts, Scheduled, Reminders, Shared and Focus
+  can't be saved. Search text is never saved.
+- **Open.** The view opens on All with its Status, Done, attachment, calendar,
+  tag and inbox filters in the normal controls; the header shows its name and a
+  `…` menu, and built-in tabs stop looking selected. Changing a filter shows
+  **Save changes** (owner) and **Reset**. Choosing a tab, or Return to Email
+  from an unavailable view, goes back to the tab and inboxes it was opened from.
+  The URL carries `mail.savedView=<id>`; Copy link shares it, and a view the
+  viewer can't open shows the unavailable state, never all mail.
+- **Order and unread.** Rows drag to reorder (a 4px move starts the drag, so a
+  click still opens the view) or use Move up/Move down in the row menu; the
+  order is personal and follows the account. A dot marks a view whose first
+  unread page has unread mail.
+- **Mobile.** A saved-view pill follows Filters; its drawer lists and manages
+  views. The filter drawer shows "Save these filters as a view" above its footer
+  and Save changes/Reset in the footer while a view is edited.
+
+Check: create a Principals view for a contact and a domain, open it, mark a
+thread read and watch the dot, reorder two views and reload, then search inside
+the view and confirm results stay within it.
 
 ## Dragging sidebar tags
 
