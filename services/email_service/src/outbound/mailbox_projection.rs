@@ -42,7 +42,7 @@ pub struct MailboxEffects<A, I, B, N, C> {
 
 fn failed<E: std::fmt::Debug>(error: E) -> MailboxError {
     tracing::warn!(?error, "mailbox projection effect deferred");
-    MailboxError::Persistence
+    MailboxError::Effect
 }
 
 impl<A, I, B, N, C> MailboxProjectionEffects for MailboxEffects<A, I, B, N, C>
@@ -302,7 +302,7 @@ where
                 AND NOT EXISTS(SELECT 1 FROM email_attachments_sfs s WHERE s.attachment_id = a.id)) AS "pending!"
         "#,current.message.db_id).fetch_one(&self.db).await.map_err(failed)?;
         if pending {
-            return Err(MailboxError::Persistence);
+            return Err(MailboxError::Effect);
         }
         Ok(())
     }

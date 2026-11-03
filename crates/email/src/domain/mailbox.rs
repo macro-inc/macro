@@ -39,6 +39,10 @@ pub enum MailboxError {
     /// A database call failed; the cause carries no row data.
     #[error("mailbox persistence is unavailable: {0}")]
     Database(DatabaseFailure),
+    /// A projection's downstream effect (event publishing, a queue, another
+    /// service) failed or is not ready; the effect logs its own cause.
+    #[error("a mailbox projection effect is unavailable")]
+    Effect,
     #[error("mailbox generation or worker lease changed")]
     Stale,
     /// The provider no longer reports the message where it was; a later

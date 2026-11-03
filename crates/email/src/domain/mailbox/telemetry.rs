@@ -22,6 +22,7 @@ pub fn defer_reason(error: &MailboxError) -> &'static str {
             "auth_required"
         }
         MailboxError::Persistence | MailboxError::Database(_) => "persistence",
+        MailboxError::Effect => "effect",
         MailboxError::LocationUnsettled => "location_unsettled",
         _ => "other",
     }

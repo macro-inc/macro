@@ -294,6 +294,11 @@ async fn persistence_errors_name_their_sqlstate(db: PgPool) {
         crate::domain::mailbox::telemetry::defer_reason(&error),
         "persistence"
     );
+    // Projection effects that fail outside the database are reported apart.
+    assert_eq!(
+        crate::domain::mailbox::telemetry::defer_reason(&MailboxError::Effect),
+        "effect"
+    );
 }
 
 async fn outlook_link(db: &PgPool, email: &str, active: bool, needs_reauth: bool) -> Uuid {
