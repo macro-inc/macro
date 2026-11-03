@@ -23,7 +23,9 @@ Home; the `X` or a middle click closes one (the last tab cannot close;
 `Shift+Cmd+W` closes the active tab); `Ctrl+Tab` / `Ctrl+Shift+Tab` cycle.
 Cmd+click (Ctrl elsewhere) on anything that navigates opens the destination in
 a background tab; adding Shift also switches to it. Tabs are not draggable.
-Tabs persist per user and restore on launch. In the browser and on other
+Tabs persist per user and restore on launch. Call pages (`/app/meet/...`) keep
+the strip although they hide the rest of the app chrome; switching tabs there
+leaves the call running in the background. In the browser and on other
 platforms the strip does not render.
 
 Reference captures (browser fixture with the desktop gates forced):
