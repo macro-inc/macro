@@ -213,8 +213,9 @@ skills.
    independent question per candidate, so several skills can match. "Every
    Monday, summarise new rows in Leads" loads both `routines` and
    `databases`. Thresholds:
-   - Built-ins: 0.5, at most 3. They are reviewed text, and missing one
-     costs domain rules.
+   - Built-ins: 0.7, at most 3. They are reviewed text, and missing one
+     costs domain rules. On the evaluation, 0.7 kept the recall of 0.5 (90%)
+     and loaded the exact expected set almost twice as often.
    - User skills: 0.8, at most 2. They redirect behaviour, so a false
      positive costs more.
    - The evaluation calibrates both.
