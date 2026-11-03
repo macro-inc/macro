@@ -183,7 +183,9 @@ export function ListViewMenu<TGroup extends string, TSort extends string>(
             <ViewIcon class="size-4" />
             {t('viewMenus.view')}
           </Dropdown.Trigger>
-          <Dropdown.Content class="min-w-80 max-w-96">
+          <Dropdown.Content
+            class={props.layout ? 'w-max' : 'min-w-56 max-w-96'}
+          >
             <Show when={props.layout}>
               {(layout) => (
                 <Dropdown.Group>
@@ -207,28 +209,34 @@ export function ListViewMenu<TGroup extends string, TSort extends string>(
                 </Dropdown.Group>
               )}
             </Show>
-            <Dropdown.Group>
-              <Show when={props.group}>
-                {(group) => (
-                  <DesktopSelection
-                    label={t('viewMenus.groupBy')}
-                    icon={<GroupIcon class="size-4 shrink-0" />}
-                    selection={group()}
-                  />
-                )}
-              </Show>
-              <Show when={props.sort}>
-                {(sort) => (
-                  <DesktopSelection
-                    label={t('viewMenus.sort')}
-                    icon={<SortIcon class="size-4 shrink-0" />}
-                    selection={sort()}
-                    disabledReason={sort().disabledReason}
-                  />
-                )}
-              </Show>
-            </Dropdown.Group>
-            {props.children}
+            {/* Let only the layout tabs determine the menu's intrinsic width. */}
+            <div
+              class="flex flex-col divide-y divide-edge-divider"
+              classList={{ '[contain:inline-size]': !!props.layout }}
+            >
+              <Dropdown.Group>
+                <Show when={props.group}>
+                  {(group) => (
+                    <DesktopSelection
+                      label={t('viewMenus.groupBy')}
+                      icon={<GroupIcon class="size-4 shrink-0" />}
+                      selection={group()}
+                    />
+                  )}
+                </Show>
+                <Show when={props.sort}>
+                  {(sort) => (
+                    <DesktopSelection
+                      label={t('viewMenus.sort')}
+                      icon={<SortIcon class="size-4 shrink-0" />}
+                      selection={sort()}
+                      disabledReason={sort().disabledReason}
+                    />
+                  )}
+                </Show>
+              </Dropdown.Group>
+              {props.children}
+            </div>
           </Dropdown.Content>
         </Dropdown>
       }

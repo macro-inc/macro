@@ -11,7 +11,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - `primitives/create-task-saved-view-draft.ts`: confirmed filter/due-date/layout/grouping/sort/property-display snapshots, dirty state, skipped-setting diagnostics, and revision-aware reconciliation; receives only the detail source, without navigation, mutation, or dialog state.
 - `views/task-saved-views.tsx`: compound sidebar/mobile lists, filter summaries, imperative action dialogs, and request-scoped write/reload completion; the Tasks host owns selection and navigation.
 - `queries/use-tasks-query.ts`: shared list, board, Gantt, and search filtering.
-- `components/TasksViewMenu.tsx`: adapts task state to the shared `ListViewMenu`; the desktop Display menu uses content-sized `md` layout tabs without a Layout subheading and combines grouping, sorting, and list property visibility, while touch keeps its separate Display sheet.
+- `components/TasksViewMenu.tsx`: adapts task state to the shared `ListViewMenu`; the desktop Display menu fits its content-sized `md` layout tabs with all tab labels visible and no Layout subheading and combines grouping, sorting, and list property visibility, while touch keeps its separate Display sheet.
 - `core/task-property-display.ts` and `primitives/create-task-property-display.ts`: property modes and account-scoped device preferences, separate from saved-view drafts.
 
 ## Gotchas
