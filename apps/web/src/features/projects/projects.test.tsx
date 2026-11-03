@@ -126,21 +126,27 @@ function setupGraphql() {
     completedTaskCount: 0,
     sharePermission: { id: 'share', owner: 'viewer', linkShare: 'DISABLED' },
   };
-  mocks.soup.mockImplementation(async (operation) => ({
-    operation,
-    stale: false,
-    hasNext: false,
-    data: {
-      user: {
-        id: 'viewer',
-        ...(['Initiative', 'InitiativeIdentity'].includes(
-          getOperationName(operation.query) ?? ''
-        )
-          ? { initiative }
-          : { soup: { nextCursor: 'next', items: [initiative] } }),
+  mocks.soup.mockImplementation(async (operation) => {
+    const requestedProject =
+      operation.variables?.initiativeId === 'other-project'
+        ? { ...initiative, id: 'other-project', displayName: 'Another project' }
+        : initiative;
+    return {
+      operation,
+      stale: false,
+      hasNext: false,
+      data: {
+        user: {
+          id: 'viewer',
+          ...(['Initiative', 'InitiativeIdentity'].includes(
+            getOperationName(operation.query) ?? ''
+          )
+            ? { initiative: requestedProject }
+            : { soup: { nextCursor: 'next', items: [initiative] } }),
+        },
       },
-    },
-  }));
+    };
+  });
   const exchange: Exchange = () => (operations) =>
     pipe(
       operations,
@@ -326,7 +332,12 @@ it('reuses cached chip identities when virtual rows remount but still fetches mi
   expect(callsFor('InitiativeIdentity')).toHaveLength(1);
 
   const missing = mount('other-project');
-  await vi.waitFor(() => expect(missing.query.data?.name).toBe('Launch'));
+  await vi.waitFor(() =>
+    expect(missing.query.data).toMatchObject({
+      id: 'other-project',
+      name: 'Another project',
+    })
+  );
   missing.dispose();
   expect(callsFor('InitiativeIdentity')).toHaveLength(2);
 });
