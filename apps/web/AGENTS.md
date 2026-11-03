@@ -6,6 +6,7 @@
 - `bun run format`: format changes with biome 
 - `bun run knip`: to check for dead code
 - Run Linux native cache-plugin tests from the repository root with `nix develop .#tauri-linux --command cargo test --manifest-path apps/web/tauri/Cargo.toml -p graphql_cache_plugin`; the [Tauri platform shell](../../docs/development/running-locally.md) supplies the required desktop libraries.
+- Refresh `nix-support/node_modules-hashes.json` for Linux and Darwin when dependency manifests, the lockfile, or dependency patches change.
 - `bun run lint:oxlint` (repository root): type-aware oxlint. `typescript/no-floating-promises` is an error with no suppressions and `ignoreVoid: false` (FE-13), enforced in `just check` and CI; start detached work with `fireAndForget` from `@core/util/fireAndForget`, not `void`. Plain `oxlint` without `--type-aware` skips that rule silently. The ast-grep rule `ts-no-expression-void` covers `() => void p()`, which the lint can't see.
 - Email rendering is isolated in `packages/email-renderer` at the repository root. Run `just test-email-rendering` for its Node and Chromium suites. Add fixtures under `packages/email-renderer/tests/fixtures`, run `just test-email-rendering-update`, and review changed images. These are renderer tests, not inbox e2e.
 - Supported browsers are the `browserslist` in `package.json`. Safari and iOS
@@ -96,7 +97,8 @@ focused something itself, or it names its own target; Tab then moves into the
 rows, which do show the ring.
 
 CRM creation has backend-free desktop/phone coverage for name-only companies,
-personal-email contacts and explicit company selection:
+personal-email contacts, contacts added by name alone, explicit company selection,
+and Unicode contact names at the server's character limit:
 `bunx playwright test --config src/features/crm/browser-test/creation/playwright.config.ts`.
 Nested picker selection must keep its containing drawer open when the option
 unmounts during the tap; drawer dismissal checks the original event path.
@@ -127,8 +129,11 @@ Event details placement has a backend-free browser regression: the desktop
 popover stays beside its event when join requests arrive after it opens, and
 slides into a short window; the phone drawer shows late requests. The same
 suite covers the Add guests and Forward invitation editors (the real
-`EventGuests` over a stand-in contact picker) on desktop and phone:
-`bunx playwright test --config src/features/calendar-view/browser-test/playwright.config.ts`.
+`EventGuests` over a stand-in contact picker) on desktop and phone, and long
+guest addresses wrapping in both: `just test-calendar-details-browser`. CI runs
+it when calendar details or `src/lib/queries/calendar` change. Its fixture
+aliases those query modules to `preview-adapters.tsx`, so a module export or
+callback argument the adapters lack leaves every page blank; mirror it there.
 Keep the popover's `flip` limited to `left-start`: an end fallback re-places it
 above the event whenever a late section changes its height. Keep the guest
 editors' `overlap`: without it their height follows the room below the button,
@@ -595,18 +600,18 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   for a notification (Home, Inbox) wait for it to choose a target.
 - Gate the Chat redesign with `enable-chat-sidebar-sections`; wait for its result, restore the tabbed rail when off, and keep mobile unchanged.
   Keep the original rail renderer and label dialogs in `components/rail/`; build the redesigned rail and section dialogs in `components/rail/next/`, with shared controller, context, and row primitives outside `next/`.
-  Default desktop Chat to Favorites, Direct messages, the team's channels, custom sections, then All channels; preserve personal section reordering without changing shared membership or the remaining public/private membership of All channels.
-  Keep resize and reorder grips keyboard-accessible; overlay reorder grips in the left gutter without shifting section names. Preserve personal section heights/order, compensate resize drags for scrolling, disable stack scroll anchoring only during resizing, and route list navigation through the sectioned renderer's scroll handle.
-  Cap section heights at measured list content and available pane space; hide resize grips for two or fewer items, default Favorites and DMs to four rows, and default other sections to their maximum height.
+  Default desktop Chat to Favorites, Direct messages, the team's channels, custom sections, then All channels; preserve personal section reordering and keep public/private channels in All channels regardless of custom-section assignments.
+  Keep resize and reorder grips keyboard-accessible; reveal bare reorder grips only on header hover or keyboard focus, keep them fixed in the left gutter without shifting section names, and include them within the drag highlight. Allow dragging from the whole heading while preserving normal collapse clicks and excluding action buttons. Preserve personal section heights/order, compensate resize drags for scrolling, disable stack scroll anchoring only during resizing, and route list navigation through the sectioned renderer's scroll handle. Scroll keyboard targets immediately without animation, keeping two rows of context on either side, clamped to the viewport.
+  Cap section heights at measured list content and available pane space; hide resize grips for two or fewer items and default Favorites and DMs to four rows. Let final All channels fill its content by default, but preserve saved heights and cap it normally when another section follows. Use TanStack Virtual for the redesigned section stack, channel rows, and search results; keep full-height channel rows virtualized against the outer viewport and retain stable keys, focused rows, and drag sources.
   Mobile retains the recent feed. Keep New channel and New direct message on their separate existing creation flows, independent of the sidebar flag; size the sidebar's New dropdown to its trigger width.
   Use `--sidebar-gutter` for the outer section, DM, and search containers; shared headings and rows provide their own item padding.
   Indent section rows by 8px; style empty states like saved views with a padded, bordered surface and secondary actions, without the extra row indentation. Keep unsectioned search results unindented.
   Reuse shared collapsible section headers and their hidden-caret behavior without leading section icons; keep Shared beside the name before the caret, replacing its badge with a users icon below 256px of section width. Use short, separate tooltips for names and sharing; apply focus backgrounds across the full header row and omit trailing header padding.
-  Space sections with the stack's 2px flex gap, not header padding; wrap each section's header and content in one drop surface, show blocked drops with a not-allowed cursor and explanation, and keep Gantt's shared drag auto-scroll and wheel scrolling available while dragging.
+  Space sections with the stack's 2px flex gap, not header padding; wrap each section's header and content in one drop surface, show blocked drops with a not-allowed cursor and borderless explanation, omit rejection overlays while section data is pending, and keep Gantt's shared drag auto-scroll and wheel scrolling available while dragging.
   Animate section reorder with the shared layout animation engine; preserve unanimated measurement wrappers, reduced-motion preferences, and cancellation on scrolling. Show a card preview and subdued source while dragging.
   Name the team-channel section after the current team, falling back to Team channels while its name is unavailable.
   Keep every joined team channel in the team section regardless of custom-section assignments; use the same complete membership for bulk notification actions.
-  Keep available channel rows visible during section hydration and refetches; pass server-returned member IDs to `queries/channel/by-ids`, whose single Soup owner selects cached rows and fetches missing records. Keep entity-ID hydration generic in Soup, with channel identities, batching, and unread refreshes in the channel query layer; append per-section skeletons only while unresolved members load.
+  Keep available channel rows visible during section hydration and refetches; key virtualized rows by stable IDs so data updates cannot interrupt a click. Pass server-returned member IDs to `queries/channel/by-ids`, whose single Soup owner selects cached rows and fetches missing records. Keep entity-ID hydration generic in Soup, with channel identities, batching, and unread refreshes in the channel query layer; append per-section skeletons only while unresolved members load.
   Show lock icons for private conversations and visible per-section options; keep empty sections usable as drop targets without an all-sections management menu.
   Create all section types through New → New section in a wider dialog with Smart in the body and Shared in the footer; keep collapse on the header and style deletion as destructive.
   Offer Add channels on manual-section headers and empty states; keep the picker scoped to eligible joined channels, explain scope and assignment moves in concise helper text, and leave smart membership rule-driven.
@@ -615,7 +620,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Default Favorites to Custom order and persist drag reordering through the shared favorites mutation; preserve hidden and non-channel favorite positions, disable dragging under automatic sorts, show an insertion line at the actual destination edge, and keep the original rail unchanged.
   Share the sliders-icon section menu's Sort, Filter, and actions with a header context menu; use trailing `SingleSelectCheck` marks for sorting, keep the Unread only label left and its switch right, and keep the filter submenu open when toggled.
   Compose the section click and right-click menus with `ContextMenuContent`, `MenuItem`, `MenuGroup`, and `MenuSeparator`; do not nest padded `Dropdown.Group` elements inside a context-menu surface.
-  Keep all section mute, unmute, and snooze actions personal to the viewer; use the complete current membership, not filtered or hydrated rows, and never apply the change to later additions. Resolve built-in membership through the complete channel list, preserving sidebar assignment exclusions and participant checks; Favorites targets channel favorites only. Reuse notification mutations and the shared snooze picker, preserving successful writes on partial failure.
+  Keep all section mute, unmute, and snooze actions personal to the viewer; use the complete current membership, not filtered or hydrated rows, and never apply the change to later additions. Resolve built-in membership through the complete channel list, including custom-section assignments and preserving participant checks; Favorites targets channel favorites only. Use the bulk item-preference endpoints and shared snooze picker, applying confirmed changes to the cache once and preserving successful chunks on partial failure.
   Use checkbox items in Add to section to toggle membership within each scope without changing the other scope.
   Carry team IDs into channel entities and require a matching team for new shared-section assignments; preserve server-authorized membership display while metadata hydrates.
 - Route supported move, trash, restore, permanent-delete, duplicate, and share-policy

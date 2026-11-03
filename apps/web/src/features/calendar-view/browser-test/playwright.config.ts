@@ -10,6 +10,8 @@ export default defineConfig({
   outputDir: `${directory}/test-results`,
   timeout: 45_000,
   fullyParallel: true,
+  forbidOnly: !!process.env.CI,
+  reporter: process.env.CI ? [['list'], ['github']] : 'list',
   use: {
     baseURL: `http://127.0.0.1:${port}`,
     trace: 'retain-on-failure',

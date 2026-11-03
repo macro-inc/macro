@@ -32,24 +32,22 @@ impl<E: SoupEntityEdges> GraphqlSoupCrmContact<E> {
     }
     /// Team-local name, falling back to the email address.
     pub(super) async fn display_name(&self) -> Option<String> {
-        Some(
-            self.0
-                .name
-                .as_deref()
-                .filter(|name| !name.trim().is_empty())
-                .unwrap_or(&self.0.email)
-                .to_owned(),
-        )
+        self.0
+            .name
+            .as_deref()
+            .filter(|name| !name.trim().is_empty())
+            .or(self.0.email.as_deref())
+            .map(str::to_owned)
     }
     /// Record metadata; the parent is the owning company.
     pub(super) async fn metadata(&self) -> GraphqlEntityMetadata {
         GraphqlEntityMetadata {
             owner_id: None,
             owner_type: None,
-            parent: Some(graphql_entity(
-                model_entity::EntityType::CrmCompany,
-                self.0.company_id,
-            )),
+            parent: self
+                .0
+                .company_id
+                .map(|company_id| graphql_entity(model_entity::EntityType::CrmCompany, company_id)),
             created_at: Some(self.0.created_at.to_rfc3339()),
             updated_at: Some(self.0.updated_at.to_rfc3339()),
             viewed_at: self.0.viewed_at.map(|value| value.to_rfc3339()),
@@ -60,17 +58,34 @@ impl<E: SoupEntityEdges> GraphqlSoupCrmContact<E> {
     pub(super) async fn team_id(&self) -> ID {
         ID(self.0.team_id.to_string())
     }
-    /// Parent company.
+    /// Parent company; null for a contact without a company.
+    pub(super) async fn parent_company_id(&self) -> Option<ID> {
+        self.0
+            .company_id
+            .map(|company_id| ID(company_id.to_string()))
+    }
+    /// Parent company's display name; null without a company.
+    pub(super) async fn parent_company_name(&self) -> Option<&str> {
+        self.0.company_name.as_deref()
+    }
+    /// Full email address; null for a contact added by name alone.
+    pub(super) async fn email_address(&self) -> Option<&str> {
+        self.0.email.as_deref()
+    }
+    /// Parent company, or the nil ID for a contact without a company.
+    #[graphql(deprecation = "Use parentCompanyId. Remove after 2026-12-10.")]
     pub(super) async fn company_id(&self) -> ID {
-        ID(self.0.company_id.to_string())
+        ID(self.0.company_id.unwrap_or_default().to_string())
     }
-    /// Parent company's display name.
+    /// Parent company's display name, or empty without a company.
+    #[graphql(deprecation = "Use parentCompanyName. Remove after 2026-12-10.")]
     pub(super) async fn company_name(&self) -> &str {
-        &self.0.company_name
+        self.0.company_name.as_deref().unwrap_or_default()
     }
-    /// Full email address.
+    /// Full email address, or empty for a contact added by name alone.
+    #[graphql(deprecation = "Use emailAddress. Remove after 2026-12-10.")]
     pub(super) async fn email(&self) -> &str {
-        &self.0.email
+        self.0.email.as_deref().unwrap_or_default()
     }
     /// Team-local display name.
     pub(super) async fn name(&self) -> Option<&str> {

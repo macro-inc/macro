@@ -1,4 +1,4 @@
-import { expect, type Page, test } from '@playwright/test';
+import { expect, type Locator, type Page, test } from '@playwright/test';
 
 const deliverJoinRequests = (page: Page) =>
   page.evaluate(() => window.calendarPreview.deliverJoinRequests());
@@ -40,7 +40,7 @@ async function openDetails(page: Page, query: string) {
   return { anchor, details };
 }
 
-async function box(locator: ReturnType<Page['getByRole']>) {
+async function box(locator: Locator) {
   const rect = await locator.boundingBox();
   if (!rect) throw new Error('Expected a laid-out element');
   return { ...rect, bottom: rect.y + rect.height };
@@ -269,4 +269,59 @@ test('the phone drawer shows join requests that arrive after it opens', async ({
     'Invited member@example.com'
   );
   await expect(requests).toHaveCount(0);
+});
+
+// The fixture's `?addresses=long` guests: one with a name, one known only by
+// address. Neither address has a space to break at.
+const NAMED_GUEST = {
+  name: 'Rowan Field',
+  address:
+    'quarterly.planning.review.coordinator.northeast@facilities-and-operations.example.com',
+};
+const ADDRESS_ONLY_GUEST =
+  'shared.conference.room.booking.notifications@resource-scheduling.example.com';
+
+/** The address text, not just its row, wraps inside the details. */
+async function expectAddressWraps(details: Locator, address: string) {
+  const text = details.getByText(address, { exact: true });
+  await expect(text).toHaveCount(1);
+  await text.scrollIntoViewIfNeeded();
+  const inside = await box(details);
+  const line = await box(text);
+  expect(line.x).toBeGreaterThanOrEqual(inside.x);
+  expect(line.x + line.width).toBeLessThanOrEqual(inside.x + inside.width);
+  expect(line.y).toBeGreaterThanOrEqual(inside.y);
+  expect(line.bottom).toBeLessThanOrEqual(inside.bottom);
+  const layout = await text.evaluate((element) => ({
+    overflow: element.scrollWidth - element.clientWidth,
+    lines:
+      element.getBoundingClientRect().height /
+      Number.parseFloat(getComputedStyle(element).lineHeight),
+  }));
+  expect(layout.overflow).toBeLessThanOrEqual(0);
+  expect(layout.lines).toBeGreaterThan(1.5);
+  return line;
+}
+
+test('long guest addresses wrap inside the popover and the phone drawer', async ({
+  page,
+  isMobile,
+}) => {
+  let details: Locator;
+  if (isMobile) {
+    await page.goto('/?addresses=long');
+    await page
+      .getByRole('button', { name: 'Planning review', exact: true })
+      .click();
+    details = page.getByRole('dialog', { name: 'Planning review' });
+    await expect(details).toBeVisible();
+  } else {
+    ({ details } = await openDetails(page, 'addresses=long'));
+  }
+
+  const name = details.getByText(NAMED_GUEST.name, { exact: true });
+  await expect(name).toHaveCount(1);
+  const address = await expectAddressWraps(details, NAMED_GUEST.address);
+  expect(address.y).toBeGreaterThanOrEqual((await box(name)).bottom - 1);
+  await expectAddressWraps(details, ADDRESS_ONLY_GUEST);
 });

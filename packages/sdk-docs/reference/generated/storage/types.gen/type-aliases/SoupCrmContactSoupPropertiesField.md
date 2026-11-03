@@ -1,6 +1,6 @@
 # Type Alias: SoupCrmContactSoupPropertiesField
 
-> **SoupCrmContactSoupPropertiesField** = \{ `properties`: [`SoupProperty`](SoupProperty.md)[]; \} & \{ `companyId`: `string`; `companyName`: `string`; `createdAt`: `string`; `email`: `string`; `firstInteraction`: `string`; `hidden`: `boolean`; `id`: `string`; `lastInteraction`: `string`; `name?`: `string` \| `null`; `teamId`: `string`; `updatedAt`: `string`; `viewedAt?`: `string` \| `null`; \}
+> **SoupCrmContactSoupPropertiesField** = \{ `properties`: [`SoupProperty`](SoupProperty.md)[]; \} & \{ `companyId?`: `string` \| `null`; `companyName?`: `string` \| `null`; `createdAt`: `string`; `email?`: `string` \| `null`; `firstInteraction`: `string`; `hidden`: `boolean`; `id`: `string`; `lastInteraction`: `string`; `name?`: `string` \| `null`; `teamId`: `string`; `updatedAt`: `string`; `viewedAt?`: `string` \| `null`; \}
 
 One original CRM contact record, selected from the viewer's accessible teams.
 
@@ -12,10 +12,10 @@ One original CRM contact record, selected from the viewer's accessible teams.
 
 | Name | Type | Description |
 | ------ | ------ | ------ |
-| `companyId` | `string` | Parent company ID. |
-| `companyName` | `string` | Parent company's display name. |
+| `companyId?` | `string` \| `null` | Parent company ID; `None` for a contact without a company. |
+| `companyName?` | `string` \| `null` | Parent company's display name; `None` without a company. |
 | `createdAt` | `string` | Record creation time. |
-| `email` | `string` | Full email address. |
+| `email?` | `string` \| `null` | Full email address; `None` for a contact added by name alone. |
 | `firstInteraction` | `string` | Earliest interaction for this team record. |
 | `hidden` | `boolean` | Whether the contact or parent company is hidden. |
 | `id` | `string` | Original team-owned contact ID. |

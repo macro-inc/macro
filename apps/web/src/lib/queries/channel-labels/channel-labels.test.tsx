@@ -3,7 +3,11 @@ import type { ChannelLabelScopeSelection } from '@service-storage/generated/sche
 import type { ChannelLabelsList } from '@service-storage/generated/schemas/channelLabelsList';
 import type { SmartTagPreview } from '@service-storage/generated/schemas/smartTagPreview';
 import { cleanup, render, waitFor } from '@solidjs/testing-library';
-import { type QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import {
+  focusManager,
+  type QueryClient,
+  QueryClientProvider,
+} from '@tanstack/solid-query';
 import { type Ok, ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -80,6 +84,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   client.clear();
+  focusManager.setFocused(undefined);
 });
 
 describe('channel tag query rollout', () => {
@@ -161,6 +166,65 @@ describe('channel tag query rollout', () => {
     expect(
       client.getQueryData(channelLabelKeys.list(undefined, 'viewer').queryKey)
     ).toEqual(labels);
+  });
+
+  it('inherits bounded retries for transient section failures and retains cached labels', async () => {
+    mocks.enabled = () => true;
+    client.setDefaultOptions({ queries: { retry: 1, retryDelay: 0 } });
+    client.setQueryData(
+      channelLabelKeys.list('personal', 'viewer').queryKey,
+      labels
+    );
+    mocks.list.mockRejectedValueOnce(new Error('Network unavailable'));
+    mocks.list.mockResolvedValueOnce(ok(labels));
+    let data!: ReturnType<typeof useChannelLabelsData>;
+    let query!: ReturnType<typeof useChannelLabelsQuery>;
+    const Probe = () => {
+      data = useChannelLabelsData('personal');
+      query = useChannelLabelsQuery('personal');
+      return null;
+    };
+    render(() => (
+      <QueryClientProvider client={client}>
+        <Probe />
+      </QueryClientProvider>
+    ));
+
+    expect(data()).toEqual(labels.labels);
+    await client.invalidateQueries({
+      queryKey: channelLabelKeys.list('personal', 'viewer').queryKey,
+    });
+
+    expect(mocks.list).toHaveBeenCalledTimes(2);
+    expect(query.isError).toBe(false);
+    expect(data()).toEqual(labels.labels);
+  });
+
+  it('recovers an initial section failure when the app regains focus', async () => {
+    mocks.enabled = () => true;
+    client.setDefaultOptions({
+      queries: { retry: false, refetchOnWindowFocus: false },
+    });
+    mocks.list.mockRejectedValueOnce(new Error('Network unavailable'));
+    mocks.list.mockResolvedValueOnce(ok(labels));
+    let query!: ReturnType<typeof useChannelLabelsQuery>;
+    const Probe = () => {
+      query = useChannelLabelsQuery('personal');
+      return null;
+    };
+    render(() => (
+      <QueryClientProvider client={client}>
+        <Probe />
+      </QueryClientProvider>
+    ));
+    await waitFor(() => expect(query.isError).toBe(true));
+
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
+
+    await waitFor(() => expect(query.isSuccess).toBe(true));
+    expect(query.data?.labels).toEqual(labels.labels);
+    expect(mocks.list).toHaveBeenCalledTimes(2);
   });
 
   it('keeps personal and team list caches independent', async () => {

@@ -258,9 +258,11 @@ export const notificationExcluded = [
   'healthHandler',
   'removeUnsubscribeAll',
   'removeUnsubscribeItem',
+  'removeUnsubscribeItems',
   'unsubscribeAll',
   'unsubscribeEmail',
   'unsubscribeItem',
+  'unsubscribeItems',
 ] as const satisfies readonly (keyof NotificationSdk)[];
 
 export const notificationBacklog =
