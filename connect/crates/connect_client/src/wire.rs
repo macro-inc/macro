@@ -23,6 +23,10 @@ pub struct CatalogEntry {
     pub mcp_url: String,
     /// Connect-served icon path when an official SVG is available.
     pub icon_url: Option<String>,
+    /// Pipedream Connect app slugs this app replaces, for customers migrating
+    /// connections off Pipedream. Empty when there is no equivalent.
+    #[serde(default)]
+    pub pipedream_app_slugs: Vec<String>,
 }
 
 /// How Connect obtains a vendor OAuth client.

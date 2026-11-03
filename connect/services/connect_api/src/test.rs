@@ -140,6 +140,10 @@ async fn catalog_only_exposes_live_apps_with_public_fields() {
             }
         );
         assert_eq!(entry["mcp_url"], app.mcp_url);
+        assert_eq!(
+            entry["pipedream_app_slugs"],
+            serde_json::json!(app.pipedream_app_slugs)
+        );
         if app.icon_svg.is_some() {
             assert_eq!(entry["icon_url"], format!("/v1/catalog/{id}/icon.svg"));
         } else {
@@ -148,9 +152,9 @@ async fn catalog_only_exposes_live_apps_with_public_fields() {
         assert_eq!(
             entry.as_object().unwrap().len(),
             if app.client_registration == ClientRegistration::ApiKey {
-                6
-            } else {
                 7
+            } else {
+                8
             }
         );
     }

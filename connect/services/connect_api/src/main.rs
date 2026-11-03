@@ -219,6 +219,7 @@ async fn catalog(State(state): State<AppState>) -> Json<Vec<CatalogEntry>> {
                         app.id
                     )
                 }),
+                pipedream_app_slugs: app.pipedream_app_slugs.clone(),
             })
             .collect(),
     )

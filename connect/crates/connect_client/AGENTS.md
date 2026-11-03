@@ -11,6 +11,8 @@ The public Rust surface for Macro Connect customers. API changes here are breaki
 - `src/wire.rs`: shared request and response types used by the client and `connect_api`.
 - Catalog entries expose an optional typed `oauth_client` label; API-key entries
   omit it.
+- Catalog entries list `pipedream_app_slugs`, the Pipedream apps each one
+  replaces, so customers can map migrated connections.
 - `list_connections(ConnectionsQuery)` returns a customer-scoped page;
   `all_connections` follows every cursor; `connections_summary` returns counts.
 - `list_users(UsersQuery)` returns complete connected users in a customer-scoped

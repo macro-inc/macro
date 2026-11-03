@@ -16,7 +16,7 @@ async fn calls_every_customer_route_with_the_shared_wire_contract() {
             ResponseTemplate::new(200).set_body_json(serde_json::json!([{
                 "id": "notion", "name": "Notion", "description": "Notes", "access": ["mcp"],
                 "mcp_url": "https://mcp.notion.com/mcp", "icon_url": null,
-                "oauth_client": "dcr"
+                "oauth_client": "dcr", "pipedream_app_slugs": ["notion"]
             }])),
         )
         .mount(&server)
@@ -24,6 +24,7 @@ async fn calls_every_customer_route_with_the_shared_wire_contract() {
     let catalog = client.catalog().await.unwrap();
     assert_eq!(catalog[0].id, "notion");
     assert_eq!(catalog[0].oauth_client, Some(wire::OAuthClient::Dcr));
+    assert_eq!(catalog[0].pipedream_app_slugs, ["notion"]);
 
     Mock::given(method("GET"))
         .and(path("/connect/v1/catalog/notion/icon.svg"))
