@@ -487,9 +487,25 @@ it('hides cached comments when a linked message denies access and retries the li
   ));
   expect(view.queryAllByRole('article')).toHaveLength(0);
   expect(view.queryByRole('textbox')).toBeNull();
-  fireEvent.click(
-    view.getByRole('button', { name: 'Could not load comments. Retry' })
-  );
+  fireEvent.click(view.getByRole('button', { name: 'Retry' }));
   expect(refetch).toHaveBeenCalled();
   expect(mocks.refetchLink).toHaveBeenCalled();
+});
+
+it('does not offer retry or a composer for a missing parent', () => {
+  mocks.timeline.mockReturnValue({
+    isPending: false,
+    isError: true,
+    error: new ThrownResultError([
+      { code: 'NOT_FOUND', message: 'message or parent not found' },
+    ]),
+  });
+  const view = render(() => (
+    <EntityConversation parent={{ type: 'document', id: 'deleted' }} canWrite />
+  ));
+  expect(view.getByRole('alert').textContent).toBe(
+    'Comments are unavailable for this item.'
+  );
+  expect(view.queryByRole('button', { name: 'Retry' })).toBeNull();
+  expect(view.queryByRole('textbox')).toBeNull();
 });

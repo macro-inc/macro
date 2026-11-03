@@ -1048,6 +1048,9 @@ and bot personas share one renderer; keep surface sizing in the caller.
 
 ### Inline comment drafts
 
+Use `MessageLoadError` for compact discussion/thread failures; missing resources
+show an unavailable state without a retry action or composer.
+
 Keep collaborative drafts as cursor-based overlays outside the shared editor tree.
 Flush pending text, publish the mark from an isolated peer with `PeerCommentUpdate`,
 and post the message only after acknowledgement. Refused operations never enter

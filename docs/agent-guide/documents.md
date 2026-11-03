@@ -2761,6 +2761,11 @@ Cancellation retries unconfirmed highlight cleanup after reconnect or reopening.
 An uncertain message response preserves its highlight rather than risking a saved
 comment becoming invisible.
 
+Discussion and thread loading errors use compact muted text and a separate
+**Retry** button. Retry is disabled while fetching. A missing parent or thread
+shows an unavailable message without Retry; a deleted task cannot load comments
+until it is restored. Verify that an unavailable discussion hides its composer.
+
 Comments anchored to selected text open in a floating margin card on desktop and
 a `Comments` drawer on touch devices. Hovering a desktop card reveals its actions
 without changing the card size or header text wrapping. New comments, replies,
