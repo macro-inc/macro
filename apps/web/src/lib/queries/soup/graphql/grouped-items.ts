@@ -1,3 +1,4 @@
+import { createDateClock } from '@core/util/createDateClock';
 /*
  * Reactive urql-backed grouped Soup parent query. The initial GroupSoup
  * operation remains subscribed so normalized property writes update grouped
@@ -60,9 +61,10 @@ export function createGraphqlGroupedSoupAstItemsQuery(
   const pendingDone = usePendingGraphqlSoupDone();
   const projectDone = createGraphqlSoupDoneProjection();
   const excludesDone = createMemo(() => soupQueryExcludesDone([args().body]));
-  const [now, setNow] = createSignal(new Date());
-  const dateTimer = setInterval(() => setNow(new Date()), 60_000);
-  onCleanup(() => clearInterval(dateTimer));
+  const now = createDateClock(
+    () => options().enabled && args().groupBy?.type === 'date',
+    86_400_000
+  );
   const [networkRevision, setNetworkRevision] = createSignal<CacheRevision>();
   const [networkInput, setNetworkInput] = createSignal<unknown>();
   const offline = createBrowserOfflineSignal();
@@ -138,7 +140,7 @@ export function createGraphqlGroupedSoupAstItemsQuery(
         },
       };
     },
-    now
+    () => new Date(now())
   );
   const query = grouped.query;
 
@@ -182,7 +184,7 @@ export function createGraphqlGroupedSoupAstItemsQuery(
       networkRevision() === local.localRevision?.()
     )
       return;
-    return groupCachedMailByDate(data, now());
+    return groupCachedMailByDate(data, new Date(now()));
   });
   const error = (): CombinedError | undefined => {
     const error = query.error;

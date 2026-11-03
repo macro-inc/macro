@@ -39,6 +39,7 @@ export function CanvasAssetPicker(props: {
   const [index, setIndex] = createSignal(0);
   const searchTerm = debouncedDependent(search, 60);
   const source = useEntityMention({
+    enabled: () => true,
     buckets:
       props.mode === 'media'
         ? ['document']

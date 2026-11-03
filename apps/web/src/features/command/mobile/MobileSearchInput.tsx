@@ -5,9 +5,9 @@ import {
   useMobileNavNavigate,
 } from '@components/app/mobile/use-mobile-nav';
 import { usePreserveFocusOnButtonTaps } from '@core/mobile/usePreserveFocusOnButtonTaps';
+import { createElementSize } from '@core/util/createElementSize';
 import { lazyNamed } from '@core/util/lazyNamed';
 import XIcon from '@icon/system/regular/x.svg';
-import { createElementSize } from '@solid-primitives/resize-observer';
 import { CommandMenuSearchInput } from '@ui';
 import { createSignal, Show, Suspense } from 'solid-js';
 import { useUniversalInputEnabled } from '../../universal-input/use-universal-input';

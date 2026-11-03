@@ -13,6 +13,7 @@ import {
 } from '@block-pr/component/PrLinks';
 import { type PrLinks, priorityTaskName } from '@block-pr/data/pr-links';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { createElementSize } from '@core/util/createElementSize';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   EntitySelectionToolbar,
@@ -23,7 +24,6 @@ import {
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import type { GithubLinkStatus } from '@queries/auth/github-link';
-import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button } from '@ui';
 import {
   createEffect,

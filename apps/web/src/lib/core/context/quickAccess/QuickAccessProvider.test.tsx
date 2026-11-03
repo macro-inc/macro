@@ -6,6 +6,7 @@ import { QuickAccessProvider } from './QuickAccessProvider';
 
 const [authenticated, setAuthenticated] = createSignal<boolean | undefined>();
 const [userId, setUserId] = createSignal<string>();
+const [unrelated, setUnrelated] = createSignal(0);
 const mountSource = vi.fn();
 const disposeSource = vi.fn();
 const refresh = vi.fn();
@@ -21,6 +22,7 @@ vi.mock('@channel/DebugSuspense', () => ({
 vi.mock('./QuickAccessSource', () => ({
   createQuickAccessValue: () => {
     const id = userId();
+    unrelated();
     const error = new Error(`Unavailable for ${id}`);
     mountSource(id);
     onCleanup(() => disposeSource(id));
@@ -38,7 +40,7 @@ vi.mock('./QuickAccessSource', () => ({
       usesSearchProjection: () => true,
       isLoading: () => false,
       refresh,
-      getById: () => undefined,
+      getById: (id: string) => ({ kind: 'entity', id }),
     };
   },
 }));
@@ -105,4 +107,55 @@ it('keeps consumers mounted while creating and disposing account sources across 
   expect(currentError()).toBeUndefined();
   expect(mountSource).toHaveBeenCalledTimes(2);
   expect(mounted).toBe(1);
+});
+
+it('does not mount sources for an unused provider or disabled list', () => {
+  setUserId('viewer');
+  setAuthenticated(true);
+  const [enabled, setEnabled] = createSignal(false);
+  function Consumer() {
+    const access = useQuickAccess();
+    const list = access.useList({ buckets: ['person'], enabled });
+    return <div>{list.items().length}</div>;
+  }
+  render(() => (
+    <QuickAccessProvider>
+      <Consumer />
+    </QuickAccessProvider>
+  ));
+  expect(mountSource).not.toHaveBeenCalled();
+  setEnabled(true);
+  expect(mountSource).toHaveBeenCalledOnce();
+  expect(screen.getByText('1')).toBeTruthy();
+  setEnabled(false);
+  expect(screen.getByText('0')).toBeTruthy();
+  setEnabled(true);
+  expect(mountSource).toHaveBeenCalledOnce();
+});
+
+it('keeps cache lookups pure and activates only an enabled list', () => {
+  setUserId('viewer');
+  setAuthenticated(true);
+  const [enabled, setEnabled] = createSignal(false);
+  let lookup: (id: string) => unknown = () => undefined;
+  function Consumer() {
+    const access = useQuickAccess();
+    lookup = access.getById;
+    access.useList({ buckets: ['document'], enabled });
+    return <div>Detail</div>;
+  }
+  render(() => (
+    <QuickAccessProvider>
+      <Consumer />
+    </QuickAccessProvider>
+  ));
+  expect(mountSource).not.toHaveBeenCalled();
+  expect(lookup('document')).toBeUndefined();
+  expect(mountSource).not.toHaveBeenCalled();
+  setEnabled(true);
+  expect(lookup('document')).toMatchObject({ id: 'document' });
+  expect(mountSource).toHaveBeenCalledOnce();
+  setUnrelated(1);
+  expect(mountSource).toHaveBeenCalledOnce();
+  expect(disposeSource).not.toHaveBeenCalled();
 });

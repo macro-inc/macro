@@ -1,11 +1,16 @@
-import { SoupChatInput } from '@app/features/chat/SoupChatInput';
 import { activeElement } from '@app/signal/focus';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { isEditableInput } from '@core/util/isEditableInput';
-import { Show } from 'solid-js';
+import { lazyNamed } from '@core/util/lazyNamed';
+import { Show, Suspense } from 'solid-js';
 import { FloatRegion } from './float-regions/FloatRegion';
 import { MobilePageCreateButton } from './MobilePageCreateButton';
 import { useForegroundMobileView } from './use-mobile-nav';
+
+const SoupChatInput = lazyNamed(
+  () => import('@app/features/chat/SoupChatInput'),
+  'SoupChatInput'
+);
 
 /** The page's New action, or an AI composer on the Agents view. */
 export function MobilePageActionRow() {
@@ -17,7 +22,11 @@ export function MobilePageActionRow() {
   const composer = (
     <Show when={showsComposer()}>
       <div ref={composerRef} class="pointer-events-auto min-w-0 flex-1">
-        <SoupChatInput />
+        <Suspense
+          fallback={<div class="h-12" aria-label="Loading agent composer" />}
+        >
+          <SoupChatInput />
+        </Suspense>
       </div>
     </Show>
   );

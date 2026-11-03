@@ -324,7 +324,6 @@ export default function GlobalShortcuts() {
         ? t('commands.closeCommandMenu')
         : t('commands.openCommandMenu'),
     keyDownHandler: (event) => {
-      console.log('## CMD K - global');
       handleCommandMenu(event);
       return true;
     },

@@ -66,7 +66,9 @@ export function createMobileSplitMotion(options: { stack: MobilePaneStack }) {
         !swipeBackGesture.isDragging() &&
         !swipeBackGesture.isAnimatingOut() &&
         !forwardIsActive() &&
-        'invisible'
+        // Retain the pane's state without laying it out under the front pane.
+        // Touch start and both transition phases restore it before movement.
+        'hidden'
     );
   }
 

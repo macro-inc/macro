@@ -11,6 +11,8 @@ type UseUsersMentionOptions = {
   /** Custom users list if necessary */
   users?: Accessor<IUser[]>;
   searchTerm: Accessor<string>;
+  /** A mounted editor can retain this hook while its menu is closed. */
+  enabled: Accessor<boolean>;
   /**
    * Whether the composer posts to a channel. Group mentions are an editor
    * configuration, not a block-context lookup: the channels view hosts a
@@ -46,7 +48,10 @@ export function useUsersMention(
 ): UseUsersMentionResult {
   const { users: customUsers, searchTerm, isChannelBlock } = options;
   const quickAccess = useQuickAccess();
-  const workspaceUsers = quickAccess.useList('person').items;
+  const workspaceUsers = quickAccess.useList({
+    buckets: ['person'],
+    enabled: options.enabled,
+  }).items;
   const currentUserEmail = useEmail();
 
   const currentUserDomain = () => {

@@ -1,3 +1,4 @@
+import { pauseOffscreenAnimations } from '@core/util/animationVisibility';
 import { cn } from '@ui';
 import { createSignal, onCleanup, onMount, type ParentProps } from 'solid-js';
 
@@ -34,6 +35,7 @@ function Row(props: ParentProps<{ class?: string }>) {
 function Bar(props: { class?: string }) {
   return (
     <div
+      ref={pauseOffscreenAnimations}
       class={cn('skeleton-shimmer h-2.5 rounded-full bg-skeleton', props.class)}
     />
   );

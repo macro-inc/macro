@@ -11,6 +11,8 @@ import { rankMentions } from '../utils/mention-ranking';
 type UseEntityMentionOptions = {
   buckets: EntityBucket[];
   searchTerm: Accessor<string>;
+  /** The owning menu admits queries when open, independently of search text. */
+  enabled: Accessor<boolean>;
 };
 
 type UseEntityMentionResult = {
@@ -33,6 +35,7 @@ export function useEntityMention(
   const entityList = quickAccess.useList({
     buckets: options.buckets,
     searchTerm: options.searchTerm,
+    enabled: options.enabled,
   }) as QuickAccessList<EntityItem>;
   const usesRankedList = () =>
     quickAccess.usesRecordSelection() || quickAccess.usesSearchProjection();

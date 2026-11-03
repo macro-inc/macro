@@ -37,10 +37,15 @@ export class CacheChangeBatch {
               ]),
             ]
           : undefined;
+      // A proof must cover every coalesced write, so intersect unchanged IDs.
+      const unchangedViews = previous.push.unchangedViews?.filter((id) =>
+        push.unchangedViews?.includes(id)
+      );
       // Missing scope means all buckets, and dominates any narrower hint.
       push = {
         kind: push.kind,
         revision: push.revision,
+        ...(unchangedViews === undefined ? {} : { unchangedViews }),
         ...(buckets === undefined ? {} : { searchChangedBuckets: buckets }),
       };
     }

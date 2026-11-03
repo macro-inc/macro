@@ -24,6 +24,8 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
   backfills, partial/cursor pages, identity switches, and pending optimistic
   rows. At most 500 local matches are checked per write; later full snapshots
   restore completeness.
+- `examples/mail_window_benchmark.rs`: measures through-window reads with real
+  native Turso and optionally emits canonical browser fixtures.
 - `src/mail/retention.rs`: retain same-query server rows while local facts are
   incomplete, reject proven nonmembers, and preserve the indexed cursor.
 
@@ -54,6 +56,16 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
 
 ## Gotchas
 
+- Prove unchanged Mail continuation with an indexed lookahead dependency; never
+  apply an offscreen cutoff to an exhausted window, and carry the lookahead
+  through window truncation and baseline retention.
+- Bind each Mail window observation to its compiled catalog input (`emailLinks`)
+  and same-query baseline; let normalized fragment reads bind selected dependencies.
+  Never use the whole user record as the catalog dependency: backfill changes
+  unrelated fields on that parent.
+- Start Mail through-window scans near the requested visible minimum and grow
+  only when the cursor requires deeper pages; keep lookahead outside the returned
+  window so continuation cursors never skip rows.
 - Mail pages reconcile server membership through the generic predicate engine;
   retain unknown projections with their supplied sort values, exclude confirmed
   nonmembers, and keep continuation cursors on the original indexed window.

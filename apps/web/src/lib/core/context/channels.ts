@@ -5,6 +5,7 @@ import { queryReadyGate } from '@queries/gate';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import { ChannelTypeEnum } from '@service-storage/client';
 import type { ApiActivity as ChannelsActivity } from '@service-storage/generated/schemas/apiActivity';
+import { createLazyMemo } from '@solid-primitives/memo';
 import { type Accessor, createMemo } from 'solid-js';
 import { createAssertedContextProvider } from './createContext';
 import { useIsAuthenticated, useUserId } from './user';
@@ -22,17 +23,29 @@ export const [ChannelsContextProvider, useChannelsContext] =
   createAssertedContextProvider('ChannelsContext', (): ChannelsContextValue => {
     const authenticated = useIsAuthenticated();
     const enabled = () => authenticated() === true;
-    const channelsQuery = useListChannelsQuery(enabled);
-    const activityQuery = useChannelsActivityQuery(enabled);
+    // Background call listeners capture this context at boot; only a data
+    // consumer should create these independent, provider-owned observers.
+    const channelsQuery = createLazyMemo(() => useListChannelsQuery(enabled));
+    const activityQuery = createLazyMemo(() =>
+      useChannelsActivityQuery(enabled)
+    );
 
-    const channels = () =>
-      enabled() && queryReadyGate(channelsQuery) ? channelsQuery.data : [];
-    const activity = () =>
-      enabled() && queryReadyGate(activityQuery) ? activityQuery.data : [];
+    const channels = () => {
+      if (!enabled()) return [];
+      const query = channelsQuery();
+      return queryReadyGate(query) ? query.data : [];
+    };
+    const activity = () => {
+      if (!enabled()) return [];
+      const query = activityQuery();
+      return queryReadyGate(query) ? query.data : [];
+    };
 
-    const channelsById = createMemo(() => {
-      if (!enabled() || !queryReadyGate(channelsQuery)) return {};
-      return channelsQuery.data.reduce<Record<string, ApiChannelWithLatest>>(
+    const channelsById = createLazyMemo(() => {
+      if (!enabled()) return {};
+      const query = channelsQuery();
+      if (!queryReadyGate(query)) return {};
+      return query.data.reduce<Record<string, ApiChannelWithLatest>>(
         (acc, ch) => {
           acc[ch.id] = ch;
           return acc;
@@ -41,15 +54,14 @@ export const [ChannelsContextProvider, useChannelsContext] =
       );
     });
 
-    const activityByChannelId = createMemo(() => {
-      if (!enabled() || !queryReadyGate(activityQuery)) return {};
-      return activityQuery.data.reduce<Record<string, ChannelsActivity>>(
-        (acc, a) => {
-          acc[a.channel_id] = a;
-          return acc;
-        },
-        {}
-      );
+    const activityByChannelId = createLazyMemo(() => {
+      if (!enabled()) return {};
+      const query = activityQuery();
+      if (!queryReadyGate(query)) return {};
+      return query.data.reduce<Record<string, ChannelsActivity>>((acc, a) => {
+        acc[a.channel_id] = a;
+        return acc;
+      }, {});
     });
 
     return {
@@ -57,8 +69,8 @@ export const [ChannelsContextProvider, useChannelsContext] =
       activity,
       channelsById,
       activityByChannelId,
-      isLoading: () => channelsQuery.isLoading || activityQuery.isLoading,
-      error: () => channelsQuery.error ?? activityQuery.error ?? null,
+      isLoading: () => channelsQuery().isLoading || activityQuery().isLoading,
+      error: () => channelsQuery().error ?? activityQuery().error ?? null,
     };
   });
 

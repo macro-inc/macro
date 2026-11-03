@@ -1,7 +1,8 @@
 import { useEmailLinksQuery } from '@queries/email/link';
 import { queryReadyGate } from '@queries/gate';
 import type { Link } from '@service-email/generated/schemas';
-import { type Accessor, createMemo } from 'solid-js';
+import { createLazyMemo } from '@solid-primitives/memo';
+import type { Accessor } from 'solid-js';
 import { macroIdToEmail, tryMacroId } from '../user/macroId';
 import { createAssertedContextProvider } from './createContext';
 import { useIsAuthenticated } from './user';
@@ -23,16 +24,20 @@ export const [EmailLinksContextProvider, useEmailLinksContext] =
     'EmailLinksContext',
     (): EmailLinksContextValue => {
       const isAuthenticated = useIsAuthenticated();
-      const linksQuery = useEmailLinksQuery(() => isAuthenticated() === true);
+      // Capturing the context does not need inbox identity metadata yet.
+      const linksQuery = createLazyMemo(() =>
+        useEmailLinksQuery(() => isAuthenticated() === true)
+      );
 
       // Inbox attribution is optional. Its REST request must not suspend
       // cached email rows or avatars during a cold offline launch.
-      const links = (): Link[] =>
-        isAuthenticated() === true && queryReadyGate(linksQuery)
-          ? linksQuery.data.links
-          : EMPTY_LINKS;
+      const links = (): Link[] => {
+        if (isAuthenticated() !== true) return EMPTY_LINKS;
+        const query = linksQuery();
+        return queryReadyGate(query) ? query.data.links : EMPTY_LINKS;
+      };
 
-      const secondaryInboxEmails = createMemo(() => {
+      const secondaryInboxEmails = createLazyMemo(() => {
         const emails = new Set<string>();
         for (const link of links()) {
           if (!link.is_primary) {

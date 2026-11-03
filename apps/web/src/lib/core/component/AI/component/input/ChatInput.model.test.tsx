@@ -168,7 +168,7 @@ vi.mock('@core/mobile/useTouchOutsideToDismissKeyboard', () => ({
   useTouchOutsideToDismissKeyboard: () => {},
 }));
 vi.mock('@core/util/upload', () => ({}));
-vi.mock('@solid-primitives/resize-observer', () => ({
+vi.mock('@core/util/createElementSize', () => ({
   createElementSize: () => ({ width: 44, height: 20 }),
 }));
 vi.mock('./Attachment', () => ({ AttachmentList: () => null }));

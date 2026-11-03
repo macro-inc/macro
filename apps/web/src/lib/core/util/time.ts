@@ -1,4 +1,5 @@
 import type { DateValue } from './date';
+import { formatIntlDate } from './dateTimeFormat';
 
 /**
  * Formats a date string according to relative time rules, eg:
@@ -23,16 +24,16 @@ export function formatRelativeDate(value: DateValue): string {
   const weekAgo = new Date(now);
   weekAgo.setDate(weekAgo.getDate() - 7);
   if (date > weekAgo) {
-    return `${date.toLocaleDateString('en-US', { weekday: 'long' })}`;
+    return `${formatIntlDate(date, 'en-US', { weekday: 'long' })}`;
   }
 
   // Same year
   if (date.getFullYear() === now.getFullYear()) {
-    return `${date.toLocaleDateString('en-US', { month: 'short' })} ${date.getDate()}`;
+    return `${formatIntlDate(date, 'en-US', { month: 'short' })} ${date.getDate()}`;
   }
 
   // Different year
-  return `${date.toLocaleDateString('en-US', { month: 'short' })} ${date.getDate()}, ${date.getFullYear().toString()}`;
+  return `${formatIntlDate(date, 'en-US', { month: 'short' })} ${date.getDate()}, ${date.getFullYear().toString()}`;
 }
 
 /**
@@ -42,7 +43,7 @@ export function formatRelativeDate(value: DateValue): string {
  */
 function _formatTime(value: DateValue): string {
   const date = value instanceof Date ? value : new Date(value);
-  return date.toLocaleTimeString('en-US', {
+  return formatIntlDate(date, 'en-US', {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,

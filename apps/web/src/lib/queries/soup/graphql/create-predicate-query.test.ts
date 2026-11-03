@@ -246,6 +246,20 @@ it('does not recreate held rows when host setup reads an unrelated signal', asyn
   expect(state.query.data()!.records).toBe(rows);
 });
 
+it('retains the row array when a delta repeats unchanged ordering keys', async () => {
+  const state = setup();
+  state.requests[0].resolve(snapshot());
+  await flush();
+  const rows = state.query.data()!.records;
+  const keys = state.query.data()!.keys;
+  state.change('2');
+  state.requests[1].resolve({ ...patch(), patches: [], keys: ['a', 'b'] });
+  await flush();
+  expect(state.query.data()!.revision).toBe('2');
+  expect(state.query.data()!.records).toBe(rows);
+  expect(state.query.data()!.keys).toBe(keys);
+});
+
 it('does not create root performance spans for repeated cache evaluations', async () => {
   const span = vi.spyOn(Telemetry, 'span');
   try {
@@ -264,4 +278,25 @@ it('does not create root performance spans for repeated cache evaluations', asyn
   } finally {
     span.mockRestore();
   }
+});
+
+it('does not reread a displayed window proven unchanged by hydration', async () => {
+  const state = setup();
+  state.requests[0].resolve({
+    ...snapshot(),
+    observationId: 'accepted-window',
+  });
+  await flush();
+  for (let index = 2; index <= 101; index++) {
+    for (const listener of state.listeners)
+      listener(revision(String(index)), {
+        unchangedViews: ['accepted-window'],
+      });
+  }
+  await flush();
+  expect(state.requests).toHaveLength(1);
+  expect(state.query.observationId()).toBe('accepted-window');
+  expect(state.query.data()?.records).toHaveLength(2);
+  state.change('102');
+  expect(state.requests).toHaveLength(2);
 });

@@ -53,8 +53,9 @@ afterEach(() => vi.useRealTimers());
 it('ranks shared people identically in body and discussion mention searches', () => {
   createRoot((dispose) => {
     const [searchTerm, setSearchTerm] = createSignal('sea');
-    const body = useUsersMention({ searchTerm });
+    const body = useUsersMention({ enabled: () => true, searchTerm });
     const discussion = useUsersMention({
+      enabled: () => true,
       searchTerm,
       users: () => [sean, alias, seamus],
     });
@@ -79,6 +80,7 @@ it('keeps custom participant scope and display data when workspace data refreshe
       photoUrl: 'avatar.png',
     };
     const mention = useUsersMention({
+      enabled: () => true,
       searchTerm: () => 'sea',
       users: () => [customUser],
     });
@@ -95,6 +97,7 @@ it('uses supplied interaction history for people absent from the workspace list'
   mocks.users = () => [];
   createRoot((dispose) => {
     const mention = useUsersMention({
+      enabled: () => true,
       searchTerm: () => 'sea',
       users: () => [sean, alias, { ...seamus, lastInteraction: new Date() }],
     });
@@ -105,7 +108,11 @@ it('uses supplied interaction history for people absent from the workspace list'
 
 it('preserves explicitly empty participant lists', () => {
   createRoot((dispose) => {
-    const mention = useUsersMention({ searchTerm: () => '', users: () => [] });
+    const mention = useUsersMention({
+      enabled: () => true,
+      searchTerm: () => '',
+      users: () => [],
+    });
     expect(mention.users()).toEqual([]);
     dispose();
   });
@@ -115,6 +122,7 @@ it('offers @here to channel composers without a block context', () => {
   createRoot((dispose) => {
     const [searchTerm, setSearchTerm] = createSignal('');
     const mention = useUsersMention({
+      enabled: () => true,
       searchTerm,
       users: () => [sean],
       isChannelBlock: true,
@@ -135,6 +143,7 @@ it('offers @here to channel composers without a block context', () => {
 it('keeps @here out of composers that do not post to a channel', () => {
   createRoot((dispose) => {
     const mention = useUsersMention({
+      enabled: () => true,
       searchTerm: () => '',
       users: () => [sean],
     });

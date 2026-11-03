@@ -1,7 +1,7 @@
 import { storageServiceClient } from '@service-storage/client';
 import type { SystemSkillSummary } from '@service-storage/generated/schemas/systemSkillSummary';
 import { useQuery } from '@tanstack/solid-query';
-import { createMemo } from 'solid-js';
+import { type Accessor, createMemo } from 'solid-js';
 
 const SYSTEM_SKILLS_QUERY_KEY = ['storage', 'system-skills'] as const;
 
@@ -30,8 +30,11 @@ export function systemSkillsQueryOptions() {
  *
  * The list is fixed per deploy, so it is fetched once and cached forever.
  */
-export function useSystemSkillsQuery() {
-  const query = useQuery(() => systemSkillsQueryOptions());
+export function useSystemSkillsQuery(enabled: Accessor<boolean> = () => true) {
+  const query = useQuery(() => ({
+    ...systemSkillsQueryOptions(),
+    enabled: enabled(),
+  }));
 
   const skills = createMemo<SystemSkillSummary[]>(() =>
     query.isSuccess ? (query.data ?? []) : []

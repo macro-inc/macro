@@ -182,8 +182,7 @@ export function normalizedCacheResultMetadata(
   };
 }
 
-// zone.js replaces the global Promise, so a native async function's promise
-// fails `instanceof Promise` in the app.
+// Cache adapters may return PromiseLike values without a native Promise prototype.
 function isThenable(value: unknown): value is PromiseLike<unknown> {
   return (
     typeof value === 'object' &&

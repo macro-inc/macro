@@ -1,4 +1,4 @@
-import { createElementSize } from '@solid-primitives/resize-observer';
+import { createElementSize } from '@core/util/createElementSize';
 import { createEffect, createSignal, Index, on, onCleanup } from 'solid-js';
 import { VOLUME_INTERVAL_MS } from '../core/volume';
 

@@ -31,24 +31,19 @@ import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
+import { createElementSize } from '@core/util/createElementSize';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { handleFileFolderDrop } from '@core/util/upload';
 import PaperclipIcon from '@icon/system/regular/paperclip.svg';
-import { createElementSize } from '@solid-primitives/resize-observer';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, ComposerSurface, cn, SendButton as UiSendButton } from '@ui';
 import { createEffect, createMemo, createSignal, Show } from 'solid-js';
 import { speedForModel } from '../../constant/speed';
 import { fastModeEnabled } from '../../signal/speed';
 import { AttachmentList } from './Attachment';
+import { CHAT_INPUT_TEXT_AREA_ID } from './constants';
 import { SpeedToggle } from './SpeedToggle';
 import { useAiDataConsentGate } from './useAiDataConsent';
-
-/**
- * Id of the chat input's text-area wrapper. Exposed so callers (e.g. the
- * mobile Create menu) can arm focus on the contenteditable before it mounts.
- */
-export const CHAT_INPUT_TEXT_AREA_ID = 'chat-input-text-area';
 
 type ChatInputProps = {
   onSend: (args: ChatSendInput) => void;

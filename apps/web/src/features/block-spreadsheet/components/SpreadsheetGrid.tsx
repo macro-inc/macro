@@ -1,4 +1,5 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { createElementSize } from '@core/util/createElementSize';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CaretDown from '@icon/system/regular/caret-down.svg';
 import Square from '@icon/system/regular/square.svg';
@@ -26,7 +27,6 @@ import {
 } from '@macro-inc/spreadsheet/sheet-tables';
 import { tableCellLook } from '@macro-inc/spreadsheet/table-styles';
 import CheckSquare from '@phosphor-fill/check-square-fill.svg';
-import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   createEffect,
   createMemo,

@@ -27,6 +27,8 @@ vi.mock('@core/hotkey/hotkeys', () => ({ registerHotkey: vi.fn() }));
 
 vi.mock('@solid-primitives/resize-observer', () => ({
   createResizeObserver: () => {},
+}));
+vi.mock('@core/util/createElementSize', () => ({
   createElementSize: () => ({
     get width() {
       return measurement.width();

@@ -1,6 +1,6 @@
+import { createElementSize } from '@core/util/createElementSize';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { PlotOptions } from '@observablehq/plot';
-import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   createEffect,
   createSignal,

@@ -15,7 +15,7 @@ import { t } from '@app/lib/i18n';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
-import { CHAT_INPUT_TEXT_AREA_ID } from '@core/component/AI/component/input/ChatInput';
+import { CHAT_INPUT_TEXT_AREA_ID } from '@core/component/AI/component/input/constants';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import {

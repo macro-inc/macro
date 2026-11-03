@@ -554,6 +554,17 @@ export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
     // payloads are persisted without being materialized back into this page.
     const page = yield* Effect.tryPromise((signal) =>
       fetchPage(input, { signal })
+    ).pipe(
+      Effect.retry({
+        // Queue supersession is flow control, not a failed lane. Fetch fresh
+        // data for the same cursor; never advance its checkpoint or replay the
+        // old response after the foreground write. Interruption still cancels.
+        while: (error) =>
+          String(error.cause).includes(
+            'cache hydration superseded by a foreground write'
+          ),
+        schedule: Schedule.spaced('250 millis'),
+      })
     );
     const afterFetchGeneration = yield* Effect.tryPromise(() =>
       host.currentStorageGeneration()

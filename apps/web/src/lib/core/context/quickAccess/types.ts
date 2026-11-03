@@ -235,8 +235,8 @@ export type QuickAccessContextValue = {
    * Get a single item by ID from the cache.
    * Returns undefined if the item is not found.
    *
-   * Use this for lazy lookup of full item data when you only have an ID.
-   * This is more efficient than searching through lists.
+   * Reads already materialized list results; it does not activate sources or
+   * build their full index. Missing details stay with the entity query owner.
    *
    * @example
    * const item = quickAccess.getById(someId);

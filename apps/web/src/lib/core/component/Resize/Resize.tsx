@@ -1,4 +1,4 @@
-import { createElementSize } from '@solid-primitives/resize-observer';
+import { createElementSize } from '@core/util/createElementSize';
 import { cn } from '@ui/utils/classname';
 import {
   createContext,

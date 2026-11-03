@@ -28,7 +28,7 @@ import { FormulaBar } from './SpreadsheetToolbar';
 vi.mock('@ui/components/Button', () => ({ Button: () => null }));
 
 // jsdom has no viewport. Give the row window a deterministic visible height.
-vi.mock('@solid-primitives/resize-observer', () => ({
+vi.mock('@core/util/createElementSize', () => ({
   createElementSize: () => ({ width: 1000, height: 960 }),
 }));
 afterEach(cleanup);

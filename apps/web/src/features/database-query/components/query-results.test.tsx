@@ -5,7 +5,7 @@ import type { QueryAnswer } from '../core/query';
 import { plainAnswerRenderers } from '../tests/plain-answer-display';
 import { QueryResults } from './query-results';
 
-vi.mock('@solid-primitives/resize-observer', () => ({
+vi.mock('@core/util/createElementSize', () => ({
   createElementSize: () => ({ width: 346, height: 300 }),
 }));
 const scalar: QueryAnswer = {

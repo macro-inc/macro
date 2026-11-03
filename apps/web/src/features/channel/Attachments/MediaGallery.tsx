@@ -1,7 +1,7 @@
 import { MediaGrid } from '@channel/Media/MediaGrid';
 import { MediaViewerDialog } from '@channel/Media/MediaViewerDialog';
 import type { MediaItem } from '@channel/Media/media-items';
-import { createElementSize } from '@solid-primitives/resize-observer';
+import { createElementSize } from '@core/util/createElementSize';
 import { createEffect, createMemo, createSignal, Show } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { itemsPerRow, THUMB_GAP, THUMB_SIZE } from './attachment-utils';

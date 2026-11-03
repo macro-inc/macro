@@ -198,6 +198,8 @@ describe('createGraphqlSoupAstItemsQuery', () => {
   beforeEach(() => {
     queryClient.clear();
     vi.clearAllMocks();
+    entityFilterMock.mockReset();
+    readRecordsByKeysMock.mockReset();
     mapSoupPageToEntityListMock.mockImplementation((page) => page.items);
     getGraphqlSoupCacheHostMock.mockReturnValue(undefined);
     makeGraphqlSoupInputMock.mockReturnValue({
@@ -4075,6 +4077,41 @@ describe('createGraphqlSoupAstItemsQuery', () => {
         await vi.waitFor(() => expect(f.names()).toEqual(['Local 2']));
       } finally {
         f.dispose();
+      }
+    });
+
+    it('does not publish a row read overtaken by a coalesced notification', async () => {
+      vi.useFakeTimers();
+      const f = fixture();
+      const states: string[][] = [];
+      const stop = createRoot((dispose) => {
+        createComputed(() => {
+          states.push(f.names() ?? []);
+        });
+        return dispose;
+      });
+      try {
+        f.fake.executions[0].next(f.page('Network'), {
+          source: 'live-network',
+          revision: REVISION_1,
+        });
+        const host = getGraphqlSoupCacheHostMock();
+        const currentRevision = host.currentRevision;
+        host.currentRevision = async () => {
+          host.currentRevision = currentRevision;
+          // Advance after the final revision read captured revision 2 but
+          // before its caller can publish the coherent row selection.
+          queueMicrotask(() => f.push('3'));
+          return REVISION_2;
+        };
+        f.push(REVISION_2);
+        await vi.advanceTimersByTimeAsync(500);
+        expect(states.some((names) => names.includes('Local 2'))).toBe(false);
+        expect(f.names()).toEqual(['Local 3']);
+      } finally {
+        stop();
+        f.dispose();
+        vi.useRealTimers();
       }
     });
 

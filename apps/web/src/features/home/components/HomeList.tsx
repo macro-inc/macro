@@ -31,6 +31,7 @@ import {
 } from '@components/app/split-layout/layoutUtils';
 import { useChannelsContext } from '@core/context/channels';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { createElementSize } from '@core/util/createElementSize';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type EntityData,
@@ -41,7 +42,6 @@ import {
 } from '@entity';
 import { getChannelThreadName } from '@entity/utils/channel-thread-name';
 import CheckIcon from '@icon/system/regular/check.svg';
-import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button } from '@ui';
 import {

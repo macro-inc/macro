@@ -13,6 +13,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { createElementSize } from '@core/util/createElementSize';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
@@ -25,7 +26,6 @@ import {
 } from '@entity';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
-import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, EmptyStatePanel } from '@ui';
 import {
   createEffect,

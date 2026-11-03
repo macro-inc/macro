@@ -14,7 +14,7 @@ import type {
   SearchDocumentWire,
 } from '@graphql-cache/index';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/index';
-import type { HydrationSearchChanges } from '@graphql-cache/protocol';
+import type { CacheChangeHints } from '@graphql-cache/protocol';
 import type { CachedGraphqlChannel } from '@queries/channel/graphql';
 import type { HistoryItem } from '@queries/history/types';
 import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
@@ -61,9 +61,7 @@ const mocks = vi.hoisted(() => ({
   channels: vi.fn<() => ApiChannelWithLatest[]>(() => []),
   cachedChannels: (): CachedGraphqlChannel[] => [],
   projectedChannels: [] as CachedGraphqlChannel[],
-  changed: undefined as
-    | ((changes?: HydrationSearchChanges) => void)
-    | undefined,
+  changed: undefined as ((changes?: CacheChangeHints) => void) | undefined,
   unsubscribe: vi.fn(),
   channelRefetch: vi.fn(),
   onCacheChanged: vi.fn(),
@@ -446,6 +444,28 @@ function renderRetainedList(
 }
 
 describe('Quick Access source integration', () => {
+  it('reads cached details without building the full item index', () => {
+    mocks.history = [
+      {
+        id: 'document-1',
+        name: 'Example document',
+        type: 'document',
+        fileType: 'md',
+        ownerId: 'owner',
+      },
+    ];
+    const item = setup((source) => {
+      expect(source.getById('document-1')).toBeUndefined();
+      source.useList('document').items();
+      return source.getById('document-1');
+    });
+    expect(item).toMatchObject({
+      kind: 'entity',
+      id: 'document-1',
+      data: { id: 'document-1' },
+    });
+  });
+
   it('starts cached email search when the GraphQL flag arrives after mounting', async () => {
     const [enabled, setEnabled] = createSignal(false);
     mocks.graphqlEnabled = enabled;

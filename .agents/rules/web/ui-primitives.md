@@ -51,6 +51,8 @@ Applies to `apps/web/src/components/ui`, including ports from shadcn-solid.
 - Keep ordinary children in the Button's flex row so trailing carets, truncation,
   and custom spacing work. Only loading actions need the reserved-content layer.
   Preserve native disabled behavior and activation guards for polymorphic controls.
+- Derive Button classes only from its style options; reading children, event
+  handlers or loading state there makes content updates recalculate styles.
 - Compose groups explicitly with `ButtonGroup.Button`; standalone Buttons do not
   inherit group styling. Segments inherit size and variant unless overridden,
   remain flat, and own their hover/pressed/disabled states. The frame owns its
@@ -64,7 +66,11 @@ Applies to `apps/web/src/components/ui`, including ports from shadcn-solid.
 - Keep Tooltip's assembled and compound APIs on the same implementation and
   clean up closed or detached popups. Do not add document-wide mutation observers
   to track individual triggers.
-- Keep materials in `src/index.css`; JavaScript only derives accent text contrast
+- Keep shared materials in `src/index.css` and native iOS press paint in
+  `components/app/mobile/glassPress.css`, loaded by `loadPlatformStyles` before
+  first render only on native iOS, with its preload failure handler installed
+  before the request (native-style regression: `src/components/ui/browser-test/style/README.md`);
+  JavaScript only derives accent text contrast
   and the corresponding state-mix direction. Reset runtime material assignments
   at theme boundaries so previews resolve their own palette. Do not persist
   derived Button tokens in authored theme data.

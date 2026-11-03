@@ -108,7 +108,7 @@ pub(super) async fn reconcile_window<S: PredicateIndexStorage>(
         Window {
             values: result.keys.iter().map(|key| values[key]).collect(),
             keys: result.keys,
-            more: window.more,
+            continuation: window.continuation,
             optimistic: result.optimistic,
         },
         result

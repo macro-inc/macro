@@ -11,6 +11,7 @@ import {
   untrack,
 } from 'solid-js';
 import { createStore, produce, reconcile } from 'solid-js/store';
+import { arrayEquals } from '../../../core/util/compareUtils';
 import type { RecordSelection } from '../../../graphql-cache/exchange/record-selection';
 import type { CacheHost } from '../../../graphql-cache/host/types';
 import {
@@ -18,6 +19,7 @@ import {
   type EntityFilterCacheArgs,
   parseCacheRevision,
 } from '../../../graphql-cache/protocol';
+import { subscribeToVisibleCacheChanges } from '../../subscribe-to-visible-cache-changes';
 import { soupCacheTelemetry } from './cache-activity-telemetry';
 
 /** A declared source and generated fragment; no mutation-specific query updates. */
@@ -64,6 +66,7 @@ export function createPredicateQuery<T extends object>(options: {
   host: Accessor<LiveQueryHost | undefined>;
   query: Accessor<PredicateQueryRequest<T> | undefined>;
 }) {
+  const [observationId, setObservationId] = createSignal<string>();
   const [data, setData] = createSignal<LiveQuerySnapshot<T>>();
   const [status, setStatus] = createSignal<PredicateQueryStatus>('idle');
   const [error, setError] = createSignal<unknown>();
@@ -77,6 +80,7 @@ export function createPredicateQuery<T extends object>(options: {
 
   createRenderEffect(
     on([query, options.host], ([request, host]) => {
+      setObservationId(undefined);
       setData(undefined);
       setError(undefined);
       if (!request || !host) {
@@ -135,7 +139,6 @@ export function createPredicateQuery<T extends object>(options: {
               removed = result.removed.length;
               const revision = parseCacheRevision(result.revision);
               if (latest !== undefined && BigInt(revision) < BigInt(latest)) {
-                pending = true;
                 continue;
               }
               if (result.reset && result.keys === undefined)
@@ -159,7 +162,8 @@ export function createPredicateQuery<T extends object>(options: {
                 batch(() => {
                   let orderChanged =
                     result.reset ||
-                    result.keys !== undefined ||
+                    (result.keys !== undefined &&
+                      !arrayEquals(keys, result.keys)) ||
                     result.removed.length > 0;
                   if (result.reset) setRows(reconcile({}));
                   for (const key of result.removed) setRows(key, undefined!);
@@ -196,12 +200,14 @@ export function createPredicateQuery<T extends object>(options: {
                       })
                     );
                   }
-                  if (result.keys !== undefined) keys = result.keys;
+                  if (result.keys !== undefined && orderChanged)
+                    keys = result.keys;
                   if (orderChanged)
                     orderedRows = keys.flatMap((key) =>
                       rows[key] ? [rows[key]] : []
                     );
                   since = revision;
+                  setObservationId(result.observationId);
                   setData({
                     revision,
                     keys,
@@ -236,31 +242,32 @@ export function createPredicateQuery<T extends object>(options: {
           running = false;
         }
       };
-      const refresh = () => {
-        if (unsupported) return;
+      const refresh = (): Promise<void> => {
+        if (unsupported) return runPromise ?? Promise.resolve();
         pending = true;
         if (!running) runPromise = run();
+        return runPromise ?? Promise.resolve();
       };
-      requestRefresh = refresh;
-      const unsubscribeChanges = host.onCacheChanged(
-        (revision) => {
+      requestRefresh = () => fireAndForget(refresh(), 'soup-predicate-query');
+      const unsubscribeChanges = subscribeToVisibleCacheChanges(host, refresh, {
+        observation: observationId,
+        onChange: (revision) => {
           latest = revision;
-          refresh();
         },
-        { includeHydration: true }
-      );
+      });
       const unsubscribeGeneration = host.onCacheGenerationChanged(() => {
         epoch += 1;
         unsupported = false;
         since = undefined;
+        setObservationId(undefined);
         latest = undefined;
         batch(() => {
           setData(undefined);
           setStatus('loading');
         });
-        refresh();
+        fireAndForget(refresh(), 'soup-predicate-query');
       });
-      refresh();
+      fireAndForget(refresh(), 'soup-predicate-query');
       onCleanup(() => {
         active = false;
         unsubscribeChanges();
@@ -280,5 +287,11 @@ export function createPredicateQuery<T extends object>(options: {
     })
   );
   usePending('soup.cache', () => status() === 'loading');
-  return { data, status, error, refresh: () => requestRefresh() };
+  return {
+    data,
+    observationId,
+    status,
+    error,
+    refresh: () => requestRefresh(),
+  };
 }

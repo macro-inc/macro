@@ -135,12 +135,12 @@ beforeEach(() => {
 describe('Mobile page action row', () => {
   it.each(['input', 'textarea', 'contenteditable'] as const)(
     'hides while an outside %s is focused and preserves the AI draft',
-    (kind) => {
+    async (kind) => {
       mocks.view = 'agents';
       render(() => <MobilePageActionRow />);
-      const draft = screen.getByRole('textbox', {
+      const draft = (await screen.findByRole('textbox', {
         name: 'Chat draft',
-      }) as HTMLTextAreaElement;
+      })) as HTMLTextAreaElement;
       draft.value = 'Keep this draft';
       draft.focus();
       setVirtualKeyboardVisible(true);
@@ -170,13 +170,13 @@ describe('Mobile page action row', () => {
       expect(draft.value).toBe('Keep this draft');
       draft.focus();
       expect(document.activeElement).toBe(draft);
-      expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy();
+      expect(await screen.findByRole('button', { name: 'Send' })).toBeTruthy();
       expect(mocks.mountComposer).toHaveBeenCalledOnce();
       expect(mocks.unmountComposer).not.toHaveBeenCalled();
     }
   );
 
-  it('starts hidden when another field is already focused and returns for a non-editable control', () => {
+  it('starts hidden when another field is already focused and returns for a non-editable control', async () => {
     mocks.view = 'agents';
     render(() => (
       <>
@@ -188,14 +188,16 @@ describe('Mobile page action row', () => {
     render(() => <MobilePageActionRow />);
     expect(screen.queryByRole('textbox', { name: 'Chat draft' })).toBeNull();
     screen.getByRole('button', { name: 'Email options' }).focus();
-    expect(screen.getByRole('textbox', { name: 'Chat draft' })).toBeTruthy();
+    expect(
+      await screen.findByRole('textbox', { name: 'Chat draft' })
+    ).toBeTruthy();
     expect(mocks.mountComposer).toHaveBeenCalledOnce();
   });
 
-  it('starts compact and yields to screen-specific controls, then returns', () => {
+  it('starts compact and yields to screen-specific controls, then returns', async () => {
     mocks.view = 'agents';
     const page = render(() => <MobilePageActionRow />);
-    const draft = screen.getByRole('textbox', { name: 'Chat draft' });
+    const draft = await screen.findByRole('textbox', { name: 'Chat draft' });
     fireEvent.input(draft, { target: { value: 'Keep this draft' } });
     expect(screen.queryByRole('button', { name: 'New email' })).toBeNull();
     const reply = render(() => (
@@ -211,7 +213,7 @@ describe('Mobile page action row', () => {
     expect((draft as HTMLTextAreaElement).value).toBe('Keep this draft');
     expect(mocks.mountComposer).toHaveBeenCalledOnce();
     expect(mocks.unmountComposer).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Send' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'New email' })).toBeNull();
     page.unmount();
     expect(mocks.unmountComposer).toHaveBeenCalledOnce();
@@ -306,11 +308,11 @@ describe('Mobile page action row', () => {
     expect(mocks.send).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
   });
-  it('shows only the AI composer on Agents, without a redundant create button', () => {
+  it('shows only the AI composer on Agents, without a redundant create button', async () => {
     mocks.view = 'agents';
     render(() => <MobilePageActionRow />);
     expect(screen.queryByRole('button', { name: /^New/ })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Send' })).toBeTruthy();
   });
   it('opens company creation from CRM without the AI composer', () => {
     mocks.view = 'companies';
@@ -430,13 +432,15 @@ describe('Mobile page action row', () => {
     expect(mocks.mountComposer).not.toHaveBeenCalled();
   });
 
-  it('reacts to navigation into and out of Agents', () => {
+  it('reacts to navigation into and out of Agents', async () => {
     const [view, setView] = createSignal<MobileNavViewId>('home');
     mocks.viewAccessor = view;
     render(() => <MobilePageActionRow />);
     expect(mocks.mountComposer).not.toHaveBeenCalled();
     setView('agents');
-    expect(screen.getByRole('textbox', { name: 'Chat draft' })).toBeTruthy();
+    expect(
+      await screen.findByRole('textbox', { name: 'Chat draft' })
+    ).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^New/ })).toBeNull();
     setView('mail');
     expect(screen.queryByRole('textbox', { name: 'Chat draft' })).toBeNull();

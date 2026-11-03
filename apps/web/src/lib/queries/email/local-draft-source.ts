@@ -47,10 +47,15 @@ export function createLocalDraftSource(enabled: Accessor<boolean>) {
   };
   // Notifications can arrive mid-disposal (an observer removed by navigation),
   // where reading `enabled` re-runs the disposing owner's stale memos.
-  const scheduleRefresh = () =>
+  let refreshQueued = false;
+  const scheduleRefresh = () => {
+    if (refreshQueued || disposed) return;
+    refreshQueued = true;
     queueMicrotask(() => {
+      refreshQueued = false;
       if (!disposed) fireAndForget(refresh(), 'email-local-drafts');
     });
+  };
   const unsubscribe = localDraftStore.subscribe(scheduleRefresh);
   const auth = queryClient.getQueryCache().subscribe((event) => {
     if (event.query.queryHash === JSON.stringify(authKeys.userInfo.queryKey))

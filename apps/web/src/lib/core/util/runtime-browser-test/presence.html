@@ -1,0 +1,5 @@
+<!doctype html><html><head><meta charset="utf-8"/><style>
+@keyframes entering {from{opacity:0}to{opacity:1}}@keyframes leaving{from{opacity:1}to{opacity:0}}
+.animated[data-show=true]{animation:entering 40ms}.animated[data-show=false]{animation:leaving 400ms}
+@media(prefers-reduced-motion:reduce){.animated{animation:none!important}}
+</style></head><body><main id="root"></main><script type="module" src="./presence-fixture.tsx"></script></body></html>

@@ -53,8 +53,8 @@ afterEach(() => {
 describe('cache-backed history refresh', () => {
   it('coalesces hidden cache changes without hiding the previous history', async () => {
     const visibility = vi.spyOn(document, 'visibilityState', 'get');
-    let notify: (() => void) | undefined;
-    mocks.subscribe.mockImplementation((callback: () => void) => {
+    let notify: CacheChangeListener | undefined;
+    mocks.subscribe.mockImplementation((callback: CacheChangeListener) => {
       notify = callback;
       return mocks.unsubscribe;
     });
@@ -85,8 +85,8 @@ describe('cache-backed history refresh', () => {
     visibility.mockReturnValue('hidden');
     document.dispatchEvent(new Event('visibilitychange'));
     mocks.readHistory.mockResolvedValue([latest]);
-    notify?.();
-    notify?.();
+    notify?.(INITIAL_CACHE_REVISION);
+    notify?.(INITIAL_CACHE_REVISION);
     await vi.advanceTimersByTimeAsync(1000);
     expect(mocks.readHistory).toHaveBeenCalledTimes(initialCalls);
     expect(query?.data).toEqual([original]);
@@ -102,8 +102,8 @@ describe('cache-backed history refresh', () => {
   });
 
   it('populates initially empty history during a slow hydration burst, then catches up once', async () => {
-    let notify: (() => void) | undefined;
-    mocks.subscribe.mockImplementation((callback: () => void) => {
+    let notify: CacheChangeListener | undefined;
+    mocks.subscribe.mockImplementation((callback: CacheChangeListener) => {
       notify = callback;
       return mocks.unsubscribe;
     });
@@ -142,9 +142,9 @@ describe('cache-backed history refresh', () => {
       await waitFor(() => expect(query?.isSuccess).toBe(true));
       expect(query?.data).toEqual([]);
       vi.useFakeTimers();
-      notify?.();
+      notify?.(INITIAL_CACHE_REVISION);
       for (let i = 0; i < 8; i++) {
-        notify?.();
+        notify?.(INITIAL_CACHE_REVISION);
         await vi.advanceTimersByTimeAsync(250);
       }
       expect(mocks.readHistory).toHaveBeenCalledTimes(2);

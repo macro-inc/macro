@@ -1,9 +1,11 @@
+import { pauseOffscreenAnimations } from '@core/util/animationVisibility';
 export const AnimatedFileCodeIcon = (props: {
   triggerAnimation?: boolean;
   class?: string;
 }) => {
   return (
     <svg
+      ref={pauseOffscreenAnimations}
       width="100%"
       height="100%"
       viewBox="0 -3 18 18"
@@ -52,7 +54,11 @@ export const AnimatedFileCodeIcon = (props: {
           }
           .place-rectangle {
             animation: blink 1s step-start infinite 0.4s;
+            animation-play-state: var(--animation-play-state, running);
           }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .animated-file-code-icon.animating .place-rectangle { animation: none; opacity: 1; }
         }
       `}</style>
       <rect x="0.47" y="0.47" width="17.06" height="11.06" rx="1.5" />

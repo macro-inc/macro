@@ -22,6 +22,7 @@ import {
   type MutationQueueEnvironment,
   reportMutationQueueCleared,
 } from '@graphql-cache/exchange/mutation-queue-telemetry';
+import { networkActivityExchange } from '@graphql-cache/exchange/network-activity';
 import { networkRevalidationExchange } from '@graphql-cache/exchange/network-revalidation-exchange';
 import {
   HYDRATE_ONLY_CONTEXT_KEY,
@@ -397,6 +398,7 @@ const graphqlSoupClient = createClient({
     captureTraceParentExchange,
     networkRevalidationExchange(),
     traceParentExchange,
+    networkActivityExchange,
     fetchExchange,
   ],
   fetch: dssGraphqlFetch,
@@ -520,6 +522,7 @@ function getUncachedRealtimeClient(): Client {
       notificationReceiptExchange(publishNotificationPatch),
       graphqlSoupSubscriptionExchange(websocketClient),
       traceParentExchange,
+      networkActivityExchange,
       fetchExchange,
     ],
     fetch: dssGraphqlFetch,
@@ -864,6 +867,7 @@ export function getGraphqlSoupClient(): Client {
           notificationReceiptExchange(publishNotificationPatch),
           graphqlSoupSubscriptionExchange(graphqlWsClient),
           traceParentExchange,
+          networkActivityExchange,
           fetchExchange,
         ],
         fetch: (input, init) => dssGraphqlFetch(input, init, host),

@@ -1,4 +1,5 @@
 import { DisclosureCaret } from '@app/features/block-agent/ui/DisclosureCaret';
+import { pauseOffscreenAnimations } from '@core/util/animationVisibility';
 import CaretRight from '@icon/system/regular/caret-right.svg?component-solid';
 import { Button, Layer } from '@ui';
 import type { Accessor, Component, JSX } from 'solid-js';
@@ -102,6 +103,7 @@ function Row(props: ToolRowProps) {
           instead, and the object a renderer highlights steps down to the
           detail's tone. */}
       <div
+        ref={pauseOffscreenAnimations}
         class="min-w-0 overflow-hidden"
         classList={{
           'flex-1': !grouped(),

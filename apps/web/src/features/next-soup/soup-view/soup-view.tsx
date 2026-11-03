@@ -85,6 +85,7 @@ import {
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { createElementSize } from '@core/util/createElementSize';
 import type { DateValue } from '@core/util/date';
 import { openExternalUrl } from '@core/util/url';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
@@ -103,7 +104,6 @@ import CheckIcon from '@icon/system/regular/check.svg';
 import InfoIcon from '@icon/system/regular/info.svg';
 import Spinner from '@icon/system/regular/spinner.svg';
 import { Telemetry } from '@macro-inc/observability';
-import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn, Layer } from '@ui';
 import { tourTarget } from '@ui/components/Tour';

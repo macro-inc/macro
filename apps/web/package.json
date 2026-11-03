@@ -116,6 +116,7 @@
     "@solid-primitives/lifecycle": "^0.1.2",
     "@solid-primitives/map": "^0.4.13",
     "@solid-primitives/memo": "^1.4.5",
+    "@solid-primitives/page-visibility": "^2.1.6",
     "@solid-primitives/platform": "^0.2.1",
     "@solid-primitives/promise": "^1.1.2",
     "@solid-primitives/resize-observer": "^2.1.3",

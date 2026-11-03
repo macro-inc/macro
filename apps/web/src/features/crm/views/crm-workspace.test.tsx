@@ -58,7 +58,7 @@ vi.mock('@core/mobile/haptics', () => ({ hapticImpact: vi.fn() }));
 vi.mock('@core/mobile/virtualKeyboard', () => ({
   virtualKeyboardVisible: () => false,
 }));
-vi.mock('@solid-primitives/resize-observer', () => ({
+vi.mock('@core/util/createElementSize', () => ({
   createElementSize: () => ({ width: 0, height: 40 }),
 }));
 vi.mock('@entity', () => ({

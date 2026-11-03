@@ -119,11 +119,12 @@ function SkillsMenuInner(props: SkillsMenuProps) {
   const activeSearchTerm = () => (props.menu.isOpen() ? searchTerm() : '');
 
   const { entities: userSkills } = useEntityMention({
+    enabled: props.menu.isOpen,
     buckets: ['skill'],
     searchTerm: activeSearchTerm,
   });
 
-  const systemSkills = useSystemSkillsQuery();
+  const systemSkills = useSystemSkillsQuery(props.menu.isOpen);
   const systemSkillItems = () => systemSkills.skills().map(systemSkillItem);
 
   // User skills first, system skills at the bottom, both narrowed by the

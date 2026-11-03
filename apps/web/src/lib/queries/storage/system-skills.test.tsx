@@ -6,7 +6,7 @@ import { storageServiceClient } from '@service-storage/client';
 import type { GetSystemSkillsHandler200 } from '@service-storage/generated/schemas/getSystemSkillsHandler200';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { ok, type Result } from 'neverthrow';
-import { Suspense } from 'solid-js';
+import { type Accessor, createSignal, Suspense } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -23,14 +23,14 @@ type SystemSkillsResult = Result<GetSystemSkillsHandler200, unknown>;
 let testQueryClient: QueryClient;
 let dispose: (() => void) | undefined;
 
-function renderProbe() {
+function renderProbe(enabled: Accessor<boolean> = () => true) {
   let hook!: ReturnType<typeof useSystemSkillsQuery>;
   dispose = render(
     () => (
       <QueryClientProvider client={testQueryClient}>
         <Suspense fallback={<span data-testid="suspended" />}>
           {(() => {
-            hook = useSystemSkillsQuery();
+            hook = useSystemSkillsQuery(enabled);
             return <span data-testid="probe">{hook.skills().length}</span>;
           })()}
         </Suspense>
@@ -89,4 +89,22 @@ describe('useSystemSkillsQuery', () => {
     expect(hook().getSystemSkill('system-skill-1')?.name).toBe('Summarize');
     expect(hook().isSystemSkillId('some-document')).toBe(false);
   });
+});
+
+it('waits for the owning menu to open before fetching system skills', async () => {
+  const [enabled, setEnabled] = createSignal(false);
+  const started = Promise.withResolvers<void>();
+  const request =
+    Promise.withResolvers<
+      Awaited<ReturnType<typeof storageServiceClient.getSystemSkills>>
+    >();
+  vi.mocked(storageServiceClient.getSystemSkills).mockImplementation(() => {
+    started.resolve();
+    return request.promise;
+  });
+  renderProbe(enabled);
+  expect(storageServiceClient.getSystemSkills).not.toHaveBeenCalled();
+  setEnabled(true);
+  await started.promise;
+  expect(storageServiceClient.getSystemSkills).toHaveBeenCalledOnce();
 });

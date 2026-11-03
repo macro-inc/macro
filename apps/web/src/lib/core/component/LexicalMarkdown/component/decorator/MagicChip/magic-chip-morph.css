@@ -5,7 +5,7 @@
   height: 50%;
   background: currentColor;
   border-radius: 1.25px;
-  animation: magic-chip-morph 2000ms ease-in-out infinite;
+  animation: magic-chip-morph 2000ms steps(5, end) infinite;
 }
 
 @keyframes magic-chip-morph {

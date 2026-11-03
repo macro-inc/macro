@@ -9,7 +9,7 @@ import type { QueryAnswer } from '../core/query';
 import { prepareQueryChart } from '../core/query-chart';
 import { QueryChart } from './query-chart';
 
-vi.mock('@solid-primitives/resize-observer', () => ({
+vi.mock('@core/util/createElementSize', () => ({
   createElementSize: () => ({ width: 346, height: 300 }),
 }));
 

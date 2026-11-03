@@ -15,8 +15,8 @@ import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getSafeAreaInset } from '@core/mobile/safeAreaInsets';
+import { createElementSize } from '@core/util/createElementSize';
 import CloseIcon from '@icon/system/regular/x.svg';
-import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn, Panel } from '@ui';
 import { createEffect, createSignal, Show, Suspense } from 'solid-js';
 import { createMutable } from 'solid-js/store';
@@ -261,7 +261,7 @@ export function SplitPanel(props: SplitPanelProps) {
                 'relative size-full touch:isolate': !props.handle.isSpotLight(),
               }}
               style={{
-                '--split-header-height': `${hasSplitHeader() ? (headerSize.height ?? 0) : 0}px`,
+                '--split-header-height': `${isTouchDevice() && hasSplitHeader() ? (headerSize.height ?? 0) : 0}px`,
                 // The hard spacer for top-anchored content on full-frame
                 // mobile/tablet: status bar + floating header strip.
                 '--mobile-content-inset-top':

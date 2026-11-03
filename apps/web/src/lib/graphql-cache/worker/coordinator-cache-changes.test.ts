@@ -355,3 +355,33 @@ it('keeps ordinary single-request updates immediate', () => {
     { kind: 'broadcast-push', push: { kind: 'cache-changed', revision: '1' } },
   ]);
 });
+
+it('intersects displayed-window proofs across coalesced hydration writes', () => {
+  const { push, reply } = resume([
+    { id: 1, kind: 'hydrate', query: '{ value }', data: { value: 1 } },
+    { id: 2, kind: 'hydrate', query: '{ value }', data: { value: 2 } },
+    { id: 3, kind: 'hydrate', query: '{ value }', data: { value: 3 } },
+  ]);
+  expect(
+    push({
+      kind: 'cache-hydrated',
+      revision: parseCacheRevision('1'),
+      unchangedViews: ['a', 'b'],
+    })
+  ).toEqual([]);
+  reply(0);
+  expect(
+    push({
+      kind: 'cache-hydrated',
+      revision: parseCacheRevision('2'),
+      unchangedViews: ['b', 'c'],
+    })
+  ).toEqual([]);
+  reply(1);
+  const flushed = reply(2);
+  expect(flushed).toContainEqual({
+    kind: 'broadcast-push',
+    push: { kind: 'cache-hydrated', revision: '2', unchangedViews: ['b'] },
+    coalescedCount: 2,
+  });
+});

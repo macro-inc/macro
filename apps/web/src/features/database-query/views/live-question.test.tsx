@@ -7,7 +7,7 @@ import type { QueryAnswer, QueryFailure } from '../core/query';
 import { PlainAnswerDisplay } from '../tests/plain-answer-display';
 import { LiveQuestion } from './live-question';
 
-vi.mock('@solid-primitives/resize-observer', () => ({
+vi.mock('@core/util/createElementSize', () => ({
   createElementSize: () => ({ width: 346, height: 300 }),
 }));
 

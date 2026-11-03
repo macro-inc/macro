@@ -272,6 +272,7 @@ export function CommandMenuSearchInput(
     const [local, rest] = splitProps(props, ['as', 'class']);
     return (
       <textarea
+        data-input-surface="command-search"
         rows={1}
         class={cn(
           'min-w-0 flex-1 py-0.5 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder',
@@ -286,6 +287,7 @@ export function CommandMenuSearchInput(
 
   return (
     <input
+      data-input-surface="command-search"
       class={cn(
         'min-w-0 flex-1 py-0.5 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder',
         local.class

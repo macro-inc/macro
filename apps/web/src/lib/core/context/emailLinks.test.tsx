@@ -130,3 +130,29 @@ describe('EmailLinksContext', () => {
     expect(queryEnabled?.()).toBe(false);
   });
 });
+
+it('does not create a query for an unused provider or an invalid inbox identity', () => {
+  mocks.useIsAuthenticated.mockReturnValue(() => true);
+  mocks.useEmailLinksQuery.mockReturnValue({
+    isPending: false,
+    isLoading: false,
+    data: { links: [] },
+  });
+  let isSecondary: (id: string | undefined) => boolean = () => false;
+  function Capture() {
+    isSecondary = useEmailLinksContext().isConnectedSecondaryInbox;
+    return null;
+  }
+  render(() => (
+    <EmailLinksContextProvider>
+      <Capture />
+    </EmailLinksContextProvider>
+  ));
+  expect(mocks.useEmailLinksQuery).not.toHaveBeenCalled();
+  expect(isSecondary(undefined)).toBe(false);
+  expect(isSecondary('not-an-identity')).toBe(false);
+  expect(mocks.useEmailLinksQuery).not.toHaveBeenCalled();
+  expect(isSecondary('macro|viewer@example.com')).toBe(false);
+  expect(isSecondary('macro|viewer@example.com')).toBe(false);
+  expect(mocks.useEmailLinksQuery).toHaveBeenCalledOnce();
+});

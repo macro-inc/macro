@@ -1,6 +1,6 @@
 import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { createElementSize } from '@solid-primitives/resize-observer';
+import { createElementSize } from '@core/util/createElementSize';
 import type { Accessor } from 'solid-js';
 import { CHANGES_NARROW_WIDTH } from '../core/layout';
 

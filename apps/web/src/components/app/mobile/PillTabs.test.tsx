@@ -19,7 +19,7 @@ vi.mock('@ui', () => ({
   cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
   Layer: (props: ParentProps) => props.children,
 }));
-vi.mock('@solid-primitives/resize-observer', () => ({
+vi.mock('@core/util/createElementSize', () => ({
   createElementSize: () => ({ width: 200, height: 40 }),
 }));
 

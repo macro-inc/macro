@@ -1,3 +1,4 @@
+import { pauseOffscreenAnimations } from '@core/util/animationVisibility';
 import Spinner from '@icon/system/regular/spinner.svg';
 import type { Component, JSX } from 'solid-js';
 
@@ -6,6 +7,7 @@ export const CircleSpinner: Component<JSX.SvgSVGAttributes<SVGSVGElement>> = (
 ) => {
   return (
     <Spinner
+      ref={pauseOffscreenAnimations}
       class="animate-spin text-ink-muted"
       width={props.width || 20}
       height={props.height || 20}

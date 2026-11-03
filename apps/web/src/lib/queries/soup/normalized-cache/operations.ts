@@ -41,6 +41,7 @@ import {
 } from './normalizer';
 import { raiseNotifiedFloor } from './notified-floor';
 import { ownTouchStamp } from './own-touch';
+import { soupQueryKeyText } from './query-key-text';
 import { retainRestoredSoupItem } from './restored-membership';
 import type {
   SoupEntityPartial,
@@ -273,7 +274,7 @@ export function invalidateSoupQueriesReferencing(ids: string[]): void {
   queryClient.invalidateQueries({
     queryKey: ['soup'],
     predicate: (query) => {
-      const serialized = JSON.stringify(query.queryKey);
+      const serialized = soupQueryKeyText(query.queryKey);
       return ids.some((id) => serialized.includes(id));
     },
   });
@@ -473,7 +474,7 @@ export function removeSoupEntitiesFromQueriesReferencing(
   if (referenceIds.length === 0) return { rollback: () => {} };
 
   return removeSoupEntitiesWhere(entityIds, (key: QueryKey) => {
-    const serialized = JSON.stringify(key);
+    const serialized = soupQueryKeyText(key);
     return referenceIds.some((id) => serialized.includes(id));
   });
 }
@@ -819,7 +820,7 @@ export async function refetchSoupEntity(
  */
 function invalidateAllSoupExceptTouched(): void {
   const notTouched = (query: Query) =>
-    !JSON.stringify(query.queryKey).includes('touched_by_me');
+    !soupQueryKeyText(query.queryKey).includes('touched_by_me');
   queryClient.invalidateQueries({
     queryKey: soupKeys.items._def,
     predicate: notTouched,

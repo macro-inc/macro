@@ -82,7 +82,7 @@ vi.mock(
 vi.mock('@queries/channel/notification-selection', () => ({
   hydrateChannelNotificationSelection: mocks.hydrate,
 }));
-vi.mock('@solid-primitives/resize-observer', () => ({
+vi.mock('@core/util/createElementSize', () => ({
   createElementSize: () => ({ height: 0 }),
 }));
 vi.mock('@ui', () => ({
