@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use serde_json::json;
 
 use super::*;
@@ -99,4 +101,34 @@ fn generated_aws_keys_have_the_shape_extenddb_requires() {
     assert!(id.starts_with("AKIA"));
     assert_eq!(secret.len(), 40);
     assert_ne!(generate_aws_key().unwrap().0, id);
+}
+
+#[test]
+fn bare_queue_names_become_queue_urls() {
+    let env = BTreeMap::from([
+        (
+            "DOCUMENT_DELETE_QUEUE".to_owned(),
+            "delete-document-handler-queue".to_owned(),
+        ),
+        (
+            "NOTIFICATION_QUEUE".to_owned(),
+            "http://localstack:4566/000000000000/n".to_owned(),
+        ),
+        (
+            "GMAIL_GCP_QUEUE".to_owned(),
+            "projects/p/topics/t".to_owned(),
+        ),
+        ("ENABLE_GMAIL_OPS_QUEUE".to_owned(), "true".to_owned()),
+    ]);
+    let out = queue_urls(env);
+    assert_eq!(
+        out["DOCUMENT_DELETE_QUEUE"],
+        "http://localstack:4566/000000000000/delete-document-handler-queue"
+    );
+    assert_eq!(
+        out["NOTIFICATION_QUEUE"],
+        "http://localstack:4566/000000000000/n"
+    );
+    assert_eq!(out["GMAIL_GCP_QUEUE"], "projects/p/topics/t");
+    assert_eq!(out["ENABLE_GMAIL_OPS_QUEUE"], "true");
 }

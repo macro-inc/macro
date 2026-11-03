@@ -143,7 +143,11 @@ rec {
           template = {
             metadata = {
               inherit labels;
-              annotations."macro.com/env-revision" = instance.envRevision;
+              # Only workloads that load the shared env roll when it changes;
+              # the data plane stays up.
+              annotations = lib.optionalAttrs (w.sharedEnv or false) {
+                "macro.com/env-revision" = instance.envRevision;
+              };
             };
             spec = {
               enableServiceLinks = false;
@@ -151,6 +155,9 @@ rec {
                 runAsUser = w.user;
                 runAsGroup = w.user;
                 fsGroup = w.user;
+                # Otherwise every mount recursively re-permissions the volume,
+                # and Postgres refuses a group-writable data directory.
+                fsGroupChangePolicy = "OnRootMismatch";
               };
               terminationGracePeriodSeconds = w.terminationGracePeriod or 30;
               containers.${name} = {

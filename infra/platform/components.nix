@@ -45,6 +45,7 @@ let
               --encoding=UTF8 --locale=en_US.UTF-8
             echo "host all all 0.0.0.0/0 scram-sha-256" >> "$PGDATA/pg_hba.conf"
           fi
+          chmod 700 "$PGDATA"
           # Full paths: the extension env locates its share/lib dirs from its
           # own bin, not from the image root's /bin links.
           exec ${postgres}/bin/postgres -D "$PGDATA" -c listen_addresses='*' \
@@ -141,6 +142,9 @@ let
       sharedEnv = true;
       env = {
         PORT = "8080";
+        # Debug builds of the deeper async handlers (DSS /history) overflow
+        # tokio's default 2 MiB worker stacks.
+        RUST_MIN_STACK = "16777216";
       } // env;
       inherit ports aliases terminationGracePeriod;
     }

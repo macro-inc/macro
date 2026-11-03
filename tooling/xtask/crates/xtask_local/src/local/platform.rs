@@ -250,7 +250,7 @@ fn up(args: &UpArgs) -> Result<()> {
         access_key_id: key_id,
         secret_access_key: key_secret,
     };
-    let mut shared_env = shared_env;
+    let mut shared_env = queue_urls(shared_env);
     shared_env.insert("AWS_ACCESS_KEY_ID".into(), aws_key.access_key_id.clone());
     shared_env.insert(
         "AWS_SECRET_ACCESS_KEY".into(),
@@ -974,23 +974,39 @@ fn deploy_sync(
     ]);
     stage.run("Waiting for the sync node", &mut wait)?;
 
-    let mut migrate = Command::new(&celld);
-    migrate
-        .current_dir(&dir)
-        .args([
-            "d1",
-            "migrations",
-            "apply",
-            "user-peer-mapping",
-            "--bucket",
-            &bucket,
-            "--endpoint",
-            &endpoint,
-            "--region",
-            "us-east-1",
-        ])
-        .envs(creds);
-    stage.run("Applying sync-service D1 migrations", &mut migrate)
+    // A node listens before it has written its lease to the bucket; retry
+    // until the fleet is visible.
+    stage.run_step("Applying sync-service D1 migrations", || {
+        let mut last = String::new();
+        for _ in 0..60 {
+            let out = Command::new(&celld)
+                .current_dir(&dir)
+                .args([
+                    "d1",
+                    "migrations",
+                    "apply",
+                    "user-peer-mapping",
+                    "--bucket",
+                    &bucket,
+                    "--endpoint",
+                    &endpoint,
+                    "--region",
+                    "us-east-1",
+                ])
+                .envs(creds)
+                .output()
+                .context("running celld d1 migrations")?;
+            if out.status.success() {
+                return Ok(());
+            }
+            last = String::from_utf8_lossy(&out.stderr).into_owned();
+            if !last.contains("no node leases") {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_secs(2));
+        }
+        bail!("celld d1 migrations failed: {last}")
+    })
 }
 
 /// The sync worker's Wrangler config for celld: compose's
@@ -1080,6 +1096,25 @@ pub fn rewrite(value: &str, rewrites: &[(String, String)]) -> String {
     rewrites
         .iter()
         .fold(value.to_owned(), |v, (from, to)| v.replace(from, to))
+}
+
+/// Queue variables the code-defined env sets to bare names (LocalStack
+/// accepts a name as a QueueUrl; SQS and ElasticMQ need the URL, which is
+/// what deployed environments set).
+pub fn queue_urls(env: BTreeMap<String, String>) -> BTreeMap<String, String> {
+    env.into_iter()
+        .map(|(k, v)| {
+            let bare = !v.is_empty()
+                && v.bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'));
+            if (k.ends_with("_QUEUE") || k.ends_with("_QUEUE_URL")) && bare {
+                let url = super::resources::queue_url(&v);
+                (k, url)
+            } else {
+                (k, v)
+            }
+        })
+        .collect()
 }
 
 /// An instance AWS-API key: ExtendDB accepts only AWS-shaped keys (`AKIA` +
