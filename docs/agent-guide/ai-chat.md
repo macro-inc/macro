@@ -798,6 +798,23 @@ show **Run unavailable** without a link, including failed preparation that creat
 no resource. Live pending rows remain neutral; persisted unsuccessful runs keep
 the failure-colored timestamp even when their transcript is still available.
 
+## Routine run notifications and failures
+
+Every routine run creates one `routine_run_finished` notification for the
+owner, "<routine> finished" or "<routine> failed", including runs that fail
+before an agent session starts. Routine notifications go to the inbox only:
+they never show a toast, browser or desktop alert, or phone push. Opening one
+opens the routine. The routine's own agent turn sends no "agent finished"
+notification; its questions still notify.
+
+The routines list shows **Failed** in failure color in the Status column while a
+routine's latest finished run failed, whether it is active, paused, or done; a
+run in progress still shows **Running**. The legacy Agents list shows **Last run
+failed** for the same routine. Verify by running a routine whose required app is
+disconnected: the row turns **Failed** and a "failed" notification appears in the
+inbox without an alert; reconnect and run again: a "finished" notification
+appears and the row returns to its normal status.
+
 ## Start a standalone chat
 
 While an answer streams, resolved mention pills should keep their names and
@@ -1629,19 +1646,19 @@ a review with nothing saved; there is no direct view tool.
 The agent decides when to present one without being asked, usually at the end
 of a turn that made, changed or sent something, or to answer a question about
 workspace data, and it does not mention again in its reply what the view shows.
-The view is checked against the renderer's schema before it is drawn: a view
-that does not match is never presented, and the agent is told what to fix.
+The server decodes the view before it is drawn: a view that does not decode
+is never presented, and the agent is told what to fix.
 The call the harness presents (`view_<id>`) draws the view directly in the
 reply and stays visible without opening a tool row. Every agent chain with
 `ExecuteCode`, including external coding agents connected through Macro's MCP
-server, can present one. Older sessions' `DisplayResults` calls, and AI chat's, still render
-the same way.
+server, can present one. AI chat's `DisplayResults` calls render the same
+way, from the view the call returns; nothing draws while the call streams.
 
 A presented view breaks tool groups before and after itself; later calls start
 a separate group. Its dashboard supports markdown, timelines, entity lists, and
-channel messages, using the same full-width view as AI chat. Malformed views
-show **Couldn't render dashboard**; failed calls show a **Failed** summary row
-without a disclosure.
+channel messages, using the same full-width view as AI chat. A finished call
+with no view shows **Couldn't render dashboard**; failed calls show a
+**Failed** summary row without a disclosure.
 
 The development gallery at `/app/component/agent-ui` includes **Replay tool
 calls** and **Replay fast batch**, both using the message renderer. Check that

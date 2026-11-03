@@ -314,17 +314,40 @@ export function useSetCompanyHiddenMutation(deps: CrmRecordDependencies) {
         companyId: string;
         hidden: boolean;
       }) =>
-        throwOnErr(() => deps.storage.setCompanyHidden({ companyId, hidden })),
-      onSuccess: async (_data, { companyId }) => {
-        await invalidateCachedCrmContacts();
-        wipeCompanyEmailCache(deps, companyId);
-        return Promise.all([
-          deps.client.invalidateQueries({ queryKey: soupKeys._def }),
-          deps.client.invalidateQueries({
-            queryKey: crmKeys.company(companyId).queryKey,
-          }),
-        ]);
-      },
+        Telemetry.span('crm.visibility_change', async (span) => {
+          span.setAttr('crm.record_type', 'company');
+          span.setAttr('crm.record_id', companyId);
+          span.setAttr('crm.hidden', hidden);
+          try {
+            const result = await throwOnErr(() =>
+              deps.storage.setCompanyHidden({ companyId, hidden })
+            );
+            await span.span(
+              'crm.visibility_change.refresh',
+              async (refresh) => {
+                try {
+                  await invalidateCachedCrmContacts();
+                  wipeCompanyEmailCache(deps, companyId);
+                  await Promise.all([
+                    deps.client.invalidateQueries({ queryKey: soupKeys._def }),
+                    deps.client.invalidateQueries({
+                      queryKey: crmKeys.company(companyId).queryKey,
+                    }),
+                  ]);
+                } catch (error) {
+                  refresh.error('Company visibility refresh failed');
+                  throw error;
+                }
+              }
+            );
+            span.setAttr('crm.visibility.outcome', 'success');
+            return result;
+          } catch (error) {
+            span.setAttr('crm.visibility.outcome', 'error');
+            span.error('Company visibility update failed');
+            throw error;
+          }
+        }),
     }),
     () => deps.client
   );

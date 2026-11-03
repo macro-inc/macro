@@ -188,6 +188,11 @@ export const NOTIFICATION_EVENT_GROUPS: readonly NotificationEventGroup[] = [
         label: 'Agent session mentions',
         description: 'When someone mentions you in an agent session',
       },
+      {
+        type: 'routine_run_finished',
+        label: 'Routine runs',
+        description: 'When one of your routines finishes or fails a run',
+      },
     ],
   },
   {

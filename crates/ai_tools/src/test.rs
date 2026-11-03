@@ -360,7 +360,15 @@ fn frontend_schemas_build() {
     }
     assert!(names.contains("QueryDatabase"));
     assert!(names.contains("DiscoverConnectors"));
+    // DisplayResults renders from the fold's decoded view, not a tool schema.
     for name in tools_for(AiHost::Chat).toolset.tools.keys() {
+        if name == "DisplayResults" {
+            assert!(
+                !names.contains(name.as_str()),
+                "DisplayResults has a frontend schema"
+            );
+            continue;
+        }
         assert!(names.contains(name.as_str()), "missing chat tool: {name}");
     }
     for name in [

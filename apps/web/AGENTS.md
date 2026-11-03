@@ -42,6 +42,13 @@ Split dragging and composer reflow have a backend-free browser regression:
 `bunx playwright test --config src/lib/core/component/Resize/browser-test/playwright.config.ts`.
 It exercises the real resize solver, scroll container, and Lexical layout primitive.
 
+Stacked splits have a backend-free browser regression over the real split
+router and tiled layout: splitting keeps the pane mounted, stacked gutters drag
+and nudge to the minimum height, and closing hands the column back:
+`bunx playwright test --config src/components/app/split-layout/browser-test/playwright.config.ts`.
+Keep panes in one keyed list positioned by the layout tree; nesting a
+`Resize.Zone` per split remounts a pane whenever its split changes.
+
 Desktop app switches open the requested list in the target split when the
 retained detail is claimed by another pane or preview. Keep this check in view
 restoration and preserve entity deduplication and native dock stack restoration;
@@ -344,6 +351,9 @@ not to account-wide paired runtime count; a user can pair several computers.
 
 ### General
 
+- Keep CRM removal and restoration visible on company/contact Overview pages;
+  use the existing hidden mutations and confirm company contact/email-sync effects.
+
 - Keep selection controls on shared `Checkbox`, `ToggleSwitch`, and `RadioGroup`;
   preserve their native input semantics and use root sizing instead of internal
   control/glyph overrides. See the [selection-control contract](../../.agents/rules/web/ui-primitives.md#selection-controls).
@@ -469,7 +479,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep split chrome portal targets reactive so cached views can mount before their header, and clear a retiring header's targets only while it still owns them.
 - Opt views into session restoration with `split-layout/view-restoration` and set `resume: true` on ordinary layout navigation; publish captured state only through the leave guard's `onCommit`, keep explicit links and new splits fresh, and reuse entry-state captors rather than hidden mounted views.
 - Let `ViewShell.TopBar` own split close and navigation controls; do not add a second split close button inside Agents headers or their preview `headerLeading`.
-- Desktop tabs (`components/app/tab-layout`, macOS + `enable-desktop-tabs`) hold one split layout per tab over the router's `layoutSnapshot`/`restoreLayout`; only the active tab is live, and the strip renders in the title bar's center slot. Cmd+click becomes a background tab through `openInNewTabMiddleware`, so tab operations must disarm the intent tracker before navigating. Tabs are not draggable. See the tabs section of `docs/agent-guide/navigation.md` at the repository root.
+- Desktop tabs (`components/app/tab-layout`, macOS + `enable-desktop-tabs`) hold one split layout per tab. Switching parks the active tab's panes (`router.openLayout`/`showLayout`) instead of removing them; the split manager keeps parked splits and `SplitLayout` renders one layer per tab, hiding background layers with `content-visibility` and `inert` without unmounting them. Up to `MAX_PARKED_TABS` stay mounted. The strip renders in the title bar's center slot. Cmd+click becomes a background tab through `openInNewTabMiddleware`, so tab operations must disarm the intent tracker before navigating. Tabs are not draggable. See the tabs section of `docs/agent-guide/navigation.md` at the repository root.
 - Show only the Recent conversation feed in mobile Channels, without view tabs or a persisted mobile tab selection; render its rows with Home's touch row (`ChannelCardLayout` and `InboxDivider`) and pin at most six channel favorites above it.
 - Mount the mobile search input before focusing it inside the dock tap; keep navigation in that handler so focus does not trigger a second navigation or lose iOS keyboard activation.
 - Preserve focused chrome editors during deferred split insertion/removal/content-change autofocus; explicit return-focus commands may still focus the pane. On desktop, content changes claim focus only for Cmd+K navigation or create-menu arrivals, and only if the destination has not already focused a child. Back/forward and ordinary clicks do not autofocus content.

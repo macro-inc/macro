@@ -3,6 +3,7 @@ import { SidePanel } from '@components/app/side-panel';
 import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
 import { CrmListSkeleton } from '../components/list-state';
 import { RecordOverview } from '../components/record-overview';
+import { RecordVisibilityAction } from '../components/record-visibility-action';
 import { useCrmContext } from '../context/crm-context';
 import {
   type ContactSection,
@@ -19,7 +20,11 @@ import {
   RecordFilesSection,
   RecordReferencesSection,
 } from './record-associations';
-import { useContactQuery, useIsTeamAdmin } from './use-crm';
+import {
+  useContactQuery,
+  useIsTeamAdmin,
+  useSetContactHiddenMutation,
+} from './use-crm';
 
 /**
  * Root of the contact detail view, laid out like a project: the host's top
@@ -64,6 +69,7 @@ function ContactContent(props: ContactProps) {
     }))
   );
   const isTeamAdmin = useIsTeamAdmin();
+  const hiddenMutation = useSetContactHiddenMutation();
   const section = () => props.section ?? 'overview';
   const scope = createMemo(
     (): CrmRecordScope | undefined => {
@@ -95,6 +101,37 @@ function ContactContent(props: ContactProps) {
                   contact={contact()}
                   onOpenCompany={props.onOpenCompany}
                 />
+                <Show when={contact()}>
+                  {(current) => (
+                    <RecordVisibilityAction
+                      recordId={current().id}
+                      kind="contact"
+                      name={current().name ?? current().email ?? 'Contact'}
+                      hidden={current().hidden}
+                      canManage={isTeamAdmin()}
+                      pending={hiddenMutation.isPending}
+                      onChange={(hidden, onSuccess) =>
+                        hiddenMutation.mutate(
+                          { contactId: current().id, hidden },
+                          {
+                            onSuccess: () => {
+                              onSuccess();
+                              context.feedback.success(
+                                hidden
+                                  ? 'Person removed from CRM'
+                                  : 'Person restored to CRM'
+                              );
+                            },
+                            onError: () =>
+                              context.feedback.failure(
+                                'Could not update contact visibility'
+                              ),
+                          }
+                        )
+                      }
+                    />
+                  )}
+                </Show>
                 <Show when={pipelinesEnabled()}>
                   <context.PipelineEntries
                     record={{ type: 'contact', id: props.contactId }}
