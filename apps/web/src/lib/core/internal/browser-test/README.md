@@ -37,7 +37,9 @@ replacement pages by keyboard or touch, empty continuations, a late match, custo
 selection preservation and input focus. The source unit regression additionally
 checks twenty replacements, close/reopen reset and query-history collection.
 New message/channel, call, routine-template and sharing pickers use this source;
-email and AI-planner pools still require their separate migration.
+main email fields also use it, with composition coverage in
+`features/email-compose/browser-test/recipient-directory.app.e2e.ts`. Remaining
+invitation and AI-planner pools still require their separate migration.
 
 This is UI/adapter coverage, not a WASM memory measurement or live-backend trace.
 Real Turso/OPFS hydration/search coverage lives in `crates/client/cache-turso`.

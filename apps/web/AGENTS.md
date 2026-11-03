@@ -1,12 +1,12 @@
 ## Development Commands
 
 - Use `bun` as the package manager and script runner (`bun run build`, `bunx tsc`).
-- `bun run test`: run tests 
+- `bun run test`: run tests
 - `bun run check`: check typescript changes
 - Forward `CacheHost.people` through the app's retiring host, resolving the current host on each call even for captured methods; retired reads return unsupported and context writes reject rather than acknowledge discarded publication.
-- `CacheHost.people` contracts come from cache-core models: `bun run gen-cache-people-schema --rust` regenerates Rust JSON plus Zod/types; `--check --rust` verifies both. `bun run check` verifies JSON-to-frontend generation, while cache-core tests verify Rust-to-JSON drift. Missing native person commands mean unsupported, never permission to issue an unscoped write. 
-- `bun run lint`: lint with biome 
-- `bun run format`: format changes with biome 
+- `CacheHost.people` contracts come from cache-core models: `bun run gen-cache-people-schema --rust` regenerates Rust JSON plus Zod/types; `--check --rust` verifies both. `bun run check` verifies JSON-to-frontend generation, while cache-core tests verify Rust-to-JSON drift. Missing native person commands mean unsupported, never permission to issue an unscoped write.
+- `bun run lint`: lint with biome
+- `bun run format`: format changes with biome
 - `bun run knip`: to check for dead code
 - Run Linux native cache-plugin tests from the repository root with `nix develop .#tauri-linux --command cargo test --manifest-path apps/web/tauri/Cargo.toml -p graphql_cache_plugin`; the [Tauri platform shell](../../docs/development/running-locally.md) supplies the required desktop libraries.
 - Refresh `nix-support/node_modules-hashes.json` for Linux and Darwin when dependency manifests, the lockfile, or dependency patches change.
@@ -48,8 +48,10 @@ window, never an authorization error or server continuation. Resolve self separa
 when 500 explicit selections fill the lookup batch. Prefer current-search DM metadata
 over a person's stored command target, then use recent conversations as fallback.
 Ranked person
-cursors require coordinator protocol 14; native menu policy version 3 matches
-final mention-menu scoring and property-picker self/domain boosts before the limit. Older policy replies are not ranked
+cursors require coordinator protocol 14; native menu policy version 4 retains
+mention scoring/property boosts and excludes automated recipient addresses before
+the limit unless their full address was typed. Generate the policy floor from Rust
+with the transport schema; older policy replies are not ranked
 native windows. Cursors bind scope/policy/epoch and retain
 only a scoring position/clock, not previous result IDs. Honor continuations on
 short/empty pages and keep server fallback explicitly source-ordered.
@@ -62,7 +64,13 @@ constructs a per-picker source from live query/open/self/domain inputs; use
 `useContactRecipientSource` or `useCombinedRecipientSource` for personal suggestions
 and keep `options` for explicit scoped extras. Closing releases the page and reopening
 starts at the first window. Selected chips remain caller-owned; Next options/PageDown
-can advance empty windows. The internal recipient browser fixture covers desktop/touch.
+can advance empty windows. Main email To/Cc/Bcc inputs receive the factory through
+`EmailComposeContext.createRecipientSource`; scoped hosts opt out explicitly with
+`undefined`. Thread extras and personal hits deduplicate by canonical email while
+preserving the selected representation. Keep selection/outside dismissal synchronous;
+a delayed combobox close must not cancel a new query after refocus. Pass supplied
+names to option/chip avatars instead of filling the global name store. The internal
+recipient and email app-browser fixtures cover desktop/touch.
 Universal task inference still uses the existing shared-recipient pool until its
 planner resolver migrates; never substitute a suggestion page for that catalog.
 

@@ -382,6 +382,37 @@ fn in_memory_recent_browse_uses_component_wise_record_key_order() {
 }
 
 #[test]
+fn engine_recent_browse_keeps_prefix_related_records_after_cursor() {
+    block_on(async {
+        let mut storage = InMemoryStorage::new();
+        let entries = ["Type:9", "Type0:1"].map(|key| {
+            let mut record = Record::default();
+            record.fields.insert(
+                "__typename".into(),
+                CacheValue::String("GraphqlSoupDocument".into()),
+            );
+            record
+                .fields
+                .insert("name".into(), CacheValue::String(key.into()));
+            record.fields.insert(
+                "updatedAt".into(),
+                CacheValue::Number(cache_core::value::CacheNumber::PosInt(1)),
+            );
+            (EntityKey(key.into()), record)
+        });
+        storage.put_batch(entries.into()).await.unwrap();
+        let mut engine = Engine::new(storage);
+
+        let first = engine.search(&request("", 1)).await.unwrap();
+        assert_eq!(first.documents[0].record_key.as_ref(), "Type:9");
+        let mut continuation = request("", 1);
+        continuation.cursor = first.next_cursor;
+        let second = engine.search(&continuation).await.unwrap();
+        assert_eq!(second.documents[0].record_key.as_ref(), "Type0:1");
+    });
+}
+
+#[test]
 fn empty_query_is_bounded_and_uses_recent_projection_path() {
     block_on(async {
         let mut storage = InMemoryStorage::new();

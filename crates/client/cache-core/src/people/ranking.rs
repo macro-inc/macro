@@ -1,7 +1,7 @@
 use super::cursor::{Cursor, Position, fingerprint};
 use super::*;
 use crate::value::{CacheValue, Record};
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::{cowlike::CowLike, email::ReadEmailParts};
 use std::{
     cmp::Ordering,
     collections::{BinaryHeap, HashSet},
@@ -9,8 +9,8 @@ use std::{
 use subsequence_match::{
     normalize_text,
     ranking::{
-        Weights, blend, match_quality_normalized, name_match_rank_normalized,
-        recipient_match_rank_normalized,
+        Weights, blend, is_automated_recipient_local_part, match_quality_normalized,
+        name_match_rank_normalized, recipient_match_rank_normalized,
     },
     subsequence_score,
 };
@@ -113,9 +113,15 @@ impl<'a> PeopleRanker<'a> {
             return;
         }
         let normalized_email = user_id.email_str();
+        if self.request.mode == PeopleMode::Recipient
+            && self.query != normalized_email
+            && is_automated_recipient_local_part(user_id.email_part().local_part())
+        {
+            return;
+        }
         let name = match record.fields.get("name") {
             Some(CacheValue::String(value)) => value.as_str(),
-            Some(CacheValue::Null) => email.split('@').next().unwrap_or(email),
+            None | Some(CacheValue::Null) => email.split('@').next().unwrap_or(email),
             _ => return,
         };
         let facts = match record.fields.get(CONTEXT_FIELD) {
@@ -341,7 +347,7 @@ impl<'a> PeopleRanker<'a> {
             None
         };
         Ok(PeopleSearchResult::Page {
-            policy_version: 3,
+            policy_version: PEOPLE_POLICY_VERSION,
             people: hits
                 .into_iter()
                 .filter(|hit| {
@@ -357,3 +363,6 @@ impl<'a> PeopleRanker<'a> {
         })
     }
 }
+
+#[cfg(test)]
+mod test;

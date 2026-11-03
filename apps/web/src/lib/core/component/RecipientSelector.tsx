@@ -14,6 +14,7 @@ import {
   recipientEntityMapper,
   type WithCustomUserInput,
 } from '@core/user';
+import { isAutomatedAddress } from '@core/user/automated-address';
 import { useAugmentUserWithDmActivity } from '@core/user/dmActivity';
 import type { RecipientSourceFactory } from '@core/user/recipient-source';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -49,6 +50,7 @@ import {
   untrack,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
+import { RecipientMenuContent } from './RecipientMenuContent';
 import { RecipientSourceControls } from './RecipientSourceControls';
 import {
   getRecipientOptionEmail,
@@ -56,8 +58,8 @@ import {
   getRecipientOptionName,
   getRecipientOptionTextValue,
   getRecipientOptionValue,
-  isAutomatedAddress,
   rankRecipientMatches,
+  uniqueRecipientMatches,
 } from './recipient-options';
 
 function ChipWithUserTooltip(props: {
@@ -524,9 +526,10 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       const email = getRecipientOptionEmail(item);
 
       if (
-        item.kind === 'contact' &&
+        (item.kind === 'contact' || item.kind === 'user') &&
         email &&
         isAutomatedAddress(email) &&
+        inputValue().trim().toLowerCase() !== email.toLowerCase() &&
         !selectedEmails().has(email.toLowerCase())
       ) {
         continue;
@@ -599,9 +602,11 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 
     // Typed recipients already chosen stay out of the suggestions, where Enter
     // on text matching nothing would toggle one off and clear the text.
-    return rankRecipientMatches(
-      [...searched, ...typed],
-      searchTerm
+    return uniqueRecipientMatches<
+      CombinedRecipientItem | WithCustomUserInput<K>
+    >(
+      rankRecipientMatches([...searched, ...typed], searchTerm),
+      props.selectedOptions
     ) as CombinedRecipientItem<K>[];
   });
 
@@ -799,6 +804,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                                       icon={
                                         <UserIcon
                                           id={opt.id}
+                                          name={displayText() ?? ''}
                                           size="sm"
                                           isDeleted={false}
                                           showTooltip={false}
@@ -883,6 +889,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                                         ) : (
                                           <UserIcon
                                             id={email}
+                                            name={email}
                                             size="sm"
                                             isDeleted={false}
                                             showTooltip={false}
@@ -1027,7 +1034,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
         <div class="hidden" ref={setPortalSearchRef} />
         <Combobox.Portal mount={portalMount()}>
           <Layer depth={2}>
-            <Combobox.Content
+            <RecipientMenuContent
               ref={(el: HTMLElement) => {
                 contentEl = el;
               }}
@@ -1139,7 +1146,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                   />
                 )}
               </Show>
-            </Combobox.Content>
+            </RecipientMenuContent>
           </Layer>
         </Combobox.Portal>
         <Combobox.ErrorMessage class="text-xs text-failure mt-1">

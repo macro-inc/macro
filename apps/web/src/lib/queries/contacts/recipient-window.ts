@@ -1,3 +1,4 @@
+import { isAutomatedAddress } from '@core/user/automated-address';
 import { recipientEntityMapper } from '@core/user/combinedRecipient';
 import type {
   RecipientSource,
@@ -30,7 +31,12 @@ export function createContactRecipientSource(
       (directory.data()?.users ?? [])
         // The native policy excludes these before limiting. Server fallback is
         // source-ordered and can leave a short/empty window with a continuation.
-        .filter((user) => !isSecondaryInbox(user.id))
+        .filter(
+          (user) =>
+            !isSecondaryInbox(user.id) &&
+            (!isAutomatedAddress(user.email) ||
+              input.search().trim().toLowerCase() === user.email.toLowerCase())
+        )
         .map(recipientEntityMapper('user'))
     ),
     loading: directory.loading,

@@ -1,6 +1,7 @@
 {
   "maxBatch": 500,
   "maxQueryBytes": 512,
+  "policyVersion": 4,
   "schemas": {
     "PeopleContextState": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -519,7 +520,7 @@
               "type": "array"
             },
             "policyVersion": {
-              "description": "Menu-policy contract version; older native binaries cannot rank the\nupdated mention surface before its result limit.",
+              "description": "Menu-policy contract version; older native binaries may not apply\ncurrent matching, exclusions and ranking before their result limit.",
               "format": "uint32",
               "minimum": 0,
               "type": "integer"

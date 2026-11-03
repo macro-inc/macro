@@ -1265,10 +1265,14 @@ with existing DM peers/inboxes; full channel sources are still in memory.
 Quick Access now reads a replaceable person window rather than `useContacts()` or
 its global item index. Commands/mentions forward typed queries; CRM alias matching
 uses exact lookup for only the current 50-row CRM window. Soup facets and property
-pickers preserve selections separately. Native policy version 3 applies final
-mention-menu scoring and property-picker self/domain boosts before the result limit. Shared recipients and AI planner
-pools still retain their explicit legacy sources; whole-app memory verification
-and bounded shared display-name storage remain pending.
+pickers preserve selections separately. Native policy version 4 retains mention
+scoring and property self/domain boosts, and excludes automated recipient mailboxes
+before the result limit unless a full address was typed. The policy floor is generated
+from Rust alongside the transport schemas; older replies use bounded server fallback.
+Creation/sharing and main email recipient controls now own paged sources; email
+threads retain scoped addresses, not an address book. Remaining invitation/AI planner
+pools retain legacy sources; whole-app memory completion and bounded shared
+name storage remain pending.
 
 ## Cached email Quick Access
 

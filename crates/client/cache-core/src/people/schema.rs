@@ -4,6 +4,7 @@ use super::*;
 /// Generate the bounded person transport models without duplicating DTOs.
 pub fn schemas() -> serde_json::Value {
     serde_json::json!({
+        "policyVersion": PEOPLE_POLICY_VERSION,
         "maxBatch": MAX_PEOPLE_BATCH,
         "maxQueryBytes": subsequence_match::MAX_QUERY_BYTES,
         "schemas": {

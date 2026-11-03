@@ -115,7 +115,7 @@ it('recovers an initially unavailable offline picker after context publication',
     ready
       ? {
           kind: 'page' as const,
-          policyVersion: 3,
+          policyVersion: 4,
           truncated: false,
           nextCursor: null,
           people: [

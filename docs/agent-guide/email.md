@@ -833,6 +833,13 @@ before suggestions loaded. A name or address word that starts with the query
 ranks above recent substring matches (`gab` finds Gab Rowan). Opened empty,
 the list puts colleagues on the sending inbox's domain first. A chip shows the
 name followed by the address in muted ink.
+Main new-email and reply/forward To/Cc/Bcc pickers now query bounded personal
+windows rather than retaining the address book. Each field owns its query; use
+**Next options** or PageDown for another window. Scoped thread addresses remain
+available, but the same address must not appear twice when the directory also
+finds it. Paging, closing, changing sender and searching must preserve selected
+custom/off-page chips. On touch, Next keeps input focus. Automated mailboxes are
+excluded before native limiting, except for complete explicitly typed addresses.
 Press Send with To empty, then add a recipient: the error clears at once, as a
 missing message or subject error does once filled in. Suggestions leave out
 automated addresses (`notifications@`, `mailer-daemon@`, `postmaster@`,

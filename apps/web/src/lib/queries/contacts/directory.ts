@@ -4,9 +4,10 @@ import {
   selectRecords,
 } from '@graphql-cache/exchange/record-selection';
 import type { CacheHost } from '@graphql-cache/host/types';
-import type {
-  PeopleSearch,
-  PeopleSearchResult,
+import {
+  PEOPLE_POLICY_VERSION,
+  type PeopleSearch,
+  type PeopleSearchResult,
 } from '@graphql-cache/people/generated';
 import {
   isStaleHydrationScopeError,
@@ -120,7 +121,8 @@ async function cachedPage(
         request.cursor?.source === 'people' ? request.cursor.after : undefined,
     });
     signal.throwIfAborted();
-    if (result.kind !== 'page' || result.policyVersion < 3) return;
+    if (result.kind !== 'page' || result.policyVersion < PEOPLE_POLICY_VERSION)
+      return;
     if (result.people.length > limit)
       throw new Error('Contact response exceeds its window');
     await assertContactCacheScope(host, viewer, generation, signal);

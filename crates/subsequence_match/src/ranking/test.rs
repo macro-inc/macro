@@ -46,6 +46,21 @@ fn recipient_tiers_match_the_browser_contract() {
 }
 
 #[test]
+fn automated_mailboxes_match_browser_fixtures() {
+    for line in include_str!("automated-recipient-fixtures.tsv")
+        .lines()
+        .skip(1)
+    {
+        let (local, automated) = line.split_once('\t').unwrap();
+        assert_eq!(
+            is_automated_recipient_local_part(&local.to_lowercase()),
+            automated.parse::<bool>().unwrap(),
+            "{line}"
+        );
+    }
+}
+
+#[test]
 fn independent_blends_preserve_recency_and_boost_priorities() {
     let weights = Weights {
         fuzzy: 0.7,

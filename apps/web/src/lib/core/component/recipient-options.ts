@@ -14,16 +14,6 @@ export function getRecipientOptionEmail(
     .exhaustive();
 }
 
-// These addresses remain available as explicitly typed custom recipients.
-export function isAutomatedAddress(email: string) {
-  const local = email.split('@')[0];
-  return (
-    /^(?:notifications|mailer-daemon|postmaster|bounce)(?:[+._-]|$)/i.test(
-      local
-    ) || /(?:no[._-]?reply|do[._-]?not[._-]?reply)/i.test(local)
-  );
-}
-
 export function getRecipientOptionName(option: CombinedRecipientItem) {
   return match(option)
     .with({ kind: 'user' }, ({ data }) =>
@@ -71,6 +61,40 @@ export function getRecipientOptionTextValue(option: CombinedRecipientItem) {
     )
     .with({ kind: 'custom' }, ({ data }) => data.email)
     .exhaustive();
+}
+
+type RecipientIdentity = {
+  kind: CombinedRecipientItem['kind'];
+  id: string;
+  data: { id: string; email?: string };
+};
+
+function recipientIdentity(option: RecipientIdentity) {
+  const email = option.data.email;
+  return email &&
+    (option.kind === 'user' ||
+      option.kind === 'contact' ||
+      option.kind === 'custom')
+    ? `email:${email.trim().toLowerCase()}`
+    : `${option.kind}:${option.id}`;
+}
+
+/** Scoped thread addresses and directory users can represent the same person.
+ * Preserve the caller's selected value rather than changing a chip's kind. */
+export function uniqueRecipientMatches<T extends RecipientIdentity>(
+  options: readonly T[],
+  selected: readonly T[] = []
+): T[] {
+  const preferred = new Map(
+    selected.map((item) => [recipientIdentity(item), item])
+  );
+  const seen = new Set<string>();
+  return options.flatMap((item) => {
+    const key = recipientIdentity(item);
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [preferred.get(key) ?? item];
+  });
 }
 
 export function rankRecipientMatches<T extends CombinedRecipientItem>(

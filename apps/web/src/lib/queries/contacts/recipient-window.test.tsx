@@ -127,57 +127,70 @@ it('replaces pages from a 100k directory and releases them on close without trun
   client.clear();
 });
 
-it('keeps the continuation when a fallback window contains only secondary inboxes', async () => {
-  vi.useFakeTimers();
-  const client = new QueryClient();
-  const reader = vi
-    .fn<typeof readContactDirectory>()
-    .mockImplementation(async (viewer, _host, request) => ({
-      query: '',
-      source: 'server',
-      sync: 'unavailable',
-      offline: false,
-      users: [
-        {
-          id: 'macro|secondary@example.com',
-          email: 'secondary@example.com',
-          name: 'Inbox',
-        },
-      ],
-      nextCursor: {
+it.each(['secondary', 'notifications'])(
+  'keeps an empty fallback continuation after filtering %s addresses',
+  async (local) => {
+    vi.useFakeTimers();
+    const client = new QueryClient();
+    const [search, setSearch] = createSignal('');
+    const reader = vi
+      .fn<typeof readContactDirectory>()
+      .mockImplementation(async (viewer, _host, request) => ({
+        query: request.query,
         source: 'server',
-        after: 'next',
-        userId: viewer,
-        query: '',
-        policyKey: hashKey([request.policy]),
-      },
-    }));
-  let source: ReturnType<typeof createContactRecipientSource> | undefined;
-  function Harness() {
-    source = createContactRecipientSource(
-      () => ({ userId: 'viewer' }),
-      {
-        search: () => '',
-        enabled: () => true,
-        selfId: () => 'viewer',
-        senderDomain: () => undefined,
-        includeSelf: () => false,
-      },
-      (id) => id === 'macro|secondary@example.com',
-      reader
-    );
-    return null;
+        sync: 'unavailable',
+        offline: false,
+        users: [
+          {
+            id: `macro|${local}@example.com`,
+            email: `${local}@example.com`,
+            name: 'Inbox',
+          },
+        ],
+        nextCursor: {
+          source: 'server',
+          after: 'next',
+          userId: viewer,
+          query: request.query,
+          policyKey: hashKey([request.policy]),
+        },
+      }));
+    let source: ReturnType<typeof createContactRecipientSource> | undefined;
+    function Harness() {
+      source = createContactRecipientSource(
+        () => ({ userId: 'viewer' }),
+        {
+          search,
+          enabled: () => true,
+          selfId: () => 'viewer',
+          senderDomain: () => undefined,
+          includeSelf: () => false,
+        },
+        (id) => id === 'macro|secondary@example.com',
+        reader
+      );
+      return null;
+    }
+    render(() => (
+      <QueryClientProvider client={client}>
+        <Harness />
+      </QueryClientProvider>
+    ));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(source!.items()).toEqual([]);
+    expect(source!.hasNext()).toBe(true);
+    expect(source!.incomplete()).toBe(true);
+    await source!.next();
+    expect(reader.mock.calls.at(-1)?.[2].cursor).toMatchObject({
+      after: 'next',
+    });
+    if (local === 'notifications') {
+      setSearch('NOTIFICATIONS@example.com');
+      await vi.advanceTimersByTimeAsync(200);
+      expect(source!.items().map((item) => item.id)).toEqual([
+        'macro|notifications@example.com',
+      ]);
+    }
+    client.clear();
   }
-  render(() => (
-    <QueryClientProvider client={client}>
-      <Harness />
-    </QueryClientProvider>
-  ));
-  await vi.advanceTimersByTimeAsync(0);
-  expect(source!.items()).toEqual([]);
-  expect(source!.hasNext()).toBe(true);
-  expect(source!.incomplete()).toBe(true);
-  await source!.next();
-  expect(reader.mock.calls.at(-1)?.[2].cursor).toMatchObject({ after: 'next' });
-  client.clear();
-});
+);

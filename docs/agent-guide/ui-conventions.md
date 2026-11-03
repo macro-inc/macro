@@ -137,12 +137,13 @@ unchanged. See the [selection-control API contract](../../.agents/rules/web/ui-p
 
 ## Recipient suggestions
 
-New message/channel, call, routine-template and sharing pickers search personal
+New message/channel, main email, call, routine-template and sharing pickers search personal
 contacts through one bounded window. Type to find later contacts; **Next options**
 or PageDown replaces the window, and ArrowDown at its end advances it. An empty
 window can still have a next page. Touch Next preserves input focus. Closing and
 reopening starts at the first window, without clearing selected/custom chips.
-Explicit participant/agent choices remain scoped extras. Other recipient surfaces
+Explicit participant/agent/thread choices remain scoped extras. Matching addresses
+are deduplicated while keeping the caller's selected representation. Other recipient surfaces
 are migrating separately; these controls do not change the AI planner's people pool.
 
 ## Multiselect dropdowns
