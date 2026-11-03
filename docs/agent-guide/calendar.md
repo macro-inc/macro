@@ -500,7 +500,11 @@ window. The picker, the people chosen and the send button stay visible at every
 event position and window height. The same regression covers both editors in a
 tall and a short window (`?guests=add` or `?guests=forward`, with
 `?contacts=late` delivering the picker's contacts on
-`window.calendarPreview.deliverContacts()`) and their phone sheets.
+`window.calendarPreview.deliverContacts()`) and their phone sheets. With `?addresses=long` it
+checks that a named guest's address and an address-only guest's address, neither with a space,
+wrap inside the popover and the phone drawer. CI runs it (`just test-calendar-details-browser`
+in `apps/web`) when calendar details or the calendar queries change; its `preview-adapters.tsx`
+stands in for those queries, so give it every export and callback argument the components use.
 
 The `New event` composer (also opened by dragging a range on the grid) has an `Event kind`
 pill choosing between `Event` and `Out of office`. Picking `Out of office` hides the guests,
@@ -549,7 +553,8 @@ Each guest in event details (desktop popover and phone drawer) shows their name 
 address on a muted line under it, as the user card shows a person, followed by `Organizer` or
 `Optional` and any comment; the viewer's own row (`(you)`) does too, which tells their inboxes
 apart. A guest Macro has no name for (no Macro profile or email contact) shows the address
-once, as the name. The address wraps instead of truncating in a narrow popover or on a phone.
+once, as the name. The address wraps instead of truncating in a narrow popover or on a phone
+(the event details browser regression's `?addresses=long`).
 The `Organizer` row under the calendar row, shown when someone other than the calendar
 organizes the event, adds the organizer's address the same way. Teammates' read-only event
 details (`Shared in Macro · Read only`) list guests by provider name, or by address when there

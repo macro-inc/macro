@@ -22,11 +22,13 @@ import {
   viewedProjectIdFromContent,
 } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
+import { t } from '@app/lib/i18n';
 import { makePersistedState } from '@app/lib/persistence';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { createSplitAutofocus } from '@components/app/split-layout/utils/createSplitAutofocus';
+import { toast } from '@core/component/Toast/Toast';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
@@ -43,6 +45,7 @@ import BellIcon from '@icon/system/regular/bell-simple.svg';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import { useRestoreEmailFolderMutation } from '@queries/email/folders';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
@@ -67,6 +70,7 @@ import {
   soupNavigationTouchHighlight,
 } from '../../next-soup/soup-view/soup-navigation-touch-highlight';
 import { openEntityInSplitFromUnifiedList } from '../../next-soup/utils';
+import { isExcludedEmailFolder } from '../constants';
 import {
   type EmailListActivationMetadata,
   useEmailView,
@@ -76,6 +80,7 @@ import {
   DEFAULT_EMAIL_LIST_STATE,
   type EmailListStateSnapshot,
 } from '../persistence';
+import { createEmailFolderRestore } from '../primitives/folder-restore';
 import { createEmailRowActionState } from '../primitives/row-action-state';
 import { createScrollAnchor } from '../primitives/scroll-anchor';
 import type { EmailDataSourceItem } from '../queries/use-email-query';
@@ -413,6 +418,33 @@ export function EmailList(props: EmailListProps) {
   }
 
   const rowActionState = createEmailRowActionState();
+  const restoreFolder = useRestoreEmailFolderMutation();
+  const restoreLabel = () =>
+    state.tab === 'spam'
+      ? t('entityActions.notSpam')
+      : t('entityActions.restoreEmail');
+  const restoreFolderThreads = createEmailFolderRestore({
+    tab: () => state.tab,
+    isPending: () => restoreFolder.isPending,
+    selection: list.selection.requestedKeys,
+    clearSelection: listInteractions.selection.clear,
+    restore: (input) => restoreFolder.mutateAsync(input),
+    onRestored: () =>
+      toast.success(t('entityActions.toastEmailRestoreRequested')),
+    onFailed: (count) =>
+      toast.failure(t('entityActions.toastEmailRestoreFailed', { count })),
+  });
+  function restoreThreads(
+    entities: EntityData[],
+    action: { clearSelection?: boolean } = {}
+  ) {
+    return restoreFolderThreads(
+      entities
+        .filter((entity) => entity.type === 'email')
+        .map((entity) => entity.id),
+      action
+    );
+  }
 
   async function runRowAction(
     row: EmailActionRow,
@@ -444,7 +476,23 @@ export function EmailList(props: EmailListProps) {
         archived={archived()}
         canArchive={entityActionViewContext().supportsMarkDone}
         canUnarchive={canMarkNotDone(props.row.entity)}
-        pending={rowActionState.isPending(props.row.rowId)}
+        pending={
+          rowActionState.isPending(props.row.rowId) || restoreFolder.isPending
+        }
+        restore={
+          isExcludedEmailFolder(state.tab)
+            ? {
+                label: restoreLabel(),
+                run: () =>
+                  fireAndForget(
+                    restoreThreads([props.row.entity], {
+                      clearSelection: false,
+                    }),
+                    'email-view'
+                  ),
+              }
+            : undefined
+        }
         onFocus={() => focusActionRow(props.row)}
         onArchive={() =>
           fireAndForget(
@@ -871,6 +919,20 @@ export function EmailList(props: EmailListProps) {
                                           />
                                         </Show>
                                       }
+                                      touchActions={
+                                        <Show
+                                          when={isExcludedEmailFolder(
+                                            state.tab
+                                          )}
+                                        >
+                                          <RowActions
+                                            row={{
+                                              entity: entityRow().entity,
+                                              rowId: entityRow().id,
+                                            }}
+                                          />
+                                        </Show>
+                                      }
                                       checked={list.selection.isSelected(
                                         entityRow().id
                                       )}
@@ -1003,7 +1065,22 @@ export function EmailList(props: EmailListProps) {
             selected={selectedEntities()}
             onClear={listInteractions.selection.clear}
             analyticsSource="email_view_selection_toolbar"
-          />
+          >
+            <Show when={isExcludedEmailFolder(state.tab)}>
+              <Button
+                size="sm"
+                disabled={restoreFolder.isPending}
+                onClick={() =>
+                  fireAndForget(
+                    restoreThreads(selectedEntities()),
+                    'email-view'
+                  )
+                }
+              >
+                {restoreLabel()}
+              </Button>
+            </Show>
+          </EntitySelectionToolbar>
         </Show>
       </div>
     </MaybeSoupEntityActionDrawerManager>

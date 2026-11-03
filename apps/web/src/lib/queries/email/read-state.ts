@@ -14,6 +14,7 @@ import {
   getUnmaintainedGraphqlSoupRevalidations,
   refreshActiveGraphqlSoupQueries,
 } from '../soup/graphql/active-queries';
+import { invalidateEmailFolderQueries } from './folder-cache';
 
 export type MarkThreadAsSeenParams = {
   threadId: string;
@@ -26,33 +27,37 @@ export type MarkThreadAsSeenParams = {
 export async function markEmailThreadSeen(
   params: MarkThreadAsSeenParams
 ): Promise<void> {
-  if (isFeatureEnabled(enableGraphqlSoup)) {
-    const disposition = await markGraphqlEmailThreadSeen(
-      getGraphqlSoupClient(),
-      params.threadId,
-      getUnmaintainedGraphqlSoupRevalidations()
-    );
-    if (disposition === 'committed' && !graphqlCacheEnabled()) {
-      await refreshActiveGraphqlSoupQueries();
-    }
-    return;
-  }
-
-  optimisticUpdateSoupEntity({
-    tag: 'emailThread',
-    data: { id: params.threadId, isRead: true },
-    frecency_score: 0,
-  });
   try {
-    await throwOnErr(() =>
-      emailClient.markThreadAsSeen(
-        { thread_id: params.threadId },
-        params.linkId
-      )
-    );
-  } catch (error) {
-    // Read back only this thread on failure, preserving unrelated list writes.
-    await refetchSoupEntity(params.threadId, 'emailThread');
-    throw error;
+    if (isFeatureEnabled(enableGraphqlSoup)) {
+      const disposition = await markGraphqlEmailThreadSeen(
+        getGraphqlSoupClient(),
+        params.threadId,
+        getUnmaintainedGraphqlSoupRevalidations()
+      );
+      if (disposition === 'committed' && !graphqlCacheEnabled()) {
+        await refreshActiveGraphqlSoupQueries();
+      }
+      return;
+    }
+
+    optimisticUpdateSoupEntity({
+      tag: 'emailThread',
+      data: { id: params.threadId, isRead: true },
+      frecency_score: 0,
+    });
+    try {
+      await throwOnErr(() =>
+        emailClient.markThreadAsSeen(
+          { thread_id: params.threadId },
+          params.linkId
+        )
+      );
+    } catch (error) {
+      // Read back only this thread on failure, preserving unrelated list writes.
+      await refetchSoupEntity(params.threadId, 'emailThread');
+      throw error;
+    }
+  } finally {
+    await invalidateEmailFolderQueries();
   }
 }

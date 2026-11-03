@@ -38,6 +38,7 @@ import { invalidateAllSoup } from '../soup/normalized-cache';
 import { type UndoHandle, useUndoableMutation } from '../undo';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { updateEmailThreadState } from './cache-cleanup';
+import { invalidateEmailFolderQueries } from './folder-cache';
 import {
   createGraphqlEmailThreadQuery,
   fetchGraphqlEmailThread,
@@ -349,7 +350,7 @@ type MarkThreadAsUnreadParams = {
 /**
  * Optimistically flip the soup row to unread. The thread messages cache is
  * intentionally left alone for the same Suspense/scroll-reset reason as
- * threadSeenOnMutate.
+ * markEmailThreadSeen.
  */
 function threadUnreadOnMutate(params: MarkThreadAsUnreadParams): void {
   if (isFeatureEnabled(enableGraphqlSoup)) return;
@@ -389,7 +390,10 @@ export function useMarkThreadAsUnreadMutation(
       );
     },
     ...withCallbacks<void, Error, MarkThreadAsUnreadParams>(
-      { onMutate: threadUnreadOnMutate },
+      {
+        onMutate: threadUnreadOnMutate,
+        onSettled: () => invalidateEmailFolderQueries(),
+      },
       callbacks
     ),
   }));

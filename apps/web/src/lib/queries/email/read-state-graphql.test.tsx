@@ -68,6 +68,7 @@ import {
 } from '@service-storage/graphql/generated/graphql';
 import { soupOptimisticResolvers } from '../optimistic-resolvers';
 import { registerGraphqlSoupRevalidations } from '../soup/graphql/active-queries';
+import { soupKeys } from '../soup/keys';
 import { emailKeys } from './keys';
 import { markEmailThreadSeen } from './read-state';
 import {
@@ -143,6 +144,20 @@ describe('email read state with GraphQL Soup', () => {
     'propagates isRead=$read before the request settles (GraphQL=$graphql)',
     async ({ read, graphql }) => {
       mocks.graphqlEnabled = graphql;
+      const folderKeys = ['spam', 'trash'].map(
+        (emailView) =>
+          soupKeys.astItems({
+            params: {},
+            body: { emailView },
+            transport: 'rest',
+          }).queryKey
+      );
+      const allKey = soupKeys.astItems({
+        params: {},
+        body: { emailView: 'all' },
+      }).queryKey;
+      for (const key of [...folderKeys, allKey])
+        client.setQueryData(key, { pages: [] });
       let finish!: () => void;
       const network = new Promise<void>((resolve) => {
         finish = resolve;
@@ -213,8 +228,11 @@ describe('email read state with GraphQL Soup', () => {
         finish();
         await result;
       }
-      // The cached record carries the change to every list.
+      // Shared-cache lists stay local; isolated folder previews need a new read.
       expect(mocks.refresh).not.toHaveBeenCalled();
+      for (const key of folderKeys)
+        expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+      expect(client.getQueryState(allKey)?.isInvalidated).toBe(false);
     }
   );
 
@@ -346,6 +364,17 @@ describe('email read state with GraphQL Soup', () => {
 describe('row-open email read operation', () => {
   it('patches the REST row synchronously, preserves inbox targeting and refreshes only the failed thread', async () => {
     mocks.graphqlEnabled = false;
+    const folderKey = soupKeys.astItems({
+      params: {},
+      body: { emailView: 'spam' },
+      transport: 'rest',
+    }).queryKey;
+    const allKey = soupKeys.astItems({
+      params: {},
+      body: { emailView: 'all' },
+    }).queryKey;
+    client.setQueryData(folderKey, { pages: [] });
+    client.setQueryData(allKey, { pages: [] });
     const pending = Promise.withResolvers<ReturnType<typeof ok<void>>>();
     mocks.markSeen.mockReturnValueOnce(pending.promise);
     const request = markEmailThreadSeen({
@@ -364,7 +393,10 @@ describe('row-open email read operation', () => {
     pending.resolve(ok(undefined));
     await request;
     expect(mocks.refetch).not.toHaveBeenCalled();
+    expect(client.getQueryState(folderKey)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(allKey)?.isInvalidated).toBe(false);
 
+    client.setQueryData(folderKey, { pages: [] });
     mocks.markSeen.mockResolvedValueOnce(
       err([{ code: 'NETWORK', message: 'offline' }])
     );
@@ -375,5 +407,7 @@ describe('row-open email read operation', () => {
       'thread',
       'emailThread'
     );
+    expect(client.getQueryState(folderKey)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(allKey)?.isInvalidated).toBe(false);
   });
 });

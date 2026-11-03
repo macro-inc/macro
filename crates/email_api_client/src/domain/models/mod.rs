@@ -16,7 +16,7 @@ pub use address_book::*;
 pub use auth::{AccessToken, TokenError, TokenFreshness};
 pub use changes::{ChangeBatch, ChangePage, InboxChanges, SyncCursor};
 pub use draft::*;
-pub use error::{EmailApiError, RateLimitOrigin, RateLimitRefusal};
+pub use error::{EmailApiError, GateLimit, RateLimitOrigin, RateLimitRefusal};
 pub use mailbox::{
     CalendarPart, ContactPage, MessageWithCalendarParts, ProviderSubscription, ThreadListPage,
 };
