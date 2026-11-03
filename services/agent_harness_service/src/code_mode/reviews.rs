@@ -9,63 +9,19 @@ use async_trait::async_trait;
 use import::domain::models::{NotionImportReport, NotionWriteChoices, RunStatus};
 use import::domain::service::WorkspaceImporter;
 use macro_user_id::user_id::MacroUserIdStr;
-use serde::Deserialize;
-use serde_json::Value;
+use serde::{Serialize, de::DeserializeOwned};
 use std::sync::Arc;
 
-#[cfg(test)]
-mod test;
-
-/// The one draft an import review carries: which source's staged plan it
-/// presents, the plan rows the user took out of it, and the rows whose
-/// sharing they changed: `shared` to share with their team, `personal` to
-/// keep to themselves.
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct ImportDraft {
-    source: ImportReviewSource,
-    #[serde(default)]
-    excluded: Vec<macro_uuid::Uuid>,
-    #[serde(default)]
-    shared: Vec<macro_uuid::Uuid>,
-    #[serde(default)]
-    personal: Vec<macro_uuid::Uuid>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum ImportReviewSource {
-    Notion,
-    Linear,
-    Jira,
-}
-impl ImportReviewSource {
-    fn source(self) -> import::domain::models::ImportSource {
-        match self {
-            Self::Notion => import::domain::models::ImportSource::Notion,
-            Self::Linear => import::domain::models::ImportSource::Linear,
-            Self::Jira => import::domain::models::ImportSource::Jira,
-        }
-    }
-}
-
+/// The source of an import review's one draft, fixed at presentation.
 fn import_source(
     record: &ReviewRecord,
 ) -> Result<import::domain::models::ImportSource, CodeModeError> {
-    let mut sources = record.items.iter().map(|item| {
-        serde_json::from_value::<ImportDraft>(item.draft.clone())
-            .map(|draft| draft.source.source())
-            .map_err(|_| CodeModeError::Invalid("Import draft is malformed.".into()))
-    });
-    let source = sources
-        .next()
-        .ok_or_else(|| CodeModeError::Invalid("Import review has no draft.".into()))??;
-    if sources.any(|other| other.ok() != Some(source)) {
-        return Err(CodeModeError::Invalid(
-            "An import review must contain one source.".into(),
-        ));
+    match &record.items {
+        ReviewItems::Import([item]) => Ok(item.draft.source.into()),
+        _ => Err(CodeModeError::Invalid(
+            "This is not an import review.".into(),
+        )),
     }
-    Ok(source)
 }
 
 pub struct Actions<S, H> {
@@ -95,15 +51,12 @@ impl<S: AgentSessionRepo, H: AgentSessionNotificationRecipient> ReviewActions fo
                 .map_err(|error| CodeModeError::Storage(rootcause::report!(error).into()))?,
         })
     }
-    fn validate(&self, kind: ReviewKind, draft: &Value) -> Result<(), CodeModeError> {
-        validate_draft(&self.tools, kind, draft)
-    }
     async fn approvable(
         &self,
         account_holder: &MacroUserIdStr<'static>,
         record: &ReviewRecord,
     ) -> Result<bool, CodeModeError> {
-        if record.kind != ReviewKind::Import {
+        if record.kind() != ReviewKind::Import {
             return Ok(true);
         }
         let report = self
@@ -111,43 +64,53 @@ impl<S: AgentSessionRepo, H: AgentSessionNotificationRecipient> ReviewActions fo
             .await?;
         Ok(report.review_id == Some(record.id.0) && report.status == Some(RunStatus::Ready))
     }
-    async fn execute(
+    async fn send_email(
         &self,
-        owner: &MacroUserIdStr<'static>,
-        record: &ReviewRecord,
-        draft: Value,
-    ) -> Result<Value, CodeModeError> {
-        let name = match record.kind {
-            ReviewKind::Email => "SendEmail",
-            ReviewKind::Calendar => "CreateCalendarEvent",
-            ReviewKind::Import => return self.start_import(owner, record, draft).await,
-        };
-        let mut context = self.context.clone();
-        context.usage_context =
-            ai_usage::UsageContext::new(ai_usage::AiFeature::AgentSession, owner.clone());
-        let result = self
-            .tools
-            .try_user_tool_call(context, RequestContext::new(owner.clone()), name, &draft)
+        account_holder: &MacroUserIdStr<'static>,
+        draft: &EmailDraft,
+    ) -> Result<EmailResult, CodeModeError> {
+        self.user_action(account_holder, "SendEmail", draft).await
+    }
+    async fn create_calendar_event(
+        &self,
+        account_holder: &MacroUserIdStr<'static>,
+        draft: &CalendarDraft,
+    ) -> Result<CalendarResult, CodeModeError> {
+        self.user_action(account_holder, "CreateCalendarEvent", draft)
             .await
-            .map_err(|_| CodeModeError::Invalid("Could not submit the reviewed action.".into()))?
-            .map_err(|_| {
-                CodeModeError::Invalid(
-                    "The reviewed action did not return a confirmed outcome.".into(),
-                )
-            })?;
-        match result {
-            ai_toolset::tool_object::UserToolResponse::UserAction(value) => Ok(value),
-            _ => Err(CodeModeError::Invalid(
-                "The action was not completed.".into(),
-            )),
+    }
+    async fn start_import(
+        &self,
+        account_holder: &MacroUserIdStr<'static>,
+        record: &ReviewRecord,
+        draft: &ImportDraft,
+    ) -> Result<ImportResult, CodeModeError> {
+        let source = import::domain::models::ImportSource::from(draft.source);
+        if source != import_source(record)? {
+            return Err(CodeModeError::Invalid(
+                "The import source cannot change after presentation.".into(),
+            ));
         }
+        self.import_service()?
+            .start_workspace_write(
+                account_holder,
+                source,
+                record.id.0,
+                NotionWriteChoices {
+                    excluded: draft.excluded.clone(),
+                    shared: draft.shared.clone(),
+                    personal: draft.personal.clone(),
+                },
+            )
+            .await
+            .map_err(|error| CodeModeError::Invalid(error.to_string()))
     }
     async fn present(
         &self,
         owner: &MacroUserIdStr<'static>,
         record: &ReviewRecord,
     ) -> Result<(), CodeModeError> {
-        if record.kind == ReviewKind::Import {
+        if record.kind() == ReviewKind::Import {
             // The plan is tied to the review before the card appears, so the
             // card never shows a plan it cannot approve.
             self.import_service()?
@@ -167,7 +130,7 @@ impl<S: AgentSessionRepo, H: AgentSessionNotificationRecipient> ReviewActions fo
             agent_session::domain::model::SessionToolPresentation {
                 tool_call_id: format!("review_{}", record.id.0),
                 title: "mcp__macro_internal__PresentReview".into(),
-                raw_input: serde_json::json!({"reviewId": record.id, "kind": record.kind, "title": record.title}),
+                raw_input: serde_json::json!({"reviewId": record.id, "kind": record.kind(), "title": record.title}),
                 raw_output: serde_json::json!({"reviewId": record.id, "message": "Presented to the user"}),
             },
         ).await.map_err(|_| CodeModeError::Invalid(format!("Review {} was saved, but presentation is pending. Read this review to retry presentation without creating another draft.", record.id.0)))
@@ -197,66 +160,48 @@ impl<S, H> Actions<S, H> {
             })
     }
 
-    /// Start writing the approved plan; the write runs in the background,
-    /// reports progress through the import state, and tells the session
-    /// once it ends.
-    async fn start_import(
+    /// Run a user tool with a reviewed draft and decode its confirmed response.
+    async fn user_action<Draft: Serialize, Response: DeserializeOwned>(
         &self,
-        owner: &MacroUserIdStr<'static>,
-        record: &ReviewRecord,
-        draft: Value,
-    ) -> Result<Value, CodeModeError> {
-        let draft: ImportDraft = serde_json::from_value(draft)
-            .map_err(|_| CodeModeError::Invalid("Import draft is malformed.".into()))?;
-        let source = draft.source.source();
-        if source != import_source(record)? {
-            return Err(CodeModeError::Invalid(
-                "The import source cannot change after presentation.".into(),
-            ));
-        }
-        let report = self
-            .import_service()?
-            .start_workspace_write(
-                owner,
-                source,
-                record.id.0,
-                NotionWriteChoices {
-                    excluded: draft.excluded,
-                    shared: draft.shared,
-                    personal: draft.personal,
-                },
+        account_holder: &MacroUserIdStr<'static>,
+        name: &str,
+        draft: &Draft,
+    ) -> Result<Response, CodeModeError> {
+        let arguments = serde_json::to_value(draft)
+            .map_err(|_| CodeModeError::Invalid("Could not submit the reviewed action.".into()))?;
+        let mut context = self.context.clone();
+        context.usage_context =
+            ai_usage::UsageContext::new(ai_usage::AiFeature::AgentSession, account_holder.clone());
+        let result = self
+            .tools
+            .try_user_tool_call(
+                context,
+                RequestContext::new(account_holder.clone()),
+                name,
+                &arguments,
             )
             .await
-            .map_err(|error| CodeModeError::Invalid(error.to_string()))?;
-        serde_json::to_value(report).map_err(|_| {
-            CodeModeError::Invalid("The import started, but its report could not be read.".into())
-        })
-    }
-}
-
-fn validate_draft(
-    tools: &ai_tools::AiToolSet,
-    kind: ReviewKind,
-    draft: &Value,
-) -> Result<(), CodeModeError> {
-    let invalid =
-        || CodeModeError::Invalid("Draft does not match the review component's schema.".into());
-    match kind {
-        ReviewKind::Email => {
-            if !tools.is_valid_tool("SendEmail", draft) {
-                return Err(invalid());
+            .map_err(|_| CodeModeError::Invalid("Could not submit the reviewed action.".into()))?
+            .map_err(|_| {
+                CodeModeError::Invalid(
+                    "The reviewed action did not return a confirmed outcome.".into(),
+                )
+            })?;
+        match result {
+            ai_toolset::tool_object::UserToolResponse::UserAction(value) => {
+                serde_json::from_value(value).map_err(|_| {
+                    tracing::warn!(
+                        tool = name,
+                        "reviewed action returned an unexpected response"
+                    );
+                    CodeModeError::Invalid(
+                        "The reviewed action did not return a confirmed outcome.".into(),
+                    )
+                })
             }
-        }
-        ReviewKind::Calendar => {
-            if !tools.is_valid_tool("CreateCalendarEvent", draft) {
-                return Err(invalid());
-            }
-        }
-        ReviewKind::Import => {
-            if serde_json::from_value::<ImportDraft>(draft.clone()).is_err() {
-                return Err(invalid());
-            }
+            _ => Err(CodeModeError::Invalid(
+                "The action was not completed.".into(),
+            )),
         }
     }
-    Ok(())
 }

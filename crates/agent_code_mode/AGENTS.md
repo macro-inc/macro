@@ -22,7 +22,13 @@ stacks. Process isolation belongs to
   receipts include observed SDK activity for inline conversation snapshots.
 - `src/domain/user.rs`: `UserCodeMode`, runs as an authenticated user with no
   session, journal or reviews; shares outcome validation with the session path.
-- `src/domain/reviews.rs`: review validation, revisions, claims and outcomes.
+- `src/domain/reviews.rs`: review revisions, claims and outcomes.
+  `src/domain/reviews/drafts.rs` holds the typed drafts and results: items
+  keyed by kind, reusing `SendEmail`, `CreateCalendarEvent` and their
+  responses, and the import plan selection. Decoding is the only validation
+  (`decode`, location-only errors); value constraints are nutype newtypes.
+  Submit refuses incomplete drafts (no recipients, no title, ends before it
+  starts) before claiming the batch.
   `decide_for_session` (the `DecideReview` tool, `inbound/reviews.rs`) is the
   agent deciding on the account holder's word in chat: a turn they prompted,
   never a System turn (per `ReviewSession::prompter`), and a Submit only once
@@ -52,7 +58,7 @@ session presentation. Never replay an uncertain submitted action.
 Reviews write `review.decided` and `review.settled` through the injected
 transaction-aware notification writer in the same revision-checked transaction.
 Reviews persist the immutable acting account. Only that account may edit or
-submit; historical reviews without an acting account use the session owner.
+submit.
 ACP presentation uses the session owner's transcript capability, independently
 of the account that later sends the email or creates the event. Cards require
 direct user authentication; `DecideReview` requires a real turn prompted by the
@@ -72,3 +78,8 @@ longer delivery state.
 
 Import reviews contain exactly one draft, with source `notion`, `linear`, or
 `jira`. Source selection stays on that draft through presentation and approval.
+
+The web and SDK review types are generated from these Rust types with specta
+(`src/bin/export_review_types.rs`, `just gen-agent-review-types` in `apps/web`).
+Regenerate after changing a review type or a type a draft or result reuses; CI
+fails on stale output.

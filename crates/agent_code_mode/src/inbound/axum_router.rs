@@ -2,6 +2,7 @@
 use crate::domain::{CodeModeError, ExecutionId, ExecutionRecord, SessionCodeMode, reviews::*};
 use axum::{
     Json, Router,
+    body::Bytes,
     extract::{FromRef, Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -146,8 +147,9 @@ pub async fn create_review<Access: EntityAccessService, Auth: MacroAuthorization
     access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
     caller: MacroAuthorizationExtractor<Auth, ActingUser>,
     State(state): State<CodeExecutionRouterState<Access, Auth>>,
-    Json(input): Json<CreateReview>,
+    body: Bytes,
 ) -> Result<Json<ReviewRecord>, CodeExecutionApiError> {
+    let input: CreateReview = decode(&body).map_err(CodeExecutionApiError)?;
     state
         .reviews
         .create(
@@ -194,8 +196,9 @@ pub async fn decide_review<Access: EntityAccessService, Auth: MacroAuthorization
     caller: MacroAuthorizationExtractor<Auth, UserOnly>,
     State(state): State<CodeExecutionRouterState<Access, Auth>>,
     Path((_session, id)): Path<(Uuid, Uuid)>,
-    Json(decision): Json<ReviewDecision>,
+    body: Bytes,
 ) -> Result<Json<ReviewRecord>, CodeExecutionApiError> {
+    let decision: ReviewDecision = decode(&body).map_err(CodeExecutionApiError)?;
     state
         .reviews
         .decide(
