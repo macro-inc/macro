@@ -1773,7 +1773,14 @@ export function mapGraphqlAgentSessionRow(
   return {
     id: entity.id,
     name: entity.sessionName,
-    isArchived: entity.isArchived,
+    archivedBy: match(entity.archivedBy)
+      .with('USER', () => 'user' as const)
+      .with('PULL_REQUEST_MERGED', () => 'pull_request_merged' as const)
+      .with('RUNTIME_CLOSED', () => 'runtime_closed' as const)
+      .with(null, () => null)
+      // A cause this build does not know still archived the session.
+      .exhaustive(() => 'user' as const),
+    archivedAt: entity.archivedAt,
     ownerId: entity.ownerId,
     botId: entity.botId,
     harness: entity.harness,

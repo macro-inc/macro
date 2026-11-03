@@ -21,6 +21,9 @@ Pulumi stacks; they do not host extra agent processes.
   `macrod.rs`, `in_memory.rs`.
 - `src/containers.rs`: Daytona sandbox lifecycle; local Docker opt-in.
 - `src/trigger.rs`: turns channel/webhook triggers into sessions.
+- `src/pull_request_archive.rs`: consumes `macro.github_pull_requests` (group
+  `agent-harness-pull-request-archive`) and auto-archives sessions whose
+  linked pull requests finished (`agent_session::domain::auto_archive`).
 - `src/internal_mcp.rs`: the internal MCP server exposed to running sessions.
 - `src/public_mcp.rs` + `src/public_mcp/`: public workspace MCP and OAuth;
   reuses the harness tool context and retains bearer authentication. Users with
