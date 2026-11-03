@@ -184,10 +184,16 @@ async fn a_gate_stop_on_an_anonymous_form_leaves_no_trace() {
     let outcome = submit_as(
         &service(&world),
         VIEWER,
-        vec![Answer {
-            question: TEAM_QUESTION,
-            value: CellValue::Options(vec![OptionRef::Id(CONTRACTOR)]),
-        }],
+        vec![
+            Answer {
+                question: TEAM_QUESTION,
+                value: CellValue::Options(vec![OptionRef::Id(CONTRACTOR)]),
+            },
+            Answer {
+                question: START_QUESTION,
+                value: CellValue::Date(Utc.with_ymd_and_hms(2026, 8, 17, 0, 0, 0).unwrap()),
+            },
+        ],
     )
     .await
     .unwrap();
