@@ -90,6 +90,34 @@ Remove one user's direct grant.
 
 ***
 
+### request()
+
+> **request**(`requestedLevel`): `Promise`\<[`AccessRequest`](AccessRequest.md)\>
+
+Ask the item's reviewers for more access in the caller's name, as the Share
+menu's Request access does, superseding the caller's latest request.
+
+Agents: call this only when the user asked for it or agreed after being
+offered it, typically after a write failed with `MacroForbiddenError`
+because the user can only view the item; never request access on your
+own. It never grants access: the request stays pending until a reviewer
+decides. Tell the user it is pending and who reviews it (`state().owner`),
+do not claim the failed write succeeded, check `state()` later (`mine`
+holds this request's `status()`), and retry the write only once
+`state().accessLevel` allows it.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `requestedLevel` | `"view"` \| `"comment"` \| `"edit"` |
+
+#### Returns
+
+`Promise`\<[`AccessRequest`](AccessRequest.md)\>
+
+***
+
 ### resolve()
 
 > **resolve**(`request`, `resolution`): `Promise`\<[`AccessRequest`](../../../../../generated/storage/types.gen/type-aliases/AccessRequest.md)\>

@@ -5,13 +5,18 @@
  */
 
 import type {
+  AgendaEvent_Serialize,
+  CardItemType,
   EntityRef,
   Query_Serialize,
+  TagNode_Serialize,
   View_Serialize,
   Widget_Serialize,
 } from './generated/types';
 
-export type { EntityRef };
+export type { CardItemType, EntityRef };
+export type AgendaEvent = AgendaEvent_Serialize;
+export type TagNode = TagNode_Serialize;
 export type Query = Query_Serialize;
 export type View = View_Serialize;
 export type Widget = Widget_Serialize;

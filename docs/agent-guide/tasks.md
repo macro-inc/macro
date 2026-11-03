@@ -615,6 +615,10 @@ row remounts must reuse complete cached identities without new
 permission refreshes remain separate. Hold a cold folder-preview or identity
 request while scrolling on desktop and phone: only the row metadata may show
 loading, and the list must remain mounted at the same scroll position.
+After a project read is denied, scroll its row out of view and back: the cached
+label must remain hidden until a new authorized response succeeds. Switch viewers
+while retaining cached rows: mismatched identities must reauthorize immediately,
+without exposing the previous viewer's data or repeatedly retrying a failed read.
 
 ## Reviews view
 
@@ -968,7 +972,9 @@ refreshes in the background to include the new row. If creation fails, the
 composer reopens as a popover with the draft and the error.
 Closing the popover without submitting keeps the underlying view open.
 
-Opening a project keeps the Tasks workspace and its navigation. The top bar
+Opening a project from Tasks keeps the Tasks workspace and its navigation.
+Home rows instead preview it inline with a Home return breadcrumb; touch and
+explicit split activation still use this full Tasks workspace. The top bar
 shows the Projects return breadcrumb and the project name, with the same Share
 and side-panel controls as task detail. `Project actions` (the dots button
 after the name) opens the row context menu's entries for this project,

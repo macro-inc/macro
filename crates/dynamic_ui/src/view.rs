@@ -21,9 +21,8 @@ pub struct View {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum Widget {
-    /// Static markdown, the narrative glue between data widgets. Supports the
-    /// full markdown feature set (headings, lists, bold/italic, links,
-    /// blockquotes, ...).
+    /// Markdown text: the narrative between the other widgets. Its type is
+    /// "md", never "markdown".
     Md { markdown: String },
     /// A chronological sequence of events. Great for "what happened" answers.
     Timeline {
@@ -56,6 +55,36 @@ pub enum Widget {
         channel_id: String,
         /// The message to render.
         message_id: String,
+    },
+    /// A calendar agenda: the events grouped by day with their times, places
+    /// and attendees, loaded live from the user's calendars. Use it whenever
+    /// an answer is about calendar events instead of listing them in text.
+    Events {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = String)]
+        title: Option<String>,
+        events: Vec<AgendaEvent>,
+    },
+    /// Rich cards for the one to four specific items the answer is about: a
+    /// document or spreadsheet, an email thread, a calendar event, a project,
+    /// a channel, a routine, a form or an initiative. Each card opens its
+    /// item, and a routine's card can pause it or run it now. Use a list
+    /// widget for longer sets.
+    Cards {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = String)]
+        title: Option<String>,
+        items: Vec<CardItem>,
+    },
+    /// Tags as coloured pills, nested to any depth: the user's tags, a
+    /// taxonomy the answer proposes, or any other ontology of tags, each with
+    /// what it is for. Use it whenever an answer is about tags, instead of a
+    /// table or a list in markdown.
+    Tags {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = String)]
+        title: Option<String>,
+        tags: Vec<TagNode>,
     },
     /// A nestable flex container of widgets.
     Container {
@@ -109,6 +138,73 @@ pub struct TimelineEvent {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[specta(optional, type = bool)]
     pub future: Option<bool>,
+}
+
+/// A calendar event an agenda lists.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct AgendaEvent {
+    /// The eventId a calendar tool such as ListCalendarEvents returned.
+    pub event_id: String,
+    /// One instance of a recurring event: that instance's recurrenceId from
+    /// ListCalendarEvents.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[specta(optional, type = String)]
+    pub occurrence_key: Option<String>,
+}
+
+/// A workspace item a card shows.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
+pub struct CardItem {
+    #[serde(rename = "type")]
+    pub item_type: CardItemType,
+    /// The item's id exactly as a tool returned it: a document id (documents
+    /// and spreadsheets), an email thread id, a calendar eventId, or a
+    /// project, channel, routine, form or initiative id.
+    pub id: String,
+}
+
+/// The kinds of workspace item a card shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum CardItemType {
+    Document,
+    EmailThread,
+    CalendarEvent,
+    Project,
+    Channel,
+    Routine,
+    Form,
+    Initiative,
+}
+
+/// One tag of an ontology and the narrower tags under it. A tag may exist
+/// already, or be one the answer proposes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct TagNode {
+    /// The tag's name. Name a narrower tag on its own: "bug" under "Type",
+    /// not "Type/bug".
+    pub label: String,
+    /// One of the tag colours: red, tomato, orange, amber, yellow, green,
+    /// teal, blue, indigo, purple, pink, gray. Gray when omitted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[specta(optional, type = String)]
+    pub color: Option<String>,
+    /// What the tag is for, in a few words.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[specta(optional, type = String)]
+    pub description: Option<String>,
+    /// For a tag that exists, the id ListTags or CreateTag returned: the tag
+    /// then shows its current name and colour, and opens what is tagged with
+    /// it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[specta(optional, type = String)]
+    pub tag_id: Option<String>,
+    /// The narrower tags under this one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[specta(optional, type = Vec<TagNode>)]
+    pub children: Option<Vec<TagNode>>,
 }
 
 /// Where a list's items come from.
