@@ -462,6 +462,12 @@ export const homeSplitRoute = defineRoute({
   search: '*' as const,
 });
 
+export const forYouRoute = defineRoute({
+  id: 'view-for-you',
+  path: 'for-you',
+  claim: () => ({ namespace: 'component', id: 'for-you' }),
+});
+
 export const recentRoute = defineRoute({
   id: 'view-recent',
   path: 'recent',

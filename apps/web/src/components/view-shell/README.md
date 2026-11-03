@@ -17,6 +17,10 @@ Both rails sit `gutter + row inset + icon slot / 2 = 26px` from the sidebar edge
 The control inset is derived from that center and the control's size. Never
 align trailing controls by their outer edges or offset an individual icon.
 
+`ViewShell.Root` accepts `defaultAsideCollapsed` for workspaces that start with
+navigation closed. An existing `asidePreferenceKey` value still takes priority;
+other workspaces keep their open default, and secondary splits start closed.
+
 - `ViewSidebar.Primary` gives create actions and toolbars the same 8px top inset.
 - `ListHeader` reserves the title's natural width and scrolls right-aligned controls
   in the remaining space; keep switcher triggers inside the title's clip boundary.

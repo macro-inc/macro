@@ -960,7 +960,7 @@ pub async fn build(
     let projection_generator =
         ai_projections::outbound::agent_generator::AgentProjectionGenerator::new(
             tool_service_context.clone(),
-            ai_tools::tools_for(ai_tools::AiHost::Chat),
+            ai_tools::projection_tools(),
         );
     // Notifier that pushes finished materializations to the target's connected
     // clients through the connection gateway.

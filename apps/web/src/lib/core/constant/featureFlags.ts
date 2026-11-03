@@ -150,6 +150,13 @@ export const PROD_MODE_ENV = import.meta.env.MODE === 'production';
 
 const onInDev = DEV_MODE_ENV || undefined;
 
+/** Local preview stays available; deployed environments use the team-only rollout. */
+export const enableForYou = defineFlag({
+  key: 'enable-for-you',
+  env: 'ENABLE_FOR_YOU',
+  default: LOCAL_ONLY || undefined,
+});
+
 /** Browser-style tabs in the macOS desktop title bar; each tab holds a split layout. */
 export const enableDesktopTabs = defineFlag({
   key: 'enable-desktop-tabs',

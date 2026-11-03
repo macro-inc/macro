@@ -5,16 +5,77 @@ import {
 } from '@app/components/view-shell';
 import { LocalRuntimePrompt } from '@app/features/settings/components/local-runtime-prompt';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { ChatInputProvider } from '@core/component/AI/context';
 import { ComposerGreeting } from '@core/component/ComposerGreeting';
-import { enableChatV3Agents } from '@core/constant/featureFlags';
-import { Show } from 'solid-js';
+import { LoadingBlock } from '@core/component/LoadingBlock';
+import { enableChatV3Agents, enableForYou } from '@core/constant/featureFlags';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { lazyNamed } from '@core/util/lazyNamed';
+import { Show, Suspense } from 'solid-js';
 import { HomeChatInput } from '../home-chat-input';
 import { HomeRecommendedActions } from './home-recommended-actions';
 
-/** Desktop Home's idle pane uses the single-line chat composer and send flow. */
-export function HomeChatStart() {
+const HomeFocusView = lazyNamed(
+  () => import('../views/home-focus-view'),
+  'HomeFocusView'
+);
+
+/** The real Home composer above a local sample-action feed. */
+function FocusHomeChatStart() {
+  const shell = useViewShell();
+  const panel = useSplitPanelOrThrow();
+  const agents = useFeatureFlag(enableChatV3Agents);
+  const showHomeTopBar = () =>
+    shell.aside.isCollapsed() || shell.aside.isOverlay();
+  let handleShortcut: ((event: KeyboardEvent) => boolean) | undefined;
+  useHotkeyInterceptor((context) => {
+    if (
+      context.eventType !== 'keydown' ||
+      context.isEditableFocused ||
+      !panel.isPanelActive()
+    )
+      return false;
+    if (
+      !shell.aside.isCollapsed() &&
+      !document.activeElement?.closest('[data-home-focus]')
+    )
+      return false;
+    return handleShortcut?.(context.event) ?? false;
+  });
+  return (
+    <ChatInputProvider>
+      <Show when={showHomeTopBar()}>
+        <ViewShell.TopBar>
+          <ViewSidebar.Title caret={false}>Home</ViewSidebar.Title>
+        </ViewShell.TopBar>
+      </Show>
+      <DragDropWrapper class="relative flex min-h-0 min-w-0 flex-1 flex-col">
+        <HomeFocusView
+          active={panel.isPanelActive()}
+          registerShortcuts={(handler) => {
+            handleShortcut = handler;
+          }}
+        >
+          <Show when={!agents().enabled}>
+            <div class="mb-8">
+              <ComposerGreeting>What should we work on?</ComposerGreeting>
+            </div>
+          </Show>
+          <HomeChatInput
+            variant="default"
+            placeholder="Type @ to reference / for skills"
+            autoFocusOnMount={false}
+          />
+        </HomeFocusView>
+      </DragDropWrapper>
+    </ChatInputProvider>
+  );
+}
+
+function LegacyHomeChatStart() {
   const shell = useViewShell();
   const agents = useFeatureFlag(enableChatV3Agents);
   const showHomeTopBar = () =>
@@ -80,5 +141,20 @@ export function HomeChatStart() {
         </div>
       </DragDropWrapper>
     </ChatInputProvider>
+  );
+}
+
+/** Keep the existing Home unchanged outside the For you rollout. */
+export function HomeChatStart() {
+  const flag = useFeatureFlag(enableForYou);
+  return (
+    <Show
+      when={flag().enabled && !isTouchDevice()}
+      fallback={<LegacyHomeChatStart />}
+    >
+      <Suspense fallback={<LoadingBlock />}>
+        <FocusHomeChatStart />
+      </Suspense>
+    </Show>
   );
 }

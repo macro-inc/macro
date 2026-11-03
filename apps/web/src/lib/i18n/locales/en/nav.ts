@@ -1,6 +1,7 @@
 export default {
   // Destinations
   home: 'Home',
+  forYou: 'For you',
   notifications: 'Notifications',
   search: 'Search',
   drive: 'Drive',

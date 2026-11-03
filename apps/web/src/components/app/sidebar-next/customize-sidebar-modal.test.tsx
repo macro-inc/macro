@@ -43,13 +43,16 @@ function Modal() {
       open
       onOpenChange={() => {}}
       gates={{
-        showCalendar: true,
-        showScheduling: true,
-        showCustomers: true,
-        showCalls: true,
-        showReviews: true,
-        showActivity: true,
-        showExternal: true,
+        enabled: [
+          'for-you',
+          'calendar',
+          'booking-links',
+          'companies',
+          'calls',
+          'reviews',
+          'activity',
+          'external',
+        ],
         get prefs() {
           return prefs();
         },
@@ -73,8 +76,8 @@ describe('sidebar customization drag sorting', () => {
     const handle = await screen.findByRole('button', {
       name: 'Reorder Drive',
     });
-    fireEvent.mouseDown(handle, { button: 0, clientX: 115, clientY: 120 });
-    fireEvent.mouseMove(document, { clientX: 115, clientY: 200 });
+    fireEvent.mouseDown(handle, { button: 0, clientX: 115, clientY: 160 });
+    fireEvent.mouseMove(document, { clientX: 115, clientY: 240 });
 
     const email = screen
       .getByRole('button', { name: 'Reorder Email' })
@@ -83,16 +86,21 @@ describe('sidebar customization drag sorting', () => {
     expect(targetTransform).not.toBe('');
     // Repeated moves inside one slot must not alternate the sort preview.
     for (let offset = 0; offset < 5; offset++) {
-      fireEvent.mouseMove(document, { clientX: 115 + offset, clientY: 200 });
+      fireEvent.mouseMove(document, { clientX: 115 + offset, clientY: 240 });
       expect(email.style.transform).toBe(targetTransform);
     }
-    fireEvent.mouseUp(document, { button: 0, clientX: 120, clientY: 200 });
+    fireEvent.mouseUp(document, { button: 0, clientX: 120, clientY: 240 });
     expect(
       screen
         .getAllByRole('button', { name: /^Reorder / })
-        .slice(0, 3)
+        .slice(0, 4)
         .map((button) => button.getAttribute('aria-label'))
-    ).toEqual(['Reorder Email', 'Reorder Chat', 'Reorder Drive']);
+    ).toEqual([
+      'Reorder For you',
+      'Reorder Email',
+      'Reorder Chat',
+      'Reorder Drive',
+    ]);
     expect(screen.queryByRole('button', { name: 'Reorder Home' })).toBeNull();
     expect(appCollision).not.toHaveBeenCalled();
     expect(appDragEnd).not.toHaveBeenCalled();

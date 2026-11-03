@@ -7,8 +7,8 @@ import {
 } from '../utils/time-grid-scroller';
 
 /**
- * Opens a time grid on {@link TIME_GRID_OPENING_SCROLL_TIME} even when
- * FullCalendar rendered it before it had layout.
+ * Opens a time grid at its requested time, defaulting to the shared workday
+ * start, even when FullCalendar rendered it before it had layout.
  *
  * FullCalendar positions the hour scroller once, while it renders, so a grid
  * that mounts hidden or unsized stays at midnight after it appears. Watching
@@ -17,18 +17,15 @@ import {
  */
 export function useTimeGridOpeningScroll(
   root: Accessor<HTMLElement | undefined>,
-  api: Accessor<Calendar | undefined>
+  api: Accessor<Calendar | undefined>,
+  openingScrollTime = TIME_GRID_OPENING_SCROLL_TIME
 ) {
   let hasLaidOut = false;
   let frame: number | undefined;
 
   const applyOpeningScroll = () => {
     frame = undefined;
-    hasLaidOut = applyTimeGridOpeningScroll(
-      root(),
-      api(),
-      TIME_GRID_OPENING_SCROLL_TIME
-    );
+    hasLaidOut = applyTimeGridOpeningScroll(root(), api(), openingScrollTime);
   };
 
   const scheduleOpeningScroll = () => {

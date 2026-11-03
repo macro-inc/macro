@@ -289,6 +289,10 @@ The backend-free desktop/phone/tablet regression is
 
 ## Development Patterns
 
+Desktop Home currently previews a focus feed backed only by `features/home/core/focus-actions.json`. Keep the existing `HomeChatInput`, `ChatInputProvider`, and attachment handling on the real homepage; keep two-line priorities at the composer width and a 200px Today calendar embed centered on the current time below it, with a local recurring-event filter; only the calendar sample events, suggested list rows, importance scores, draft previews, routine previews, and dismiss/undo actions use sample data; mobile retains the notifications list. The backend-free browser check is `bun --bun ../../node_modules/@playwright/test/cli.js test --config src/features/home/browser-test/playwright.config.ts` from `apps/web`.
+
+The desktop For you page at `/app/for-you` combines Important items, agent ideas, updates, and missed items to Revisit. Gate its route, navigation, and Home focus preview with `enable-for-you`, preserving existing Home when off. Keep its sidebar entry below Home by default. It uses the authenticated AI projection service and account-scoped preferences; actions open the real agent composer or source entity. See `features/for-you/AGENTS.md`; do not restore sample production data.
+
 Route database row rename and delete through `renameDatabase` and
 `trashDatabase`; use the row grant for rename, delete, and sharing permissions.
 

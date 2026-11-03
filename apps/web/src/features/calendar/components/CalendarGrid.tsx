@@ -82,6 +82,8 @@ export interface CalendarGridHandle extends FullCalendarContextValue {
 
 export interface CalendarGridSettings {
   initialView: CalendarPeriodView;
+  /** Opening hour for time-grid embeds; defaults to the shared workday start. */
+  openingScrollTime?: string;
   /** Consecutive visible days for time-grid embeds. */
   dayCount?: number;
   showDayHeaders?: boolean;
@@ -121,6 +123,7 @@ export interface CalendarGridProps {
 
 function CalendarGridHost(props: {
   selectionColor: string;
+  openingScrollTime?: string;
   eventElements: Map<string, HTMLElement>;
   chipMounts: Accessor<undefined>;
   children?: CalendarGridProps['children'];
@@ -128,7 +131,7 @@ function CalendarGridHost(props: {
   const calendar = useFullCalendar();
   const [element, setElement] = createSignal<HTMLDivElement>();
 
-  useTimeGridOpeningScroll(element, calendar.api);
+  useTimeGridOpeningScroll(element, calendar.api, props.openingScrollTime);
 
   const handle: CalendarGridHandle = {
     api: calendar.api,
@@ -250,7 +253,9 @@ export function CalendarGrid(props: CalendarGridProps) {
       allDayText="All day"
       nowIndicator
       headerToolbar={false}
-      scrollTime={TIME_GRID_OPENING_SCROLL_TIME}
+      scrollTime={
+        props.settings.openingScrollTime ?? TIME_GRID_OPENING_SCROLL_TIME
+      }
       scrollTimeReset={false}
       weekends={props.settings.showWeekends}
       firstDay={props.settings.weekStartsOn}
@@ -430,6 +435,7 @@ export function CalendarGrid(props: CalendarGridProps) {
 
       <CalendarGridHost
         selectionColor={props.selection.color}
+        openingScrollTime={props.settings.openingScrollTime}
         eventElements={eventElements}
         chipMounts={chipMounts}
         children={props.children}
