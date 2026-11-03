@@ -34,8 +34,12 @@ export function ReconnectBanner(props: { count: number }) {
   );
 }
 
-/** A Pipedream connection that Macro Connect now serves: one click to move. */
-export function ReconnectRow(props: {
+export function reconnectDescription(name: string) {
+  return `We moved ${name} to our own connection. Reconnect to keep using it.`;
+}
+
+/** One click to move a Pipedream connection that Macro Connect now serves. */
+export function ReconnectAction(props: {
   connection: PipedreamConnectionResponse;
 }) {
   const name = () => props.connection.server_name;
@@ -48,6 +52,20 @@ export function ReconnectRow(props: {
   });
 
   return (
+    <ConnectAction
+      label="Reconnect"
+      ariaLabel={busy() ? `Reconnecting ${name()}` : `Reconnect ${name()}`}
+      loading={busy()}
+      onClick={() => fireAndForget(connect(), 'connections-settings')}
+    />
+  );
+}
+
+/** The row for a reconnect whose app has no row of its own. */
+export function ReconnectRow(props: {
+  connection: PipedreamConnectionResponse;
+}) {
+  return (
     <IntegrationListRow
       icon={
         <PipedreamConnectorIcon
@@ -55,19 +73,14 @@ export function ReconnectRow(props: {
           class="size-5"
         />
       }
-      name={name()}
+      name={props.connection.server_name}
       kind="mcp"
-      description={`We moved ${name()} to our own connection. Reconnect to keep using it.`}
+      description={reconnectDescription(props.connection.server_name)}
       categories={['Agent tools']}
       status="attention"
       statusLabel="Reconnect required"
     >
-      <ConnectAction
-        label="Reconnect"
-        ariaLabel={busy() ? `Reconnecting ${name()}` : `Reconnect ${name()}`}
-        loading={busy()}
-        onClick={() => fireAndForget(connect(), 'connections-settings')}
-      />
+      <ReconnectAction connection={props.connection} />
     </IntegrationListRow>
   );
 }

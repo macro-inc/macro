@@ -73,7 +73,8 @@ vi.mock('./use-connections-model', () => ({
     retry: vi.fn(),
   }),
 }));
-vi.mock('./model', () => ({
+vi.mock('./model', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./model')>()),
   capabilitiesFor: () =>
     mocks.connected ? [{ mechanism: 'pipedream', status: 'connected' }] : [],
 }));
@@ -325,7 +326,7 @@ describe('Slack channel import handoff', () => {
 
 describe('unified Integrations page', () => {
   it('prompts for each connection to reconnect and starts the connect flow', async () => {
-    mocks.reconnects = [{ app_slug: 'linear', server_name: 'Linear' }];
+    mocks.reconnects = [{ app_slug: 'todoist', server_name: 'Todoist' }];
     mocks.connect.mockResolvedValue('closed');
     render(() => (
       <IntegrationsView
@@ -335,19 +336,34 @@ describe('unified Integrations page', () => {
     ));
 
     expect(screen.getByText('1 app needs reconnecting.')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Reconnect Linear' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect Todoist' }));
 
     await waitFor(() =>
       expect(mocks.connect).toHaveBeenCalledWith(
-        expect.objectContaining({ appSlug: 'linear' })
+        expect.objectContaining({ appSlug: 'todoist' })
       )
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(screen.queryByText('1 app needs reconnecting.')).toBeNull();
     expect(
-      screen.getByRole('button', { name: 'Reconnect Linear' })
+      screen.getByRole('button', { name: 'Reconnect Todoist' })
     ).toBeTruthy();
+  });
+
+  it('adds no row for a reconnect whose app already has one', () => {
+    mocks.reconnects = [{ app_slug: 'slack_v2', server_name: 'Slack' }];
+    render(() => (
+      <IntegrationsView
+        onOpenEmailSettings={() => {}}
+        onOpenMacroMcp={() => {}}
+      />
+    ));
+
+    expect(screen.getByText('1 app needs reconnecting.')).toBeTruthy();
+    expect(
+      screen.queryByRole('button', { name: 'Reconnect Slack' })
+    ).toBeNull();
   });
 
   it('hides local harness setup when no allowed entry point is supplied', () => {

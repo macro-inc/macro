@@ -72,6 +72,12 @@ export type ConnectionsInput = {
   nativeMcp: ServerResponse[];
 };
 
+export function curatedPipedreamSlugs(
+  provider: CuratedAiProvider
+): readonly string[] {
+  return provider === 'slack' ? SLACK_PIPEDREAM_SLUGS : [provider];
+}
+
 export const CURATED_AI: Record<
   CuratedAiProvider,
   { title: string; outcome: string }
@@ -165,8 +171,9 @@ function curatedAiAndLeftovers(input: ConnectionsInput): {
   for (const provider of Object.keys(CURATED_AI) as CuratedAiProvider[]) {
     const copy = CURATED_AI[provider];
     // Match backend alias priority before considering enabled state.
-    const slugs = provider === 'slack' ? SLACK_PIPEDREAM_SLUGS : [provider];
-    const pd = slugs.map((slug) => pipedream.get(slug)).find((row) => row);
+    const pd = curatedPipedreamSlugs(provider)
+      .map((slug) => pipedream.get(slug))
+      .find((row) => row);
     const native = input.nativeMcp.find(
       (server) => nativeCuratedProvider(server) === provider
     );

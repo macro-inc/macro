@@ -47,6 +47,7 @@ import { LeftoverRow, leftoverCategories } from './leftover-row';
 import {
   type ConnectionsModel,
   capabilitiesFor,
+  curatedPipedreamSlugs,
   type Leftover,
   type ProviderId,
 } from './model';
@@ -215,10 +216,13 @@ function IntegrationsOverview(
     catalog.onSearchInput(value);
   };
 
+  const reconnectsQuery = usePipedreamReconnectsQuery();
+  const allReconnects = () =>
+    queryReadyGate(reconnectsQuery) ? reconnectsQuery.data : [];
   const agentTools = [
-    useAgentProviderItem(props.model, 'slack'),
-    useAgentProviderItem(props.model, 'linear'),
-    useAgentProviderItem(props.model, 'notion'),
+    useAgentProviderItem(props.model, 'slack', allReconnects),
+    useAgentProviderItem(props.model, 'linear', allReconnects),
+    useAgentProviderItem(props.model, 'notion', allReconnects),
   ];
   const emailItems = useEmailItems(props);
   const otherItems = [
@@ -260,19 +264,24 @@ function IntegrationsOverview(
   const otherLeftovers = () =>
     leftovers().filter((leftover) => !isCustom(leftover));
 
-  const reconnectsQuery = usePipedreamReconnectsQuery();
-  const allReconnects = () =>
-    queryReadyGate(reconnectsQuery) ? reconnectsQuery.data : [];
+  // Agent tool rows carry their own reconnect prompt when they're showing.
+  const hasAgentToolRow = (slug: string) =>
+    props.agentToolsAvailable &&
+    (['slack', 'linear', 'notion'] as const).some((provider) =>
+      curatedPipedreamSlugs(provider).includes(slug)
+    );
   const reconnects = () =>
-    allReconnects().filter((connection) =>
-      matchesIntegration(
-        {
-          name: connection.server_name,
-          description: connection.app_slug,
-          categories: [],
-        },
-        query()
-      )
+    allReconnects().filter(
+      (connection) =>
+        !hasAgentToolRow(connection.app_slug) &&
+        matchesIntegration(
+          {
+            name: connection.server_name,
+            description: connection.app_slug,
+            categories: [],
+          },
+          query()
+        )
     );
 
   // Includes overlaid apps, which are connected as native MCP servers.
