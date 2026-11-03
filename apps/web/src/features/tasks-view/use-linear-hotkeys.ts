@@ -188,7 +188,6 @@ export function useLinearHotkeys(options: UseLinearHotkeysOptions) {
   };
 
   useHotkeyProfile(LINEAR, {
-    context: 'view',
     scopeId: options.scopeId,
     enabled: options.enabled,
     actions: {

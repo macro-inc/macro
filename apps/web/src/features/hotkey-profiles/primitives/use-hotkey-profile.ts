@@ -13,29 +13,23 @@ import type {
   ProfileLeader,
 } from '../core/profiles';
 
-type Registration = {
+export type ProfileRegistration<Action extends string> = {
   /** The scope the view's own keys live in. */
   scopeId: string;
   /** Whether the view has the keyboard, e.g. its split is active. */
   enabled: () => boolean;
-};
-
-export type ViewProfileRegistration<Action extends string> = Registration & {
-  context: 'view';
   actions: Record<Action, ProfileActionHandler>;
 };
 
-export type DetailProfileRegistration = Registration & { context: 'detail' };
-
 /**
- * Registers a profile's keys for one context of a view. They run only while
+ * Registers a profile's keys for a view. They run only while
  * the person has the profile on, and then take precedence over Macro's keys
  * in the scope (see HotkeyCommand.profile). Register beside the view's own
  * keys, so a profile key is in the same scope as the key it replaces.
  */
 export function useHotkeyProfile<Action extends string>(
   profile: HotkeyProfile<Action>,
-  registration: ViewProfileRegistration<Action> | DetailProfileRegistration
+  registration: ProfileRegistration<Action>
 ) {
   const profiles = useHotkeyProfiles();
   const tag: HotkeyProfileTag = { id: profile.id, label: profile.label };
@@ -73,10 +67,8 @@ export function useHotkeyProfile<Action extends string>(
     const target = binding.target;
     let handler: (index: number, e?: KeyboardEvent) => boolean;
     if ('tokens' in target) {
-      if (!target.contexts.includes(registration.context)) continue;
       handler = (_index, e) => runTokenCommand([...target.tokens], e);
     } else {
-      if (registration.context !== 'view') continue;
       const run = registration.actions[target.action];
       handler = (index) => run(index);
     }

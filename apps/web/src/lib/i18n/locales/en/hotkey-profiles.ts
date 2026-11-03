@@ -140,9 +140,6 @@ export default {
 
   // The Macro shortcut on the same keys that a profile key replaces
   replacedCreateMenu: 'Create menu',
-  replacedReplyAll: 'Reply all',
-  replacedMarkUnread: 'Mark as unread',
-  replacedMarkRead: 'Mark as read',
   replacedGoToHome: 'Go to Home',
   replacedOpenPeople: 'Open People',
   replacedGoToSearch: 'Go to Search',

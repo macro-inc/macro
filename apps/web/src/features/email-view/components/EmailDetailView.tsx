@@ -3,8 +3,6 @@ import { ViewShell } from '@app/components/view-shell';
 import { displaySubject } from '@app/features/email-compose/core/subject-text';
 import type { EmailThreadHost } from '@app/features/email-thread/context/email-thread-context';
 import { createEmailThreadSource } from '@app/features/email-thread/queries/thread-source';
-import { SUPERHUMAN } from '@app/features/hotkey-profiles/core/profiles';
-import { useHotkeyProfile } from '@app/features/hotkey-profiles/primitives/use-hotkey-profile';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { createSearchParams, useRouteParams } from '@app/lib/split-router';
 import { emailThreadRoute } from '@app/routes/routes';
@@ -234,12 +232,6 @@ export function EmailDetailView(props: {
       panel.isPanelActive() && selectedThread()?.id === props.thread.id,
     navigation: listNavigation,
     arrowKeys: true,
-  });
-  // The thread's own keys (r, u) live in its scope; so do the profile's.
-  useHotkeyProfile(SUPERHUMAN, {
-    context: 'detail',
-    scopeId: keyScope,
-    enabled: panel.isPanelActive,
   });
   const loadResult = {
     data: threadData,

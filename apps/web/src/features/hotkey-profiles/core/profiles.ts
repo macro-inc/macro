@@ -7,13 +7,6 @@ import type { ValidHotkey } from '@core/hotkey/types';
 export type HotkeyProfileDomain = 'email' | 'tasks';
 
 /**
- * Where a view registers a binding. `view` keys live in the view's own scope;
- * `detail` keys live in the scope of the item open in it, for keys that item
- * defines itself (an Email thread in the reading pane has its own scope).
- */
-type HotkeyProfileContext = 'view' | 'detail';
-
-/**
  * `g` and `o` are Macro's go-to and command-menu leaders; any other leader
  * belongs to the profile, which takes over that key in its view.
  */
@@ -30,10 +23,7 @@ type ProfileTarget<Action extends string> =
    * Run the nearest command registered for the first of these tokens that can
    * run now; the key falls through when none can.
    */
-  | {
-      tokens: readonly HotkeyToken[];
-      contexts: readonly HotkeyProfileContext[];
-    }
+  | { tokens: readonly HotkeyToken[] }
   /**
    * A view-supplied action. With `indexed`, each key passes its position
    * (⌃1–9 passes 0–8).
@@ -110,19 +100,6 @@ export const SUPERHUMAN = {
   toggleDescription: () => t('hotkeyProfiles.superhumanToggleDescription'),
   bindings: [
     {
-      section: SECTION.conversations,
-      keys: ['u'],
-      description: () => t('hotkeyProfiles.toggleRead'),
-      target: {
-        tokens: [
-          TOKENS.entity.action.markUnread,
-          TOKENS.entity.action.markRead,
-        ],
-        contexts: ['view', 'detail'],
-      },
-      replaces: () => t('hotkeyProfiles.replacedMarkUnread'),
-    },
-    {
       section: SECTION.messages,
       keys: ['c'],
       description: () => t('hotkeyProfiles.compose'),
@@ -130,17 +107,10 @@ export const SUPERHUMAN = {
       replaces: () => t('hotkeyProfiles.replacedCreateMenu'),
     },
     {
-      section: SECTION.messages,
-      keys: ['r'],
-      description: () => t('hotkeyProfiles.replyToSender'),
-      target: { tokens: [TOKENS.email.replyToSender], contexts: ['detail'] },
-      replaces: () => t('hotkeyProfiles.replacedReplyAll'),
-    },
-    {
       section: SECTION.labels,
       keys: ['l'],
       description: () => t('hotkeyProfiles.editTags'),
-      target: { tokens: [TOKENS.entity.action.tags], contexts: ['view'] },
+      target: { tokens: [TOKENS.entity.action.tags] },
     },
     {
       section: SECTION.labels,
@@ -148,7 +118,6 @@ export const SUPERHUMAN = {
       description: () => t('hotkeyProfiles.moveToFolder'),
       target: {
         tokens: [TOKENS.entity.action.moveToFolder],
-        contexts: ['view'],
       },
     },
     {
@@ -156,7 +125,6 @@ export const SUPERHUMAN = {
       keys: ['shift+u'],
       description: () => t('hotkeyProfiles.showUnread'),
       target: { action: 'showUnread' },
-      replaces: () => t('hotkeyProfiles.replacedMarkRead'),
     },
     {
       section: SECTION.filters,
@@ -193,7 +161,7 @@ export const SUPERHUMAN = {
       section: SECTION.windows,
       keys: ['ctrl+/'],
       description: () => t('hotkeyProfiles.copyLink'),
-      target: { tokens: [TOKENS.entity.action.copyLink], contexts: ['view'] },
+      target: { tokens: [TOKENS.entity.action.copyLink] },
     },
     {
       section: SECTION.popOut,
@@ -203,11 +171,6 @@ export const SUPERHUMAN = {
     },
   ],
   sameKeys: [
-    {
-      section: SECTION.actions,
-      keys: ['cmd+k'],
-      description: () => t('hotkeyProfiles.openCommandMenu'),
-    },
     {
       section: SECTION.actions,
       keys: ['/'],
@@ -275,6 +238,11 @@ export const SUPERHUMAN = {
     },
     {
       section: SECTION.conversations,
+      keys: ['u'],
+      description: () => t('hotkeyProfiles.toggleRead'),
+    },
+    {
+      section: SECTION.conversations,
       keys: ['shift+e'],
       description: () => t('hotkeyProfiles.markNotDone'),
     },
@@ -302,6 +270,11 @@ export const SUPERHUMAN = {
       section: SECTION.conversations,
       keys: ['x'],
       description: () => t('hotkeyProfiles.selectConversation'),
+    },
+    {
+      section: SECTION.messages,
+      keys: ['r'],
+      description: () => t('hotkeyProfiles.replyToSender'),
     },
     {
       section: SECTION.messages,
@@ -482,14 +455,14 @@ export const LINEAR = {
       section: SECTION.navigation,
       keys: ['/'],
       description: () => t('hotkeyProfiles.searchTasks'),
-      target: { tokens: [TOKENS.soup.openSearch], contexts: ['view'] },
+      target: { tokens: [TOKENS.soup.openSearch] },
       replaces: () => t('hotkeyProfiles.replacedGoToSearch'),
     },
     {
       section: SECTION.navigation,
       keys: ['cmd+i'],
       description: () => t('hotkeyProfiles.toggleDetails'),
-      target: { tokens: [TOKENS.block.toggleSidePanel], contexts: ['view'] },
+      target: { tokens: [TOKENS.block.toggleSidePanel] },
     },
     {
       section: SECTION.navigation,
@@ -563,14 +536,13 @@ export const LINEAR = {
       // An open task focuses its editor; in the list, opens the focused task.
       target: {
         tokens: [TOKENS.block.focus, TOKENS.entity.open],
-        contexts: ['view'],
       },
     },
     {
       section: SECTION.issueActions,
       keys: ['a'],
       description: () => t('hotkeyProfiles.assign'),
-      target: { tokens: [TOKENS.entity.action.assignee], contexts: ['view'] },
+      target: { tokens: [TOKENS.entity.action.assignee] },
     },
     {
       section: SECTION.issueActions,
@@ -582,21 +554,21 @@ export const LINEAR = {
       section: SECTION.issueActions,
       keys: ['l', 'shift+l'],
       description: () => t('hotkeyProfiles.changeTags'),
-      target: { tokens: [TOKENS.entity.action.tags], contexts: ['view'] },
+      target: { tokens: [TOKENS.entity.action.tags] },
       replaces: () => t('hotkeyProfiles.replacedExpandItem'),
     },
     {
       section: SECTION.issueActions,
       keys: ['s'],
       description: () => t('hotkeyProfiles.changeStatus'),
-      target: { tokens: [TOKENS.entity.action.status], contexts: ['view'] },
+      target: { tokens: [TOKENS.entity.action.status] },
       replaces: () => t('hotkeyProfiles.replacedSort'),
     },
     {
       section: SECTION.issueActions,
       keys: ['p'],
       description: () => t('hotkeyProfiles.changePriority'),
-      target: { tokens: [TOKENS.entity.action.priority], contexts: ['view'] },
+      target: { tokens: [TOKENS.entity.action.priority] },
     },
     {
       section: SECTION.issueActions,
@@ -620,13 +592,13 @@ export const LINEAR = {
       section: SECTION.issueActions,
       keys: ['cmd+backspace'],
       description: () => t('hotkeyProfiles.deleteTask'),
-      target: { tokens: [TOKENS.entity.action.delete], contexts: ['view'] },
+      target: { tokens: [TOKENS.entity.action.delete] },
     },
     {
       section: SECTION.issueActions,
       keys: ['shift+s'],
       description: () => t('hotkeyProfiles.toggleMute'),
-      target: { tokens: [TOKENS.entity.action.mute], contexts: ['view'] },
+      target: { tokens: [TOKENS.entity.action.mute] },
     },
     {
       section: SECTION.issueActions,
@@ -647,7 +619,6 @@ export const LINEAR = {
       description: () => t('hotkeyProfiles.copyTaskId'),
       target: {
         tokens: [TOKENS.entity.action.copyEntityId],
-        contexts: ['view'],
       },
       replaces: () => t('hotkeyProfiles.replacedWorkspaceNavigation'),
     },
@@ -657,14 +628,13 @@ export const LINEAR = {
       description: () => t('hotkeyProfiles.copyBranchName'),
       target: {
         tokens: [TOKENS.entity.action.copyBranchName],
-        contexts: ['view'],
       },
     },
     {
       section: SECTION.issueActions,
       keys: ['shift+cmd+,'],
       description: () => t('hotkeyProfiles.copyLink'),
-      target: { tokens: [TOKENS.entity.action.copyLink], contexts: ['view'] },
+      target: { tokens: [TOKENS.entity.action.copyLink] },
     },
     {
       section: SECTION.issueActions,
@@ -679,7 +649,6 @@ export const LINEAR = {
       description: () => t('hotkeyProfiles.addToProject'),
       target: {
         tokens: [TOKENS.entity.action.addToProject],
-        contexts: ['view'],
       },
     },
   ],

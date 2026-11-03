@@ -26,7 +26,6 @@ export function useSuperhumanHotkeys(options: UseSuperhumanHotkeysOptions) {
   );
 
   useHotkeyProfile(SUPERHUMAN, {
-    context: 'view',
     scopeId: options.scopeId,
     enabled: options.enabled,
     actions: {

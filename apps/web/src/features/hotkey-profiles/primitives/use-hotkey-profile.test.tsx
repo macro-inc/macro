@@ -47,7 +47,7 @@ const PROFILE = {
       section: () => 'Conversations',
       keys: ['u'],
       description: () => 'Mark read or unread',
-      target: { tokens: [MARK_UNREAD, MARK_READ], contexts: ['view'] },
+      target: { tokens: [MARK_UNREAD, MARK_READ] },
     },
     {
       section: () => 'Issue actions',
@@ -146,7 +146,6 @@ function setup() {
       },
     });
     useHotkeyProfile(PROFILE, {
-      context: 'view',
       scopeId: viewScope,
       enabled: () => true,
       actions: {

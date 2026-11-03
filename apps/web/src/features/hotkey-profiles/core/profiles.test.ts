@@ -20,17 +20,11 @@ describe.each(HOTKEY_PROFILES)('$id', (profile) => {
     expect(aliased.filter((token) => !tokens.has(token))).toEqual([]);
   });
 
-  it('gives every key one meaning in each context', () => {
-    for (const context of ['view', 'detail'] as const) {
-      const keys = profile.bindings
-        .filter((binding) =>
-          'tokens' in binding.target
-            ? binding.target.contexts.some((c) => c === context)
-            : context === 'view'
-        )
-        .flatMap((binding) => binding.keys.map(keyName));
-      expect(keys.length).toBe(new Set(keys).size);
-    }
+  it('gives every key one meaning', () => {
+    const keys = profile.bindings.flatMap((binding) =>
+      binding.keys.map(keyName)
+    );
+    expect(keys.length).toBe(new Set(keys).size);
     const sameKeys = new Set(
       profile.sameKeys.flatMap((same) => same.keys.map(keyName))
     );

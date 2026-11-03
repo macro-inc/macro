@@ -44,8 +44,8 @@ back as soon as the profile is off.
 ## Gotchas
 
 - Register a binding in the scope of the key it replaces: a nearer scope's key
-  wins. An Email thread in the reading pane has its own scope, so thread keys
-  are `detail` bindings registered by `EmailDetailView`.
+  wins, so a view-scope binding can't take over a key that an Email thread in
+  the reading pane defines in its own scope.
 - A token binding falls through to the default when the action can't run here;
   an action returning false does too.
 - Hotkeys are off on touch devices, so the Settings section lives only on the
