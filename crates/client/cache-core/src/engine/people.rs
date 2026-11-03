@@ -1,8 +1,8 @@
 //! Account-fenced local facts and streamed before-limit person ranking.
 use super::*;
 use crate::people::{
-    self, ContextAction, ContextState, ContextUpdate, MAX_PEOPLE_BATCH, PeopleError, PeopleSearch,
-    PeopleSearchResult, StoredFacts,
+    self, ContextAction, ContextState, ContextUpdate, MAX_PEOPLE_BATCH, PeopleError,
+    PeopleReferenceRequest, PeopleReferenceResult, PeopleSearch, PeopleSearchResult, StoredFacts,
 };
 use crate::value::CacheValue;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -135,6 +135,38 @@ impl<S: Storage> Engine<S> {
             revalidations: vec![],
             mutation_uuid: None,
         })
+    }
+
+    /// Resolve names over the complete cached contact projection, retaining at
+    /// most two witnesses per requested label. This is not a suggestion page.
+    /// Callers still check hydration completeness before assuming uniqueness.
+    pub async fn resolve_people_references(
+        &mut self,
+        request: &PeopleReferenceRequest,
+    ) -> Result<PeopleReferenceResult, EngineError<S::Error>> {
+        let mut collector = people::references::ReferenceCollector::new(request, None)?;
+        self.people_scope(&request.scope).await?;
+        // Unlike menu search, this read may not require a published context.
+        // It must still have an established viewer; it never binds one itself.
+        if self.current_identity().await?.as_deref() != Some(request.scope.identity.as_str()) {
+            return Err(EngineError::StaleHydrationScope);
+        }
+        if request.labels.is_empty() {
+            return collector.finish().map_err(EngineError::from);
+        }
+        if request.exclude_secondary_inboxes {
+            let ContextState::Ready { epoch } = self.people_context().await? else {
+                return Ok(PeopleReferenceResult::ContextPending);
+            };
+            collector.set_epoch(epoch);
+        }
+        self.storage
+            .visit_contact_records(&SearchQuery::new(""), |key, record| {
+                collector.push(key, record)
+            })
+            .await
+            .map_err(EngineError::Storage)?;
+        collector.finish().map_err(EngineError::from)
     }
 
     /// Stream SQL-filtered records into one bounded heap. Secondary inboxes,

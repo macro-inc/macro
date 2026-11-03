@@ -241,6 +241,11 @@ pub(crate) fn contact_key(viewer: &str, user: &str) -> EntityKey<'static> {
 
 mod cursor;
 pub(crate) mod ranking;
+pub(crate) mod references;
+pub use references::{
+    PeopleReferenceMatch, PeopleReferenceRequest, PeopleReferenceResult, PersonReference,
+    ReferenceMatchMode,
+};
 
 #[cfg(any(test, feature = "schema"))]
 pub mod schema;

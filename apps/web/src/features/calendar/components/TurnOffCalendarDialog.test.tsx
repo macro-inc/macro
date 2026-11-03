@@ -2,7 +2,6 @@
  * @vitest-environment jsdom
  */
 
-import { authKeys } from '@queries/auth/keys';
 import { render, screen } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { ok } from 'neverthrow';
@@ -19,10 +18,7 @@ vi.mock('@core/component/Toast/Toast', () => ({
   toast: { success: vi.fn(), failure: vi.fn() },
 }));
 
-vi.mock('@core/context/user', () => ({
-  useUserId: () => () => 'macro|self',
-  useIsAuthenticated: () => () => true,
-}));
+vi.mock('@core/context/user', () => ({ useUserId: () => () => 'macro|self' }));
 vi.mock('@queries/calendar/sync', () => ({
   invalidateCalendarViews: vi.fn(),
 }));
@@ -43,10 +39,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   testQueryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
-  testQueryClient.setQueryData(authKeys.userInfo.queryKey, {
-    id: 'macro|self',
-    authenticated: true,
   });
 });
 

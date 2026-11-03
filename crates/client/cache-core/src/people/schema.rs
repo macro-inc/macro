@@ -13,6 +13,8 @@ pub fn schemas() -> serde_json::Value {
             "PeopleContextUpdate": schemars::schema_for!(ContextUpdate),
             "PeopleContextState": schemars::schema_for!(ContextState),
             "PeopleSearchResult": schemars::schema_for!(PeopleSearchResult),
+            "PeopleReferenceRequest": schemars::schema_for!(PeopleReferenceRequest),
+            "PeopleReferenceResult": schemars::schema_for!(PeopleReferenceResult),
         }
     })
 }

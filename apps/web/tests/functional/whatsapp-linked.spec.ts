@@ -567,14 +567,7 @@ async function mount(page: Page, state: LinkedServer, query = '') {
     }
     if (/^\/(auth|dss|notification|connection-gateway)\//.test(url.pathname))
       return route.fulfill({ json: {} });
-    try {
-      return await route.fulfill({ response: await route.fetch() });
-    } catch (error) {
-      // Late asset reads may finish after Playwright has torn down the test.
-      if (error instanceof Error && error.message.includes('Test ended'))
-        return;
-      throw error;
-    }
+    return route.fulfill({ response: await route.fetch() });
   });
   await page.goto(
     `${origin}/tests/functional/whatsapp-linked/index.html${query}`

@@ -70,6 +70,51 @@ export const PeopleContextUpdateSchema = z
 
 export type PeopleContextUpdate = z.infer<typeof PeopleContextUpdateSchema>;
 
+export const PeopleReferenceRequestSchema = z
+  .object({
+    excludeSecondaryInboxes: z.boolean(),
+    labels: z.array(z.string()).max(500),
+    matching: z.union([
+      z.literal('exact'),
+      z.literal('preferFullName'),
+      z.literal('anyName'),
+    ]),
+    scope: z
+      .object({ identity: z.string(), storageGeneration: z.string().uuid() })
+      .strict(),
+  })
+  .strict();
+
+export type PeopleReferenceRequest = z.infer<
+  typeof PeopleReferenceRequestSchema
+>;
+
+export const PeopleReferenceResultSchema = z.union([
+  z.object({ kind: z.literal('contextPending') }),
+  z.object({
+    kind: z.literal('resolved'),
+    matches: z
+      .array(
+        z.object({
+          complete: z.boolean(),
+          people: z
+            .array(
+              z.object({
+                email: z.string(),
+                name: z.union([z.string(), z.null()]).optional(),
+                userId: z.string(),
+              })
+            )
+            .max(2),
+        })
+      )
+      .max(500),
+    policyVersion: z.number().int().gte(0),
+  }),
+]);
+
+export type PeopleReferenceResult = z.infer<typeof PeopleReferenceResultSchema>;
+
 export const PeopleScopeSchema = z
   .object({ identity: z.string(), storageGeneration: z.string().uuid() })
   .strict();

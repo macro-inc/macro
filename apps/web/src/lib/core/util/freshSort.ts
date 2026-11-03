@@ -2,7 +2,7 @@
  * Deterministic per-row name matching blended with freshness and surface boosts.
  */
 
-import uFuzzy from '@leeoniya/ufuzzy';
+import { nameMatchQuality, normalizeNameText } from './name-match-score';
 import { differenceInMilliseconds } from 'date-fns';
 import type { Accessor } from 'solid-js';
 import type { DateValue } from './date';
@@ -11,9 +11,6 @@ import {
   parsedDurationToMilliseconds,
 } from './dateSearch/dateParser';
 import { fuzzyScoreCommaSpaceSeparated } from './fuzzy';
-import { nameMatchQuality, normalizeNameText } from './name-match-score';
-
-const fuzzyEligibility = new uFuzzy({});
 
 interface FuzzyFilterResult<T> {
   original: T;
@@ -395,18 +392,8 @@ export function createFreshSearch<T>({
       );
     }
 
-    if (finalConfig.commaSeparatedChannelMatch && !hasTerms) return [];
-
-    // Multi-person channel matching adds reversed participant terms without
-    // widening other local entity rows. Single-token subsequences retain the
-    // shared corpus-independent matcher used by cached/local rows.
-    const eligible = useMultiTermChannelMatch
-      ? (fuzzyEligibility.filter(items.map(getName), trimmedQuery) ?? []).map(
-          (index) => items[index]
-        )
-      : items;
     const fuzzyResults = filterNameMatches(
-      eligible,
+      items,
       getName,
       getDisplayName,
       trimmedQuery,
