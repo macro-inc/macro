@@ -601,6 +601,7 @@ async fn run() -> anyhow::Result<()> {
         pool.clone(),
         std::net::SocketAddr::from(([127, 0, 0, 1], config.port)),
         http_ready,
+        Arc::clone(&notifications),
     )
     .await?;
     let scheduling_router = scheduling_runtime.router.clone();
