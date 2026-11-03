@@ -65,7 +65,6 @@ export function PresentedReviewPart(props: {
         sessionId={props.sessionId}
         reviewId={props.reviewId}
         canAct={canAct()}
-        ownerId={session?.session()?.ownerId}
         eventId={latestNotification()?.id}
         onDecision={() =>
           setPendingDecision({ previousEvent: latestNotification()?.id })
