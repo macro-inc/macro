@@ -163,34 +163,83 @@ export function ListEntity(props: ListEntityProps) {
 
   const showContentHits = () => showHitSnippet() && !isContentHitsRedundant();
 
-  const layoutProps = (): LayoutProps => ({
-    entity: props.entity,
-    actions: !isTouchDevice() ? rowActions() : undefined,
-    leadingAction: isTouchDevice() ? touchActions() : leadingAction(),
-    titleLeading: titleLeading(),
-    icon: icon(),
-    titleTrailing: titleTrailing(),
-    meta: meta(),
-    metaEnd: metaEnd(),
-    scheduleStatus: scheduleStatus(),
-    referenceProperties: referenceProperties(),
-    authorDisplayName: props.authorDisplayName,
-    checked: props.checked,
-    hideCheckbox: props.hideCheckbox,
-    onChecked: props.onChecked,
-    unread: unread(),
-    isShared: isShared(),
-    hasNotifications: hasNotifications(),
-    showHitSnippet: showHitSnippet(),
-    streamState: streamState(),
+  // Forward fields independently. A dynamic object spread would make a
+  // selection change reevaluate every layout input and its downstream memos.
+  const layoutProps: LayoutProps = {
+    get entity() {
+      return props.entity;
+    },
+    get actions() {
+      return !isTouchDevice() ? rowActions() : undefined;
+    },
+    get leadingAction() {
+      return isTouchDevice() ? touchActions() : leadingAction();
+    },
+    get titleLeading() {
+      return titleLeading();
+    },
+    get icon() {
+      return icon();
+    },
+    get titleTrailing() {
+      return titleTrailing();
+    },
+    get meta() {
+      return meta();
+    },
+    get metaEnd() {
+      return metaEnd();
+    },
+    get scheduleStatus() {
+      return scheduleStatus();
+    },
+    get referenceProperties() {
+      return referenceProperties();
+    },
+    get authorDisplayName() {
+      return props.authorDisplayName;
+    },
+    get checked() {
+      return props.checked;
+    },
+    get hideCheckbox() {
+      return props.hideCheckbox;
+    },
+    get onChecked() {
+      return props.onChecked;
+    },
+    get unread() {
+      return unread();
+    },
+    get isShared() {
+      return isShared();
+    },
+    get hasNotifications() {
+      return hasNotifications();
+    },
+    get showHitSnippet() {
+      return showHitSnippet();
+    },
+    get streamState() {
+      return streamState();
+    },
     setSnippetContainerRef,
-    chars: chars(),
-    onProjectClick: props.onProjectClick,
-    onFilterByTag: props.onFilterByTag ?? soupView?.filterByTag,
-    showCalendarAttendance:
-      props.showCalendarAttendance ??
-      (soupView?.activeTab() ?? 'all') === 'all',
-  });
+    get chars() {
+      return chars();
+    },
+    get onProjectClick() {
+      return props.onProjectClick;
+    },
+    get onFilterByTag() {
+      return props.onFilterByTag ?? soupView?.filterByTag;
+    },
+    get showCalendarAttendance() {
+      return (
+        props.showCalendarAttendance ??
+        (soupView?.activeTab() ?? 'all') === 'all'
+      );
+    },
+  };
 
   const draggable = createEntityDraggable({
     entity: props.entity,
@@ -295,7 +344,7 @@ export function ListEntity(props: ListEntityProps) {
             entityId={props.entity.id}
             config={props.entityRowConfig}
           >
-            <WideLayout {...layoutProps()} />
+            <WideLayout {...layoutProps} />
           </MaybeEntityRow>
         </Match>
         {/* Mixed-type lists (Search) render every entity as one line, ahead
@@ -305,7 +354,7 @@ export function ListEntity(props: ListEntityProps) {
             entityId={props.entity.id}
             config={props.entityRowConfig}
           >
-            <NarrowSingleLineLayout {...layoutProps()} />
+            <NarrowSingleLineLayout {...layoutProps} />
           </MaybeEntityRow>
         </Match>
         {/* Email lists on desktop stack their rows compactly; mixed lists keep
@@ -318,7 +367,7 @@ export function ListEntity(props: ListEntityProps) {
               entityId={props.entity.id}
               config={props.entityRowConfig}
             >
-              <NarrowEmailLayout {...layoutProps()} entity={entity()} />
+              <NarrowEmailLayout {...layoutProps} entity={entity()} />
             </MaybeEntityRow>
           )}
         </Match>
@@ -342,7 +391,7 @@ export function ListEntity(props: ListEntityProps) {
             entityId={props.entity.id}
             config={props.entityRowConfig}
           >
-            <NarrowInboxLayout {...layoutProps()} />
+            <NarrowInboxLayout {...layoutProps} />
           </MaybeEntityRow>
         </Match>
         <Match when={!isMobile() && usesCondensedNarrowLayout()}>
@@ -350,7 +399,7 @@ export function ListEntity(props: ListEntityProps) {
             entityId={props.entity.id}
             config={props.entityRowConfig}
           >
-            <NarrowCondensedLayout {...layoutProps()} />
+            <NarrowCondensedLayout {...layoutProps} />
           </MaybeEntityRow>
         </Match>
         <Match when={true}>
@@ -358,7 +407,7 @@ export function ListEntity(props: ListEntityProps) {
             entityId={props.entity.id}
             config={props.entityRowConfig}
           >
-            <NarrowLayout {...layoutProps()} />
+            <NarrowLayout {...layoutProps} />
           </MaybeEntityRow>
         </Match>
       </Switch>

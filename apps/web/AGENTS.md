@@ -1134,3 +1134,10 @@ of posting, multi-paragraph anchors, saved ranges, and cancellation during posti
   static `data-input-surface` categories on editor/field owners, never caller
   labels.
 - Keep record names, addresses, answers and query text out of attributes.
+
+### Entity rows
+
+- Keep `ListEntity` layout fields independently reactive (getters, not a
+  dynamic object spread); a spread makes a selection change revisit every
+  unrelated layout input. Profile with the
+  [entity collection fixture](src/features/entity/browser-test/README.md).
