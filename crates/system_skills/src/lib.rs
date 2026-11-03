@@ -23,6 +23,7 @@ pub mod catch_me_up;
 pub mod configure_agent;
 pub mod crm;
 pub mod databases;
+pub mod email;
 pub mod what_i_did_yesterday;
 
 #[cfg(test)]
@@ -94,6 +95,7 @@ pub static SYSTEM_SKILLS: &[&SystemSkill] = &[
     &configure_agent::SKILL,
     &databases::SKILL,
     &crm::SKILL,
+    &email::SKILL,
 ];
 
 /// Look up a system skill by its well-known id.

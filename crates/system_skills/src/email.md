@@ -1,10 +1,4 @@
-//! Email inbox behavior, including how the email tools handle multi-inbox setups.
-
-use crate::types::StaticPrompt;
-
-static TITLE: &str = "Email Inboxes";
-
-static INSTRUCTIONS: &str = r##"## Email inboxes
+## Email inboxes
 
 - A user can have more than one email inbox: their own primary inbox, additional inboxes they
   have connected, and inboxes that teammates have delegated to them.
@@ -34,12 +28,3 @@ static INSTRUCTIONS: &str = r##"## Email inboxes
   you do not need to know or pass the inbox for it.
 - Only pass `inbox` to `ListLabels` when the user asks about a specific inbox's labels in the
   abstract (not tied to a thread); otherwise prefer `thread_id`, or omit both for the primary inbox.
-"##;
-
-static INTENT: &str = "The model treats the primary inbox as the default for email tools, uses \
-ListInboxes to discover other connected or delegated inboxes when the user references a \
-non-default mailbox, scopes reads and searches to one inbox via the inbox parameter, and resolves \
-per-thread label operations through the owning thread rather than assuming the primary inbox.";
-
-/// The email inbox-behavior prompt.
-pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);

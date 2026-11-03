@@ -17,7 +17,6 @@ pub mod databases;
 pub mod deferred_tools;
 pub mod do_not;
 pub mod document_content_links;
-pub mod email;
 pub mod math;
 pub mod mcp_item_links;
 pub mod mentions;
@@ -50,25 +49,24 @@ static SESSION_BASE_PROMPT: ComposedPrompt = math::PROMPT
 
 /// The tool-enabled prompt for hosts whose tools all execute directly in the
 /// agent loop (the channel-mention bot, the MCP server): [`BASE_PROMPT`] with
-/// the database, skill-following and document-content linking rules and
-/// email inbox behavior appended. Says nothing about
+/// the skill-following and document-content linking rules appended. Area
+/// guidance (databases, email, ...) comes from built-in skills, which
+/// `ai_tools` inlines or routes. Says nothing about
 /// composer-confirmed user tools — those hosts' toolsets execute
 /// `CreateCalendarEvent` directly and have no `SendEmail` at all.
 pub static DIRECT_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
     .compose(&skills::PROMPT)
-    .compose(&document_content_links::PROMPT)
-    .compose(&email::PROMPT);
+    .compose(&document_content_links::PROMPT);
 
 /// The chat tool-enabled prompt: [`DIRECT_TOOL_USE_PROMPT`] plus the rules
 /// for composer-confirmed user tools (`SendEmail`, deferred execution), which
 /// only apply on surfaces that can render the composer card. Composed as its
-/// own chain so the email section stays last.
+/// own chain so the document-content linking section stays last.
 pub static TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
     .compose(&user_tools::BOOKING_PROMPT)
     .compose(&user_tools::PROMPT)
     .compose(&skills::PROMPT)
-    .compose(&document_content_links::PROMPT)
-    .compose(&email::PROMPT);
+    .compose(&document_content_links::PROMPT);
 
 /// The agent-session tool-enabled prompt: [`TOOL_USE_PROMPT`] on
 /// [`SESSION_BASE_PROMPT`], with the user tool rules restated for a host that
@@ -78,8 +76,7 @@ pub static SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROMPT
     .compose(&user_tools::BOOKING_PROMPT)
     .compose(&user_tools::SESSION_PROMPT)
     .compose(&skills::PROMPT)
-    .compose(&document_content_links::PROMPT)
-    .compose(&email::PROMPT);
+    .compose(&document_content_links::PROMPT);
 
 /// Agent-session instructions in code mode: [`SESSION_TOOL_USE_PROMPT`] with
 /// the [`code_mode`] section and nonblocking saved reviews.
@@ -89,8 +86,7 @@ pub static CODE_MODE_SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROM
     .compose(&user_tools::CODE_MODE_SESSION_PROMPT)
     .compose(&tasks::PROMPT)
     .compose(&skills::PROMPT)
-    .compose(&document_content_links::PROMPT)
-    .compose(&email::PROMPT);
+    .compose(&document_content_links::PROMPT);
 
 /// Database-only agent instructions, without unrelated tool capabilities.
 pub static DATABASE_TOOL_USE_PROMPT: ComposedPrompt =
