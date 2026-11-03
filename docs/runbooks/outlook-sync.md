@@ -87,7 +87,7 @@ about 0.1% fail. The ratio adds 100 lookups to the denominator, so a quiet hour
 needs a few more failures to alert.
 
 - Group `@outlook.token_cache:* @outlook.outcome:unavailable` spans by
-  `@http.response.status_code`. 503 is authentication-service's own transient
+  `@http.status_code`. 503 is authentication-service's own transient
   failure; no status means the request never got an answer.
 - Check authentication-service: errors on
   `GET /auth/internal/microsoft_access_token`, its recent deploys, and

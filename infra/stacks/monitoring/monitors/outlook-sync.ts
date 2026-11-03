@@ -15,8 +15,9 @@
 //   Datadog keeps the name as `resource_name`) with `outlook.outcome` and
 //   `outlook.defer_reason`; the Graph request span with `outlook.throttle_origin`
 //   and `http.response.status_code`; the token lookup span with
-//   `outlook.token_cache` and `outlook.outcome` (`ok` | `auth_required` |
-//   `unavailable`).
+//   `outlook.token_cache`, `outlook.outcome` (`ok` | `auth_required` |
+//   `unavailable`) and `http.response.status_code`. Datadog stores
+//   `http.response.status_code` as `@http.status_code`.
 //
 // Graph and token spans are matched by those fields, not by name: Datadog
 // renames a client span that carries `http.request.method` to
@@ -63,6 +64,7 @@ const spanTag = (path: string): SpanGroupBy => ({
   path: `@${path}`,
   tagName: path,
 });
+const STATUS = spanTag('http.status_code');
 
 // Span-based metrics count every ingested span, and the ratio monitors need
 // every success, so Outlook spans must not be head-sampled (the field
@@ -93,11 +95,7 @@ new datadog.SpansMetric('outlook-graph-request', {
     path: '@duration',
     includePercentiles: true,
   },
-  groupBies: [
-    ENV,
-    spanTag('http.response.status_code'),
-    spanTag('outlook.throttle_origin'),
-  ],
+  groupBies: [ENV, STATUS, spanTag('outlook.throttle_origin')],
 });
 
 new datadog.SpansMetric('outlook-token-acquire', {
@@ -108,7 +106,7 @@ new datadog.SpansMetric('outlook-token-acquire', {
     ENV,
     spanTag('outlook.outcome'),
     spanTag('outlook.token_cache'),
-    spanTag('http.response.status_code'),
+    STATUS,
   ],
 });
 
@@ -224,7 +222,7 @@ const dashboard = new datadog.Dashboard('outlook-sync', {
     graphGroup('Graph', [
       lines(
         'Graph requests by status',
-        'count:macro.outlook.graph_request{env:$env.value} by {http.response.status_code}.as_count()',
+        'count:macro.outlook.graph_request{env:$env.value} by {http.status_code}.as_count()',
         'bars'
       ),
       lines(
@@ -234,7 +232,7 @@ const dashboard = new datadog.Dashboard('outlook-sync', {
       ),
       lines(
         'Graph request p95 (ms), requests that reached Graph',
-        'p95:macro.outlook.graph_request{env:$env.value,!outlook.throttle_origin:gate} by {http.response.status_code} / 1000000'
+        'p95:macro.outlook.graph_request{env:$env.value,!outlook.throttle_origin:gate} by {http.status_code} / 1000000'
       ),
     ]),
     graphGroup('Tokens', [
@@ -245,7 +243,7 @@ const dashboard = new datadog.Dashboard('outlook-sync', {
       ),
       lines(
         'Token lookup failures by authentication-service status',
-        'sum:macro.outlook.token.acquire{env:$env.value,!outlook.outcome:ok} by {outlook.outcome,http.response.status_code}.as_count()',
+        'sum:macro.outlook.token.acquire{env:$env.value,!outlook.outcome:ok} by {outlook.outcome,http.status_code}.as_count()',
         'bars'
       ),
     ]),
