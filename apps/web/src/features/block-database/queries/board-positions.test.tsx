@@ -357,7 +357,7 @@ it('keeps cached positions ready when a background refresh fails', async () => {
     )
   ).toEqual(saved);
 
-  void refreshCardPositions('database', 'view');
+  await refreshCardPositions('database', 'view');
 
   await waitFor(() => expect(transport.viewPositions).toHaveBeenCalledTimes(2));
   await waitFor(() =>
