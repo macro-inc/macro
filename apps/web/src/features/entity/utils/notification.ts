@@ -26,6 +26,7 @@ const CHANNEL_NOTIFICATION_TYPES = [
   'channel_message_reaction',
   'channel_message_reply',
   'document_mention',
+  'channel_access_requested',
 ] as const;
 
 export function notificationIsRead(notification: UnifiedNotification): boolean {
@@ -248,6 +249,7 @@ export function getNotificationActionText(n: Notification): string {
     .with('entity_access_granted', () => 'granted access')
     .with('commented_on_document', 'crm_discussion', () => 'commented')
     .with('channel_invite', () => 'invited')
+    .with('channel_access_requested', () => 'asked to join')
     .with('new_email', () => 'emailed')
     .with('invite_to_team', () => 'invited')
     .with('task_assigned', () => 'assigned')
@@ -348,6 +350,7 @@ export function extractMessageContent(notification: Notification): string {
       (m) => `New ${providerIdentity(m.content.provider).label} message`
     )
     .with({ tag: 'channel_invite' }, () => '')
+    .with({ tag: 'channel_access_requested' }, () => '')
     .with({ tag: 'invite_to_team' }, () => '')
     .with({ tag: 'call_started' }, (m) => m.content.channel_name ?? '')
     .with({ tag: 'reminder' }, (m) => m.content.description)

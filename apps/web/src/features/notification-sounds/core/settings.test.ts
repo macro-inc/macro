@@ -53,6 +53,7 @@ it('plays the sound chosen for the notification category', () => {
       categories: {
         mentions: { enabled: true, sound: 'bloom' },
         email: { enabled: false, sound: 'chime' },
+        other: { enabled: true, sound: 'pluck' },
       },
     })
   );
@@ -62,6 +63,9 @@ it('plays the sound chosen for the notification category', () => {
     'bloom'
   );
   expect(soundForNotification('new_email', settings)).toBeNull();
+  expect(soundForNotification('channel_access_requested', settings)).toBe(
+    'pluck'
+  );
 });
 
 it('stays quiet for calls, muted volume, and unknown events', () => {
@@ -70,6 +74,7 @@ it('stays quiet for calls, muted volume, and unknown events', () => {
   );
 
   expect(soundForNotification('call_started', settings)).toBeNull();
+  expect(soundForNotification('channel_access_requested', settings)).toBeNull();
   expect(soundForNotification('event_from_a_newer_backend', settings)).toBe(
     null
   );

@@ -15,6 +15,7 @@ field and mutate.
 - [`Calendar`](../../calendar/calendar/classes/Calendar.md)
 - [`CalendarEvent`](../../calendar/event/classes/CalendarEvent.md)
 - [`CallMessage`](../../calls/message/classes/CallMessage.md)
+- [`ChannelAccessRequest`](../../channels/access-request/classes/ChannelAccessRequest.md)
 - [`ChatMessage`](../../chats/generation/classes/ChatMessage.md)
 - [`CrmComment`](../../crm/comment/classes/CrmComment.md)
 - [`CrmPipeline`](../../crm/pipeline/classes/CrmPipeline.md)

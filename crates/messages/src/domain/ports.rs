@@ -594,6 +594,7 @@ pub const CHANNEL_TIMELINE: TimelineSelection = TimelineSelection::new(
         ActionTag::ParticipantAdded,
         ActionTag::ParticipantRemoved,
         ActionTag::CallEnded,
+        ActionTag::AccessRequested,
     ],
     &[],
 );

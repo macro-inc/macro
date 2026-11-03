@@ -37,6 +37,7 @@
 - [src/entities/calls/call-record](src/entities/calls/call-record/README.md)
 - [src/entities/calls/message](src/entities/calls/message/README.md)
 - [src/entities/calls/namespace](src/entities/calls/namespace/README.md)
+- [src/entities/channels/access-request](src/entities/channels/access-request/README.md)
 - [src/entities/channels/activity](src/entities/channels/activity/README.md)
 - [src/entities/channels/channel](src/entities/channels/channel/README.md)
 - [src/entities/channels/labels](src/entities/channels/labels/README.md)
