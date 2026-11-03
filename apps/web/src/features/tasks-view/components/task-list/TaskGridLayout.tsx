@@ -1,3 +1,8 @@
+import { useRegisterPriorityCollapseItem } from '@app/components/priority-collapse/createPriorityCollapser';
+import {
+  createPriorityCollapseController,
+  PriorityCollapseOverflowSensor,
+} from '@app/components/priority-collapse/PriorityCollapseOverflowSensor';
 import {
   Entity,
   isProjectContainedEntity,
@@ -7,13 +12,13 @@ import {
   type TaskEntityWithProperties,
   UnreadIndicator,
 } from '@entity';
-import {
-  CreatedByBadgeSmall,
-  SharedBadgeSmall,
-} from '@entity/components/Badges';
+import { SharedBadgeSmall } from '@entity/components/Badges';
+import { NarrowLayout } from '@entity/composed/list-entity/narrow-layout';
 import type { LayoutProps } from '@entity/composed/list-entity/shared';
 import { soupPropertyToProperty } from '@entity/extractors-property';
 import { EntityReferenceProperties } from '@entity/extractors-property/entity-reference-properties';
+import { TaskPropertyControl } from '@entity/extractors-property/task-property-control';
+import { getTaskDueDate, isTaskClosed } from '@entity/utils/task-properties';
 import { ListPropertyValue } from '@property/component/ListPropertyValue';
 import { Modals } from '@property/component/modal';
 import {
@@ -26,9 +31,23 @@ import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity'
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { cn } from '@ui/utils/classname';
-import { createMemo, For, Show, Suspense } from 'solid-js';
 import {
+  type Accessor,
+  createMemo,
+  For,
+  Match,
+  Show,
+  Suspense,
+  Switch,
+} from 'solid-js';
+import {
+  type DateBucketBoundaries,
+  taskDueDateUrgency,
+} from '../../core/task-due-date';
+import {
+  TASK_DUE_DATE_COLUMN,
   TASK_GRID_COLUMNS,
+  TASK_LIST_COLUMNS,
   TASK_PROJECT_COLUMN,
   type TaskGridColumn,
   taskGridTemplate,
@@ -62,6 +81,8 @@ function buildStubProperty(col: TaskGridColumn): Property {
 type TaskGridLayoutProps = Omit<LayoutProps, 'entity'> & {
   entity: TaskEntityWithProperties;
   onFilterByTag?: (optionId: string) => void;
+  compact?: boolean;
+  calendar: Accessor<DateBucketBoundaries>;
   referencePropertyIds?: readonly string[];
 };
 
@@ -82,6 +103,19 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
   });
 
   const properties = createMemo(() => Array.from(propertyMap().values()));
+  const collapseController = createPriorityCollapseController();
+  const columns = () =>
+    TASK_LIST_COLUMNS.filter(
+      (column) =>
+        (column !== 'indicator' || !props.hideCheckbox) &&
+        (column !== 'initiative' || props.showProject === true)
+    );
+  const propertyColumns = () =>
+    columns().flatMap((id) =>
+      [TASK_PROJECT_COLUMN, ...TASK_GRID_COLUMNS].filter(
+        (column) => column.id === id
+      )
+    );
 
   const saveMutation = useBulkSaveEntityPropertiesMutation();
 
@@ -103,6 +137,19 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
       saveOne(property, { valueType: 'DATE', value: date }),
   };
 
+  const dueDateClass = () => {
+    const urgency = taskDueDateUrgency(
+      getTaskDueDate(props.entity),
+      isTaskClosed(props.entity),
+      props.calendar()
+    );
+    return cn({
+      'text-failure': urgency === 'danger',
+      'text-warning': urgency === 'warning',
+      'text-ink-muted': !urgency,
+    });
+  };
+
   return (
     <PropertiesProvider
       entityId={props.entity.id}
@@ -114,133 +161,167 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
       onPropertyDeleted={() => {}}
       saveHandler={saveHandler}
     >
-      <Entity.Layout
-        class={cn(
-          'task-grid-row w-full min-h-[inherit] items-center text-sm px-2',
-          'gap-2 grid grid-rows-[1fr]'
-        )}
-        style={taskGridTemplate({
-          indicator: !props.hideCheckbox,
-          project: props.showProject === true,
-        })}
-      >
-        <Show when={!props.hideCheckbox}>
-          <Entity.Slot placement="indicator" class="relative size-full group">
-            <div class="absolute inset-0 grid place-items-center group-hover:opacity-0">
-              <UnreadIndicator active={props.unread} />
-            </div>
-            <div
-              class={cn(
-                'absolute inset-0 grid place-items-center opacity-0 group-hover:opacity-100',
-                {
-                  'opacity-100': props.checked,
-                }
-              )}
-            >
-              <MultiSelectCheckbox
-                checked={props.checked}
-                onChecked={props.onChecked}
-              />
-            </div>
-          </Entity.Slot>
-        </Show>
-
-        <Entity.Slot
-          placement="content"
-          class="ph-no-capture font-medium truncate items-center gap-2 flex min-w-0"
-        >
-          <div class="size-4 shrink-0">
-            <Entity.Icon
-              entity={props.entity}
-              streamState={props.streamState}
-            />
-          </div>
-          <span class="truncate min-w-0">
-            <Entity.Title entity={props.entity} />
-          </span>
-          <Show when={isProjectContainedEntity(props.entity) && props.entity}>
-            {(entity) => (
-              <span class="ph-no-capture text-ink text-xs shrink-0 truncate border border-edge-muted px-2 rounded-sm py-0.5">
-                <ProjectBreadCrumb
-                  entity={entity()}
-                  onClick={props.onProjectClick}
-                />
-              </span>
-            )}
-          </Show>
-          <Show when={props.isShared}>
-            <span class="@min-[841px]/u-list:hidden">
-              <SharedBadgeSmall ownerId={props.entity.ownerId} />
-            </span>
-            <span class="hidden @min-[841px]/u-list:inline @min-[1221px]/u-list:hidden">
-              <CreatedByBadgeSmall ownerId={props.entity.ownerId} />
-            </span>
-          </Show>
-          <Show when={props.referencePropertyIds}>
-            {(ids) => (
-              <EntityReferenceProperties
-                entity={props.entity}
-                propertyIds={ids()}
-                compact={false}
-              />
-            )}
-          </Show>
-          <EntityRowTags
-            entityId={props.entity.id}
-            entityType={EntityType.TASK}
-            properties={entity().properties}
-            onFilterByTag={props.onFilterByTag}
-            class="ml-auto"
-          />
-        </Entity.Slot>
-
-        <For each={TASK_GRID_COLUMNS}>
-          {(col) => (
-            <Entity.Slot
-              placement={col.id}
-              class="flex items-center min-w-0 text-xs ph-no-capture @container/slot @max-[840px]/u-list:justify-center"
-            >
+      <Switch>
+        <Match when={props.compact}>
+          <NarrowLayout {...props}>
+            <div class="w-8 min-w-0">
               <ListPropertyValue
                 entityId={props.entity.id}
                 property={
-                  propertyMap().get(col.defId) ?? buildStubProperty(col)
+                  propertyMap().get(TASK_DUE_DATE_COLUMN.defId) ??
+                  buildStubProperty(TASK_DUE_DATE_COLUMN)
                 }
+                class={dueDateClass()}
+              />
+            </div>
+          </NarrowLayout>
+        </Match>
+        <Match when={true}>
+          <Entity.Layout
+            class={cn(
+              'task-grid-row task-grid-icon-creator w-full min-h-[inherit] items-center text-sm px-2',
+              'gap-2 grid grid-rows-[1fr]'
+            )}
+            style={taskGridTemplate(columns())}
+          >
+            <Show when={!props.hideCheckbox}>
+              <Entity.Slot
+                placement="indicator"
+                class="relative size-full group"
+              >
+                <div class="absolute inset-0 grid place-items-center group-hover:opacity-0">
+                  <UnreadIndicator active={props.unread} />
+                </div>
+                <div
+                  class={cn(
+                    'absolute inset-0 grid place-items-center opacity-0 group-hover:opacity-100',
+                    {
+                      'opacity-100': props.checked,
+                    }
+                  )}
+                >
+                  <MultiSelectCheckbox
+                    checked={props.checked}
+                    onChecked={props.onChecked}
+                  />
+                </div>
+              </Entity.Slot>
+            </Show>
+
+            <Entity.Slot
+              placement="content"
+              ref={collapseController.setRow}
+              class={cn(
+                'ph-no-capture min-w-0 font-medium',
+                !props.hideCheckbox && 'ms-2'
+              )}
+            >
+              <PriorityCollapseOverflowSensor
+                controller={collapseController}
+                truncateAsLastResort
+                class="w-full min-w-0 overflow-hidden"
+                contentClass="flex min-w-full items-center gap-2"
+              >
+                <TaskPropertyControl
+                  entity={props.entity}
+                  property="priority"
+                />
+                <div class="-mr-1 flex shrink-0 items-center touch:-mr-2">
+                  <TaskPropertyControl
+                    entity={props.entity}
+                    property="status"
+                  />
+                </div>
+                <span class="flex min-w-0 flex-1 items-center gap-1">
+                  <span class="min-w-0 truncate">
+                    <Entity.Title entity={props.entity} />
+                  </span>
+                  <Show when={props.isShared}>
+                    <span class="task-shared-badge hidden shrink-0">
+                      <SharedBadgeSmall ownerId={props.entity.ownerId} />
+                    </span>
+                  </Show>
+                </span>
+                <Show
+                  when={isProjectContainedEntity(props.entity) && props.entity}
+                >
+                  {(entity) => {
+                    const collapsed = useRegisterPriorityCollapseItem(
+                      collapseController.collapser,
+                      { id: 'folder', priority: Number.MIN_SAFE_INTEGER }
+                    );
+                    return (
+                      <span class="ph-no-capture text-ink text-xs shrink-0">
+                        <ProjectBreadCrumb
+                          entity={entity()}
+                          onClick={props.onProjectClick}
+                          collapsed={collapsed()}
+                        />
+                      </span>
+                    );
+                  }}
+                </Show>
+
+                <Show when={props.referencePropertyIds}>
+                  {(ids) => (
+                    <EntityReferenceProperties
+                      entity={props.entity}
+                      propertyIds={ids()}
+                      compact={false}
+                    />
+                  )}
+                </Show>
+                <EntityRowTags
+                  entityId={props.entity.id}
+                  entityType={EntityType.TASK}
+                  properties={entity().properties}
+                  collapse={collapseController.collapser}
+                  onFilterByTag={props.onFilterByTag}
+                  class="ml-auto"
+                />
+              </PriorityCollapseOverflowSensor>
+            </Entity.Slot>
+
+            <For each={propertyColumns()}>
+              {(col) => (
+                <Entity.Slot
+                  placement={col.id}
+                  class="ms-2 flex items-center min-w-0 text-xs ph-no-capture @container/slot @max-[840px]/u-list:justify-center"
+                >
+                  <ListPropertyValue
+                    entityId={props.entity.id}
+                    class={col.id === 'dueDate' ? dueDateClass() : undefined}
+                    property={
+                      propertyMap().get(col.defId) ?? buildStubProperty(col)
+                    }
+                  />
+                </Entity.Slot>
+              )}
+            </For>
+
+            <Entity.Slot
+              placement="timestamp"
+              class="task-updated-cell ms-2 whitespace-nowrap text-xs text-right text-ink-extra-muted font-light"
+            >
+              <Show when={!props.hasNotifications}>
+                <Entity.Timestamp entity={props.entity} />
+              </Show>
+            </Entity.Slot>
+
+            <Entity.Slot
+              placement="createdBy"
+              class="task-creator-cell ms-2 flex items-center justify-end min-w-0 text-xs text-ink-muted ph-no-capture"
+            >
+              <OwnerLabel
+                ownerId={props.entity.ownerId}
+                viewerLabel="Me"
+                iconOnly
+                iconClass="@max-[840px]/u-list:size-5"
               />
             </Entity.Slot>
-          )}
-        </For>
-
-        <Show when={props.showProject}>
-          <Entity.Slot
-            placement={TASK_PROJECT_COLUMN.id}
-            class="flex items-center min-w-0 text-xs ph-no-capture @container/slot @max-[840px]/u-list:justify-center"
-          >
-            <ListPropertyValue
-              entityId={props.entity.id}
-              property={
-                propertyMap().get(TASK_PROJECT_COLUMN.defId) ??
-                buildStubProperty(TASK_PROJECT_COLUMN)
-              }
-            />
-          </Entity.Slot>
-        </Show>
-
-        <Entity.Slot
-          placement="createdBy"
-          class="hidden @min-[1221px]/u-list:flex items-center min-w-0 overflow-hidden text-xs text-ink-muted ph-no-capture"
-        >
-          <OwnerLabel ownerId={props.entity.ownerId} viewerLabel="Me" />
-        </Entity.Slot>
-
-        <Entity.Slot
-          placement="timestamp"
-          class="text-xs text-right text-ink-extra-muted font-light"
-        >
-          <Show when={!props.hasNotifications}>
-            <Entity.Timestamp entity={props.entity} />
-          </Show>
-        </Entity.Slot>
-      </Entity.Layout>
+          </Entity.Layout>
+        </Match>
+      </Switch>
       <Suspense>
         <Modals />
       </Suspense>

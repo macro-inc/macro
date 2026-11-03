@@ -35,7 +35,7 @@ import {
   createGraphqlSoupAstItemsQuery,
   type GraphqlSoupAstItemsQuery,
 } from './items';
-import { usePendingGraphqlSoupDeleteIds } from './optimistic-deletions';
+import { usePendingGraphqlSoupDeleteKeys } from './optimistic-deletions';
 import { usePendingGraphqlSoupDone } from './optimistic-done';
 
 export type GraphqlGroupedSoupAstItemsQueryArgs = {
@@ -56,7 +56,7 @@ export function createGraphqlGroupedSoupAstItemsQuery(
   args: Accessor<GraphqlGroupedSoupAstItemsQueryArgs>,
   options: Accessor<GraphqlGroupedSoupAstItemsQueryOptions>
 ): GraphqlSoupAstItemsQuery {
-  const pendingDeleteIds = usePendingGraphqlSoupDeleteIds();
+  const pendingDeleteKeys = usePendingGraphqlSoupDeleteKeys();
   const pendingDone = usePendingGraphqlSoupDone();
   const projectDone = createGraphqlSoupDoneProjection();
   const excludesDone = createMemo(() => soupQueryExcludesDone([args().body]));
@@ -218,7 +218,7 @@ export function createGraphqlGroupedSoupAstItemsQuery(
         cachedMail() ?? projected(),
         pendingDone(),
         excludesDone(),
-        pendingDeleteIds()
+        pendingDeleteKeys()
       )
     ),
     error,

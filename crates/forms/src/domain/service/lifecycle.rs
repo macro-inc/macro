@@ -12,7 +12,9 @@ use entity_access::domain::models::{
     AccessLevel, EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel,
 };
 use macro_event_broker::MacroEventBroker;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_forms::MAX_TEXT_LENGTH;
+use uuid::Uuid;
 
 use super::layout::file_columns;
 use super::{
@@ -26,10 +28,12 @@ use crate::domain::models::{
     Audience, ForbiddenWidget, Form, FormAccess, FormError, FormId, FormUpdate, ListedForm,
     SharingRefusal, UpdateForm, Widget,
 };
-use crate::domain::ports::{Clock, FormAccessDirectory, FormEventPublisher, FormsRepo};
+use crate::domain::ports::{
+    Clock, FormAccessDirectory, FormEventPublisher, FormImageFiles, FormsRepo,
+};
 
-impl<Repository, Databases, Access, Events, Now, Broker, Drafts>
-    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
+impl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images>
+    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images>
 where
     Repository: FormsRepo + FormDraftRepository,
     Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
@@ -38,6 +42,7 @@ where
     Now: Clock,
     Broker: MacroEventBroker,
     Drafts: FormDraftStore,
+    Images: FormImageFiles,
 {
     /// The live forms the viewer holds a grant on, newest first, each with
     /// the viewer's level as the grants answer it.
@@ -94,6 +99,17 @@ where
                 return Err(SharingRefusal::RespondentsAlreadyNamed.into());
             }
         }
+        let actor = receipt.acting_user_id();
+        for (chosen, current) in [
+            (update.logo_file_id, form.branding.logo_file_id),
+            (update.cover_file_id, form.branding.cover_file_id),
+        ] {
+            if let Some(Some(file)) = chosen
+                && Some(file) != current
+            {
+                self.check_branding_image(file, actor).await?;
+            }
+        }
         // A public form asks for no file: going public holds only if no
         // question asks for one when the change commits. A file widget left
         // on a column the grid retyped asks for nothing, so only the
@@ -124,6 +140,37 @@ where
             FormUpdate::FormGone => Err(FormError::NotFound),
             FormUpdate::WidgetInUse => Err(FormError::FileUploadNeedsSignIn),
         }
+    }
+
+    /// A logo or cover must be an image the caller uploaded, so a form never
+    /// shows a file someone else chose to keep to themselves. Keeping the
+    /// image a form already shows needs no check. Whether its bytes landed is
+    /// not asked: storage marks that only after the upload is used here.
+    async fn check_branding_image(
+        &self,
+        file: Uuid,
+        actor: Option<&MacroUserIdStr<'static>>,
+    ) -> Result<(), FormError> {
+        let stored = self
+            .images
+            .image_file(file)
+            .await
+            .map_err(repository_error)?
+            .ok_or(FormError::InvalidBranding("the image is not available"))?;
+        if actor.is_none_or(|actor| stored.owner_id != actor.as_ref()) {
+            return Err(FormError::InvalidBranding(
+                "the image must be one you uploaded",
+            ));
+        }
+        if !matches!(
+            stored.content_type.as_str(),
+            "image/jpeg" | "image/png" | "image/webp" | "image/gif"
+        ) {
+            return Err(FormError::InvalidBranding(
+                "the image must be a JPEG, PNG, WebP or GIF",
+            ));
+        }
+        Ok(())
     }
 
     /// Rename a form: the database it goes by, when it follows one, then a

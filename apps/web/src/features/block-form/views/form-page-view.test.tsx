@@ -56,6 +56,7 @@ const detail: FormDetail = {
     responsesVisible: false,
     respondentHidden: false,
     confirmationMessage: '',
+    branding: { logoFileId: null, coverFileId: null, accentColor: null },
     submittedColumnId: null,
     respondentColumnId: null,
   },

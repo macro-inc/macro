@@ -25,4 +25,5 @@ mod set_company_name;
 mod set_contact_hidden;
 mod set_contact_name;
 mod set_email_sync;
+mod team_crm_enabled;
 mod team_settings;

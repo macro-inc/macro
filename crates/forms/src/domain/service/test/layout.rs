@@ -24,6 +24,7 @@ fn respondent_details_withhold_the_booking_destination() {
         status: FormStatus::Open,
         closes_at: None,
         confirmation_message: "Thank you".into(),
+        branding: FormBranding::default(),
         created_at: start_of_tests(),
         updated_at: start_of_tests(),
         is_hidden_in_drive: false,

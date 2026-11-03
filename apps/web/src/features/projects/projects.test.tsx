@@ -198,6 +198,14 @@ it('keeps retained query sources gated after their view owner is disposed', asyn
   setEnabled(true);
   await vi.waitFor(() => expect(sources.detail.project()?.name).toBe('Launch'));
   await vi.waitFor(() => expect(sources.collection.rows()).toHaveLength(1));
+  expect(sources.detail.project()).toMatchObject({
+    taskCount: 1,
+    completedTaskCount: 0,
+  });
+  expect(sources.collection.rows()?.[0].project).toMatchObject({
+    taskCount: 1,
+    completedTaskCount: 0,
+  });
   expect(mocks.page).not.toHaveBeenCalled();
   expect(mocks.soup).toHaveBeenCalledTimes(2);
   await vi.advanceTimersByTimeAsync(30_000);

@@ -19,6 +19,7 @@ const detail: FormCollaboration['detail'] = {
     status: 'open',
     closesAt: null,
     confirmationMessage: 'Thank you',
+    branding: { logoFileId: null, coverFileId: null, accentColor: null },
     createdAt: '2026-10-05T09:00:00Z',
     updatedAt: '2026-10-05T09:00:00Z',
     isHiddenInDrive: false,

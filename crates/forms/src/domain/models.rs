@@ -7,8 +7,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 pub use models_databases::{CellValue, ColumnId, DatabaseId, OptionId, RowId, TableId};
 pub use models_forms::{
-    Answer, Audience, CreateForm, Form, FormAccess, FormDetail, FormId, FormLayout,
-    FormQuestionDetail, FormQuestionId, FormResponse, FormResponseId, FormSection,
+    AccentColor, Answer, Audience, CreateForm, Form, FormAccess, FormBranding, FormDetail, FormId,
+    FormLayout, FormQuestionDetail, FormQuestionId, FormResponse, FormResponseId, FormSection,
     FormSectionDetail, FormSectionId, FormSource, FormStatus, FormTally, LayoutProblem, ListedForm,
     MyResponse, QuestionLayout, QuestionOption, QuestionTally, ResponseStatus, ResponseSummary,
     SectionCount, Submission, SubmissionOutcome, TallyBucket, TallyValue, UpdateForm, Widget,
@@ -24,6 +24,15 @@ pub struct StoredForm {
     pub trashed_at: Option<DateTime<Utc>>,
     /// Whether the form created its own database and goes by its name.
     pub name_follows_database: bool,
+}
+
+/// A file a form's branding may show, as static-file storage records it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredImageFile {
+    /// Who uploaded it.
+    pub owner_id: String,
+    /// Its media type.
+    pub content_type: String,
 }
 
 /// Who is responding.
@@ -206,6 +215,9 @@ pub enum FormError {
     /// A sharing change was refused.
     #[error("invalid sharing change: {0}")]
     InvalidSharing(SharingRefusal),
+    /// A logo or cover image is not an image the caller uploaded.
+    #[error("{0}")]
+    InvalidBranding(&'static str),
     /// The owner keeps the form's tallies from respondents.
     #[error("this form's results are hidden")]
     TallyHidden,

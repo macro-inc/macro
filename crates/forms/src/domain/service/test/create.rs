@@ -96,6 +96,7 @@ async fn a_form_over_a_table_asks_every_column_and_adds_the_managed_ones() {
                 status: FormStatus::Open,
                 closes_at: None,
                 confirmation_message: "".into(),
+                branding: FormBranding::default(),
                 created_at: start_of_tests(),
                 updated_at: start_of_tests(),
                 is_hidden_in_drive: false,

@@ -1,6 +1,6 @@
 import { For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
-import type { ChartScene, ChartShape } from '../core/chart-scene';
+import type { ChartScene, ChartShape } from '../core/chart-shapes';
 
 function Shape(props: { shape: ChartShape }) {
   return match(props.shape)
@@ -11,6 +11,8 @@ function Shape(props: { shape: ChartShape }) {
         width={shape.width}
         height={shape.height}
         fill={shape.fill}
+        stroke={shape.stroke}
+        stroke-width={shape.stroke ? 1 : undefined}
       >
         <Show when={shape.tip}>{(tip) => <title>{tip()}</title>}</Show>
       </rect>
@@ -28,6 +30,7 @@ function Shape(props: { shape: ChartShape }) {
         stroke-width={shape.strokeWidth}
         stroke-linejoin="round"
         stroke-linecap="round"
+        stroke-dasharray={shape.dash}
         opacity={shape.opacity}
       >
         <Show when={shape.tip}>{(tip) => <title>{tip()}</title>}</Show>
@@ -67,10 +70,13 @@ function Shape(props: { shape: ChartShape }) {
         text-anchor={shape.anchor}
         dominant-baseline={shape.baseline}
         font-size={`${shape.size}px`}
-        font-weight={shape.role === 'title' ? 600 : undefined}
-        fill={
-          shape.role === 'title' ? 'var(--color-ink)' : 'var(--color-ink-muted)'
-        }
+        font-weight={shape.role === 'title' || shape.bold ? 600 : undefined}
+        fill={match(shape.role)
+          .with('title', () => 'var(--color-ink)')
+          .with('label', () => 'var(--color-ink-muted)')
+          // Over a series color, as Excel writes labels inside bars.
+          .with('inside', () => '#FFFFFF')
+          .exhaustive()}
       >
         {shape.text}
       </text>

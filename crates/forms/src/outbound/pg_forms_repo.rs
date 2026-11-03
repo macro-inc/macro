@@ -18,9 +18,9 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    Audience, ColumnId, DatabaseId, ForbiddenWidget, Form, FormCreation, FormId, FormLayout,
-    FormResponse, FormResponseId, FormSectionId, FormStatus, FormUpdate, LayoutReplacement,
-    RecordedResponse, ResponseCounts, RowId, StoredForm, TableId, UpdateForm,
+    AccentColor, Audience, ColumnId, DatabaseId, ForbiddenWidget, Form, FormBranding, FormCreation,
+    FormId, FormLayout, FormResponse, FormResponseId, FormSectionId, FormStatus, FormUpdate,
+    LayoutReplacement, RecordedResponse, ResponseCounts, RowId, StoredForm, TableId, UpdateForm,
 };
 
 /// Errors from the Postgres repository.
@@ -90,6 +90,9 @@ struct FormRow {
     status: String,
     closes_at: Option<DateTime<Utc>>,
     confirmation_message: String,
+    logo_file_id: Option<Uuid>,
+    cover_file_id: Option<Uuid>,
+    accent_color: Option<String>,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     trashed_at: Option<DateTime<Utc>>,
@@ -118,6 +121,21 @@ impl TryFrom<FormRow> for StoredForm {
                 status: parsed::<FormStatus>("status", &row.status)?,
                 closes_at: row.closes_at,
                 confirmation_message: row.confirmation_message,
+                branding: FormBranding {
+                    logo_file_id: row.logo_file_id,
+                    cover_file_id: row.cover_file_id,
+                    accent_color: row
+                        .accent_color
+                        .map(|color| {
+                            AccentColor::try_from(color.clone()).map_err(|_| {
+                                PgFormsRepoError::Corrupt {
+                                    kind: "accent color",
+                                    value: color,
+                                }
+                            })
+                        })
+                        .transpose()?,
+                },
                 created_at: row.created_at,
                 updated_at: row.updated_at,
                 is_hidden_in_drive: row.is_hidden_in_drive,
@@ -168,10 +186,13 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
             INSERT INTO forms (
                 id, name, description, owner_id, database_id, table_id,
                 submitted_column_id, respondent_column_id, audience, tally_visible,
-                status, closes_at, confirmation_message, created_at, updated_at,
-                name_follows_database, is_hidden_in_drive, responses_visible, respondent_hidden
+                status, closes_at, confirmation_message, logo_file_id, cover_file_id,
+                accent_color, created_at, updated_at, name_follows_database, is_hidden_in_drive, responses_visible, respondent_hidden
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+            VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
+                $19, $20, $21, $22
+            )
             ON CONFLICT (table_id) DO NOTHING
             "#,
             form.id.into_uuid(),
@@ -187,6 +208,9 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
             <&str>::from(form.status),
             form.closes_at,
             form.confirmation_message,
+            form.branding.logo_file_id,
+            form.branding.cover_file_id,
+            form.branding.accent_color.as_ref().map(AccentColor::as_str),
             form.created_at,
             form.updated_at,
             name_follows_database,
@@ -238,7 +262,8 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
             r#"
             SELECT id, name, description, owner_id, database_id, table_id,
                    submitted_column_id, respondent_column_id, audience, tally_visible,
-                   status, closes_at, confirmation_message, created_at, updated_at, trashed_at,
+                   status, closes_at, confirmation_message, logo_file_id, cover_file_id, accent_color,
+                   created_at, updated_at, trashed_at,
                    name_follows_database, is_hidden_in_drive, responses_visible, respondent_hidden
             FROM forms WHERE id = $1
             "#,
@@ -258,7 +283,8 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                 r#"
                 SELECT id, name, description, owner_id, database_id, table_id,
                        submitted_column_id, respondent_column_id, audience, tally_visible,
-                       status, closes_at, confirmation_message, created_at, updated_at, trashed_at,
+                       status, closes_at, confirmation_message, logo_file_id, cover_file_id, accent_color,
+                   created_at, updated_at, trashed_at,
                    name_follows_database, is_hidden_in_drive, responses_visible, respondent_hidden
                 FROM forms WHERE id = ANY($1) AND trashed_at IS NULL
                 ORDER BY id
@@ -291,7 +317,8 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                 r#"
                 SELECT id, name, description, owner_id, database_id, table_id,
                        submitted_column_id, respondent_column_id, audience, tally_visible,
-                       status, closes_at, confirmation_message, created_at, updated_at, trashed_at,
+                       status, closes_at, confirmation_message, logo_file_id, cover_file_id, accent_color,
+                   created_at, updated_at, trashed_at,
                    name_follows_database, is_hidden_in_drive, responses_visible, respondent_hidden
                 FROM forms WHERE database_id = $1 AND trashed_at IS NULL
                 ORDER BY created_at, id
@@ -374,13 +401,17 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                 status = COALESCE($5, status),
                 closes_at = CASE WHEN $6 THEN $7 ELSE closes_at END,
                 tally_visible = COALESCE($8, tally_visible),
-                responses_visible = COALESCE($10, responses_visible),
-                respondent_hidden = COALESCE($11, respondent_hidden),
+                logo_file_id = CASE WHEN $10 THEN $11 ELSE logo_file_id END,
+                cover_file_id = CASE WHEN $12 THEN $13 ELSE cover_file_id END,
+                accent_color = CASE WHEN $14 THEN $15 ELSE accent_color END,
+                responses_visible = COALESCE($16, responses_visible),
+                respondent_hidden = COALESCE($17, respondent_hidden),
                 updated_at = $9
             WHERE id = $1
             RETURNING id, name, description, owner_id, database_id, table_id,
                       submitted_column_id, respondent_column_id, audience, tally_visible,
-                      status, closes_at, confirmation_message, created_at, updated_at, trashed_at,
+                      status, closes_at, confirmation_message, logo_file_id, cover_file_id, accent_color,
+                   created_at, updated_at, trashed_at,
                    name_follows_database, is_hidden_in_drive, responses_visible, respondent_hidden
             "#,
             id.into_uuid(),
@@ -392,6 +423,15 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
             changes.closes_at.flatten(),
             changes.tally_visible,
             updated_at,
+            changes.logo_file_id.is_some(),
+            changes.logo_file_id.flatten(),
+            changes.cover_file_id.is_some(),
+            changes.cover_file_id.flatten(),
+            changes.accent_color.is_some(),
+            changes
+                .accent_color
+                .as_ref()
+                .and_then(|color| color.as_ref().map(AccentColor::as_str)),
             changes.responses_visible,
             changes.respondent_hidden,
         )
@@ -416,7 +456,8 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
             WHERE id = $1 AND trashed_at IS NULL
             RETURNING id, name, description, owner_id, database_id, table_id,
                       submitted_column_id, respondent_column_id, audience, tally_visible,
-                      status, closes_at, confirmation_message, created_at, updated_at, trashed_at,
+                      status, closes_at, confirmation_message, logo_file_id, cover_file_id, accent_color,
+                   created_at, updated_at, trashed_at,
                    name_follows_database, is_hidden_in_drive, responses_visible, respondent_hidden
             "#,
             id.into_uuid(),
@@ -442,7 +483,8 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
             WHERE id = $1 AND trashed_at IS NULL
             RETURNING id, name, description, owner_id, database_id, table_id,
                       submitted_column_id, respondent_column_id, audience, tally_visible,
-                      status, closes_at, confirmation_message, created_at, updated_at, trashed_at,
+                      status, closes_at, confirmation_message, logo_file_id, cover_file_id, accent_color,
+                   created_at, updated_at, trashed_at,
                       name_follows_database, is_hidden_in_drive, responses_visible, respondent_hidden
             "#,
             id.into_uuid(),

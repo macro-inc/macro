@@ -4,6 +4,7 @@ use chrono::{DateTime, Utc};
 use models_databases::{ColumnId, DatabaseId, TableId};
 use serde::{Deserialize, Deserializer, Serialize};
 
+use crate::branding::{AccentColor, FormBranding};
 use crate::ids::FormId;
 
 /// Who may respond to a form.
@@ -132,6 +133,8 @@ pub struct Form {
     /// What a respondent reads once their response is saved; empty for the
     /// default.
     pub confirmation_message: String,
+    /// Its logo, cover image and accent color.
+    pub branding: FormBranding,
     /// When it was created.
     pub created_at: DateTime<Utc>,
     /// When its facts or layout last changed.
@@ -191,8 +194,8 @@ pub enum FormSource {
     },
 }
 
-/// A change to a form's facts; what is left out stays. The description and
-/// confirmation message take edit, the rest owner. A form is renamed
+/// A change to a form's facts; what is left out stays. The description,
+/// confirmation message and branding take edit, the rest owner. A form is renamed
 /// through the entity mutation router.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(
@@ -244,9 +247,41 @@ pub struct UpdateForm {
     #[schema(nullable = false)]
     #[specta(optional)]
     pub respondent_hidden: Option<bool>,
+    /// A new logo, or `null` to remove it.
+    #[serde(
+        default,
+        deserialize_with = "present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    #[schema(value_type = Option<Uuid>)]
+    #[specta(type = Option<uuid::Uuid>, optional)]
+    pub logo_file_id: Option<Option<uuid::Uuid>>,
+    /// A new cover image, or `null` to remove it.
+    #[serde(
+        default,
+        deserialize_with = "present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    #[schema(value_type = Option<Uuid>)]
+    #[specta(type = Option<uuid::Uuid>, optional)]
+    pub cover_file_id: Option<Option<uuid::Uuid>>,
+    /// A new accent color, or `null` for the default.
+    #[serde(
+        default,
+        deserialize_with = "present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    #[schema(value_type = Option<String>, pattern = "^#[0-9a-fA-F]{6}$")]
+    #[specta(type = Option<AccentColor>, optional)]
+    pub accent_color: Option<Option<AccentColor>>,
 }
 
 impl UpdateForm {
+    /// Whether the change touches the form's branding.
+    pub fn changes_branding(&self) -> bool {
+        self.logo_file_id.is_some() || self.cover_file_id.is_some() || self.accent_color.is_some()
+    }
+
     /// Whether the change touches a fact only the owner may change.
     pub fn needs_owner(&self) -> bool {
         self.audience.is_some()
