@@ -25,8 +25,8 @@ Connect owns grants and refresh), behind the `macro-connect` flag.
   (also reached through `recover_pipedream_connection`)
   refuses them (409) and deletes the new Pipedream account.
 - `src/inbound/toolset.rs`: how connected apps surface as agent tools.
-- `src/outbound/connect.rs`: the Macro Connect adapter over the in-tree
-  `connect_client` (`connect/crates/connect_client`): tools through Connect's
+- `src/outbound/connect.rs`: the Macro Connect adapter over
+  `connect_client` (a pinned copy of Connect's client): tools through Connect's
   MCP gateway, app API calls with an exported access token, catalog apps
   addressed by the Pipedream slugs they replace.
 - `src/outbound/dispatch.rs`: `ConnectorBackends`, the one type hosts wire:

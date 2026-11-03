@@ -4,12 +4,6 @@ resolver = "2"
 exclude = ["vendor"]
 
 members = [
-  "connect/crates/connect_registry",
-  "connect/crates/connect_platform",
-  "connect/crates/connect_client",
-  "connect/tests/connect_integration",
-  "connect/services/connect_api",
-  "connect/services/connect_demo",
   "crates/access_requests",
   "crates/agent_api_keys",
   "crates/routines",
@@ -43,6 +37,7 @@ members = [
   "crates/cognition",
   "crates/codex_cloud_agents",
   "crates/codex_connection",
+  "crates/connect_client",
   "crates/collab_surface",
   "crates/complete_graph",
   "crates/cowlike",
