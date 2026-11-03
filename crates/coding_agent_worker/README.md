@@ -30,7 +30,7 @@ and daemon restarts reuse the saved window without renaming it. Existing shared
 tabs are reattached in place; only an explicitly closed window is replaced.
 An occupied pane or a connection error does not open a duplicate workspace.
 If launch confirmation fails after the native agent starts, the next prompt
-reattaches to that agent and waits for any active turn or dialog before submitting.
+reattaches to that agent and waits for reported active turns or dialogs before submitting.
 ACP `session/load` replays the native transcript before
 acknowledging the load. A running Herdr agent is reattached; an explicitly missing
 agent resumes its native session on the next prompt. Socket errors do not create
@@ -171,6 +171,8 @@ herdr-core does not guess status; it shows what a program reports through
 OSC 7501. Claude Code reports it. Codex does not, so under herdr-core a Codex
 session loses three things: busy detection before a prompt, remote permission
 answers (approve in Herdr), and cancelling a turn Macro did not start.
+Startup and recovery require an unchanged screen for an agent without status;
+a readiness timeout returns an error without submitting the prompt.
 Transcripts still end its turns. Without a reported session ID, macrod finds
 Codex's transcript by working directory and start time. Viewer windows
 (`macrod herdr-pane`) report their own state through OSC 7501.

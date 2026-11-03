@@ -294,6 +294,12 @@ impl Core {
     /// status is ready once its screen stops changing; one that does must
     /// say so, or it is likely on a dialog (folder trust, sign-in) where a
     /// typed prompt would answer the wrong question.
+    #[tracing::instrument(
+        name = "macrod.herdr.wait_ready",
+        skip_all,
+        fields(agent_id = name, kind = kind, reports_status = reports_status, outcome = "failed"),
+        err
+    )]
     pub(super) async fn wait_ready(
         &self,
         name: &str,
@@ -307,10 +313,12 @@ impl Core {
             tokio::time::sleep(AGENT_READY_POLL).await;
             let terminal = self.get(name).await?;
             if terminal.state != "live" {
+                tracing::Span::current().record("outcome", "ended");
                 return Err(HerdrError::Ended);
             }
             if let Some(status) = &terminal.status {
                 if status.state != "working" {
+                    tracing::Span::current().record("outcome", "ready");
                     return Ok(());
                 }
                 continue;
@@ -327,13 +335,12 @@ impl Core {
             settled = if current == screen { settled + 1 } else { 0 };
             screen = current;
             if settled >= SETTLED_POLLS {
+                tracing::Span::current().record("outcome", "ready");
                 return Ok(());
             }
         }
-        if reports_status {
-            return Err(HerdrError::NotReady);
-        }
-        Ok(())
+        tracing::Span::current().record("outcome", "not_ready");
+        Err(HerdrError::NotReady)
     }
 
     /// Remove a previous terminal of this name: a finished one keeps its

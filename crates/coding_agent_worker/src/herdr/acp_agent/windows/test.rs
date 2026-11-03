@@ -145,6 +145,40 @@ async fn recovery_preserves_readiness_and_core_support_for_agents_without_status
 }
 
 #[tokio::test]
+async fn core_recovery_does_not_submit_when_the_screen_never_settles() {
+    let root = tempfile::tempdir().unwrap();
+    let script = root.path().join("herdr");
+    std::fs::write(&script, include_str!("core-recovery.sh")).unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let (mut adapter, _) = super::super::test::test_adapter(root.path());
+    let inner = Arc::get_mut(&mut adapter).unwrap();
+    inner.options.kind = TuiAgent::Codex;
+    inner.herdr = Some(HerdrCli::core(script, "t1"));
+    let response = adapter.new_session(&json!({"cwd":root.path()})).unwrap();
+    let session = adapter
+        .session(&json!({"sessionId":response["sessionId"]}))
+        .unwrap();
+    std::fs::write(
+        root.path().join("agent.json"),
+        json!({
+            "address":"t2","state":"live","cwd":root.path(),"status":null,
+            "labels":{"macro.agent":"codex"},
+            "foreground":{"pid":1,"name":"codex","argv":[],"cwd":root.path()}
+        })
+        .to_string(),
+    )
+    .unwrap();
+    std::fs::write(root.path().join("unsteady"), "").unwrap();
+    let error = adapter.prompt(&session, "/fast").await.unwrap_err();
+    assert_eq!(error.message, HerdrError::NotReady.to_string());
+    assert!(session.live.lock().await.is_none());
+    let calls = std::fs::read_to_string(root.path().join("calls")).unwrap();
+    assert!(!calls.contains("send "));
+    assert!(!calls.contains("run "));
+    adapter.shutdown.cancel();
+}
+
+#[tokio::test]
 async fn a_resumed_claude_keeps_its_saved_native_identity() {
     let root = tempfile::tempdir().unwrap();
     let script = root.path().join("herdr");

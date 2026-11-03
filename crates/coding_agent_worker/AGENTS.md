@@ -118,7 +118,7 @@ external chat replies depend on it. Direct session controls still mint IDs.
 - Create Git worktrees without Herdr's repository grouping, persist native
   window IDs before launch, and preserve existing workspace and tab names;
   `src/herdr/acp_agent/windows.rs` owns reuse, recovery after unconfirmed launches,
-  and rollback.
+  and rollback. Readiness timeouts must leave the pending prompt unsubmitted.
 - Only release builds update themselves: the tag workflow compiles the tag in
   as `MACROD_RELEASE_TAG`, and a build without a `vYYYY.MM.DD.N` tag never
   polls. `macrod service` (the desktop app's bundled copy) never updates; the
