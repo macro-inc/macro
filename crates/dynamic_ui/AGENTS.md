@@ -48,6 +48,9 @@ and the web's TypeScript through specta.
 - Problems name a place and what belongs there, never what the view holds:
   they reach logs and the model with the failed call. `decode.rs` drops the
   value serde quotes.
+- `view.rs` and `query.rs` are exempt from `missing_docs`: every doc comment
+  there becomes a description in the schema ExecuteCode carries on every
+  turn, so document only what guides the model.
 - Paths stop at an internally tagged widget: serde buffers a tagged variant's
   fields, so a problem inside one names the widget, not the field.
 - The browser never validates a view: every path decodes it on the server

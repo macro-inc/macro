@@ -136,7 +136,13 @@ fn a_problem_never_repeats_what_the_view_holds() {
     }
 }
 
+/// Maps are sorted: serde_json keeps insertion order only when a build
+/// unifies its `preserve_order` feature.
 #[test]
 fn the_present_view_schema_is_pinned() {
-    insta::assert_snapshot!(present_view_schema());
+    let schema: serde_json::Value =
+        serde_json::from_str(&present_view_schema()).expect("the schema is JSON");
+    insta::with_settings!({ sort_maps => true }, {
+        insta::assert_json_snapshot!(schema);
+    });
 }

@@ -30,7 +30,7 @@ pub struct Query {
 #[serde(untagged)]
 pub enum DocumentWhere {
     All(Vec<DocumentFilterExpression>),
-    One(DocumentFilterExpression),
+    One(Box<DocumentFilterExpression>),
 }
 
 /// A document filter: a clause, or clauses combined with `op`.
@@ -38,7 +38,7 @@ pub enum DocumentWhere {
 #[serde(untagged)]
 pub enum DocumentFilterExpression {
     Combined(DocumentFilterCombination),
-    Clause(DocumentFilterClause),
+    Clause(Box<DocumentFilterClause>),
 }
 
 /// Document filter expressions combined.

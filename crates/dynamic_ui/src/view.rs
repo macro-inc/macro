@@ -116,7 +116,7 @@ pub struct TimelineEvent {
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum ListSource {
     /// The items a filter matches, fetched by the list itself.
-    Query { query: Query },
+    Query { query: Box<Query> },
     /// A fixed set of items.
     Items { entities: Vec<EntityRef> },
 }

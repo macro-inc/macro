@@ -6,11 +6,11 @@
 
 import { AgentActivity } from '@app/features/agent-activity/agent-activity';
 import { PermissionCard } from '@app/features/agent-interactions/components/PermissionCard';
-import type { View } from '@app/features/dynamic-ui/view';
 import {
   initialValues,
   validate,
 } from '@app/features/agent-interactions/state/elicitation-form';
+import type { View } from '@app/features/dynamic-ui/view';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { MagicChipView } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/MagicChipView';
 import type { MagicChipPresentation } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/presentation';

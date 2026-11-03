@@ -10,8 +10,8 @@ import {
   type SerializedLexicalNode,
   type Spread,
 } from 'lexical';
-import type { View_Serialize as View } from '../generated/dynamic-ui';
 import { type DecoratorComponent, getDecorator } from '../decoratorRegistry';
+import type { View_Serialize as View } from '../generated/dynamic-ui';
 import { $applyIdFromSerialized } from '../plugins/nodeIdPlugin';
 
 const VERSION = 1;
