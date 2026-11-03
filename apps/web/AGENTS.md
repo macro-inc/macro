@@ -918,6 +918,14 @@ On a physical iPhone, WKWebView still synthesises the compatibility `mousedown`/
 Use the existing status dot in Home and Agents rows with `bg-failure` when the
 persisted `turnState` is `failed`; open the session to inspect its error.
 
+### Agent transcript projection
+
+Keep folded messages ordered by turn and author in the transcript store: append
+at the new index, reconcile matching rows in place, binary-search earlier
+updates, and splice only for real insertion/removal. Never `produce` the whole
+array per append; it makes initial projection quadratic. Check with the
+[session-open runner](src/features/block-agent/browser-test/README.md).
+
 ### Agent system events
 
 Agent activity labels share `block-agent/ui/TextShimmer.tsx` and the global
@@ -991,6 +999,14 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 - Reuse `CreateMenuItem` for explanatory New menu entries: original icons, a title, and muted wrapping descriptions, preserving the existing `ViewCreateButton` trigger and each action's feature gates.
 - Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus. Mobile toasts dismiss by swiping left or right and have no corner close button. Phone prompts stay in their own stack under the modal layer, never on `z-toast-region`, and never hide with a document-wide `:has()` (#8840).
 - Notification sounds are off by default and saved per user per device; map each new notification event in `features/notification-sounds/core/categories.ts` and keep system alerts silent when Macro plays its own sound. Quiet hours on the same page silence those sounds and skip desktop alerts on a per-device weekly schedule; incoming calls still ring. See the [notification sounds walkthrough](../../docs/agent-guide/notifications.md#notification-sounds).
+
+### Agent result task lists
+
+Agent result task titles wrap above live metadata; nested horizontal groups
+stack below 672px of container width. The backend-free browser regression is
+`bunx playwright test --config src/features/dynamic-ui/browser-test/playwright.config.ts`.
+It covers desktop and touch layouts, narrow containers inside a wide viewport,
+unbroken titles, and keyboard opening.
 
 ### Inline property values
 
