@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { Macro } from '../src/macro';
+import { MacroApiError, MacroForbiddenError } from '../src/utils';
 
 const originalFetch = globalThis.fetch;
 
@@ -88,5 +89,46 @@ describe('EntityAccess.request', () => {
     await macro.documents.byId(initiativeId).access.request('edit');
 
     expect(bodies).toEqual([{ requestedLevel: 'edit' }]);
+  });
+});
+
+describe('MacroForbiddenError', () => {
+  test('a refused write throws the forbidden error', async () => {
+    globalThis.fetch = (async (_input) =>
+      Response.json(
+        { message: 'Access denied' },
+        { status: 403 },
+      )) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { storage: 'https://storage.example.test' },
+    });
+
+    const error = await macro.documents
+      .byId(initiativeId)
+      .rename('Renamed')
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(MacroForbiddenError);
+    expect(error).toBeInstanceOf(MacroApiError);
+    expect((error as MacroForbiddenError).status).toBe(403);
+    expect((error as Error).message).toBe('Macro API error 403: Access denied');
+  });
+
+  test('other failures stay plain API errors', async () => {
+    globalThis.fetch = (async (_input) =>
+      Response.json({ message: 'Not found' }, { status: 404 })) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { storage: 'https://storage.example.test' },
+    });
+
+    const error = await macro.documents
+      .byId(initiativeId)
+      .rename('Renamed')
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(MacroApiError);
+    expect(error).not.toBeInstanceOf(MacroForbiddenError);
   });
 });
