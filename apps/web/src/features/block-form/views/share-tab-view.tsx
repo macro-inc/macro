@@ -194,8 +194,8 @@ export function ShareTabView(props: {
           <Tooltip
             label={
               anonymityLocked()
-                ? 'People have already responded on the understanding that this form is or isn’t anonymous, so it can’t change.'
-                : 'Nobody in Macro, you included, can see who gave which response.'
+                ? 'People have responded, so this can’t change.'
+                : 'Nobody in Macro, you included, sees who gave which response.'
             }
             class="self-start"
           >
