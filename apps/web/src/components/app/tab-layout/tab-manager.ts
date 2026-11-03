@@ -6,15 +6,15 @@ import type {
   ShowLayoutOptions,
   SplitRouter,
 } from '@app/lib/split-router';
-import type {
-  SplitId,
-  SplitManager,
-} from '@components/app/split-layout/layoutManager';
 import {
   INITIAL_LAYER_ID,
   type SplitLayers,
   sameIds,
 } from '@components/app/split-layout/layers';
+import type {
+  SplitId,
+  SplitManager,
+} from '@components/app/split-layout/layoutManager';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import {

@@ -3,6 +3,7 @@ import {
   createMemoryPaneStore,
   createSplitRouter,
   type Entry,
+  PANE_LEVEL,
   type PaneId,
   type SplitRouter,
 } from '@app/lib/split-router';
@@ -12,7 +13,6 @@ import {
 } from '@app/lib/split-router/tests/fixtures';
 import { createRoot } from 'solid-js';
 import { afterEach, describe, expect, it } from 'vitest';
-import { PANE_LEVEL } from '@app/lib/split-router';
 import {
   createTabManager,
   MAX_PARKED_TABS,
