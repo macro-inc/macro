@@ -21,7 +21,8 @@ export class WebNamespace {
 
   /**
    * Search the web and return the pages found (title, url, and pageAge when
-   * known), most relevant first. Results carry no page text: read a page's
+   * known), most relevant first. pageAge is free text ("April 30, 2025" or
+   * "3 days ago"), not a parseable date. Results carry no page text: read a page's
    * preview with `macro.unfurls.get(url)`. Takes a few seconds, so run
    * independent searches with `Promise.all`.
    *

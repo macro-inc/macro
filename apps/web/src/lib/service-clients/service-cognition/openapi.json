@@ -6869,7 +6869,7 @@
         "properties": {
           "pageAge": {
             "type": ["string", "null"],
-            "description": "When the page was last updated, as the search index reports it\n(for example \"April 30, 2025\"), when known."
+            "description": "How old the page is, as free text from the search index (\"April 30,\n2025\" or \"3 days ago\"), when known. Not a parseable date."
           },
           "title": {
             "type": "string",

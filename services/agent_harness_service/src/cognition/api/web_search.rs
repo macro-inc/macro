@@ -54,8 +54,8 @@ pub struct WebSearchResult {
     pub title: String,
     /// The page URL.
     pub url: String,
-    /// When the page was last updated, as the search index reports it
-    /// (for example "April 30, 2025"), when known.
+    /// How old the page is, as free text from the search index ("April 30,
+    /// 2025" or "3 days ago"), when known. Not a parseable date.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub page_age: Option<String>,
 }

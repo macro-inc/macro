@@ -10,8 +10,8 @@ import type { WebSearchResultPageAge } from './webSearchResultPageAge';
  * One page found by a web search.
  */
 export interface WebSearchResult {
-  /** When the page was last updated, as the search index reports it
-(for example "April 30, 2025"), when known. */
+  /** How old the page is, as free text from the search index ("April 30,
+2025" or "3 days ago"), when known. Not a parseable date. */
   pageAge?: WebSearchResultPageAge;
   /** The page title. */
   title: string;
