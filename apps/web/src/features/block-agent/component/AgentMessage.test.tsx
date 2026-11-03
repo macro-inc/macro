@@ -351,7 +351,7 @@ describe('Message tool grouping', () => {
           tool('display', {
             name: { kind: 'mcp', server: 'macro', tool: 'DisplayResults' },
             status: 'pending',
-            detail: { kind: 'macro', input: null, output: null, error: null },
+            detail: { kind: 'view', view: null, error: null },
           }),
           tool('c'),
           tool('d'),

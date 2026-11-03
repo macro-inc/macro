@@ -140,6 +140,8 @@ export type EntityFilterCacheResult =
   | LiveQueryUpdate
   | {
       kind: 'mail-page';
+      /** Complete engine-owned window; absent on older native runtimes. */
+      observationId?: string;
       revision: CacheRevision;
       keys: string[];
       /** Server members with incomplete local metadata; absent on older native hosts. */
@@ -172,6 +174,10 @@ export type EntityFilterCacheResult =
 
 export type LiveQueryUpdate = {
   kind: 'live-query';
+  /** Native specification identity; absent from older installed binaries. */
+  registrationId?: string;
+  /** Immutable observation of this exact evaluated window; legacy hosts omit it. */
+  observationId?: string;
   revision: CacheRevision;
   reset: boolean;
   /** Omitted when the existing order remains valid. */
@@ -600,12 +606,18 @@ export type CachedQueryInstanceWire = CachedQueryVariantWire & {
   value?: unknown;
 };
 
-/** Missing metadata means unknown (older runtimes); [] proves no search change. */
-export type HydrationSearchChanges = {
+/** Optional engine evidence. Missing fields preserve conservative invalidation. */
+export type CacheChangeHints = {
+  /** Windows proven unchanged. Missing IDs mean unknown, never unchanged. */
+  unchangedViews?: string[];
+  /** Known changed Quick Access buckets; [] proves no search change. */
   searchChangedBuckets?: string[];
 };
 
-export type HydrationResult = HydrationSearchChanges &
+/** Previous name, kept until the cache worker adopts CacheChangeHints. */
+export type HydrationSearchChanges = CacheChangeHints;
+
+export type HydrationResult = CacheChangeHints &
   (
     | { kind: 'data'; data: unknown; revision: CacheRevision }
     | { kind: 'void'; revision: CacheRevision }
@@ -619,7 +631,7 @@ export type RecordFieldChange =
     }
   | { kind: 'invalidate'; key: string };
 
-export type WriteResult = HydrationSearchChanges & {
+export type WriteResult = CacheChangeHints & {
   /** Effective view changes. Missing metadata requires a conservative reread. */
   fieldChanges?: RecordFieldChange[];
   /** Bindings omitted while committing an otherwise normalizable response. */
@@ -963,11 +975,11 @@ export type CachePush =
       kind: 'cache-changed';
       revision: CacheRevision;
       reset?: boolean;
-    } & HydrationSearchChanges)
+    } & CacheChangeHints)
   | ({
       kind: 'cache-hydrated';
       revision: CacheRevision;
-    } & HydrationSearchChanges)
+    } & CacheChangeHints)
   | { kind: 'mutation-settled'; settlement: MutationSettlement };
 
 export type WorkerMessage = CacheResponse | CachePush;
@@ -1094,16 +1106,26 @@ export function isCachePush(value: unknown): value is CachePush {
           'revision',
           'reset',
           'searchChangedBuckets',
+          'unchangedViews',
         ]) &&
         isCacheRevision(value.revision) &&
         (value.reset === undefined || typeof value.reset === 'boolean') &&
+        (value.unchangedViews === undefined ||
+          isWireStringArray(value.unchangedViews)) &&
         (value.searchChangedBuckets === undefined ||
           isWireStringArray(value.searchChangedBuckets))
       );
     case 'cache-hydrated':
       return (
-        hasOnlyWireKeys(value, ['kind', 'revision', 'searchChangedBuckets']) &&
+        hasOnlyWireKeys(value, [
+          'kind',
+          'revision',
+          'searchChangedBuckets',
+          'unchangedViews',
+        ]) &&
         isCacheRevision(value.revision) &&
+        (value.unchangedViews === undefined ||
+          isWireStringArray(value.unchangedViews)) &&
         (value.searchChangedBuckets === undefined ||
           isWireStringArray(value.searchChangedBuckets))
       );

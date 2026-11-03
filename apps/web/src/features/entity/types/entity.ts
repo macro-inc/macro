@@ -1,4 +1,5 @@
 import type { DateValue } from '@core/util/date';
+import type { ArchiveCause } from '@service-agent-harness/generated/schemas';
 import type { ApiLabel } from '@service-email/generated/schemas';
 import type {
   GithubPullRequestCheckRun,
@@ -197,7 +198,9 @@ export type ChatEntity = EntityBase & {
 
 export type AgentSessionEntity = EntityBase & {
   type: 'agent_session';
-  isArchived?: boolean;
+  /** Who archived the session; null while it is not archived. */
+  archivedBy?: ArchiveCause | null;
+  archivedAt?: string | null;
   botId: string;
   harness?: string;
   repoUrl?: string | null;
@@ -365,11 +368,13 @@ export type CallEntity = EntityBase & {
 };
 
 /**
- * What a routine is doing now. A run in progress outranks activation, and a
- * paused routine keeps its stale `next_run_at`, so pause outranks the schedule.
+ * What a routine is doing now. A run in progress outranks activation, a failed
+ * last run outranks the schedule, and a paused routine keeps its stale
+ * `next_run_at`, so pause outranks the schedule.
  */
 export type RoutineStatus =
   | { kind: 'running' }
+  | { kind: 'failed' }
   | { kind: 'paused' }
   | { kind: 'scheduled'; nextRunAt: string }
   | { kind: 'unscheduled' };
@@ -378,8 +383,11 @@ export function routineStatus(facts: {
   enabled: boolean;
   isRunning: boolean;
   nextRunAt?: string | null;
+  /** The latest finished run failed; it stays visible until a run succeeds. */
+  lastRunFailed?: boolean;
 }): RoutineStatus {
   if (facts.isRunning) return { kind: 'running' };
+  if (facts.lastRunFailed) return { kind: 'failed' };
   if (!facts.enabled) return { kind: 'paused' };
   if (facts.nextRunAt) return { kind: 'scheduled', nextRunAt: facts.nextRunAt };
   return { kind: 'unscheduled' };

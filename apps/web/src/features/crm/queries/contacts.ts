@@ -1,4 +1,5 @@
 import { throwOnErr } from '@core/util/result';
+import { Telemetry } from '@macro-inc/observability';
 import { soupKeys } from '@queries/soup/keys';
 import { invalidateCachedCrmContacts } from '@service-storage/crm-contacts';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
@@ -145,7 +146,7 @@ export function useSetContactNameMutation(deps: CrmRecordDependencies) {
  * Hidden contacts disappear from the parent company's contact list
  * (non-admin view) and from any soup surface that filters them.
  *
- * Returns the invalidation promise from `onSuccess` so the mutation
+ * Awaits cache invalidation in the visibility trace so the mutation
  * stays pending until both the contact query and the soup queries
  * refetch — the toggle state and any dependent UI all flip in one beat.
  */
@@ -159,16 +160,39 @@ export function useSetContactHiddenMutation(deps: CrmRecordDependencies) {
         contactId: string;
         hidden: boolean;
       }) =>
-        throwOnErr(() => deps.storage.setContactHidden({ contactId, hidden })),
-      onSuccess: async (_data, { contactId }) => {
-        await invalidateCachedCrmContacts(contactId);
-        return Promise.all([
-          deps.client.invalidateQueries({ queryKey: soupKeys._def }),
-          deps.client.invalidateQueries({
-            queryKey: crmKeys.contact(contactId).queryKey,
-          }),
-        ]);
-      },
+        Telemetry.span('crm.visibility_change', async (span) => {
+          span.setAttr('crm.record_type', 'contact');
+          span.setAttr('crm.record_id', contactId);
+          span.setAttr('crm.hidden', hidden);
+          try {
+            const result = await throwOnErr(() =>
+              deps.storage.setContactHidden({ contactId, hidden })
+            );
+            await span.span(
+              'crm.visibility_change.refresh',
+              async (refresh) => {
+                try {
+                  await invalidateCachedCrmContacts(contactId);
+                  await Promise.all([
+                    deps.client.invalidateQueries({ queryKey: soupKeys._def }),
+                    deps.client.invalidateQueries({
+                      queryKey: crmKeys.contact(contactId).queryKey,
+                    }),
+                  ]);
+                } catch (error) {
+                  refresh.error('Contact visibility refresh failed');
+                  throw error;
+                }
+              }
+            );
+            span.setAttr('crm.visibility.outcome', 'success');
+            return result;
+          } catch (error) {
+            span.setAttr('crm.visibility.outcome', 'error');
+            span.error('Contact visibility update failed');
+            throw error;
+          }
+        }),
     }),
     () => deps.client
   );

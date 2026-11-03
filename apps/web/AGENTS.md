@@ -42,6 +42,13 @@ Split dragging and composer reflow have a backend-free browser regression:
 `bunx playwright test --config src/lib/core/component/Resize/browser-test/playwright.config.ts`.
 It exercises the real resize solver, scroll container, and Lexical layout primitive.
 
+Stacked splits have a backend-free browser regression over the real split
+router and tiled layout: splitting keeps the pane mounted, stacked gutters drag
+and nudge to the minimum height, and closing hands the column back:
+`bunx playwright test --config src/components/app/split-layout/browser-test/playwright.config.ts`.
+Keep panes in one keyed list positioned by the layout tree; nesting a
+`Resize.Zone` per split remounts a pane whenever its split changes.
+
 Desktop app switches open the requested list in the target split when the
 retained detail is claimed by another pane or preview. Keep this check in view
 restoration and preserve entity deduplication and native dock stack restoration;
@@ -343,6 +350,9 @@ not to account-wide paired runtime count; a user can pair several computers.
 
 ### General
 
+- Keep CRM removal and restoration visible on company/contact Overview pages;
+  use the existing hidden mutations and confirm company contact/email-sync effects.
+
 - Keep selection controls on shared `Checkbox`, `ToggleSwitch`, and `RadioGroup`;
   preserve their native input semantics and use root sizing instead of internal
   control/glyph overrides. See the [selection-control contract](../../.agents/rules/web/ui-primitives.md#selection-controls).
@@ -468,7 +478,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep split chrome portal targets reactive so cached views can mount before their header, and clear a retiring header's targets only while it still owns them.
 - Opt views into session restoration with `split-layout/view-restoration` and set `resume: true` on ordinary layout navigation; publish captured state only through the leave guard's `onCommit`, keep explicit links and new splits fresh, and reuse entry-state captors rather than hidden mounted views.
 - Let `ViewShell.TopBar` own split close and navigation controls; do not add a second split close button inside Agents headers or their preview `headerLeading`.
-- Desktop tabs (`components/app/tab-layout`, macOS + `enable-desktop-tabs`) hold one split layout per tab over the router's `layoutSnapshot`/`restoreLayout`; only the active tab is live, and the strip renders in the title bar's center slot. Cmd+click becomes a background tab through `openInNewTabMiddleware`, so tab operations must disarm the intent tracker before navigating. Tabs are not draggable. See the tabs section of `docs/agent-guide/navigation.md` at the repository root.
+- Desktop tabs (`components/app/tab-layout`, macOS + `enable-desktop-tabs`) hold one split layout per tab. Switching parks the active tab's panes (`router.openLayout`/`showLayout`) instead of removing them; the split manager keeps parked splits and `SplitLayout` renders one layer per tab, hiding background layers with `content-visibility` and `inert` without unmounting them. Up to `MAX_PARKED_TABS` stay mounted. The strip renders in the title bar's center slot. Cmd+click becomes a background tab through `openInNewTabMiddleware`, so tab operations must disarm the intent tracker before navigating. Tabs are not draggable. See the tabs section of `docs/agent-guide/navigation.md` at the repository root.
 - Show only the Recent conversation feed in mobile Channels, without view tabs or a persisted mobile tab selection; render its rows with Home's touch row (`ChannelCardLayout` and `InboxDivider`) and pin at most six channel favorites above it.
 - Mount the mobile search input before focusing it inside the dock tap; keep navigation in that handler so focus does not trigger a second navigation or lose iOS keyboard activation.
 - Preserve focused chrome editors during deferred split insertion/removal/content-change autofocus; explicit return-focus commands may still focus the pane. On desktop, content changes claim focus only for Cmd+K navigation or create-menu arrivals, and only if the destination has not already focused a child. Back/forward and ordinary clicks do not autofocus content.
@@ -626,6 +636,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   and asserts every observed row-ID state on revisits and an OPFS reload.
   It also verifies that cold empty Mail tabs stay loading until HTTP settles.
   It also runs in `just test-cache-wasm-browser`.
+- Trace initial Soup loading through pending flow phases; aggregate incremental
+  cache activity in `cache-activity-telemetry.ts`. Never start a root span per
+  cache revision or choose a root by comparing no-op span identity.
 - Reactive GraphQL reads use `createLiveQuery` for a document and
   `useSoupAstItemsQuery` (backed by `createSoupLiveQuery`) for Soup lists; see
   [choosing a reactive read](docs/graphql-normalized-cache-plan.md#choosing-a-reactive-read).
@@ -963,7 +976,7 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 
 - Reuse `CreateMenuItem` for explanatory New menu entries: original icons, a title, and muted wrapping descriptions, preserving the existing `ViewCreateButton` trigger and each action's feature gates.
 - Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus. Mobile toasts dismiss by swiping left or right and have no corner close button. Phone prompts stay in their own stack under the modal layer, never on `z-toast-region`, and never hide with a document-wide `:has()` (#8840).
-- Notification sounds are off by default and saved per user per device; map each new notification event in `features/notification-sounds/core/categories.ts` and keep system alerts silent when Macro plays its own sound. See the [notification sounds walkthrough](../../docs/agent-guide/notifications.md#notification-sounds).
+- Notification sounds are off by default and saved per user per device; map each new notification event in `features/notification-sounds/core/categories.ts` and keep system alerts silent when Macro plays its own sound. Quiet hours on the same page silence those sounds and skip desktop alerts on a per-device weekly schedule; incoming calls still ring. See the [notification sounds walkthrough](../../docs/agent-guide/notifications.md#notification-sounds).
 
 ### Inline property values
 
@@ -996,3 +1009,33 @@ and bot personas share one renderer; keep surface sizing in the caller.
 
 - Advertise Mail v5 capsules only for the current browser engine or a verified supported installed native build; OTA bundle version alone cannot establish native capability.
 - Bound native Mail capability discovery to 1.5 seconds and cache the legacy profile on failure or timeout so stalled IPC cannot block GraphQL transport; record the selected profile and bounded outcome in HTTP and WebSocket setup spans without error text.
+
+## Performance
+
+### Tracing
+
+- Instrument loading with the flow API in the `instrumentation` skill; read the
+  traces with the [observability guide](../../docs/agent-guide/observability.md#web-performance-traces).
+  Tracing observes readiness; never drive app behavior from trace callbacks.
+- Keep document load, snapshot and editor phases under the routed view flow and
+  pass its span explicitly to sync/AI clients; never store spans by document id
+  or end caller-owned spans in collaboration code. Acquire agent sessions in the
+  active view span.
+- Put flows at the shared owner so every host inherits them: Soup status in
+  `SoupViewListContent`; channel tabs in `ChannelTabProvider`, with each host's
+  `channel.*.view` inside the panel's Suspense and the routed detail observing
+  `detail.view().status` as `channel.detail`; form tabs and panels in
+  `FormPageView` (keep its builder/layout session alive across tabs); form
+  responding (`view.form-respond`, `form.submit`) keyed on form and preview
+  mode; CRM detail in the shared company/contact views keyed by record and
+  section; Command-K input through `beginInteraction` and a query-keyed results
+  flow with debounce/source `usePending` phases, no manual per-input signals
+  (the universal-input browser suite checks the exported traces).
+- Cancel the form-submit measurement on teardown but let its in-flight save
+  finish; late completion must not scroll or measure another view.
+- Runtime resource samples and typing bursts use the `perf` class decision
+  (`Telemetry.config.sampled('perf')`) and the shared UI-operation observer: no
+  second observer, no per-key frame sampling, no listeners for unsampled users. Typing surfaces come from
+  static `data-input-surface` categories on editor/field owners, never caller
+  labels.
+- Keep record names, addresses, answers and query text out of attributes.
