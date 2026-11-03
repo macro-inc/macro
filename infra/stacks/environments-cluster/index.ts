@@ -116,13 +116,16 @@ const developerAccess = new aws.eks.AccessEntry(`${name}-developer-${stack}`, {
   principalArn: developerRole.arn,
   type: 'STANDARD',
 });
-new aws.eks.AccessPolicyAssociation(`${name}-developer-admin-${stack}`, {
-  clusterName: cluster.name,
-  principalArn: developerAccess.principalArn,
-  policyArn:
-    'arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy',
-  accessScope: { type: 'cluster' },
-});
+const developerAdmin = new aws.eks.AccessPolicyAssociation(
+  `${name}-developer-admin-${stack}`,
+  {
+    clusterName: cluster.name,
+    principalArn: developerAccess.principalArn,
+    policyArn:
+      'arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy',
+    accessScope: { type: 'cluster' },
+  }
+);
 
 const nodes = new aws.eks.NodeGroup(`${name}-nodes-${stack}`, {
   clusterName: cluster.name,
@@ -167,9 +170,18 @@ const ebsCsi = new aws.eks.Addon(
   { dependsOn: [podIdentityAgent] }
 );
 
+// Authenticate as the developer role: this account's EKS rejects tokens minted
+// for IAM users directly, so Pulumi uses the same path developers do.
 const kubeconfig = pulumi
-  .all([cluster.name, cluster.endpoint, cluster.certificateAuthority])
-  .apply(([clusterName, endpoint, ca]) =>
+  .all([
+    cluster.name,
+    cluster.endpoint,
+    cluster.certificateAuthority,
+    developerRole.arn,
+    // The role must be authorized before the provider uses it.
+    developerAdmin.id,
+  ])
+  .apply(([clusterName, endpoint, ca, roleArn]) =>
     JSON.stringify({
       apiVersion: 'v1',
       kind: 'Config',
@@ -197,6 +209,8 @@ const kubeconfig = pulumi
                 clusterName,
                 '--region',
                 aws.config.region ?? 'us-east-1',
+                '--role-arn',
+                roleArn,
               ],
             },
           },
