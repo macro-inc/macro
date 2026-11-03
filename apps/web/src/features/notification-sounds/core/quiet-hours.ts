@@ -22,32 +22,62 @@ export const WEEKDAY_NAMES: Record<Weekday, string> = {
 };
 
 const MINUTES_IN_DAY = 24 * 60;
+const DEFAULT_START_MINUTES = 22 * 60;
+const DEFAULT_END_MINUTES = 8 * 60;
 
 /**
- * When notification sounds and desktop alerts stay quiet.
- * Saved with the other sound settings, per person and per device.
+ * How one calendar day treats sounds and desktop alerts.
+ * `off` never quiets that day. `all-day` quiets the whole day.
+ * `hours` uses this day's own clock window.
  */
-export type QuietHours = {
-  enabled: boolean;
+export type DayQuietMode = 'off' | 'hours' | 'all-day';
+
+export type DayQuietHours = {
+  mode: DayQuietMode;
   /** Minutes from midnight, 0–1439. A later start runs through midnight. */
   startMinutes: number;
   /** Minutes from midnight, 0–1439. The window ends at this minute. */
   endMinutes: number;
-  /**
-   * Calendar days, in the schedule's time zone, that use the clock window.
-   * Tuesday morning is quiet only when Tuesday is selected.
-   */
-  days: readonly Weekday[];
+};
+
+/**
+ * When notification sounds and desktop alerts stay quiet.
+ * Saved with the other sound settings, per person and per device.
+ * Each weekday has its own window, so a weekend day can differ or be off.
+ */
+export type QuietHours = {
+  enabled: boolean;
+  days: Record<Weekday, DayQuietHours>;
   /** IANA zone. Empty means the device zone at the moment of evaluation. */
   timeZone: string;
 };
 
+function week(
+  make: (day: Weekday) => DayQuietHours
+): Record<Weekday, DayQuietHours> {
+  return {
+    mon: make('mon'),
+    tue: make('tue'),
+    wed: make('wed'),
+    thu: make('thu'),
+    fri: make('fri'),
+    sat: make('sat'),
+    sun: make('sun'),
+  };
+}
+
+function dayWindow(
+  mode: DayQuietMode,
+  startMinutes = DEFAULT_START_MINUTES,
+  endMinutes = DEFAULT_END_MINUTES
+): DayQuietHours {
+  return { mode, startMinutes, endMinutes };
+}
+
 /** Off until turned on, then every day from 10:00 PM to 8:00 AM. */
 export const DEFAULT_QUIET_HOURS: QuietHours = {
   enabled: false,
-  startMinutes: 22 * 60,
-  endMinutes: 8 * 60,
-  days: WEEKDAYS,
+  days: week(() => dayWindow('hours')),
   timeZone: '',
 };
 
@@ -83,6 +113,16 @@ function isTimeZone(zone: string): boolean {
   }
 }
 
+function isWeekday(value: unknown): value is Weekday {
+  return (
+    typeof value === 'string' && (WEEKDAYS as readonly string[]).includes(value)
+  );
+}
+
+function isDayMode(value: unknown): value is DayQuietMode {
+  return value === 'off' || value === 'hours' || value === 'all-day';
+}
+
 /** The device's IANA time zone, or UTC when the runtime cannot name one. */
 export function deviceTimeZone(): string {
   try {
@@ -93,24 +133,53 @@ export function deviceTimeZone(): string {
   }
 }
 
-/** Reads a saved schedule, keeping each valid field and defaulting the rest. */
+function parseDay(raw: unknown, fallback: DayQuietHours): DayQuietHours {
+  if (!raw || typeof raw !== 'object') return fallback;
+  const value = raw as Record<string, unknown>;
+  return {
+    mode: isDayMode(value.mode) ? value.mode : fallback.mode,
+    startMinutes: clockMinutes(value.startMinutes, fallback.startMinutes),
+    endMinutes: clockMinutes(value.endMinutes, fallback.endMinutes),
+  };
+}
+
+/**
+ * Reads a saved schedule. A `days` object is one window per weekday.
+ * A `days` array is the first release's shared window: listed days use it,
+ * and every other day is off but keeps those times.
+ */
 export function parseQuietHours(raw: unknown): QuietHours {
   if (!raw || typeof raw !== 'object') return DEFAULT_QUIET_HOURS;
   const value = raw as Record<string, unknown>;
-  const storedDays = value.days;
-  const days = Array.isArray(storedDays)
-    ? WEEKDAYS.filter((day) => storedDays.includes(day))
-    : DEFAULT_QUIET_HOURS.days;
   const timeZone = typeof value.timeZone === 'string' ? value.timeZone : '';
-  return {
+  const schedule: QuietHours = {
     enabled: value.enabled === true,
-    startMinutes: clockMinutes(
-      value.startMinutes,
-      DEFAULT_QUIET_HOURS.startMinutes
-    ),
-    endMinutes: clockMinutes(value.endMinutes, DEFAULT_QUIET_HOURS.endMinutes),
-    days,
+    days: DEFAULT_QUIET_HOURS.days,
     timeZone: timeZone && isTimeZone(timeZone) ? timeZone : '',
+  };
+
+  if (
+    value.days &&
+    typeof value.days === 'object' &&
+    !Array.isArray(value.days)
+  ) {
+    const stored = value.days as Record<string, unknown>;
+    return {
+      ...schedule,
+      days: week((day) => parseDay(stored[day], DEFAULT_QUIET_HOURS.days[day])),
+    };
+  }
+
+  const startMinutes = clockMinutes(value.startMinutes, DEFAULT_START_MINUTES);
+  const endMinutes = clockMinutes(value.endMinutes, DEFAULT_END_MINUTES);
+  const selected = Array.isArray(value.days)
+    ? new Set(value.days.filter(isWeekday))
+    : new Set<Weekday>(WEEKDAYS);
+  return {
+    ...schedule,
+    days: week((day) =>
+      dayWindow(selected.has(day) ? 'hours' : 'off', startMinutes, endMinutes)
+    ),
   };
 }
 
@@ -142,19 +211,31 @@ function zonedClock(
   }
 }
 
-/** Whether `now` falls inside the schedule. An equal start and end covers nothing. */
-export function isWithinQuietHours(quietHours: QuietHours, now: Date): boolean {
-  if (!quietHours.enabled || quietHours.days.length === 0) return false;
-  if (quietHours.startMinutes === quietHours.endMinutes) return false;
-  const clock = zonedClock(now, quietHours.timeZone);
-  if (!clock || !quietHours.days.includes(clock.weekday)) return false;
-  const { minutes } = clock;
-  if (quietHours.startMinutes < quietHours.endMinutes) {
-    return (
-      minutes >= quietHours.startMinutes && minutes < quietHours.endMinutes
-    );
+function minutesInsideWindow(
+  minutes: number,
+  startMinutes: number,
+  endMinutes: number
+): boolean {
+  if (startMinutes === endMinutes) return false;
+  if (startMinutes < endMinutes) {
+    return minutes >= startMinutes && minutes < endMinutes;
   }
-  return minutes >= quietHours.startMinutes || minutes < quietHours.endMinutes;
+  return minutes >= startMinutes || minutes < endMinutes;
+}
+
+/**
+ * Whether `now` falls inside that calendar day's window.
+ * Tuesday morning follows Tuesday's hours, not Monday's overnight end.
+ * An equal start and end covers nothing. `all-day` covers the whole day.
+ */
+export function isWithinQuietHours(quietHours: QuietHours, now: Date): boolean {
+  if (!quietHours.enabled) return false;
+  const clock = zonedClock(now, quietHours.timeZone);
+  if (!clock) return false;
+  const day = quietHours.days[clock.weekday];
+  if (day.mode === 'off') return false;
+  if (day.mode === 'all-day') return true;
+  return minutesInsideWindow(clock.minutes, day.startMinutes, day.endMinutes);
 }
 
 /**
