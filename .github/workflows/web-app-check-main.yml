@@ -18,6 +18,7 @@ jobs:
       codegen_changed: ${{ steps.filter.outputs.codegen_changed }}
       i18n_changed: ${{ steps.filter.outputs.i18n_changed }}
       database_grid_changed: ${{ steps.filter.outputs.database_grid_changed }}
+      calendar_details_changed: ${{ steps.filter.outputs.calendar_details_changed }}
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -72,6 +73,10 @@ jobs:
             - 'apps/web/src/features/settings/**'
           database_grid_changed:
             - 'apps/web/src/features/database/**'
+          calendar_details_changed:
+            - 'apps/web/src/features/calendar-view/**'
+            - 'apps/web/src/features/calendar/**'
+            - 'apps/web/src/lib/queries/calendar/**'
   android-native-check:
     name: Android Native Check
     runs-on: namespace-profile-linux-tiny-no-cache
@@ -430,6 +435,12 @@ jobs:
       run: |-
         bunx playwright install-deps chromium
         just test-database-browser
+      working-directory: apps/web
+    - name: Calendar Event Details Browser Tests
+      if: needs.path-check.outputs.calendar_details_changed == 'true'
+      run: |-
+        bunx playwright install-deps chromium
+        just test-calendar-details-browser
       working-directory: apps/web
     - name: Teardown Nix
       if: always()

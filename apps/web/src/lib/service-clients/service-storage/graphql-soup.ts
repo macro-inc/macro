@@ -2136,9 +2136,9 @@ export function mapGraphqlSoupItem(
           data: {
             id: entity.id,
             teamId: entity.contactTeamId,
-            companyId: entity.companyId,
-            companyName: entity.companyName,
-            email: entity.email,
+            companyId: entity.contactCompanyId,
+            companyName: entity.contactCompanyName,
+            email: entity.contactEmail,
             name: entity.crmContactName,
             hidden: entity.hidden,
             firstInteraction: entity.firstInteraction,

@@ -2675,15 +2675,15 @@ export const CreateConfirmedCalendarEvent = z.object({
 });
 
 export const CreateContact = z.object({
-  companyId: z.string().uuid(),
+  companyId: z.union([z.string().uuid(), z.null()]).optional(),
   name: z.string(),
-  email: z.string(),
+  email: z.union([z.string(), z.null()]).optional(),
 });
 
 export const CreateContactResponse = z.object({
   contactId: z.string().uuid(),
-  companyId: z.string().uuid(),
-  email: z.string(),
+  companyId: z.union([z.string().uuid(), z.null()]).optional(),
+  email: z.union([z.string(), z.null()]).optional(),
   name: z.union([z.string(), z.null()]).optional(),
 });
 
@@ -9234,7 +9234,7 @@ export const GetCompanyResponse = z.object({
   contacts: z.array(
     z.object({
       id: z.string().uuid(),
-      email: z.string(),
+      email: z.union([z.string(), z.null()]).optional(),
       name: z.union([z.string(), z.null()]).optional(),
       lastInteraction: z.string().datetime({ offset: true }),
     })

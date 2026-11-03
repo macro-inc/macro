@@ -172,6 +172,18 @@ always the user's. Each row names the item with a chip that opens it; edit and
 sharing rows expand to show the new text or settings. Verify with throwaway
 items, since these mutate real data.
 
+### Requesting access the user lacks
+
+A write the user can only view fails in code mode with `MacroForbiddenError`
+(a 403). The agent should say the user can only view the item and offer to
+ask its owner for edit access; only after the user agrees does it call
+`<item>.access.request('edit')`. The owner gets the same request the Share
+menu sends, from the user, and **Share → Permission requests** shows it. The
+agent reports the request as pending and who reviews it, and retries the write
+only after `<item>.access.state()` shows edit access. To verify, have a
+view-only user ask an agent to add a task to a project they can only view,
+agree to the request, grant it as the owner, then ask the agent to retry.
+
 ## Phones with new agents enabled
 
 With `enable-chat-v3-agents`, **Agents** opens the new conversation list on phones,
@@ -338,6 +350,12 @@ pull request. **Open session** opens the coding conversation in another split so
 you can follow up there. Reloading the chat restores the same session card.
 Failed dispatches do not show a successful session card. If no coding agents are
 available, configure one in Agents before retrying.
+
+Code-mode sessions do not get these two tools. They do the coding work themselves
+first and, when asked to hand a task off, run `ExecuteCode`: pick one of your own
+agents from `macro.agents.list()` and start it with
+`macro.agentSessions.createManaged({ agent, prompt, repoUrl })`, omitting `agent`
+for the default persona. Built-in personas cannot be chosen by id there yet.
 
 Ask a chat agent what your coding agents need from you and it calls
 `ListAgentUpdates`: your non-archived coding sessions waiting on a permission,

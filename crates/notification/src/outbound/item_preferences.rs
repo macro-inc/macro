@@ -69,6 +69,49 @@ impl ItemNotificationPreferenceRepository for PgItemNotificationPreferenceReposi
         Ok(())
     }
 
+    async fn set_bulk(
+        &self,
+        user: MacroUserIdStr<'_>,
+        entities: &[Entity<'_>],
+        until: Option<DateTime<Utc>>,
+    ) -> Result<(), Report> {
+        let ids: Vec<String> = entities
+            .iter()
+            .map(|entity| entity.entity_id.to_string())
+            .collect();
+        let types: Vec<String> = entities
+            .iter()
+            .map(|entity| entity.entity_type.to_string())
+            .collect();
+
+        sqlx::query!(
+            r#"INSERT INTO user_notification_item_unsubscribe (user_id, item_id, item_type, snoozed_until)
+               SELECT $1, item_id, item_type, $4
+               FROM UNNEST($2::text[], $3::text[]) AS items(item_id, item_type)
+               ON CONFLICT (user_id, item_id) DO UPDATE
+               SET item_type = EXCLUDED.item_type, snoozed_until = EXCLUDED.snoozed_until"#,
+            user.as_ref(), &ids, &types, until
+        ).execute(&self.0).await?;
+        Ok(())
+    }
+
+    async fn remove_bulk(
+        &self,
+        user: MacroUserIdStr<'_>,
+        entities: &[Entity<'_>],
+    ) -> Result<(), Report> {
+        let ids: Vec<String> = entities
+            .iter()
+            .map(|entity| entity.entity_id.to_string())
+            .collect();
+
+        sqlx::query!(
+            "DELETE FROM user_notification_item_unsubscribe WHERE user_id = $1 AND item_id = ANY($2::text[])",
+            user.as_ref(), &ids
+        ).execute(&self.0).await?;
+        Ok(())
+    }
+
     async fn remove(&self, user: MacroUserIdStr<'_>, entity: Entity<'_>) -> Result<(), Report> {
         sqlx::query!(
             "DELETE FROM user_notification_item_unsubscribe WHERE user_id = $1 AND item_id = $2",
