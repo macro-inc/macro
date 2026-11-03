@@ -11808,6 +11808,23 @@ export const undoDatabaseChangeResponse = zod
   .describe('What undoing a change did.');
 
 /**
+ * @summary Copy a database, with its tables, columns, views and rows, into a new one
+the caller owns. Its sharing, forms, webhooks and history stay behind.
+ */
+export const duplicateDatabaseParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const duplicateDatabaseBody = zod
+  .object({
+    name: zod
+      .string()
+      .nullish()
+      .describe('The copy\'s name; left out, \"<name> copy\".'),
+  })
+  .describe('Request body for duplicating a database.');
+
+/**
  * @summary Import a new table and every row atomically; retries carry the same request ID.
  */
 export const importDatabaseTableParams = zod.object({

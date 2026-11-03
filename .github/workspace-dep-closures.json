@@ -12203,6 +12203,7 @@
       "crates/macro_authorization",
       "crates/macro_env",
       "crates/macro_env_var",
+      "crates/macro_tower_layers",
       "crates/macro_user_id",
       "crates/model-error-response",
       "crates/model_user",

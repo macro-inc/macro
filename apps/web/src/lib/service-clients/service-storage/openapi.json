@@ -7875,6 +7875,96 @@
         }
       }
     },
+    "/databases/{id}/duplicate": {
+      "post": {
+        "tags": ["databases"],
+        "summary": "Copy a database, with its tables, columns, views and rows, into a new one\nthe caller owns. Its sharing, forms, webhooks and history stay behind.",
+        "operationId": "duplicate_database",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DuplicateDatabaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Database"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/databases/{id}/import": {
       "post": {
         "tags": ["databases"],
@@ -28796,6 +28886,16 @@
           "share_permission_updated": {
             "type": "boolean",
             "description": "Whether share permissions were updated."
+          }
+        }
+      },
+      "DuplicateDatabaseRequest": {
+        "type": "object",
+        "description": "Request body for duplicating a database.",
+        "properties": {
+          "name": {
+            "type": ["string", "null"],
+            "description": "The copy's name; left out, \"<name> copy\"."
           }
         }
       },
