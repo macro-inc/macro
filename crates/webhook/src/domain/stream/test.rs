@@ -534,3 +534,66 @@ async fn agent_session_events_fall_back_to_access_level() {
     assert_eq!(delivered[0].entity_id, SESSION_ID);
     assert_eq!(*access_level_calls.lock().unwrap(), 1);
 }
+
+fn people_candidate(event_name: &str, people: &[&str]) -> StreamCandidateEvent {
+    let mut candidate = document_candidate(event_name, "bot_test");
+    candidate.audience = StreamAudience::People(
+        people
+            .iter()
+            .map(|person| MacroUserIdStr::try_from(person.to_string()).expect("valid user id"))
+            .collect(),
+    );
+    candidate
+}
+
+/// A session a teammate asks for reaches the team's runtime, whose stream is
+/// team-scoped under another member's identity.
+#[tokio::test]
+async fn team_scope_receives_events_addressed_to_a_teammate() {
+    let (service, sender) = service(FakeAccessService::allowing(&[]));
+
+    let stream = service
+        .open_stream(
+            subscriber(),
+            WebhookScope::Team,
+            filter(&["agent_trigger.new"]),
+        )
+        .await
+        .expect("stream opens");
+    sender
+        .send(people_candidate(
+            "agent_trigger.new",
+            &["macro|teammate@example.com"],
+        ))
+        .unwrap();
+
+    let delivered: Vec<NormalizedWebhookEvent> = stream.take(1).collect().await;
+    assert_eq!(delivered.len(), 1);
+}
+
+/// A user-scoped stream only receives events addressed to its own user.
+#[tokio::test]
+async fn user_scope_receives_only_events_addressed_to_itself() {
+    let (service, sender) = service(FakeAccessService::allowing(&[]));
+
+    let stream = service
+        .open_stream(
+            subscriber(),
+            WebhookScope::User,
+            filter(&["agent_trigger.new", "agent_trigger.existing"]),
+        )
+        .await
+        .expect("stream opens");
+    sender
+        .send(people_candidate(
+            "agent_trigger.new",
+            &["macro|teammate@example.com"],
+        ))
+        .unwrap();
+    sender
+        .send(people_candidate("agent_trigger.existing", &[SUBSCRIBER_ID]))
+        .unwrap();
+
+    let delivered: Vec<NormalizedWebhookEvent> = stream.take(1).collect().await;
+    assert_eq!(delivered[0].event_name, "agent_trigger.existing");
+}

@@ -80,16 +80,9 @@ pub(crate) fn agent_trigger_stream_candidate(
             entity_id,
             entity_type,
         },
-        // Named people subscribe from their own workspaces, as a departed
-        // session's owner does.
-        TriggerAudience::People(people) => StreamAudience::Any(
-            people
-                .into_iter()
-                .map(|person| StreamAudience::Workspace {
-                    workspace_id: person.to_string(),
-                })
-                .collect(),
-        ),
+        // Named people subscribe from their own workspace or their team's:
+        // a team runtime serves the sessions its members ask for.
+        TriggerAudience::People(people) => StreamAudience::People(people),
     };
     Ok(StreamCandidateEvent {
         audience,
