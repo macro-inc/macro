@@ -56,16 +56,16 @@ export function mergeCommandPeople<T extends CommandMenuItem>(
   viewerId: string | undefined
 ): (T | EntityItem)[] {
   // Typed search can find DMs outside the bounded recent list.
-  const conversations = directMessagesByUser(
-    [...directMessages, ...items],
-    viewerId
-  );
+  const searchedConversations = directMessagesByUser(items, viewerId);
+  const recentConversations = directMessagesByUser(directMessages, viewerId);
   const merged = new Map<string, T | EntityItem>();
   for (const item of items) {
     if (item.kind === 'user' && item.id === viewerId) continue;
     const conversation =
       item.kind === 'user'
-        ? (item.commandTarget ?? conversations.get(item.id))
+        ? (searchedConversations.get(item.id) ??
+          item.commandTarget ??
+          recentConversations.get(item.id))
         : undefined;
     const resolved = conversation
       ? {

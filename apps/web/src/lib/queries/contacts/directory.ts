@@ -32,6 +32,13 @@ export { ContactDirectoryScopeError } from './cache-scope';
 const CONTACT_SELECTION = selectRecords(ContactDirectoryFieldsFragmentDoc);
 export const CONTACT_WINDOW_SIZE = 50;
 
+/** A later local hydration/context hint may make this read available. */
+export class ContactDirectoryOfflineError extends Error {
+  constructor() {
+    super('Contacts are unavailable offline');
+  }
+}
+
 /** Cursors retain their source, account and query; cache cursors also require
  * the same durable generation. A source switch must start at the beginning. */
 export type ContactDirectoryCursor = { userId: string; query: string } & (
@@ -280,7 +287,7 @@ export async function readContactDirectory(
       result = { ...local, offline: !online };
     } else {
       try {
-        if (!online) throw new Error('Contacts are unavailable offline');
+        if (!online) throw new ContactDirectoryOfflineError();
         const page = await fetchPage(
           {
             limit,

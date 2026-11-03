@@ -23,6 +23,7 @@ import {
 import {
   type ContactDirectoryCursor,
   type ContactDirectoryHost,
+  ContactDirectoryOfflineError,
   type ContactDirectoryRequest,
   ContactDirectoryScopeError,
   type ContactPeoplePolicy,
@@ -87,48 +88,59 @@ export function createContactDirectoryWindow(
   const [ownSearch, setSearch] = createSignal('');
   const search = options.search ?? ownSearch;
   const debouncedSearch = debouncedDependent(search, 200);
-  const [cursor, setCursor] = createSignal<ContactDirectoryCursor>();
-  const [fresh, setFresh] = createSignal(false);
+  const input = createMemo(
+    () => {
+      const value = options.policy?.();
+      if (value && value.excluded.length > MAX_PEOPLE_BATCH)
+        throw new Error('Invalid contact policy exclusions');
+      const policy = value
+        ? {
+            mode: value.mode,
+            excluded: [...value.excluded],
+            senderDomain: value.senderDomain,
+          }
+        : undefined;
+      return { query: search(), policy, policyKey: hashKey([policy]) };
+    },
+    undefined,
+    {
+      equals: (previous, next) =>
+        previous.query === next.query && previous.policyKey === next.policyKey,
+    }
+  );
+  const [cursor, setCursor] = createSignal<{
+    input: ReturnType<typeof input>;
+    value: ContactDirectoryCursor;
+  }>();
+  const [fresh, setFresh] = createSignal<ReturnType<typeof input>>();
   const { epoch: generation, invalidate } = createContactQueryEpoch(
     scope,
     () => {
       setCursor(undefined);
-      setFresh(false);
+      setFresh(undefined);
     }
   );
   const request = createMemo<ContactDirectoryRequest>(() => {
     const current = cursor();
     const query = debouncedSearch();
-    const inputPolicy = options.policy?.();
-    if (inputPolicy && inputPolicy.excluded.length > MAX_PEOPLE_BATCH)
-      throw new Error('Invalid contact policy exclusions');
-    const policy = inputPolicy
-      ? {
-          mode: inputPolicy.mode,
-          excluded: [...inputPolicy.excluded],
-          senderDomain: inputPolicy.senderDomain,
-        }
-      : undefined;
-    const policyMatches =
-      current?.source === 'cache'
-        ? !policy
-        : current?.policyKey === (policy ? hashKey([policy]) : undefined);
+    const selection = input();
+    const policy = selection.policy;
     return {
       query,
       cursor:
-        current?.query === query &&
-        current.userId === scope().userId &&
-        policyMatches
-          ? current
+        current?.input === selection &&
+        current.value.query === query &&
+        current.value.userId === scope().userId
+          ? current.value
           : undefined,
-      fresh: fresh(),
+      fresh: fresh() === selection,
       ...(policy ? { policy } : {}),
     };
   });
   const query = useQuery(() =>
     contactWindowOptions(
       owner,
-      enabled() ? scope().userId : undefined,
+      enabled() && search() === debouncedSearch() ? scope().userId : undefined,
       scope().host,
       generation(),
       request(),
@@ -163,7 +175,14 @@ export function createContactDirectoryWindow(
         () => {
           // Do not re-fetch the network for every background hydration page. A
           // server continuation stays on its original source until Restart.
-          if (untrack(data)?.source === 'cache')
+          if (!enabled()) return;
+          const page = untrack(data);
+          if (
+            page?.source === 'cache' ||
+            (!page &&
+              untrack(() => query.error) instanceof
+                ContactDirectoryOfflineError)
+          )
             return query.refetch({ cancelRefetch: false });
         },
         { searchBuckets: () => ['person'] }
@@ -177,7 +196,7 @@ export function createContactDirectoryWindow(
         if (
           error instanceof ContactDirectoryScopeError &&
           options.policy &&
-          untrack(cursor)?.source === 'people'
+          untrack(cursor)?.value.source === 'people'
         ) {
           setCursor(undefined);
           invalidate();
@@ -188,20 +207,23 @@ export function createContactDirectoryWindow(
   const advance = () => {
     const next = data()?.nextCursor;
     if (!next || !enabled()) return false;
-    setFresh(false);
-    // Never retain a previous query-store proxy as the continuation.
-    setCursor(
-      next.source === 'cache'
-        ? { ...next, after: { ...next.after } }
-        : { ...next }
-    );
+    setFresh(undefined);
+    // The input identity changes even when an external query/policy returns to
+    // an earlier value. Never revive its old continuation or retain a proxy.
+    setCursor({
+      input: input(),
+      value:
+        next.source === 'cache'
+          ? { ...next, after: { ...next.after } }
+          : { ...next },
+    });
     return true;
   };
   return {
     search,
     setSearch: (value: string) => {
       setCursor(undefined);
-      setFresh(false);
+      setFresh(undefined);
       setSearch(value);
     },
     data,
@@ -228,7 +250,7 @@ export function createContactDirectoryWindow(
     restart: () =>
       batch(() => {
         setCursor(undefined);
-        setFresh(true);
+        setFresh(input());
         invalidate();
       }),
     retry: () => query.refetch({ cancelRefetch: false }),

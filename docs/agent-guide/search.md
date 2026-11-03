@@ -49,6 +49,12 @@ late resolution must preserve the row's UI identity. Sender/speaker/assignee/cre
 facets search remotely while open and retain selected labels independently.
 Verify off-page selection and Only on desktop and phone. A short/empty window
 may still offer Next; it is not proof that the directory is exhausted.
+Returning to a previously paged query or exclusion policy restarts at its first
+window. An offline picker waiting for local context should recover when that
+context arrives; background hydration must not replace server continuations or
+clear authorization errors. Current-search DM metadata wins over an older stored
+person target. Resolving 500 selected people keeps all 500 and looks up self
+separately when that would otherwise overflow the batch.
 On phones, name-result icons and avatars are scaled to 150% (16px artwork
 becomes 24px), preserving row height and text alignment.
 

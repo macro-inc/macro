@@ -48,27 +48,35 @@ export function usePinnedContactUsers(
   enabled: Accessor<boolean>
 ) {
   const scope = useContactDirectoryScope();
+  const input = createMemo(() => {
+    const values: string[] = [];
+    for (const id of selected()) {
+      if (!tryMacroId(id)) continue;
+      values.push(id);
+      if (values.length > MAX_CONTACT_LOOKUP) break;
+    }
+    const viewer = scope().userId;
+    const self = viewer && !values.includes(viewer) ? [viewer] : [];
+    if (values.length < MAX_CONTACT_LOOKUP) {
+      values.push(...self);
+      return { values, self: [] };
+    }
+    return { values, self };
+  });
   const resolution = createContactResolution(
     scope,
-    () => {
-      const values: string[] = [];
-      for (const id of selected()) {
-        if (!tryMacroId(id)) continue;
-        values.push(id);
-        if (values.length > MAX_CONTACT_LOOKUP) break;
-      }
-      const viewer = scope().userId;
-      if (
-        viewer &&
-        !values.includes(viewer) &&
-        values.length <= MAX_CONTACT_LOOKUP
-      )
-        values.push(viewer);
-      return { kind: 'ids', values };
-    },
+    () => ({ kind: 'ids', values: input().values }),
     enabled
   );
-  return () => resolution.data()?.users ?? [];
+  const self = createContactResolution(
+    scope,
+    () => ({ kind: 'ids', values: input().self }),
+    enabled
+  );
+  return createMemo(() => [
+    ...(resolution.data()?.users ?? []),
+    ...(self.data()?.users ?? []),
+  ]);
 }
 
 export function useContactDirectoryWindow() {

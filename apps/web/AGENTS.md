@@ -41,7 +41,13 @@ than publishing an empty snapshot. `context-publisher.ts` caps pending IDs and
 write batches at 500, replaces overflowing/uncertain snapshots with a new epoch,
 and never writes directory names or membership. `useContactContextPublisher`
 shares Soup's leader, rollout and generation lifecycle; do not add another leader.
-The bounded directory window accepts external search/policy inputs. Ranked person
+The bounded directory window accepts external search/policy inputs. Bind continuations
+to each input transition, not just equal query strings; returning to an earlier input
+must start at page one. Person hydration wakes an initially unavailable offline
+window, never an authorization error or server continuation. Resolve self separately
+when 500 explicit selections fill the lookup batch. Prefer current-search DM metadata
+over a person's stored command target, then use recent conversations as fallback.
+Ranked person
 cursors require coordinator protocol 14; native menu policy version 3 matches
 final mention-menu scoring and property-picker self/domain boosts before the limit. Older policy replies are not ranked
 native windows. Cursors bind scope/policy/epoch and retain
