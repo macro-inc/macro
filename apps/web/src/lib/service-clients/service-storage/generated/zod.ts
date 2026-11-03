@@ -2653,7 +2653,7 @@ export const getCallRecordResponse = zod
                 "Link to the call in the provider's app, if it has one."
               ),
             provider: zod
-              .enum(['macro', 'granola'])
+              .enum(['macro', 'granola', 'dialpad'])
               .describe(
                 'Supported call and transcript providers. Add variants as integrations grow.'
               ),

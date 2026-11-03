@@ -17,7 +17,7 @@ use crate::domain::models::{
 use crate::domain::records::CallProvider;
 
 /// Imported attendees, shown as guests: they carry provider identity hints
-/// (name, email) but never a Macro account.
+/// (name, email, phone) but never a Macro account.
 pub(super) async fn imported_guests(
     conn: &mut PgConnection,
     call_ids: &[Uuid],
@@ -28,7 +28,7 @@ pub(super) async fn imported_guests(
     }
     for row in sqlx::query!(
         r#"
-        SELECT p.call_id, p.id, p.display_name, p.email,
+        SELECT p.call_id, p.id, p.display_name, p.email, p.phone,
                COALESCE(ce.started_at, ce.created_at) AS "joined_at!",
                ce.ended_at
         FROM call_entity_participants p
@@ -49,6 +49,7 @@ pub(super) async fn imported_guests(
                 display_name: row
                     .display_name
                     .or(row.email)
+                    .or(row.phone)
                     .unwrap_or_else(|| "Participant".into()),
                 joined_at: row.joined_at,
                 left_at: row.ended_at,

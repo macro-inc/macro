@@ -61,6 +61,8 @@ pub enum CallProvider {
     Macro,
     /// A call or transcript imported from Granola.
     Granola,
+    /// A phone call imported from Dialpad.
+    Dialpad,
 }
 
 /// Durable product identity, independent of any room or provider.

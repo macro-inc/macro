@@ -116,3 +116,40 @@ async fn imports_require_a_complete_source_identity(pool: PgPool) {
     call.source.namespace = " ".into();
     assert!(service.ingest(call).await.is_err());
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("import_users"))
+)]
+async fn phone_only_participants_keep_their_number_and_identity(pool: PgPool) {
+    let service = CallImportServiceImpl(
+        PgImportedCallRepository::new(pool.clone()),
+        macro_event_broker::NoopMacroEventBroker,
+    );
+    let caller = |name: &str| CallParticipant {
+        id: macro_uuid::generate_uuid_v7(),
+        user_id: None,
+        display_name: Some(name.into()),
+        email: None,
+        phone: Some("+1555010".into()),
+        external_id: None,
+        attendance: vec![],
+    };
+    let now = Utc::now();
+    let mut call = snapshot("import-a", now);
+    call.participants = vec![caller("Jane")];
+    let id = service.ingest(call).await.unwrap();
+    let first = service.read(&user("import-a"), id).await.unwrap().unwrap();
+    assert_eq!(first.participants[0].phone.as_deref(), Some("+1555010"));
+
+    let mut renamed = snapshot("import-a", now + chrono::Duration::seconds(1));
+    renamed.participants = vec![caller("Jane Doe")];
+    service.ingest(renamed).await.unwrap();
+    let second = service.read(&user("import-a"), id).await.unwrap().unwrap();
+    assert_eq!(second.participants.len(), 1);
+    assert_eq!(second.participants[0].id, first.participants[0].id);
+    assert_eq!(
+        second.participants[0].display_name.as_deref(),
+        Some("Jane Doe")
+    );
+}

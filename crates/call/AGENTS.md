@@ -11,6 +11,9 @@ in-call chat.
 - `src/domain/service.rs` + `src/domain/models.rs`: call lifecycle policy.
 - `src/domain/service/guest_chat.rs`: active guest authorization for the shared
   call discussion; message storage and delivery belong to `messages`.
+- `src/domain/imports.rs`: the provider-neutral import port (Granola, Dialpad).
+  Each import is a full snapshot; re-imports keep participant ids stable by
+  matching email or phone.
 - `src/domain/meetings.rs`: scheduled-meeting ↔ call association (used by
   `calendar_events`/`calendar_scheduling` meeting links).
 - `src/inbound/axum_router.rs`, `src/inbound/stale_call_sweeper.rs`: HTTP routes
