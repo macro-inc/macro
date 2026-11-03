@@ -10,11 +10,11 @@ AI system prompts: one module per prompt section, each exporting a
 ## Start here
 
 - `src/lib.rs`: the module list — one file per topic (`about_macro.rs`,
-  `agent_identity.rs`, `mentions.rs`, `databases.rs`, `crm_pipelines.rs`, ...).
+  `agent_identity.rs`, `mentions.rs`, `email.rs`, ...).
 - `src/types.rs`: `StaticPrompt` and `ComposedPrompt` — the composition
   mechanism every module uses.
-- `src/crm_pipelines.rs`: an example pairing a `.rs` module with a sibling
-  `.md` file for the actual prompt text.
+- `src/user_tools.rs`: an example pairing a `.rs` module with a sibling
+  `.md` file (`user_tools/code_mode.md`) for the actual prompt text.
 
 ## Scope
 

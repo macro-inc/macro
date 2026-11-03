@@ -59,3 +59,13 @@ fn database_prompts_do_not_advertise_removed_schema_tools() {
     assert!(read_only.contains("This host is read-only"));
     assert!(!read_only.contains("SaveDatabaseQuery"));
 }
+
+#[test]
+fn mcp_clients_get_pipeline_guidance_and_the_database_host_does_not() {
+    assert!(mcp_instructions("https://macro.com").contains("How CRM pipelines work"));
+    assert!(
+        !DATABASE_TOOL_USE_PROMPT
+            .to_string()
+            .contains("How CRM pipelines work")
+    );
+}

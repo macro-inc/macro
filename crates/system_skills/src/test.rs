@@ -104,3 +104,20 @@ fn inline_skills_are_the_agent_only_bodies_in_order() {
         .collect();
     assert_eq!(inline(), expected);
 }
+
+#[test]
+fn crm_skill_maps_deal_requests_to_pipelines_without_tool_how_to() {
+    let text = crm::SKILL.render_content();
+    for guidance in [
+        "\"Deal\", \"opportunity\", \"lead\"",
+        "not a Macro database",
+        "company's own properties",
+    ] {
+        assert!(
+            text.contains(guidance),
+            "missing pipeline guidance: {guidance}"
+        );
+    }
+    // How to call the pipeline tools is in their descriptions, not here.
+    assert!(!text.contains("FindPipelineEntries"));
+}

@@ -13,7 +13,6 @@ pub mod citations;
 pub mod code_mode;
 pub mod coding_agents;
 pub mod connected_toolsets;
-pub mod crm_pipelines;
 pub mod databases;
 pub mod deferred_tools;
 pub mod do_not;
@@ -56,7 +55,6 @@ static SESSION_BASE_PROMPT: ComposedPrompt = math::PROMPT
 /// composer-confirmed user tools — those hosts' toolsets execute
 /// `CreateCalendarEvent` directly and have no `SendEmail` at all.
 pub static DIRECT_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
-    .compose(&crm_pipelines::PROMPT)
     .compose(&skills::PROMPT)
     .compose(&document_content_links::PROMPT)
     .compose(&email::PROMPT);
@@ -66,7 +64,6 @@ pub static DIRECT_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
 /// only apply on surfaces that can render the composer card. Composed as its
 /// own chain so the email section stays last.
 pub static TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
-    .compose(&crm_pipelines::PROMPT)
     .compose(&user_tools::BOOKING_PROMPT)
     .compose(&user_tools::PROMPT)
     .compose(&skills::PROMPT)
@@ -78,7 +75,6 @@ pub static TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
 /// reviews those calls in the turn - a review card the user answers while the
 /// agent waits, not a composer left pending after it.
 pub static SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROMPT
-    .compose(&crm_pipelines::PROMPT)
     .compose(&user_tools::BOOKING_PROMPT)
     .compose(&user_tools::SESSION_PROMPT)
     .compose(&skills::PROMPT)
@@ -89,7 +85,6 @@ pub static SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROMPT
 /// the [`code_mode`] section and nonblocking saved reviews.
 pub static CODE_MODE_SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROMPT
     .compose(&code_mode::PROMPT)
-    .compose(&crm_pipelines::PROMPT)
     .compose(&user_tools::BOOKING_PROMPT)
     .compose(&user_tools::CODE_MODE_SESSION_PROMPT)
     .compose(&tasks::PROMPT)
@@ -124,7 +119,7 @@ static MCP_STATIC_INSTRUCTIONS: ComposedPrompt = citations::PROMPT
     .compose(&about_macro::PROMPT)
     .compose(&pull_requests::PROMPT)
     .compose(&system_skills::databases::SKILL)
-    .compose(&crm_pipelines::PROMPT)
+    .compose(&system_skills::crm::SKILL)
     .compose(&document_content_links::PROMPT);
 
 /// Builds the instructions surfaced to external MCP clients via the server

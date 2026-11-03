@@ -35,10 +35,6 @@ const PLANNED: &[(&str, &str)] = &[
         "Use when creating, writing into or editing a document, canvas, spreadsheet, Word document or deck; not databases.",
     ),
     (
-        "CRM",
-        "Use when working with deals, pipelines, stages, companies or contacts; not generic databases.",
-    ),
-    (
         "Routines",
         "Use when something should happen later, on a schedule, or whenever an event occurs, such as every Monday, a reminder, or when an email arrives.",
     ),

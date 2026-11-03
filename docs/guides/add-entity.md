@@ -385,8 +385,8 @@ the skill doesn't cover:
   `with_actor` in `crates/ai_tools/src/tool_context.rs`, or agent writes are
   attributed to the default bot. Add a test in `crates/ai_tools/src/test.rs` that
   the tools resolve on every host; hosts have shipped with tools unwired.
-- Prompt guidance: a section in `crates/prompt/src/` (see `databases`,
-  `crm_pipelines`).
+- Prompt guidance: an agent-only built-in skill in `crates/system_skills/src/`
+  (see `databases`, `crm`), which agents load when a request needs it.
 - Web: a renderer in `apps/web/src/lib/core/component/AI/component/tool/` with
   `handler.tsx`, and wording in `apps/web/src/features/block-agent/state/tool-approval-wording.ts`.
 - Regenerate: `cd apps/web && bun run gen-tools` and

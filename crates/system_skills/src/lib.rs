@@ -21,6 +21,7 @@ use uuid::Uuid;
 
 pub mod catch_me_up;
 pub mod configure_agent;
+pub mod crm;
 pub mod databases;
 pub mod what_i_did_yesterday;
 
@@ -92,6 +93,7 @@ pub static SYSTEM_SKILLS: &[&SystemSkill] = &[
     &what_i_did_yesterday::SKILL,
     &configure_agent::SKILL,
     &databases::SKILL,
+    &crm::SKILL,
 ];
 
 /// Look up a system skill by its well-known id.
