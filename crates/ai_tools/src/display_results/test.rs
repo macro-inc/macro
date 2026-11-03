@@ -48,7 +48,10 @@ fn provider_schema_contains_the_recursive_view_contract_at_the_tool_root() {
         ["md", "timeline", "list", "channelMessage", "container"]
     );
     let children = &variants[4]["properties"]["children"]["items"]["$ref"];
-    assert!(children.is_string(), "a container's children refer back to the widget");
+    assert!(
+        children.is_string(),
+        "a container's children refer back to the widget"
+    );
 }
 
 #[test]
