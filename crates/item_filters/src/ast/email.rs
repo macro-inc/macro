@@ -19,6 +19,44 @@ pub enum Email {
     Domain(String),
 }
 
+/// Text a message subject must contain, compared case-insensitively.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct SubjectQuery(String);
+
+/// A subject query that is blank or longer than [`SubjectQuery::MAX_CHARS`].
+#[derive(Debug, thiserror::Error)]
+#[error("subject filter must be 1 to {max} characters", max = SubjectQuery::MAX_CHARS)]
+pub struct InvalidSubjectQuery;
+
+impl SubjectQuery {
+    /// Longest accepted query, in characters, after trimming.
+    pub const MAX_CHARS: usize = 200;
+
+    /// The trimmed query text.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl TryFrom<String> for SubjectQuery {
+    type Error = InvalidSubjectQuery;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let trimmed = value.trim();
+        if trimmed.is_empty() || trimmed.chars().count() > Self::MAX_CHARS {
+            return Err(InvalidSubjectQuery);
+        }
+        Ok(Self(trimmed.to_owned()))
+    }
+}
+
+impl From<SubjectQuery> for String {
+    fn from(value: SubjectQuery) -> Self {
+        value.0
+    }
+}
+
 /// Returns true if `s` looks like a bare domain: no `@`, at least two
 /// dot-separated segments, each made of alphanumeric or `-` characters.
 fn looks_like_domain(s: &str) -> bool {
@@ -45,6 +83,8 @@ pub enum EmailLiteral {
     Bcc(Email),
     /// The recipient field of the email
     Recipient(Email),
+    /// A message whose subject contains this text, ignoring case.
+    Subject(SubjectQuery),
     /// This value filters by email thread ID
     ThreadId(Uuid),
     /// Restrict to a specific inbox (email_links.id, which is also

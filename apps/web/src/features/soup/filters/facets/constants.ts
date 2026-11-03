@@ -113,6 +113,25 @@ export const FILTER_TARGETS = {
       backend: 'Bcc',
       formatValue: (value) => ({ Complete: value }),
     },
+    // Exact domain of the address, e.g. `acme.com` (not `mail.acme.com`).
+    emailSenderDomain: {
+      backend: 'Sender',
+      formatValue: (value) => ({ Domain: value }),
+    },
+    emailRecipientDomain: {
+      backend: 'Recipient',
+      formatValue: (value) => ({ Domain: value }),
+    },
+    emailCcDomain: {
+      backend: 'Cc',
+      formatValue: (value) => ({ Domain: value }),
+    },
+    emailBccDomain: {
+      backend: 'Bcc',
+      formatValue: (value) => ({ Domain: value }),
+    },
+    // Case-insensitive substring of any message subject; 1-200 characters.
+    emailSubject: { backend: 'Subject' },
     emailSeen: { backend: 'Read', domain: [true, false] },
     emailDone: {
       backend: 'InboxVisible',
@@ -305,6 +324,11 @@ type FilterTargetsMeta = {
     emailRecipientAddress: string[];
     emailCcAddress: string[];
     emailBccAddress: string[];
+    emailSenderDomain: string[];
+    emailRecipientDomain: string[];
+    emailCcDomain: string[];
+    emailBccDomain: string[];
+    emailSubject: string;
     emailSeen: boolean;
     emailDone: boolean;
     emailImportance: boolean;

@@ -479,6 +479,8 @@ function mapEmailLiteral(literal: unknown): GraphqlEmailLiteralInput {
       return { cc: mapEmailValue(value) };
     case 'Bcc':
       return { bcc: mapEmailValue(value) };
+    case 'Subject':
+      return { subject: mapString(value, 'subject') };
     case 'ThreadId':
       return { threadId: mapString(value, 'threadId') };
     case 'Owner':

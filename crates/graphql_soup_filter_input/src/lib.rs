@@ -31,7 +31,7 @@ use item_filters::{
         database_row::DatabaseRowLiteral,
         date::DateLiteral,
         document::DocumentLiteral,
-        email::{Email, EmailLiteral},
+        email::{Email, EmailLiteral, SubjectQuery},
         foreign_entity::ForeignEntityLiteral,
         github_pull_request::{
             GithubPullRequestLiteral, GithubPullRequestReviewStatus, GithubPullRequestState,
@@ -948,6 +948,8 @@ enum GraphqlEmailLiteral {
     Bcc(GraphqlEmailValue),
     /// The recipient option.
     Recipient(GraphqlEmailValue),
+    /// A message whose subject contains this text, ignoring case (1-200 characters).
+    Subject(String),
     /// The thread id option.
     ThreadId(ID),
     /// The owner option.
@@ -982,6 +984,9 @@ impl IntoFilterExpr<EmailLiteral> for GraphqlEmailLiteral {
             Self::Cc(value) => EmailLiteral::Cc(value.into_ast()?),
             Self::Bcc(value) => EmailLiteral::Bcc(value.into_ast()?),
             Self::Recipient(value) => EmailLiteral::Recipient(value.into_ast()?),
+            Self::Subject(value) => EmailLiteral::Subject(
+                SubjectQuery::try_from(value).map_err(|err| InputError::new(err.to_string()))?,
+            ),
             Self::ThreadId(id) => EmailLiteral::ThreadId(parse_id(id, "threadId")?),
             Self::Owner(id) => EmailLiteral::Owner(parse_id(id, "owner")?),
             Self::ProjectId(id) => EmailLiteral::ProjectId(id),

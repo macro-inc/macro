@@ -4550,6 +4550,10 @@ input GraphqlEmailLiteral @oneOf {
 	"""
 	recipient: GraphqlEmailValue
 	"""
+	A message whose subject contains this text, ignoring case (1-200 characters).
+	"""
+	subject: String
+	"""
 	The thread id option.
 	"""
 	threadId: ID

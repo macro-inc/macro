@@ -434,3 +434,22 @@ fn activity_association_accepts_only_true() {
     );
     assert!(materialize_graphql_filter(json!({"crmAssociation": {"activity": false}})).is_err());
 }
+
+#[test]
+fn email_subject_is_trimmed_and_blank_subjects_are_rejected() {
+    let ast = materialize_graphql_filter(
+        json!({"emailFilter": {"tree": {"literal": {"subject": " FYI "}}}}),
+    )
+    .unwrap();
+    assert!(matches!(
+        ast.email_filter.tree.as_deref(),
+        Some(Expr::Literal(EmailLiteral::Subject(query))) if query.as_str() == "FYI"
+    ));
+
+    assert!(
+        materialize_graphql_filter(
+            json!({"emailFilter": {"tree": {"literal": {"subject": "  "}}}})
+        )
+        .is_err()
+    );
+}

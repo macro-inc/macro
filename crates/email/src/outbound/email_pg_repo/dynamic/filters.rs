@@ -27,12 +27,16 @@ fn date_predicate(col: &str, lit: &DateLiteral) -> SqlFragment {
     SqlFragment::raw(sql)
 }
 
+/// True when the candidate stage must apply the email tree itself. Subject is
+/// message-level but has no address-index pushdown, so the candidate EXISTS
+/// mirrors it; otherwise the candidate LIMIT counts threads the lateral drops.
 pub(super) fn has_thread_literals(ast: &Expr<EmailLiteral>) -> bool {
     ast.collapse_frames(|frame| match frame {
         filter_ast::ExprFrame::And(a, b) | filter_ast::ExprFrame::Or(a, b) => a || b,
         filter_ast::ExprFrame::Not(a) => a,
         filter_ast::ExprFrame::Literal(
-            EmailLiteral::ThreadId(_)
+            EmailLiteral::Subject(_)
+            | EmailLiteral::ThreadId(_)
             | EmailLiteral::Owner(_)
             | EmailLiteral::ProjectId(_)
             | EmailLiteral::CalendarOnly(_)
@@ -199,6 +203,15 @@ fn build_message_literal_predicate(
         }
         EmailLiteral::Cc(email) => build_address_predicate_on_m(AddressKind::Cc, email, resolved),
         EmailLiteral::Bcc(email) => build_address_predicate_on_m(AddressKind::Bcc, email, resolved),
+        EmailLiteral::Subject(query) => {
+            // COALESCE keeps NOT Subject(x) matching messages without a subject.
+            let mut f = SqlFragment::raw("COALESCE(m.subject, '') ILIKE ");
+            f.extend(SqlFragment::bind_string(format!(
+                "%{}%",
+                escape_like_pattern(query.as_str())
+            )));
+            f
+        }
         _ => unreachable!("expected a message-level email literal"),
     }
 }
@@ -262,7 +275,8 @@ fn build_thread_literal_predicate(
         EmailLiteral::Sender(_)
         | EmailLiteral::Cc(_)
         | EmailLiteral::Bcc(_)
-        | EmailLiteral::Recipient(_) => unreachable!("expected a thread-level email literal"),
+        | EmailLiteral::Recipient(_)
+        | EmailLiteral::Subject(_) => unreachable!("expected a thread-level email literal"),
     }
 }
 
@@ -285,7 +299,8 @@ fn build_candidate_pair_predicate(
             EmailLiteral::Sender(_)
             | EmailLiteral::Cc(_)
             | EmailLiteral::Bcc(_)
-            | EmailLiteral::Recipient(_) => build_message_literal_predicate(&literal, resolved),
+            | EmailLiteral::Recipient(_)
+            | EmailLiteral::Subject(_) => build_message_literal_predicate(&literal, resolved),
             _ => build_thread_literal_predicate(&literal, sort_ts_field, "t", "uh"),
         },
     })
@@ -339,7 +354,8 @@ pub(super) fn build_message_email_filter(
             EmailLiteral::Sender(_)
             | EmailLiteral::Cc(_)
             | EmailLiteral::Bcc(_)
-            | EmailLiteral::Recipient(_) => build_message_literal_predicate(&literal, resolved),
+            | EmailLiteral::Recipient(_)
+            | EmailLiteral::Subject(_) => build_message_literal_predicate(&literal, resolved),
             _ => build_correlated_thread_predicate(&literal, sort_ts_field),
         },
     });

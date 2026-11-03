@@ -19,6 +19,7 @@ mod senders;
 mod sending_inbox;
 mod settings;
 mod signal_flag;
+mod subject_filter;
 mod thread;
 mod thread_archive;
 mod thread_labels;
