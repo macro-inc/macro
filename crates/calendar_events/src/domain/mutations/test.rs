@@ -188,6 +188,7 @@ struct FakeRepo {
     visible_calendars: Vec<VisibleCalendar>,
     fail_list_visible: bool,
     fail_owned_inboxes: bool,
+    fail_remove_source: bool,
     /// Guest policies recorded after the provider refused an invite.
     recorded_guest_policies: Arc<Mutex<Vec<(Uuid, GuestPolicy)>>>,
     /// Stored details a guest's update is compared against.
@@ -226,6 +227,7 @@ impl Default for FakeRepo {
             visible_calendars: Vec::new(),
             fail_list_visible: false,
             fail_owned_inboxes: false,
+            fail_remove_source: false,
             recorded_guest_policies: Default::default(),
             event_details: None,
             details_requests: Default::default(),
@@ -618,6 +620,9 @@ impl CalendarRepository for FakeRepo {
         calendar_id: Uuid,
         provider_event_id: &str,
     ) -> Result<Vec<RetiredCalendarEvent>, rootcause::Report> {
+        if self.fail_remove_source {
+            return Err(rootcause::report!("the source could not be removed"));
+        }
         self.removed_sources.lock().unwrap().push((
             account_id,
             calendar_id,
@@ -2911,6 +2916,41 @@ async fn truncation_google_answers_with_a_new_series_retires_the_old_source() {
             .any(|event| event.key == event_id.to_string()
                 && event.payload.get("calendar_event.deleted").is_some()),
         "the old entity's retirement is announced"
+    );
+}
+
+/// The series changed at the provider, so the caller hears that the stale row
+/// is still there, as for any other write that reached the provider.
+#[tokio::test]
+async fn a_replaced_series_whose_old_source_stays_reports_the_failure() {
+    let repo = FakeRepo {
+        mutation_target: Some(mutation_target(false)),
+        fail_remove_source: true,
+        ..FakeRepo::default()
+    };
+    let upserts = repo.upserts.clone();
+    let mut provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    provider.series_replaced_by = Some("replacement-id");
+
+    let result = service(repo, provider, FakeTokens::ok())
+        .delete_event(
+            "macro|user",
+            Uuid::now_v7(),
+            None,
+            CalendarDeletionScope::ThisAndFollowing {
+                recurrence_id: "2026-08-12T09:00:00+00:00".to_string(),
+            },
+        )
+        .await;
+
+    assert!(matches!(
+        result,
+        Err(CalendarMutationError::PersistFailed(_))
+    ));
+    assert_eq!(
+        upserts.lock().unwrap().len(),
+        1,
+        "what is left of the series is stored first"
     );
 }
 

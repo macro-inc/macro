@@ -190,36 +190,44 @@ where
                 // entity stays on the calendar until its tombstone syncs.
                 let replacement = upsert.source.details().provider_event_id.clone();
                 self.persist_echo(target.actor.as_ref(), *upsert).await?;
-                if replacement != target.master_provider_event_id() {
-                    tracing::info!(
-                        event_id = %target.event_id,
-                        provider_event_id = target.master_provider_event_id(),
-                        replacement,
-                        "the provider replaced the series, retiring its old source"
-                    );
-                    self.retire_gone_source(target).await;
+                if replacement == target.master_provider_event_id() {
+                    return Ok(());
                 }
-                Ok(())
+                tracing::info!(
+                    event_id = %target.event_id,
+                    provider_event_id = target.master_provider_event_id(),
+                    replacement,
+                    "the provider replaced the series, retiring its old source"
+                );
+                self.retire_deleted_series(target).await
             }
             // Either the deletion removed the series or it was already
             // gone; retiring the local source converges both.
             ProviderSeriesMutationOutcome::SeriesDeleted | ProviderSeriesMutationOutcome::Gone => {
-                // Retiring a recurring master's source also retires its
-                // expanded instances, so this reports several events; each
-                // announces its own fate.
-                let retired = self
-                    .repository
-                    .remove_provider_source(
-                        target.account_id,
-                        target.calendar_id,
-                        target.master_provider_event_id(),
-                    )
-                    .await
-                    .map_err(|error| CalendarMutationError::PersistFailed(format!("{error:?}")))?;
-                self.announce_retirements(&target.owner_id, target.email_link_id, retired)
-                    .await;
-                Ok(())
+                self.retire_deleted_series(target).await
             }
         }
+    }
+
+    /// Retire the source of a series the provider no longer has under the id
+    /// `target` addresses. Retiring a recurring master's source also retires
+    /// its expanded instances, so this reports several events; each announces
+    /// its own fate.
+    async fn retire_deleted_series(
+        &self,
+        target: &CalendarEventMutationTarget,
+    ) -> Result<(), CalendarMutationError> {
+        let retired = self
+            .repository
+            .remove_provider_source(
+                target.account_id,
+                target.calendar_id,
+                target.master_provider_event_id(),
+            )
+            .await
+            .map_err(|error| CalendarMutationError::PersistFailed(format!("{error:?}")))?;
+        self.announce_retirements(&target.owner_id, target.email_link_id, retired)
+            .await;
+        Ok(())
     }
 }
