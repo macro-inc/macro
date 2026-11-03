@@ -297,7 +297,7 @@ describe('routine steps editor', () => {
       name: 'Rewritten step',
     });
     expect(revise).toHaveBeenCalledWith(before, 'also include overdue tasks');
-    expect(within(review).getByText('and overdue tasks').tagName).toBe('MARK');
+    expect(within(review).getByText('and overdue tasks').tagName).toBe('INS');
     expect(within(review).getByText('Rewritten and checked')).toBeTruthy();
     expect(
       within(review).getByText('Your values stay as they are.')

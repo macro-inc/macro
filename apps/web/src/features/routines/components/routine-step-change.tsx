@@ -208,9 +208,9 @@ function WordChange(props: { part: DiffPart }) {
         <>
           {pieces()[1]}
           {props.part.change === 'added' ? (
-            <mark class="rounded-sm bg-accent-bg px-0.5 font-medium text-accent-ink">
+            <ins class="rounded-sm bg-accent/20 px-0.5 text-ink no-underline">
               {pieces()[2]}
-            </mark>
+            </ins>
           ) : (
             <del class="text-ink-extra-muted">{pieces()[2]}</del>
           )}
