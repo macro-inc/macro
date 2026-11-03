@@ -390,6 +390,7 @@ Bulk restores limit concurrent requests. Failed requests remain retryable, and a
 bulk failure does not undo successful restores. While a restore is pending, switch
 folders and select another row; completing the old restore must preserve the new
 selection. The same applies to selecting different rows in the original folder.
+Restoring an individual row also preserves selections on other rows.
 No permanent-delete action is added.
 
 ### Cached Mail filtering

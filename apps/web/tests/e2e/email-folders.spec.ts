@@ -91,6 +91,25 @@ test('restore controls work in Spam and Trash', async ({
   ]);
 });
 
+test('restoring one row preserves other selected rows', async ({
+  page,
+  isMobile,
+}) => {
+  await mockFolderApi(page);
+  await page.goto('/tests/e2e/fixtures/email-folders.html');
+  const rows = page.getByRole('listitem');
+  await expect(rows).toHaveCount(2);
+  const selection = rows.last().getByRole('checkbox');
+  await selection.click();
+  if (!isMobile) await rows.first().hover();
+  await rows
+    .first()
+    .getByRole('button', { name: 'Not spam', exact: true })
+    .click();
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first().getByRole('checkbox')).toBeChecked();
+});
+
 test('failed restore remains available for retry', async ({
   page,
   isMobile,

@@ -17,7 +17,10 @@ type FolderRestoreOptions = {
 
 /** Restore the captured folder without clearing a newer list selection. */
 export function createEmailFolderRestore(options: FolderRestoreOptions) {
-  return async (threadIds: string[]) => {
+  return async (
+    threadIds: string[],
+    action: { clearSelection?: boolean } = {}
+  ) => {
     const folder = options.tab();
     if (!isExcludedEmailFolder(folder) || options.isPending()) return;
     const selection = options.selection();
@@ -26,7 +29,11 @@ export function createEmailFolderRestore(options: FolderRestoreOptions) {
       if (result.failedIds.length) {
         options.onFailed(result.failedIds.length);
       } else {
-        if (options.selection() === selection) options.clearSelection();
+        if (
+          action.clearSelection !== false &&
+          options.selection() === selection
+        )
+          options.clearSelection();
         options.onRestored();
       }
     } catch {

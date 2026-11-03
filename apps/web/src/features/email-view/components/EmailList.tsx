@@ -430,11 +430,15 @@ export function EmailList(props: EmailListProps) {
     onFailed: (count) =>
       toast.failure(t('entityActions.toastEmailRestoreFailed', { count })),
   });
-  function restoreThreads(entities: EntityData[]) {
+  function restoreThreads(
+    entities: EntityData[],
+    action: { clearSelection?: boolean } = {}
+  ) {
     return restoreFolderThreads(
       entities
         .filter((entity) => entity.type === 'email')
-        .map((entity) => entity.id)
+        .map((entity) => entity.id),
+      action
     );
   }
 
@@ -477,7 +481,9 @@ export function EmailList(props: EmailListProps) {
                 label: restoreLabel(),
                 run: () =>
                   fireAndForget(
-                    restoreThreads([props.row.entity]),
+                    restoreThreads([props.row.entity], {
+                      clearSelection: false,
+                    }),
                     'email-view'
                   ),
               }

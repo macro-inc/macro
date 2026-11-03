@@ -125,7 +125,8 @@ function FolderQueryFixture() {
                       onCommands={() => {}}
                       restore={{
                         label: label(),
-                        run: () => restore([entity.id]),
+                        run: () =>
+                          restore([entity.id], { clearSelection: false }),
                       }}
                     />
                   );

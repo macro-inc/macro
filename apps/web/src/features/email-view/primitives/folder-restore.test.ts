@@ -5,6 +5,23 @@ import type { EmailTab } from '../tabs';
 import { createEmailFolderRestore } from './folder-restore';
 
 describe('folder restore selection lifetime', () => {
+  it('preserves unrelated selections when restoring an individual row', async () => {
+    const selection = new Set(['first', 'second']);
+    const clearSelection = vi.fn(() => selection.clear());
+    const restore = createEmailFolderRestore({
+      tab: () => 'trash',
+      isPending: () => false,
+      selection: () => selection,
+      clearSelection,
+      restore: async () => ({ failedIds: [] }),
+      onRestored: vi.fn(),
+      onFailed: vi.fn(),
+    });
+    await restore(['third'], { clearSelection: false });
+    expect([...selection]).toEqual(['first', 'second']);
+    expect(clearSelection).not.toHaveBeenCalled();
+  });
+
   it.each([
     'new selection',
     'switch folder',
