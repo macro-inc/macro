@@ -602,6 +602,7 @@ fn a_form_sends_its_branding_with_its_facts() {
         id: FORM,
         name: "Site intake".into(),
         description: "".into(),
+        appearance: None,
         owner_id: "macro|owner@macro.com".into(),
         database_id: DATABASE,
         table_id: TABLE,
