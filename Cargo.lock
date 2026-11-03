@@ -15355,6 +15355,7 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "chrono",
+ "connect_client",
  "futures",
  "http 1.4.0",
  "macro_authorization",

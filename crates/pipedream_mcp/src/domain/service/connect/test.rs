@@ -68,6 +68,74 @@ impl ConnectionStore for FakeStore {
 struct FakePipedream {
     accounts: HashMap<String, PipedreamAccount>,
     deleted: Mutex<Vec<String>>,
+    /// Connect apps by the Pipedream slug they replace.
+    connect_apps: HashMap<String, ConnectApp>,
+    /// `(user, app_id)` pairs Connect lists as connected.
+    connect_connections: Mutex<Vec<(String, String)>>,
+    connect_deleted: Mutex<Vec<(String, String)>>,
+}
+
+impl FakePipedream {
+    fn with_connect_app(mut self, app_slug: &str, app_id: &str) -> Self {
+        self.connect_apps.insert(
+            app_slug.to_owned(),
+            ConnectApp {
+                app_id: app_id.to_owned(),
+                app_slug: app_slug.to_owned(),
+                name: "Linear".to_owned(),
+            },
+        );
+        self
+    }
+
+    fn connected_on_connect(self, user_id: &str, app_id: &str) -> Self {
+        self.connect_connections
+            .lock()
+            .unwrap()
+            .push((user_id.to_owned(), app_id.to_owned()));
+        self
+    }
+}
+
+impl MacroConnect for FakePipedream {
+    async fn app_for_slug(&self, app_slug: &str) -> anyhow::Result<Option<ConnectApp>> {
+        Ok(self.connect_apps.get(app_slug).cloned())
+    }
+
+    async fn create_connect_session(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        app: &ConnectApp,
+    ) -> anyhow::Result<String> {
+        Ok(format!(
+            "https://connect.test/v1/connect/{}/{user_id}",
+            app.app_id
+        ))
+    }
+
+    async fn is_connected(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        app_id: &str,
+    ) -> anyhow::Result<bool> {
+        Ok(self
+            .connect_connections
+            .lock()
+            .unwrap()
+            .contains(&(user_id.to_string(), app_id.to_owned())))
+    }
+
+    async fn delete_connection(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        app_id: &str,
+    ) -> anyhow::Result<()> {
+        self.connect_deleted
+            .lock()
+            .unwrap()
+            .push((user_id.to_string(), app_id.to_owned()));
+        Ok(())
+    }
 }
 
 impl PipedreamConnect for FakePipedream {
@@ -243,6 +311,7 @@ async fn reconnecting_keeps_name_and_enabled_state_but_swaps_the_account() {
             server_name: "My Linear".into(),
             account_id: "apn_old".into(),
             enabled: false,
+            provider: ConnectionProvider::Pipedream,
         })
         .await
         .unwrap();
@@ -302,6 +371,7 @@ async fn disconnect_revokes_the_pipedream_account_and_deletes_the_row() {
             server_name: "Linear".into(),
             account_id: "apn_1".into(),
             enabled: true,
+            provider: ConnectionProvider::Pipedream,
         })
         .await
         .unwrap();
@@ -438,6 +508,7 @@ async fn recovery_does_not_report_the_already_stored_account_as_new() {
             server_name: "Linear".into(),
             account_id: "apn_1".into(),
             enabled: true,
+            provider: ConnectionProvider::Pipedream,
         })
         .await
         .unwrap();
@@ -489,4 +560,162 @@ async fn recovering_an_overlaid_app_is_refused_and_its_account_deleted() {
     assert!(matches!(err, PipedreamConnectError::Overlaid { .. }));
     assert_eq!(*pd.deleted.lock().unwrap(), vec!["apn_1".to_owned()]);
     assert!(store.records.lock().unwrap().is_empty(), "nothing stored");
+}
+
+#[tokio::test]
+async fn connect_session_starts_for_an_app_connect_serves() {
+    let pd = FakePipedream::default().with_connect_app("linear", "linear");
+
+    let url = start_connect_session(
+        &NoOverlays,
+        &pd,
+        &user("macro|user-1@example.com"),
+        "linear",
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        url.as_deref(),
+        Some("https://connect.test/v1/connect/linear/macro|user-1@example.com")
+    );
+}
+
+#[tokio::test]
+async fn apps_connect_lacks_overlaid_or_pipedream_only_stay_on_pipedream() {
+    let pd = FakePipedream::default()
+        .with_connect_app("sentry", "sentry")
+        .with_connect_app("granola", "granola");
+    let user = user("macro|user-1@example.com");
+
+    for (overlays, slug) in [(false, "notion"), (true, "sentry"), (false, "granola")] {
+        let url = if overlays {
+            start_connect_session(&SentryOverlay, &pd, &user, slug).await
+        } else {
+            start_connect_session(&NoOverlays, &pd, &user, slug).await
+        };
+        assert_eq!(url.unwrap(), None, "{slug}");
+    }
+}
+
+#[tokio::test]
+async fn completing_through_connect_stores_a_connect_record() {
+    let store = FakeStore::default();
+    let pd = FakePipedream::default()
+        .with_connect_app("airtable_oauth", "airtable")
+        .connected_on_connect("macro|user-1@example.com", "airtable");
+
+    let record = complete_connect_connection(
+        &store,
+        &NoOverlays,
+        &pd,
+        &user("macro|user-1@example.com"),
+        "airtable_oauth",
+        None,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(record.app_slug, "airtable_oauth");
+    assert_eq!(record.account_id, "airtable");
+    assert_eq!(record.provider, ConnectionProvider::Connect);
+    assert!(record.enabled);
+    assert_eq!(
+        store
+            .load(&user("macro|user-1@example.com"), "airtable_oauth")
+            .await
+            .unwrap(),
+        Some(record)
+    );
+}
+
+#[tokio::test]
+async fn completing_through_connect_before_connect_confirms_is_not_found() {
+    let store = FakeStore::default();
+    // Connected for someone else: the caller cannot claim it.
+    let pd = FakePipedream::default()
+        .with_connect_app("linear", "linear")
+        .connected_on_connect("macro|user-2@example.com", "linear");
+
+    let err = complete_connect_connection(
+        &store,
+        &NoOverlays,
+        &pd,
+        &user("macro|user-1@example.com"),
+        "linear",
+        None,
+    )
+    .await
+    .unwrap_err();
+
+    assert!(matches!(err, PipedreamConnectError::NotFound));
+    assert!(store.records.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn completing_through_connect_revokes_the_pipedream_grant_it_replaces() {
+    let store = FakeStore::default();
+    store
+        .save(&PipedreamConnection {
+            user_id: user("macro|user-1@example.com"),
+            app_slug: "linear".into(),
+            server_name: "My Linear".into(),
+            account_id: "apn_1".into(),
+            enabled: false,
+            provider: ConnectionProvider::Pipedream,
+        })
+        .await
+        .unwrap();
+    let pd = FakePipedream::default()
+        .with_connect_app("linear", "linear")
+        .connected_on_connect("macro|user-1@example.com", "linear");
+
+    let record = complete_connect_connection(
+        &store,
+        &NoOverlays,
+        &pd,
+        &user("macro|user-1@example.com"),
+        "linear",
+        None,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(record.server_name, "My Linear");
+    assert!(!record.enabled);
+    assert_eq!(record.provider, ConnectionProvider::Connect);
+    assert_eq!(*pd.deleted.lock().unwrap(), vec!["apn_1".to_owned()]);
+}
+
+#[tokio::test]
+async fn disconnecting_a_connect_app_deletes_it_from_connect() {
+    let store = FakeStore::default();
+    store
+        .save(&PipedreamConnection {
+            user_id: user("macro|user-1@example.com"),
+            app_slug: "airtable_oauth".into(),
+            server_name: "Airtable".into(),
+            account_id: "airtable".into(),
+            enabled: true,
+            provider: ConnectionProvider::Connect,
+        })
+        .await
+        .unwrap();
+    let pd = FakePipedream::default();
+
+    disconnect_mcp_server(
+        &store,
+        &pd,
+        &user("macro|user-1@example.com"),
+        "airtable_oauth",
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        *pd.connect_deleted.lock().unwrap(),
+        vec![("macro|user-1@example.com".to_owned(), "airtable".to_owned())]
+    );
+    assert!(pd.deleted.lock().unwrap().is_empty());
+    assert!(store.records.lock().unwrap().is_empty());
 }

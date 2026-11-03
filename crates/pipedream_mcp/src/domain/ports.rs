@@ -1,6 +1,6 @@
 use super::models::{
-    CatalogEntry, CatalogPage, ConnectToken, ConnectorOverlay, MacroUserIdStr, McpServer,
-    PipedreamAccount, PipedreamConnection,
+    CatalogEntry, CatalogPage, ConnectApp, ConnectToken, ConnectorOverlay, MacroUserIdStr,
+    McpServer, PipedreamAccount, PipedreamConnection,
 };
 
 /// The catalog apps that connect through the native MCP stack instead of
@@ -137,6 +137,40 @@ pub trait PipedreamConnect: Send + Sync + 'static {
     /// Delete a connected account from Pipedream (revoking our copy of the
     /// grant).
     fn delete_account(&self, account_id: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
+}
+
+/// Port for Macro Connect's connect flow: Connect owns the consent flow,
+/// the grant, and refresh, like Pipedream Connect, but Macro owns the OAuth
+/// apps. Apps are addressed by the Pipedream slug they replace.
+pub trait MacroConnect: Send + Sync + 'static {
+    /// The Connect app standing in for `app_slug`, or `None` when Connect
+    /// does not serve it (or is not configured).
+    fn app_for_slug(
+        &self,
+        app_slug: &str,
+    ) -> impl Future<Output = anyhow::Result<Option<ConnectApp>>> + Send;
+
+    /// Start a browser connect session for `user_id` and return the URL to
+    /// open. Connect redirects back to Macro when consent finishes.
+    fn create_connect_session(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        app: &ConnectApp,
+    ) -> impl Future<Output = anyhow::Result<String>> + Send;
+
+    /// Whether `user_id` holds a usable connection to `app_id`.
+    fn is_connected(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        app_id: &str,
+    ) -> impl Future<Output = anyhow::Result<bool>> + Send;
+
+    /// Delete `user_id`'s connection to `app_id` from Connect.
+    fn delete_connection(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        app_id: &str,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
 /// Port for browsing the directory of connectable apps.
