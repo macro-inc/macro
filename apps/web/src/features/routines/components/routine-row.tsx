@@ -8,6 +8,7 @@ import { Slot as EntitySlot } from '@entity/core/Slot';
 import ClockIcon from '@icon/system/regular/clock-clockwise.svg';
 import { cn, InlineCheckbox, Layer, Tooltip } from '@ui';
 import { type JSX, type ParentProps, Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import type { RoutineRow } from '../core/types';
 
 /**
@@ -41,6 +42,17 @@ export function RoutineListRow(props: {
     props.pending ||
     (!props.row.enabled &&
       (props.row.status === 'Running' || props.row.status === 'Completed'));
+  // A run in progress outranks its last outcome; otherwise a failure stays
+  // visible whether the routine is active, paused or done.
+  const failed = () =>
+    props.row.lastRunFailed && props.row.status !== 'Running';
+  const statusTone = () => {
+    if (failed()) return 'failure';
+    return match(props.row.status)
+      .with('Active', 'Running', () => 'accent' as const)
+      .with('Paused', 'Completed', () => 'muted' as const)
+      .exhaustive();
+  };
   const toggleDescription = () => {
     if (props.pending) return 'Saving…';
     if (!props.row.enabled && props.row.status === 'Completed')
@@ -80,21 +92,21 @@ export function RoutineListRow(props: {
           <span
             class={cn(
               'inline-flex items-center gap-1.5',
-              props.row.status === 'Active' || props.row.status === 'Running'
-                ? 'text-accent'
-                : 'text-ink-muted'
+              statusTone() === 'failure' && 'text-failure',
+              statusTone() === 'accent' && 'text-accent',
+              statusTone() === 'muted' && 'text-ink-muted'
             )}
           >
             <span
               aria-hidden="true"
               class={cn(
                 'size-1.5 rounded-full',
-                props.row.status === 'Active' || props.row.status === 'Running'
-                  ? 'bg-accent'
-                  : 'bg-ink-extra-muted'
+                statusTone() === 'failure' && 'bg-failure',
+                statusTone() === 'accent' && 'bg-accent',
+                statusTone() === 'muted' && 'bg-ink-extra-muted'
               )}
             />
-            {props.row.status}
+            {failed() ? 'Failed' : props.row.status}
           </span>
         </EntitySlot>
         <EntitySlot role="cell" class="min-w-0 text-xs text-ink-muted">

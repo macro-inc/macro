@@ -1297,6 +1297,12 @@ export type NotifEvent = {
      */
     content: CalendarEventJoinRequestMetadata;
     tag: 'calendar_event_join_request';
+} | {
+    /**
+     * One of the user's routines finished a run, successfully or not.
+     */
+    content: RoutineRunFinishedMetadata;
+    tag: 'routine_run_finished';
 };
 
 /**
@@ -1497,6 +1503,30 @@ export type RepliedToDocumentCommentThreadMetadata = {
  * Permission level used by an access request, excluding ownership.
  */
 export type RequestedAccessLevel = 'view' | 'comment' | 'edit';
+
+/**
+ * One of the recipient's routines finished a run. Every run notifies,
+ * whether it succeeded or failed.
+ */
+export type RoutineRunFinishedMetadata = {
+    /**
+     * How the run ended.
+     */
+    outcome: RoutineRunOutcome;
+    /**
+     * The routine that ran.
+     */
+    routineId: string;
+    /**
+     * The routine's name when it ran.
+     */
+    routineName: string;
+};
+
+/**
+ * How a routine run ended, as its notification reports it.
+ */
+export type RoutineRunOutcome = 'succeeded' | 'failed';
 
 /**
  * Metadata for when a user is assigned to a task
