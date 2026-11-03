@@ -107,7 +107,11 @@ impl IntoResponse for WebSearchErrorBody {
         (status = 503, description = "Usage validation unavailable", body = WebSearchErrorBody),
     )
 )]
-#[tracing::instrument(skip_all, err)]
+#[tracing::instrument(
+    skip_all,
+    fields(user_id = %user.authorization.user.macro_user_id, result_count = tracing::field::Empty),
+    err
+)]
 pub async fn search_web_handler(
     State(state): State<ApiContext>,
     user: MacroAuthorizationExtractor<DcsAuthorizationService, UserOrInternal>,
@@ -200,6 +204,7 @@ pub async fn search_web_handler(
                 page_age,
             }
         })
-        .collect();
+        .collect::<Vec<_>>();
+    tracing::Span::current().record("result_count", results.len());
     Ok(Json(WebSearchResponse { results }))
 }
