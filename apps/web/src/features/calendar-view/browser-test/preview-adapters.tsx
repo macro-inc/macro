@@ -88,22 +88,28 @@ export function useCalendarJoinRequestsQuery(
     },
   };
 }
+const ANSWER_STATUS = { accept: 'accepted', decline: 'declined' } as const;
+type JoinRequestAnswer = {
+  request: CalendarJoinRequest;
+  decision: keyof typeof ANSWER_STATUS;
+};
+export const isAlreadyAnswered = (
+  answered: CalendarJoinRequest,
+  decision: JoinRequestAnswer['decision']
+) => answered.status !== ANSWER_STATUS[decision];
 export function useRespondToCalendarJoinRequestMutation(callbacks?: {
-  onSuccess?: (answered: CalendarJoinRequest) => void;
+  onSuccess?: (answered: CalendarJoinRequest, args: JoinRequestAnswer) => void;
 }) {
   return {
     isPending: false,
-    mutate: (args: {
-      request: CalendarJoinRequest;
-      decision: 'accept' | 'decline';
-    }) => {
+    mutate: (args: JoinRequestAnswer) => {
       setJoinRequests((current) =>
         current?.filter((request) => request.id !== args.request.id)
       );
-      callbacks?.onSuccess?.({
-        ...args.request,
-        status: args.decision === 'accept' ? 'accepted' : 'declined',
-      });
+      callbacks?.onSuccess?.(
+        { ...args.request, status: ANSWER_STATUS[args.decision] },
+        args
+      );
     },
   };
 }
@@ -160,7 +166,7 @@ export const copyCalendarEventMention = () =>
 export const downloadCalendarEventIcs = () =>
   announce('Download event · Preview only');
 export const openDocument = () => announce('Open document · Preview only');
-export const toast = { success: announce, failure: announce };
+export const toast = { success: announce, alert: announce, failure: announce };
 
 export const createCalendarRsvpController = () => ({
   pending: () => false,
