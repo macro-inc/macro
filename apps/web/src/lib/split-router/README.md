@@ -24,6 +24,16 @@ Preload and middleware errors that the router recovers from still allow commit
 callbacks when navigation commits. Host-leave permission checks cannot confirm
 that the host actually navigates, so their `onCommit` registration is a no-op.
 
+## Parked layouts
+
+`layoutSnapshot` and `restoreLayout` capture and bring back whole layouts.
+To keep a layout's views mounted while another shows, park it instead:
+`openLayout` shows a captured layout (or `layoutFromHref`) in new panes, and
+`showLayout` shows retained panes again; both park the open panes, which leave
+the URL but keep their histories in `retainedPanes`. Nothing leaves, so no
+leave guard runs, unless `closeOpen` removes the open panes. `discardPanes`
+forgets parked panes. URL navigation never reuses a parked pane id.
+
 ## Outlets
 
 An outlet outside a pane renders the first available pane. While no pane exists,

@@ -156,10 +156,6 @@ type ToolParserMap = {
     call: types.DispatchCodingAgent;
     response: types.DispatchedCodingAgent;
   };
-  DisplayResults: {
-    call: types.DisplayResults;
-    response: types.DisplayResultsResponse;
-  };
   DuplicateItem: {
     call: types.DuplicateItem;
     response: types.DuplicateItemResponse;
@@ -717,10 +713,6 @@ const toolParserMap = {
   DispatchCodingAgent: {
     call: schemas.DispatchCodingAgent,
     response: schemas.DispatchedCodingAgent,
-  },
-  DisplayResults: {
-    call: schemas.DisplayResults,
-    response: schemas.DisplayResultsResponse,
   },
   DuplicateItem: {
     call: schemas.DuplicateItem,
@@ -1341,10 +1333,6 @@ type ToolDataMap = {
   DispatchCodingAgent: {
     call: types.DispatchCodingAgent;
     response: types.DispatchedCodingAgent;
-  };
-  DisplayResults: {
-    call: types.DisplayResults;
-    response: types.DisplayResultsResponse;
   };
   DuplicateItem: {
     call: types.DuplicateItem;
