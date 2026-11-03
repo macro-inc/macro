@@ -43,12 +43,10 @@ async fn an_anonymous_response_is_a_receipt_and_an_entry_that_name_nothing_of_ea
     assert_eq!(stored[0].row_id, Some(row.into_uuid()));
     assert_eq!(stored[0].submitted_at, day);
     assert_eq!(stored[0].updated_at, day);
-    let receipts = sqlx::query!(
-        "SELECT form_id, user_id FROM form_submission_receipts",
-    )
-    .fetch_all(&pool)
-    .await
-    .unwrap();
+    let receipts = sqlx::query!("SELECT form_id, user_id FROM form_submission_receipts",)
+        .fetch_all(&pool)
+        .await
+        .unwrap();
     assert_eq!(receipts.len(), 1);
     assert_eq!(receipts[0].form_id, form.id.into_uuid());
     assert_eq!(receipts[0].user_id, RESPONDENT);

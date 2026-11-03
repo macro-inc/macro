@@ -175,7 +175,9 @@ pub(super) async fn record_anonymous_submission(
     .fetch_one(&mut *transaction)
     .await?;
     transaction.commit().await?;
-    Ok(RecordedResponse::Recorded(FormResponse::try_from(recorded)?))
+    Ok(RecordedResponse::Recorded(FormResponse::try_from(
+        recorded,
+    )?))
 }
 
 #[tracing::instrument(err, skip(pool, voter))]

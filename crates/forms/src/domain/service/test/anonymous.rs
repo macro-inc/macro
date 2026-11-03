@@ -6,8 +6,7 @@ use models_databases::{CellValue, CellWrite, DatabaseOp, OptionRef, RowsChange};
 
 use super::*;
 use crate::domain::models::{
-    Answer, FormError, MyResponse, SharingRefusal, Submission, SubmissionOutcome,
-    UpdateForm,
+    Answer, FormError, MyResponse, SharingRefusal, Submission, SubmissionOutcome, UpdateForm,
 };
 use crate::domain::ports::{CreateFormCommand, CreateSource, FormsService};
 
