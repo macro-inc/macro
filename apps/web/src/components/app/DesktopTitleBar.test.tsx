@@ -43,6 +43,7 @@ it('navigates the active split and disables unavailable directions', () => {
   const [activeSplit, setActiveSplit] = createSignal(first);
   setGlobalSplitManager({
     activeSplit,
+    activeSplitId: () => undefined,
     canAppendSplit: () => false,
   } as unknown as SplitManager);
 

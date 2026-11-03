@@ -11,6 +11,8 @@ export type RoutineSnapshot = {
   enabled: boolean;
   nextRunAt?: string | null;
   claimedAt?: string | null;
+  /** Whether the latest finished run failed; unknown outside the list. */
+  lastRunFailed?: boolean;
   revision: number;
   configurationKey: string;
   draft?: ScheduleDraft;

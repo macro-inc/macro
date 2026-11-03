@@ -42,6 +42,13 @@ Split dragging and composer reflow have a backend-free browser regression:
 `bunx playwright test --config src/lib/core/component/Resize/browser-test/playwright.config.ts`.
 It exercises the real resize solver, scroll container, and Lexical layout primitive.
 
+Stacked splits have a backend-free browser regression over the real split
+router and tiled layout: splitting keeps the pane mounted, stacked gutters drag
+and nudge to the minimum height, and closing hands the column back:
+`bunx playwright test --config src/components/app/split-layout/browser-test/playwright.config.ts`.
+Keep panes in one keyed list positioned by the layout tree; nesting a
+`Resize.Zone` per split remounts a pane whenever its split changes.
+
 Desktop app switches open the requested list in the target split when the
 retained detail is claimed by another pane or preview. Keep this check in view
 restoration and preserve entity deduplication and native dock stack restoration;

@@ -44,7 +44,10 @@ Pulumi stacks; they do not host extra agent processes.
   composes staged search type/field extraction and Clairic content extraction
   with Nemotron temporal extraction and the shared admission/usage services.
 - `src/scheduling.rs`: routine HTTP routes and background scheduling;
-  domain/adapters live in `crates/scheduled_action`.
+  domain/adapters live in `crates/scheduled_action`. Its run observers send
+  `routine_run_finished` analytics and, for every run, an inbox-only
+  `routine_run_finished` notification to the owner
+  (`src/scheduling/routine_run_notifications.rs`).
 - `src/preview.rs` + `src/preview/`: preview control routes, public HTTP and SSH listeners;
   lease/ticket and authorization logic lives in `crates/agent_preview`. The shared
   pool stores replica ownership and credential hashes; startup and ten-second

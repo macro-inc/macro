@@ -103,6 +103,11 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   `ActionConfigurationUpdate`, with `trigger` required; the cron-only body with a
   top-level `schedule` is gone. Rejections return serde's message, which names
   the field. Cron schedules have 6 or 7 fields.
+- The list response carries each routine's `last_run` (latest finished run)
+  so clients can flag failures; single reads omit it. Every finished run is
+  reported to the owner by the host's `RoutineRunObserver`
+  (`services/agent_harness_service/src/scheduling/routine_run_notifications.rs`)
+  as an inbox-only `routine_run_finished` notification.
 - `template_id` is a plain pointer, not a foreign key: activated routines keep
   it after the template is unshared or its source routine is deleted.
 - `run_visibility` is copied onto each run's agent session when the run is

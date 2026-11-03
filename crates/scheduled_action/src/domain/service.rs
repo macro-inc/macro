@@ -22,7 +22,7 @@ use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
 use super::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionPolicyError,
-    DispatchEvent, InProgressExecution, OwnerNotUserError, ScheduledAction,
+    DispatchEvent, InProgressExecution, ListedAction, OwnerNotUserError, ScheduledAction,
 };
 use super::ports::{
     ScheduledActionExecutor, ScheduledActionRepo, ScheduledActionService, TaskTargetValidator,
@@ -449,16 +449,26 @@ where
         &self,
         user_id: MacroUserIdStr<'static>,
         include_events: bool,
-    ) -> Result<Vec<ScheduledAction>> {
-        Ok(
+    ) -> Result<Vec<ListedAction>> {
+        let actions: Vec<ScheduledAction> =
             list_accessible_actions(self.repo.as_ref(), self.grants.as_ref(), &user_id)
                 .await?
                 .into_iter()
                 .filter(|action| {
                     include_events || matches!(action.trigger, ActionTrigger::Cron { .. })
                 })
-                .collect(),
-        )
+                .collect();
+
+        let ids: Vec<Uuid> = actions.iter().filter_map(|action| action.id).collect();
+        let mut last_runs = self.repo.last_runs(&ids).await?;
+
+        Ok(actions
+            .into_iter()
+            .map(|action| ListedAction {
+                last_run: action.id.and_then(|id| last_runs.remove(&id)),
+                action,
+            })
+            .collect())
     }
 
     async fn update_action(

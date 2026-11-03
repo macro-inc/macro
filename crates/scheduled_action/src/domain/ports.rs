@@ -4,7 +4,7 @@ use super::event_trigger::{EventName, EventReference};
 use super::execution::ExecutionHandle;
 use super::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, DispatchEvent,
-    InProgressExecution, ScheduledAction, ScheduledActionUpdate,
+    InProgressExecution, LastRun, ListedAction, ScheduledAction, ScheduledActionUpdate,
 };
 use super::templates::{RoutineTemplate, ShareRoutineTemplate, TemplateSnapshot};
 use anyhow::Result;
@@ -18,6 +18,7 @@ use macro_uuid::Uuid;
 use model_entity::EntityAppearance;
 use model_owner::{CreationPrincipal, Owner};
 use rootcause::Report;
+use std::collections::HashMap;
 use tokio::sync::mpsc::{Receiver, Sender};
 use trigger_context::RoutineEvent;
 
@@ -108,6 +109,13 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
         action_id: &Uuid,
     ) -> impl Future<Output = Result<Vec<ActionExecutionRecord>>> + Send;
 
+    /// The latest finished run of each action that has one. Ids without runs
+    /// are omitted.
+    fn last_runs(
+        &self,
+        action_ids: &[Uuid],
+    ) -> impl Future<Output = Result<HashMap<Uuid, LastRun>>> + Send;
+
     /// Advance the cron firing time; event actions are left unchanged.
     fn update_next_run_at(&self, id: &Uuid) -> impl Future<Output = Result<()>> + Send;
 
@@ -174,7 +182,7 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         &self,
         user_id: MacroUserIdStr<'static>,
         include_events: bool,
-    ) -> impl Future<Output = Result<Vec<ScheduledAction>>> + Send;
+    ) -> impl Future<Output = Result<Vec<ListedAction>>> + Send;
 
     fn update_action(
         &self,
@@ -376,6 +384,7 @@ pub enum RunEnd {
 pub struct FinishedRoutineRun {
     pub owner: MacroUserIdStr<'static>,
     pub routine_id: Uuid,
+    pub routine_name: String,
     pub trigger: RunTrigger,
     pub target: RunTarget,
     pub end: RunEnd,
@@ -390,4 +399,12 @@ pub trait RoutineRunObserver: Send + Sync + 'static {
 
 impl RoutineRunObserver for () {
     fn run_finished(&self, _run: FinishedRoutineRun) {}
+}
+
+/// Tells both observers, in order.
+impl<First: RoutineRunObserver, Second: RoutineRunObserver> RoutineRunObserver for (First, Second) {
+    fn run_finished(&self, run: FinishedRoutineRun) {
+        self.0.run_finished(run.clone());
+        self.1.run_finished(run);
+    }
 }

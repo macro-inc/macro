@@ -25,7 +25,7 @@ use crate::domain::event_trigger::{
 use crate::domain::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionKind, AgentTask,
     AgentTaskAgent, ExecutionResource, ExecutionResourceType, ExecutionResult, InProgressExecution,
-    RoutineModelId, Schedule, ScheduledAction, ScheduledActionUpdate,
+    LastRun, RoutineModelId, Schedule, ScheduledAction, ScheduledActionUpdate,
 };
 use ai_billing::inbound::admission::AiAdmissionErrorBody;
 use model::response::EmptyResponse;
@@ -82,6 +82,7 @@ use model_entity::{AppearanceColor, AppearanceIcon, EntityAppearance};
             ExecutionResult,
             InProgressExecution,
             ActionExecutionRecord,
+            LastRun,
             ScheduledActionUpdate,
             EmptyResponse,
             crate::domain::templates::RoutineTemplate,
