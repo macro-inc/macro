@@ -16,6 +16,7 @@ import {
   homePreviewLegacyTarget,
 } from './home-route';
 import type { HomePreviewRouteParams } from './home-route-schema';
+import { homeProjectSearch } from './home-route-schema';
 import { HomePendingView, HomeView } from './home-view';
 
 type HomeDetailParams = Partial<HomePreviewRouteParams> & {
@@ -29,6 +30,7 @@ function HomeLegacyRouteView() {
   const params = useParams<HomeDetailParams>();
   const [channelSearch] = createSearchParams(channelsSearch);
   const [documentSearch] = createSearchParams(driveSearch);
+  const [projectSearch] = createSearchParams(homeProjectSearch);
   const [eventSearch] = createSearchParams(calendarSearch);
   const legacyTarget = () => {
     const { period } = params;
@@ -38,6 +40,7 @@ function HomeLegacyRouteView() {
     return homePreviewLegacyTarget(detail, {
       channel: channelSearch,
       document: documentSearch,
+      project: projectSearch,
     });
   };
 

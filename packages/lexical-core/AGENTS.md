@@ -28,6 +28,10 @@ composer imports the URL matcher from this package; do not duplicate it.
 
 ## Gotchas
 
+Human user mention Markdown requires only a nonempty string `userId`; the importer
+derives a missing email from `macro|` IDs so web name lookup and clipboard round
+trips can resolve the user. Other identities still need an email or display name.
+
 Keep URLs protected from inline formatting during import; matching rendered
 text is too late. Preserve code, mention payloads, existing links, and escaped
 literal URLs. Keep unlink state through both Markdown and Lexical JSON saves.

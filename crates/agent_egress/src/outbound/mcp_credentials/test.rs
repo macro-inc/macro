@@ -17,6 +17,7 @@ fn connection(app_slug: &str, enabled: bool) -> PipedreamConnection {
         server_name: format!("{app_slug} display name"),
         account_id: format!("apn_{app_slug}"),
         enabled,
+        provider: pipedream_mcp::domain::models::ConnectionProvider::Pipedream,
     }
 }
 

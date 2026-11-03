@@ -128,11 +128,11 @@ pub type DcsOnboardingService = onboarding::domain::service::OnboardingServiceIm
 >;
 
 /// Concrete Pipedream MCP router state for DCS: the Postgres connection
-/// store plus the Pipedream client (None when not configured — endpoints
+/// store plus the connector backends (None when not configured — endpoints
 /// answer 501).
 pub type DcsPipedreamRouterState = pipedream_mcp::inbound::PipedreamRouterState<
     pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
-    pipedream_mcp::outbound::api::PipedreamClient,
+    pipedream_mcp::outbound::dispatch::ConnectorBackends,
     DcsAuthorizationService,
 >;
 
