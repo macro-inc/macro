@@ -87,14 +87,14 @@ const emailTabSources = {
   sent: 'soup',
   scheduled: 'scheduled-message-service',
   reminders: 'reminder-collection',
-  spam: 'provider-folder-rest',
-  trash: 'provider-folder-rest',
   calendar: 'soup',
   drafts: 'soup',
   shared: 'soup',
   archived: 'soup',
   all: 'soup',
   focus: 'focus-list',
+  spam: 'provider-folder-rest',
+  trash: 'provider-folder-rest',
 } as const satisfies Record<
   (typeof EMAIL_TABS)[number]['id'],
   | 'soup'
