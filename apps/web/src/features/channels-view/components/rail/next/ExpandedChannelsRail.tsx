@@ -57,6 +57,7 @@ import { ChannelLabelEmptyState, ChannelLabelRow } from './ChannelLabelRows';
 import {
   ChannelRailVirtualizer,
   type ChannelRailVirtualizerHandle,
+  scrollChannelRailTargetIntoView,
 } from './ChannelRailVirtualizer';
 import { ChannelSectionDropZone } from './ChannelSectionDropZone';
 import { ChannelSectionEmptyState } from './ChannelSectionEmptyState';
@@ -797,36 +798,31 @@ function ExpandedBrowse() {
           sections()
             .get(request.section)
             ?.rows.findIndex((row) => row.id === request.rowId) ?? -1;
+        const container = scrollRoot();
+        const target = document.getElementById(
+          domIdForRow(rail.railId, request.rowId)
+        );
+        if (container && target && (!handle.outerScroll || currentIndex < 0)) {
+          const nextOffset =
+            currentIndex >= 0
+              ? handle.virtualizer?.getScrollOffsetForIndex(
+                  currentIndex,
+                  request.options
+                )
+              : undefined;
+          const targetShift =
+            nextOffset === undefined
+              ? 0
+              : (handle.viewport?.scrollTop ?? 0) - nextOffset;
+          scrollChannelRailTargetIntoView(
+            container,
+            target,
+            CHANNEL_SECTION_ROW_HEIGHT * 2,
+            targetShift
+          );
+        }
         if (currentIndex >= 0) {
           handle.virtualizer?.scrollToIndex(currentIndex, request.options);
-        }
-        const container = scrollRoot();
-        const target =
-          currentIndex < 0
-            ? document.getElementById(domIdForRow(rail.railId, request.rowId))
-            : handle.root;
-        if (container && target && (!handle.outerScroll || currentIndex < 0)) {
-          const bounds = target.getBoundingClientRect();
-          const viewport = container.getBoundingClientRect();
-          const padding = Math.min(
-            CHANNEL_SECTION_ROW_HEIGHT * 2,
-            Math.max(0, (viewport.height - bounds.height) / 2)
-          );
-          let offset = 0;
-          if (bounds.top < viewport.top + padding) {
-            offset = bounds.top - viewport.top - padding;
-          } else if (bounds.bottom > viewport.bottom - padding) {
-            offset = bounds.bottom - viewport.bottom + padding;
-          }
-          if (offset !== 0) {
-            container.scrollTo({
-              top: container.scrollTop + offset,
-              behavior: window.matchMedia('(prefers-reduced-motion: reduce)')
-                .matches
-                ? 'auto'
-                : 'smooth',
-            });
-          }
         }
         setPendingScroll(undefined);
       });

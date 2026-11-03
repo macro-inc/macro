@@ -21,8 +21,42 @@ import {
 export type ChannelRailVirtualizerHandle = ListScrollHandle & {
   visibleRange: () => { startIndex: number; endIndex: number } | undefined;
   scrollMetrics: () => { size: number; offset: number; viewport: number };
+  getScrollOffsetForIndex: (
+    ...args: Parameters<ListScrollHandle['scrollToIndex']>
+  ) => number | undefined;
 };
 
+export function scrollChannelRailTargetIntoView(
+  container: HTMLElement,
+  target: HTMLElement,
+  padding: number,
+  targetShift = 0
+) {
+  const bounds = target.getBoundingClientRect();
+  const viewport = container.getBoundingClientRect();
+  const scale = viewport.height / container.offsetHeight || 1;
+  const top = (bounds.top - viewport.top) / scale + targetShift;
+  const bottom = (bounds.bottom - viewport.top) / scale + targetShift;
+  const gap = Math.min(
+    padding,
+    Math.max(0, (container.clientHeight - bounds.height / scale) / 2)
+  );
+
+  let offset = 0;
+  if (top < gap) {
+    offset = top - gap;
+  } else if (bottom > container.clientHeight - gap) {
+    offset = bottom - container.clientHeight + gap;
+  }
+
+  const immediate =
+    offset === 0 ||
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  container.scrollTo({
+    top: container.scrollTop + offset,
+    behavior: immediate ? 'instant' : 'smooth',
+  });
+}
 type ChannelRailVirtualizerProps<K extends string> = {
   keys: readonly K[];
   scrollRoot: HTMLDivElement | undefined;
@@ -99,6 +133,13 @@ function VirtualRows<K extends string>(
           ? 'auto'
           : 'smooth',
       });
+    },
+    getScrollOffsetForIndex: (index, options) => {
+      const align = options?.align;
+      return virtualizer.getOffsetForIndex(
+        index,
+        !align || align === 'nearest' ? 'auto' : align
+      )?.[0];
     },
     visibleRange: () => {
       virtualizer.getVirtualItems();

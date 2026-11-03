@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ChannelRailVirtualizer,
   type ChannelRailVirtualizerHandle,
+  scrollChannelRailTargetIntoView,
 } from './ChannelRailVirtualizer';
 
 const observers = new Set<MeasuredResizeObserver>();
@@ -292,5 +293,92 @@ describe('channel rail virtualizer', () => {
     expect(view.queryByText('row-0')).toBeNull();
     expect(view.getByText('row-20')).toBeTruthy();
     outer.remove();
+  });
+});
+
+describe('channel rail target scrolling', () => {
+  it('reveals a bottom row even when its section is taller than the sidebar', () => {
+    const container = document.createElement('div');
+    const row = document.createElement('div');
+    Object.defineProperties(container, {
+      clientHeight: { value: 300 },
+      offsetHeight: { value: 300 },
+    });
+    container.scrollTop = 100;
+    container.scrollTo = vi.fn();
+    vi.spyOn(container, 'getBoundingClientRect').mockReturnValue(
+      new DOMRect(0, 0, 300, 300)
+    );
+    vi.spyOn(row, 'getBoundingClientRect').mockReturnValue(
+      new DOMRect(0, 368, 300, 32)
+    );
+
+    scrollChannelRailTargetIntoView(container, row, 64);
+
+    expect(container.scrollTo).toHaveBeenCalledWith({
+      top: 264,
+      behavior: 'smooth',
+    });
+  });
+
+  it('uses the row position after a pending inner scroll', async () => {
+    const inner = mount(0, 0, 64);
+    measure(500);
+    const nextOffset = inner
+      .handle()
+      ?.getScrollOffsetForIndex(30, { align: 'nearest' });
+    expect(nextOffset).toBe(556);
+    if (nextOffset === undefined) throw new Error('Missing target offset');
+    const container = document.createElement('div');
+    const row = document.createElement('div');
+    Object.defineProperties(container, {
+      clientHeight: { value: 300 },
+      offsetHeight: { value: 300 },
+    });
+    container.scrollTo = vi.fn();
+    vi.spyOn(container, 'getBoundingClientRect').mockReturnValue(
+      new DOMRect(0, 0, 300, 300)
+    );
+    vi.spyOn(row, 'getBoundingClientRect').mockReturnValue(
+      new DOMRect(0, 960, 300, 32)
+    );
+
+    scrollChannelRailTargetIntoView(container, row, 64, -nextOffset);
+    inner.handle()?.scrollToIndex(30, { align: 'nearest' });
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(container.scrollTo).toHaveBeenCalledWith({
+      top: 200,
+      behavior: 'smooth',
+    });
+    expect(inner.viewport.scrollTop).toBe(556);
+  });
+
+  it('cancels an old smooth scroll when a new heading already has context', () => {
+    const container = document.createElement('div');
+    const heading = document.createElement('div');
+    Object.defineProperties(container, {
+      clientHeight: { value: 300 },
+      offsetHeight: { value: 300 },
+    });
+    container.scrollTo = vi.fn();
+    vi.spyOn(container, 'getBoundingClientRect').mockReturnValue(
+      new DOMRect(0, 0, 300, 300)
+    );
+    const bounds = vi.spyOn(heading, 'getBoundingClientRect');
+    bounds.mockReturnValue(new DOMRect(0, 700, 300, 32));
+    scrollChannelRailTargetIntoView(container, heading, 64);
+    expect(container.scrollTo).toHaveBeenLastCalledWith({
+      top: 496,
+      behavior: 'smooth',
+    });
+
+    bounds.mockReturnValue(new DOMRect(0, 100, 300, 32));
+    scrollChannelRailTargetIntoView(container, heading, 64);
+
+    expect(container.scrollTo).toHaveBeenLastCalledWith({
+      top: 0,
+      behavior: 'instant',
+    });
   });
 });
