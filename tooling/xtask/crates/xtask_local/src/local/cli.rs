@@ -59,6 +59,9 @@ enum Cmd {
     /// dev server; the proxy serves a static frontend bundle.
     #[command(subcommand)]
     Stack(StackCmd),
+    /// Macro instances on the local k3s cluster, declared in infra/platform.
+    #[command(subcommand)]
+    Platform(super::platform::PlatformCmd),
 }
 
 #[derive(Subcommand)]
@@ -300,6 +303,7 @@ fn run(cli: Cli) -> Result<()> {
             StackCmd::Status(a) => super::stack::status(&a),
             StackCmd::Down(a) => super::stack::down(&a),
         },
+        Cmd::Platform(cmd) => super::platform::run(cmd),
     }
 }
 

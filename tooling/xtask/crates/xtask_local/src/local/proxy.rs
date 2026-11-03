@@ -129,7 +129,10 @@ pub fn caddyfile_for(mode: Mode, static_frontend: bool, flavor: Flavor) -> Strin
     } else {
         ""
     };
-    let frontend_block = if static_frontend {
+    let frontend_block = if static_frontend && flavor == Flavor::Kubernetes {
+        // The edge image names its bundle's store path in MACRO_FRONTEND.
+        FRONTEND_STATIC.replace("/srv/frontend", "{$MACRO_FRONTEND}")
+    } else if static_frontend {
         FRONTEND_STATIC.to_owned()
     } else {
         FRONTEND_VITE.replace("BACKEND_PREFIXES", &frontend_path_prefixes().join(" "))

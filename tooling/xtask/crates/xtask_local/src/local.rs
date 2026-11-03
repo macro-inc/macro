@@ -34,6 +34,7 @@ pub mod local_env;
 pub mod localstack;
 pub mod mailpit;
 pub mod opensearch;
+pub mod platform;
 pub mod portmap;
 pub mod proxy;
 pub mod resources;
