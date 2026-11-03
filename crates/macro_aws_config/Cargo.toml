@@ -10,6 +10,7 @@ sqs = ["dep:aws-sdk-sqs"]
 
 [dependencies]
 aws-config = { workspace = true }
+aws-credential-types = { workspace = true }
 macro_env_var = { path = "../macro_env_var" }
 thiserror = { workspace = true }
 tracing = { workspace = true }

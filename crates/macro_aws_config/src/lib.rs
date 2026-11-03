@@ -46,11 +46,25 @@ pub async fn get_macro_aws_config() -> aws_config::SdkConfig {
     }
 }
 
-/// Creates an AWS SDK config pointed at a LocalStack endpoint.
+/// Access key local AWS-API backends accept. LocalStack takes any key, but the
+/// platform's backends (RustFS, ExtendDB) verify SigV4 against a provisioned
+/// key, which must be AWS-shaped (20 and 40 characters).
+pub const LOCAL_ACCESS_KEY_ID: &str = "LOCALMACROSTACKKEY01";
+/// Secret for [`LOCAL_ACCESS_KEY_ID`]; a fixed local fixture, never deployed.
+pub const LOCAL_SECRET_ACCESS_KEY: &str = "localmacrostacksecretlocalmacrostacksec1";
+
+/// Creates an AWS SDK config pointed at a local AWS-API endpoint (LocalStack,
+/// or the platform's AWS gateway), signed with the fixed local key.
 pub async fn local_aws_config(local_aws_url: &str) -> aws_config::SdkConfig {
     aws_config::defaults(aws_config::BehaviorVersion::latest())
         .region("us-east-1")
-        .test_credentials()
+        .credentials_provider(aws_credential_types::Credentials::new(
+            LOCAL_ACCESS_KEY_ID,
+            LOCAL_SECRET_ACCESS_KEY,
+            None,
+            None,
+            "macro-local",
+        ))
         .endpoint_url(local_aws_url)
         .load()
         .await

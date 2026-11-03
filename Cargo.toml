@@ -232,6 +232,7 @@ async-stream = "0.3.6"
 async-trait = "0.1.86"
 automod = "1"
 aws-config = { version = "1.8.16", features = ["behavior-version-latest"] }
+aws-credential-types = "1.2.14"
 aws-msk-iam-sasl-signer = "1.0.1"
 # SDK defaults also enable the deprecated `rustls` feature, which pulls in
 # rustls 0.21 / hyper 0.14. Keep the modern HTTPS client and the other defaults;
