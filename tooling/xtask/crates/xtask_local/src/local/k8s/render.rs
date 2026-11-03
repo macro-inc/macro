@@ -49,6 +49,8 @@ const INFRA_SERVICES: &[&str] = &[
 /// the ones it lists.
 const UNDECLARED_PORTS: &[(&str, &[u16])] = &[
     ("db", &[5432]),
+    // The in-network broker listener and the KRaft controller.
+    ("kafka", &[29092, 29093]),
     ("agent-harness-service", &[8080, 8102, 8111, 2222]),
     ("whatsapp-session-service", &[8080]),
     ("search-processing-service", &[8080]),

@@ -19,6 +19,10 @@ use crate::local::{repo_root, tls};
 pub const KIND_CLUSTER: &str = "macro-envs";
 /// Host port the kind cluster's ingress listens on (loopback only).
 pub const KIND_HTTPS_PORT: u16 = 9443;
+/// The registry container kind pulls environment images from, as EKS pulls
+/// from ECR. Pushed to at `localhost:<port>`; the node reaches it by name.
+const KIND_REGISTRY: &str = "macro-envs-registry";
+const KIND_REGISTRY_PORT: u16 = 5001;
 
 /// The shared EKS environments cluster (`infra/stacks/environments-cluster`).
 pub const EKS_CLUSTER: &str = "macro-environments";
@@ -112,6 +116,7 @@ impl ClusterTarget {
     pub fn ensure_ready(&self, stage: &Stage) -> Result<()> {
         match self {
             ClusterTarget::Kind { https_port } => {
+                ensure_kind_registry(stage)?;
                 ensure_kind_cluster(stage, *https_port)?;
                 self.install_kind_ingress(stage)
             }
@@ -206,37 +211,25 @@ impl ClusterTarget {
     }
 
     fn registry(&self) -> Result<String> {
-        Ok(format!(
-            "{}.dkr.ecr.{EKS_REGION}.amazonaws.com",
-            aws_account()?
-        ))
+        match self {
+            ClusterTarget::Kind { .. } => Ok(format!("localhost:{KIND_REGISTRY_PORT}")),
+            ClusterTarget::Eks { .. } => Ok(format!(
+                "{}.dkr.ecr.{EKS_REGION}.amazonaws.com",
+                aws_account()?
+            )),
+        }
     }
 
     /// Publish a locally built image under its content digest and return the
-    /// reference the cluster pulls.
+    /// reference the cluster pulls. Both targets push to a registry: the
+    /// local one for kind, ECR for EKS.
     fn publish(&self, stage: &Stage, key: &str, local_tag: &str) -> Result<String> {
         let id = image_digest(local_tag)?;
-        let reference = match self {
-            ClusterTarget::Kind { .. } => format!("macro-env/{key}:{id}"),
-            ClusterTarget::Eks { .. } => {
-                format!("{}/{EKS_REPOSITORY}:{key}-{id}", self.registry()?)
-            }
-        };
+        let reference = format!("{}/{EKS_REPOSITORY}:{key}-{id}", self.registry()?);
         run_quiet(Command::new("docker").args(["tag", local_tag, &reference]))?;
-        match self {
-            ClusterTarget::Kind { .. } => {
-                if !kind_has_image(&reference) {
-                    let mut load = Command::new("kind");
-                    load.args(["load", "docker-image", "--name", KIND_CLUSTER, &reference]);
-                    stage.run(&format!("Loading {key} into kind"), &mut load)?;
-                }
-            }
-            ClusterTarget::Eks { .. } => {
-                let mut push = Command::new("docker");
-                push.args(["push", "--quiet", &reference]);
-                stage.run(&format!("Pushing {key}"), &mut push)?;
-            }
-        }
+        let mut push = Command::new("docker");
+        push.args(["push", "--quiet", &reference]);
+        stage.run(&format!("Pushing {key}"), &mut push)?;
         Ok(reference)
     }
 
@@ -398,10 +391,19 @@ nodes:
         nodeRegistration:
           kubeletExtraArgs:
             node-labels: "ingress-ready=true"
+      # Kubelet cannot stat a ZFS- or btrfs-backed Docker volume as its root
+      # filesystem and exits; ephemeral-storage accounting is not needed here.
+      - |
+        kind: KubeletConfiguration
+        localStorageCapacityIsolation: false
     extraPortMappings:
       - containerPort: 443
         hostPort: {https_port}
         listenAddress: 127.0.0.1
+containerdConfigPatches:
+  - |-
+    [plugins."io.containerd.grpc.v1.cri".registry]
+      config_path = "/etc/containerd/certs.d"
 "#
     );
     let path = std::env::temp_dir().join("macro-env-kind.yaml");
@@ -409,24 +411,73 @@ nodes:
     let mut cmd = Command::new("kind");
     cmd.args(["create", "cluster", "--name", KIND_CLUSTER, "--config"])
         .arg(&path);
-    stage.run(&format!("Creating kind cluster {KIND_CLUSTER}"), &mut cmd)
+    stage.run(&format!("Creating kind cluster {KIND_CLUSTER}"), &mut cmd)?;
+    // Resolve `localhost:<port>` image references on the node to the
+    // registry container (kind's local-registry recipe).
+    let dir = format!("/etc/containerd/certs.d/localhost:{KIND_REGISTRY_PORT}");
+    let hosts = format!(
+        "[host.\"http://{KIND_REGISTRY}:5000\"]\n  capabilities = [\"pull\", \"resolve\"]\n"
+    );
+    let mut write = Command::new("docker");
+    write
+        .args([
+            "exec",
+            "-i",
+            &format!("{KIND_CLUSTER}-control-plane"),
+            "sh",
+            "-c",
+        ])
+        .arg(format!("mkdir -p '{dir}' && cat > '{dir}/hosts.toml'"))
+        .stdin(Stdio::piped());
+    let mut child = write
+        .spawn()
+        .context("configuring the kind registry mirror")?;
+    if let Some(stdin) = child.stdin.as_mut() {
+        use std::io::Write;
+        stdin.write_all(hosts.as_bytes())?;
+    }
+    ensure!(
+        child.wait()?.success(),
+        "configuring the kind registry mirror failed"
+    );
+    // kind creates the `kind` network with the cluster.
+    connect_registry_to_kind();
+    Ok(())
 }
 
-fn kind_has_image(reference: &str) -> bool {
-    let node = format!("{KIND_CLUSTER}-control-plane");
-    let full = if reference.contains('/')
-        && !reference.split('/').next().is_some_and(|r| r.contains('.'))
-    {
-        format!("docker.io/{reference}")
-    } else {
-        reference.to_owned()
-    };
-    Command::new("docker")
-        .args(["exec", &node, "crictl", "inspecti", &full])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok_and(|s| s.success())
+/// Start the local registry container (idempotent).
+fn ensure_kind_registry(stage: &Stage) -> Result<()> {
+    let running = Command::new("docker")
+        .args(["inspect", "-f", "{{.State.Running}}", KIND_REGISTRY])
+        .output()
+        .is_ok_and(|o| o.status.success() && String::from_utf8_lossy(&o.stdout).trim() == "true");
+    if !running {
+        let _ = Command::new("docker")
+            .args(["rm", "-f", KIND_REGISTRY])
+            .output();
+        let mut run = Command::new("docker");
+        run.args([
+            "run",
+            "-d",
+            "--restart=always",
+            "--name",
+            KIND_REGISTRY,
+            "-p",
+            &format!("127.0.0.1:{KIND_REGISTRY_PORT}:5000"),
+            "registry:2",
+        ]);
+        stage.run("Starting the local image registry", &mut run)?;
+    }
+    connect_registry_to_kind();
+    Ok(())
+}
+
+/// Attach the registry to kind's network. Harmless when already attached or
+/// before the network exists.
+fn connect_registry_to_kind() {
+    let _ = Command::new("docker")
+        .args(["network", "connect", "kind", KIND_REGISTRY])
+        .output();
 }
 
 fn aws_account() -> Result<String> {

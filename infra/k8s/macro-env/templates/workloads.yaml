@@ -29,6 +29,9 @@ metadata:
     app.kubernetes.io/name: {{ $w.name }}
 spec:
   replicas: 1
+  # A cold pull of a large image on a fresh node can take a while; helm's
+  # readiness wait treats an exceeded deadline as a failure.
+  progressDeadlineSeconds: 1800
   # Single-writer volumes and singleton workers: never run two pods at once.
   strategy:
     type: Recreate
@@ -48,6 +51,32 @@ spec:
       enableServiceLinks: false
       {{- with $w.terminationGracePeriodSeconds }}
       terminationGracePeriodSeconds: {{ . }}
+      {{- end }}
+      {{- with $w.volumes }}
+      # Docker seeds a new named volume from the image directory it covers,
+      # contents and owner. A fresh PVC is empty and root-owned, which hides
+      # image defaults (FusionAuth's config) and locks out non-root images.
+      initContainers:
+        {{- range $v := . }}
+        - name: seed-{{ $v.name }}
+          image: {{ $w.image }}
+          imagePullPolicy: {{ $root.Values.imagePullPolicy }}
+          securityContext:
+            runAsUser: 0
+          command:
+            - sh
+            - -c
+            - |
+              [ -d "$SRC" ] || exit 0
+              if [ -z "$(ls -A /seed | grep -v '^lost+found$')" ]; then cp -a "$SRC"/. /seed/; fi
+              chown "$(stat -c %u:%g "$SRC")" /seed
+          env:
+            - name: SRC
+              value: {{ $v.mountPath | quote }}
+          volumeMounts:
+            - name: vol-{{ $v.name }}
+              mountPath: /seed
+        {{- end }}
       {{- end }}
       containers:
         - name: {{ $w.name }}
@@ -126,6 +155,9 @@ metadata:
   labels:
     {{- include "macro-env.labels" $root | nindent 4 }}
 spec:
+  # Compose DNS resolves a container whether or not it is healthy; services
+  # such as Kafka's KRaft controller dial themselves before they are ready.
+  publishNotReadyAddresses: true
   selector:
     {{- include "macro-env.selector" $ctx | nindent 4 }}
   ports:
