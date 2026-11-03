@@ -213,8 +213,9 @@ skills.
    independent question per candidate, so several skills can match. "Every
    Monday, summarise new rows in Leads" loads both `routines` and
    `databases`. Thresholds:
-   - Built-ins: 0.5, at most 3. They are reviewed text, and missing one
-     costs domain rules.
+   - Built-ins: 0.7, at most 3. They are reviewed text, and missing one
+     costs domain rules. On the evaluation, 0.7 kept the recall of 0.5 (90%)
+     and loaded the exact expected set almost twice as often.
    - User skills: 0.8, at most 2. They redirect behaviour, so a false
      positive costs more.
    - The evaluation calibrates both.
@@ -222,22 +223,31 @@ skills.
    not for (databases: "not CRM pipelines or spreadsheets"). The evaluation
    reports the confusable pairs: databases/crm, databases/documents,
    finding-things/email, routines/calendar.
-4. **Load, sticky.** A loaded skill's body goes into the context of the turn
-   that triggered it, and its tools are loaded (Anthropic `tool_reference`;
-   other providers get the tools added). The agent session records which
-   skills were loaded with that turn. Replay therefore rebuilds the same
-   history, the skill stays in effect for the rest of the session without
-   being routed again, and the cached prefix only grows. This replaces the
-   earlier per-turn `turn` placement.
+4. **Load, sticky.** Loaded skills' bodies go in the turn part of the system
+   prompt, skills first and SDK references after them. Each session keeps
+   the skills it has loaded (at most 8, oldest dropped first) in the engine's
+   memory, so a skill stays in effect without being routed again, and the
+   turn part changes only when a new skill loads. After a restart, a session
+   routes again from its next message. Persisting loaded skills in the
+   session log would survive restarts too, but would need a new frame kind;
+   that waits until restarts prove to matter.
 5. **Catalog.**
-   - Built-in names and descriptions go in `shared`. They are identical for
-     everyone, so they are cached.
-   - User skills go in `rest`, at most 256 lines; past that, `SearchSkills`.
-   - The model can load anything Jev missed with `ReadSkill`, which also
-     loads the skill's tools.
-6. **Backstop.** Loading a tool a skill owns loads the skill.
-   `CreateDocument` and `EditDocument` stay eager, so `documents` has no
-   backstop: if the evaluation shows its recall below 95%,
+   - Built-in names, ids and descriptions go in `shared` (the routed prompt).
+     They are identical for everyone, so they are cached.
+   - User skills are not listed in the prompt: `ListSkills` and
+     `SearchSkills` stay eager tools, and listing hundreds of skills every
+     turn would cost more than it saves.
+   - User skills that score between 0.5 and the load threshold are recorded
+     on the span as `suggested`, not put in the prompt, where they would
+     change every turn and break the cache.
+   - The model can read anything Jev missed with `ReadSkill`.
+6. **Tools.** A skill's body names the deferred tools it covers, and the
+   model loads them with `LoadTools`, as it does today. Jev cannot preload
+   them: on Anthropic, a deferred tool is only callable once a tool result
+   references it, so a preload would need a fake call. The backstop (loading
+   one of a skill's tools loads the skill) follows as its own change.
+   `CreateDocument` and `EditDocument` stay eager, so `documents` would have
+   no backstop anyway: if the evaluation shows its recall below 95%,
    `document_content_links` stays always-on.
 7. **Failure.** On a timeout, a Jev error, or no cognition service, nothing
    loads and the catalog stays. The turn never waits longer than the 1 s
@@ -245,7 +255,10 @@ skills.
 
 **Hosts:**
 
-- **Agent sessions:** first, direct and code mode.
+- **Agent sessions:** first, direct and code mode, behind the `auto-skills`
+  flag. Without the flag, and on every host that does not route, the prompt
+  carries every agent-only skill's instructions inline, so moving guidance
+  into skills changes nothing for them.
 - **Chat and channel bot:** next.
 - **Public MCP:** never sees the user's message, so it cannot route. Its
   instructions shrink in the same way, pointing at `ListSkills` (now with
