@@ -1,4 +1,5 @@
 use super::*;
+use crate::toolset::web_search::{WebSearchQuery, search_web};
 use crate::types::response::web_search::{SearchResult, WebSearchContent, WebSearchToolError};
 use crate::types::response::{Content, MessageResponse, ResponseContentKind};
 use ai_billing::domain::{
@@ -662,4 +663,131 @@ fn deserialize_text_with_citations() {
         Err(e) => panic!("Failed to deserialize text with citations: {e}"),
         Ok(block) => assert!(matches!(block, ResponseContentKind::Text(_))),
     }
+}
+
+#[tokio::test]
+async fn direct_search_limits_domains_and_searches_and_returns_found_pages() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let body = serde_json::json!({
+        "id": "msg-1",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+            {"type": "server_tool_use", "id": "srv-1", "name": "web_search", "input": {"query": "rust 2024 edition"}},
+            search_result_block("srv-1", serde_json::json!([search_result("https://doc.rust-lang.org/edition-guide")])),
+        ],
+        "stop_reason": "end_turn",
+        "stop_sequence": null,
+        "usage": {"input_tokens": 10, "output_tokens": 5}
+    })
+    .to_string();
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let mut request = Vec::new();
+        let mut buffer = vec![0; 8192];
+        let body_start = loop {
+            let read = socket.read(&mut buffer).await.unwrap();
+            request.extend_from_slice(&buffer[..read]);
+            if let Some(end) = request.windows(4).position(|window| window == b"\r\n\r\n") {
+                break end + 4;
+            }
+        };
+        let headers = String::from_utf8_lossy(&request[..body_start]).to_lowercase();
+        let length: usize = headers
+            .lines()
+            .find_map(|line| line.strip_prefix("content-length: "))
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        while request.len() < body_start + length {
+            let read = socket.read(&mut buffer).await.unwrap();
+            request.extend_from_slice(&buffer[..read]);
+        }
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        socket.write_all(response.as_bytes()).await.unwrap();
+        serde_json::from_slice::<serde_json::Value>(&request[body_start..]).unwrap()
+    });
+    let context = AnthropicToolContext::new(
+        Client::with_config(crate::config::Config {
+            api_base: format!("http://{address}"),
+            ..Default::default()
+        }),
+        "claude-haiku-4-5".into(),
+    );
+    let request = RequestContext::new(
+        "macro|authenticated@example.com"
+            .to_owned()
+            .try_into()
+            .unwrap(),
+    );
+
+    let response = search_web(
+        &context,
+        &request,
+        &WebSearchQuery {
+            query: "rust 2024 edition".into(),
+            allowed_domains: vec!["rust-lang.org".into()],
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        response.content,
+        WebSearchContent::Results(vec![SearchResult::WebSearchResult {
+            title: "Title of https://doc.rust-lang.org/edition-guide".into(),
+            url: "https://doc.rust-lang.org/edition-guide".into(),
+            encrypted_content: None,
+            page_age: Some("April 30, 2025".into()),
+        }])
+    );
+    let sent = server.await.unwrap();
+    assert_eq!(
+        sent["tools"],
+        serde_json::json!([{
+            "type": "web_search_20250305",
+            "name": "web_search",
+            "max_uses": 3,
+            "allowed_domains": ["rust-lang.org"],
+        }])
+    );
+    assert_eq!(sent["messages"][0]["content"], "rust 2024 edition");
+}
+
+#[tokio::test]
+async fn direct_search_reports_admission_refusal_as_admission() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let mut context = AnthropicToolContext::new(
+        Client::with_config(crate::config::Config {
+            api_base: format!("http://{}", listener.local_addr().unwrap()),
+            ..Default::default()
+        }),
+        "claude-haiku-4-5".into(),
+    );
+    context.admission = Arc::new(Refuse {
+        error: AiAdmissionError::Denied(DenyReason::AllowanceExhausted),
+        callers: Mutex::new(Vec::new()),
+    });
+    let request = RequestContext::new("macro|first@example.com".to_owned().try_into().unwrap());
+
+    let error = search_web(
+        &context,
+        &request,
+        &WebSearchQuery {
+            query: "anything".into(),
+            allowed_domains: Vec::new(),
+        },
+    )
+    .await
+    .unwrap_err();
+
+    assert!(matches!(
+        error,
+        ServerToolError::Admission(AiAdmissionError::Denied(DenyReason::AllowanceExhausted))
+    ));
 }

@@ -8,7 +8,7 @@ mod web_search;
 pub use bash_code_execution::BashCodeExecution;
 pub use text_editor_code_execution::TextEditorCodeExecution;
 pub use web_fetch::WebFetch;
-pub use web_search::WebSearch;
+pub use web_search::{WebSearch, WebSearchQuery, search_web};
 
 use crate::client::Client;
 use crate::types::request::{
@@ -63,12 +63,32 @@ impl AnthropicToolContext {
     }
 }
 
-fn tool_error(error: impl Into<anyhow::Error>) -> ToolCallError {
-    let error = error.into();
-    ToolCallError {
-        description: format!("Anthropic API error: {error:?}"),
-        internal_error: error,
+/// Why a server tool invocation failed.
+#[derive(Debug, thiserror::Error)]
+pub enum ServerToolError {
+    /// The caller's AI allowance refused the work before any provider call.
+    #[error(transparent)]
+    Admission(ai_billing::domain::admission::AiAdmissionError),
+    /// The Anthropic API call failed or returned no usable result.
+    #[error("Anthropic API error: {0:?}")]
+    Provider(anyhow::Error),
+}
+
+impl From<ServerToolError> for ToolCallError {
+    fn from(error: ServerToolError) -> Self {
+        let description = match &error {
+            ServerToolError::Admission(admission) => format!("{}: {admission}", admission.code()),
+            ServerToolError::Provider(_) => error.to_string(),
+        };
+        ToolCallError {
+            description,
+            internal_error: error.into(),
+        }
     }
+}
+
+fn provider_error(error: impl Into<anyhow::Error>) -> ServerToolError {
+    ServerToolError::Provider(error.into())
 }
 
 fn response_usage(value: &serde_json::Value) -> UsageEvidence {
@@ -118,15 +138,12 @@ pub(crate) async fn invoke_server_tool(
     request_context: &RequestContext,
     server_tool: ServerTool,
     input: &str,
-) -> Result<Vec<ResponseContentKind>, ToolCallError> {
+) -> Result<Vec<ResponseContentKind>, ServerToolError> {
     context
         .admission
         .admit(&request_context.user_id, context.usage_context.feature)
         .await
-        .map_err(|error| ToolCallError {
-            description: format!("{}: {error}", error.code()),
-            internal_error: error.into(),
-        })?;
+        .map_err(ServerToolError::Admission)?;
 
     let request = CreateMessageRequestBody {
         model: context.model.clone(),
@@ -152,7 +169,11 @@ pub(crate) async fn invoke_server_tool(
             let _ = model.inspect_err(|error| {
                 tracing::error!(error = ?error, "cannot identify tool provider; observation not persisted");
             });
-            let response = client.chat().create(request).await.map_err(tool_error)?;
+            let response = client
+                .chat()
+                .create(request)
+                .await
+                .map_err(provider_error)?;
             return Ok(match response.content {
                 Some(Content::Array(blocks)) => blocks,
                 _ => Vec::new(),
@@ -255,11 +276,11 @@ pub(crate) async fn invoke_server_tool(
         Ok::<_, anyhow::Error>(value)
     })
     .await
-    .map_err(tool_error)?
-    .map_err(tool_error)?;
+    .map_err(provider_error)?
+    .map_err(provider_error)?;
     drop(caller_alive);
     // Observe before result parsing: a malformed tool result can still incur tokens.
-    let response: MessageResponse = serde_json::from_value(response).map_err(tool_error)?;
+    let response: MessageResponse = serde_json::from_value(response).map_err(provider_error)?;
 
     match response.content {
         Some(Content::Array(blocks)) => Ok(blocks),
