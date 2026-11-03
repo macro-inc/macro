@@ -87,6 +87,7 @@
           && !(lib.hasPrefix "apps/web/tauri/target/" rel)
           && !(lib.hasPrefix "apps/web/src/lib/graphql-cache/wasm/" rel)
           && !(lib.hasPrefix "apps/web/src/lib/core/agent-fold/wasm/" rel)
+          && !(lib.hasPrefix "apps/web/src/lib/core/database-sql/wasm/" rel)
           && !(lib.hasPrefix "packages/lexical-core/node_modules/" rel)
           && !(lib.hasPrefix "services/lexical-service/node_modules/" rel)
           && !(lib.hasPrefix "packages/loro-mirror/node_modules/" rel)
@@ -98,7 +99,8 @@
           && rel != "apps/web/dist"
           && rel != "apps/web/tauri/target"
           && rel != "apps/web/src/lib/graphql-cache/wasm"
-          && rel != "apps/web/src/lib/core/agent-fold/wasm";
+          && rel != "apps/web/src/lib/core/agent-fold/wasm"
+          && rel != "apps/web/src/lib/core/database-sql/wasm";
       };
 
       rootCargoVendorDir = craneLib.vendorCargoDeps {
@@ -166,6 +168,34 @@
         installPhaseCommand = ''
           mkdir -p $out
           cp -a apps/web/src/lib/core/agent-fold/wasm/. $out/
+        '';
+        doInstallCargoArtifacts = false;
+      };
+
+      # The SQL engine database tables and boards (CRM pipelines) lay out with.
+      databaseSqlWasmPackage = craneLib.mkCargoDerivation {
+        pname = "macro-database-sql-wasm";
+        version = appVersion;
+        src = jsSrc;
+        cargoArtifacts = null;
+        cargoVendorDir = rootCargoVendorDir;
+        nativeBuildInputs = [
+          pkgs.binaryen
+          pkgs.wasm-bindgen-cli_0_2_126
+          pkgs.wasm-pack
+        ];
+        doCheck = false;
+        preBuild = cacheWasmPackage.preBuild;
+        buildPhaseCargoCommand = ''
+          wasm-pack build crates/database_sql \
+            --target web \
+            --release \
+            --mode no-install \
+            --out-dir "$PWD/apps/web/src/lib/core/database-sql/wasm"
+        '';
+        installPhaseCommand = ''
+          mkdir -p $out
+          cp -a apps/web/src/lib/core/database-sql/wasm/. $out/
         '';
         doInstallCargoArtifacts = false;
       };
@@ -259,6 +289,8 @@
           cp -a ${cacheWasmPackage}/. apps/web/src/lib/graphql-cache/wasm/
           mkdir -p apps/web/src/lib/core/agent-fold/wasm
           cp -a ${agentFoldWasmPackage}/. apps/web/src/lib/core/agent-fold/wasm/
+          mkdir -p apps/web/src/lib/core/database-sql/wasm
+          cp -a ${databaseSqlWasmPackage}/. apps/web/src/lib/core/database-sql/wasm/
           (
             cd apps/web
             MODE=production NODE_ENV=production bun ../../node_modules/vite/bin/vite.js build -c vite.config.ts
@@ -286,6 +318,9 @@
           runHook preCheck
           for asset in apps/web/dist/assets/agent_fold-*.js apps/web/dist/assets/agent_fold_bg-*.wasm; do
             test -s "$asset" || { echo "Missing agent fold bundle asset: $asset" >&2; exit 1; }
+          done
+          for asset in apps/web/dist/assets/database_sql-*.js apps/web/dist/assets/database_sql_bg-*.wasm; do
+            test -s "$asset" || { echo "Missing database SQL bundle asset: $asset" >&2; exit 1; }
           done
           runHook postCheck
         '';
