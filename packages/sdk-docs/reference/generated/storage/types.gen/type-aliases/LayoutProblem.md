@@ -1,6 +1,6 @@
 # Type Alias: LayoutProblem
 
-> **LayoutProblem** = \{ `kind`: `"bookingMustBeLast"`; \} \| \{ `column`: `string`; `kind`: `"unknownColumn"`; \} \| \{ `column`: `string`; `kind`: `"managedColumn"`; \} \| \{ `column`: `string`; `kind`: `"repeatedColumn"`; \} \| \{ `id`: `string`; `kind`: `"repeatedId"`; \} \| \{ `column`: `string`; `kind`: `"gateNamesLaterColumn"`; \} \| \{ `kind`: `"gateRule"`; `reason`: `string`; \} \| \{ `kind`: `"textTooLong"`; `max`: `number`; \}
+> **LayoutProblem** = \{ `kind`: `"bookingMustBeLast"`; \} \| \{ `column`: `string`; `kind`: `"unknownColumn"`; \} \| \{ `column`: `string`; `kind`: `"managedColumn"`; \} \| \{ `column`: `string`; `kind`: `"repeatedColumn"`; \} \| \{ `id`: `string`; `kind`: `"repeatedId"`; \} \| \{ `column`: `string`; `kind`: `"gateNamesLaterColumn"`; \} \| \{ `kind`: `"gateRule"`; `reason`: `string`; \} \| \{ `column`: `string`; `kind`: `"conditionNamesLaterColumn"`; \} \| \{ `kind`: `"conditionRule"`; `reason`: `string`; \} \| \{ `kind`: `"textTooLong"`; `max`: `number`; \}
 
 Why a layout does not fit the form's table.
 
@@ -74,6 +74,28 @@ Why a layout does not fit the form's table.
 | Name | Type | Description |
 | ------ | ------ | ------ |
 | `kind` | `"gateRule"` | - |
+| `reason` | `string` | Why. |
+
+***
+
+### Type Literal
+
+\{ `column`: `string`; `kind`: `"conditionNamesLaterColumn"`; \}
+
+| Name | Type | Description |
+| ------ | ------ | ------ |
+| `column` | `string` | The column. |
+| `kind` | `"conditionNamesLaterColumn"` | - |
+
+***
+
+### Type Literal
+
+\{ `kind`: `"conditionRule"`; `reason`: `string`; \}
+
+| Name | Type | Description |
+| ------ | ------ | ------ |
+| `kind` | `"conditionRule"` | - |
 | `reason` | `string` | Why. |
 
 ***

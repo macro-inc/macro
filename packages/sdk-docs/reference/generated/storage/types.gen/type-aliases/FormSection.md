@@ -1,6 +1,6 @@
 # Type Alias: FormSection
 
-> **FormSection** = \{ `description`: `string`; `id`: `string`; `kind`: `"questions"`; `questions`: [`QuestionLayout`](QuestionLayout.md)[]; `title`: `string`; \} \| \{ `description`: `string`; `id`: `string`; `kind`: `"gate"`; `message`: `string`; `rules`: [`FilterGroup`](FilterGroup.md); `title`: `string`; \} \| \{ `description`: `string`; `id`: `string`; `kind`: `"booking"`; `target`: [`BookingTarget`](BookingTarget.md); `title`: `string`; \}
+> **FormSection** = \{ `description`: `string`; `id`: `string`; `kind`: `"questions"`; `questions`: [`QuestionLayout`](QuestionLayout.md)[]; `showWhen?`: [`FilterGroup`](FilterGroup.md); `title`: `string`; \} \| \{ `description`: `string`; `id`: `string`; `kind`: `"gate"`; `message`: `string`; `rules`: [`FilterGroup`](FilterGroup.md); `title`: `string`; \} \| \{ `description`: `string`; `id`: `string`; `kind`: `"booking"`; `target`: [`BookingTarget`](BookingTarget.md); `title`: `string`; \}
 
 One section of a layout: questions on one screen, or a gate the answers
 so far must pass.
@@ -9,7 +9,7 @@ so far must pass.
 
 ### Type Literal
 
-\{ `description`: `string`; `id`: `string`; `kind`: `"questions"`; `questions`: [`QuestionLayout`](QuestionLayout.md)[]; `title`: `string`; \}
+\{ `description`: `string`; `id`: `string`; `kind`: `"questions"`; `questions`: [`QuestionLayout`](QuestionLayout.md)[]; `showWhen?`: [`FilterGroup`](FilterGroup.md); `title`: `string`; \}
 
 | Name | Type | Description |
 | ------ | ------ | ------ |
@@ -17,6 +17,7 @@ so far must pass.
 | `id` | `string` | The section, under an id the client mints. |
 | `kind` | `"questions"` | - |
 | `questions` | [`QuestionLayout`](QuestionLayout.md)[] | Its questions, in order. |
+| `showWhen?` | [`FilterGroup`](FilterGroup.md) | When to show it: the rules answers of earlier shown sections must pass, naming only their columns. A section whose rules fail is skipped: its questions are not required and their answers are not written. Absent, it is always shown. |
 | `title` | `string` | Its title; may be empty. |
 
 ***

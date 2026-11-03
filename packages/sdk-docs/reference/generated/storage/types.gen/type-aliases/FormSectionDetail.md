@@ -1,6 +1,6 @@
 # Type Alias: FormSectionDetail
 
-> **FormSectionDetail** = \{ `description`: `string`; `id`: `string`; `kind`: `"questions"`; `questions`: [`FormQuestionDetail`](FormQuestionDetail.md)[]; `title`: `string`; \} \| \{ `description`: `string`; `id`: `string`; `kind`: `"gate"`; `message`: `string`; `rules`: [`FilterGroup`](FilterGroup.md); `title`: `string`; \} \| \{ `description`: `string`; `id`: `string`; `kind`: `"booking"`; `target?`: [`BookingTarget`](BookingTarget.md); `title`: `string`; \}
+> **FormSectionDetail** = \{ `description`: `string`; `id`: `string`; `kind`: `"questions"`; `questions`: [`FormQuestionDetail`](FormQuestionDetail.md)[]; `showWhen?`: [`FilterGroup`](FilterGroup.md); `title`: `string`; \} \| \{ `description`: `string`; `id`: `string`; `kind`: `"gate"`; `message`: `string`; `rules`: [`FilterGroup`](FilterGroup.md); `title`: `string`; \} \| \{ `description`: `string`; `id`: `string`; `kind`: `"booking"`; `target?`: [`BookingTarget`](BookingTarget.md); `title`: `string`; \}
 
 One section of a form as it reads.
 
@@ -8,7 +8,7 @@ One section of a form as it reads.
 
 ### Type Literal
 
-\{ `description`: `string`; `id`: `string`; `kind`: `"questions"`; `questions`: [`FormQuestionDetail`](FormQuestionDetail.md)[]; `title`: `string`; \}
+\{ `description`: `string`; `id`: `string`; `kind`: `"questions"`; `questions`: [`FormQuestionDetail`](FormQuestionDetail.md)[]; `showWhen?`: [`FilterGroup`](FilterGroup.md); `title`: `string`; \}
 
 | Name | Type | Description |
 | ------ | ------ | ------ |
@@ -16,6 +16,7 @@ One section of a form as it reads.
 | `id` | `string` | The section. |
 | `kind` | `"questions"` | - |
 | `questions` | [`FormQuestionDetail`](FormQuestionDetail.md)[] | Its questions, in order. |
+| `showWhen?` | [`FilterGroup`](FilterGroup.md) | When to show it, from earlier shown sections' answers; absent, it is always shown. Sent to every caller so a respondent's page can skip it. |
 | `title` | `string` | Its title. |
 
 ***
