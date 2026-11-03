@@ -438,7 +438,9 @@ fn every_host_exposes_skill_discovery_and_reading() {
             );
         }
         assert!(
-            tools.prompt.to_string().contains("ReadSkill"),
+            tools.toolset.tools["SearchSkills"]
+                .description
+                .contains("ReadSkill"),
             "{host:?} missing skill reading instructions"
         );
     }
