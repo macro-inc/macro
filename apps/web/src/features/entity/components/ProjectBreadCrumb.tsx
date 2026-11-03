@@ -1,9 +1,10 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { t } from '@app/lib/i18n';
 import FolderIcon from '@icon/system/regular/folder-simple.svg';
+import { queryReadyGate } from '@queries/gate';
 import { useProjectPreviewQuery } from '@queries/storage/project-preview';
 import { buttonClasses, cn, HoverCard } from '@ui';
-import { Show, Suspense } from 'solid-js';
+import { Show } from 'solid-js';
 import type { ProjectContainedEntity, ProjectEntity } from '../types/entity';
 import { truncatedPath } from '../utils/path';
 
@@ -16,11 +17,13 @@ export function ProjectBreadCrumb(props: {
 }) {
   const projectQuery = useProjectPreviewQuery(() => props.entity.projectId);
   const fullPath = () =>
-    projectQuery.data?.path.join('/') || projectQuery.data?.name;
+    queryReadyGate(projectQuery)
+      ? projectQuery.data.path.join('/') || projectQuery.data.name
+      : undefined;
 
   const handleClick = (e: MouseEvent) => {
     e.preventDefault();
-    if (!projectQuery.isSuccess) return;
+    if (!projectQuery.isSuccess || !queryReadyGate(projectQuery)) return;
     e.stopPropagation();
 
     const data = projectQuery.data;
@@ -64,15 +67,20 @@ export function ProjectBreadCrumb(props: {
     >
       <FolderIcon class="size-4 shrink-0 mobile:size-5" />
       <Show when={!props.collapsed}>
-        <Suspense fallback={<ListSkeleton.Bar class="h-2 w-10" />}>
-          <Show when={projectQuery.data}>
-            {(data) => (
-              <div class="truncate">
-                {truncatedPath(data().path, MAX_PATH_LENGTH)}
-              </div>
-            )}
-          </Show>
-        </Suspense>
+        <Show
+          when={queryReadyGate(projectQuery) ? projectQuery.data : undefined}
+          fallback={
+            projectQuery.isPending ? (
+              <ListSkeleton.Bar class="h-2 w-10" />
+            ) : undefined
+          }
+        >
+          {(data) => (
+            <div class="truncate">
+              {truncatedPath(data().path, MAX_PATH_LENGTH)}
+            </div>
+          )}
+        </Show>
       </Show>
     </HoverCard>
   );
