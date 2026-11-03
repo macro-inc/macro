@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT user_id, app_slug, server_name, account_id, enabled, provider\n            FROM pipedream_mcp_connections\n            WHERE user_id = $1 AND app_slug = $2\n                AND NOT EXISTS (SELECT 1 FROM mcp_overlays o WHERE o.app_slug = $2)\n            ",
+  "query": "\n            SELECT user_id, app_slug, server_name, account_id, enabled, provider\n            FROM pipedream_mcp_connections c\n            WHERE user_id = $1\n                AND (c.provider = 'connect'\n                    OR NOT EXISTS (SELECT 1 FROM mcp_overlays o WHERE o.app_slug = c.app_slug))\n            ORDER BY server_name\n            ",
   "describe": {
     "columns": [
       {
@@ -36,7 +36,6 @@
     ],
     "parameters": {
       "Left": [
-        "Text",
         "Text"
       ]
     },
@@ -49,5 +48,5 @@
       false
     ]
   },
-  "hash": "5059c329fd5116f716830e3a47e7a2b30d592fa6aa9a732915efd93e42dd7f64"
+  "hash": "5c770383b05fea77d04238a17ec1586574473163aff7d0a42855429f8982620e"
 }
