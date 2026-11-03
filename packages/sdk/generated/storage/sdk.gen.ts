@@ -1845,10 +1845,11 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * Lists the built-in system skills. System skills are static, code-defined
-     * AI instructions (see the `system_skills` crate); they surface in the
-     * skills menu and AI skill tools like user skills, but have no document
-     * behind them, so clients must not offer to open them.
+     * Lists the built-in system skills offered in the skills menu. System skills
+     * are static, code-defined AI instructions (see the `system_skills` crate);
+     * they surface in the skills menu and AI skill tools like user skills, but
+     * have no document behind them, so clients must not offer to open them.
+     * Agent-only skills are left out.
      */
     public getSystemSkillsHandler<ThrowOnError extends boolean = false>(options?: Options<GetSystemSkillsHandlerData, ThrowOnError>): RequestResult<GetSystemSkillsHandlerResponses, GetSystemSkillsHandlerErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetSystemSkillsHandlerResponses, GetSystemSkillsHandlerErrors, ThrowOnError>({ url: '/documents/system_skills', ...options });
