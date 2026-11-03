@@ -55,7 +55,6 @@ jobs:
             - '.sqlx/**'
             - 'crates/**'
             - 'services/**'
-            - 'connect/**'
             - 'tooling/xtask/**'
             - 'static_assets/**'
             - 'nix/**'

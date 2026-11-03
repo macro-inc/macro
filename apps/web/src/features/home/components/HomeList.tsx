@@ -1,3 +1,4 @@
+import { usePending } from '@app/observability/flow';
 import '@entity/composed/ListEntity.css';
 import {
   createListController,
@@ -113,6 +114,8 @@ export function HomeList(props: HomeListProps) {
     useHomeDataSource(state)
   );
 
+  usePending('home.items', source.isLoading);
+
   const list = withSplitPanelOwner(listOwnedSlotName('controller'), () =>
     createListController<HomeDataSourceItem, HomeListActivationMetadata>({
       items: source.items,
@@ -169,10 +172,7 @@ export function HomeList(props: HomeListProps) {
     const newSplit =
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
 
-    // Projects have no Home preview, so activating one opens it in place
-    // instead of selecting a row that shows nothing.
-    const previewable = sourceRow.entity.type !== 'initiative';
-    if (!isTouchDevice() && !newSplit && previewable) {
+    if (!isTouchDevice() && !newSplit) {
       markEntitySeen(sourceRow.entity);
       showPreview(sourceRow.entity, { activate: true });
       props.onPreviewActivate?.();
@@ -201,10 +201,7 @@ export function HomeList(props: HomeListProps) {
     entity: WithNotification<EntityData>,
     options?: { activate?: boolean }
   ) {
-    props.onPreviewEntityChange(
-      entity?.type === 'initiative' ? undefined : entity,
-      options
-    );
+    props.onPreviewEntityChange(entity, options);
   }
 
   const previewAfterNavigation = debounce(showPreview, 150);
@@ -304,9 +301,7 @@ export function HomeList(props: HomeListProps) {
 
     return ({ entity }) => {
       previewAfterNavigation.clear();
-      props.onPreviewEntityChange(
-        entity?.type === 'initiative' ? undefined : entity
-      );
+      props.onPreviewEntityChange(entity);
     };
   };
 

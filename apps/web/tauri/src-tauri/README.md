@@ -182,6 +182,26 @@ UPDATE_NATIVE_DIAGNOSTIC_TYPES=1 cargo test --manifest-path apps/web/tauri/Cargo
 
 The same tests without that environment variable check for drift.
 
+## Linux rendering diagnostics
+
+The app leaves WebKitGTK hardware acceleration and DMABUF negotiation at their
+platform defaults. WebKit's default hardware acceleration policy is `ALWAYS`,
+subject to system support; an available GPU, compatible driver, display server,
+and WebKitGTK build determine the actual rendering path. See the upstream
+[hardware policy](https://webkitgtk.org/reference/webkit2gtk/stable/property.Settings.hardware-acceleration-policy.html)
+and [graphics architecture](https://docs.webkit.org/Ports/WebKitGTK%20and%20WPE%20WebKit/Graphics.html).
+
+Distinguish software-only test machines from GPU-equipped desktops. Check device
+access (`/dev/dri`), the actual EGL renderer in the app's runtime environment,
+and driver/display compatibility. A masked JavaScript WebGL renderer string is
+not reliable hardware evidence. Do not globally disable compositing or DMABUF as
+a performance workaround: that can force more painting onto the CPU. Continuous
+status animations must stay inexpensive on software compositing too.
+
+Run native performance investigations, including all WebKit child processes,
+in the memory-capped scope from the
+[running guide](../../../../docs/development/running-locally.md).
+
 ## Running in development
 
 ```sh

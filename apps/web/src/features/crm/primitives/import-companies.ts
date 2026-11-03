@@ -133,9 +133,9 @@ export function createCompanyImport(
       setError('Could not read that file. Please try again.');
     }
   }
-  async function importRow(row: CompanyImportRow) {
+  async function importRow(row: CompanyImportRow, parent: Span) {
     try {
-      const outcome = await importer.create(row);
+      const outcome = await parent.run(() => importer.create(row));
       if (outcome === 'exists') setExisting((n) => n + 1);
       else setCompleted((n) => n + 1);
       return true;
@@ -173,7 +173,7 @@ export function createCompanyImport(
       span.setAttr('crm.import.pipeline_rows', result.added);
       setPipeline({ pipeline: target, ...result });
       try {
-        await transfer.refresh();
+        await span.run(() => transfer.refresh());
       } catch {
         // The rows are saved; the pipeline's own polling shows them.
       }
@@ -194,9 +194,9 @@ export function createCompanyImport(
       'crm.companies.import',
       async (span) => {
         span.setAttr('crm.import.rows', rows().length);
-        await span.span('crm.companies.import.create', () =>
+        await span.span('crm.companies.import.create', (create) =>
           runConcurrently(rows(), IMPORT_CONCURRENCY, async (row) => {
-            if (!(await importRow(row))) failed.add(row);
+            if (!(await importRow(row, create))) failed.add(row);
           })
         );
         span.setAttr('crm.import.created', completed());
@@ -204,7 +204,7 @@ export function createCompanyImport(
         span.setAttr('crm.import.failed', failed.size);
         const saved = await importPipeline(span, signal);
         try {
-          await importer.refresh();
+          await span.run(() => importer.refresh());
         } catch (cause) {
           // The companies exist; listings catch up on their next read.
           span.event('refresh_failed', {

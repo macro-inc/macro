@@ -109,7 +109,11 @@ keeps that named chip, including on phones, rather than showing “1 tag”.
 Open the overflow to edit all tags; hover it for hidden-tag names and filter/edit actions.
 The overflow chip reads “N tags” when it represents all tags, or “+N tags” when
 individual tag chips remain visible.
-An open picker or nested tag editor stays mounted while resizing. Add tags in a
+An open picker or nested tag editor stays mounted while resizing or when a
+sorted insertion moves its chip into overflow. Keep the active chip within the
+visible-chip cap until closing, then restore normal order. Live tag refreshes
+retain staged picker changes while accepting remote changes and deleted tags,
+including when a failed tag deletion restores its option. Add tags in a
 constrained row and close the picker: excess tags must enter overflow without
 resizing or reloading, restoring title space before truncating it. The share
 indicator remains immediately beside the title whenever it is shown.
@@ -604,6 +608,18 @@ also usable. An initial cache miss still shows failure; HTTP and GraphQL errors
 remain visible even with cached rows. Change filters while retaining prior rows:
 those older results must not hide a failure for the new, uncached query.
 
+For project labels, warm the Projects list or a project detail, then scroll tasks
+referencing that project out of view and back. With GraphQL caching enabled,
+row remounts must reuse complete cached identities without new
+`InitiativeIdentity` requests; missing identity fields still fetch. Explicit
+permission refreshes remain separate. Hold a cold folder-preview or identity
+request while scrolling on desktop and phone: only the row metadata may show
+loading, and the list must remain mounted at the same scroll position.
+After a project read is denied, scroll its row out of view and back: the cached
+label must remain hidden until a new authorized response succeeds. Switch viewers
+while retaining cached rows: mismatched identities must reauthorize immediately,
+without exposing the previous viewer's data or repeatedly retrying a failed read.
+
 ## Reviews view
 
 With `enable-tasks-reviews` enabled (on by default in development),
@@ -956,7 +972,9 @@ refreshes in the background to include the new row. If creation fails, the
 composer reopens as a popover with the draft and the error.
 Closing the popover without submitting keeps the underlying view open.
 
-Opening a project keeps the Tasks workspace and its navigation. The top bar
+Opening a project from Tasks keeps the Tasks workspace and its navigation.
+Home rows instead preview it inline with a Home return breadcrumb; touch and
+explicit split activation still use this full Tasks workspace. The top bar
 shows the Projects return breadcrumb and the project name, with the same Share
 and side-panel controls as task detail. `Project actions` (the dots button
 after the name) opens the row context menu's entries for this project,

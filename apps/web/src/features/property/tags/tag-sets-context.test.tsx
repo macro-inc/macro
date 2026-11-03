@@ -8,9 +8,10 @@ import type { TagSetResponse } from '@service-properties/generated/schemas/tagSe
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
-import { createSignal, type JSX } from 'solid-js';
+import { createRoot, createSignal, type JSX } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { EntityRowTags } from './EntityRowTags';
+import { createTagPickerSession, type DocTags } from './tag-picker-session';
 import { TagSetsProvider } from './tag-sets-context';
 
 const mocks = vi.hoisted(() => ({
@@ -48,6 +49,38 @@ vi.mock('./TagDot', () => ({
 vi.mock('./useDocTags', () => ({
   useDocTags: mocks.useDocTags,
   useSoupDocTags: mocks.useSoupDocTags,
+}));
+
+vi.mock('@components/app/split-layout/layout', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  useSplitLayout: () => ({}),
+}));
+vi.mock('@components/app/split-layout/layoutUtils', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  useSplitPanel: () => undefined,
+}));
+vi.mock(
+  '@property/editors/selectors/PropertyOptionSelector',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    useDropdownSearch: () => ({
+      setSelectedIndex: () => {},
+      selectedIndex: () => 0,
+      keyboardMode: () => false,
+    }),
+  })
+);
+vi.mock('@queries/properties/options', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  useAddPropertyOptionMutation: () => ({ isPending: false }),
+}));
+vi.mock('@queries/properties/tags', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  useEnsureTagSetMutation: () => ({ isPending: false }),
+}));
+vi.mock('@queries/team/teams', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  useCurrentTeamQuery: () => ({}),
 }));
 
 beforeEach(() => {
@@ -243,5 +276,138 @@ describe('TagSetsContext', () => {
       registration.setCollapsed(true);
     }
     expect(view.getByRole('button', { name: '4 tags' })).toBeTruthy();
+  });
+});
+
+describe('TagPickerSession', () => {
+  it('reconciles live selections and deletion rollbacks without losing staged changes', async () => {
+    const option = (id: string) => ({
+      id,
+      propertyDefinitionId: 'tag-definition',
+      displayOrder: 0,
+      value: { type: 'string' as const, value: id },
+    });
+    const [applied, setApplied] = createSignal(['a', 'b']);
+    const [options, setOptions] = createSignal(['a', 'b', 'c', 'd', 'e']);
+    const setTagSelection = vi.fn(async (_ids: ReadonlySet<string>) => {});
+    let dispose = () => {};
+    const session = createRoot((cleanup) => {
+      dispose = cleanup;
+      return createTagPickerSession({
+        docTags: {
+          appliedTags: () =>
+            applied().map((optionId) => ({
+              optionId,
+              propertyDefinitionId: 'tag-definition',
+              scope: 'user' as const,
+              label: optionId,
+            })),
+          tagSets: () => [
+            {
+              scope: 'user',
+              definition: { id: 'tag-definition' },
+              options: options().map(option),
+            },
+          ],
+          setTagSelection,
+        } as unknown as DocTags,
+        onClose: () => {},
+        onOpenEditEditor: () => {},
+        confirmsWithDone: true,
+      });
+    });
+
+    session.pick({ scope: 'user', option: option('a') });
+    session.pick({ scope: 'user', option: option('c') });
+    setApplied(['a', 'b', 'd']);
+    expect(session.isSelected('a')).toBe(false);
+    expect(session.isSelected('b')).toBe(true);
+    expect(session.isSelected('c')).toBe(true);
+    expect(session.isSelected('d')).toBe(true);
+
+    setOptions(['a', 'b', 'd', 'e']);
+    expect(session.isSelected('c')).toBe(false);
+    session.pick({ scope: 'user', option: option('e') });
+    setApplied(['a', 'b', 'd', 'e']);
+    expect(session.isSelected('a')).toBe(false);
+    expect(session.isSelected('e')).toBe(true);
+
+    setOptions(['b', 'd', 'e']);
+    setOptions(['a', 'b', 'c', 'd', 'e']);
+    expect(session.isSelected('a')).toBe(false);
+    expect(session.isSelected('c')).toBe(true);
+    await session.persistSelection();
+    expect([...setTagSelection.mock.calls[0][0]].sort()).toEqual([
+      'b',
+      'c',
+      'd',
+      'e',
+    ]);
+    dispose();
+  });
+});
+
+describe('EntityRowTags live insertions', () => {
+  it('keeps an active chip mounted within the visible cap until close', async () => {
+    const registrations = new Map<string, CollapsibleRegistration>();
+    const collapse = {
+      register(registration: CollapsibleRegistration) {
+        registrations.set(registration.id, registration);
+        return () => registrations.delete(registration.id);
+      },
+    };
+    const [tagIds, setTagIds] = createSignal(['b', 'c']);
+    const tagSets = (): TagSetResponse[] => [
+      {
+        scope: 'user',
+        definition: { id: 'tag-definition' },
+        options: ['a', 'b', 'c'].map((id, displayOrder) => ({
+          id,
+          propertyDefinitionId: 'tag-definition',
+          displayOrder,
+          value: { type: 'string', value: id },
+        })),
+      } as TagSetResponse,
+    ];
+    const properties = () => [
+      {
+        id: 'assignment',
+        definition: { id: 'tag-definition' },
+        value: { type: 'SelectOption', value: tagIds() },
+      } as SoupProperty,
+    ];
+    const view = render(() => (
+      <QueryClientProvider client={new QueryClient()}>
+        <TagSetsProvider tagSets={tagSets}>
+          <EntityRowTags
+            entityId="document-live-insert"
+            entityType={EntityType.DOCUMENT}
+            properties={properties()}
+            maxVisible={2}
+            collapse={collapse}
+          />
+        </TagSetsProvider>
+      </QueryClientProvider>
+    ));
+
+    const active = view.getByRole('button', { name: 'c' });
+    await fireEvent.click(active);
+    setTagIds(['a', 'b', 'c']);
+    expect(view.getByRole('button', { name: 'c' })).toBe(active);
+    expect(view.queryByRole('button', { name: 'b' })).toBeNull();
+    expect(view.getByRole('button', { name: '+1 tag' })).toBeTruthy();
+    expect(registrations.size).toBe(0);
+
+    await fireEvent.click(active);
+    expect(registrations.size).toBe(2);
+    expect(active.isConnected).toBe(false);
+    expect(view.getByRole('button', { name: 'b' })).toBeTruthy();
+    expect(view.queryByRole('button', { name: 'c' })).toBeNull();
+
+    const removed = view.getByRole('button', { name: 'b' });
+    await fireEvent.click(removed);
+    setTagIds(['a', 'c']);
+    expect(removed.isConnected).toBe(false);
+    expect(registrations.size).toBe(2);
   });
 });

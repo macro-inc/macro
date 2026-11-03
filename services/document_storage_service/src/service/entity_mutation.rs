@@ -240,6 +240,7 @@ where
     Databases: DatabasesService
         + RenameEntity
         + MoveEntity
+        + DuplicateEntity
         + TrashEntity
         + RestoreEntity
         + DeleteEntityPermanently,
@@ -804,6 +805,10 @@ where
                 self.duplicate_project(actor, &requested, display_name)
                     .await
             }
+            EntityType::Database => {
+                self.duplicate_with(&*self.databases, actor, &requested, display_name)
+                    .await
+            }
             EntityType::User
             | EntityType::Team
             | EntityType::Channel
@@ -821,8 +826,6 @@ where
             | EntityType::AgentSession
             | EntityType::ScheduledAction
             | EntityType::Initiative
-            // Duplicating a database is unsupported.
-            | EntityType::Database
             | EntityType::ExternalChat
             | EntityType::Form
             | EntityType::DatabaseRow => {
@@ -864,6 +867,7 @@ where
     Databases: DatabasesService
         + RenameEntity
         + MoveEntity
+        + DuplicateEntity
         + TrashEntity
         + RestoreEntity
         + DeleteEntityPermanently,

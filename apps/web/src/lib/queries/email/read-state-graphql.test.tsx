@@ -67,6 +67,7 @@ import {
 } from '@service-storage/graphql/generated/graphql';
 import { soupOptimisticResolvers } from '../optimistic-resolvers';
 import { registerGraphqlSoupRevalidations } from '../soup/graphql/active-queries';
+import { soupKeys } from '../soup/keys';
 import { emailKeys } from './keys';
 import {
   trackExternalThreadArchive,
@@ -141,6 +142,20 @@ describe('email read state with GraphQL Soup', () => {
     'propagates isRead=$read before the request settles (GraphQL=$graphql)',
     async ({ read, graphql }) => {
       mocks.graphqlEnabled = graphql;
+      const folderKeys = ['spam', 'trash'].map(
+        (emailView) =>
+          soupKeys.astItems({
+            params: {},
+            body: { emailView },
+            transport: 'rest',
+          }).queryKey
+      );
+      const allKey = soupKeys.astItems({
+        params: {},
+        body: { emailView: 'all' },
+      }).queryKey;
+      for (const key of [...folderKeys, allKey])
+        client.setQueryData(key, { pages: [] });
       let finish!: () => void;
       const network = new Promise<void>((resolve) => {
         finish = resolve;
@@ -211,8 +226,11 @@ describe('email read state with GraphQL Soup', () => {
         finish();
         await result;
       }
-      // The cached record carries the change to every list.
+      // Shared-cache lists stay local; isolated folder previews need a new read.
       expect(mocks.refresh).not.toHaveBeenCalled();
+      for (const key of folderKeys)
+        expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+      expect(client.getQueryState(allKey)?.isInvalidated).toBe(false);
     }
   );
 

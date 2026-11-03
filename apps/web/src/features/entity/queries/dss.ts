@@ -1,3 +1,4 @@
+import { Telemetry, type TraceContext } from '@macro-inc/observability';
 /** Document-storage mutations used by entity surfaces. */
 
 import { databaseEntityMessage } from '@app/features/database/core/write-failure';
@@ -522,7 +523,8 @@ export function createBulkCopyDssEntityMutation() {
   const isUnsupportedEntity = (entity: EntityData) =>
     (entity.type !== 'chat' &&
       entity.type !== 'document' &&
-      entity.type !== 'project') ||
+      entity.type !== 'project' &&
+      entity.type !== 'database') ||
     !canDuplicateItemType(entity.type);
 
   return useMutation(() => ({
@@ -590,9 +592,11 @@ export function createBulkMoveToProjectDssEntityMutation() {
     mutationFn: async ({
       entities,
       project,
+      parentSpan,
     }: {
       entities: (EntityData & { name: string })[];
       project: { id: string; name: string };
+      parentSpan?: TraceContext;
     }) => {
       if (!entities.every(isFolderMovable)) {
         throw new Error(`Unsupported entity type provided`);
@@ -600,11 +604,13 @@ export function createBulkMoveToProjectDssEntityMutation() {
 
       const results = await Promise.all(
         entities.map((entity) =>
-          moveToFolder({
-            itemType: entity.type,
-            id: entity.id,
-            folderId: project.id,
-          })
+          (parentSpan ?? Telemetry.captureContext()).run(() =>
+            moveToFolder({
+              itemType: entity.type,
+              id: entity.id,
+              folderId: project.id,
+            })
+          )
         )
       );
 
@@ -621,6 +627,7 @@ export function createBulkMoveToProjectDssEntityMutation() {
     }: {
       entities: (EntityData & { name: string })[];
       project: { id: string; name: string };
+      parentSpan?: TraceContext;
     }) => {
       const moveableEntities = entities.filter(
         (e): e is typeof e & { type: 'document' | 'chat' | 'email' } =>
@@ -642,7 +649,7 @@ export function createBulkMoveToProjectDssEntityMutation() {
       ];
     },
 
-    onSettled: (data, error, { entities, project }, context) => {
+    onSettled: (data, error, { entities, project, parentSpan }, context) => {
       const failed = data?.success === false || !!error;
       if (failed) {
         context?.forEach((txn) => txn.rollback());
@@ -650,11 +657,13 @@ export function createBulkMoveToProjectDssEntityMutation() {
       }
       invalidateListedEntities(entities);
 
-      return invalidateAfterMove(
-        entities.map((e) => e.id),
-        project.id,
-        entities.some((e) => e.type === 'project'),
-        failed
+      return (parentSpan ?? Telemetry.captureContext()).run(() =>
+        invalidateAfterMove(
+          entities.map((e) => e.id),
+          project.id,
+          entities.some((e) => e.type === 'project'),
+          failed
+        )
       );
     },
   }));

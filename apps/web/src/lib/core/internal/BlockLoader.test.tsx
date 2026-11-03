@@ -1,7 +1,9 @@
+import { TraceFlow, useFlow } from '@app/observability/flow';
+import { initializeUiOperationTelemetry } from '@app/observability/ui-operation';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { err, ok } from 'neverthrow';
-import { createEffect, createSignal, on, Show } from 'solid-js';
+import { createEffect, createSignal, lazy, on, Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 vi.mock('@core/context/user', () => ({ useIsAuthenticated: () => () => true }));
@@ -51,8 +53,14 @@ import {
 } from '../signal/load';
 import { BlockLoader, blockDataSignal } from './BlockLoader';
 
-afterEach(cleanup);
+let disposeTelemetry: (() => void) | undefined;
+afterEach(() => {
+  cleanup();
+  disposeTelemetry?.();
+  vi.restoreAllMocks();
+});
 beforeEach(() => {
+  disposeTelemetry = initializeUiOperationTelemetry();
   nested = true;
   analytics.track.mockClear();
   analytics.pageView.mockClear();
@@ -409,4 +417,54 @@ it('reports no open for a block without open history by default', async () => {
     expect.anything()
   );
   expect(analytics.pageView).not.toHaveBeenCalled();
+});
+
+it('holds the enclosing view until both data and component code are ready', async () => {
+  const data = Promise.withResolvers<{ id: string }>();
+  const code = Promise.withResolvers<void>();
+  const published = Promise.withResolvers<void>();
+  const settled = Promise.withResolvers<void>();
+  const ready = vi.fn(() => settled.resolve());
+  function ObserveReady() {
+    const span = useFlow().span;
+    const setAttr = span.setAttr.bind(span);
+    vi.spyOn(span, 'setAttr').mockImplementation((key, value) => {
+      setAttr(key, value);
+      if (key === 'ui.work_to_ready_ms') ready();
+    });
+    return null;
+  }
+  render(() => {
+    createEffect(() => {
+      if (blockDataSignal.get()) published.resolve();
+    });
+    return (
+      <TraceFlow name="view.document">
+        <ObserveReady />
+        <BlockLoader
+          id="document"
+          source={{ type: 'dss', id: 'document' }}
+          definition={{
+            name: 'email',
+            description: 'Email',
+            accepted: {},
+            component: lazy(async () => {
+              await code.promise;
+              return { default: () => null };
+            }),
+            load: async () => ok(await data.promise),
+          }}
+        />
+      </TraceFlow>
+    );
+  });
+  await Promise.resolve();
+  expect(ready).not.toHaveBeenCalled();
+  data.resolve({ id: 'document' });
+  await Promise.resolve();
+  expect(ready).not.toHaveBeenCalled();
+  code.resolve();
+  await published.promise;
+  await settled.promise;
+  expect(ready).toHaveBeenCalledOnce();
 });

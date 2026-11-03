@@ -3,6 +3,7 @@ import {
   createMemoryPaneStore,
   createSplitRouter,
   type Entry,
+  PANE_LEVEL,
   type PaneId,
   type SplitRouter,
 } from '@app/lib/split-router';
@@ -12,7 +13,11 @@ import {
 } from '@app/lib/split-router/tests/fixtures';
 import { createRoot } from 'solid-js';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createTabManager, type TabLayoutHost } from '../tab-manager';
+import {
+  createTabManager,
+  MAX_PARKED_TABS,
+  type TabLayoutHost,
+} from '../tab-manager';
 
 const fakeHost = (): TabLayoutHost => ({
   tabTitle: () => undefined,
@@ -171,5 +176,85 @@ describe('desktop tab manager', () => {
       kind: 'url',
       url: '/mail/t1',
     });
+  });
+
+  it('parks the tab it leaves, so switching back shows the same panes without remounting', async () => {
+    const { router, tabManager } = track(setup('/mail/t1'));
+    const [first] = tabManager.tabs();
+    const firstPanes = router.panes();
+    const firstEntry = router.entry(firstPanes[0]!);
+
+    tabManager.newTab();
+    await flush(router);
+    const second = tabManager.activeTabId();
+    expect(tabManager.layerIds()).toEqual([first!.id, second]);
+    expect(tabManager.isLive(second)).toBe(true);
+    expect(tabManager.isLive(first!.id)).toBe(false);
+    // The left tab's panes stay retained, with their entries, in its layer.
+    expect(tabManager.layerSplits(first!.id)).toEqual(firstPanes);
+    expect(router.entry(firstPanes[0]!)).toBe(firstEntry);
+
+    tabManager.activateTab(first!.id);
+    await flush(router);
+    expect(router.panes()).toEqual(firstPanes);
+    expect(router.entry(firstPanes[0]!)).toBe(firstEntry);
+    expect(tabManager.isLive(first!.id)).toBe(true);
+    expect(tabManager.layerSplits(second)).toHaveLength(1);
+  });
+
+  it('the first live tab takes the initial layer, so enabling tabs remounts nothing', () => {
+    const { tabManager } = track(setup('/mail/t1'));
+    expect(tabManager.layerIds()).toEqual(['initial']);
+  });
+
+  it(`unmounts the least recently used tabs past ${MAX_PARKED_TABS} parked`, async () => {
+    const { router, tabManager } = track(setup('/mail/t1'));
+    const [first] = tabManager.tabs();
+    const firstPanes = router.panes();
+
+    for (let i = 0; i <= MAX_PARKED_TABS; i += 1) {
+      tabManager.newTab();
+      await flush(router);
+    }
+
+    const evicted = tabManager.tabs().find((tab) => tab.id === first!.id)!;
+    expect(evicted.stored.kind).toBe('snapshot');
+    expect(router.retainedPanes()).not.toContain(firstPanes[0]);
+    expect(tabManager.layerIds()).toHaveLength(MAX_PARKED_TABS + 1);
+
+    tabManager.activateTab(first!.id);
+    await flush(router);
+    expect(routeIds(router)).toEqual([['mail', 'mail-thread']]);
+  });
+
+  it('closing a background tab forgets its parked panes', async () => {
+    const { router, tabManager } = track(setup('/mail/t1'));
+    const [first] = tabManager.tabs();
+    const firstPanes = router.panes();
+    tabManager.newTab();
+    await flush(router);
+
+    tabManager.closeTab(first!.id);
+    expect(tabManager.tabs()).toHaveLength(1);
+    expect(router.retainedPanes()).toEqual(router.panes());
+    expect(router.entry(firstPanes[0]!)).toBeUndefined();
+  });
+
+  it('a leave guard in the active tab can refuse closing it', async () => {
+    const { router, tabManager } = track(setup('/mail/t1'));
+    tabManager.newTab();
+    await flush(router);
+    const closing = tabManager.activeTabId();
+    const stop = router.registerGuard(
+      router.panes()[0]!,
+      PANE_LEVEL,
+      () => false
+    );
+
+    tabManager.closeTab(closing);
+    await flush(router);
+    expect(tabManager.tabs()).toHaveLength(2);
+    expect(tabManager.activeTabId()).toBe(closing);
+    stop();
   });
 });

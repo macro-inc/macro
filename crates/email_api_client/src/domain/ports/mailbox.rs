@@ -233,6 +233,12 @@ pub trait MailboxDraftClient: Send + Sync + 'static {
         bytes: &[u8],
     ) -> impl Future<Output = Result<crate::domain::models::UploadProgress, EmailApiError>> + Send;
 }
+/// Reads how many requests a mailbox's request gate admitted.
+pub trait MailboxRequestCount: Send + Sync + 'static {
+    /// Requests admitted for the mailbox's sync generation, when known.
+    fn admitted_requests(&self, mailbox: MailboxAccess)
+    -> impl Future<Output = Option<u64>> + Send;
+}
 /// Binds request accounting to the same mailbox as credential acquisition.
 pub trait ScopedMailboxRepository: Clone + Send + Sync + 'static {
     /// Return a request-scoped clone; credentials remain supplied separately.
@@ -254,6 +260,12 @@ pub trait MailboxRequestGate: Send + Sync + 'static {
         permit: uuid::Uuid,
         retry_after: Option<std::time::Duration>,
     ) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send + '_>>;
+    /// Requests admitted for this mailbox's sync generation, or `None` when
+    /// the count is unavailable.
+    fn admitted(
+        &self,
+        mailbox: MailboxAccess,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Option<u64>> + Send + '_>>;
 }
 
 /// Settings capabilities which require explicit rule ownership and bounded cleanup.
