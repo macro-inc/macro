@@ -203,10 +203,10 @@ export function HomeList(props: HomeListProps) {
   }
 
   function showPreview(
-    entity: WithNotification<EntityData>,
+    entity: WithNotification<EntityData> | undefined,
     options?: { activate?: boolean }
   ) {
-    markPrNotificationsSeenOnOpen(entity, notificationSource);
+    if (entity) markPrNotificationsSeenOnOpen(entity, notificationSource);
     props.onPreviewEntityChange(
       entity?.type === 'initiative' ? undefined : entity,
       options
@@ -310,9 +310,7 @@ export function HomeList(props: HomeListProps) {
 
     return ({ entity }) => {
       previewAfterNavigation.clear();
-      props.onPreviewEntityChange(
-        entity?.type === 'initiative' ? undefined : entity
-      );
+      showPreview(entity);
     };
   };
 

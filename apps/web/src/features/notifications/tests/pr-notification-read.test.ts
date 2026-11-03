@@ -121,6 +121,8 @@ function createSource() {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  mocks.seen.mockReset();
+  mocks.entitySeen.mockClear();
   mocks.transport = 'graphql';
   mocks.feed.mockReturnValue([]);
 });
