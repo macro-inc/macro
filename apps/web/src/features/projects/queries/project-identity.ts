@@ -92,11 +92,15 @@ function createAuthorizedProjectQuery<
   const operationName = getOperationName(
     createRequest(document, { initiativeId: '' }).query
   );
+  const currentClient = createMemo(client);
+  const currentViewer = createMemo(userId);
+  const currentProject = createMemo(projectId);
+  const readEnabled = createMemo(enabled);
   const scope = createMemo(() => ({
-    client: client(),
-    viewerId: userId(),
-    projectId: projectId(),
-    active: enabled() && Boolean(userId() && projectId()),
+    client: currentClient(),
+    viewerId: currentViewer(),
+    projectId: currentProject(),
+    active: readEnabled() && Boolean(currentViewer() && currentProject()),
   }));
   const active = () => scope().active;
   const authorization = createMemo(() => {

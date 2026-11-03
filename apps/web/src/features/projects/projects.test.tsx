@@ -520,12 +520,14 @@ it('immediately reauthorizes another viewer cache hit once per activation', asyn
   ).data;
   const { client, requests } = controlledClient();
   const [viewer, setViewer] = createSignal('next-viewer');
+  const [gate, setGate] = createSignal({ enabled: true });
   const query = createRoot((dispose) => {
     onTestFinished(dispose);
     return createProjectIdentityQuery(
       () => client,
       viewer,
-      () => 'launch'
+      () => 'launch',
+      () => gate().enabled
     );
   });
   requests[0].next(data, undefined, true);
@@ -534,6 +536,8 @@ it('immediately reauthorizes another viewer cache hit once per activation', asyn
   expect(requests[1].operation.context.requestPolicy).toBe('network-only');
   requests[1].next(data, undefined, true);
   expect(query.data).toBeUndefined();
+  expect(requests).toHaveLength(2);
+  setGate({ enabled: true });
   expect(requests).toHaveLength(2);
   requests[1].next({ user: { ...data.user, id: 'next-viewer' } });
   expect(query.data?.name).toBe('Launch');
