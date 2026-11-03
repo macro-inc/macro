@@ -530,7 +530,7 @@ impl IntoResponse for ScheduledActionApiError {
         }
         if let Some(validation) = error.downcast_ref::<TargetValidationError>() {
             let status = match validation {
-                TargetValidationError::InvalidTask | TargetValidationError::AgentsDisabled => {
+                TargetValidationError::InvalidTask | TargetValidationError::SessionsUnavailable => {
                     StatusCode::BAD_REQUEST
                 }
                 TargetValidationError::ExplicitAgentRequired
