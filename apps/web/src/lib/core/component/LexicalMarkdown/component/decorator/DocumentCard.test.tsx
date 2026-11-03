@@ -233,13 +233,33 @@ it('reserves a poll’s height across suspended metadata loading', async () => {
   const placeholder = await screen.findByRole('status');
   expect(
     placeholder.closest<HTMLElement>('[data-slot="card"]')?.style.height
-  ).toBe('21.5rem');
+  ).toBe('20.25rem');
   release?.();
   const content = await screen.findByText('form-1');
-  expect(content.closest<HTMLElement>('.rounded-xl')?.style.height).toBe(
-    '21.5rem'
-  );
+  // The loaded card keeps the reservation as a floor and grows to its content.
+  const card = content.closest<HTMLElement>('.rounded-xl');
+  expect(card?.style.minHeight).toBe('20.25rem');
+  expect(card?.style.height).toBe('auto');
   expect(screen.queryByRole('status')).toBeNull();
+});
+
+it('reserves no poll height once the form turns out to be unavailable', async () => {
+  mocks.access = 'no_access';
+  render(() => (
+    <MarkdownHostContext.Provider value="channel">
+      <DocumentCard
+        key="poll-node"
+        documentId="form-1"
+        documentName="Lunch?"
+        blockName="form"
+        blockParams={{}}
+        previewData={{ poll: { optionCount: 3 } }}
+        theme={{}}
+      />
+    </MarkdownHostContext.Provider>
+  ));
+  const message = await screen.findByText('You don’t have access to this poll');
+  expect(message.closest<HTMLElement>('.rounded-xl')?.style.minHeight).toBe('');
 });
 
 it.each(['code', 'canvas', 'pdf'] as const)(

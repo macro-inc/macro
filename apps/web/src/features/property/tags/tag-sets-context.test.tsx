@@ -153,7 +153,6 @@ describe('TagSetsContext', () => {
       'first-tag',
       'second-tag',
       'third-tag',
-      'fourth-tag',
     ]);
     const properties = () => [
       {
@@ -180,12 +179,16 @@ describe('TagSetsContext', () => {
 
     expect(view.getByRole('button', { name: 'Third' })).toBeTruthy();
     expect(view.queryByRole('button', { name: 'Fourth' })).toBeNull();
-    expect(view.getByRole('button', { name: '+1 tag' })).toBeTruthy();
+    expect(view.queryByRole('button', { name: '+1 tag' })).toBeNull();
     const first = view.getByRole('button', { name: 'First' });
     await fireEvent.click(first);
     expect(registrations.size).toBe(0);
     expect(view.getByRole('button', { name: 'First' })).toBe(first);
     expect(mocks.useSoupDocTags).toHaveBeenCalledOnce();
+
+    setTagIds(['first-tag', 'second-tag', 'third-tag', 'fourth-tag']);
+    expect(view.getByRole('button', { name: 'First' })).toBe(first);
+    expect(registrations.size).toBe(0);
 
     await fireEvent.click(first);
     for (const registration of registrations.values()) {
@@ -216,6 +219,29 @@ describe('TagSetsContext', () => {
 
     setTagIds(['first-tag', 'second-tag', 'third-tag', 'fourth-tag']);
     expect(registrations.size).toBe(3);
+    expect(view.getByRole('button', { name: '4 tags' })).toBeTruthy();
+
+    for (const registration of registrations.values()) {
+      registration.setCollapsed(false);
+    }
+    const removedChip = view.getByRole('button', { name: 'First' });
+    await fireEvent.click(removedChip);
+    setTagIds(['second-tag', 'third-tag']);
+    expect(removedChip.isConnected).toBe(false);
+    expect(registrations.size).toBe(2);
+
+    setTagIds(['first-tag', 'second-tag', 'third-tag', 'fourth-tag']);
+    const removedOverflow = view.getByRole('button', { name: '+1 tag' });
+    await fireEvent.click(removedOverflow);
+    setTagIds(['first-tag', 'second-tag', 'third-tag']);
+    expect(removedOverflow.isConnected).toBe(false);
+    expect(registrations.size).toBe(3);
+
+    setTagIds(['first-tag', 'second-tag', 'third-tag', 'fourth-tag']);
+    expect(registrations.size).toBe(3);
+    for (const registration of registrations.values()) {
+      registration.setCollapsed(true);
+    }
     expect(view.getByRole('button', { name: '4 tags' })).toBeTruthy();
   });
 });

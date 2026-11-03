@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT database_id AS id, name, user_id AS owner_id, created_at, trashed_at\n            FROM database_entities\n            WHERE database_id = ANY($1)\n            ORDER BY created_at\n            ",
+  "query": "\n            SELECT database_id AS id, name, user_id AS owner_id, created_at, trashed_at, project_id\n            FROM database_entities\n            WHERE database_id = ANY($1)\n            ORDER BY created_at\n            ",
   "describe": {
     "columns": [
       {
@@ -27,6 +27,11 @@
         "ordinal": 4,
         "name": "trashed_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "project_id",
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -39,8 +44,9 @@
       false,
       false,
       false,
+      true,
       true
     ]
   },
-  "hash": "f2af84dbfa64cd884cae988fb76db056c11f32b0cff76152c069724b1fcf035c"
+  "hash": "414511b5955036e2b7509bbafde6c7cdc67282d591d72031d53535ff20db546f"
 }
