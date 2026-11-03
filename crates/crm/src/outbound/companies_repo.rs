@@ -713,25 +713,28 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-        // Same lock populate/depopulate take for the domain.
+        // Same lock populate/depopulate take for the domain, then the team
+        // and settings locks every writer holds through commit, so CRM
+        // disable+purge can't commit between this check and the insert.
         Self::lock_team_domain(&mut tx, team_id, &normalized_domain).await?;
 
-        let admitted = sqlx::query_scalar!(
-            r#"
-            SELECT COALESCE(
-                (SELECT crm_enabled AND NOT exclude_personal_emails
-                 FROM team_crm_settings WHERE team_id = $1),
-                FALSE
-            ) AND NOT EXISTS (
-                SELECT 1 FROM crm_blocked_domains WHERE team_id = $1 AND domain = $2
-            ) AS "admitted!"
-            "#,
-            team_id,
-            normalized_domain,
-        )
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        let admitted = Self::team_crm_enabled(&mut tx, team_id).await?
+            && sqlx::query_scalar!(
+                r#"
+                SELECT COALESCE(
+                    (SELECT NOT exclude_personal_emails
+                     FROM team_crm_settings WHERE team_id = $1),
+                    FALSE
+                ) AND NOT EXISTS (
+                    SELECT 1 FROM crm_blocked_domains WHERE team_id = $1 AND domain = $2
+                ) AS "admitted!"
+                "#,
+                team_id,
+                normalized_domain,
+            )
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
         // Merge rules mirror populate_contact: first non-NULL name wins,
         // last_interaction always GREATEST, first_interaction LEAST only

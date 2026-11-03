@@ -489,9 +489,10 @@ the back arrow is the only control in the header. It is the same page as
 Settings > CRM, with the same member and admin permissions; check both roles.
 
 Its **Email sync** section (shown while CRM is on) has **Keep personal emails
-out** (on by default) and **Blocked domains**. With the toggle off, email sync
-adds people who email from personal providers (gmail.com, outlook.com, …) as
-contacts without a company; vendor, brand and bulk-sender domains stay out.
+out** (on by default) and **Blocked domains**. With the toggle off, mail you
+send to someone on a personal provider (gmail.com, outlook.com, …) adds them as
+a contact without a company; mail they send you only updates a contact that
+already exists. Vendor, brand and bulk-sender domains stay out.
 Blocking a domain (typed, or every domain of a company picked from the menu)
 stops email sync for it and hides its company and people; unblocking shows them
 again. Only admins and owners change either; members see them read-only.

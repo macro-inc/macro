@@ -16,6 +16,9 @@ import {
 // A plausible address; the server enforces the real rules.
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const INVALID_EMAIL = 'Enter an email like jane@example.com, or leave it empty';
+// Matches the server's display-name limit.
+const MAX_NAME_CHARS = 200;
+const NAME_TOO_LONG = `Use a name of ${MAX_NAME_CHARS} characters or fewer`;
 
 export function contactCreationError(cause: unknown): string {
   if (cause instanceof ThrownResultError) {
@@ -26,7 +29,7 @@ export function contactCreationError(cause: unknown): string {
       return "CRM isn't enabled for your team.";
     }
     if (cause.errors.some((e) => e.code === 'BAD_REQUEST')) {
-      return "Use an email at the company's domain, a personal email, or none.";
+      return 'Check the name and email, then try again.';
     }
   }
   return 'Failed to create contact. Try again.';
@@ -106,6 +109,10 @@ export function CreateContactModal(props: {
       setError('Enter a name');
       return;
     }
+    if (contactName().length > MAX_NAME_CHARS) {
+      setError(NAME_TOO_LONG);
+      return;
+    }
     if (contactEmail() && !EMAIL_PATTERN.test(contactEmail())) {
       setError(INVALID_EMAIL);
       return;
@@ -163,7 +170,9 @@ export function CreateContactModal(props: {
                     placeholder="Contact name"
                     autocomplete="off"
                     data-1p-ignore
-                    aria-invalid={error() === 'Enter a name'}
+                    aria-invalid={
+                      error() === 'Enter a name' || error() === NAME_TOO_LONG
+                    }
                     class="ph-no-capture w-full min-w-0 text-xl/7 font-medium outline-none bg-transparent placeholder:text-ink-placeholder"
                     value={name()}
                     disabled={createContactMutation.isPending}

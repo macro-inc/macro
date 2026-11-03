@@ -51,8 +51,10 @@ deploy), makes `crm_contacts.email` and `company_id` nullable, and adds
 `team_crm_settings.exclude_personal_emails` and `crm_blocked_domains`. Rollback
 is an application rollback that leaves the additive schema in place: older
 readers ignore the new column, settings and blocklist, but they fail to decode
-contacts without an email or company, so hide or remove those rows before
-rolling back past this delivery. Existing name-only
+contacts without an email or company, including hidden ones (admin reads include
+hidden contacts). Before rolling back past this delivery, move those rows out of
+`crm_contacts` (for example into a holding table to restore afterwards); hiding
+them is not enough. Existing name-only
 companies and cross-domain manual contacts remain readable and retain the
 manual-creation protection against sync cleanup.
 
