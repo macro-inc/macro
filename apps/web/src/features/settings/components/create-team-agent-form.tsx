@@ -249,7 +249,7 @@ export function CreateTeamAgentForm(props: {
               <Show
                 when={models()?.status === 'available'}
                 fallback={
-                  <p class="settings-input text-ink-muted">
+                  <p class="settings-input flex items-center text-ink-muted">
                     {runtime()?.connected
                       ? modelsQuery.isError
                         ? 'Could not load models'

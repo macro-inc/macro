@@ -519,7 +519,7 @@ export function InviteToTeamDialog(props: {
           </Dialog.Title>
         </Panel.Header>
 
-        <Panel.Body class="p-3 flex flex-col gap-3">
+        <Panel.Body scroll class="p-3 flex flex-col gap-3">
           <Show when={canCreateAgents()}>
             <Tabs
               size="sm"
