@@ -55,6 +55,7 @@ export const authExcluded = [
   'createMergeRequest',
   'createPortalSession',
   'createTeam',
+  'createTeamAgent',
   'createTeamInviteLink',
   // An agent's own API key is a credential managed in the app's agent settings.
   'deleteAgentApiKey',
@@ -74,6 +75,9 @@ export const authExcluded = [
   'getGithubPullRequestMergeability',
   'getGtmInviteOffer',
   'getLegacyUserPermissions',
+  // Team agents use these through crates/agent_brain, not the SDK.
+  'getMyTeamAgent',
+  'getMyTeamAgentEmail',
   'getPermissions',
   // Renewal and scheduled-plan details are part of the app's billing settings.
   'getSubscriptionStatus',
@@ -100,6 +104,7 @@ export const authExcluded = [
   'listCodexEnvironments',
   'listCursorModels',
   'listGtmInviteLinks',
+  'listMyTeamAgentEmail',
   'listSystemStatusHistory',
   'logout',
   'mergeGithubPullRequest',
@@ -132,6 +137,7 @@ export const authExcluded = [
   'revokeGtmInviteLink',
   'sendMobileWelcomeEmail',
   'sendTeamDomainNotice',
+  'sendTeamAgentEmail',
   'sessionCreation',
   'sessionLogin',
   'setGithubPullRequestDraft',

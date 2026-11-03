@@ -331,6 +331,36 @@ export type CreatePortalSessionRequest = {
 };
 
 /**
+ * Input for creating a team agent.
+ */
+export type CreateTeamAgent = {
+    /**
+     * Profile picture URL (a static file the caller uploaded).
+     */
+    avatarUrl?: string | null;
+    /**
+     * The team macrod runtime to run the agent's brain on.
+     */
+    harnessId: string;
+    /**
+     * What the agent is responsible for.
+     */
+    jobDescription: string;
+    /**
+     * The runtime's model for the brain's sessions.
+     */
+    model: string;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * How the agent behaves and talks.
+     */
+    personality: string;
+};
+
+/**
  * The request body to create a new team
  */
 export type CreateTeamRequest = {
@@ -529,6 +559,54 @@ export type EmailConnectionProviders = {
      * `original_url` for the administrator's browser to return to.
      */
     outlook_admin_consent_url?: string | null;
+};
+
+/**
+ * One email in an agent's mailbox.
+ */
+export type EmailMessage = {
+    /**
+     * Sender.
+     */
+    from: string;
+    /**
+     * Provider message id.
+     */
+    messageId: string;
+    /**
+     * Short preview of the body.
+     */
+    preview?: string | null;
+    /**
+     * When the provider received or sent it.
+     */
+    receivedAt: string;
+    /**
+     * Subject line.
+     */
+    subject?: string | null;
+    /**
+     * Plain-text body, when fetched individually.
+     */
+    text?: string | null;
+    /**
+     * Provider thread id.
+     */
+    threadId: string;
+    /**
+     * Recipients.
+     */
+    to: Array<string>;
+};
+
+/**
+ * A page of an agent's emails, newest first.
+ */
+export type EmailMessages = {
+    /**
+     * The emails.
+     */
+    messages: Array<EmailMessage>;
 };
 
 /**
@@ -1643,6 +1721,28 @@ export type SendDomainNoticeResponse = {
 };
 
 /**
+ * An email for an agent to send.
+ */
+export type SendEmail = {
+    /**
+     * Optional HTML body.
+     */
+    html?: string | null;
+    /**
+     * Subject line.
+     */
+    subject: string;
+    /**
+     * Plain-text body.
+     */
+    text: string;
+    /**
+     * Recipients.
+     */
+    to: Array<string>;
+};
+
+/**
  * The body which is used to describe the recipient email
  */
 export type SendInviteBody = {
@@ -1664,6 +1764,16 @@ export type SendMobileWelcomeEmailResponse = {
      * Whether the lead was enrolled (false if they were already enrolled previously)
      */
     sent: boolean;
+};
+
+/**
+ * The provider's id for a sent email.
+ */
+export type SentEmail = {
+    /**
+     * Provider message id.
+     */
+    messageId: string;
 };
 
 /**
@@ -1839,6 +1949,56 @@ export type Team = {
     name: string;
     owner_id: string;
     slug: string;
+};
+
+/**
+ * A team agent: an AI teammate with its own Macro account on a team.
+ */
+export type TeamAgent = {
+    /**
+     * The Macro agent (bot) bound to the brain's runtime.
+     */
+    brainBotId?: string | null;
+    /**
+     * The brain's first agent session, where it set itself up.
+     */
+    brainSessionId?: string | null;
+    /**
+     * When the agent was created.
+     */
+    createdAt: string;
+    /**
+     * Admin who created the agent; it takes operating instructions from them.
+     */
+    createdBy?: string | null;
+    /**
+     * The agent's email address.
+     */
+    email: string;
+    /**
+     * The macrod runtime the agent's brain runs on.
+     */
+    harnessId?: string | null;
+    /**
+     * What the agent is responsible for.
+     */
+    jobDescription: string;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * How the agent behaves and talks.
+     */
+    personality: string;
+    /**
+     * Team the agent belongs to.
+     */
+    teamId: string;
+    /**
+     * The agent's Macro user id (`macro|<email>`).
+     */
+    userId: string;
 };
 
 /**
@@ -2182,6 +2342,10 @@ export type UserLinkResponse = {
 export type UserName = {
     first_name?: string | null;
     id: string;
+    /**
+     * Whether the account is a team agent (an AI teammate).
+     */
+    is_agent?: boolean;
     last_name?: string | null;
 };
 
@@ -4352,6 +4516,126 @@ export type GetUserInvitesResponses = {
 };
 
 export type GetUserInvitesResponse = GetUserInvitesResponses[keyof GetUserInvitesResponses];
+
+export type CreateTeamAgentData = {
+    body: CreateTeamAgent;
+    path?: never;
+    query?: never;
+    url: '/team_agents';
+};
+
+export type CreateTeamAgentErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateTeamAgentError = CreateTeamAgentErrors[keyof CreateTeamAgentErrors];
+
+export type CreateTeamAgentResponses = {
+    201: TeamAgent;
+};
+
+export type CreateTeamAgentResponse = CreateTeamAgentResponses[keyof CreateTeamAgentResponses];
+
+export type GetMyTeamAgentData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team_agents/me';
+};
+
+export type GetMyTeamAgentErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetMyTeamAgentError = GetMyTeamAgentErrors[keyof GetMyTeamAgentErrors];
+
+export type GetMyTeamAgentResponses = {
+    200: TeamAgent;
+};
+
+export type GetMyTeamAgentResponse = GetMyTeamAgentResponses[keyof GetMyTeamAgentResponses];
+
+export type ListMyTeamAgentEmailData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Most emails to return, 1 to 100. Defaults to 20.
+         */
+        limit?: number;
+    };
+    url: '/team_agents/me/email/messages';
+};
+
+export type ListMyTeamAgentEmailErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    502: ErrorResponse;
+    503: ErrorResponse;
+};
+
+export type ListMyTeamAgentEmailError = ListMyTeamAgentEmailErrors[keyof ListMyTeamAgentEmailErrors];
+
+export type ListMyTeamAgentEmailResponses = {
+    200: EmailMessages;
+};
+
+export type ListMyTeamAgentEmailResponse = ListMyTeamAgentEmailResponses[keyof ListMyTeamAgentEmailResponses];
+
+export type GetMyTeamAgentEmailData = {
+    body?: never;
+    path: {
+        /**
+         * Provider message id.
+         */
+        message_id: string;
+    };
+    query?: never;
+    url: '/team_agents/me/email/messages/{message_id}';
+};
+
+export type GetMyTeamAgentEmailErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    502: ErrorResponse;
+    503: ErrorResponse;
+};
+
+export type GetMyTeamAgentEmailError = GetMyTeamAgentEmailErrors[keyof GetMyTeamAgentEmailErrors];
+
+export type GetMyTeamAgentEmailResponses = {
+    200: EmailMessage;
+};
+
+export type GetMyTeamAgentEmailResponse = GetMyTeamAgentEmailResponses[keyof GetMyTeamAgentEmailResponses];
+
+export type SendTeamAgentEmailData = {
+    body: SendEmail;
+    path?: never;
+    query?: never;
+    url: '/team_agents/me/email/send';
+};
+
+export type SendTeamAgentEmailErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    502: ErrorResponse;
+    503: ErrorResponse;
+};
+
+export type SendTeamAgentEmailError = SendTeamAgentEmailErrors[keyof SendTeamAgentEmailErrors];
+
+export type SendTeamAgentEmailResponses = {
+    200: SentEmail;
+};
+
+export type SendTeamAgentEmailResponse = SendTeamAgentEmailResponses[keyof SendTeamAgentEmailResponses];
 
 export type GetUserNamesData = {
     body: PostGetNamesRequestBody;
