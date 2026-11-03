@@ -12,6 +12,7 @@ use serde_json::{Value, json};
 /// Production Dialpad. Its sandbox is a separate account system.
 pub const DIALPAD_API: &str = "https://dialpad.com/api/v2";
 
+/// [`Dialpad`] over its REST API.
 pub struct DialpadApi {
     http: reqwest::Client,
     base_url: String,
@@ -25,6 +26,7 @@ struct Reply {
 }
 
 impl DialpadApi {
+    /// A client for the API at `base_url`.
     pub fn new(base_url: impl Into<String>) -> Result<Self> {
         let http = reqwest::Client::builder()
             .connect_timeout(std::time::Duration::from_secs(10))

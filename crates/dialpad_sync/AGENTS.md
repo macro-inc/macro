@@ -55,7 +55,11 @@ A first-connect backfill pages `GET /call` one page per reconcile.
 - Dialpad only delivers to public HTTPS; setup is a no-op without one
   (local stacks need a tunnel on `/cognition/integrations/dialpad/webhooks`).
 - Disconnecting deletes Macro Connect's connection; it does not revoke the
-  grant at Dialpad. Imported calls stay.
+  grant at Dialpad. Imported calls stay, and the sync row stays (as
+  `Disconnected`) so a reconnect keeps its import namespace: never delete it,
+  or a backfill re-imports calls as duplicates.
+- Deliveries are stored only while a sync runs or is mid-setup; a stopped
+  sync's subscription may keep posting.
 - Needs `CONNECT_CUSTOMER_KEY` and a live `dialpad` app in Macro Connect
   (`connect/registry/apps/dialpad`, an `own_app` awaiting Dialpad's approval).
 

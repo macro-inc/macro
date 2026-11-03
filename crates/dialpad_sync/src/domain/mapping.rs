@@ -17,7 +17,9 @@ mod test;
 /// What a call's events need fetched before it can be imported.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Needs {
+    /// Fetch the transcript: Dialpad said it is ready, or this is a past call.
     pub transcript: bool,
+    /// Fetch the AI recap: a past call whose events carry none.
     pub recap: bool,
 }
 

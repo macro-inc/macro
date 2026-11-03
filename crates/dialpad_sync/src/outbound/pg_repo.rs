@@ -16,6 +16,7 @@ pub struct PgSyncRepository {
 }
 
 impl PgSyncRepository {
+    /// Storage over `pool`, sealing signing secrets under `key`.
     pub fn new(pool: PgPool, key: &[u8; 32]) -> Self {
         Self {
             pool,
@@ -229,10 +230,27 @@ impl SyncRepository for PgSyncRepository {
         Ok(())
     }
 
-    async fn delete(&self, id: Uuid) -> Result<()> {
-        sqlx::query!("DELETE FROM dialpad_sync_connections WHERE id = $1", id)
-            .execute(&self.pool)
-            .await?;
+    async fn disconnect(&self, id: Uuid, unregistered: bool) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query!(
+            r#"UPDATE dialpad_sync_connections
+            SET enabled = false, last_error = $2, setup_started_at = NULL,
+                webhook_id = CASE WHEN $3 THEN NULL ELSE webhook_id END,
+                subscription_id = CASE WHEN $3 THEN NULL ELSE subscription_id END
+            WHERE id = $1"#,
+            id,
+            SyncIssue::Disconnected.as_ref(),
+            unregistered
+        )
+        .execute(tx.as_mut())
+        .await?;
+        sqlx::query!(
+            "DELETE FROM dialpad_sync_events WHERE connection_id = $1 AND completed_at IS NULL",
+            id
+        )
+        .execute(tx.as_mut())
+        .await?;
+        tx.commit().await?;
         Ok(())
     }
 
@@ -292,7 +310,9 @@ impl SyncRepository for PgSyncRepository {
             .ok_or_else(|| rootcause::report!("Dialpad event has no timestamp"))?;
         sqlx::query!(
             r#"INSERT INTO dialpad_sync_events (connection_id, call_id, state, occurred_at, payload, traceparent)
-            SELECT id, $2, $3, $4, $5, $6 FROM dialpad_sync_connections WHERE id = $1
+            SELECT id, $2, $3, $4, $5, $6 FROM dialpad_sync_connections
+            -- Running, or mid-setup (deliveries can beat activation); never stopped.
+            WHERE id = $1 AND (enabled OR (setup_started_at IS NOT NULL AND last_error IS NULL))
             ON CONFLICT DO NOTHING"#,
             id,
             event.call_id.0,

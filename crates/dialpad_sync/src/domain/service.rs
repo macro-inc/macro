@@ -17,13 +17,16 @@ const ENROLLMENT_TTL: chrono::Duration = chrono::Duration::hours(1);
 /// check and disconnect it; webhooks and reconciliation do the rest.
 #[async_trait]
 pub trait SyncService: Send + Sync {
+    /// Where the user's sync stands.
     async fn status(&self, user: &MacroUserIdStr<'static>) -> Result<SyncStatus>;
     /// Start connecting: returns the Macro Connect URL to send the user to.
     async fn connect(&self, user: &MacroUserIdStr<'static>, backfill: Backfill) -> Result<String>;
     /// The user is back from Macro Connect: set up now instead of waiting for
     /// the next reconcile pass.
     async fn complete(&self, user: &MacroUserIdStr<'static>) -> Result<SyncStatus>;
+    /// Stop syncing and remove the Dialpad connection from Macro Connect. Imported calls stay.
     async fn disconnect(&self, user: &MacroUserIdStr<'static>) -> Result<()>;
+    /// Verify and store one webhook delivery.
     async fn receive(&self, id: Uuid, body: &[u8]) -> std::result::Result<(), SyncError>;
     /// Import one queued delivery. Returns whether there was work.
     async fn tick(&self) -> Result<bool>;
@@ -31,11 +34,17 @@ pub trait SyncService: Send + Sync {
     async fn reconcile(&self) -> Result<()>;
 }
 
+/// [`SyncService`] over its ports.
 pub struct Service<R, G, D, V> {
+    /// Sync state and deliveries.
     pub repo: R,
+    /// The user's grant in Macro Connect.
     pub grants: G,
+    /// Dialpad's REST API.
     pub dialpad: D,
+    /// Delivery signature checks.
     pub verifier: V,
+    /// Where calls are imported.
     pub calls: Arc<dyn CallImportService>,
     /// Public harness origin that Dialpad delivers webhooks to.
     pub public_url: String,
@@ -51,7 +60,11 @@ fn new_secret() -> SigningSecret {
 
 fn status_of(connection: Option<Connection>) -> SyncStatus {
     match connection {
-        None => SyncStatus::NotConnected,
+        None
+        | Some(Connection {
+            last_error: Some(SyncIssue::Disconnected),
+            ..
+        }) => SyncStatus::NotConnected,
         Some(connection) if connection.enabled => SyncStatus::Connected {
             last_synced_at: connection.last_synced_at,
             issue: connection.last_error,
@@ -83,7 +96,8 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> Service<R, G
             Grant::Active(token) => token,
             Grant::NotConnected => {
                 if connection.enrolled_at < chrono::Utc::now() - ENROLLMENT_TTL {
-                    self.repo.delete(connection.id).await?;
+                    let unregistered = connection.registration.is_none();
+                    self.repo.disconnect(connection.id, unregistered).await?;
                     span.record("outcome", "abandoned");
                 } else {
                     span.record("outcome", "waiting");
@@ -121,21 +135,43 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> Service<R, G
     ) -> Result<()> {
         // Left behind when a sync stopped without a usable token.
         if let Some(old) = connection.registration
-            && let Err(error) = self.dialpad.unregister(token, old).await
+            && let Err(error) = self
+                .dialpad
+                .unregister(token, old)
+                .instrument(tracing::info_span!("dialpad.unregister"))
+                .await
         {
             tracing::warn!(error = ?error, "could not remove old Dialpad subscription");
         }
-        let me = self.dialpad.me(token).await?;
+        let me = self
+            .dialpad
+            .me(token)
+            .instrument(tracing::info_span!("dialpad.users_me"))
+            .await?;
         let url = format!(
             "{}/integrations/dialpad/webhooks/{}",
             self.public_url.trim_end_matches('/'),
             connection.id
         );
-        let webhook = self.dialpad.create_webhook(token, &url, secret).await?;
-        let subscription_id = match self.dialpad.subscribe(token, webhook, me.id).await {
+        let webhook = self
+            .dialpad
+            .create_webhook(token, &url, secret)
+            .instrument(tracing::info_span!("dialpad.create_webhook"))
+            .await?;
+        let subscribed = self
+            .dialpad
+            .subscribe(token, webhook, me.id)
+            .instrument(tracing::info_span!("dialpad.subscribe"))
+            .await;
+        let subscription_id = match subscribed {
             Ok(id) => id,
             Err(error) => {
-                if let Err(cleanup) = self.dialpad.delete_webhook(token, webhook).await {
+                if let Err(cleanup) = self
+                    .dialpad
+                    .delete_webhook(token, webhook)
+                    .instrument(tracing::info_span!("dialpad.delete_webhook"))
+                    .await
+                {
                     tracing::warn!(error = ?cleanup, "could not remove unused Dialpad webhook");
                 }
                 return Err(error);
@@ -151,7 +187,10 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> Service<R, G
             .activate(connection.id, me.id, registration)
             .await?
         {
-            self.dialpad.unregister(token, registration).await?;
+            self.dialpad
+                .unregister(token, registration)
+                .instrument(tracing::info_span!("dialpad.unregister"))
+                .await?;
         }
         Ok(())
     }
@@ -176,6 +215,7 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> Service<R, G
         let page = self
             .dialpad
             .calls(&token, dialpad_user, *since, cursor.as_deref())
+            .instrument(tracing::info_span!("dialpad.list_calls"))
             .await?;
         let calls: Vec<CallEvent> = page
             .calls
@@ -285,15 +325,26 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> SyncService
     #[tracing::instrument(name = "dialpad.disconnect", skip_all, err(Display))]
     async fn disconnect(&self, user: &MacroUserIdStr<'static>) -> Result<()> {
         let connection = self.repo.by_user(user).await?;
-        if let Some(registration) = connection.as_ref().and_then(|c| c.registration)
-            && let Grant::Active(token) = self.grants.grant(user).await?
-            && let Err(error) = self.dialpad.unregister(&token, registration).await
-        {
-            tracing::warn!(error = ?error, "could not remove Dialpad subscription");
+        let mut unregistered = true;
+        if let Some(registration) = connection.as_ref().and_then(|c| c.registration) {
+            unregistered = false;
+            if let Grant::Active(token) = self.grants.grant(user).await? {
+                match self
+                    .dialpad
+                    .unregister(&token, registration)
+                    .instrument(tracing::info_span!("dialpad.unregister"))
+                    .await
+                {
+                    Ok(()) => unregistered = true,
+                    Err(error) => {
+                        tracing::warn!(error = ?error, "could not remove Dialpad subscription")
+                    }
+                }
+            }
         }
         self.grants.disconnect(user).await?;
         if let Some(connection) = connection {
-            self.repo.delete(connection.id).await?;
+            self.repo.disconnect(connection.id, unregistered).await?;
         }
         Ok(())
     }

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE dialpad_sync_connections\n            SET enabled = false, last_error = $2, setup_started_at = NULL,\n                webhook_id = CASE WHEN $3 THEN NULL ELSE webhook_id END,\n                subscription_id = CASE WHEN $3 THEN NULL ELSE subscription_id END\n            WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "909b42ca51abe3c4891549300c85410092163efb1e5d9ca635f3123f32093cf6"
+}

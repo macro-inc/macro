@@ -5,6 +5,7 @@ use crate::domain::{
 };
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 
+/// [`DeliveryVerifier`] for Dialpad's HS256 JWT deliveries.
 pub struct JwtVerifier;
 
 impl DeliveryVerifier for JwtVerifier {

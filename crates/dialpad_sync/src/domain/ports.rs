@@ -4,13 +4,16 @@ use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
+/// Result of a port call.
 pub type Result<T> = std::result::Result<T, rootcause::Report>;
 
 /// Storage owns enrollment, setup leases, durable delivery deduplication and
 /// delivery leases.
 #[async_trait]
 pub trait SyncRepository: Send + Sync {
+    /// The user's sync, if they ever connected.
     async fn by_user(&self, user: &MacroUserIdStr<'static>) -> Result<Option<Connection>>;
+    /// A sync by id.
     async fn by_id(&self, id: Uuid) -> Result<Option<Connection>>;
     /// Start or resume a user's enrollment. A running sync keeps running and
     /// only clears its issue; anything else restarts as pending with
@@ -38,7 +41,10 @@ pub trait SyncRepository: Send + Sync {
     async fn stop(&self, id: Uuid, issue: SyncIssue) -> Result<()>;
     /// Record an issue on a running sync without stopping it.
     async fn flag(&self, id: Uuid, issue: SyncIssue) -> Result<()>;
-    async fn delete(&self, id: Uuid) -> Result<()>;
+    /// Stop as [`SyncIssue::Disconnected`], keeping the row and its import
+    /// namespace. `unregistered` forgets the Dialpad resources once they
+    /// were removed; otherwise the next setup removes them.
+    async fn disconnect(&self, id: Uuid, unregistered: bool) -> Result<()>;
     /// Running syncs with past calls left to import.
     async fn backfilling(&self, limit: i64) -> Result<Vec<Connection>>;
     /// Queue one page of past calls and save where the import resumes;
@@ -51,15 +57,18 @@ pub trait SyncRepository: Send + Sync {
     ) -> Result<()>;
     /// Persist a verified delivery once; repeats are ignored.
     async fn enqueue(&self, id: Uuid, event: CallEvent, traceparent: Option<String>) -> Result<()>;
+    /// Lease the next due delivery, if any.
     async fn claim(&self) -> Result<Option<Job>>;
     /// Every stored event for one call, oldest first.
     async fn events(&self, id: Uuid, call: DialpadId) -> Result<Vec<CallEvent>>;
+    /// Complete a leased delivery, or schedule its retry with backoff.
     async fn finish(&self, job: &Job, success: bool) -> Result<()>;
 }
 
 /// The user's Dialpad grant, held by Macro Connect.
 #[async_trait]
 pub trait Grants: Send + Sync {
+    /// The user's current Dialpad grant.
     async fn grant(&self, user: &MacroUserIdStr<'static>) -> Result<Grant>;
     /// A Macro Connect URL where the user approves Dialpad, returning to
     /// `redirect_url`.
@@ -76,13 +85,16 @@ pub trait Grants: Send + Sync {
 /// Dialpad's REST API, called with the user's token.
 #[async_trait]
 pub trait Dialpad: Send + Sync {
+    /// The connected Dialpad user.
     async fn me(&self, token: &AccessToken) -> Result<DialpadUser>;
+    /// Register a webhook signed with `secret`; returns its id.
     async fn create_webhook(
         &self,
         token: &AccessToken,
         url: &str,
         secret: &SigningSecret,
     ) -> Result<DialpadId>;
+    /// Subscribe `webhook` to `user`'s call states; returns the subscription id.
     async fn subscribe(
         &self,
         token: &AccessToken,
@@ -91,6 +103,7 @@ pub trait Dialpad: Send + Sync {
     ) -> Result<DialpadId>;
     /// Delete the subscription, then the webhook. Already-gone is success.
     async fn unregister(&self, token: &AccessToken, registration: Registration) -> Result<()>;
+    /// Delete a webhook. Already-gone is success.
     async fn delete_webhook(&self, token: &AccessToken, webhook: DialpadId) -> Result<()>;
     /// `None` when the call has no transcript.
     async fn transcript(

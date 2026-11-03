@@ -9,6 +9,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
 use zeroize::Zeroizing;
 
+/// [`Grants`] over Macro Connect.
 pub struct ConnectGrants(pub Arc<ConnectClient>);
 
 #[async_trait]

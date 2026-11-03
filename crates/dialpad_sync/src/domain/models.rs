@@ -70,26 +70,36 @@ impl Backfill {
 /// that delivers to it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Registration {
+    /// The webhook Dialpad delivers to.
     pub webhook_id: DialpadId,
+    /// The call event subscription feeding the webhook.
     pub subscription_id: DialpadId,
 }
 
 /// One user's sync. The id is stable and names the webhook URL.
 #[derive(Clone)]
 pub struct Connection {
+    /// Row id; names the webhook URL.
     pub id: Uuid,
     /// Stable import namespace, retained across reconnects.
     pub namespace: Uuid,
+    /// The Macro user who connected Dialpad and owns imported calls.
     pub user_id: MacroUserIdStr<'static>,
+    /// Whether deliveries are imported.
     pub enabled: bool,
     /// The connected Dialpad user, once setup has read it.
     pub dialpad_user_id: Option<DialpadId>,
+    /// Dialpad resources registered for this sync, if any.
     pub registration: Option<Registration>,
     /// Present from the start of setup, so early deliveries verify.
     pub secret: Option<SigningSecret>,
+    /// First-connect import of past calls.
     pub backfill: BackfillState,
+    /// When the user last started connecting.
     pub enrolled_at: DateTime<Utc>,
+    /// When a call last imported successfully.
     pub last_synced_at: Option<DateTime<Utc>>,
+    /// Why the sync is not healthy, if it isn't.
     pub last_error: Option<SyncIssue>,
 }
 
@@ -100,7 +110,9 @@ pub enum BackfillState {
     Done,
     /// Import calls started at or after `since`, resuming at `cursor`.
     Pending {
+        /// Earliest call start to import.
         since: DateTime<Utc>,
+        /// Dialpad's cursor for the next page, after the first.
         cursor: Option<String>,
     },
 }
@@ -120,6 +132,10 @@ pub enum SyncIssue {
     /// A call failed to sync; it is retried with backoff.
     #[strum(serialize = "Call sync failed; retrying automatically")]
     CallSyncFailed,
+    /// The user disconnected Dialpad, or never finished connecting. The row
+    /// stays so a reconnect keeps the import namespace.
+    #[strum(serialize = "Disconnected")]
+    Disconnected,
 }
 
 /// What the Settings page shows.
@@ -131,11 +147,17 @@ pub enum SyncStatus {
     Connecting,
     /// Calls are syncing.
     Connected {
+        /// When a call last imported successfully.
         last_synced_at: Option<DateTime<Utc>>,
+        /// A problem that does not stop sync.
         issue: Option<SyncIssue>,
     },
     /// Sync is not running; `issue` says why.
-    Failed { issue: SyncIssue },
+    /// Sync is not running; `issue` says why.
+    Failed {
+        /// What stopped it.
+        issue: SyncIssue,
+    },
 }
 
 /// The call states Macro subscribes to. Anything else is not delivered.
@@ -175,19 +197,25 @@ impl CallState {
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum Direction {
+    /// The external party called the Dialpad user.
     Inbound,
+    /// The Dialpad user called the external party.
     Outbound,
 }
 
 /// The Dialpad user (or department) on Macro's side of a call.
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct Target {
+    /// Dialpad user or department id.
     #[serde(default)]
     pub id: Option<DialpadId>,
+    /// Display name.
     #[serde(default)]
     pub name: Option<String>,
+    /// Email address, when Dialpad has one.
     #[serde(default)]
     pub email: Option<String>,
+    /// Phone number on Macro's side.
     #[serde(default)]
     pub phone: Option<String>,
 }
@@ -195,12 +223,16 @@ pub struct Target {
 /// The external party, matching `external_number`. `email` is often empty.
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct Contact {
+    /// Dialpad's contact id; may be a URL.
     #[serde(default)]
     pub id: Option<String>,
+    /// Display name; Dialpad uses the number when it has none.
     #[serde(default)]
     pub name: Option<String>,
+    /// Email address; often empty.
     #[serde(default)]
     pub email: Option<String>,
+    /// Phone number, normally E.164.
     #[serde(default)]
     pub phone: Option<String>,
 }
@@ -209,32 +241,47 @@ pub struct Contact {
 /// Timestamps are Unix milliseconds.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CallEvent {
+    /// Dialpad's call id.
     pub call_id: DialpadId,
+    /// The state this event reports.
     pub state: CallState,
+    /// Who placed the call.
     #[serde(default)]
     pub direction: Option<Direction>,
+    /// When Dialpad began handling the call.
     #[serde(default)]
     pub date_started: Option<i64>,
+    /// When both sides were connected; absent for unanswered calls.
     #[serde(default)]
     pub date_connected: Option<i64>,
+    /// When the call ended.
     #[serde(default)]
     pub date_ended: Option<i64>,
+    /// When this event happened.
     #[serde(default)]
     pub event_timestamp: Option<i64>,
+    /// The external party's number.
     #[serde(default)]
     pub external_number: Option<String>,
+    /// The number on Macro's side.
     #[serde(default)]
     pub internal_number: Option<String>,
+    /// The external party.
     #[serde(default)]
     pub contact: Option<Contact>,
+    /// The Dialpad user or department on Macro's side.
     #[serde(default)]
     pub target: Option<Target>,
+    /// The first call of a transferred call's chain.
     #[serde(default)]
     pub master_call_id: Option<DialpadId>,
+    /// Link to the call in Dialpad, for company members.
     #[serde(default)]
     pub company_call_review_share_link: Option<String>,
+    /// Dialpad's AI summary, on `recap_summary` events.
     #[serde(default)]
     pub recap_summary: Option<String>,
+    /// Dialpad's AI action items, on `recap_action_items` events.
     #[serde(default)]
     pub recap_action_items: Option<Vec<String>>,
 }
@@ -255,6 +302,7 @@ pub struct TranscriptLine {
     /// `transcript` for speech; moments and AI questions are other kinds.
     #[serde(default, rename = "type")]
     pub kind: Option<String>,
+    /// What was said.
     #[serde(default)]
     pub content: Option<String>,
     /// The speaker's name.
@@ -269,30 +317,42 @@ pub struct TranscriptLine {
 /// their events).
 #[derive(Debug, Clone, Default)]
 pub struct Recap {
+    /// Summary text, unless Dialpad returned its too-short placeholder.
     pub summary: Option<String>,
+    /// Action items, in order.
     pub action_items: Vec<String>,
 }
 
 /// A stored delivery waiting to be imported. Completion is fenced by lease_id.
 pub struct Job {
+    /// The sync the delivery belongs to.
     pub connection: Connection,
+    /// Dialpad's call id.
     pub call_id: DialpadId,
+    /// The delivered state.
     pub state: CallState,
+    /// When the event happened; part of the delivery's identity.
     pub occurred_at: DateTime<Utc>,
+    /// Trace context of the webhook request that stored it.
     pub traceparent: Option<String>,
+    /// Fences completion to this claim.
     pub lease_id: Uuid,
+    /// Claims so far, including this one.
     pub attempts: i32,
 }
 
 /// The connected Dialpad user, from `GET /users/me`.
 #[derive(Debug, Clone)]
 pub struct DialpadUser {
+    /// Dialpad's user id.
     pub id: DialpadId,
 }
 
 /// One page of past calls.
 pub struct CallPage {
+    /// Calls on this page.
     pub calls: Vec<CallEvent>,
+    /// Cursor for the next page; `None` on the last.
     pub cursor: Option<String>,
 }
 
@@ -315,12 +375,16 @@ impl std::fmt::Debug for AccessToken {
     }
 }
 
+/// Why a webhook delivery was not accepted.
 #[derive(Debug, thiserror::Error)]
 pub enum SyncError {
+    /// The signature, connection or payload did not check out.
     #[error("Invalid webhook signature or payload")]
     InvalidDelivery,
+    /// Sync cannot accept deliveries on this deployment.
     #[error("Dialpad sync is not configured")]
     Unavailable,
+    /// Storing the delivery failed.
     #[error("Dialpad sync request failed: {0}")]
     Internal(rootcause::Report),
 }

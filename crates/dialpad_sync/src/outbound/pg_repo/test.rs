@@ -308,6 +308,18 @@ async fn a_connected_user_s_calls_import_from_signed_deliveries_until_disconnect
         service.status(&user()).await.unwrap(),
         SyncStatus::NotConnected
     );
+
+    // Reconnecting keeps the import namespace, so past calls never duplicate.
+    service.connect(&user(), Backfill::Week).await.unwrap();
+    service.complete(&user()).await.unwrap();
+    let reconnected = service.repo.by_user(&user()).await.unwrap().unwrap();
+    assert!(reconnected.enabled);
+    assert_eq!(reconnected.id, connection.id);
+    assert_eq!(reconnected.namespace, connection.namespace);
+    assert!(matches!(
+        reconnected.backfill,
+        BackfillState::Pending { .. }
+    ));
 }
 
 #[sqlx::test(
@@ -339,6 +351,21 @@ async fn a_removed_connect_grant_stops_sync_and_drops_pending_deliveries(pool: P
         }
     );
     assert!(service.repo.claim().await.unwrap().is_none());
+    // Dialpad may keep delivering to a stopped sync; nothing piles up.
+    service
+        .receive(
+            connection.id,
+            &signed(&secret, call_event(11, "hangup", 3), json!({})),
+        )
+        .await
+        .unwrap();
+    let stored = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM dialpad_sync_events WHERE call_id = 11"#
+    )
+    .fetch_one(&service.repo.pool)
+    .await
+    .unwrap();
+    assert_eq!(stored, 0);
 
     // Reconnecting restarts sync under a new secret and the same import namespace.
     service.grants.set(GrantState::Active);

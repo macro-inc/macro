@@ -80,6 +80,7 @@ impl<Auth> FromRef<DialpadRouterState<Auth>> for MacroAuthorizationState<Auth> {
 }
 
 impl<Auth> DialpadRouterState<Auth> {
+    /// Routes over `service`, authorized by `authorization_state`.
     pub fn new(
         service: Option<Arc<dyn SyncService>>,
         authorization_state: MacroAuthorizationState<Auth>,
@@ -117,9 +118,11 @@ where
 pub enum DialpadConnectionState {
     /// This deployment cannot connect Dialpad.
     Unavailable,
+    /// The user has not connected Dialpad.
     NotConnected,
     /// Waiting for the user to approve Dialpad, or for setup.
     Connecting,
+    /// Calls are syncing.
     Connected,
     /// Sync is not running; `issue` says why.
     Failed,
@@ -142,7 +145,8 @@ pub enum DialpadSyncIssue {
 impl From<SyncIssue> for DialpadSyncIssue {
     fn from(issue: SyncIssue) -> Self {
         match issue {
-            SyncIssue::Stopped => Self::Stopped,
+            // Never reported: a disconnected sync reads as not connected.
+            SyncIssue::Stopped | SyncIssue::Disconnected => Self::Stopped,
             SyncIssue::NeedsReauth => Self::NeedsReauth,
             SyncIssue::SetupFailed => Self::SetupFailed,
             SyncIssue::CallSyncFailed => Self::CallSyncFailed,
@@ -154,9 +158,11 @@ impl From<SyncIssue> for DialpadSyncIssue {
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DialpadConnectionResponse {
+    /// Where sync stands.
     pub state: DialpadConnectionState,
     /// When a call last synced.
     pub last_synced_at: Option<DateTime<Utc>>,
+    /// Why sync needs attention, if it does.
     pub issue: Option<DialpadSyncIssue>,
 }
 
@@ -192,13 +198,17 @@ pub struct ConnectDialpadRequest {
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectDialpadResponse {
+    /// The Macro Connect page to open.
     pub connect_url: String,
 }
 
+/// A connection route failed.
 #[derive(Debug, thiserror::Error)]
 pub enum DialpadHandlerError {
+    /// Dialpad is not configured on this deployment.
     #[error("Dialpad is not available on this deployment")]
     Unavailable,
+    /// The request failed; details are logged, not returned.
     #[error("Dialpad request failed")]
     Internal(rootcause::Report),
 }
