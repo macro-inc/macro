@@ -83,9 +83,11 @@ link flow, following the hexagonal architecture pattern.
   `GithubError::Internal(e.into())`, which turns an outage back into a 500.
   Throttling never comes back from `GithubHttp::send` as a response, so a
   GitHub 403 a caller sees is a refusal.
-- Send new GitHub API calls through `outbound/github_http.rs` (`GithubHttp`);
-  only the sync client's App-JWT and installation-admin calls still use
-  `reqwest` directly. It paces each token with `governor`, holds up to a
+- Send new GitHub API calls through `outbound/github_http.rs` (`GithubHttp`).
+  The sync client's setup-code exchange, App-JWT and installation-admin
+  calls, user-installation and authenticated-user lookups (user tokens), PR
+  comments, and branch lists still use `reqwest` directly, unpaced and
+  uncached. `GithubHttp` paces each token with `governor`, holds up to a
   second and retries once when GitHub says it will accept requests again
   within that, remembers a throttled token so later calls fail fast with when
   to retry, shares identical in-flight reads, and revalidates GETs by `ETag`
