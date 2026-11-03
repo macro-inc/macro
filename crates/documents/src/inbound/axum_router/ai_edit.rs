@@ -62,7 +62,7 @@ pub enum DocumentAiEditFailedCode {
 pub struct DocumentAiEditFailed {
     /// Always `edit_failed`.
     pub error: DocumentAiEditFailedCode,
-    /// What went wrong.
+    /// What to do next; the cause is logged, never returned.
     pub message: String,
 }
 
@@ -85,7 +85,7 @@ impl IntoResponse for DocumentAiEditError {
                     StatusCode::BAD_GATEWAY,
                     Json(DocumentAiEditFailed {
                         error: DocumentAiEditFailedCode::EditFailed,
-                        message: error.to_string(),
+                        message: "The edit failed after it started and may have partly applied; read the document before retrying.".to_string(),
                     }),
                 )
                     .into_response()

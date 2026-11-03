@@ -27,6 +27,9 @@ pub struct DocumentAiEdited {
     pub changed_block_ids: Vec<String>,
     /// The document's version after the edit, as sync-service encodes it.
     pub revision: String,
+    /// What the editor needs to know to finish, when it applied part of the
+    /// edit and stopped; the applied part stays.
+    pub clarification: Option<String>,
 }
 
 /// Why an edit by instructions did not complete.
@@ -38,7 +41,7 @@ pub enum DocumentAiEditError {
     /// AI admission refused the caller; no model ran.
     #[error("{0}")]
     Admission(AiAdmissionError),
-    /// The editor could not do the edit and changed nothing.
+    /// The editor could not do the edit and applied nothing.
     #[error("edit refused: {0}")]
     Refused(String),
     /// The edit failed after it started, so it may have partly applied.
@@ -140,7 +143,11 @@ pub async fn edit_with_instructions<Worker: EditingWorkerService>(
             AiEditError::Admission(error) => DocumentAiEditError::Admission(error),
             AiEditError::Worker(error) => DocumentAiEditError::Failed(error),
         })?;
-    if let Some(reason) = result.clarification {
+    // A clarification with applied ops is a partial edit, not a refusal: the
+    // caller must see what changed so a retry doesn't apply it twice.
+    if result.edits_applied == 0
+        && let Some(reason) = result.clarification
+    {
         return Err(DocumentAiEditError::Refused(reason));
     }
     let (Some(summary), Some(revision)) = (result.summary, result.revision) else {
@@ -152,5 +159,6 @@ pub async fn edit_with_instructions<Worker: EditingWorkerService>(
         summary,
         changed_block_ids: result.changed_block_ids,
         revision,
+        clarification: result.clarification,
     })
 }

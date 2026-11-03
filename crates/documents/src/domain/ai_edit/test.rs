@@ -121,6 +121,7 @@ async fn instructions_run_editdocuments_pipeline_and_return_what_changed() {
             summary: "Changed Q3 to Q4.".to_string(),
             changed_block_ids: vec!["k3Fq".to_string()],
             revision: "AQID".to_string(),
+            clarification: None,
         }
     );
 }
@@ -230,6 +231,47 @@ async fn a_clarification_is_a_refused_edit() {
     assert!(
         matches!(&error, DocumentAiEditError::Refused(reason) if reason == "Which of the two plans?"),
         "{error:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_clarification_after_applied_ops_keeps_what_changed() {
+    let mut worker = MockEditingWorkerService::new();
+    worker.expect_edit().times(1).returning(|_, _, _, _, _| {
+        Box::pin(async {
+            Ok(EditResult {
+                edits_applied: 2,
+                usage: Vec::new(),
+                clarification: Some("Which of the two plans?".to_string()),
+                changed_block_ids: vec!["k3Fq".to_string()],
+                revision: Some("AQID".to_string()),
+                summary: Some("Edited 1 block.".to_string()),
+            })
+        })
+    });
+
+    let edited = edit_with_instructions(
+        &ai_editing(
+            worker,
+            Arc::new(ai_billing::domain::admission::DisabledAiAdmissionService),
+        ),
+        SECRET,
+        edit_receipt(DOCUMENT),
+        &document("md"),
+        "Fix both plans",
+        false,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        edited,
+        DocumentAiEdited {
+            summary: "Edited 1 block.".to_string(),
+            changed_block_ids: vec!["k3Fq".to_string()],
+            revision: "AQID".to_string(),
+            clarification: Some("Which of the two plans?".to_string()),
+        }
     );
 }
 

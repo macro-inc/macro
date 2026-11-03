@@ -351,7 +351,11 @@ export class Document
    * Throws `DocumentEditRefusedError` with the editor's reason when it can't do
    * the edit (nothing changed), `EditOutcomeUnknownError` when the outcome is
    * unknown (read before retrying), and `AbortError` when `options.signal`
-   * aborts: what the editor applied before the abort stays, nothing after it. AI usage is billed as for any AI edit. A full edit can take tens of
+   * aborts: what the editor applied before the abort stays, nothing after it.
+   * When it applies part of the edit and then needs more information, it
+   * resolves with `clarification` set; send only the rest.
+   *
+   * AI usage is billed as for any AI edit. A full edit can take tens of
    * seconds: pass `fast: true` for small edits, and keep one edit per call
    * within the run's deadline.
    *

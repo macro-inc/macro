@@ -127,3 +127,38 @@ test('aborting an edit in flight cancels its request', async () => {
   await expect(edit).rejects.toMatchObject({ name: 'AbortError' });
   expect(signal.aborted).toBe(true);
 });
+
+test('a timed-out or broken edit is reported as an unknown outcome', async () => {
+  globalThis.fetch = (async (_input) =>
+    Response.json({ message: 'timed out' }, { status: 504 })) as typeof fetch;
+  await expect(
+    macro().documents.byId('doc-1').edit('Shorten "Risks".'),
+  ).rejects.toMatchObject({ name: 'EditOutcomeUnknownError', status: 504 });
+
+  globalThis.fetch = (async (_input) => {
+    throw new TypeError('connection reset');
+  }) as typeof fetch;
+  await expect(
+    macro().documents.byId('doc-1').edit('Shorten "Risks".'),
+  ).rejects.toMatchObject({ name: 'EditOutcomeUnknownError', status: 0 });
+});
+
+test('a partial edit returns what changed with the clarification', async () => {
+  globalThis.fetch = (async (_input) =>
+    Response.json({
+      summary: 'Edited 1 block.',
+      changedBlockIds: ['k3Fq'],
+      revision: 'AQID',
+      clarification: 'Which of the two plans?',
+    })) as typeof fetch;
+
+  expect(
+    await macro().documents.byId('doc-1').edit('Fix both plans.'),
+  ).toEqual({
+    summary: 'Edited 1 block.',
+    changedBlocks: ['k3Fq'],
+    revision: 'AQID',
+    webUrl: 'https://macro.com/app/md/doc-1',
+    clarification: 'Which of the two plans?',
+  });
+});

@@ -10,13 +10,14 @@ export interface SavedQueryBlock {
 }
 
 /**
- * An edit was sent but its outcome is unknown (HTTP 502): it may have applied,
- * in part for an instructions edit. Read the document with `content()` before
- * retrying; never replay the edit blindly.
+ * An edit was sent but its outcome is unknown: the service reported a failure
+ * after the edit started (HTTP 502), timed out (504), or the connection broke
+ * with no response (status 0). It may have partly applied. Read the document
+ * with `content()` before retrying; never replay the edit blindly.
  */
 export class EditOutcomeUnknownError extends MacroApiError {
-  constructor(data: unknown) {
-    super(502, data);
+  constructor(data: unknown, status = 502) {
+    super(status, data);
     this.name = 'EditOutcomeUnknownError';
     this.message =
       'The edit may have applied; read the document before retrying.';
@@ -58,6 +59,11 @@ export interface DocumentEditResult {
   revision: string;
   /** Link to the document in the Macro web app. */
   webUrl: string;
+  /**
+   * Set when the editor applied part of the edit and stopped: what it needs to
+   * know to finish. The applied part stays; send only the rest.
+   */
+  clarification?: string;
 }
 
 /**
@@ -101,15 +107,19 @@ export async function editWithInstructions(
   options.signal?.throwIfAborted();
 
   if (isRefusal(result.error)) throw new DocumentEditRefusedError(result.error);
-  if (result.response?.status === 502)
-    throw new EditOutcomeUnknownError(result.error);
+  const status = result.response?.status;
+  if (status === 502 || status === 504)
+    throw new EditOutcomeUnknownError(result.error, status);
+  if (result.error !== undefined && result.response === undefined)
+    throw new EditOutcomeUnknownError(result.error, 0);
 
-  const { summary, changedBlockIds, revision } = unwrap(result);
+  const { summary, changedBlockIds, revision, clarification } = unwrap(result);
   return {
     summary,
     changedBlocks: changedBlockIds,
     revision,
     webUrl: document.webUrl(),
+    clarification: clarification ?? undefined,
   };
 }
 
