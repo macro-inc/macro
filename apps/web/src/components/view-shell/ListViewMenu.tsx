@@ -58,9 +58,9 @@ function DesktopSelection<T extends string>(props: {
       <Select.Label class="text-sm text-ink-muted">{props.label}</Select.Label>
       <Tooltip
         label={props.disabledReason ?? selected()?.label ?? props.label}
-        class="min-w-0 w-full"
+        class="min-w-0 max-w-48 justify-self-end"
       >
-        <Select.Trigger>
+        <Select.Trigger class="w-auto max-w-full">
           <Show
             when={!props.disabledReason}
             fallback={

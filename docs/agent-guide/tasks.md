@@ -84,7 +84,9 @@ and switching tabs clears it like any other filter. On mobile, the tabs
 are pills, with separate leading Filters and Display controls. Filters contains only
 filter facets (including Tags); Display opens a sheet with Group by, Sort, and Properties choices.
 On desktop, Display is a popover sized to the full layout tab labels, with labeled
-Group by and Sort selects and the Properties section beneath them. Layout tabs use
+Group by and Sort selects and the Properties section beneath them. Select triggers
+align right and fit their current value, capped at 12rem or the available row width;
+long values truncate and remain available in a tooltip. Layout tabs use
 standard-height, content-sized controls without a separate subheading.
 In Properties, compact icon pills use a wrapping row on desktop and touch.
 Shown properties have a filled pill, Hide when empty uses a dashed outline,
