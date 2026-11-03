@@ -439,6 +439,9 @@ export type ConnectDialpadRequest = {
  * Where to send the user to approve Dialpad.
  */
 export type ConnectDialpadResponse = {
+    /**
+     * The Macro Connect page to open.
+     */
     connectUrl: string;
 };
 
@@ -592,6 +595,9 @@ export type DialpadConnectionResponse = {
      * When a call last synced.
      */
     lastSyncedAt?: string | null;
+    /**
+     * Where sync stands.
+     */
     state: DialpadConnectionState;
 };
 

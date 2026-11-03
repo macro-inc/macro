@@ -9,5 +9,6 @@
  * Where to send the user to approve Dialpad.
  */
 export interface ConnectDialpadResponse {
+  /** The Macro Connect page to open. */
   connectUrl: string;
 }

@@ -15,5 +15,6 @@ export interface DialpadConnectionResponse {
   issue?: DialpadConnectionResponseIssue;
   /** When a call last synced. */
   lastSyncedAt?: DialpadConnectionResponseLastSyncedAt;
+  /** Where sync stands. */
   state: DialpadConnectionState;
 }

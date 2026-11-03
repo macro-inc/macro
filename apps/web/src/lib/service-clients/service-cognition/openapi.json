@@ -3662,7 +3662,8 @@
         "required": ["connectUrl"],
         "properties": {
           "connectUrl": {
-            "type": "string"
+            "type": "string",
+            "description": "The Macro Connect page to open."
           }
         }
       },
@@ -3922,7 +3923,8 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/DialpadSyncIssue"
+                "$ref": "#/components/schemas/DialpadSyncIssue",
+                "description": "Why sync needs attention, if it does."
               }
             ]
           },
@@ -3932,7 +3934,8 @@
             "description": "When a call last synced."
           },
           "state": {
-            "$ref": "#/components/schemas/DialpadConnectionState"
+            "$ref": "#/components/schemas/DialpadConnectionState",
+            "description": "Where sync stands."
           }
         }
       },
