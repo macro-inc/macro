@@ -3,6 +3,7 @@ import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils'
 import { projectRouteId } from '@app/features/projects/core/route';
 import { createSoupRowStore } from '@app/features/soup/collection/row-store';
 import { t } from '@app/lib/i18n';
+import { usePending } from '@app/observability/flow';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { MobileViewsRow } from '@components/app/mobile/MobileViewsRow';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -50,6 +51,8 @@ function MobileNameResults(props: {
     enabled: () => true,
     contactDiscovery: useCrmContactDiscovery,
   });
+  usePending('search.names', source.isLoadingEntities);
+  usePending('search.rank', source.isSettling);
   useDatabaseDiscoverySync(() => true);
   const incoming = createMemo(() =>
     source.rankItems(source.items(), state.query())
@@ -135,6 +138,7 @@ function MobileNameResults(props: {
       } else if (item.kind === 'user') {
         const result = await directMessage.mutateAsync({
           recipient_id: item.id,
+          parentSpan: span,
         });
         openWithSplit(
           { type: 'channel', id: result.channel_id },
@@ -216,6 +220,7 @@ function MobileFullTextResults(props: {
   const state = props.session;
   const category = useMobileSearchCategory(state.category);
   const search = createMobileFullTextSearch(state.query, category);
+  usePending('search.full-text', search.isSettling);
   const hasAuthoritativeError = () =>
     !!search.error() && !isTransientRequestError(search.error());
   const panel = useSplitPanelOrThrow();

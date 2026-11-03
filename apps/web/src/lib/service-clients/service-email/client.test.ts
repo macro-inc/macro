@@ -2,7 +2,8 @@ import { ok } from 'neverthrow';
 import { expect, it, vi } from 'vitest';
 
 const fetchWithToken = vi.hoisted(() => vi.fn());
-vi.mock('@core/constant/servers', () => ({
+vi.mock('@core/constant/servers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/servers')>()),
   SERVER_HOSTS: {
     'email-service': 'https://gateway.example/email',
     'calendar-service': 'https://gateway.example/calendar',
