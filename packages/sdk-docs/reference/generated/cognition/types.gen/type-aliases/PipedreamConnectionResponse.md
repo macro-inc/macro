@@ -1,6 +1,6 @@
 # Type Alias: PipedreamConnectionResponse
 
-> **PipedreamConnectionResponse** = \{ `app_slug`: `string`; `enabled`: `boolean`; `server_name`: `string`; \}
+> **PipedreamConnectionResponse** = \{ `app_slug`: `string`; `enabled`: `boolean`; `provider`: [`PipedreamProviderResponse`](PipedreamProviderResponse.md); `server_name`: `string`; \}
 
 A connected MCP app as returned by the API.
 
@@ -10,4 +10,5 @@ A connected MCP app as returned by the API.
 | ------ | ------ | ------ |
 | <a id="property-app_slug"></a> `app_slug` | `string` | Pipedream app name slug, e.g. `linear`. |
 | <a id="property-enabled"></a> `enabled` | `boolean` | Whether the connector is enabled for tool use. |
+| <a id="property-provider"></a> `provider` | [`PipedreamProviderResponse`](PipedreamProviderResponse.md) | The backend holding the grant. |
 | <a id="property-server_name"></a> `server_name` | `string` | Human-readable display name. |
