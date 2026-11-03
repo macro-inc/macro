@@ -248,6 +248,21 @@ impl MacroClient {
         self.json("read a channel", self.http.get(url)).await
     }
 
+    /// The direct-message channel with a user (`macro|<email>`), created if
+    /// it doesn't exist yet. Returns its channel id.
+    pub async fn open_direct_message(&self, user_id: &str) -> Result<String> {
+        let url = format!("{}/channels/get_or_create_dm", self.hosts.storage);
+        let opened: OpenedChannel = self
+            .json(
+                "open a direct message",
+                self.http
+                    .post(url)
+                    .json(&serde_json::json!({ "recipient_id": user_id })),
+            )
+            .await?;
+        Ok(opened.channel_id)
+    }
+
     /// Root messages in a channel, newest first, one page.
     pub async fn channel_messages(
         &self,

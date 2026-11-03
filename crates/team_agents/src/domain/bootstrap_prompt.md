@@ -84,10 +84,18 @@ Then:
   (`git` or `gh` on this machine has access). Build in release mode.
 - Run the daemon as a service that restarts on failure and survives logout
   and reboot (a systemd user unit with lingering on Linux, a launchd agent on
-  macOS). Check its logs to make sure it actually connected.
+  macOS). Without either (a container, say), run it under a small restart
+  loop with `nohup` and its output in a log file. Check its logs to make sure
+  it actually connected.
 - If this machine has no desktop or browser you can drive and your job needs
   the web, set one up (for example Xvfb with a lightweight window manager and
   a browser you can control). Figure it out; it's your computer.
+
+If something blocks you that you can't work around, don't stop silently:
+send {{creator}} a direct message (open it with `POST /dss/channels/get_or_create_dm`
+`{"recipient_id": "{{creator}}"}`, then post to the returned `channel_id`)
+saying what's in the way and what you need,
+the way a new hire would ask for help, then end this session.
 
 When the daemon is running and you have tested that a message wakes you,
 introduce yourself to {{creator}} in a direct message, the way a new hire

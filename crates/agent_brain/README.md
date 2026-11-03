@@ -11,7 +11,7 @@ you want. Every part works on its own.
 
 | Part | What it does |
 | --- | --- |
-| `MacroClient` | Your account over HTTP: `me`, `post`, `reply`, `typing`, `channel`, `recent_messages`, `channel_messages`, `decide`, `team_agent_profile`, `emails`, `send_email`, `create_agent_session`, `prompt_agent_session`. |
+| `MacroClient` | Your account over HTTP: `me`, `open_direct_message`, `post`, `reply`, `typing`, `channel`, `recent_messages`, `channel_messages`, `decide`, `team_agent_profile`, `emails`, `send_email`, `create_agent_session`, `prompt_agent_session`. |
 | `EventStream` | Live Macro events as a `Stream`, reconnecting with backoff. Yields `StreamItem::Reconnected` after a drop: events in between are lost, so catch up. |
 | `Relevance` | The "should I wake?" check (Jev). Asks your yes/no questions about a message with recent context; @mentions and DMs skip the model. Logs every decision. |
 | `ConversationQueue` | Durable per-conversation queue. One worker per conversation, a burst becomes one batch, conversations run in parallel, a crash mid-turn re-runs the batch. |

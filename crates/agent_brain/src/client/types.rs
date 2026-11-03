@@ -178,6 +178,13 @@ pub enum ChannelType {
     Unknown,
 }
 
+/// A channel that was opened or created, from `get_or_create_dm`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OpenedChannel {
+    /// Channel id.
+    pub channel_id: String,
+}
+
 /// A channel, from `GET {storage}/channels/{id}`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChannelDetail {

@@ -100,3 +100,23 @@ fn debug_hides_the_key() {
     let client = MacroClient::new("secret-key", Hosts::for_env(Environment::Prod)).unwrap();
     assert!(!format!("{client:?}").contains("secret-key"));
 }
+
+#[tokio::test]
+async fn open_direct_message_returns_the_channel() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/channels/get_or_create_dm"))
+        .and(body_partial_json(json!({"recipient_id": "macro|owner@example.com"})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"channel_id": "dm1"})))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let channel = client(&server)
+        .await
+        .open_direct_message("macro|owner@example.com")
+        .await
+        .unwrap();
+
+    assert_eq!(channel, "dm1");
+}
