@@ -1,3 +1,4 @@
+import { markPrNotificationsSeenOnOpen } from '@app/features/block-pr/mark-pr-notifications-seen';
 import { usePending } from '@app/observability/flow';
 import '@entity/composed/ListEntity.css';
 import {
@@ -137,6 +138,7 @@ export function HomeList(props: HomeListProps) {
       controller: list,
       handle: panel.handle,
       openEntityInSplit: (entity, options) => {
+        markRowNotificationsSeenOnOpen(entity, notificationSource);
         fireAndForget(
           openEntityInSplitFromUnifiedList(entity, {
             splitHandle: panel.handle,
@@ -204,6 +206,7 @@ export function HomeList(props: HomeListProps) {
     entity: WithNotification<EntityData>,
     options?: { activate?: boolean }
   ) {
+    markPrNotificationsSeenOnOpen(entity, notificationSource);
     props.onPreviewEntityChange(
       entity?.type === 'initiative' ? undefined : entity,
       options

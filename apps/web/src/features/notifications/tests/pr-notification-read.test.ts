@@ -12,7 +12,8 @@ import type { UnifiedNotification } from '../types';
 const mocks = vi.hoisted(() => ({
   seen: vi.fn(),
   entitySeen: vi.fn(),
-  feed: vi.fn(() => []),
+  feed: vi.fn<() => UnifiedNotification[]>(() => []),
+  transport: 'graphql' as 'graphql' | 'rest',
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
@@ -28,7 +29,9 @@ vi.mock('@queries/notification/user-notifications', () => ({
   useMarkNotificationsAsSeenMutation: () => ({ mutateAsync: mocks.seen }),
   useMarkNotificationsAsDoneMutation: () => ({ mutateAsync: vi.fn() }),
   useUserNotificationsQuery: () => ({
-    transport: 'graphql',
+    get transport() {
+      return mocks.transport;
+    },
     isLoading: false,
     get data() {
       return mocks.feed();
@@ -116,7 +119,11 @@ function createSource() {
   }));
 }
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  mocks.transport = 'graphql';
+  mocks.feed.mockReturnValue([]);
+});
 
 describe('opening pull request notifications', () => {
   it('leaves rows without loaded notifications to the opened PR', () => {
@@ -130,22 +137,30 @@ describe('opening pull request notifications', () => {
     }
   });
 
-  it.each(['array', 'accessor'] as const)(
-    'clears an attached %s before the write finishes without loading the global feed',
+  it.each(['array', 'accessor', 'rest-feed'] as const)(
+    'clears %s notifications before the write finishes',
     async (shape) => {
       mocks.feed.mockClear();
       const pending = Promise.withResolvers<void>();
       mocks.seen.mockReturnValueOnce(pending.promise);
-      const { source, dispose } = createSource();
       const attached = [
         { ...notification, id: `pending-${shape}` },
         { ...notification, id: `done-${shape}`, state: 'done' as const },
         { ...notification, id: `seen-${shape}`, state: 'seen' as const },
       ];
-      const row = {
-        ...pr,
-        notifications: shape === 'array' ? attached : () => attached,
-      };
+      const fromRestFeed = shape === 'rest-feed';
+      if (fromRestFeed) {
+        mocks.transport = 'rest';
+        mocks.feed.mockReturnValue(attached);
+      }
+      const { source, dispose } = createSource();
+      // REST Soup rows have no raw notification edge; Home reads the source.
+      const row = fromRestFeed
+        ? pr
+        : {
+            ...pr,
+            notifications: shape === 'array' ? attached : () => attached,
+          };
       const rendered = withEntityNotifications(row, source);
       try {
         expect(unreadFilterFn(rendered)).toBe(true);
@@ -154,7 +169,7 @@ describe('opening pull request notifications', () => {
         expect(mocks.seen).toHaveBeenLastCalledWith({
           notificationIds: [`pending-${shape}`],
         });
-        expect(mocks.feed).not.toHaveBeenCalled();
+        if (!fromRestFeed) expect(mocks.feed).not.toHaveBeenCalled();
         pending.resolve();
         await pending.promise;
         expect(unreadFilterFn(withEntityNotifications(row, source))).toBe(
@@ -167,33 +182,39 @@ describe('opening pull request notifications', () => {
     }
   );
 
-  it('restores the dot after a failed write and clears it on a retry', async () => {
-    const pending = Promise.withResolvers<void>();
-    const reported = Promise.withResolvers<void>();
-    const telemetry = vi
-      .spyOn(Telemetry, 'error')
-      .mockImplementation(() => reported.resolve());
-    mocks.seen.mockReturnValueOnce(pending.promise);
-    const { source, dispose } = createSource();
-    const row = withEntityNotifications(
-      { ...pr, notifications: [{ ...notification, id: 'failed-read' }] },
-      source
-    );
-    try {
-      markPrNotificationsSeenOnOpen(row, source);
-      expect(unreadFilterFn(row)).toBe(false);
-      const error = new Error('offline');
-      pending.reject(error);
-      await reported.promise;
-      expect(telemetry).toHaveBeenCalledWith(error, {
-        surface: 'pr-notification-read',
-      });
-      expect(unreadFilterFn(row)).toBe(true);
-      mocks.seen.mockResolvedValueOnce(undefined);
-      markPrNotificationsSeenOnOpen(row, source);
-      expect(unreadFilterFn(row)).toBe(false);
-    } finally {
-      dispose();
+  it.each(['graphql', 'rest'] as const)(
+    'restores the %s dot after a failed write and clears it on a retry',
+    async (transport) => {
+      const pending = Promise.withResolvers<void>();
+      const reported = Promise.withResolvers<void>();
+      const telemetry = vi
+        .spyOn(Telemetry, 'error')
+        .mockImplementation(() => reported.resolve());
+      mocks.seen.mockReturnValueOnce(pending.promise);
+      mocks.transport = transport;
+      const attached = [{ ...notification, id: `failed-read-${transport}` }];
+      mocks.feed.mockReturnValue(attached);
+      const { source, dispose } = createSource();
+      const row = withEntityNotifications(
+        transport === 'graphql' ? { ...pr, notifications: attached } : pr,
+        source
+      );
+      try {
+        markPrNotificationsSeenOnOpen(row, source);
+        expect(unreadFilterFn(row)).toBe(false);
+        const error = new Error('offline');
+        pending.reject(error);
+        await reported.promise;
+        expect(telemetry).toHaveBeenCalledWith(error, {
+          surface: 'pr-notification-read',
+        });
+        expect(unreadFilterFn(row)).toBe(true);
+        mocks.seen.mockResolvedValueOnce(undefined);
+        markPrNotificationsSeenOnOpen(row, source);
+        expect(unreadFilterFn(row)).toBe(false);
+      } finally {
+        dispose();
+      }
     }
-  });
+  );
 });

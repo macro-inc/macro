@@ -105,6 +105,7 @@ unchanged webhook should not produce another Soup update. The PR detail's
 separate diff and discussion requests are outside this subscription behavior.
 
 Opening a pull request from Home clears its loaded unread notifications immediately,
-including desktop previews, keyboard activation, and phone taps. A failed read
+including desktop previews, keyboard activation, j/k navigation, and phone taps.
+Keyboard browsing marks the row when its debounced preview actually opens. A failed read
 write restores the unread dot; opening the row again retries it. The detail
 view still marks the whole pull request read after its usual debounce.
