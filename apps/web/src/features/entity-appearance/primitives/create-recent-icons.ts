@@ -37,6 +37,7 @@ export function createRecentIcons(userId: string) {
     }
   );
   function record(icon: AppearanceIcon) {
+    if (!recentIconSchema.safeParse(icon).success) return;
     setIcons((previous) =>
       [
         icon,

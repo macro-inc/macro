@@ -13,6 +13,7 @@ env:
     - bun.lock
     - apps/web/**
     - packages/**
+    - tooling/icons/**
     - crates/folds/agent_fold/**
     - crates/agent_runtime_protocol/**
     - crates/client/cache-core/**

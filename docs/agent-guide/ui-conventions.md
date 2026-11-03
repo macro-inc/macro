@@ -74,9 +74,11 @@ The Icons tab shows Default (a ring in the entity's type color) and the same
 twelve fixed colors as tags, in tag-palette order. Swatches wrap in narrow panes.
 The Emoji tab hides the row; emoji retain native colors. **Remove** clears only
 the icon, while Default clears only color.
-Recent picks are stored per account. The catalog is grouped and excludes layout
-and editing glyphs from the picker without invalidating existing stored icons.
-Icon search also includes matching emoji. Both catalogs render virtualized rows,
+Recent picks are stored per account and include only current picker choices.
+The dedicated entity catalog has fourteen sections; tooltips show icon nouns.
+Search matches names and nouns (for example, Idea and Dining), plus emoji.
+Retired icons and aliases remain renderable without appearing in the picker.
+Both catalogs render virtualized rows,
 including search results. Arrow keys traverse all rows, not only mounted cells;
 Enter picks, and typing focuses search. Recent reordering preserves focus. The
 Emoji category bar stays pinned and jumps to unmounted sections.

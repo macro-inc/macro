@@ -38,7 +38,13 @@ import {
   appearanceColor,
   type EntityAppearance,
 } from '../core/appearance';
-import { ICON_SECTIONS, iconLabel, PICKER_ICON_NAMES } from '../core/catalog';
+import {
+  ICON_SECTIONS,
+  iconLabel,
+  isPickerIconName,
+  PICKER_ICON_LABELS,
+  PICKER_ICON_NAMES,
+} from '../core/catalog';
 import {
   nextPickerOption,
   type PickerOption,
@@ -101,14 +107,18 @@ export function AppearancePicker(props: {
   let searchElement: HTMLInputElement | undefined;
   let grid: HTMLDivElement | undefined;
   const searching = () => search().trim().length > 0;
+  const macroLabel = (name: string) =>
+    isPickerIconName(name) ? t(`entityIcons.icon_${name}`) : iconLabel(name);
   const names = createMemo(() => {
     const words = search()
       .trim()
       .toLowerCase()
       .split(/[\s-]+/);
-    return PICKER_ICON_NAMES.filter((name) =>
-      words.every((word) => name.includes(word))
-    );
+    return PICKER_ICON_NAMES.filter((name) => {
+      const searchable =
+        `${name} ${PICKER_ICON_LABELS.get(name)} ${macroLabel(name)}`.toLowerCase();
+      return words.every((word) => searchable.includes(word));
+    });
   });
   const columns = () => (props.mobile ? 8 : 9);
   const option = (
@@ -122,7 +132,7 @@ export function AppearancePicker(props: {
   });
   const macroOptions = (section: string, names: readonly string[]) =>
     names.map((name) =>
-      option(section, { kind: 'macro', name }, iconLabel(name))
+      option(section, { kind: 'macro', name }, macroLabel(name))
     );
   const emojiOptions = (section: string, emojis: readonly SimpleEmoji[]) =>
     emojis.map((emoji) =>
@@ -164,7 +174,7 @@ export function AppearancePicker(props: {
         option(
           'recent',
           icon,
-          icon.kind === 'macro' ? iconLabel(icon.name) : icon.value
+          icon.kind === 'macro' ? macroLabel(icon.name) : icon.value
         )
       ),
     };
@@ -173,8 +183,11 @@ export function AppearancePicker(props: {
         recentSection,
         ...ICON_SECTIONS.map((section) => ({
           key: section.id,
-          label: t(`appearance.section_${section.id}`),
-          options: macroOptions(section.id, section.names),
+          label: t(`entityIcons.section_${section.id}`),
+          options: macroOptions(
+            section.id,
+            section.icons.map(({ name }) => name)
+          ),
         })),
       ];
     const groups = emojiData.groups();

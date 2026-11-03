@@ -1,7 +1,7 @@
 ## Development Commands
 - Use `bun` as the package manager and script runner (`bun run build`, `bunx tsc`).
 - `bun run test`: run tests 
-- `bun run check`: check typescript changes 
+- `bun run check`: check generated entity catalogs, TypeScript, and Biome; `bun run check-entity-icons` runs the catalog guard and generator regression tests.
 - `bun run lint`: lint with biome 
 - `bun run format`: format changes with biome 
 - `bun run knip`: to check for dead code

@@ -47,12 +47,14 @@ describe('recent icon preferences', () => {
     restored.dispose();
   });
 
-  it('ignores malformed entries and layout glyphs in stored preferences', () => {
+  it('ignores malformed, retired, and unknown picks when reading and recording', () => {
     localStorage.setItem(
       'entity-icons:recent:first',
       JSON.stringify([
         null,
         { kind: 'macro', name: 'align-bottom-simple' },
+        { kind: 'macro', name: 'calendar-dots' },
+        { kind: 'macro', name: 'unknown-icon' },
         { kind: 'macro', name: 'star' },
         { kind: 'emoji', value: '🚀' },
         { kind: 'emoji', value: 42 },
@@ -62,6 +64,8 @@ describe('recent icon preferences', () => {
       dispose,
       recent: createRecentIcons('first'),
     }));
+    recent.record({ kind: 'macro', name: 'calendar-dots' });
+    recent.record({ kind: 'macro', name: 'unknown-icon' });
     expect(recent.icons()).toEqual([
       { kind: 'macro', name: 'star' },
       { kind: 'emoji', value: '🚀' },

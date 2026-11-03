@@ -1,12 +1,20 @@
-import { type ENTITY_ICON_NAMES, ICON_SECTIONS } from './catalog.generated';
+import { ICON_SECTIONS } from './catalog.generated';
 
 export { ICON_SECTIONS };
 
-type IconName = (typeof ENTITY_ICON_NAMES)[number];
+export type PickerIconName =
+  (typeof ICON_SECTIONS)[number]['icons'][number]['name'];
 
-export const PICKER_ICON_NAMES: readonly IconName[] = ICON_SECTIONS.flatMap(
-  (section) => [...section.names]
+const PICKER_ICONS = ICON_SECTIONS.flatMap((section) => [...section.icons]);
+
+export const PICKER_ICON_NAMES = PICKER_ICONS.map(({ name }) => name);
+export const PICKER_ICON_LABELS = new Map<string, string>(
+  PICKER_ICONS.map(({ name, label }) => [name, label])
 );
+
+export function isPickerIconName(name: string): name is PickerIconName {
+  return PICKER_ICON_LABELS.has(name);
+}
 
 export function iconLabel(name: string): string {
   const label = name.replaceAll('-', ' ');

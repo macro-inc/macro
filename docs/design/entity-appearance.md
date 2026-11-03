@@ -35,8 +35,38 @@ loading document properties.
 Existing duplication/template flows copy appearance; blank creation uses defaults.
 Published routine templates retain snapshot semantics.
 
-The icon catalog comes from `tooling/icons/generate-entity-icons.ts`. Generate
-wire types from the Rust schemas, not hand-written frontend DTOs.
+Generate wire types from the Rust schemas, not hand-written frontend DTOs.
+Unknown wire colors retain the icon and use the type color; unknown icon kinds
+retain valid colors.
+
+## Icon catalog maintenance
+
+Entity artwork lives only in `apps/web/src/components/icon/entity/`, separate
+from interface controls. The initial catalog contains 266 original drawings;
+its approved SVG bytes are preserved, including code-file drawings. The initial
+unreleased allowlist reset replaces the previous UI-folder-derived catalog.
+
+`tooling/icons/entity-icon-sections.json` owns picker order, section labels, and
+icon nouns. Tooltips show those nouns; search matches nouns and stored names.
+`tooling/icons/generate-entity-icons.ts` produces the Rust allowlist, web catalog,
+and English labels. `tooling/icons/entity-icon-names.json` records permanent
+names and grows when new drawings or aliases are added.
+
+- Add an SVG to the entity folder, regenerate, add its name and noun to a section,
+  and regenerate again. Deploy server support before or with the web picker.
+- Redraw under the existing name; do not change identity to change artwork.
+- Retire a drawing by removing its section entry. It stays valid and renderable
+  but never appears in the picker or Recent.
+- To rename, map the old name directly to an existing drawing in
+  `tooling/icons/entity-icon-aliases.json`. The server accepts both names; the
+  client renders the target. Alias chains and picker entries for aliases fail.
+- Never delete a permanent name without an explicit data migration. Generation
+  checks every committed name list, so trimming the manifest cannot bypass the
+  guard. Missing names require aliases; shallow clones must fetch full history.
+- Run `bun tooling/icons/generate-entity-icons.ts --check` and
+  `bun test tooling/icons/generate-entity-icons.test.ts`. Generation rejects
+  identical geometry after removing icon metadata and normalizing whitespace,
+  rather than silently dropping a drawing.
 
 ## Editing
 
@@ -52,9 +82,9 @@ optimistic, per-entity serialized path. The picker stays open; dismissal does
 not undo picks. A failed save restores the last successful choice unless a newer
 choice is pending. Async completion stays scoped to the opening account.
 
-Icons are grouped, with up to nine account-scoped recent picks first. Picker-only
-curation excludes layout/editing glyphs without changing the stored catalog.
-Icon search also matches emoji. Both catalogs and search results use virtualized
+Icons use fourteen curated sections, with up to nine account-scoped recent picks
+first. Recent includes only currently selectable names. Icon search matches
+stored names, nouns, and emoji. Both catalogs and search results use virtualized
 rows; keyboard navigation reaches unmounted rows, and focused choices survive
 Recent reordering. The Emoji tab groups the shared catalog and pins category
 navigation. Arrow keys move between cells and Enter selects.

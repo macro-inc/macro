@@ -12,7 +12,7 @@ snippets, task projects (initiatives), forms, and databases.
 - `components/appearance-glyph.tsx`: presentation without data fetching.
 - `primitives/create-appearance-editor.ts`: immediate picks with guarded async settlement.
 - `primitives/create-recent-icons.ts`: account-scoped recent picks through `makePersistedState` and schema-validated storage.
-- `core/catalog.ts`: generated picker catalog projections; curate sections in `tooling/icons/entity-icon-sections.json`.
+- `core/catalog.ts`: picker projections of the dedicated `components/icon/entity/` SVG catalog; curate names and nouns in `tooling/icons/entity-icon-sections.json`.
 - `core/picker-grid.ts`: row projection and keyboard traversal independent of the virtual viewport.
 - `queries/appearance.ts`: domain writes and cache reconciliation.
 - `queries/appearance-readers.ts`: one typed entity adapter table for API routing, cancellation keys, and cache patches.
@@ -27,8 +27,10 @@ snippets, task projects (initiatives), forms, and databases.
 
 ## Recipes
 
-- Regenerate selectable icons with `bun tooling/icons/generate-entity-icons.ts`
-  from the repository root; generation rejects unknown or duplicate section entries.
+- Add an SVG to `apps/web/src/components/icon/entity/`, regenerate with `bun tooling/icons/generate-entity-icons.ts`, then add its name and noun to a section and regenerate again.
+- Deploy server support before or with the web app that offers new names; redraw under the same name, retire from sections, or map an old name in `tooling/icons/entity-icon-aliases.json`.
+- Never delete a permanent name without a data migration; `tooling/icons/entity-icon-names.json` is append-only after the initial catalog reset. See `docs/design/entity-appearance.md`.
+- Run `bun tooling/icons/generate-entity-icons.ts --check` to reject missing names, identical geometry, invalid sections, and stale generated output.
 - Regenerate all service and AI-tool contracts with `bun run gen-api` from `apps/web`; never hand-write appearance DTOs.
 
 ## Checks
@@ -42,7 +44,8 @@ snippets, task projects (initiatives), forms, and databases.
 - Do not change content recency or send notifications when appearance changes.
 - Apply each icon, emoji, color, or Remove pick immediately without closing the editor; dismissal never undoes a pick.
 - Keep mutations account-scoped, update every reader optimistically, and roll back rejected writes without overwriting newer edits.
-- Keep recent picks account-scoped and filter only the picker catalog; stored icon names remain valid.
+- Filter restored and newly recorded recent picks against the current picker set; retired and unknown names are never offered, while stored retired icons and aliases still render.
+- Preserve independent appearance overrides on unknown wire values: unknown colors fall back to type color, and unknown icon kinds retain their valid color.
 - Show colors only on Icons; Default uses the entity type color and Remove clears only the icon.
 - Reuse the shared 12-color tag palette in `@core/constant/color-palette`; preserve named wire keys and let swatches wrap.
 - Use `virtua` for both catalogs and search results; pin and restore focused choices across scrolling and Recent reordering.

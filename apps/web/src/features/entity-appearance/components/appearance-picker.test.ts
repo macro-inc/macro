@@ -161,14 +161,42 @@ describe('appearance picker interaction', () => {
     expect(close).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['idea', 'Idea', 'lightbulb'],
+    ['dining', 'Dining', 'fork-knife'],
+  ])('finds a stored icon by its %s noun', async (search, label, name) => {
+    const { change } = renderPicker();
+    fireEvent.input(screen.getByRole('textbox', { name: 'Search icons' }), {
+      target: { value: search },
+    });
+    fireEvent.click(
+      await screen.findByLabelText(label, { selector: 'button' })
+    );
+    expect(change).toHaveBeenLastCalledWith({
+      icon: { kind: 'macro', name },
+      color: null,
+    });
+  });
+
   it('searches emoji on Icons and moves keyboard focus into the result', async () => {
     const { change } = renderPicker();
     const search = screen.getByRole('textbox', { name: 'Search icons' });
     fireEvent.input(search, { target: { value: 'rocket' } });
-    const rocket = await screen.findByLabelText('Rocket', {
-      selector: 'button',
+    const rocket = await waitFor(() => {
+      const emoji = screen
+        .getAllByLabelText('Rocket', { selector: 'button' })
+        .find((button) => button.textContent?.includes('🚀'));
+      expect(emoji).toBeDefined();
+      return emoji;
     });
+    if (!rocket) throw new Error('Missing emoji search result');
     fireEvent.keyDown(search, { key: 'ArrowDown' });
+    await waitFor(() =>
+      expect(
+        document.activeElement?.getAttribute('data-appearance-option')
+      ).toContain('macro')
+    );
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
     await waitFor(() => expect(document.activeElement).toBe(rocket));
     fireEvent.click(rocket);
     expect(change).toHaveBeenLastCalledWith({
@@ -184,7 +212,7 @@ describe('appearance picker interaction', () => {
     renderPicker();
     const search = screen.getByRole('textbox', { name: 'Search icons' });
     fireEvent.input(search, { target: { value: 'rocket' } });
-    await screen.findByLabelText('Rocket', { selector: 'button' });
+    await screen.findAllByLabelText('Rocket', { selector: 'button' });
     fireEvent.input(search, { target: { value: '{' } });
     expect(
       screen.queryByLabelText('Rocket', { selector: 'button' })
@@ -193,7 +221,7 @@ describe('appearance picker interaction', () => {
 
   it('virtualizes both catalogs and jumps to unmounted emoji categories', async () => {
     const { container } = renderPicker();
-    await screen.findByLabelText('Kanban', { selector: 'button' });
+    await screen.findByLabelText('Board', { selector: 'button' });
     expect(
       container.querySelectorAll('[data-appearance-option]').length
     ).toBeLessThan(160);
@@ -221,15 +249,16 @@ describe('appearance picker interaction', () => {
     renderPicker();
     const search = screen.getByRole('textbox', { name: 'Search icons' });
     fireEvent.keyDown(search, { key: 'ArrowUp' });
-    const swatches = await screen.findByLabelText('Swatches', {
+    const asterisk = await screen.findByLabelText('Asterisk', {
       selector: 'button',
     });
-    await waitFor(() => expect(document.activeElement).toBe(swatches));
+    await waitFor(() => expect(document.activeElement).toBe(asterisk));
   });
 
   it('resets the emoji category when clearing search', async () => {
     renderPicker();
     fireEvent.click(screen.getByRole('radio', { name: 'Emoji' }));
+    await screen.findByText('Smileys & people', { selector: 'h3' });
     const categories = within(screen.getByLabelText('Emoji categories'));
     const flags = categories.getByRole('button', { name: 'Flags' });
     fireEvent.click(flags);
