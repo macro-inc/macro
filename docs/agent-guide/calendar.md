@@ -545,6 +545,15 @@ selected, since the presets never end. Either is saved as written while untouche
 start to another weekday keeps a custom rule on the day the editor shows. Event details (desktop
 popover and phone drawer) and Forward by email's summary name the day too (`Weekly on Saturday ·
 3 occurrences`), read from the occurrence's original slot in the event's own time zone.
+Each guest in event details (desktop popover and phone drawer) shows their name with their
+address on a muted line under it, as the user card shows a person, followed by `Organizer` or
+`Optional` and any comment; the viewer's own row (`(you)`) does too, which tells their inboxes
+apart. A guest Macro has no name for (no Macro profile or email contact) shows the address
+once, as the name. The address wraps instead of truncating in a narrow popover or on a phone.
+The `Organizer` row under the calendar row, shown when someone other than the calendar
+organizes the event, adds the organizer's address the same way. Teammates' read-only event
+details (`Shared in Macro · Read only`) list guests by provider name, or by address when there
+is none.
 As in Google Calendar, the guests row of the details popover (a bottom sheet on phones)
 carries `Copy guest emails` and `Email guests` icon buttons, both hidden when you are the
 only guest (always so on a snapshot). Copying puts every guest's address on the clipboard,
