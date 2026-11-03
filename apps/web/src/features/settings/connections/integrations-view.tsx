@@ -7,6 +7,7 @@ import {
 } from '@core/pipedream/pendingConnect';
 import { fireAndForget } from '@core/util/fireAndForget';
 import PlusIcon from '@icon/system/regular/plus.svg';
+import { readGithubLinkStatus } from '@queries/auth';
 import { queryReadyGate } from '@queries/gate';
 import {
   connectPipedreamApp,
@@ -16,6 +17,7 @@ import {
 } from '@queries/pipedream-connectors';
 import { makeEventListener } from '@solid-primitives/event-listener';
 import { Button } from '@ui';
+import { ResultAsync } from 'neverthrow';
 import {
   type Accessor,
   createEffect,
@@ -72,6 +74,16 @@ export function IntegrationsView(props: IntegrationsViewProps) {
   );
 }
 
+const GITHUB_APP_SLUG = 'github';
+
+/** Whether the viewer's GitHub account is linked; unknown reads as unlinked. */
+async function githubAlreadyLinked(): Promise<boolean> {
+  const status = await ResultAsync.fromPromise(readGithubLinkStatus(), () => ({
+    kind: 'github-link-status-unavailable' as const,
+  }));
+  return status.isOk() && status.value === 'linked';
+}
+
 function ConnectionsContent(props: IntegrationsViewProps) {
   const { model, ready, error, partialError, retry } = useConnectionsModel();
   // A consent finished in the system browser leaves the page visible, so the
@@ -96,6 +108,13 @@ function ConnectionsContent(props: IntegrationsViewProps) {
   );
   async function connectRequestedApp(appSlug: string) {
     try {
+      // A linked account already authorizes GitHub's agent tools, so a
+      // request to connect it means they are switched off. Show them instead
+      // of linking again, which on the web navigates the whole page away.
+      if (appSlug === GITHUB_APP_SLUG && (await githubAlreadyLinked())) {
+        view.openProvider('github');
+        return;
+      }
       const outcome = await connectPipedreamApp({ appSlug });
       if (outcome === 'unsupported')
         toast.failure('Connectors are not available on this deployment');
