@@ -52,6 +52,9 @@ macro_env_var::maybe_env_vars!(
     pub struct PosthogApiKey;
     /// Regional PostHog ingestion origin; defaults to the US origin.
     pub struct PosthogHost;
+    /// Macro's customer key for the Macro Connect API. When unset, Connect
+    /// is off and every connection goes through Pipedream.
+    pub struct ConnectCustomerKey;
     /// Dedicated KMS key for encrypted per-owner Codex OAuth state.
     pub struct CodexOauthKmsKeyId;
     /// Rollout gate for sessions owned by a bot.
@@ -110,6 +113,9 @@ pub struct Config {
     pub posthog_api_key: PosthogApiKey,
     /// Same regional origin as the frontend's PostHog project.
     pub posthog_host: PosthogHost,
+    /// Customer key for Macro Connect; sandboxes reach Connect-held grants
+    /// through its MCP gateway.
+    pub connect_customer_key: ConnectCustomerKey,
     /// Pinned Deno executable. Unset hosts do not advertise code execution.
     pub deno_binary: Option<String>,
     /// Default-off quota admission and prospective usage counting.

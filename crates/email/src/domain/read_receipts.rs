@@ -1,4 +1,4 @@
-//! Sender-opted-in open tracking: a per-message pixel added at provider delivery.
+//! Per-inbox open tracking, on by default: a per-message pixel added at provider delivery.
 //!
 //! Opens are approximate. Image proxies and privacy features fetch pixels on
 //! delivery, and clients that block images never fetch them.
@@ -109,7 +109,7 @@ impl From<Report> for ReadReceiptError {
 
 /// Persisted facts for open tracking.
 pub trait ReadReceiptRepository: Send + Sync + 'static {
-    /// Whether the inbox opted in; a missing settings row means no.
+    /// Whether the inbox has tracking on; a missing settings row means yes.
     fn tracking_enabled(&self, link_id: Uuid) -> impl Future<Output = Result<bool, Report>> + Send;
     /// Store `candidate` unless the message already has a token; return the stored token.
     fn message_token(
@@ -154,7 +154,7 @@ impl<R: ReadReceiptRepository> ReadReceiptService<R> {
 
     /// The HTML body to hand the provider. Macro pixels quoted from earlier
     /// messages are always removed so a reply never reports opens of its
-    /// ancestors. When the inbox opted in, this message's pixel is appended.
+    /// ancestors. When the inbox has tracking on, this message's pixel is appended.
     /// Plain-text-only messages are not tracked, and tracking failures never
     /// block delivery.
     #[tracing::instrument(skip(self, html), fields(tracked = tracing::field::Empty))]

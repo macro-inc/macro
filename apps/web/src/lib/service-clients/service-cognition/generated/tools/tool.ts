@@ -156,10 +156,6 @@ type ToolParserMap = {
     call: types.DispatchCodingAgent;
     response: types.DispatchedCodingAgent;
   };
-  DisplayResults: {
-    call: types.DisplayResults;
-    response: types.DisplayResultsResponse;
-  };
   DuplicateItem: {
     call: types.DuplicateItem;
     response: types.DuplicateItemResponse;
@@ -416,10 +412,6 @@ type ToolParserMap = {
     call: types.ReadDiscussion;
     response: types.ReadDiscussionResponse;
   };
-  ReadEntityAccessRequest: {
-    call: types.ReadEntityAccessRequest;
-    response: types.ReadEntityAccessRequestResponse;
-  };
   ReadForm: { call: types.ReadForm; response: types.ReadResult };
   ReadIllustratorDocument: {
     call: types.ReadIllustratorDocument;
@@ -472,10 +464,6 @@ type ToolParserMap = {
   };
   RenameItem: { call: types.RenameItem; response: types.RenameItemResponse };
   RenderCanvas: { call: types.RenderCanvas; response: types.CanvasRender };
-  RequestEntityAccess: {
-    call: types.RequestEntityAccess;
-    response: types.RequestEntityAccessResponse;
-  };
   ResolveComment: {
     call: types.ResolveComment;
     response: types.ResolveCommentResponse;
@@ -725,10 +713,6 @@ const toolParserMap = {
   DispatchCodingAgent: {
     call: schemas.DispatchCodingAgent,
     response: schemas.DispatchedCodingAgent,
-  },
-  DisplayResults: {
-    call: schemas.DisplayResults,
-    response: schemas.DisplayResultsResponse,
   },
   DuplicateItem: {
     call: schemas.DuplicateItem,
@@ -1025,10 +1009,6 @@ const toolParserMap = {
     call: schemas.ReadDiscussion,
     response: schemas.ReadDiscussionResponse,
   },
-  ReadEntityAccessRequest: {
-    call: schemas.ReadEntityAccessRequest,
-    response: schemas.ReadEntityAccessRequestResponse,
-  },
   ReadForm: { call: schemas.ReadForm, response: schemas.ReadResult },
   ReadIllustratorDocument: {
     call: schemas.ReadIllustratorDocument,
@@ -1087,10 +1067,6 @@ const toolParserMap = {
     response: schemas.RenameItemResponse,
   },
   RenderCanvas: { call: schemas.RenderCanvas, response: schemas.CanvasRender },
-  RequestEntityAccess: {
-    call: schemas.RequestEntityAccess,
-    response: schemas.RequestEntityAccessResponse,
-  },
   ResolveComment: {
     call: schemas.ResolveComment,
     response: schemas.ResolveCommentResponse,
@@ -1358,10 +1334,6 @@ type ToolDataMap = {
     call: types.DispatchCodingAgent;
     response: types.DispatchedCodingAgent;
   };
-  DisplayResults: {
-    call: types.DisplayResults;
-    response: types.DisplayResultsResponse;
-  };
   DuplicateItem: {
     call: types.DuplicateItem;
     response: types.DuplicateItemResponse;
@@ -1618,10 +1590,6 @@ type ToolDataMap = {
     call: types.ReadDiscussion;
     response: types.ReadDiscussionResponse;
   };
-  ReadEntityAccessRequest: {
-    call: types.ReadEntityAccessRequest;
-    response: types.ReadEntityAccessRequestResponse;
-  };
   ReadForm: { call: types.ReadForm; response: types.ReadResult };
   ReadIllustratorDocument: {
     call: types.ReadIllustratorDocument;
@@ -1674,10 +1642,6 @@ type ToolDataMap = {
   };
   RenameItem: { call: types.RenameItem; response: types.RenameItemResponse };
   RenderCanvas: { call: types.RenderCanvas; response: types.CanvasRender };
-  RequestEntityAccess: {
-    call: types.RequestEntityAccess;
-    response: types.RequestEntityAccessResponse;
-  };
   ResolveComment: {
     call: types.ResolveComment;
     response: types.ResolveCommentResponse;

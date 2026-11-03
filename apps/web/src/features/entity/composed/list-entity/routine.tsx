@@ -13,6 +13,12 @@ function RoutineSubtitle(props: { status: RoutineStatus }) {
             Running
           </span>
         ))
+        .with({ kind: 'failed' }, () => (
+          <span class="flex items-center justify-end gap-1.5 text-failure">
+            <span class="size-1.5 rounded-full bg-failure" />
+            Last run failed
+          </span>
+        ))
         .with({ kind: 'scheduled' }, ({ nextRunAt }) => (
           <span class="text-ink-extra-muted">
             Next run {formatDateAndTime(nextRunAt)}

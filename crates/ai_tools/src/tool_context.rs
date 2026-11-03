@@ -1540,28 +1540,6 @@ pub fn build_favorites_tool_context(
     ))
 }
 
-/// Access requests an agent makes in the user's name; reviewers still decide.
-pub type ToolAccessRequestToolContext = access_requests::inbound::toolset::AccessRequestToolContext<
-    access_requests::outbound::postgres::PgRequestRepository,
-    ToolEntityAccessService,
-    access_requests::domain::ports::SystemClock,
->;
-
-/// Build the access-request tools over the same workflow the Share menu uses.
-/// Document storage delivers the notifications they enqueue.
-pub fn build_access_request_tool_context(
-    pool: sqlx::PgPool,
-    entity_access_service: Arc<ToolEntityAccessService>,
-) -> ToolAccessRequestToolContext {
-    access_requests::inbound::toolset::AccessRequestToolContext {
-        service: Arc::new(access_requests::domain::service::AccessRequestService::new(
-            Arc::new(access_requests::outbound::postgres::PgRequestRepository::new(pool)),
-            entity_access_service,
-            access_requests::domain::ports::SystemClock,
-        )),
-    }
-}
-
 /// Type alias for the chat tool context
 pub type ToolChatToolContext = ChatToolContext<ToolChatService, ToolEntityAccessService>;
 
@@ -1992,11 +1970,11 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
     }
 }
 
-/// Type alias for the import service implementation used by AI tools.
-/// The MCP connection to Pipedream's remote server: `None` on deployments
-/// where Pipedream isn't configured (its toolsets then come up empty).
+/// The connector backends (Pipedream, plus Macro Connect when configured):
+/// `None` on deployments where Pipedream isn't configured (its toolsets then
+/// come up empty).
 pub type ToolPipedreamConnection =
-    Option<std::sync::Arc<pipedream_mcp::outbound::api::PipedreamClient>>;
+    Option<std::sync::Arc<pipedream_mcp::outbound::dispatch::ConnectorBackends>>;
 
 /// The MCP stack selector wired to the concrete DCS stores: the native
 /// server store and the Pipedream connection store. Picks which stack
@@ -2015,7 +1993,7 @@ pub type ToolImportService = import::domain::service::ImportServiceImpl<
     import::outbound::mcp_slack_source::McpSlackSource<ToolMcpSelector>,
     import_notion::outbound::pipedream::PipedreamNotionConnections<
         pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
-        pipedream_mcp::outbound::api::PipedreamClient,
+        pipedream_mcp::outbound::dispatch::ConnectorBackends,
     >,
 >;
 
@@ -2121,8 +2099,6 @@ pub struct ToolServiceContext {
     pub project_tool_context: ToolProjectToolContext,
     /// Favorite toggles; the same favorites back `soup_service`'s favorites filter.
     pub favorites_tool_context: ToolFavoritesToolContext,
-    /// Requests for more access on items the user can't fully use.
-    pub access_request_tool_context: ToolAccessRequestToolContext,
     /// The Discussion of any item: the same message service the document
     /// tools comment through.
     pub message_tool_context: ToolMessageToolContext,
@@ -2151,7 +2127,7 @@ pub struct ToolServiceContext {
 
 /// Pipedream discovery dependencies shared by chat tools.
 pub type ToolConnectorToolContext = pipedream_mcp::inbound::toolset::ConnectorToolContext<
-    pipedream_mcp::outbound::api::PipedreamClient,
+    pipedream_mcp::outbound::dispatch::ConnectorBackends,
     pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
     mcp_select::NativeOverlayConnections<mcp_client::outbound::NativeServerStore>,
 >;
@@ -2162,7 +2138,7 @@ pub type ToolConnectorToolContext = pipedream_mcp::inbound::toolset::ConnectorTo
 /// native MCP stack; `None` where that stack has no encryption key.
 pub fn build_connector_tool_context(
     pool: sqlx::PgPool,
-    client: Option<Arc<pipedream_mcp::outbound::api::PipedreamClient>>,
+    client: Option<Arc<pipedream_mcp::outbound::dispatch::ConnectorBackends>>,
     native_servers: Option<Arc<mcp_client::outbound::NativeServerStore>>,
 ) -> ToolConnectorToolContext {
     pipedream_mcp::inbound::toolset::ConnectorToolContext {

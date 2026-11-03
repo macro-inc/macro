@@ -10,6 +10,7 @@ import {
   initialValues,
   validate,
 } from '@app/features/agent-interactions/state/elicitation-form';
+import type { View } from '@app/features/dynamic-ui/view';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { MagicChipView } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/MagicChipView';
 import type { MagicChipPresentation } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/presentation';
@@ -478,37 +479,8 @@ function DisplayResultsDemo() {
         name: { kind: 'mcp', server: 'macro', tool: 'DisplayResults' },
         status: pending() ? 'running' : 'completed',
         detail: {
-          kind: 'macro',
-          input: {
-            view: {
-              title: 'Launch overview',
-              widgets: [
-                {
-                  type: 'md',
-                  markdown:
-                    'The checklist is ready. **Two steps remain before launch.**',
-                },
-                {
-                  type: 'timeline',
-                  events: [
-                    {
-                      time: 'Today',
-                      title: 'Review launch checklist',
-                      description:
-                        'Confirm the release notes and rollout plan.',
-                    },
-                    {
-                      time: 'Tomorrow',
-                      title: 'Launch',
-                      description: 'Publish the release after checks pass.',
-                      future: true,
-                    },
-                  ],
-                },
-              ],
-            },
-          },
-          output: null,
+          kind: 'view',
+          view: pending() ? null : PRESENTED_VIEW,
           error: null,
         },
       },
@@ -530,7 +502,7 @@ function DisplayResultsDemo() {
   );
 }
 
-const PRESENTED_VIEW = {
+const PRESENTED_VIEW: View = {
   title: 'Launch overview',
   widgets: [
     {
@@ -564,14 +536,7 @@ function presentViewPart(id: string): MessagePart {
     id,
     name: { kind: 'mcp', server: 'macro_internal', tool: 'PresentView' },
     status: 'completed',
-    detail: {
-      kind: 'other',
-      acpKind: 'other',
-      input: { view: PRESENTED_VIEW },
-      output: null,
-      result: { message: 'Presented to the user' },
-      error: null,
-    },
+    detail: { kind: 'view', view: PRESENTED_VIEW, error: null },
   };
 }
 
@@ -737,53 +702,6 @@ const FIXTURE_MESSAGE: FoldedMessage = {
         kind: 'macro',
         input: { query: 'fold' },
         output: { hits: 3 },
-        error: null,
-      },
-    },
-    {
-      kind: 'tool_use',
-      id: 'demo-request-access',
-      name: { kind: 'mcp', server: 'macro', tool: 'RequestEntityAccess' },
-      status: 'completed',
-      detail: {
-        kind: 'macro',
-        input: {
-          entityType: 'initiative',
-          entityId: '0195d2dd-5de9-71f2-9d59-5d9734f1adb8',
-          access: 'edit',
-        },
-        output: {
-          status: 'pending',
-          requestedLevel: 'edit',
-          sentTo: ['macro|owner@example.com'],
-          requestedAt: '2026-10-30T12:00:00Z',
-        },
-        error: null,
-      },
-    },
-    {
-      kind: 'tool_use',
-      id: 'demo-read-access-request',
-      name: { kind: 'mcp', server: 'macro', tool: 'ReadEntityAccessRequest' },
-      status: 'completed',
-      detail: {
-        kind: 'macro',
-        input: {
-          entityType: 'initiative',
-          entityId: '0195d2dd-5de9-71f2-9d59-5d9734f1adb8',
-        },
-        output: {
-          currentAccess: 'edit',
-          supportedLevels: ['view', 'comment', 'edit'],
-          owner: 'macro|owner@example.com',
-          request: {
-            status: 'granted',
-            requestedLevel: 'edit',
-            grantedLevel: 'edit',
-            updatedAt: '2026-10-30T12:05:00Z',
-            retryAfter: null,
-          },
-        },
         error: null,
       },
     },

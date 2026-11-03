@@ -5,8 +5,6 @@ edition = "2024"
 publish = false
 
 [dependencies]
-ai_toolset = { path = "../ai_toolset" }
-async-trait = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
 entity_access = { path = "../entity_access" }
@@ -18,7 +16,6 @@ model_owner = { path = "../model_owner" }
 models_permissions = { path = "../models_permissions" }
 opentelemetry = { workspace = true }
 rootcause = { workspace = true }
-schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }

@@ -31,7 +31,6 @@ mod subagent;
 mod tool_context;
 pub mod user_tool_review;
 
-use access_requests::inbound::toolset::access_request_toolset;
 pub use anthropic::toolset::AnthropicToolContext;
 use anthropic::toolset::anthropic_toolset;
 use bots::inbound::toolset::bot_toolset;
@@ -74,15 +73,18 @@ pub use build_context::{
 };
 pub use deferred::{DeferredToolSet, deferred_tools};
 pub use import_jobs::{IMPORT_JOBS_HANDOVER_TIMEOUT, ImportJobs};
-pub use mcp_app_catalog::{PipedreamMcpAppCatalog, pipedream_client_from_env};
+pub use mcp_app_catalog::{
+    PipedreamMcpAppCatalog, connect_adapter, connector_backends_from_env, macro_connect_rollout,
+    pipedream_client_from_env,
+};
 pub use search::search_toolset;
 pub use tool_context::{
     ChannelSideEffectClients, FormsToolConfig, MaybeToolEventBroker, NoOpCallRtcClient,
     NoOpConnectionService, NoOpNotificationIngress, NoOpNotificationService,
     NoOpSnsEndpointManager, NoOpTaskProperties, RequestContext, RoutineToolContext,
-    TaskPropertiesAdapter, ToolAccessRequestToolContext, ToolActivityToolContext,
-    ToolBookingLinkService, ToolBookingLinkToolContext, ToolBookingManagementToolContext,
-    ToolBotService, ToolBotToolContext, ToolCalendarMutationService, ToolCalendarReadService,
+    TaskPropertiesAdapter, ToolActivityToolContext, ToolBookingLinkService,
+    ToolBookingLinkToolContext, ToolBookingManagementToolContext, ToolBotService,
+    ToolBotToolContext, ToolCalendarMutationService, ToolCalendarReadService,
     ToolCalendarToolContext, ToolCallRecordQueryService, ToolCallService, ToolCallToolContext,
     ToolChannelEventDispatcher, ToolChannelMediaUploadToolContext, ToolChannelMessagesService,
     ToolChannelToolContext, ToolChatService, ToolChatToolContext, ToolCodingAgentToolContext,
@@ -102,19 +104,18 @@ pub use tool_context::{
     ToolServiceContext, ToolSkillService, ToolSkillToolContext, ToolSoupService,
     ToolSystemPropertiesService, ToolTableEventPublisher, ToolTeamCalendarService,
     ToolTeamCalendarToolContext, ToolTeamService, ToolTeamToolContext, ToolUserEmailService,
-    ToolViewOnlyDatabasesSqlToolContext, build_access_request_tool_context,
-    build_activity_tool_context, build_booking_link_tool_context,
-    build_booking_management_tool_context, build_bot_tool_context, build_calendar_tool_context,
-    build_channel_media_upload_tool_context, build_channel_tool_context_with_dispatcher,
-    build_channel_tool_context_with_side_effects, build_channel_tool_context_without_side_effects,
-    build_coding_agent_tool_context, build_crm_tool_context, build_crm_transfer_tool_context,
-    build_databases_sql_tool_context, build_databases_tool_context, build_favorites_service,
-    build_favorites_tool_context, build_forms_tool_context, build_image_generation_tool_context,
-    build_import_repo, build_initiative_tool_context,
-    build_item_notification_preference_tool_context, build_message_service_with_side_effects,
-    build_message_service_without_side_effects, build_message_tool_context,
-    build_pipeline_tool_context, build_project_tool_context, build_properties_service,
-    build_properties_service_with_broker, build_properties_tool_context,
+    ToolViewOnlyDatabasesSqlToolContext, build_activity_tool_context,
+    build_booking_link_tool_context, build_booking_management_tool_context, build_bot_tool_context,
+    build_calendar_tool_context, build_channel_media_upload_tool_context,
+    build_channel_tool_context_with_dispatcher, build_channel_tool_context_with_side_effects,
+    build_channel_tool_context_without_side_effects, build_coding_agent_tool_context,
+    build_crm_tool_context, build_crm_transfer_tool_context, build_databases_sql_tool_context,
+    build_databases_tool_context, build_favorites_service, build_favorites_tool_context,
+    build_forms_tool_context, build_image_generation_tool_context, build_import_repo,
+    build_initiative_tool_context, build_item_notification_preference_tool_context,
+    build_message_service_with_side_effects, build_message_service_without_side_effects,
+    build_message_tool_context, build_pipeline_tool_context, build_project_tool_context,
+    build_properties_service, build_properties_service_with_broker, build_properties_tool_context,
     build_read_agent_session_context, build_routine_tool_context, build_skill_tool_context,
     build_task_properties_adapter, build_team_calendar_tool_context, build_team_repository,
     build_team_tool_context,
@@ -176,7 +177,6 @@ pub(crate) fn subagent_toolset() -> AiToolSet {
         .add_subtoolset::<ToolCognitionToolContext>(cognition_toolset())
         .add_subtoolset::<ToolProjectToolContext>(project_toolset())
         .add_subtoolset::<ToolFavoritesToolContext>(favorites_toolset())
-        .add_subtoolset::<ToolAccessRequestToolContext>(access_request_toolset())
         .add_subtoolset::<ToolMessageToolContext>(message_toolset())
         .add_subtoolset::<ToolInitiativeToolContext>(initiative_toolset())
         .add_subtoolset::<ToolPropertiesToolContext>(properties_toolset())
@@ -380,11 +380,6 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
             Box::new(prompt::DIRECT_TOOL_USE_PROMPT.compose(&prompt::coding_agents::PROMPT))
         }
     };
-    let prompt: Box<dyn std::fmt::Display + Send + Sync> = if code_mode_direct {
-        Box::new(format!("{prompt}{}", prompt::tool_usage::CODE_MODE_ROUTING))
-    } else {
-        prompt
-    };
     let catalog: Vec<(&str, &str)> = deferred
         .iter()
         .map(|tool| (tool.name.as_str(), tool.description.as_str()))
@@ -408,8 +403,6 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
 pub fn all_tool_frontend_schemas() -> FrontendSchemas {
     frontend_schemas_builder()
         .merge(&tools_for(AiHost::AgentSession))
-        // Chat's view tool, which agent sessions also used before `execution.views.present`.
-        .merge(&AsyncToolCollection::new().add_tool::<DisplayResults, ToolServiceContext>())
         .merge(&agent_code_mode::inbound::toolset::toolset())
         // Persisted legacy calls still render, but are never executable or advertised.
         .merge(&chat::inbound::toolset::chat_toolset::<

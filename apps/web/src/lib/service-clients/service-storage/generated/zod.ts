@@ -22641,6 +22641,11 @@ export const listFormsResponseBrandingAccentColorRegExpTwo = new RegExp(
 
 export const listFormsResponseItem = zod
   .object({
+    anonymous: zod
+      .boolean()
+      .describe(
+        'Whether nobody, the owner included, can see who gave which response.\nWho responded is kept apart from the responses, only so nobody\nresponds twice. Fixed once anyone has responded.'
+      ),
     audience: zod
       .enum(['members', 'public'])
       .describe('Who may respond to a form.'),
@@ -22699,8 +22704,11 @@ export const listFormsResponseItem = zod
       .uuid()
       .nullable()
       .describe(
-        'The person column each signed-in submission names its respondent in;\n`null` once deleted.'
+        'The person column each signed-in submission names its respondent in;\n`null` once deleted, and on a form created anonymous. An anonymous\nform never writes it.'
       ),
+    responsesVisible: zod
+      .boolean()
+      .describe('Whether people with View may read individual response rows.'),
     status: zod
       .enum(['open', 'closed'])
       .describe(
@@ -22736,6 +22744,12 @@ export const createFormBody = zod
       .union([
         zod
           .object({
+            anonymous: zod
+              .boolean()
+              .optional()
+              .describe(
+                'Make the form anonymous from the start: its table gets no\nRespondent column.'
+              ),
             isHiddenInDrive: zod
               .boolean()
               .optional()
@@ -22774,10 +22788,15 @@ export const listAccessibleFormsResponseItem = zod
     access: zod
       .enum(['view', 'edit', 'owner'])
       .describe(
-        "The caller's level on a form: view responds, edit changes questions and\nreads responses, owner also sets the audience, closes and trashes it."
+        "The caller's level on a form: view responds (and reads responses when\nthey are shared), edit changes questions and reads responses, owner\nalso sets the audience, closes and trashes it."
       ),
     form: zod
       .object({
+        anonymous: zod
+          .boolean()
+          .describe(
+            'Whether nobody, the owner included, can see who gave which response.\nWho responded is kept apart from the responses, only so nobody\nresponds twice. Fixed once anyone has responded.'
+          ),
         audience: zod
           .enum(['members', 'public'])
           .describe('Who may respond to a form.'),
@@ -22840,7 +22859,12 @@ export const listAccessibleFormsResponseItem = zod
           .uuid()
           .nullable()
           .describe(
-            'The person column each signed-in submission names its respondent in;\n`null` once deleted.'
+            'The person column each signed-in submission names its respondent in;\n`null` once deleted, and on a form created anonymous. An anonymous\nform never writes it.'
+          ),
+        responsesVisible: zod
+          .boolean()
+          .describe(
+            'Whether people with View may read individual response rows.'
           ),
         status: zod
           .enum(['open', 'closed'])
@@ -22889,10 +22913,15 @@ export const getFormResponse = zod
     access: zod
       .enum(['view', 'edit', 'owner'])
       .describe(
-        "The caller's level on a form: view responds, edit changes questions and\nreads responses, owner also sets the audience, closes and trashes it."
+        "The caller's level on a form: view responds (and reads responses when\nthey are shared), edit changes questions and reads responses, owner\nalso sets the audience, closes and trashes it."
       ),
     form: zod
       .object({
+        anonymous: zod
+          .boolean()
+          .describe(
+            'Whether nobody, the owner included, can see who gave which response.\nWho responded is kept apart from the responses, only so nobody\nresponds twice. Fixed once anyone has responded.'
+          ),
         audience: zod
           .enum(['members', 'public'])
           .describe('Who may respond to a form.'),
@@ -22953,7 +22982,12 @@ export const getFormResponse = zod
           .uuid()
           .nullable()
           .describe(
-            'The person column each signed-in submission names its respondent in;\n`null` once deleted.'
+            'The person column each signed-in submission names its respondent in;\n`null` once deleted, and on a form created anonymous. An anonymous\nform never writes it.'
+          ),
+        responsesVisible: zod
+          .boolean()
+          .describe(
+            'Whether people with View may read individual response rows.'
           ),
         status: zod
           .enum(['open', 'closed'])
@@ -23408,6 +23442,12 @@ export const updateFormBody = zod
       .regex(updateFormBodyAccentColorRegExp)
       .nullish()
       .describe('A new accent color, or `null` for the default.'),
+    anonymous: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether nobody can see who gave which response; refused once anyone\nhas responded.'
+      ),
     audience: zod
       .enum(['members', 'public'])
       .optional()
@@ -23429,6 +23469,10 @@ export const updateFormBody = zod
       .uuid()
       .nullish()
       .describe('A new logo, or `null` to remove it.'),
+    responsesVisible: zod
+      .boolean()
+      .optional()
+      .describe('Whether people with View may read individual response rows.'),
     status: zod
       .enum(['open', 'closed'])
       .optional()
@@ -23450,6 +23494,11 @@ export const updateFormResponseBrandingAccentColorRegExpTwo = new RegExp(
 
 export const updateFormResponse = zod
   .object({
+    anonymous: zod
+      .boolean()
+      .describe(
+        'Whether nobody, the owner included, can see who gave which response.\nWho responded is kept apart from the responses, only so nobody\nresponds twice. Fixed once anyone has responded.'
+      ),
     audience: zod
       .enum(['members', 'public'])
       .describe('Who may respond to a form.'),
@@ -23508,8 +23557,11 @@ export const updateFormResponse = zod
       .uuid()
       .nullable()
       .describe(
-        'The person column each signed-in submission names its respondent in;\n`null` once deleted.'
+        'The person column each signed-in submission names its respondent in;\n`null` once deleted, and on a form created anonymous. An anonymous\nform never writes it.'
       ),
+    responsesVisible: zod
+      .boolean()
+      .describe('Whether people with View may read individual response rows.'),
     status: zod
       .enum(['open', 'closed'])
       .describe(
@@ -23550,10 +23602,15 @@ export const collaborateFormResponse = zod
         access: zod
           .enum(['view', 'edit', 'owner'])
           .describe(
-            "The caller's level on a form: view responds, edit changes questions and\nreads responses, owner also sets the audience, closes and trashes it."
+            "The caller's level on a form: view responds (and reads responses when\nthey are shared), edit changes questions and reads responses, owner\nalso sets the audience, closes and trashes it."
           ),
         form: zod
           .object({
+            anonymous: zod
+              .boolean()
+              .describe(
+                'Whether nobody, the owner included, can see who gave which response.\nWho responded is kept apart from the responses, only so nobody\nresponds twice. Fixed once anyone has responded.'
+              ),
             audience: zod
               .enum(['members', 'public'])
               .describe('Who may respond to a form.'),
@@ -23620,7 +23677,12 @@ export const collaborateFormResponse = zod
               .uuid()
               .nullable()
               .describe(
-                'The person column each signed-in submission names its respondent in;\n`null` once deleted.'
+                'The person column each signed-in submission names its respondent in;\n`null` once deleted, and on a form created anonymous. An anonymous\nform never writes it.'
+              ),
+            responsesVisible: zod
+              .boolean()
+              .describe(
+                'Whether people with View may read individual response rows.'
               ),
             status: zod
               .enum(['open', 'closed'])
@@ -24500,10 +24562,15 @@ export const putFormLayoutResponse = zod
         access: zod
           .enum(['view', 'edit', 'owner'])
           .describe(
-            "The caller's level on a form: view responds, edit changes questions and\nreads responses, owner also sets the audience, closes and trashes it."
+            "The caller's level on a form: view responds (and reads responses when\nthey are shared), edit changes questions and reads responses, owner\nalso sets the audience, closes and trashes it."
           ),
         form: zod
           .object({
+            anonymous: zod
+              .boolean()
+              .describe(
+                'Whether nobody, the owner included, can see who gave which response.\nWho responded is kept apart from the responses, only so nobody\nresponds twice. Fixed once anyone has responded.'
+              ),
             audience: zod
               .enum(['members', 'public'])
               .describe('Who may respond to a form.'),
@@ -24570,7 +24637,12 @@ export const putFormLayoutResponse = zod
               .uuid()
               .nullable()
               .describe(
-                'The person column each signed-in submission names its respondent in;\n`null` once deleted.'
+                'The person column each signed-in submission names its respondent in;\n`null` once deleted, and on a form created anonymous. An anonymous\nform never writes it.'
+              ),
+            responsesVisible: zod
+              .boolean()
+              .describe(
+                'Whether people with View may read individual response rows.'
               ),
             status: zod
               .enum(['open', 'closed'])
@@ -25492,222 +25564,240 @@ export const getMyFormResponseParams = zod.object({
 });
 
 export const getMyFormResponseResponse = zod
-  .object({
-    answers: zod
-      .array(
-        zod
-          .object({
-            question: zod.uuid().describe('The question.'),
-            value: zod
-              .union([
-                zod
-                  .object({
-                    type: zod.enum(['text']),
-                    value: zod.string().describe('Free text.'),
-                  })
-                  .describe('Free text.'),
-                zod
-                  .object({
-                    type: zod.enum(['number']),
-                    value: zod.number().describe('A finite number.'),
-                  })
-                  .describe('A finite number.'),
-                zod
-                  .object({
-                    type: zod.enum(['boolean']),
-                    value: zod.boolean().describe('A checkbox.'),
-                  })
-                  .describe('A checkbox.'),
-                zod
-                  .object({
-                    type: zod.enum(['date']),
-                    value: zod.iso.datetime({}).describe('A date-time.'),
-                  })
-                  .describe('A date-time.'),
-                zod
-                  .object({
-                    type: zod.enum(['date_range']),
-                    value: zod
+  .union([
+    zod
+      .object({
+        answers: zod
+          .array(
+            zod
+              .object({
+                question: zod.uuid().describe('The question.'),
+                value: zod
+                  .union([
+                    zod
                       .object({
-                        end: zod.iso
-                          .datetime({})
-                          .describe('Where it ends; never before the start.'),
-                        start: zod.iso
-                          .datetime({})
-                          .describe('Where it starts.'),
+                        type: zod.enum(['text']),
+                        value: zod.string().describe('Free text.'),
+                      })
+                      .describe('Free text.'),
+                    zod
+                      .object({
+                        type: zod.enum(['number']),
+                        value: zod.number().describe('A finite number.'),
+                      })
+                      .describe('A finite number.'),
+                    zod
+                      .object({
+                        type: zod.enum(['boolean']),
+                        value: zod.boolean().describe('A checkbox.'),
+                      })
+                      .describe('A checkbox.'),
+                    zod
+                      .object({
+                        type: zod.enum(['date']),
+                        value: zod.iso.datetime({}).describe('A date-time.'),
+                      })
+                      .describe('A date-time.'),
+                    zod
+                      .object({
+                        type: zod.enum(['date_range']),
+                        value: zod
+                          .object({
+                            end: zod.iso
+                              .datetime({})
+                              .describe(
+                                'Where it ends; never before the start.'
+                              ),
+                            start: zod.iso
+                              .datetime({})
+                              .describe('Where it starts.'),
+                          })
+                          .describe(
+                            'A span of time from `start` to `end`, both included. A write whose end\ncomes before its start is refused.'
+                          ),
                       })
                       .describe(
-                        'A span of time from `start` to `end`, both included. A write whose end\ncomes before its start is refused.'
+                        'A span of time; its end may not come before its start.'
                       ),
-                  })
-                  .describe(
-                    'A span of time; its end may not come before its start.'
-                  ),
-                zod
-                  .object({
-                    type: zod.enum(['link']),
-                    value: zod
-                      .array(zod.string())
+                    zod
+                      .object({
+                        type: zod.enum(['link']),
+                        value: zod
+                          .array(zod.string())
+                          .describe(
+                            'Complete http or https URLs; at most one for a single-valued column.'
+                          ),
+                      })
                       .describe(
                         'Complete http or https URLs; at most one for a single-valued column.'
                       ),
-                  })
-                  .describe(
-                    'Complete http or https URLs; at most one for a single-valued column.'
-                  ),
-                zod
-                  .object({
-                    type: zod.enum(['options']),
-                    value: zod
-                      .array(
-                        zod
-                          .union([
+                    zod
+                      .object({
+                        type: zod.enum(['options']),
+                        value: zod
+                          .array(
                             zod
-                              .object({
-                                id: zod
-                                  .uuid()
+                              .union([
+                                zod
+                                  .object({
+                                    id: zod
+                                      .uuid()
+                                      .describe('An option the column has.'),
+                                  })
                                   .describe('An option the column has.'),
-                              })
-                              .describe('An option the column has.'),
-                            zod
-                              .object({
-                                label: zod
-                                  .string()
+                                zod
+                                  .object({
+                                    label: zod
+                                      .string()
+                                      .describe(
+                                        "An option's label, matched without regard to case. An unknown label\nis refused."
+                                      ),
+                                  })
                                   .describe(
                                     "An option's label, matched without regard to case. An unknown label\nis refused."
                                   ),
-                              })
+                              ])
                               .describe(
-                                "An option's label, matched without regard to case. An unknown label\nis refused."
-                              ),
-                          ])
-                          .describe(
-                            'A select option, by its id or by its label.'
+                                'A select option, by its id or by its label.'
+                              )
                           )
-                      )
+                          .describe(
+                            'Options of a select or tag column; at most one for a single-valued\ncolumn.'
+                          ),
+                      })
                       .describe(
                         'Options of a select or tag column; at most one for a single-valued\ncolumn.'
                       ),
-                  })
-                  .describe(
-                    'Options of a select or tag column; at most one for a single-valued\ncolumn.'
-                  ),
-                zod
-                  .object({
-                    type: zod.enum(['entities']),
-                    value: zod
-                      .array(
-                        zod
-                          .object({
-                            entityId: zod.string().describe("The entity's id."),
-                            entityType: zod
-                              .enum([
-                                'USER',
-                                'DOCUMENT',
-                                'TASK',
-                                'COMPANY',
-                                'CONTACT',
-                                'CALL_RECORD',
-                                'CHANNEL',
-                                'CHAT',
-                                'PROJECT',
-                                'THREAD',
-                                'CALENDAR_EVENT',
-                                'INITIATIVE',
-                              ])
-                              .describe(
-                                'A kind of Macro entity a reference column can point at.'
-                              ),
-                          })
-                          .describe('A reference to one Macro entity.')
-                      )
+                    zod
+                      .object({
+                        type: zod.enum(['entities']),
+                        value: zod
+                          .array(
+                            zod
+                              .object({
+                                entityId: zod
+                                  .string()
+                                  .describe("The entity's id."),
+                                entityType: zod
+                                  .enum([
+                                    'USER',
+                                    'DOCUMENT',
+                                    'TASK',
+                                    'COMPANY',
+                                    'CONTACT',
+                                    'CALL_RECORD',
+                                    'CHANNEL',
+                                    'CHAT',
+                                    'PROJECT',
+                                    'THREAD',
+                                    'CALENDAR_EVENT',
+                                    'INITIATIVE',
+                                  ])
+                                  .describe(
+                                    'A kind of Macro entity a reference column can point at.'
+                                  ),
+                              })
+                              .describe('A reference to one Macro entity.')
+                          )
+                          .describe(
+                            'References to Macro entities of the kind the column points at; at\nmost one for a single-valued column.'
+                          ),
+                      })
                       .describe(
                         'References to Macro entities of the kind the column points at; at\nmost one for a single-valued column.'
                       ),
-                  })
-                  .describe(
-                    'References to Macro entities of the kind the column points at; at\nmost one for a single-valued column.'
-                  ),
-                zod
-                  .object({
-                    type: zod.enum(['rows']),
-                    value: zod
-                      .array(zod.uuid())
+                    zod
+                      .object({
+                        type: zod.enum(['rows']),
+                        value: zod
+                          .array(zod.uuid())
+                          .describe(
+                            'Rows of the table a relation column points at.'
+                          ),
+                      })
                       .describe(
                         'Rows of the table a relation column points at.'
                       ),
-                  })
-                  .describe('Rows of the table a relation column points at.'),
-                zod
-                  .object({
-                    type: zod.enum(['clear']),
-                  })
-                  .describe('No value: the cell is emptied.'),
-              ])
+                    zod
+                      .object({
+                        type: zod.enum(['clear']),
+                      })
+                      .describe('No value: the cell is emptied.'),
+                  ])
+                  .describe(
+                    "A cell's value. It must fit the column's type: text for a text column,\noptions of the column for a select, and so on."
+                  ),
+              })
               .describe(
-                "A cell's value. It must fit the column's type: text for a text column,\noptions of the column for a select, and so on."
-              ),
-          })
-          .describe(
-            "One question's answer: a value for its column, typed as the column's\ncells are."
+                "One question's answer: a value for its column, typed as the column's\ncells are."
+              )
           )
-      )
-      .describe(
-        "The row's cells for the form's current questions, the empty ones\nleft out; none when the row is gone."
-      ),
-    booking: zod
-      .object({
-        description: zod
-          .string()
-          .describe('What respondents read before choosing a time.'),
-        section: zod.uuid().describe('The booking section.'),
-        target: zod
+          .describe(
+            "The row's cells for the form's current questions, the empty ones\nleft out; none when the row is gone."
+          ),
+        booking: zod
           .object({
-            eventTypeId: zod.uuid().describe('The event type to book.'),
-            profileId: zod
+            description: zod
+              .string()
+              .describe('What respondents read before choosing a time.'),
+            section: zod.uuid().describe('The booking section.'),
+            target: zod
+              .object({
+                eventTypeId: zod.uuid().describe('The event type to book.'),
+                profileId: zod
+                  .uuid()
+                  .describe('The scheduling profile that owns the event.'),
+              })
+              .describe(
+                'An existing native Macro scheduling event offered after an accepted response.'
+              ),
+            title: zod.string().describe('Its title.'),
+          })
+          .optional()
+          .describe(
+            'A booking step a passing response has unlocked, with its destination.'
+          ),
+        kind: zod.enum(['saved']),
+        response: zod
+          .object({
+            formId: zod.uuid().describe('The form.'),
+            id: zod.uuid().describe('The entry.'),
+            row: zod
               .uuid()
-              .describe('The scheduling profile that owns the event.'),
+              .nullable()
+              .describe(
+                'The row holding the answers; `null` when stopped, or once the row was\ndeleted from the table.'
+              ),
+            status: zod
+              .enum(['submitted', 'stopped'])
+              .describe(
+                'Whether a ledger entry is a saved response or a stop at a gate.'
+              ),
+            stoppedAtSection: zod
+              .uuid()
+              .nullable()
+              .describe('The gate that stopped it.'),
+            submittedAt: zod.iso
+              .datetime({})
+              .describe('When it was first submitted.'),
+            updatedAt: zod.iso.datetime({}).describe('When it last changed.'),
           })
           .describe(
-            'An existing native Macro scheduling event offered after an accepted response.'
+            "One entry of a form's submission ledger: who answered, when, and where\nthe answers went."
           ),
-        title: zod.string().describe('Its title.'),
       })
-      .optional()
       .describe(
-        'A booking step a passing response has unlocked, with its destination.'
+        'Their ledger entry, with its answers as the row holds them now.'
       ),
-    response: zod
+    zod
       .object({
-        formId: zod.uuid().describe('The form.'),
-        id: zod.uuid().describe('The entry.'),
-        row: zod
-          .uuid()
-          .nullable()
-          .describe(
-            'The row holding the answers; `null` when stopped, or once the row was\ndeleted from the table.'
-          ),
-        status: zod
-          .enum(['submitted', 'stopped'])
-          .describe(
-            'Whether a ledger entry is a saved response or a stop at a gate.'
-          ),
-        stoppedAtSection: zod
-          .uuid()
-          .nullable()
-          .describe('The gate that stopped it.'),
-        submittedAt: zod.iso
-          .datetime({})
-          .describe('When it was first submitted.'),
-        updatedAt: zod.iso.datetime({}).describe('When it last changed.'),
+        kind: zod.enum(['anonymous']),
       })
       .describe(
-        "One entry of a form's submission ledger: who answered, when, and where\nthe answers went."
+        'They responded to an anonymous form. Nothing links them to their\nresponse, so there is nothing more to show.'
       ),
-  })
-  .describe(
-    "A signed-in respondent's own response, with its answers as the row\nholds them now."
-  );
+  ])
+  .describe("A signed-in respondent's own response.");
 
 /**
  * @summary Replace the signed-in caller's answers while the form is open. A gate
@@ -26014,6 +26104,12 @@ export const getFormTallyResponse = zod
                           .describe('A checkbox state.'),
                       ])
                       .describe('A value a tally counts.'),
+                    voters: zod
+                      .array(zod.string())
+                      .nullish()
+                      .describe(
+                        "Who chose it, as Macro user ids in submission order: present only\nfor the form's editors, or its viewers when it shares its responses,\nand never when it hides respondents. Rows no signed-in respondent\nsubmitted count without a voter."
+                      ),
                   })
                   .describe('How many rows hold one value.')
               )
@@ -31482,6 +31578,24 @@ export const getItemsSoupResponse = zod
                 )
                 .and(
                   zod.object({
+                    archivedAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'When the session was archived, or `None` while it is active.'
+                      ),
+                    archivedBy: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'user',
+                            'pull_request_merged',
+                            'runtime_closed',
+                          ])
+                          .describe('Who or what archived an agent session.'),
+                      ])
+                      .optional(),
                     botId: zod.uuid().describe('The bot running this session'),
                     createdAt: zod.iso
                       .datetime({})
@@ -31492,11 +31606,6 @@ export const getItemsSoupResponse = zod
                         'The runtime snapshotted when the session was created.'
                       ),
                     id: zod.uuid().describe('The agent session uuid'),
-                    isArchived: zod
-                      .boolean()
-                      .describe(
-                        'Whether the session is archived and read-only.'
-                      ),
                     name: zod
                       .string()
                       .describe('The user-facing name of the session'),
@@ -36432,6 +36541,24 @@ export const postItemsSoupResponse = zod
                 )
                 .and(
                   zod.object({
+                    archivedAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'When the session was archived, or `None` while it is active.'
+                      ),
+                    archivedBy: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'user',
+                            'pull_request_merged',
+                            'runtime_closed',
+                          ])
+                          .describe('Who or what archived an agent session.'),
+                      ])
+                      .optional(),
                     botId: zod.uuid().describe('The bot running this session'),
                     createdAt: zod.iso
                       .datetime({})
@@ -36442,11 +36569,6 @@ export const postItemsSoupResponse = zod
                         'The runtime snapshotted when the session was created.'
                       ),
                     id: zod.uuid().describe('The agent session uuid'),
-                    isArchived: zod
-                      .boolean()
-                      .describe(
-                        'Whether the session is archived and read-only.'
-                      ),
                     name: zod
                       .string()
                       .describe('The user-facing name of the session'),
@@ -40823,6 +40945,24 @@ export const postItemsSoupAstResponse = zod
                 )
                 .and(
                   zod.object({
+                    archivedAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'When the session was archived, or `None` while it is active.'
+                      ),
+                    archivedBy: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'user',
+                            'pull_request_merged',
+                            'runtime_closed',
+                          ])
+                          .describe('Who or what archived an agent session.'),
+                      ])
+                      .optional(),
                     botId: zod.uuid().describe('The bot running this session'),
                     createdAt: zod.iso
                       .datetime({})
@@ -40833,11 +40973,6 @@ export const postItemsSoupAstResponse = zod
                         'The runtime snapshotted when the session was created.'
                       ),
                     id: zod.uuid().describe('The agent session uuid'),
-                    isArchived: zod
-                      .boolean()
-                      .describe(
-                        'Whether the session is archived and read-only.'
-                      ),
                     name: zod
                       .string()
                       .describe('The user-facing name of the session'),
@@ -45791,6 +45926,26 @@ export const postItemsSoupAstGroupedResponse = zod
                       )
                       .and(
                         zod.object({
+                          archivedAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe(
+                              'When the session was archived, or `None` while it is active.'
+                            ),
+                          archivedBy: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum([
+                                  'user',
+                                  'pull_request_merged',
+                                  'runtime_closed',
+                                ])
+                                .describe(
+                                  'Who or what archived an agent session.'
+                                ),
+                            ])
+                            .optional(),
                           botId: zod
                             .uuid()
                             .describe('The bot running this session'),
@@ -45803,11 +45958,6 @@ export const postItemsSoupAstGroupedResponse = zod
                               'The runtime snapshotted when the session was created.'
                             ),
                           id: zod.uuid().describe('The agent session uuid'),
-                          isArchived: zod
-                            .boolean()
-                            .describe(
-                              'Whether the session is archived and read-only.'
-                            ),
                           name: zod
                             .string()
                             .describe('The user-facing name of the session'),
@@ -50147,6 +50297,26 @@ export const postItemsSoupAstGroupedResponse = zod
                       )
                       .and(
                         zod.object({
+                          archivedAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe(
+                              'When the session was archived, or `None` while it is active.'
+                            ),
+                          archivedBy: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum([
+                                  'user',
+                                  'pull_request_merged',
+                                  'runtime_closed',
+                                ])
+                                .describe(
+                                  'Who or what archived an agent session.'
+                                ),
+                            ])
+                            .optional(),
                           botId: zod
                             .uuid()
                             .describe('The bot running this session'),
@@ -50159,11 +50329,6 @@ export const postItemsSoupAstGroupedResponse = zod
                               'The runtime snapshotted when the session was created.'
                             ),
                           id: zod.uuid().describe('The agent session uuid'),
-                          isArchived: zod
-                            .boolean()
-                            .describe(
-                              'Whether the session is archived and read-only.'
-                            ),
                           name: zod
                             .string()
                             .describe('The user-facing name of the session'),

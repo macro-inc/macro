@@ -10,6 +10,7 @@ pub mod agent_identity;
 pub mod agent_session;
 pub mod channel_mention;
 pub mod citations;
+pub mod code_mode;
 pub mod coding_agents;
 pub mod connected_toolsets;
 pub mod crm_pipelines;
@@ -26,7 +27,6 @@ pub mod pull_requests;
 pub mod skills;
 pub mod tasks;
 pub mod tone;
-pub mod tool_usage;
 mod types;
 pub mod user_tools;
 
@@ -51,12 +51,11 @@ static SESSION_BASE_PROMPT: ComposedPrompt = math::PROMPT
 
 /// The tool-enabled prompt for hosts whose tools all execute directly in the
 /// agent loop (the channel-mention bot, the MCP server): [`BASE_PROMPT`] with
-/// the tool use instructions, skill-following rules, document-content linking
-/// rules, and email inbox behavior appended. Says nothing about
+/// the database, skill-following and document-content linking rules and
+/// email inbox behavior appended. Says nothing about
 /// composer-confirmed user tools — those hosts' toolsets execute
 /// `CreateCalendarEvent` directly and have no `SendEmail` at all.
 pub static DIRECT_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
-    .compose(&tool_usage::PROMPT)
     .compose(&databases::PROMPT)
     .compose(&crm_pipelines::PROMPT)
     .compose(&skills::PROMPT)
@@ -68,7 +67,6 @@ pub static DIRECT_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
 /// only apply on surfaces that can render the composer card. Composed as its
 /// own chain so the email section stays last.
 pub static TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
-    .compose(&tool_usage::PROMPT)
     .compose(&databases::PROMPT)
     .compose(&crm_pipelines::PROMPT)
     .compose(&user_tools::BOOKING_PROMPT)
@@ -82,7 +80,6 @@ pub static TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
 /// reviews those calls in the turn - a review card the user answers while the
 /// agent waits, not a composer left pending after it.
 pub static SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROMPT
-    .compose(&tool_usage::PROMPT)
     .compose(&databases::PROMPT)
     .compose(&crm_pipelines::PROMPT)
     .compose(&user_tools::BOOKING_PROMPT)
@@ -91,9 +88,10 @@ pub static SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROMPT
     .compose(&document_content_links::PROMPT)
     .compose(&email::PROMPT);
 
-/// Agent-session instructions for nonblocking saved reviews in code mode.
+/// Agent-session instructions in code mode: [`SESSION_TOOL_USE_PROMPT`] with
+/// the [`code_mode`] section and nonblocking saved reviews.
 pub static CODE_MODE_SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROMPT
-    .compose(&tool_usage::PROMPT)
+    .compose(&code_mode::PROMPT)
     .compose(&databases::PROMPT)
     .compose(&crm_pipelines::PROMPT)
     .compose(&user_tools::BOOKING_PROMPT)
@@ -239,17 +237,23 @@ mod tests {
     }
 
     #[test]
-    fn session_prompts_present_views_unasked_and_leave_what_they_show_unmentioned() {
-        for prompt in [
-            SESSION_TOOL_USE_PROMPT.to_string(),
-            CODE_MODE_SESSION_TOOL_USE_PROMPT.to_string(),
-        ] {
-            assert!(prompt.contains("the user will not ask"));
-            assert!(prompt.contains("presenting them with `execution.views.present`"));
-            // The mention rule says IMPORTANT twice; a view's items are its
-            // one exception, or the agent names them again under the view.
-            assert!(prompt.contains("view opens it, so do not mention it again in your reply"));
-        }
+    fn code_mode_presents_views_unasked_and_mentions_leave_what_they_show_unmentioned() {
+        let code_mode = CODE_MODE_SESSION_TOOL_USE_PROMPT.to_string();
+        assert!(
+            code_mode.contains("present them with `execution.views.present` without being asked")
+        );
+        assert!(
+            !SESSION_TOOL_USE_PROMPT
+                .to_string()
+                .contains("execution.views.present` without")
+        );
+        // The mention rule is the base prompt's; a view's items are its one
+        // exception, or the agent names them again under the view.
+        assert!(
+            BASE_PROMPT
+                .to_string()
+                .contains("the view already opens them")
+        );
     }
 
     #[test]

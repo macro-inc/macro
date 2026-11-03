@@ -1,5 +1,5 @@
 import { type RoutineEntity, routineStatus } from '@entity/types/entity';
-import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
+import type { ScheduledActionResponse } from '@service-scheduled-action/generated/schemas';
 import { createMemo } from 'solid-js';
 import { isClaimActive } from '../core/claim';
 import { useSchedulesQuery } from './schedules';
@@ -8,7 +8,7 @@ import { getCronTrigger } from './triggers';
 export { isClaimActive } from '../core/claim';
 
 export function scheduleToEntity(
-  schedule: ScheduledAction
+  schedule: ScheduledActionResponse
 ): RoutineEntity | undefined {
   const trigger = getCronTrigger(schedule);
   if (!schedule.id) return undefined;
@@ -24,6 +24,7 @@ export function scheduleToEntity(
       enabled: schedule.enabled,
       isRunning: isClaimActive(schedule.claimed),
       nextRunAt: schedule.next_run_at,
+      lastRunFailed: schedule.last_run ? !schedule.last_run.is_success : false,
     }),
   };
 }

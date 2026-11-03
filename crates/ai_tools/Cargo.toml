@@ -8,7 +8,7 @@ version = "0.1.0"
 test-support = []
 
 [dependencies]
-access_requests = { path = "../access_requests" }
+feature_flags = { path = "../feature_flags" }
 import_linear = { path = "../import_linear" }
 import_jira = { path = "../import_jira" }
 
@@ -20,6 +20,7 @@ forms = { path = "../forms", features = ["ai_tools", "gateway", "postgres", "sch
 routines = { path = "../routines" }
 macro_auth = { path = "../macro_auth" }
 agent_code_mode = { path = "../agent_code_mode" }
+dynamic_ui = { path = "../dynamic_ui" }
 ai_billing = { path = "../ai_billing", features = ["pg-admission"] }
 collab_surface = { path = "../collab_surface", features = ["postgres"] }
 initiative = { path = "../initiative", default-features = false, features = ["postgres", "resources", "toolset"] }
@@ -85,6 +86,7 @@ macro_user_id = { path = "../macro_user_id" }
 mcp_client = { path = "../mcp_client" }
 mcp_select = { path = "../mcp_select" }
 pipedream_mcp = { path = "../pipedream_mcp" }
+url = { workspace = true }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 model_notifications = { path = "../model_notifications" }
