@@ -32,6 +32,7 @@ const result: FormMutation = {
       closesAt: null,
       tallyVisible: false,
       confirmationMessage: '',
+      branding: { logoFileId: null, coverFileId: null, accentColor: null },
       submittedColumnId: null,
       respondentColumnId: null,
       createdAt: '2026-10-06T12:00:00Z',

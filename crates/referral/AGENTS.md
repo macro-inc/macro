@@ -2,24 +2,25 @@
 
 ## What it is
 
-Part of the billing feature (referrals). Generates/redeems referral codes,
-grants the Stripe discount, and notifies the referrer for the
-invite-to-Macro flow.
+Part of the billing feature (referrals). Generates referral codes, records a
+referral when a brand-new user signs up through one, and rewards the referrer
+($10 of AI credit, or more free allowance) through the `ReferralRewarder`
+port. Also sends invite-to-Macro emails.
 
 ## Start here
 
 - `src/domain/service.rs`: `ReferralServiceImpl` — referral code generation,
-  invite handling, and discount/notification orchestration.
-- `src/domain/ports.rs`: `ReferralRepo`, `DiscountClient`, `ReferralService`.
-- `src/outbound/pg_referral_repo.rs` + `src/outbound/stripe_discount_client.rs`:
-  the Postgres and Stripe adapters.
+  referral tracking plus the referrer reward, and invite emails.
+- `src/domain/ports.rs`: `ReferralRepo`, `ReferralRewarder`, `ReferralService`.
+- `src/outbound/pg_referral_repo.rs`: the Postgres adapter. A user is referred
+  at most once (unique `referral_tracking.referred_id`).
 
 ## Scope
 
 - Owns: referral code lifecycle and invite-to-Macro.
-- Not here: the discount's actual billing effect → Stripe (via
-  `stripe_discount_client.rs`, a thin client only); sending the notification
-  itself → `notification`.
+- Not here: the reward itself → `crates/ai_billing` (`InviteRewardService`,
+  wired in `services/authentication_service/src/outbound/invite_rewards.rs`);
+  sending the notification itself → `notification`.
 
 ## Boundaries
 

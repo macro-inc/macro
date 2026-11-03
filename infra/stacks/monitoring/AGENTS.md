@@ -33,6 +33,9 @@ From `infra/`:
   at oncall.macro-internal.com.
 - A prod monitor's graph on its file's dashboard repeats its metric and
   thresholds by hand; change both. `routing.test.ts` matches them by title.
+  The long-running transaction monitor is a Database Monitoring alert so the
+  notification can include the SQL; its graph still plots
+  `postgresql.activity.xact_start_age`.
 - End every monitor message with `notify({ pages })`, which routes only to
   GoAlert, and pass `dependsOn: goalertWebhooks`. Never mention a channel
   webhook, Slack handle or email address: GoAlert posts to the channel. Only

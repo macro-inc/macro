@@ -1,0 +1,10 @@
+id = "granola"
+name = "Granola"
+description = "Search meeting notes and transcripts."
+access = ["mcp"]
+mcp_url = "https://mcp.granola.ai/mcp"
+client_registration = "cimd"
+scopes = []
+pipedream_app_slugs = ["granola"]
+status = "pending"
+probed = 2026-10-30

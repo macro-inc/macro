@@ -248,6 +248,126 @@ async fn stage_requirements_reject_atomically_and_allow_combined_edits(pool: PgP
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn rejected_required_input_edits_preserve_materialized_formulas(pool: PgPool) {
+    let (s, _db, a, team, company) = fixture(&pool).await;
+    let p = create(&s, team, PipelineRecordType::Company).await;
+    let detail = s
+        .table(access(&a, p.id, EntityType::CrmPipeline, OWNER).await)
+        .await
+        .unwrap();
+    let stage = detail.columns[1].column.id;
+    let won = OptionId::from_uuid(detail.columns[1].definition.property_options[1].id);
+    let amount = detail.columns[3].column.id;
+    let doubled = ColumnId::new();
+    write(
+        &s,
+        &a,
+        &p,
+        vec![DatabaseOp::Column {
+            table: p.table_id,
+            column: doubled,
+            change: ColumnChange::Create {
+                definition: NewColumn::Derived {
+                    name: "Double revenue".into(),
+                    formula: Formula::Binary {
+                        operator: Operator::Multiply,
+                        left: Box::new(Formula::Column { column: amount }),
+                        right: Box::new(Formula::Number { value: 2.0 }),
+                    },
+                },
+                after: None,
+            },
+        }],
+    )
+    .await
+    .unwrap();
+    let rule = StageRequirement {
+        stage_column_id: stage,
+        stage_id: won,
+        required_column_ids: vec![amount],
+    };
+    s.set_stage_requirement(
+        access(&a, p.id, EntityType::CrmPipeline, OWNER).await,
+        rule.clone(),
+    )
+    .await
+    .unwrap();
+    let mut addition = insert(&p, company);
+    if let DatabaseOp::Rows {
+        change: RowsChange::Insert { rows },
+        ..
+    } = &mut addition
+    {
+        rows[0].extend([
+            CellWrite {
+                column: stage,
+                value: CellValue::Options(vec![OptionRef::Id(won)]),
+            },
+            CellWrite {
+                column: amount,
+                value: CellValue::Number(50.0),
+            },
+        ]);
+    }
+    let row = inserted(&write(&s, &a, &p, vec![addition]).await.unwrap());
+    let before = s
+        .read_rows(
+            access(&a, p.id, EntityType::CrmPipeline, OWNER).await,
+            &[row],
+        )
+        .await
+        .unwrap();
+    assert_eq!(before[0].cells[&amount], PropertyValue::Num(50.0));
+    assert_eq!(before[0].cells[&doubled], PropertyValue::Num(100.0));
+    assert!(
+        write(
+            &s,
+            &a,
+            &p,
+            vec![DatabaseOp::Rows {
+                table: p.table_id,
+                change: RowsChange::Update {
+                    changes: RowChanges::Uniform {
+                        rows: vec![row],
+                        cells: vec![CellWrite {
+                            column: amount,
+                            value: CellValue::Clear,
+                        }],
+                    },
+                },
+            }],
+        )
+        .await
+        .is_err()
+    );
+    let after = s
+        .read_rows(
+            access(&a, p.id, EntityType::CrmPipeline, OWNER).await,
+            &[row],
+        )
+        .await
+        .unwrap();
+    assert_eq!(after[0].cells, before[0].cells);
+    assert!(
+        s.set_stage_requirement(
+            access(&a, p.id, EntityType::CrmPipeline, OWNER).await,
+            StageRequirement {
+                required_column_ids: vec![doubled],
+                ..rule.clone()
+            },
+        )
+        .await
+        .is_err()
+    );
+    assert_eq!(
+        s.stage_requirements(access(&a, p.id, EntityType::CrmPipeline, OWNER).await)
+            .await
+            .unwrap(),
+        vec![rule]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn board_moves_share_stage_validation_and_keep_failed_moves_unchanged(pool: PgPool) {
     let (s, _db, a, team, company) = fixture(&pool).await;
     let p = create(&s, team, PipelineRecordType::Company).await;

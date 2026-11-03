@@ -2,6 +2,7 @@
 
 ## Type Aliases
 
+- [AccentColor](type-aliases/AccentColor.md)
 - [AccessiblePipeline](type-aliases/AccessiblePipeline.md)
 - [AccessLevel](type-aliases/AccessLevel.md)
 - [AccessRequest](type-aliases/AccessRequest.md)
@@ -840,6 +841,7 @@
 - [ForeignEntityFilters](type-aliases/ForeignEntityFilters.md)
 - [Form](type-aliases/Form.md)
 - [FormAccess](type-aliases/FormAccess.md)
+- [FormBranding](type-aliases/FormBranding.md)
 - [FormCollaboration](type-aliases/FormCollaboration.md)
 - [FormDetail](type-aliases/FormDetail.md)
 - [FormErrorCode](type-aliases/FormErrorCode.md)
