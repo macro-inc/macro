@@ -101,6 +101,9 @@ async fn graph_retry_after_and_request_ids_are_recorded_on_every_response() {
     let spans = Spans::default();
     let _subscriber =
         tracing::subscriber::set_default(tracing_subscriber::registry().with(spans.clone()));
+    // A callsite another test thread registered while this subscriber was
+    // being installed can keep a cached "never" interest; recompute it.
+    tracing::callsite::rebuild_interest_cache();
     let (server, api, token) = super::super::test::setup().await;
     let api = api.for_mailbox(MAILBOX);
     Mock::given(method("GET"))
@@ -174,6 +177,9 @@ async fn a_gate_refusal_is_a_deferral_not_a_failed_request() {
     let spans = Spans::default();
     let _subscriber =
         tracing::subscriber::set_default(tracing_subscriber::registry().with(spans.clone()));
+    // A callsite another test thread registered while this subscriber was
+    // being installed can keep a cached "never" interest; recompute it.
+    tracing::callsite::rebuild_interest_cache();
     let (_server, mut api, token) = super::super::test::setup().await;
     api.gate = Some(Arc::new(RefusingGate));
     let api = api.for_mailbox(MAILBOX);

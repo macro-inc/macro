@@ -33,7 +33,12 @@ pub(crate) struct Telemetry(Arc<Mutex<Captured>>);
 
 impl Telemetry {
     pub(crate) fn install(&self) -> tracing::subscriber::DefaultGuard {
-        tracing::subscriber::set_default(tracing_subscriber::registry().with(self.clone()))
+        let guard =
+            tracing::subscriber::set_default(tracing_subscriber::registry().with(self.clone()));
+        // A callsite another test thread registered while this subscriber was
+        // being installed can keep a cached "never" interest; recompute it.
+        tracing::callsite::rebuild_interest_cache();
+        guard
     }
 
     /// Closed spans with this name, oldest first.
