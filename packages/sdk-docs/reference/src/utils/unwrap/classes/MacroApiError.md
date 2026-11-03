@@ -11,6 +11,7 @@ and `data` holds the parsed error body.
 ## Extended by
 
 - [`MacroOpRefusedError`](../../../entities/databases/database/classes/MacroOpRefusedError.md)
+- [`MacroForbiddenError`](MacroForbiddenError.md)
 
 ## Constructors
 

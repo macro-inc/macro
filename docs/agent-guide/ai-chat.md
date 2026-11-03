@@ -172,6 +172,18 @@ always the user's. Each row names the item with a chip that opens it; edit and
 sharing rows expand to show the new text or settings. Verify with throwaway
 items, since these mutate real data.
 
+### Requesting access the user lacks
+
+A write the user can only view fails in code mode with `MacroForbiddenError`
+(a 403). The agent should say the user can only view the item and offer to
+ask its owner for edit access; only after the user agrees does it call
+`<item>.access.request('edit')`. The owner gets the same request the Share
+menu sends, from the user, and **Share → Permission requests** shows it. The
+agent reports the request as pending and who reviews it, and retries the write
+only after `<item>.access.state()` shows edit access. To verify, have a
+view-only user ask an agent to add a task to a project they can only view,
+agree to the request, grant it as the owner, then ask the agent to retry.
+
 ## Phones with new agents enabled
 
 With `enable-chat-v3-agents`, **Agents** opens the new conversation list on phones,
