@@ -1,3 +1,4 @@
+import { staticFileIdEndpoint } from '@core/constant/servers';
 import { $createImageNode, ImageNode } from '@macro-inc/lexical-core';
 import {
   COMMAND_PRIORITY_NORMAL,
@@ -39,11 +40,12 @@ export function gifPickerPlugin(props: GifPickerPluginProps) {
   return (editor: LexicalEditor) => registerGifPickerPlugin(editor, props);
 }
 
-export function $insertGifNode(gif: Gif) {
+export function $insertGifNode(gif: Gif, staticFileId: string) {
   const width = Math.min(gif.width, MAX_GIF_WIDTH);
   const imageNode = $createImageNode({
-    srcType: 'url',
-    url: gif.url,
+    srcType: 'sfs',
+    id: staticFileId,
+    url: staticFileIdEndpoint(staticFileId),
     alt: gif.title,
     width: gif.width,
     height: gif.height,
