@@ -7396,6 +7396,10 @@ type GraphqlScheduledActionEventFilter {
 	"""
 	payloadMatch: [String!]!
 	"""
+	The task property that must have changed, and the values it must gain.
+	"""
+	property: GraphqlScheduledActionPropertySelector
+	"""
 	Yes/no question the triggering content must answer with yes before the routine runs.
 	"""
 	condition: String
@@ -7515,6 +7519,20 @@ type GraphqlScheduledActionMultipleTrigger {
 	Events that can also trigger this routine.
 	"""
 	events: GraphqlScheduledActionEventsTrigger
+}
+
+"""
+A task property a filter watches.
+"""
+type GraphqlScheduledActionPropertySelector {
+	"""
+	The property definition that must have changed.
+	"""
+	definitionId: ID!
+	"""
+	Select option or referenced entity ids, one of which the change must add. Empty matches any change.
+	"""
+	values: [String!]!
 }
 
 """
