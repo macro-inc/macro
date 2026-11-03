@@ -31,10 +31,6 @@ const PLANNED: &[(&str, &str)] = &[
         "Use when the user asks to find, look up or list their own Macro content (documents, emails, messages, tasks, people), or asks something their workspace answers; not for the web.",
     ),
     (
-        "Documents",
-        "Use when creating, writing into or editing a document, canvas, spreadsheet, Word document or deck; not databases.",
-    ),
-    (
         "Routines",
         "Use when something should happen later, on a schedule, or whenever an event occurs, such as every Monday, a reminder, or when an email arrives.",
     ),
@@ -90,11 +86,8 @@ const PROMPTS: &[(&str, &[&str])] = &[
         &["Calendar"],
     ),
     ("Send me my booking link", &["Calendar"]),
-    (
-        "Write a project brief for the onboarding revamp",
-        &["Documents"],
-    ),
-    ("Fix the formulas in the budget spreadsheet", &["Documents"]),
+    ("Write a project brief for the onboarding revamp", &[]),
+    ("Fix the formulas in the budget spreadsheet", &[]),
     (
         "Post a poll in #design about the two logo options",
         &["Channels"],

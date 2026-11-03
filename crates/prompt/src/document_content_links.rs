@@ -2,9 +2,9 @@
 //!
 //! The full Markdown-surface scope and `<m-document-mention>` tag rules live in
 //! [`crate::mentions`], and already cover `CreateDocument`/`EditDocument`
-//! content for in-app tool calls — [`crate::mentions`] composes into
-//! [`crate::TOOL_USE_PROMPT`] via [`crate::BASE_PROMPT`], so nothing here is
-//! needed there. But [`crate::mentions`] is deliberately excluded from the MCP
+//! content for in-app tool calls — [`crate::mentions`] composes into every
+//! in-app prompt via [`crate::BASE_PROMPT`], so this section is composed only
+//! into MCP instructions. But [`crate::mentions`] is deliberately excluded from the MCP
 //! static instructions (see `MCP_STATIC_INSTRUCTIONS` in `lib.rs` and
 //! [`crate::mcp_item_links`], which tells the model to link items in its own
 //! MCP chat replies as plain Markdown URLs instead, since MCP clients can't

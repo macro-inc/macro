@@ -49,23 +49,20 @@ static SESSION_BASE_PROMPT: ComposedPrompt = math::PROMPT
 
 /// The tool-enabled prompt for hosts whose tools all execute directly in the
 /// agent loop (the channel-mention bot, the MCP server): [`BASE_PROMPT`] with
-/// the skill-following and document-content linking rules appended. Area
+/// the skill-following rules appended. Area
 /// guidance (databases, email, ...) comes from built-in skills, which
 /// `ai_tools` inlines or routes. Says nothing about
 /// composer-confirmed user tools — those hosts' toolsets execute
 /// `CreateCalendarEvent` directly and have no `SendEmail` at all.
-pub static DIRECT_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
-    .compose(&skills::PROMPT)
-    .compose(&document_content_links::PROMPT);
+pub static DIRECT_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT.compose(&skills::PROMPT);
 
 /// The chat tool-enabled prompt: [`DIRECT_TOOL_USE_PROMPT`] plus the rules
 /// for composer-confirmed user tools (`SendEmail`, deferred execution), which
 /// only apply on surfaces that can render the composer card. Composed as its
-/// own chain so the document-content linking section stays last.
+/// own chain so the skill-following section stays last.
 pub static TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
     .compose(&user_tools::PROMPT)
-    .compose(&skills::PROMPT)
-    .compose(&document_content_links::PROMPT);
+    .compose(&skills::PROMPT);
 
 /// The agent-session tool-enabled prompt: [`TOOL_USE_PROMPT`] on
 /// [`SESSION_BASE_PROMPT`], with the user tool rules restated for a host that
@@ -73,8 +70,7 @@ pub static TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
 /// agent waits, not a composer left pending after it.
 pub static SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROMPT
     .compose(&user_tools::SESSION_PROMPT)
-    .compose(&skills::PROMPT)
-    .compose(&document_content_links::PROMPT);
+    .compose(&skills::PROMPT);
 
 /// Agent-session instructions in code mode: [`SESSION_TOOL_USE_PROMPT`] with
 /// the [`code_mode`] section and nonblocking saved reviews.
@@ -82,8 +78,7 @@ pub static CODE_MODE_SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROM
     .compose(&code_mode::PROMPT)
     .compose(&user_tools::CODE_MODE_SESSION_PROMPT)
     .compose(&tasks::PROMPT)
-    .compose(&skills::PROMPT)
-    .compose(&document_content_links::PROMPT);
+    .compose(&skills::PROMPT);
 
 /// Database-only agent instructions, without unrelated tool capabilities.
 pub static DATABASE_TOOL_USE_PROMPT: ComposedPrompt =
@@ -338,6 +333,21 @@ mod tests {
                 assert!(text.contains(guidance), "missing poll guidance: {guidance}");
             }
         }
+    }
+
+    #[test]
+    fn in_app_prompts_get_document_content_rules_from_mentions_only() {
+        let restated = document_content_links::PROMPT.to_string();
+        for prompt in [
+            DIRECT_TOOL_USE_PROMPT.to_string(),
+            TOOL_USE_PROMPT.to_string(),
+            SESSION_TOOL_USE_PROMPT.to_string(),
+            CODE_MODE_SESSION_TOOL_USE_PROMPT.to_string(),
+        ] {
+            assert!(prompt.contains("`CreateDocument`/`EditDocument` content for Markdown"));
+            assert!(!prompt.contains(&restated));
+        }
+        assert!(mcp_instructions("https://macro.com").contains(&restated));
     }
 
     #[test]
