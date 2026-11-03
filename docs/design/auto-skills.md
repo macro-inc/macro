@@ -88,7 +88,7 @@ deferred unless noted.
 | Skill | Use when … | Moves in from `crates/prompt` (chars) | Tools | SDK |
 | --- | --- | --- | --- | --- |
 | `finding-things` | the user asks to find, look up or list their own Macro content (documents, emails, messages, tasks, people), or asks something their workspace answers; not for the web | code-mode `guides/search.md` (1,427) becomes its body | ContentSearch, NameSearch, ListEntities, ReadContent, ReadMetadata (eager, they stay eager), ReadActivity | search, entity |
-| `documents` | creating, writing into or editing a document, canvas, spreadsheet, Word document or deck; not databases | `document_content_links` (3,339) | CreateDocument, EditDocument (eager); canvas, spreadsheet, Word, PowerPoint, design readers, RenameDocument, CommentOnText, UploadFile, GenerateImage | documents |
+| ~~`documents`~~ | dropped: `document_content_links` turned out to be an MCP-only restatement of `mentions`, so it leaves the in-app chains outright, and editor guidance already lives in the editor tools' descriptions; the skill would have no body | | | |
 | `databases` | working with a Macro database or table: creating one, querying it, adding rows, columns or views; not CRM pipelines or spreadsheets | `databases` (2,766) | ListDatabases, DescribeDatabase, QueryDatabase, SaveDatabaseQuery, Save/DeleteDatabaseView | databases |
 | `crm` | deals, pipelines, stages, companies or contacts; not generic databases | `crm_pipelines` (749) | the 14 pipeline, company and contact tools | crm |
 | `routines` | something should happen later, on a schedule, or whenever an event occurs ("every Monday", "remind me", "when an email arrives") | new body: the general rules in CreateRoutine's description (agent target, once vs cron, never create a routine per run) | Create/List/Read/Update/Run/DeleteRoutine | routines |
@@ -246,9 +246,6 @@ skills.
    them: on Anthropic, a deferred tool is only callable once a tool result
    references it, so a preload would need a fake call. The backstop (loading
    one of a skill's tools loads the skill) follows as its own change.
-   `CreateDocument` and `EditDocument` stay eager, so `documents` would have
-   no backstop anyway: if the evaluation shows its recall below 95%,
-   `document_content_links` stays always-on.
 7. **Failure.** On a timeout, a Jev error, or no cognition service, nothing
    loads and the catalog stays. The turn never waits longer than the 1 s
    deadline.
