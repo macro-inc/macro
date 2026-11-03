@@ -5,6 +5,15 @@ limit of 50, release builds, and one local machine. They are not production
 latency guarantees. Those comparisons preserved their original matching/ranking;
 the subsequent deterministic person policy is measured separately below.
 
+A full-frontend contact diagnostic at `1932eec7` found directory-sized main-thread
+JS retention and a missing person
+capability in the app's retiring-host wrapper. Its UI queries used server fallback.
+Later full-app runs restore the capability; at `bd5748ab`, Home/command runs retain
+56.6 MiB of JS at 100k versus 55.8–55.9 MiB at 1k, with no legacy directory reads
+or command-person server fallback. Other surfaces and total-memory acceptance
+remain open, and warm broad DOM-result samples still take 600–616 ms. Keep those
+full-app observations separate from the engine timings below.
+
 ## SQL scan comparison
 
 Run from the repository root:
