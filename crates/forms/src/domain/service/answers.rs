@@ -1,7 +1,8 @@
 //! A submission's answers against a form's layout: shape and required
 //! checks, labels resolved to options, the sections skipped by their
-//! show-when rules, and the gates, walked in section order. The databases service stays the authority on whether a value fits
-//! its column; this checks only what the form must decide itself.
+//! show-when rules, and the gates, walked in section order. The databases
+//! service stays the authority on whether a value fits its column; this
+//! checks only what the form must decide itself.
 
 use std::collections::HashMap;
 
