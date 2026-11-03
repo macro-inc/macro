@@ -49,7 +49,9 @@ vi.mock('../notification-settings', () => ({
 function MockToaster() {
   return (
     <>
-      <button onClick={() => mocks.custom.mock.lastCall?.[1]?.onUserDismiss?.()}>
+      <button
+        onClick={() => mocks.custom.mock.lastCall?.[1]?.onUserDismiss?.()}
+      >
         Dismiss
       </button>
       <button
