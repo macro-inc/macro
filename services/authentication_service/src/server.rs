@@ -268,7 +268,7 @@ pub async fn run() -> anyhow::Result<()> {
                 cipher,
             )
             .with_connections_enabled(config.outlook_connections_enabled)
-            .with_feature_flags(feature_flags),
+            .with_feature_flags(feature_flags.clone()),
         ) as Arc<dyn MicrosoftAuth>
     });
 
@@ -774,6 +774,9 @@ pub async fn run() -> anyhow::Result<()> {
             team_agent_launches.clone(),
         )
         .map_err(|error| anyhow::anyhow!("{error:?}"))?,
+        // Gates creating agents per admin (`enable-team-agents`). Without a
+        // PostHog key (local, tests) creation is open.
+        feature_flags.clone(),
         // The brain runs on its own machine, so it reaches Macro through the
         // public gateway, never this container's in-network addresses.
         team_agents::domain::service::BrainEnvironment {

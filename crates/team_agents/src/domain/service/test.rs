@@ -2,6 +2,8 @@ use std::sync::Mutex;
 
 use chrono::Utc;
 use entity_access::domain::models::{AdminTeamRole, EntityAccessReceipt, EntityType};
+use feature_flags::outbound::fake::FakeFeatureFlags;
+use feature_flags::{FlagSnapshot, FlagValue};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
@@ -189,9 +191,33 @@ impl BrainLauncher for FakeLauncher {
     }
 }
 
-type Service = TeamAgentServiceImpl<FakeRepo, FakeTeams, FakeKeys, FakeMailboxes, FakeLauncher>;
+type Service = TeamAgentServiceImpl<
+    FakeRepo,
+    FakeTeams,
+    FakeKeys,
+    FakeMailboxes,
+    FakeLauncher,
+    FakeFeatureFlags,
+>;
 
 fn service(bind_fails: bool) -> Service {
+    service_with_flags(bind_fails, None)
+}
+
+fn admin() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::parse_from_str("macro|admin@example.com")
+        .map(MacroUserIdStr::into_owned)
+        .unwrap_or_else(|_| panic!("valid user id"))
+}
+
+/// Flags where the admin's load answers `result`.
+fn flags(result: Result<FlagSnapshot, String>) -> Option<FakeFeatureFlags> {
+    let mut flags = FakeFeatureFlags::default();
+    flags.set(admin(), result);
+    Some(flags)
+}
+
+fn service_with_flags(bind_fails: bool, flags: Option<FakeFeatureFlags>) -> Service {
     TeamAgentServiceImpl::new(
         FakeRepo::default(),
         FakeTeams,
@@ -201,6 +227,7 @@ fn service(bind_fails: bool) -> Service {
             bind_fails,
             launches: Mutex::new(vec![]),
         },
+        flags,
         BrainEnvironment {
             environment: "dev".to_string(),
             gateway_url: "https://dev-gateway.macro.com".to_string(),
@@ -332,4 +359,50 @@ fn slug_keeps_ascii_words() {
     assert_eq!(slug("Sam Rivera"), "sam-rivera");
     assert_eq!(slug("  Ünïcode!! Bot 2 "), "n-code-bot-2");
     assert_eq!(slug("✨"), "agent");
+}
+
+#[tokio::test]
+async fn create_needs_the_flag_on_for_the_admin() {
+    let on = service_with_flags(
+        false,
+        flags(Ok(FlagSnapshot::new([(
+            TEAM_AGENTS_FLAG.to_string(),
+            FlagValue::Boolean(true),
+        )]))),
+    );
+    assert!(on.create(receipt(), request("Bob")).await.is_ok());
+
+    let off = service_with_flags(
+        false,
+        flags(Ok(FlagSnapshot::new([(
+            TEAM_AGENTS_FLAG.to_string(),
+            FlagValue::Boolean(false),
+        )]))),
+    );
+    let refused = off.create(receipt(), request("Bob")).await;
+    assert!(matches!(refused, Err(TeamAgentError::NotEnabled)));
+    assert!(
+        off.repo
+            .accounts
+            .lock()
+            .map(|a| a.is_empty())
+            .unwrap_or(false)
+    );
+}
+
+#[tokio::test]
+async fn create_stays_closed_when_flags_fail_to_load() {
+    let service = service_with_flags(false, flags(Err("posthog unavailable".to_string())));
+
+    let refused = service.create(receipt(), request("Bob")).await;
+
+    assert!(matches!(refused, Err(TeamAgentError::NotEnabled)));
+    assert!(
+        service
+            .mailboxes
+            .deleted
+            .lock()
+            .map(|d| d.is_empty())
+            .unwrap_or(false)
+    );
 }

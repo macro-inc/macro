@@ -97,7 +97,7 @@ impl IntoResponse for TeamAgentError {
             TeamAgentError::BadRequest(_) | TeamAgentError::Runtime(_) => StatusCode::BAD_REQUEST,
             TeamAgentError::NotAnAgent => StatusCode::NOT_FOUND,
             TeamAgentError::EmailUnavailable => StatusCode::SERVICE_UNAVAILABLE,
-            TeamAgentError::Forbidden => StatusCode::FORBIDDEN,
+            TeamAgentError::Forbidden | TeamAgentError::NotEnabled => StatusCode::FORBIDDEN,
             TeamAgentError::EmailProvider(_) => StatusCode::BAD_GATEWAY,
             TeamAgentError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };

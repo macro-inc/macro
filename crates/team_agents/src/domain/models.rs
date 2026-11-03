@@ -179,6 +179,9 @@ pub enum TeamAgentError {
     /// The caller may not do this.
     #[error("not allowed")]
     Forbidden,
+    /// Team agents aren't available to the caller yet (feature flag).
+    #[error("team agents aren't available for this account yet")]
+    NotEnabled,
     /// The brain's runtime refused the agent (offline, not a team runtime).
     #[error("the runtime could not take this agent: {0}")]
     Runtime(String),

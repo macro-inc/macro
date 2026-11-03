@@ -44,6 +44,9 @@ account and mailbox.
 
 ## Gotchas
 
+- Creating agents is gated per admin by the PostHog flag `enable-team-agents`
+  (the web tab uses the same key). It fails closed when flags can't load and
+  is open where no PostHog key is configured (local stacks, tests).
 - The brain must run on a team-owned macrod runtime: a private bot owned by
   the agent can only bind to its own or its team's harness.
 - Without `DEAD_SIMPLE_MAIL_API_KEY` agents get an `@agents.macro.invalid`

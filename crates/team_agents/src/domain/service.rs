@@ -1,6 +1,7 @@
 //! Team agent service implementation.
 
 use entity_access::domain::models::{AdminTeamRole, EntityAccessReceipt};
+use feature_flags::FeatureFlags;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
@@ -18,6 +19,10 @@ mod test;
 
 const BOOTSTRAP_PROMPT: &str = include_str!("bootstrap_prompt.md");
 
+/// PostHog flag that lets a team admin create team agents. Checked for the
+/// creating admin only: an agent's own routes exist only once one was made.
+pub const TEAM_AGENTS_FLAG: &str = "enable-team-agents";
+
 /// Where the brain finds Macro, rendered into its setup prompt.
 #[derive(Debug, Clone)]
 pub struct BrainEnvironment {
@@ -28,16 +33,19 @@ pub struct BrainEnvironment {
 }
 
 /// Team agent service backed by its ports.
-pub struct TeamAgentServiceImpl<R, T, K, M, B> {
+pub struct TeamAgentServiceImpl<R, T, K, M, B, F> {
     repo: R,
     teams: T,
     keys: K,
     mailboxes: M,
     launcher: B,
+    /// `None` where no flag provider is configured (local stacks, tests):
+    /// creation is then open.
+    flags: Option<F>,
     environment: BrainEnvironment,
 }
 
-impl<R, T, K, M, B> TeamAgentServiceImpl<R, T, K, M, B> {
+impl<R, T, K, M, B, F> TeamAgentServiceImpl<R, T, K, M, B, F> {
     /// Builds the service.
     pub fn new(
         repo: R,
@@ -45,6 +53,7 @@ impl<R, T, K, M, B> TeamAgentServiceImpl<R, T, K, M, B> {
         keys: K,
         mailboxes: M,
         launcher: B,
+        flags: Option<F>,
         environment: BrainEnvironment,
     ) -> Self {
         Self {
@@ -53,6 +62,7 @@ impl<R, T, K, M, B> TeamAgentServiceImpl<R, T, K, M, B> {
             keys,
             mailboxes,
             launcher,
+            flags,
             environment,
         }
     }
@@ -149,14 +159,36 @@ pub fn render_bootstrap_prompt(
         .replace("{{email_section}}", &email_section)
 }
 
-impl<R, T, K, M, B> TeamAgentServiceImpl<R, T, K, M, B>
+impl<R, T, K, M, B, F> TeamAgentServiceImpl<R, T, K, M, B, F>
 where
     R: TeamAgentRepository,
     T: TeamMembership,
     K: AgentApiKeys,
     M: Mailboxes,
     B: BrainLauncher,
+    F: FeatureFlags + 'static,
 {
+    /// Whether `caller` may create team agents. Fails closed when the flags
+    /// can't be loaded.
+    async fn ensure_enabled(&self, caller: &MacroUserIdStr<'_>) -> Result<(), TeamAgentError> {
+        let Some(flags) = &self.flags else {
+            return Ok(());
+        };
+
+        let enabled = flags
+            .load(caller)
+            .await
+            .inspect_err(|error| tracing::warn!(error = ?error, "could not load feature flags; team agents stay closed"))
+            .is_ok_and(|snapshot| snapshot.is_enabled(TEAM_AGENTS_FLAG));
+        tracing::Span::current().record("team_agents.flag", enabled);
+
+        if enabled {
+            Ok(())
+        } else {
+            Err(TeamAgentError::NotEnabled)
+        }
+    }
+
     /// Undoes a partly created agent. Best effort: each step logs its own
     /// failure so the rest still run.
     async fn discard(&self, user_id: Option<&MacroUserIdStr<'_>>, mailbox_id: Option<&str>) {
@@ -196,15 +228,16 @@ where
     }
 }
 
-impl<R, T, K, M, B> TeamAgentService for TeamAgentServiceImpl<R, T, K, M, B>
+impl<R, T, K, M, B, F> TeamAgentService for TeamAgentServiceImpl<R, T, K, M, B, F>
 where
     R: TeamAgentRepository,
     T: TeamMembership,
     K: AgentApiKeys,
     M: Mailboxes,
     B: BrainLauncher,
+    F: FeatureFlags + 'static,
 {
-    #[tracing::instrument(skip_all, fields(team_id, agent_user_id, harness_id = %request.harness_id), err)]
+    #[tracing::instrument(skip_all, fields(team_id, agent_user_id, harness_id = %request.harness_id, team_agents.flag), err)]
     async fn create(
         &self,
         receipt: EntityAccessReceipt<AdminTeamRole>,
@@ -224,6 +257,7 @@ where
             .acting_user_id()
             .cloned()
             .ok_or(TeamAgentError::Forbidden)?;
+        self.ensure_enabled(&created_by).await?;
         tracing::Span::current().record("team_id", tracing::field::display(team_id));
 
         let name = request.name.trim().to_string();

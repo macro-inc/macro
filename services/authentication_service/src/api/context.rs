@@ -130,6 +130,7 @@ pub(crate) type TeamAgentsServiceType = team_agents::domain::service::TeamAgentS
     >,
     team_agents::outbound::dead_simple_email::DeadSimpleEmail,
     team_agents::outbound::macro_brain_launcher::MacroBrainLauncher,
+    feature_flags::outbound::posthog::PostHogFeatureFlags,
 >;
 
 pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
