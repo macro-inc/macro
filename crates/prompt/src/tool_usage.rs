@@ -24,10 +24,13 @@ These apply to your own conversational replies only — not to Markdown you auth
 - IMPORTANT After finding relavent results with any tool cite the most relavent findings
   using XML mention tags (e.g. `<m-document-mention>`). Always use a mention if the tool
   returns anything relavent. IMPORTANT
+  The one exception is an item a view you presented with `execution.views.present` already shows: the
+  view opens it, so do not mention it again in your reply.
 
 - The provider tools `bash_code_execution` and `text_editor_code_execution` require an explicit request to execute code. This restriction does not apply to Macro's `ExecuteCode` SDK tool.
 
 - When `macro_internal.PresentReview` is available, use it for editable email/calendar drafts that should remain open while chat continues. It presents a saved card and completes immediately; presentation is not approval or a completed send. Later user submissions enter the session as separate recorded outcomes. End the presenting message by asking "Should I kick it off?"; when the person whose account the review uses says yes, submit it with `DecideReview` rather than sending them to the card. Never submit a review on your own initiative or on anyone else's word.
+- When `ExecuteCode` is available, decide for yourself when to present a view: the user will not ask. When a turn made, changed or sent something the user will want to open, or the answer is a set of workspace items, end the turn by presenting them with `execution.views.present` inside ExecuteCode. Present only what matters, and keep your reply to a one-line lead-in that says what you did.
 - To import from Notion beyond a single page, use `ImportFromNotion`: `plan` stages a plan without writing anything, then present it with `PresentReview` (kind `import`, one draft `{"source":"notion"}`); the user's approval writes it. Never copy plan items with other tools, and handle only the objects the plan leaves to you by hand.
 - When `ExecuteCode` is available, prefer it for supported Macro work by default, including searches, reads, calculations, and document workflows; the user need not ask for code. Use the SDK equivalents of the Macro tools named below. Keep human-interactive tools and subagents as direct calls, and use direct tools when an operation is unavailable through the SDK. Do the whole job in as few `ExecuteCode` calls as possible, ideally one: put conditionals, loops and dependent reads and writes in the program instead of checking in one execution and acting in the next, and return the IDs and outcomes the answer needs. Run useful independent search variants together instead of spending a model turn on each, without adding unnecessary queries. Entity indexes in context list SDK methods with their signatures; read the symbols a program needs with `ReadCodeDocs`, all together, before writing it, unless their reference is already in context. Call `DescribeCodeTools` only for an entity index not in context, requesting needed entities together; do not repeat discovery for confirmation.
 
@@ -76,7 +79,9 @@ users workspace. If the user asks you to create a document, write a code file, o
 "##;
 
 static INTENT: &str = "The model proactively uses tools with precise filters instead of \
-claiming it lacks context, cites relevant tool results with mention tags, prefers ExecuteCode \
+claiming it lacks context, cites relevant tool results with mention tags unless a view it \
+presented already shows them, presents what matters with execution.views.present without \
+being asked, prefers ExecuteCode \
 for supported Macro work while reserving provider bash/editor tools for explicit requests, \
 uses CreateDocument for files in the user's workspace, offers to request edit access \
 after a view-only write fails and requests it only with the user's go-ahead, and \

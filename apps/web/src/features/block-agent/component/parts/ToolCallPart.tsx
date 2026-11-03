@@ -14,6 +14,7 @@ import { type JSX, Match, Show, Switch } from 'solid-js';
 import {
   isCodeExecution,
   presentedReviewId,
+  presentedView,
   rendersOwnView,
 } from '../../state/tool-groups';
 import { settledToolStatus } from '../../ui';
@@ -81,8 +82,9 @@ export function ToolCallPart(props: {
       </Match>
       <Match
         when={
-          rendersOwnView(props.part) &&
-          toolLabel(props.part.name) === 'DisplayResults'
+          presentedView(props.part) ||
+          (rendersOwnView(props.part) &&
+            toolLabel(props.part.name) === 'DisplayResults')
         }
       >
         <DisplayResultsToolCall

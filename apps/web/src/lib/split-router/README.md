@@ -1,4 +1,6 @@
-# SplitRouter leave guards
+# SplitRouter
+
+## Leave guards
 
 `useBeforeLeave` runs when a navigation leaves the registering route, closes its
 pane, or changes an explicitly watched search namespace. Returning `false` keeps
@@ -21,3 +23,15 @@ or preventing later callbacks from running.
 Preload and middleware errors that the router recovers from still allow commit
 callbacks when navigation commits. Host-leave permission checks cannot confirm
 that the host actually navigates, so their `onCommit` registration is a no-op.
+
+## Outlets
+
+An outlet outside a pane renders the first available pane. While no pane exists,
+it renders its supplied fallback without calling pane-scoped hooks. It starts
+rendering the pane when one becomes available. An outlet already inside a pane
+continues that pane's route branch, even when no explicit `pane` prop is given.
+
+Route preloads resolve the destination leaf's `toReference` once and pass it to
+ancestor data preload hooks. Canonical reference params preserve targets in both
+scoped router search and external links. Hover preloads use the router lifetime
+signal; disposing an account's router cancels deferred query admission.

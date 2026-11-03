@@ -29,7 +29,11 @@ const COLUMNS: DatabaseViewColumn[] = [
   { ...title, id: 'owner', name: 'Owner' },
   { ...title, id: 'notes', name: 'Notes' },
 ];
-const ROWS: DatabaseRow[] = Array.from({ length: 30 }, (_, index) => ({
+// `?rows=` grows the table past what the virtualizer mounts.
+const ROW_COUNT = Number(
+  new URLSearchParams(location.search).get('rows') ?? 30
+);
+const ROWS: DatabaseRow[] = Array.from({ length: ROW_COUNT }, (_, index) => ({
   rowId: `row-${index}`,
   cells: {
     title: `Task ${index + 1}`,

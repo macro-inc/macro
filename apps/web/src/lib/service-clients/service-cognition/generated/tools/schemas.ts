@@ -4878,10 +4878,6 @@ export const DispatchCodingAgent = z
   .object({ agent_id: z.string().uuid(), prompt: z.string() })
   .strict();
 
-export const DisplayResults = z.object({ view: z.any() });
-
-export const DisplayResultsResponse = z.object({ message: z.string() });
-
 export const DuplicateItem = z.object({
   entityType: z.any().superRefine((x, ctx) => {
     const schemas = [z.literal('document'), z.literal('chat')];
@@ -17769,6 +17765,10 @@ export const WebSearchResponse = z.object({
   ]),
   tool_use_id: z.string(),
 });
+
+export const DisplayResults = z.object({ view: z.any() });
+
+export const DisplayResultsResponse = z.object({ message: z.string() });
 
 export const DescribeCodeTools = z
   .object({

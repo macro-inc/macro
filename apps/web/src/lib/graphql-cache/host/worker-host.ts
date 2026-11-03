@@ -313,11 +313,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     if (isCachePush(msg)) {
       if (msg.kind === 'cache-hydrated') {
         for (const cb of hydrationSubscribers) {
-          if (msg.searchChangedBuckets === undefined) cb(msg.revision);
-          else
-            cb(msg.revision, {
-              searchChangedBuckets: msg.searchChangedBuckets,
-            });
+          cb(msg.revision, {
+            searchChangedBuckets: msg.searchChangedBuckets,
+            unchangedViews: msg.unchangedViews,
+          });
         }
         return;
       }
@@ -327,11 +326,16 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
             cb({ storage: 'reset' });
         }
         for (const cb of cacheChangeSubscribers) {
-          if (msg.reset || msg.searchChangedBuckets === undefined)
+          if (
+            msg.reset ||
+            (msg.searchChangedBuckets === undefined &&
+              msg.unchangedViews === undefined)
+          )
             cb(msg.revision);
           else
             cb(msg.revision, {
               searchChangedBuckets: msg.searchChangedBuckets,
+              unchangedViews: msg.unchangedViews,
             });
         }
         return;

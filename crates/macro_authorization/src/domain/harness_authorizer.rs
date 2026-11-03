@@ -113,6 +113,7 @@ fn user_authentication(acting_user: ResolvedBotActingUser) -> MacroUserAuthentic
     MacroUserAuthentication {
         origin: CredentialOrigin::Harness,
         agent_id: None,
+        agent_via: None,
         macro_user_id: acting_user.macro_user_id,
         user_context: UserContext {
             user_id,

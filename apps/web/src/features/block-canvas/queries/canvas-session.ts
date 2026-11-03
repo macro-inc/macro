@@ -1,7 +1,3 @@
-import {
-  endTrackedDocumentSpan,
-  registerDocumentSpan,
-} from '@block-md/observability';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { schema } from '@loro-mirror/core';
 import { createAwareness } from '@macro-inc/collaboration/collab/awareness';
@@ -31,7 +27,7 @@ import {
   WALSyncer,
 } from '@macro-inc/collaboration/collab/wal';
 import type { PeerPresence } from '@macro-inc/graphics/loro';
-import { Telemetry } from '@macro-inc/observability';
+import type { Span } from '@macro-inc/observability';
 import type { LoroDoc } from 'loro-crdt';
 import { err, errAsync, type ResultAsync } from 'neverthrow';
 import {
@@ -52,6 +48,7 @@ type CanvasConnection = {
 export type CanvasSessionOptions = {
   documentId: string;
   initial: CanvasFile;
+  span?: Span;
   requireShared?: boolean;
   userId?: string;
   canEdit: Accessor<boolean>;
@@ -173,6 +170,7 @@ export function createCanvasSession(options: CanvasSessionOptions) {
   }
   const manager = new CanvasManager(schema({}), {
     documentId: options.documentId,
+    parentSpan: options.span,
     // The graphics backend owns the typed scene Mirror on this same document.
     mirror: false,
   });
@@ -294,6 +292,7 @@ export function createCanvasSession(options: CanvasSessionOptions) {
   };
   const engine = createSyncEngine({
     loroManager: manager,
+    parentSpan: options.span,
     awareness,
     syncs: { live, wal },
     bindings: { onRemoteState: () => {} },
@@ -432,14 +431,12 @@ export function createCanvasSession(options: CanvasSessionOptions) {
     return hydration;
   }
   async function runInitialization() {
-    const span = Telemetry.span('canvas.open');
-    span.setAttr('document.id', options.documentId);
-    span.setAttr('document.type', 'canvas');
-    registerDocumentSpan(options.documentId, span);
+    const span = options.span;
     try {
-      await span.span('canvas.hydrate', hydrate);
+      if (span) await span.span('canvas.hydrate', hydrate);
+      else await hydrate();
     } catch (cause) {
-      span.error(cause);
+      span?.error(cause);
       if (!disposed && started)
         setFailure(
           'Live canvas sync is unavailable. Local changes are preserved.'
@@ -452,8 +449,6 @@ export function createCanvasSession(options: CanvasSessionOptions) {
               ? cause.message
               : 'Unable to open this canvas.',
         });
-    } finally {
-      endTrackedDocumentSpan(span);
     }
   }
   const initialization = initialize();
