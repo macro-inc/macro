@@ -299,7 +299,7 @@ export function ChannelInput(props: ChannelInputProps) {
         options?: RestoreSnapshotOptions;
       }
     | undefined;
-  let pendingFocus = false;
+  let pendingFocus: (() => boolean) | undefined;
   // Caret placement requested by a `cursor: 'trailing-paragraph'` restore.
   // Applied on the next programmatic focus rather than at restore time.
   let pendingCursor: RestoreSnapshotOptions['cursor'];
@@ -337,18 +337,22 @@ export function ChannelInput(props: ChannelInputProps) {
     markdownEditor.controls.focus();
   };
 
-  const focusEditor = () => {
+  const focusEditor = (when: () => boolean = () => true) => {
+    if (!when()) return;
     if (!isEditorConnected) {
-      pendingFocus = true;
+      pendingFocus = when;
       return;
     }
     focusEditorNow();
   };
 
   const flushPendingFocus = () => {
-    if (!pendingFocus) return;
-    pendingFocus = false;
-    queueMicrotask(() => focusEditorNow());
+    const when = pendingFocus;
+    pendingFocus = undefined;
+    if (!when) return;
+    queueMicrotask(() => {
+      if (when()) focusEditorNow();
+    });
   };
 
   const parentBots =
@@ -703,11 +707,12 @@ export function ChannelInput(props: ChannelInputProps) {
   props.onReady?.({
     snapshot: inputState.snapshot,
     clear: () => markdownEditor.controls.clear(),
-    focus: () => {
+    focus: (options) => {
+      if (options?.when?.() === false) return;
       // A collapsed pill hides the editor; programmatic focus implies intent
       // to type, so expand first.
       collapsedInput.expand();
-      focusEditor();
+      focusEditor(options?.when);
     },
     send: commands.send,
     attachFiles: (files) => inputState.commands.attachFiles(files),

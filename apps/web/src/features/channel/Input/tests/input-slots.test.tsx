@@ -622,6 +622,24 @@ describe('Input slots', () => {
     expect(onStartTyping).toHaveBeenCalledTimes(1);
   });
 
+  it.each([false, true])(
+    'rechecks deferred focus before editor connection (current: %s)',
+    async (current) => {
+      let focusCurrent = true;
+      render(() => (
+        <ChannelInput
+          input={baseInput}
+          onReady={(handle) => {
+            handle.focus({ when: () => focusCurrent });
+            focusCurrent = current;
+          }}
+        />
+      ));
+      await Promise.resolve();
+      expect(editorMocks.focus).toHaveBeenCalledTimes(current ? 1 : 0);
+    }
+  );
+
   it('does not refocus the editor when a portaled editor control is clicked', async () => {
     const user = userEvent.setup();
     render(() => <ChannelInput input={baseInput} />);

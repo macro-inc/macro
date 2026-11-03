@@ -10,6 +10,7 @@ type GuestCallChatProps = {
   callId: string;
   session: { token: string; participantId: string };
   open: boolean;
+  focusOnOpen?: boolean;
   onClose: () => void;
 };
 
@@ -33,7 +34,8 @@ function GuestCallChatContent(props: GuestCallChatProps) {
   let input!: HTMLTextAreaElement;
   createEffect(
     on([() => props.open, chat.ready], ([open, ready]) => {
-      if (open && ready && !isTouchDevice()) input?.focus();
+      if (open && ready && props.focusOnOpen !== false && !isTouchDevice())
+        input?.focus();
     })
   );
 

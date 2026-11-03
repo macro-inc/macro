@@ -277,7 +277,9 @@ phones use the shared bottom sheet instead of a resize handle.
 Dismiss the sheet with its handle, backdrop, or Escape; desktop closes with
 **Close chat and participants** or Escape. Closing returns focus to the footer
 button. Switching tabs, closing, and resizing preserve the message draft and
-scroll position. Check both signed-in and guest calls.
+scroll position. Tab changes keep keyboard focus on the selected tab instead of
+moving it into the composer; reopening retains the existing autofocus behavior.
+Check both signed-in and guest calls.
 
 ### Browser call diagnostics
 

@@ -29,6 +29,7 @@ import { useCallChat } from './queries/use-call-chat';
 export default function CallChat(props: {
   callId: string;
   open: boolean;
+  focusOnOpen?: boolean;
   onClose: () => void;
 }) {
   // Queries and all shared Markdown descendants stay within the chat boundary.
@@ -50,6 +51,7 @@ export default function CallChat(props: {
 function CallChatContent(props: {
   callId: string;
   open: boolean;
+  focusOnOpen?: boolean;
   onClose: () => void;
 }) {
   const chat = useCallChat(() => props.callId);
@@ -65,7 +67,11 @@ function CallChatContent(props: {
 
   createEffect(
     on([() => props.open, canSend, input], ([open, ready, handle]) => {
-      if (open && ready) handle?.focus();
+      if (open && ready && props.focusOnOpen !== false) {
+        handle?.focus({
+          when: () => props.open && props.focusOnOpen !== false,
+        });
+      }
     })
   );
 

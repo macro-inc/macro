@@ -308,6 +308,7 @@ export function CallOverlay(props: {
   const [panelOpen, setPanelOpen] = createSignal(false);
   const [panelMounted, setPanelMounted] = createSignal(false);
   const [selectedTab, setSelectedTab] = createSignal<CallPanelTab>('chat');
+  const [focusChatOnOpen, setFocusChatOnOpen] = createSignal(true);
   const [resizeContext, setResizeContext] = createSignal<ResizeZoneCtx>();
   const [panelWidth, setPanelWidth] = createSignal(360);
   const [sidebarMount, setSidebarMount] = createSignal<HTMLDivElement>();
@@ -336,6 +337,7 @@ export function CallOverlay(props: {
   };
   const togglePanel = () => {
     if (panelOpen()) return closePanel();
+    setFocusChatOnOpen(true);
     setPanelMounted(true);
     setPanelOpen(true);
   };
@@ -642,7 +644,10 @@ export function CallOverlay(props: {
             open={panelOpen()}
             onClose={closePanel}
             activeTab={activeTab()}
-            onTabChange={setSelectedTab}
+            onTabChange={(tab) => {
+              setFocusChatOnOpen(false);
+              setSelectedTab(tab);
+            }}
             chatAvailable={canChat()}
             participantCount={participants().length + 1}
             participants={<CallParticipantsList localName={props.localName} />}
@@ -660,6 +665,7 @@ export function CallOverlay(props: {
                       <CallChat
                         callId={callId}
                         open={panelOpen() && activeTab() === 'chat'}
+                        focusOnOpen={focusChatOnOpen()}
                         onClose={closePanel}
                       />
                     }
@@ -669,6 +675,7 @@ export function CallOverlay(props: {
                         callId={callId}
                         session={session}
                         open={panelOpen() && activeTab() === 'chat'}
+                        focusOnOpen={focusChatOnOpen()}
                         onClose={closePanel}
                       />
                     )}

@@ -121,3 +121,28 @@ it('keeps Enter for newlines on touch and sends with the button', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Send' }));
   await waitFor(() => expect(mocks.send).toHaveBeenCalledOnce());
 });
+
+it('only autofocuses when the panel opens, not when a tab becomes visible', () => {
+  const [open, setOpen] = createSignal(false);
+  const [focusOnOpen, setFocusOnOpen] = createSignal(false);
+  render(() => (
+    <>
+      <button>Selected tab</button>
+      <GuestCallChat
+        callId="call"
+        session={{ token: 'token', participantId: 'guest' }}
+        open={open()}
+        focusOnOpen={focusOnOpen()}
+        onClose={() => {}}
+      />
+    </>
+  ));
+  const tab = screen.getByRole('button', { name: 'Selected tab' });
+  tab.focus();
+  setOpen(true);
+  expect(document.activeElement).toBe(tab);
+  setOpen(false);
+  setFocusOnOpen(true);
+  setOpen(true);
+  expect(document.activeElement).toBe(screen.getByRole('textbox'));
+});
