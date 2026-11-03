@@ -992,6 +992,14 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 - Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus. Mobile toasts dismiss by swiping left or right and have no corner close button. Phone prompts stay in their own stack under the modal layer, never on `z-toast-region`, and never hide with a document-wide `:has()` (#8840).
 - Notification sounds are off by default and saved per user per device; map each new notification event in `features/notification-sounds/core/categories.ts` and keep system alerts silent when Macro plays its own sound. Quiet hours on the same page silence those sounds and skip desktop alerts on a per-device weekly schedule; incoming calls still ring. See the [notification sounds walkthrough](../../docs/agent-guide/notifications.md#notification-sounds).
 
+### Agent result task lists
+
+Agent result task titles wrap above live metadata; nested horizontal groups
+stack below 672px of container width. The backend-free browser regression is
+`bunx playwright test --config src/features/dynamic-ui/browser-test/playwright.config.ts`.
+It covers desktop and touch layouts, narrow containers inside a wide viewport,
+unbroken titles, and keyboard opening.
+
 ### Inline property values
 
 Inline property fields stay `readOnly`, never `disabled`, while they save: a
