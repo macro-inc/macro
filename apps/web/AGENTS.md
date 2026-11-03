@@ -451,10 +451,6 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   controls below the video; Back dismisses without leaving, while setup and
   tablet/desktop chrome stay unchanged.
   See [Calls](../../docs/agent-guide/calls.md).
-- Keep the Corvu drawer lifecycle patch in `patches/corvu-drawer-0.2.4.patch`
-  until upstream fixes rapid close/reopen and disposal races; run
-  `bun run test src/features/channel/Call/chat/components/CallChatPanel.test.tsx`
-  when changing or upgrading the patched dependency.
 - Diagnose browser call media with `call.media.*` spans and the `meeting.setup.id`
   on `meeting.join`; keep provider messages, device labels/IDs, and call-link
   tokens out of telemetry. See [call diagnostics](../../docs/agent-guide/calls.md#browser-call-diagnostics).

@@ -571,7 +571,6 @@
     "graphql-ws@6.2.0": "apps/web/patches/graphql-ws@6.2.0.patch",
     "@kobalte/core@0.13.11": "apps/web/patches/@kobalte%2Fcore@0.13.11.patch",
     "virtua@0.48.8": "apps/web/patches/virtua@0.48.8.patch",
-    "@corvu/drawer@0.2.4": "apps/web/patches/corvu-drawer-0.2.4.patch",
     "@lexical/markdown@0.45.0": "apps/web/patches/@lexical%2Fmarkdown@0.45.0.patch",
     "@thisbeyond/solid-dnd@0.7.5": "apps/web/patches/@thisbeyond%2Fsolid-dnd@0.7.5.patch",
     "@tauri-apps/plugin-http@2.5.9": "apps/web/patches/@tauri-apps%2Fplugin-http@2.5.9.patch",
