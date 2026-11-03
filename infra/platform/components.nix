@@ -38,10 +38,12 @@ let
           export PGDATA=/var/lib/postgresql/data/pgdata
           if [ ! -s "$PGDATA/PG_VERSION" ]; then
             echo '${password}' > /tmp/pw
-            initdb -D "$PGDATA" -U '${user}' --pwfile=/tmp/pw --auth=scram-sha-256
+            ${postgres}/bin/initdb -D "$PGDATA" -U '${user}' --pwfile=/tmp/pw --auth=scram-sha-256
             echo "host all all 0.0.0.0/0 scram-sha-256" >> "$PGDATA/pg_hba.conf"
           fi
-          exec postgres -D "$PGDATA" -c listen_addresses='*' \
+          # Full paths: the extension env locates its share/lib dirs from its
+          # own bin, not from the image root's /bin links.
+          exec ${postgres}/bin/postgres -D "$PGDATA" -c listen_addresses='*' \
             -c max_connections=${toString maxConnections} \
             -c shared_preload_libraries=pg_stat_statements \
             -c unix_socket_directories=/tmp
@@ -51,7 +53,7 @@ let
       ports = [ 5432 ];
       volumes.data = "/var/lib/postgresql/data";
       readiness.exec = [
-        "pg_isready"
+        "${postgres}/bin/pg_isready"
         "-h"
         "127.0.0.1"
         "-U"
@@ -237,6 +239,9 @@ in
         mkdir -p /tmp/os/config
         cp -r ${opensearchHome}/config/. /tmp/os/config/
         chmod -R u+w /tmp/os/config
+        # The launcher runs from the read-only home; keep JVM output in /tmp.
+        sed -i -e 's|logs/gc.log|/tmp/os/logs/gc.log|' -e 's|HeapDumpPath=data|HeapDumpPath=/tmp|' \
+          -e 's|ErrorFile=logs/|ErrorFile=/tmp/os/logs/|' /tmp/os/config/jvm.options
         cat > /tmp/os/config/opensearch.yml <<EOF
         cluster.name: search
         node.name: search
@@ -247,6 +252,8 @@ in
         plugins.security.disabled: true
         EOF
         export OPENSEARCH_PATH_CONF=/tmp/os/config OPENSEARCH_JAVA_OPTS="-Xms512m -Xmx512m"
+        # jvm.options logs GC to a path relative to the working directory.
+        mkdir -p /tmp/os/logs && cd /tmp/os
         exec ${opensearchHome}/bin/opensearch
       '';
     };
@@ -320,10 +327,11 @@ in
         if [ ! -f provisioned ]; then
           export EXTENDDB_PASSWORD="$(cat admin-password)"
           M="extenddb manage --config extenddb.toml --user admin"
-          $M create-account --account-id 000000000000 --account-name local
-          $M create-user --account-id 000000000000 --user-name services
+          # Each step tolerates "already exists": a restart can interrupt this.
+          $M create-account --account-id 000000000000 --account-name local || true
+          $M create-user --account-id 000000000000 --user-name services || true
           $M import-access-key --yes --account-id 000000000000 --user-name services \
-            --access-key-id ${awsKey} --secret-access-key ${awsSecret}
+            --access-key-id ${awsKey} --secret-access-key ${awsSecret} || true
           $M put-user-policy --account-id 000000000000 --user-name services --policy-name all \
             --policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"dynamodb:*","Resource":"*"}]}'
           touch provisioned
@@ -367,6 +375,8 @@ in
       contents = [ pkgs.nginx ];
       entrypoint = [
         "nginx"
+        "-e"
+        "/dev/stderr"
         "-c"
         "${awsGatewayConf}"
       ];
@@ -408,13 +418,18 @@ in
       entrypoint = sh ''
         set -e
         src=${platformPkgs.fusionauth}/share/fusionauth
-        mkdir -p /tmp/fusionauth
-        for entry in "$src"/*; do ln -sfn "$entry" /tmp/fusionauth/; done
-        rm -f /tmp/fusionauth/config /tmp/fusionauth/logs
-        mkdir -p /tmp/fusionauth/logs
+        # /tmp survives container restarts within a pod; start clean.
+        rm -rf /tmp/fusionauth && mkdir -p /tmp/fusionauth/logs
+        for entry in "$src"/*; do
+          case "$(basename "$entry")" in config|logs) ;; *) ln -s "$entry" /tmp/fusionauth/ ;; esac
+        done
         ln -sfn /var/lib/fusionauth/config /tmp/fusionauth/config
         mkdir -p /var/lib/fusionauth/config
-        exec /tmp/fusionauth/fusionauth-app/bin/start.sh
+        # start.sh downloads a JDK unless one sits at java/current.
+        mkdir -p /tmp/fusionauth/java/jdk-21.0.4+7
+        ln -s ${platformPkgs.fusionauthJdk} /tmp/fusionauth/java/current
+        export FUSIONAUTH_BASE=/tmp/fusionauth
+        exec ${platformPkgs.fusionauth}/bin/fusionauth
       '';
     };
     user = 1000;

@@ -25,6 +25,8 @@ earlier compose-to-Helm prototype on this branch is superseded (see
    replace the ad hoc internal HTTP/queue IPC with typed, generated gRPC.
 7. **Auxiliary services too.** CI runners and the Cloudflare bot workers run on
    the same clusters.
+8. **Self-hostable.** Customers can run Macro on their own Kubernetes cluster
+   without Nix, from a Helm chart and ordinary OCI images.
 
 First pass: everything runs on one local machine (big-pickle), declared so that
 the same expressions later deploy to AWS.
@@ -244,6 +246,29 @@ changes).
   default-deny NetworkPolicy stops instances from reaching each other.
 - **Prod** is the `prod` instance at the `prod` size.
 
+### Self-hosting
+
+Customers run any conformant Kubernetes, without Nix on their nodes. The same
+component modules therefore emit a second, portable output; nothing is
+maintained twice:
+
+- **Images:** each component's store-path image is also built as a regular
+  OCI image with `nix2container`, from the same store paths (same closure,
+  same entrypoint). Release CI pushes them to a public registry, tagged by
+  release. Our own clusters keep using `nix:0` references.
+- **Helm chart:** a release step renders an instance with placeholder values
+  and turns the result into a chart (`macro`). Templated values: host and
+  TLS, size profile (replicas, resources, storage), image registry and tag,
+  and the secret references (`macro-env` and the identity kickstart). These are
+  exactly the fields the parity rule already allows to differ. The chart is a
+  generated artifact; CI fails if it drifts from the modules.
+- **Data plane choice:** the chart bundles the open-source data plane by
+  default (Postgres, Kafka, OpenSearch, Valkey, RustFS, ExtendDB, celld), and
+  each component can be switched off in favour of an external endpoint (a
+  customer's managed Postgres or S3).
+- **Self-hosting KMS:** customers use OpenBao Transit (the prod adapter);
+  local-kms is never shipped in the chart.
+
 ### Auxiliary services
 
 - **CI runners:** GitHub Actions Runner Controller (`gha-runner-scale-set`,
@@ -276,9 +301,12 @@ changes).
 5. **Aux.** ARC runners and the bots on the cluster.
 6. **AWS.** terranix/OpenTofu for nodes and networking; the dev instance on
    AWS; the parity check in CI.
-7. **gRPC and splits.** Proceed boundary by boundary (runs in parallel from
+7. **Self-hosting.** OCI images via nix2container, plus the generated Helm
+   chart, published per release. Done when the chart installs on a stock
+   cluster (k3s without the nix snapshotter, kind) and passes the E2E suite.
+8. **gRPC and splits.** Proceed boundary by boundary (runs in parallel from
    phase 3).
-8. **Prod cutover.** A separate plan for data migration (RDS → CNPG, DynamoDB
+9. **Prod cutover.** A separate plan for data migration (RDS → CNPG, DynamoDB
    → ExtendDB, S3 → RustFS) and rollback.
 
 ## Resolved questions

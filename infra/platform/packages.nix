@@ -73,6 +73,15 @@ rec {
     meta.license = lib.licenses.mit;
   };
 
+  # FusionAuth's start.sh deletes the xmldsig `disallowAlg` lines from the
+  # JDK's java.security at every boot (SAML with SHA-1 signatures). The store
+  # is read-only, so make that edit once, on a JDK of its own.
+  fusionauthJdk = pkgs.runCommand "fusionauth-jdk" { } ''
+    cp -r ${pkgs.jdk21_headless}/lib/openjdk $out
+    chmod -R u+w $out/conf
+    sed -i -E '/^.*disallowAlg.*xmldsig.*$/d' $out/conf/security/java.security
+  '';
+
   # Identity provider. Already self-hosted; runs on nixpkgs' JDK.
   fusionauth = pkgs.stdenvNoCC.mkDerivation rec {
     pname = "fusionauth";
@@ -86,9 +95,14 @@ rec {
     installPhase = ''
       mkdir -p $out/share
       cp -r fusionauth $out/share/fusionauth
+      # start.sh derives its writable base (data, logs, config) from its own
+      # physical path, which is the read-only store; let the image choose.
+      substituteInPlace $out/share/fusionauth/fusionauth-app/bin/start.sh \
+        --replace-fail 'cd "''${SCRIPT_DIR}/../.."' 'cd "''${FUSIONAUTH_BASE:-''${SCRIPT_DIR}/../..}"' \
+        --replace-fail "sed -i -E '/^.*disallowAlg.*xmldsig.*\$/d' \"\''${JAVA_HOME}/conf/security/java.security\"" ":"
       makeWrapper $out/share/fusionauth/fusionauth-app/bin/start.sh $out/bin/fusionauth \
-        --set JAVA_HOME ${pkgs.jdk21_headless} \
-        --prefix PATH : ${lib.makeBinPath [ pkgs.jdk21_headless pkgs.bash pkgs.coreutils pkgs.gnugrep pkgs.gnused ]}
+        --set JAVA_HOME ${fusionauthJdk} \
+        --prefix PATH : ${lib.makeBinPath [ fusionauthJdk pkgs.bash pkgs.coreutils pkgs.gnugrep pkgs.gnused ]}
     '';
   };
 }

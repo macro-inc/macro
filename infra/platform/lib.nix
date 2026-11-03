@@ -166,8 +166,14 @@ rec {
                   protocol = "TCP";
                 }) ports;
                 inherit resources;
-                volumeMounts =
-                  lib.mapAttrsToList (v: mountPath: {
+                # A store-path root is read-only and has no /tmp.
+                volumeMounts = [
+                  {
+                    name = "tmp";
+                    mountPath = "/tmp";
+                  }
+                ]
+                ++ lib.mapAttrsToList (v: mountPath: {
                     name = "vol-${v}";
                     inherit mountPath;
                   }) volumes
@@ -177,8 +183,13 @@ rec {
                     readOnly = true;
                   } // lib.optionalAttrs (spec ? subPath) { inherit (spec) subPath; }) files;
               } // probe;
-              volumes =
-                lib.mapAttrsToList (v: _: {
+              volumes = [
+                {
+                  name = "tmp";
+                  emptyDir = { };
+                }
+              ]
+              ++ lib.mapAttrsToList (v: _: {
                   name = "vol-${v}";
                   persistentVolumeClaim.claimName = "${name}-${v}";
                 }) volumes
