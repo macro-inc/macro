@@ -55,6 +55,7 @@
 | <a id="property-pins"></a> `pins` | `readonly` | [`PinsNamespace`](../../entities/pins/namespace/classes/PinsNamespace.md) | - |
 | <a id="property-projects"></a> `projects` | `readonly` | [`ProjectNamespace`](../../entities/projects/namespace/classes/ProjectNamespace.md) | - |
 | <a id="property-properties"></a> `properties` | `readonly` | [`PropertiesNamespace`](../../entities/properties/namespace/classes/PropertiesNamespace.md) | - |
+| <a id="property-referrals"></a> `referrals` | `readonly` | [`ReferralNamespace`](../../entities/referrals/namespace/classes/ReferralNamespace.md) | Share the caller's referral link and email invites to join Macro. |
 | <a id="property-routines"></a> `routines` | `readonly` | [`RoutineNamespace`](../../entities/routines/namespace/classes/RoutineNamespace.md) | routines resources and operations. |
 | <a id="property-tasks"></a> `tasks` | `readonly` | [`TaskNamespace`](../../entities/tasks/namespace/classes/TaskNamespace.md) | - |
 | <a id="property-teams"></a> `teams` | `readonly` | [`TeamNamespace`](../../entities/teams/namespace/classes/TeamNamespace.md) | - |

@@ -73,6 +73,8 @@ workspace-members = [
     # anyhow, either, nom, tracing, thiserror - is contributed by dozens of
     # other members anyway, so the deploy dependency layers are unchanged.
     "agent_fold",
+    # dynamic_ui: the view types the fold's tool details and activity cards hold.
+    "dynamic_ui",
     "graphql_soup_filter_input",
     "item_filters",
     # Shared notification state is also consumed by the browser-side filter model.

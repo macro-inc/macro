@@ -1,3 +1,4 @@
+import type { View_Serialize as View } from "@macro-inc/lexical-core/generated/dynamic-ui";
 import { AGENT_ACTIVITY_STATUSES } from "@macro-inc/lexical-core/nodes/AgentActivityNode";
 import { CONNECT_APP_TARGETS } from "@macro-inc/lexical-core/nodes/ConnectAppNode";
 import {
@@ -56,10 +57,16 @@ const sessionAnnouncementRequest = z.object({
  * turn runs, or prose the harness patches in - the answer, a fallback for a
  * turn that said nothing, a question only the session view can answer.
  */
-/** What a step put in front of the person: a view the agent presented. */
+/**
+ * What a step put in front of the person: a view the agent presented. The
+ * harness sends the view it decoded into `dynamic_ui::View`, so it is taken
+ * as that type rather than checked again.
+ */
 const activityCard = z.object({
 	kind: z.literal("view"),
-	view: z.record(z.string(), z.unknown()),
+	view: z.custom<View>(
+		(value) => typeof value === "object" && value !== null,
+	),
 });
 
 const activityRow = z.object({

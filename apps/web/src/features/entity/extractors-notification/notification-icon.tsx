@@ -8,6 +8,7 @@ import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
 import ChatIcon from '@icon/system/regular/chat.svg';
 import ChatTeardropIcon from '@icon/system/regular/chat-teardrop.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
+import ClockIcon from '@icon/system/regular/clock-clockwise.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import FilesIcon from '@icon/system/regular/files.svg';
 import PhoneIcon from '@icon/system/regular/phone-call.svg';
@@ -79,6 +80,7 @@ export function getNotificationIcon(
     .with('agent_session_settled', () => AgentIcon)
     .with('agent_session_waiting_for_input', () => QuestionIcon)
     .with('agent_session_mentioned', () => AtIcon)
+    .with('routine_run_finished', () => ClockIcon)
     .exhaustive(() => BellIcon);
 }
 

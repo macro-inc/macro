@@ -25,7 +25,7 @@ pub use metadata::{
     InitiativeDiscussionReason, InviteToTeamMetadata, InviteePlan, ItemSharedMetadata,
     MentionedInDocumentCommentMetadata, NewEmailMetadata, NotificationDocumentSubType,
     NotificationTitle, ReminderMetadata, RepliedToDocumentCommentThreadMetadata,
-    RequestedAccessLevel, TaskAssignedMetadata,
+    RequestedAccessLevel, RoutineRunFinishedMetadata, RoutineRunOutcome, TaskAssignedMetadata,
 };
 pub use unsubscribe::UserUnsubscribe;
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -282,6 +282,8 @@ define_notif_event!(
 
         /// Someone asked to join a channel the user participates in.
         ChannelAccessRequested(ChannelAccessRequestedMetadata),
+        /// One of the user's routines finished a run, successfully or not.
+        RoutineRunFinished(RoutineRunFinishedMetadata),
     }
 );
 
@@ -352,6 +354,7 @@ impl NotificationTitle for NotifEvent {
                 github_pr_review.format_title(sender_id)
             }
             NotifEvent::AgentSessionSettled(m) => m.format_title(sender_id),
+            NotifEvent::RoutineRunFinished(m) => m.format_title(sender_id),
             NotifEvent::AgentSessionWaitingForInput(m) => m.format_title(sender_id),
             NotifEvent::AgentSessionMentioned(m) => m.format_title(sender_id),
         }
@@ -421,6 +424,7 @@ impl NotificationTitle for NotifEvent {
             }
             NotifEvent::GithubPrReview(github_pr_review) => github_pr_review.format_body(sender_id),
             NotifEvent::AgentSessionSettled(m) => m.format_body(sender_id),
+            NotifEvent::RoutineRunFinished(m) => m.format_body(sender_id),
             NotifEvent::AgentSessionWaitingForInput(m) => m.format_body(sender_id),
             NotifEvent::AgentSessionMentioned(m) => m.format_body(sender_id),
         }

@@ -146,6 +146,8 @@
 - [RemoveUnsubscribeItemResponses](type-aliases/RemoveUnsubscribeItemResponses.md)
 - [RepliedToDocumentCommentThreadMetadata](type-aliases/RepliedToDocumentCommentThreadMetadata.md)
 - [RequestedAccessLevel](type-aliases/RequestedAccessLevel.md)
+- [RoutineRunFinishedMetadata](type-aliases/RoutineRunFinishedMetadata.md)
+- [RoutineRunOutcome](type-aliases/RoutineRunOutcome.md)
 - [TaskAssignedMetadata](type-aliases/TaskAssignedMetadata.md)
 - [UnsubscribeAllData](type-aliases/UnsubscribeAllData.md)
 - [UnsubscribeAllError](type-aliases/UnsubscribeAllError.md)
