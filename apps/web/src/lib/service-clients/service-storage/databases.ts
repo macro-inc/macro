@@ -22,6 +22,7 @@ import type { CreateDatabaseRequest } from './generated/schemas/createDatabaseRe
 import type { CreatedDatabaseWebhookResponse } from './generated/schemas/createdDatabaseWebhookResponse';
 import type { Database } from './generated/schemas/database';
 import type { DatabaseDetail } from './generated/schemas/databaseDetail';
+import type { DuplicateDatabaseRequest } from './generated/schemas/duplicateDatabaseRequest';
 import type { ErrorResponse } from './generated/schemas/errorResponse';
 import type { ImportTable } from './generated/schemas/importTable';
 import type { InferColumnTypeOutcome } from './generated/schemas/inferColumnTypeOutcome';
@@ -209,6 +210,18 @@ export const databasesClient = {
       body: JSON.stringify(request),
       invalid: 'INVALID_SCHEMA',
     });
+  },
+
+  /** Copy a database the caller can see into a new one they own. */
+  duplicate({ id, ...request }: { id: string } & DuplicateDatabaseRequest) {
+    return databasesFetch<Database, 'INVALID_SCHEMA'>(
+      `/databases/${id}/duplicate`,
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+        invalid: 'INVALID_SCHEMA',
+      }
+    );
   },
 
   /** The dry run of a type change: what each menu type does to the values. */

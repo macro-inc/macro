@@ -182,3 +182,17 @@ it('does not recover an old account after native clearing fails', async () => {
   dispose = replacement.startNativeDiagnostics(snapshot);
   expect(replacement.recoverableNativeFrontend()).toBeUndefined();
 });
+
+it('records idle diagnostic heartbeats twice a minute and visibility immediately', async () => {
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+  const diagnostics = await import('./native-diagnostics');
+  dispose = diagnostics.startNativeDiagnostics(snapshot);
+  await vi.advanceTimersByTimeAsync(0);
+  vi.mocked(invoke).mockClear();
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(invoke).toHaveBeenCalledTimes(2);
+  document.dispatchEvent(new Event('visibilitychange'));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(invoke).toHaveBeenCalledTimes(4);
+  vi.restoreAllMocks();
+});

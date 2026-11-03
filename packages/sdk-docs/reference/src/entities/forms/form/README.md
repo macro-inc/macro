@@ -24,3 +24,4 @@
 - [FormSectionPlacement](type-aliases/FormSectionPlacement.md)
 - [FormSubmissionOutcome](type-aliases/FormSubmissionOutcome.md)
 - [MyFormResponse](type-aliases/MyFormResponse.md)
+- [SavedFormResponse](type-aliases/SavedFormResponse.md)

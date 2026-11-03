@@ -317,6 +317,7 @@ dependencies = [
  "chrono",
  "code_execution",
  "cognition",
+ "dynamic_ui",
  "entity_access",
  "macro_authorization",
  "macro_db_migrator",
@@ -394,6 +395,7 @@ dependencies = [
  "agent_runtime_protocol",
  "chrono",
  "clap",
+ "dynamic_ui",
  "html-escape",
  "insta",
  "lazy-regex",
@@ -445,6 +447,7 @@ dependencies = [
  "cursor_cloud_agents",
  "dashmap",
  "documents",
+ "dynamic_ui",
  "entity_access",
  "entity_access_db_utils",
  "entity_registry",
@@ -1154,6 +1157,7 @@ dependencies = [
  "databases_sql",
  "dateparser",
  "documents",
+ "dynamic_ui",
  "email",
  "email_service_client",
  "entity_access",
@@ -1181,6 +1185,7 @@ dependencies = [
  "macro_authorization",
  "macro_aws_config",
  "macro_db_client",
+ "macro_entrypoint",
  "macro_env",
  "macro_env_var",
  "macro_event_broker",
@@ -1189,6 +1194,7 @@ dependencies = [
  "macro_user_id",
  "mcp_client",
  "mcp_select",
+ "memory",
  "messages",
  "model",
  "model-entity",
@@ -3810,7 +3816,6 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "email_utils",
- "entity_access",
  "futures",
  "macro_authorization",
  "macro_db_migrator",
@@ -3884,7 +3889,6 @@ dependencies = [
  "email_api_client",
  "email_db_client",
  "email_utils",
- "entity_access",
  "futures",
  "google_token",
  "macro_auth",
@@ -4873,143 +4877,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ca0197aee26d1ae37445ee532fefce43251d24cc7c166799f4d46817f1d3973"
 dependencies = [
  "crossbeam-utils",
-]
-
-[[package]]
-name = "connect_api"
-version = "0.1.0"
-dependencies = [
- "aes-gcm 0.10.3",
- "async-stream",
- "async-trait",
- "aws-sdk-kms",
- "axum",
- "base64 0.22.1",
- "bytes",
- "chrono",
- "clap",
- "connect_client",
- "connect_platform",
- "connect_registry",
- "futures",
- "http-body-util",
- "opentelemetry",
- "opentelemetry-http",
- "rand 0.9.4",
- "reqwest 0.13.4",
- "rmcp",
- "rootcause",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "sqlx",
- "strum 0.27.2",
- "subtle",
- "thiserror 2.0.18",
- "tokio",
- "tower 0.5.3",
- "tracing",
- "tracing-opentelemetry",
- "url",
- "utoipa",
- "uuid",
- "wiremock",
- "workspace-hack",
- "zeroize",
-]
-
-[[package]]
-name = "connect_client"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "connect_platform",
- "reqwest 0.13.4",
- "rootcause",
- "serde",
- "serde_json",
- "strum 0.27.2",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
- "url",
- "utoipa",
- "wiremock",
- "workspace-hack",
- "zeroize",
-]
-
-[[package]]
-name = "connect_demo"
-version = "0.1.0"
-dependencies = [
- "axum",
- "connect_client",
- "connect_platform",
- "futures",
- "html-escape",
- "http-body-util",
- "reqwest 0.13.4",
- "rootcause",
- "serde",
- "serde_json",
- "sse-stream",
- "thiserror 2.0.18",
- "tokio",
- "tower 0.5.3",
- "tracing",
- "url",
- "uuid",
- "wiremock",
- "workspace-hack",
-]
-
-[[package]]
-name = "connect_integration"
-version = "0.1.0"
-dependencies = [
- "clap",
- "connect_client",
- "connect_registry",
- "reqwest 0.13.4",
- "rmcp",
- "serde_json",
- "tokio",
- "url",
- "uuid",
- "workspace-hack",
- "zeroize",
-]
-
-[[package]]
-name = "connect_platform"
-version = "0.1.0"
-dependencies = [
- "aws-config",
- "http 1.4.0",
- "opentelemetry",
- "opentelemetry-http",
- "opentelemetry-otlp",
- "opentelemetry_sdk",
- "serde_json",
- "thiserror 2.0.18",
- "tower-http",
- "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber",
- "workspace-hack",
-]
-
-[[package]]
-name = "connect_registry"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "serde",
- "thiserror 2.0.18",
- "toml 0.8.23",
- "url",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6599,7 +6466,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7183,6 +7050,22 @@ name = "dyn-clone"
 version = "1.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
+
+[[package]]
+name = "dynamic_ui"
+version = "0.1.0"
+dependencies = [
+ "insta",
+ "lazy-regex",
+ "nutype",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "serde_path_to_error",
+ "specta",
+ "specta-serde",
+ "specta-typescript",
+]
 
 [[package]]
 name = "dynamodb_client"
@@ -8523,6 +8406,7 @@ dependencies = [
  "tokio",
  "tower 0.5.3",
  "tracing",
+ "tracing-subscriber",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -11572,6 +11456,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "kinded"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21677048d7aa2c4c73e7edac4a9d5aee810a3987ccef2762c8449ffd0b92f8d2"
+dependencies = [
+ "kinded_macros",
+]
+
+[[package]]
+name = "kinded_macros"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6eaa04e7e45e39b21765756cc9544a4eb4a7f41abefbe77e6256a1649789551d"
+dependencies = [
+ "convert_case 0.11.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "lambda_client"
 version = "0.1.0"
 dependencies = [
@@ -12955,47 +12860,27 @@ version = "0.1.0"
 dependencies = [
  "agent",
  "ai_billing",
- "ai_tools",
  "ai_toolset",
  "ai_usage",
  "anyhow",
+ "async-trait",
  "axum",
- "bots",
- "call",
- "channels",
  "chrono",
- "crm",
- "documents",
- "email",
- "email_service_client",
- "entity_access",
- "entity_access_management",
- "entity_registry",
- "entity_registry_db_utils",
- "foreign_entity",
- "frecency",
  "futures",
- "github_pull_requests",
- "lexical_client",
  "macro_authorization",
- "macro_aws_config",
  "macro_db_migrator",
- "macro_entrypoint",
  "macro_env",
  "macro_env_var",
  "macro_user_id",
  "macro_uuid",
- "notification",
- "readonly_pool",
- "reminders",
+ "prompt",
  "rootcause",
- "search_service_client",
+ "scheduled_action",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
- "soup",
  "sqlx",
- "sqs_client",
- "sync_service_client",
+ "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
@@ -14284,6 +14169,30 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "nutype"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae5a3dbe7b39891991de649985f7930fea69131fc7492d1cf2621d279ad56f77"
+dependencies = [
+ "nutype_macros",
+]
+
+[[package]]
+name = "nutype_macros"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea8ebf0265a233787dc277bd299f7facf14954a4e8a40c7c3435d8a58c9cd522"
+dependencies = [
+ "cfg-if",
+ "kinded",
+ "proc-macro2",
+ "quote",
+ "rustc_version",
+ "syn 2.0.117",
+ "urlencoding",
 ]
 
 [[package]]
@@ -17121,6 +17030,7 @@ dependencies = [
  "chrono-tz",
  "cron",
  "macro_authorization",
+ "macro_tower_layers",
  "macro_user_id",
  "reqwest 0.13.4",
  "schemars 1.2.1",
@@ -23195,7 +23105,6 @@ dependencies = [
  "tokio-rustls",
  "tokio-stream",
  "tokio-util",
- "toml_edit 0.22.27",
  "tower 0.5.3",
  "tower-http",
  "tracing",

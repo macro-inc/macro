@@ -69,6 +69,21 @@ describe('SenderIcon', () => {
     }
   });
 
+  it('draws a post made through an MCP client as that client', () => {
+    const { getByTestId, queryByTestId } = renderSender(
+      message(MACRO_AGENT_PRINCIPAL_ID, {
+        type: 'bot',
+        id: '00000000-0000-0000-0000-00000000a1a1',
+        name: 'Macro',
+        triggered_by: 'macro|alice@example.com',
+        triggered_via: 'Claude Code',
+      })
+    );
+    expect(getByTestId('bot-icon').textContent).toBe('Claude Code');
+    expect(getByTestId('user-card').dataset.name).toBe('Claude Code');
+    expect(queryByTestId('user-icon')).toBeNull();
+  });
+
   it('draws a team bot with its own uploaded avatar', () => {
     const { getByTestId, queryByTestId } = renderSender(
       message(`bot|${TEAM_BOT_ID}`, {

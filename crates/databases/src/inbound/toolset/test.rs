@@ -75,6 +75,7 @@ fn database() -> Database {
         owner_id: USER.to_string(),
         created_at: Utc::now(),
         trashed_at: None,
+        project_id: None,
     }
 }
 

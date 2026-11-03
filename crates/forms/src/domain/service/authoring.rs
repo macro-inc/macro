@@ -22,25 +22,27 @@ where
         &self,
         source: &CreateSource,
     ) -> Result<(Vec<Column>, Vec<models_databases::ColumnId>), FormError> {
-        let new_columns = || {
-            vec![
-                Column {
-                    id: models_databases::ColumnId::new(),
-                    name: create::SUBMITTED_COLUMN.into(),
-                    kind: managed::submitted_kind(),
-                    options: vec![],
-                },
-                Column {
+        // An anonymous form's new table gets no Respondent column.
+        let new_columns = |anonymous: bool| {
+            let mut columns = vec![Column {
+                id: models_databases::ColumnId::new(),
+                name: create::SUBMITTED_COLUMN.into(),
+                kind: managed::submitted_kind(),
+                options: vec![],
+            }];
+            if !anonymous {
+                columns.push(Column {
                     id: models_databases::ColumnId::new(),
                     name: create::RESPONDENT_COLUMN.into(),
                     kind: managed::respondent_kind(),
                     options: vec![],
-                },
-            ]
+                });
+            }
+            columns
         };
         match source {
-            CreateSource::NewDatabase { .. } => {
-                let columns = new_columns();
+            CreateSource::NewDatabase { anonymous, .. } => {
+                let columns = new_columns(*anonymous);
                 let managed = columns.iter().map(|c| c.id).collect();
                 Ok((columns, managed))
             }
@@ -79,7 +81,7 @@ where
                     })
                     .collect();
                 let mut managed_ids = vec![];
-                for column in new_columns() {
+                for column in new_columns(false) {
                     match create::managed_column(table, &column.name, column.kind) {
                         create::ManagedColumn::Existing(id) => managed_ids.push(id),
                         create::ManagedColumn::New { id, name } => {

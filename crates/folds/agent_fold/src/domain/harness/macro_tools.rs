@@ -39,7 +39,10 @@ pub const MCP_SERVER: &str = "macro";
 pub fn mcp_tool(name: &ToolName) -> Option<&str> {
     match name {
         ToolName::Mcp { server, tool } if server == MCP_SERVER => Some(tool),
-        ToolName::Mcp { server, tool } if server == "macro_internal" && tool == "ExecuteCode" => {
+        ToolName::Mcp { server, tool }
+            if server == "macro_internal"
+                && (tool == "ExecuteCode" || tool == PRESENT_VIEW_TOOL) =>
+        {
             Some(tool)
         }
         ToolName::Native { .. } | ToolName::Mcp { .. } => None,
@@ -53,6 +56,13 @@ pub fn mcp_tool(name: &ToolName) -> Option<&str> {
 /// the session's own API.
 pub const USER_TOOLS: &[&str] = &["SendEmail", "CreateCalendarEvent"];
 
+/// Macro tools whose result is a view shown to the person: the chat's
+/// `DisplayResults` and the harness's presented `PresentView`.
+pub const VIEW_TOOLS: &[&str] = &["DisplayResults", PRESENT_VIEW_TOOL];
+
+/// The call the harness presents for `execution.views.present`.
+const PRESENT_VIEW_TOOL: &str = "PresentView";
+
 /// Macro's own delegation tool. Mirrors `agent_inmem`'s `SUBAGENT_TOOL`.
 pub const SUBAGENT_TOOL: &str = "Subagent";
 
@@ -63,6 +73,8 @@ pub enum MacroTool<'name> {
     User(&'name str),
     /// The `Subagent` tool: folds to a delegation, like a harness's own.
     Subagent,
+    /// A tool whose result is a view: folds to the view.
+    View,
     /// Any other Macro tool: folds to its own input and output.
     Other(&'name str),
 }
@@ -75,6 +87,8 @@ impl<'name> MacroTool<'name> {
             Self::User(tool)
         } else if tool == SUBAGENT_TOOL {
             Self::Subagent
+        } else if VIEW_TOOLS.contains(&tool) {
+            Self::View
         } else {
             Self::Other(tool)
         }

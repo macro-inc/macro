@@ -23,6 +23,7 @@ mod model_providers;
 mod permission_policy;
 mod preview;
 mod public_mcp;
+mod pull_request_archive;
 mod routine_sessions;
 mod runtime_commands;
 mod scheduling;
@@ -600,6 +601,7 @@ async fn run() -> anyhow::Result<()> {
         pool.clone(),
         std::net::SocketAddr::from(([127, 0, 0, 1], config.port)),
         http_ready,
+        Arc::clone(&notifications),
     )
     .await?;
     let scheduling_router = scheduling_runtime.router.clone();
@@ -737,6 +739,18 @@ async fn run() -> anyhow::Result<()> {
     let session_metadata_realtime = ConnectionGatewayAgentSessionRealtime::new(
         connection_gateway.clone(),
         session_audience.clone(),
+    );
+    let auto_archive_settings = agent_session::domain::auto_archive::AutoArchiveService::new(
+        session_repo.clone(),
+        session_metadata_realtime.clone(),
+    );
+    let pull_request_archive = agent_session::domain::auto_archive::AutoArchiveService::new(
+        session_repo.clone(),
+        session_metadata_realtime.clone(),
+    );
+    let runtime_close_archive = agent_session::domain::auto_archive::AutoArchiveService::new(
+        session_repo.clone(),
+        session_metadata_realtime.clone(),
     );
     let session_tasks: Arc<dyn agent_session::domain::session_task::SessionTasks> = Arc::new(
         agent_session::domain::session_task::SessionTaskService::new(
@@ -1150,7 +1164,13 @@ async fn run() -> anyhow::Result<()> {
     // bound to it. Held here because the gateway puts dialed-in sockets into
     // it and the harness takes sessions out of it. Attach/detach is mirrored
     // to the harnesses table so the settings page can show connection state.
-    let runtimes = RuntimeRegistry::with_presence(Arc::new(PgHarnessPresence::new(pool.clone())));
+    // Each dial also reports which sessions its runtime still serves, which
+    // the harness loads once it exists below.
+    let (live_sessions, mut live_session_reports) = tokio::sync::mpsc::unbounded_channel();
+    let runtimes = RuntimeRegistry::with_presence(
+        Arc::new(PgHarnessPresence::new(pool.clone())),
+        live_sessions,
+    );
     // Read once, here, rather than at every session this deployment opens: a
     // URL that names no repository is a misconfiguration of the deployment,
     // and refusing it at startup is the difference between one loud failure
@@ -1293,6 +1313,17 @@ async fn run() -> anyhow::Result<()> {
     reviews_cell
         .set(reviews.clone())
         .map_err(|_| anyhow::anyhow!("Review service was initialized twice"))?;
+    let reattaching = Arc::clone(&harness);
+    tokio::spawn(async move {
+        while let Some(live) = live_session_reports.recv().await {
+            let harness = Arc::clone(&reattaching);
+            tokio::spawn(async move {
+                harness
+                    .reattach_live_sessions(live.harness, live.acp_sessions, live.span)
+                    .await;
+            });
+        }
+    });
     let warm_cleanup = Arc::clone(&harness);
     let session_visibility_repo = session_repo.clone();
     tokio::spawn(async move {
@@ -1343,8 +1374,19 @@ async fn run() -> anyhow::Result<()> {
     );
 
     // Close the loop: turn ends observed by the session actors drain the
-    // harness's prompt queue, and capture what the turn changed.
-    turn_observer.bind((harness.clone(), CaptureOnTurnEnd::new(changes.clone())));
+    // harness's prompt queue and capture what the turn changed, and a
+    // runtime closed on purpose archives its session when its owner opted in.
+    let auto_archive_tasks = tokio_util::task::TaskTracker::new();
+    turn_observer.bind((
+        harness.clone(),
+        (
+            CaptureOnTurnEnd::new(changes.clone()),
+            agent_harness::domain::runtime_closed::ArchiveOnRuntimeClosed::new(
+                runtime_close_archive,
+                auto_archive_tasks.clone(),
+            ),
+        ),
+    ));
     held_tool_calls.bind(harness.clone());
     let runtime_command_models = macrod_models.clone();
     let runtime_command_redis = redis.clone();
@@ -1579,6 +1621,13 @@ async fn run() -> anyhow::Result<()> {
                 MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
             ),
         );
+    let auto_archive = agent_session::inbound::axum_router::auto_archive::agent_auto_archive_router(
+        AgentSessionRouterState::new(
+            auto_archive_settings,
+            entity_access.clone(),
+            MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        ),
+    );
     let code_executions = agent_code_mode::inbound::axum_router::code_execution_router(
         agent_code_mode::inbound::axum_router::CodeExecutionRouterState::new(
             code_mode,
@@ -1655,6 +1704,7 @@ async fn run() -> anyhow::Result<()> {
             .with_capabilities(capabilities)
             .with_mode_choice(mode_choice)
             .with_pull_requests(pull_requests)
+            .with_auto_archive(auto_archive)
             .with_tool_approvals(tool_approval_answers)
             .with_app_connections(app_connections)
             .with_code_executions(code_executions)
@@ -1803,6 +1853,21 @@ async fn run() -> anyhow::Result<()> {
             messages: message_service,
         },
     ));
+
+    let pull_request_archive_shutdown = service_shutdown.clone();
+    let pull_request_archive_brokers = config.kafka_brokers.as_ref().to_owned();
+    tokio::spawn(async move {
+        if let Err(error) = pull_request_archive::run(
+            &pull_request_archive_brokers,
+            &pull_request_archive,
+            pull_request_archive_shutdown.clone(),
+        )
+        .await
+        {
+            tracing::error!(error = ?error, "pull request auto-archive consumer stopped");
+            pull_request_archive_shutdown.cancel();
+        }
+    });
 
     let egress_port = config.egress_port;
     let egress_shutdown = service_shutdown.clone();
@@ -1972,6 +2037,7 @@ async fn run() -> anyhow::Result<()> {
                                 | HarnessCommand::ToolApproval(_)
                                 | HarnessCommand::PresentTool { .. }
                                 | HarnessCommand::SessionStopped { .. }
+                                | HarnessCommand::Reattach
                                 | HarnessCommand::DrainNotifications => "agent_trigger.unexpected",
                             };
                             tracing::Span::current().record("macro.event.type", event_type);
@@ -2059,6 +2125,8 @@ async fn run() -> anyhow::Result<()> {
     notification_cancel.cancel();
     notification_tasks.close();
     notification_tasks.wait().await;
+    auto_archive_tasks.close();
+    auto_archive_tasks.wait().await;
     http.abort();
     trigger.abort();
     egress_http.abort();

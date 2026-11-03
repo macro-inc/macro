@@ -31,6 +31,8 @@ composer imports the URL matcher from this package; do not duplicate it.
 Keep URLs protected from inline formatting during import; matching rendered
 text is too late. Preserve code, mention payloads, existing links, and escaped
 literal URLs. Keep unlink state through both Markdown and Lexical JSON saves.
+`NodeReplacements` must copy `ListNode` start when wrapping as `TaskListNode`;
+dropping it resets every typed `6.` marker to `1.`
 
 An image under a list item is a child of that `ListItemNode`. Lexical runs
 element transformers only on top-level nodes, so `listItemImage` exports it as

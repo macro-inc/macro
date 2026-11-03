@@ -20,6 +20,18 @@ Entry point for coding-agent sessions.
 
 ## Methods
 
+### autoArchivePreferences()
+
+> **autoArchivePreferences**(): `Promise`\<[`AutoArchivePreferencesBody`](../../../../../generated/agent-harness/types.gen/type-aliases/AutoArchivePreferencesBody.md)\>
+
+Which triggers archive the caller's sessions by default; each is off unless chosen.
+
+#### Returns
+
+`Promise`\<[`AutoArchivePreferencesBody`](../../../../../generated/agent-harness/types.gen/type-aliases/AutoArchivePreferencesBody.md)\>
+
+***
+
 ### byId()
 
 > **byId**(`id`): [`AgentSession`](../../agent-session/classes/AgentSession.md)
@@ -73,7 +85,12 @@ What the caller's new coding sessions are told to do beyond their assignment.
 
 > **createManaged**(`opts?`): `Promise`\<[`AgentSession`](../../agent-session/classes/AgentSession.md)\>
 
-Create a managed agent session.
+Create a managed session as `agent` when one is named, otherwise the
+deployment's default coding persona. List personas with
+AgentNamespace.list and construct one with Agent.byId.
+Unknown or inaccessible personas fail. `model` and `instructions`
+outrank the persona's. `repoUrl` is honored for Cursor; omit `agent`
+and it starts as Cursor.
 
 #### Parameters
 
@@ -148,6 +165,24 @@ lists.
 #### Returns
 
 `Promise`\<`string`[]\>
+
+***
+
+### setAutoArchivePreferences()
+
+> **setAutoArchivePreferences**(`preferences`): `Promise`\<[`AutoArchivePreferencesBody`](../../../../../generated/agent-harness/types.gen/type-aliases/AutoArchivePreferencesBody.md)\>
+
+Replace which triggers archive the caller's sessions by default.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `preferences` | [`AutoArchivePreferencesBody`](../../../../../generated/agent-harness/types.gen/type-aliases/AutoArchivePreferencesBody.md) |
+
+#### Returns
+
+`Promise`\<[`AutoArchivePreferencesBody`](../../../../../generated/agent-harness/types.gen/type-aliases/AutoArchivePreferencesBody.md)\>
 
 ***
 

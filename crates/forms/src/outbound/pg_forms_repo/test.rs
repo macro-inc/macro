@@ -11,8 +11,10 @@ use models_permissions::share_permission::channel_share_permission::{
 
 use super::*;
 
+mod anonymous;
 mod booking;
 mod drafts;
+mod folders;
 mod names;
 mod protections;
 mod races;
@@ -173,7 +175,10 @@ fn form_over(table: &Table) -> Form {
         branding: FormBranding::default(),
         created_at: at(9),
         updated_at: at(9),
+        project_id: None,
         is_hidden_in_drive: false,
+        responses_visible: false,
+        anonymous: false,
     }
 }
 
@@ -259,6 +264,8 @@ async fn a_form_hidden_in_drive_stays_hidden_through_a_rename(pool: PgPool) {
     let repo = PgFormsRepo::new(pool.clone());
     let form = Form {
         is_hidden_in_drive: true,
+        responses_visible: false,
+        anonymous: false,
         ..form_over(&table)
     };
     repo.create_form(&form, &layout_over(&table), true)
@@ -357,6 +364,8 @@ async fn facts_change_only_where_given_and_a_closing_time_can_be_cleared(pool: P
                 status: Some(FormStatus::Closed),
                 closes_at: Some(Some(at(17))),
                 tally_visible: Some(true),
+                responses_visible: None,
+                anonymous: None,
                 logo_file_id: Some(Some(Uuid::from_u128(0x1060))),
                 cover_file_id: None,
                 accent_color: Some(Some(AccentColor::try_from("#1f6feb".to_string()).unwrap())),
@@ -525,6 +534,33 @@ async fn anonymous_responses_are_unbounded_and_counted(pool: PgPool) {
             submitted: 2,
             stopped_by_section: vec![(gate, 1)],
         }
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn respondents_by_row_name_signed_in_responses_in_submission_order(pool: PgPool) {
+    let table = insert_table(&pool).await;
+    let repo = PgFormsRepo::new(pool.clone());
+    let form = form_over(&table);
+    repo.create_form(&form, &layout_over(&table), false)
+        .await
+        .unwrap();
+    let later = insert_row(&pool, table.table, "a0").await;
+    let earlier = insert_row(&pool, table.table, "a1").await;
+    let anonymous = insert_row(&pool, table.table, "a2").await;
+    repo.record_submission(form.id, Some(&user(OWNER)), later, at(11))
+        .await
+        .unwrap();
+    repo.record_submission(form.id, Some(&user(RESPONDENT)), earlier, at(10))
+        .await
+        .unwrap();
+    repo.record_submission(form.id, None, anonymous, at(9))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        repo.respondents_by_row(form.id).await.unwrap(),
+        vec![(earlier, user(RESPONDENT)), (later, user(OWNER))]
     );
 }
 

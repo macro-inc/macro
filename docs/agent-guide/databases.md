@@ -26,6 +26,17 @@ a title does not enter the grid, and a failed rename shows a toast. Reload to ve
 the saved name persists. Viewers cannot enter rename from either entry point and
 see the split header's `viewer` badge instead.
 
+**Database actions → Duplicate** (any grant, viewers included) copies the database
+into a new one named "<name> copy" that you own, and opens it in the same split.
+The copy has every table, column (options and colours, formulas, relations within
+the database), view (filters, sorts, layouts and hand-placed board cards) and
+record, under new ids. A relation into another database stays only if you can see
+that database; otherwise the column and its view references are left out.
+Sharing, forms, webhooks, saved queries and row history stay with the original.
+Drive and list rows offer the same **Duplicate**, and agents use `DuplicateItem`
+with `entityType: "database"`. Verify by editing a record in the copy and
+checking the original is unchanged.
+
 Reopening a loaded table or view shows its cached rows while a background read
 checks for changes. Wait for refreshing to finish before asserting server
 reconciliation; visible rows alone do not mean the network read has completed.
@@ -331,7 +342,11 @@ after, so a 1 PM to 5 PM range contains its day. Properties of type **Time range
 edit with the same fields.
 Invalid numbers remain in the editor for correction.
 Drag across table cells to select a rectangle, or Shift-click another cell to
-extend from the first cell. Delete or Backspace clears editable cells in that
+extend from the first cell. From the keyboard, Shift+Arrow grows or shrinks the
+rectangle from the focused cell, Shift+Cmd/Ctrl+Arrow runs to the edge of the
+data, Shift+Home/End to the ends of the row, and Cmd/Ctrl+A selects every loaded
+cell; a plain arrow collapses it. Inside an open cell editor Shift+Arrow selects
+text as usual. Delete or Backspace clears editable cells in that
 rectangle as one undoable change; read-only cells are skipped. Newly saved rows
 can be included immediately; unsaved insertion rows are excluded. Escape clears
 the selection. Other participants see the selected range with a colored outline and
@@ -782,6 +797,13 @@ Database awareness identifies each mounted client with a random peer ID while th
 server supplies its authenticated user. Open the same database in two tabs signed
 in as the same user: each should show the other tab's selection and name. Moving
 or leaving one peer must not overwrite or remove another peer's selection.
+Another viewer's selection is an outline in their color laid over the cells, and
+their name sits above the selection's top-right corner, over the sticky header
+while that edge is in view. Neither ever changes a row's or cell's size. Anyone
+who can view the database shares and sees presence: a view-only viewer's label
+shows an eye (`Lee is viewing`), and the server never relays them as editing.
+Sign in as an editor and a viewer to check both directions; the viewer still
+cannot change cells.
 Refresh failures emit a `database.rows.read_refresh` span with the database ID,
 table ID, and failure kind, plus a `database rows could not be refreshed` log.
 

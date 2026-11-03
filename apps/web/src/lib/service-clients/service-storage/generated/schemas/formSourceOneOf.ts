@@ -11,6 +11,9 @@ import type { FormSourceOneOfKind } from './formSourceOneOfKind';
 starts with only the form's own columns.
  */
 export type FormSourceOneOf = {
+  /** Make the form anonymous from the start: its table gets no
+Respondent column. */
+  anonymous?: boolean;
   /** Keep the form, and the database made for it, out of Drive, as
 for a channel poll. */
   isHiddenInDrive?: boolean;

@@ -2088,3 +2088,54 @@ impl NotificationExtIos for ExternalChatMessageMetadata {
         alert_apns(self, sender_id, notification_id, None).ok()
     }
 }
+
+/// How a routine run ended, as its notification reports it.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RoutineRunOutcome {
+    /// The run did its work.
+    Succeeded,
+    /// The run failed or was cut short.
+    Failed,
+}
+
+/// One of the recipient's routines finished a run. Every run notifies,
+/// whether it succeeded or failed.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutineRunFinishedMetadata {
+    /// The routine that ran.
+    pub routine_id: Uuid,
+    /// The routine's name when it ran.
+    pub routine_name: String,
+    /// How the run ended.
+    pub outcome: RoutineRunOutcome,
+}
+
+impl Notification for RoutineRunFinishedMetadata {
+    const TYPE_NAME: &'static str = "routine_run_finished";
+}
+
+impl NotificationTitle for RoutineRunFinishedMetadata {
+    fn format_title(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(match self.outcome {
+            RoutineRunOutcome::Succeeded => format!("{} finished", self.routine_name),
+            RoutineRunOutcome::Failed => format!("{} failed", self.routine_name),
+        })
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(match self.outcome {
+            RoutineRunOutcome::Succeeded => "A routine run finished.".to_string(),
+            RoutineRunOutcome::Failed => {
+                "A routine run failed. Open its history to see why.".to_string()
+            }
+        })
+    }
+}
