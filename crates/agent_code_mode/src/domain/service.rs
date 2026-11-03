@@ -254,6 +254,9 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "Decide"
                 | "GenerateObject"
                 | "WebSearch"
+                // macro.agents.list() and macro.agentSessions.createManaged.
+                | "ListCodingAgents"
+                | "DispatchCodingAgent"
         )
 }
 

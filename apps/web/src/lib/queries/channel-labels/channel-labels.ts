@@ -29,9 +29,10 @@ function channelLabelsQueryOptions(
     queryFn: () =>
       throwOnErr(() => storageServiceClient.channelLabels.list(scope)),
     staleTime: 30_000,
+    refetchOnWindowFocus: true,
     refetchInterval: (query) =>
       query.state.data?.labels.some((label) => label.rule) ? 30_000 : false,
-    retry: false,
+    reconcile: 'id',
   });
 }
 

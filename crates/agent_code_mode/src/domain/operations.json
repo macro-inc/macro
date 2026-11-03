@@ -302,6 +302,8 @@
   "notification.unsubscribeEmail": "Unsubscribe Email",
   "notification.removeUnsubscribeItem": "Remove Unsubscribe Item",
   "notification.unsubscribeItem": "Unsubscribe Item",
+  "notification.removeUnsubscribeItems": "Remove Unsubscribe Items",
+  "notification.unsubscribeItems": "Unsubscribe Items",
   "notification.removeUnsubscribeAll": "Remove Unsubscribe All",
   "notification.unsubscribeAll": "Unsubscribe All",
   "notification.listTypedNotifications": "List Typed Notifications",

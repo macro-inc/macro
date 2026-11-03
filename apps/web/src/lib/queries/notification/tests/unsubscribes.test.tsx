@@ -4,20 +4,25 @@ import {
   onlineManager,
   QueryClientProvider,
 } from '@tanstack/solid-query';
-import { ok } from 'neverthrow';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { err, ok } from 'neverthrow';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { queryClient } from '../../client';
 import { notificationKeys } from '../keys';
 import {
+  useBulkNotificationPreferencesMutation,
   useMutedEntitiesQuery,
   useMuteItemMutation,
   useUnmuteItemMutation,
 } from '../unsubscribes';
 
+const user = vi.hoisted(() => ({ id: 'viewer' }));
+vi.mock('@core/context/user', () => ({ useUserId: () => () => user.id }));
 const client = vi.hoisted(() => ({
   unsubscribeItem: vi.fn(),
   removeUnsubscribeItem: vi.fn(),
   getUnsubscribes: vi.fn(),
+  unsubscribeItems: vi.fn(),
+  removeUnsubscribeItems: vi.fn(),
 }));
 vi.mock('@service-notification/client', () => ({
   notificationServiceClient: client,
@@ -38,9 +43,11 @@ const key = notificationKeys.unsubscribes.queryKey;
 function setup() {
   let mute!: ReturnType<typeof useMuteItemMutation>;
   let unmute!: ReturnType<typeof useUnmuteItemMutation>;
+  let bulk!: ReturnType<typeof useBulkNotificationPreferencesMutation>;
   function Test() {
     mute = useMuteItemMutation();
     unmute = useUnmuteItemMutation();
+    bulk = useBulkNotificationPreferencesMutation();
     return null;
   }
   render(() => (
@@ -49,9 +56,14 @@ function setup() {
     </QueryClientProvider>
   ));
   queryClient.setQueryData(key, [original]);
-  return { mute, unmute };
+  return { mute, unmute, bulk };
 }
 
+beforeEach(() => {
+  user.id = 'viewer';
+  client.unsubscribeItems.mockReset().mockResolvedValue(ok({}));
+  client.removeUnsubscribeItems.mockReset().mockResolvedValue(ok({}));
+});
 afterEach(() => {
   cleanup();
   queryClient.clear();
@@ -166,4 +178,113 @@ describe('offline mute writes', () => {
       expect(queryClient.getQueryData(key)).toEqual([original]);
     }
   );
+});
+
+describe('bulk notification preferences', () => {
+  it('sends one snooze request and updates the cache once after confirmation', async () => {
+    const { bulk } = setup();
+    const write = vi.spyOn(queryClient, 'setQueryData');
+    const until = '2030-10-01T09:00:00.000Z';
+    const items = [item, { item_type: 'channel', item_id: 'two' }];
+    const result = await bulk.mutateAsync({
+      actorId: 'viewer',
+      items,
+      muted: true,
+      snoozedUntil: until,
+    });
+
+    expect(client.unsubscribeItems).toHaveBeenCalledExactlyOnceWith(
+      items,
+      until
+    );
+    expect(write).toHaveBeenCalledOnce();
+    expect(result.failed).toEqual([]);
+    expect(queryClient.getQueryData(key)).toEqual(
+      items.map((entry) => ({
+        ...entry,
+        snoozed_until: until,
+      }))
+    );
+    write.mockRestore();
+  });
+
+  it('keeps confirmed chunks and returns only the failed chunk for retry', async () => {
+    const { bulk } = setup();
+    const items = Array.from({ length: 501 }, (_, index) => ({
+      item_type: 'channel',
+      item_id: `channel-${index}`,
+    }));
+    client.unsubscribeItems.mockResolvedValueOnce(ok({}));
+    client.unsubscribeItems.mockResolvedValueOnce(
+      err([{ message: 'Offline', code: 'FETCH_ERROR' }])
+    );
+    const result = await bulk.mutateAsync({
+      actorId: 'viewer',
+      items,
+      muted: true,
+    });
+
+    expect(client.unsubscribeItems).toHaveBeenCalledTimes(2);
+    expect(
+      client.unsubscribeItems.mock.calls.map(([batch]) => batch.length)
+    ).toEqual([500, 1]);
+    expect(result.succeeded).toHaveLength(500);
+    expect(result.failed).toEqual([items[500]]);
+    expect(queryClient.getQueryData(key)).toEqual([
+      original,
+      ...items
+        .slice(0, 500)
+        .map((entry) => ({ ...entry, snoozed_until: null })),
+    ]);
+  });
+
+  it('preserves unrelated preferences added while a bulk request is pending', async () => {
+    const { bulk } = setup();
+    let finish!: (result: unknown) => void;
+    client.removeUnsubscribeItems.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+    );
+    const pending = bulk.mutateAsync({
+      actorId: 'viewer',
+      items: [item],
+      muted: false,
+    });
+    await waitFor(() =>
+      expect(client.removeUnsubscribeItems).toHaveBeenCalledOnce()
+    );
+    const unrelated = { item_id: 'unrelated', item_type: 'channel' };
+    queryClient.setQueryData(key, [original, unrelated]);
+    finish(ok({}));
+    await pending;
+
+    expect(queryClient.getQueryData(key)).toEqual([unrelated]);
+  });
+
+  it('stops later chunks and ignores late cache updates after an account change', async () => {
+    const { bulk } = setup();
+    const items = Array.from({ length: 501 }, (_, index) => ({
+      item_type: 'channel',
+      item_id: `channel-${index}`,
+    }));
+    let finish!: (result: unknown) => void;
+    client.unsubscribeItems.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+    );
+    const pending = bulk.mutateAsync({ actorId: 'viewer', items, muted: true });
+    await waitFor(() => expect(client.unsubscribeItems).toHaveBeenCalledOnce());
+    user.id = 'another-viewer';
+    const current = [{ item_id: 'current', item_type: 'channel' }];
+    queryClient.setQueryData(key, current);
+    finish(ok({}));
+    await pending;
+
+    expect(client.unsubscribeItems).toHaveBeenCalledOnce();
+    expect(queryClient.getQueryData(key)).toEqual(current);
+  });
 });
