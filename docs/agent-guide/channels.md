@@ -1019,7 +1019,9 @@ explain the name and sharing, without overlapping native title hints. Personal
 sections have no scope icon or badge. Header focus backgrounds fill the entire header row, including its
 trailing controls, with no extra right padding.
 
-The sidebar virtualizes the section stack and each expanded channel list.
+The sidebar uses TanStack Virtual for the section stack, each expanded channel
+list, and search results. Rows retain stable identities through live refreshes;
+focused and dragged rows remain mounted when they leave the visible range.
 Capped sections scroll independently. When All channels is last and has no saved
 height, it grows to show its full list while rows remain virtualized against the
 outer sidebar scroll. Moving another section below it restores the normal height

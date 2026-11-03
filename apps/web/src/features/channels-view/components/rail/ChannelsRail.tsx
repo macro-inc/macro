@@ -55,7 +55,6 @@ import {
   Show,
   startTransition,
 } from 'solid-js';
-import type { VirtualizerHandle } from 'virtua/solid';
 import { useChannelsView } from '../../channels-view-context';
 import {
   canAssignChannel,
@@ -296,7 +295,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const [listRoot, setListRoot] = createSignal<HTMLDivElement>();
   const [virtualizers, setVirtualizers] = createSignal<
-    Partial<Record<ChannelsSourceScope, VirtualizerHandle>>
+    Partial<Record<ChannelsSourceScope, ListScrollHandle>>
   >({});
   const [browseScrollHandle, setBrowseScrollHandle] =
     createSignal<ListScrollHandle>();
@@ -1209,7 +1208,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const registerVirtualizer = (
     scope: ChannelsSourceScope,
-    handle: VirtualizerHandle
+    handle: ListScrollHandle
   ) => {
     setVirtualizers((current) => ({ ...current, [scope]: handle }));
 

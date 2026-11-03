@@ -323,7 +323,7 @@ vi.mock('./next/ChannelLabelRows', () => ({
   ChannelLabelEmptyState: () => null,
   ChannelLabelRow: () => null,
 }));
-// Keep the section layout and Virtua real; isolate unrelated menus and decoration.
+// Keep the section layout and virtualizer real; isolate unrelated menus and decoration.
 vi.mock('./next/ResizableRailSection', () => ({
   ResizableRailSection: (props: {
     header: JSX.Element;
@@ -505,6 +505,12 @@ it('keeps a pressed channel row attached through a live data refresh and activat
       return this.parentElement;
     }
   );
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
+    function (this: HTMLElement) {
+      return this.hasAttribute('data-index') ? 34 : 200;
+    }
+  );
+  vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(300);
   const observers: Array<{
     callback: ResizeObserverCallback;
     targets: Element[];
@@ -554,9 +560,14 @@ it('keeps a pressed channel row attached through a live data refresh and activat
             0,
             0,
             300,
-            target.hasAttribute('index') ? 64 : 200
+            target.hasAttribute('data-index') ? 34 : 200
           ),
-          borderBoxSize: [],
+          borderBoxSize: [
+            {
+              inlineSize: 300,
+              blockSize: target.hasAttribute('data-index') ? 34 : 200,
+            },
+          ],
           contentBoxSize: [],
           devicePixelContentBoxSize: [],
         })),

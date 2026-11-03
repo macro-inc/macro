@@ -1,35 +1,8 @@
 diff --git a/lib/solid/index.jsx b/lib/solid/index.jsx
-index 029201a2c88fe71645242b3f6f11493a7f91fa86..aebc8d56aa954afd7973b24145fe844cab5e7a21 100644
+index 029201a2c88fe71645242b3f6f11493a7f91fa86..19392eed983d16cdad923b2dc5ce2aaeec8e20fc 100644
 --- a/lib/solid/index.jsx
 +++ b/lib/solid/index.jsx
-@@ -559,6 +559,7 @@ const createVirtualStore = (elementsCount, itemSize = 40, ssrCount = 0, cacheSna
-                 }
-                 case ACTION_START_OFFSET_CHANGE: {
-                     startSpacerSize = payload;
-+                    mutated = UPDATE_VIRTUAL_STATE;
-                     break;
-                 }
-                 case ACTION_MANUAL_SCROLL: {
-@@ -848,6 +849,9 @@ const createScroller = (store, isHorizontal) => {
-                 }
-             });
-             initialized[1](true);
-+            store.$update(ACTION_SCROLL, normalizeScrollOffset(viewport[scrollOffsetKey], isNegative));
-+            // An initial offset is not an active scroll gesture.
-+            if (store.$isScrolling()) store.$update(ACTION_SCROLL_END);
-         },
-         $dispose() {
-             scrollObserver && scrollObserver._dispose();
-@@ -866,7 +870,7 @@ const createScroller = (store, isHorizontal) => {
-         $scrollToIndex(index, { align, smooth, offset = 0 } = {}) {
-             index = clamp(index, 0, store.$getItemsLength() - 1);
-             if (align === "nearest") {
--                const itemOffset = store.$getItemOffset(index);
-+                const itemOffset = store.$getStartSpacerSize() + store.$getItemOffset(index);
-                 const scrollOffset = store.$getScrollOffset();
-                 if (itemOffset < scrollOffset) {
-                     align = "start";
-@@ -1068,7 +1072,7 @@ const createResizeObserver = (cb) => {
+@@ -1068,7 +1068,7 @@ const createResizeObserver = (cb) => {
              // https://www.w3.org/TR/resize-observer/#intro
              (ro ||
                  // https://bugs.chromium.org/p/chromium/issues/detail?id=1491739

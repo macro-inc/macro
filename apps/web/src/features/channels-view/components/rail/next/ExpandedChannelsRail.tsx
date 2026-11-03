@@ -26,7 +26,6 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import {
   CHANNEL_SECTION_MAX_HEIGHT,
   CHANNEL_SECTION_MIN_HEIGHT,
@@ -49,13 +48,16 @@ import {
   RailListLoading,
   RailListLoadingMore,
 } from '../ChannelsRailSection';
-import { useChannelRailVirtualizer } from '../hooks/useChannelRailState';
 import {
   type ChannelRailSectionRows,
   groupChannelRailSections,
 } from './build-channel-rail-rows';
 import { ChannelFavoriteRow } from './ChannelFavoriteRow';
 import { ChannelLabelEmptyState, ChannelLabelRow } from './ChannelLabelRows';
+import {
+  ChannelRailVirtualizer,
+  type ChannelRailVirtualizerHandle,
+} from './ChannelRailVirtualizer';
 import { ChannelSectionDropZone } from './ChannelSectionDropZone';
 import { ChannelSectionEmptyState } from './ChannelSectionEmptyState';
 import {
@@ -308,7 +310,7 @@ function BrowseRow(props: {
 type SectionHandle = {
   layout?: HTMLDivElement;
   root?: HTMLDivElement;
-  virtualizer?: VirtualizerHandle;
+  virtualizer?: ChannelRailVirtualizerHandle;
   viewport?: HTMLDivElement;
   outerScroll?: boolean;
 };
@@ -331,7 +333,8 @@ function BrowseSection(props: {
   const rail = useChannelsRail();
   const handle: SectionHandle = {};
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
-  const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
+  const [virtualizer, setVirtualizer] =
+    createSignal<ChannelRailVirtualizerHandle>();
   const size = createElementSize(scrollRoot);
   const [resizing, setResizing] = createSignal(false);
   const [startMargin, setStartMargin] = createSignal(0);
@@ -384,8 +387,7 @@ function BrowseSection(props: {
     )
   );
 
-  // Virtualizer keys by item identity. Row IDs keep an in-flight pointer gesture
-  // attached to the same element when hydration or unread updates replace data.
+  // Stable row IDs preserve in-flight pointer gestures during live updates.
   const rowsById = createMemo(
     () => new Map(props.section.rows.map((row) => [row.id, row]))
   );
@@ -459,13 +461,11 @@ function BrowseSection(props: {
     const visible = outer.getBoundingClientRect();
     if (bounds.bottom <= visible.top || bounds.top >= visible.bottom) return;
 
-    const first = current.findItemIndex(
-      Math.max(0, current.scrollOffset - 100)
-    );
-    const last = current.findItemIndex(
-      current.scrollOffset + current.viewportSize + 150
-    );
+    const range = current.visibleRange();
+    if (!range) return;
 
+    const first = Math.max(0, range.startIndex - 3);
+    const last = range.endIndex + 5;
     for (const row of props.section.rows.slice(first, last + 1)) {
       if (row.kind !== 'status') {
         continue;
@@ -548,36 +548,31 @@ function BrowseSection(props: {
           </Show>
         }
       >
-        <Show when={rowsScrollRoot()} keyed>
-          {(root) => (
-            <Virtualizer
-              ref={(current) => {
-                handle.virtualizer = current;
-                handle.outerScroll = outerScroll();
-                setVirtualizer(current);
-                props.onReady();
-              }}
-              data={rowIds()}
-              scrollRef={root}
-              startMargin={outerScroll() ? startMargin() : 0}
-              itemSize={CHANNEL_SECTION_ROW_HEIGHT}
-              bufferSize={200}
-              keepMounted={keepRows()}
-              onScroll={loadVisibleSections}
-            >
-              {(id) => (
-                <Show when={rowsById().get(id)}>
-                  {(row) => (
-                    <BrowseRow
-                      row={row()}
-                      favoriteReorder={props.favoriteReorder}
-                    />
-                  )}
-                </Show>
+        <ChannelRailVirtualizer
+          ref={(current) => {
+            handle.virtualizer = current;
+            handle.outerScroll = outerScroll();
+            setVirtualizer(current);
+            if (current) props.onReady();
+          }}
+          keys={rowIds()}
+          scrollRoot={rowsScrollRoot()}
+          scrollMargin={outerScroll() ? startMargin() : 0}
+          estimateSize={CHANNEL_SECTION_ROW_HEIGHT}
+          keepMounted={keepRows()}
+          onRangeChange={loadVisibleSections}
+        >
+          {(id) => (
+            <Show when={rowsById().get(id)}>
+              {(row) => (
+                <BrowseRow
+                  row={row()}
+                  favoriteReorder={props.favoriteReorder}
+                />
               )}
-            </Virtualizer>
+            </Show>
           )}
-        </Show>
+        </ChannelRailVirtualizer>
       </Show>
     </ResizableRailSection>
   );
@@ -602,7 +597,7 @@ function ExpandedBrowse() {
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
   const [stackContent, setStackContent] = createSignal<HTMLDivElement>();
   const [stackVirtualizer, setStackVirtualizer] =
-    createSignal<VirtualizerHandle>();
+    createSignal<ChannelRailVirtualizerHandle>();
   const [scrollVersion, setScrollVersion] = createSignal(0);
   const [handlesVersion, setHandlesVersion] = createSignal(0);
   const [gestureSection, setGestureSection] = createSignal<ChannelSectionKey>();
@@ -838,39 +833,36 @@ function ExpandedBrowse() {
         on:scroll={{ capture: true, handleEvent: updateDropTarget }}
       >
         <div ref={setStackContent}>
-          <Show when={scrollRoot()}>
-            {(root) => (
-              <Virtualizer
-                ref={setStackVirtualizer}
-                scrollRef={root()}
-                data={keys()}
-                keepMounted={keepSections()}
-                bufferSize={300}
-              >
-                {(key) => (
-                  <Show when={sections().get(key)}>
-                    {(section) => (
-                      <BrowseSection
-                        sectionKey={key}
-                        section={section()}
-                        maxHeight={maximumHeight(key)}
-                        outerScrollRoot={scrollRoot()}
-                        layoutVersion={stackSize.height ?? 0}
-                        sectionOrder={keys()}
-                        scrollVersion={scrollVersion()}
-                        savedScrollTop={scrollOffsets.get(key) ?? 0}
-                        onReady={ready}
-                        onPointerDown={() => setGestureSection(key)}
-                        favoriteReorder={favoriteReorder}
-                        sectionReorder={sectionReorder}
-                        register={register}
-                      />
-                    )}
-                  </Show>
+          <ChannelRailVirtualizer
+            ref={setStackVirtualizer}
+            scrollRoot={scrollRoot()}
+            keys={keys()}
+            estimateSize={200}
+            keepMounted={keepSections()}
+            overscan={3}
+          >
+            {(key) => (
+              <Show when={sections().get(key)}>
+                {(section) => (
+                  <BrowseSection
+                    sectionKey={key}
+                    section={section()}
+                    maxHeight={maximumHeight(key)}
+                    outerScrollRoot={scrollRoot()}
+                    layoutVersion={stackSize.height ?? 0}
+                    sectionOrder={keys()}
+                    scrollVersion={scrollVersion()}
+                    savedScrollTop={scrollOffsets.get(key) ?? 0}
+                    onReady={ready}
+                    onPointerDown={() => setGestureSection(key)}
+                    favoriteReorder={favoriteReorder}
+                    sectionReorder={sectionReorder}
+                    register={register}
+                  />
                 )}
-              </Virtualizer>
+              </Show>
             )}
-          </Show>
+          </ChannelRailVirtualizer>
         </div>
       </div>
     </div>
@@ -878,12 +870,42 @@ function ExpandedBrowse() {
 }
 
 function ExpandedSearchResults(props: { search: ChannelRailSearch }) {
+  const rail = useChannelsRail();
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
-  const pagination = useChannelRailVirtualizer(() => 'search');
+  let virtualizer: ChannelRailVirtualizerHandle | undefined;
+  let unregister: (() => void) | undefined;
+
+  onCleanup(() => unregister?.());
+
   const channelsById = createMemo(
     () =>
       new Map(props.search.results().map((channel) => [channel.id, channel]))
   );
+
+  const keepMounted = () => {
+    const row = rail.list.focus.item();
+    if (row?.kind !== 'conversation') return [];
+
+    const index = props.search
+      .results()
+      .findIndex(({ id }) => id === row.channel.id);
+    return index >= 0 ? [index] : [];
+  };
+
+  const loadMoreNearEnd = () => {
+    const metrics = virtualizer?.scrollMetrics();
+    const source = rail.sources.search;
+
+    if (
+      metrics &&
+      metrics.size - metrics.offset - metrics.viewport < 300 &&
+      source.hasMore() &&
+      !source.isFetching() &&
+      !source.error()
+    ) {
+      fireAndForget(source.loadMore(), 'channels-view');
+    }
+  };
 
   createScrollTopFade(scrollRoot);
 
@@ -900,19 +922,25 @@ function ExpandedSearchResults(props: { search: ChannelRailSearch }) {
       <Show when={props.search.error()}>
         <RailListError retry={props.search.retry} />
       </Show>
-      <Virtualizer
-        ref={pagination.registerVirtualizer}
-        data={[...channelsById().keys()]}
-        scrollRef={scrollRoot()}
-        itemSize={CHANNEL_SECTION_ROW_HEIGHT}
-        onScroll={pagination.loadMoreNearEnd}
+      <ChannelRailVirtualizer
+        ref={(current) => {
+          unregister?.();
+          unregister = undefined;
+          virtualizer = current;
+          if (current) unregister = rail.registerVirtualizer('search', current);
+        }}
+        keys={[...channelsById().keys()]}
+        scrollRoot={scrollRoot()}
+        estimateSize={CHANNEL_SECTION_ROW_HEIGHT}
+        keepMounted={keepMounted()}
+        onRangeChange={loadMoreNearEnd}
       >
         {(id) => (
           <Show when={channelsById().get(id)}>
             {(channel) => <ChannelOption channel={channel()} />}
           </Show>
         )}
-      </Virtualizer>
+      </ChannelRailVirtualizer>
       <Show
         when={
           !props.search.isLoading() &&
