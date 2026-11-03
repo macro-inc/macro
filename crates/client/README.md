@@ -332,6 +332,17 @@ aliases already emitted on previous pages, without retaining page history or a
 corpus-sized seen set. Such pages can be short/empty with a continuation; ordinary
 record updates have keyset semantics, not transactional snapshot guarantees.
 
+`CacheHost.people.resolveReferences` exposes a separate read for inferred labels.
+It scans the existing contact projection while retaining at most two distinct
+witnesses per label (500 raw labels, 512 UTF-8 bytes each), preserving exact-name
+and first-name ambiguity. The bound viewer and generation are checked without
+binding an unowned cache; foreign-viewer keys are ignored before private-name
+matching. Inbox exclusions additionally require ready context. Callers still
+check hydration completeness before assuming uniqueness; cached absence is not
+an authoritative server omission. Coordinator protocol 15 and a dedicated native
+command carry the generated contract. Missing reference support is independently
+unsupported, and captured reads become unsupported after host retirement.
+
 ## Browser OPFS writes
 
 The OPFS adapter coalesces each Turso vectored write into batches of at most

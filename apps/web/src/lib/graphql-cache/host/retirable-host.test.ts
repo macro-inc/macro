@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPeopleCache } from '../people/host';
-import { PEOPLE_UNSUPPORTED, type PeopleSearch } from '../people/protocol';
+import {
+  PEOPLE_UNSUPPORTED,
+  type PeopleReferenceRequest,
+  type PeopleSearch,
+} from '../people/protocol';
 import { INITIAL_CACHE_REVISION } from '../protocol';
 import { createNoopCacheHost } from './noop-host';
 import { createRetirableCacheHost, retainCacheHost } from './retirable-host';
@@ -121,7 +125,19 @@ describe('createRetirableCacheHost', () => {
       truncated: false,
       nextCursor: null,
     };
+    const references: PeopleReferenceRequest = {
+      scope,
+      labels: ['Person'],
+      matching: 'preferFullName',
+      excludeSecondaryInboxes: true,
+    };
+    const resolved = {
+      kind: 'resolved',
+      policyVersion: 4,
+      matches: [{ complete: true, people: [] }],
+    };
     const transport = {
+      resolveReferences: vi.fn().mockResolvedValue(resolved),
       context: vi.fn().mockResolvedValue({ kind: 'ready', epoch }),
       update: vi.fn().mockResolvedValue('1'),
       search: vi.fn().mockResolvedValue(page),
@@ -142,6 +158,10 @@ describe('createRetirableCacheHost', () => {
     });
     await expect(people.update(update)).resolves.toBe('1');
     await expect(people.search(search)).resolves.toEqual(page);
+    await expect(people.resolveReferences(references)).resolves.toEqual(
+      resolved
+    );
+    expect(transport.resolveReferences.mock.calls[0][0]).toEqual(references);
     expect(transport.context.mock.calls[0][0]).toEqual(scope);
     expect(transport.update.mock.calls[0][0]).toEqual(update);
     expect(transport.search.mock.calls[0][0]).toEqual(search);
@@ -149,13 +169,18 @@ describe('createRetirableCacheHost', () => {
     const contextRead = people.context;
     const write = people.update;
     const searchRead = people.search;
+    const referenceRead = people.resolveReferences;
     host.dispose();
+    await expect(referenceRead(references)).resolves.toEqual({
+      kind: 'unsupported',
+    });
     await expect(contextRead(scope)).resolves.toEqual({ kind: 'unsupported' });
     await expect(searchRead(search)).resolves.toEqual({ kind: 'unsupported' });
     await expect(write(update)).rejects.toThrow(PEOPLE_UNSUPPORTED);
     expect(transport.context).toHaveBeenCalledOnce();
     expect(transport.update).toHaveBeenCalledOnce();
     expect(transport.search).toHaveBeenCalledOnce();
+    expect(transport.resolveReferences).toHaveBeenCalledOnce();
     expect(inner.dispose).toHaveBeenCalledOnce();
   });
 
@@ -168,6 +193,7 @@ describe('createRetirableCacheHost', () => {
     const host = createRetirableCacheHost({
       ...createNoopCacheHost(),
       people: createPeopleCache({
+        resolveReferences: vi.fn().mockRejectedValue(error),
         context: vi.fn().mockRejectedValue(error),
         search: vi.fn().mockRejectedValue(error),
         update: vi.fn().mockRejectedValue(error),
@@ -176,6 +202,14 @@ describe('createRetirableCacheHost', () => {
     const people = host.people;
     if (!people) throw new Error('Missing person capability');
     await expect(people.context(scope)).rejects.toBe(error);
+    await expect(
+      people.resolveReferences({
+        scope,
+        labels: ['Person'],
+        matching: 'exact',
+        excludeSecondaryInboxes: false,
+      })
+    ).rejects.toBe(error);
     await expect(
       people.search({
         scope,

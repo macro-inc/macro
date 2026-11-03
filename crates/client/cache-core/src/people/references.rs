@@ -1,7 +1,8 @@
 //! Bounded evidence for resolving inferred labels across the cached directory.
 
 use super::{
-    CONTEXT_FIELD, MAX_PEOPLE_BATCH, PEOPLE_POLICY_VERSION, PeopleError, StoredFacts, contact_key,
+    CONTEXT_FIELD, MAX_PEOPLE_BATCH, MAX_REFERENCE_WITNESSES, PEOPLE_POLICY_VERSION, PeopleError,
+    StoredFacts,
 };
 use crate::{
     engine::HydrationScope,
@@ -62,7 +63,7 @@ pub struct PersonReference {
 #[cfg_attr(any(test, feature = "schema"), derive(schemars::JsonSchema))]
 pub struct PeopleReferenceMatch {
     /// At most two distinct witnesses. Two means ambiguous, not a complete candidate list.
-    #[cfg_attr(any(test, feature = "schema"), schemars(length(max = 2)))]
+    #[cfg_attr(any(test, feature = "schema"), schemars(length(max = MAX_REFERENCE_WITNESSES)))]
     pub people: Vec<PersonReference>,
     /// Malformed matching records cannot establish uniqueness. The caller must also
     /// check directory hydration completeness before relying on a single witness.
@@ -95,6 +96,7 @@ struct Evidence {
 pub(crate) struct ReferenceCollector<'a> {
     request: &'a PeopleReferenceRequest,
     epoch: Option<Uuid>,
+    namespace: Uuid,
     by_label: HashMap<String, usize>,
     order: Vec<usize>,
     evidence: Vec<Evidence>,
@@ -133,6 +135,7 @@ impl<'a> ReferenceCollector<'a> {
         Ok(Self {
             request,
             epoch,
+            namespace: Uuid::new_v5(&Uuid::NAMESPACE_OID, request.scope.identity.as_bytes()),
             by_label,
             order,
             evidence,
@@ -154,6 +157,14 @@ impl<'a> ReferenceCollector<'a> {
             return;
         };
         if raw_user.len() > 1024 || !email.eq_ignore_ascii_case(user.email_str()) {
+            return;
+        }
+        // Foreign-viewer rows must not affect even the ambiguity/completeness
+        // flags. Check ownership before inspecting their private names.
+        let expected = Uuid::new_v5(&self.namespace, user.as_ref().as_bytes());
+        let mut buffer = Uuid::encode_buffer();
+        let expected: &str = expected.hyphenated().encode_lower(&mut buffer);
+        if key.typename() != Some("GraphqlContact") || key.id() != Some(expected) {
             return;
         }
         let name = match record.fields.get("name") {
@@ -186,7 +197,7 @@ impl<'a> ReferenceCollector<'a> {
         if matches.iter().all(|(index, _)| index.is_none()) {
             return;
         }
-        let mut complete = key == &contact_key(&self.request.scope.identity, user.as_ref());
+        let mut complete = true;
         if self.request.exclude_secondary_inboxes {
             match record.fields.get(CONTEXT_FIELD) {
                 None => {}
@@ -218,7 +229,7 @@ impl<'a> ReferenceCollector<'a> {
                 evidence.priority = priority;
                 evidence.matched.people.clear();
             }
-            if evidence.matched.people.len() < 2
+            if evidence.matched.people.len() < MAX_REFERENCE_WITNESSES
                 && !evidence
                     .matched
                     .people

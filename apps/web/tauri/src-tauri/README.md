@@ -14,13 +14,17 @@ projection 5 support, and a missing scoped command must reject without fallback.
 This requires a native rebuild; legacy unscoped callers remain compatible.
 
 Context-aware person search also needs a rebuild for `graphql_cache_people_context`,
-`graphql_cache_people_update`, and `graphql_cache_people_search`. OTA clients detect
+`graphql_cache_people_update`, `graphql_cache_people_search`, and the additive
+`graphql_cache_people_resolve_references` read. OTA clients detect
 missing commands as unavailable, never as an empty directory or a successful write.
 These commands keep account/generation admission and ranking inside the shared
 engine lock. The leader publisher and Quick Access reader are implemented.
-Rebuild native code for person policy version 3 before relying on ranked mention/property
-windows; older policy responses fall back to bounded server pages. Shared
-recipient reader migration remains pending.
+Rebuild native code for person policy version 4 before relying on current before-limit
+recipient exclusions and ranked mention/property windows; older policy responses
+use bounded server pages. Reference reads return at most two witnesses per label,
+never a directory, and cannot bind an unowned cache. A missing reference command
+is independently unsupported, not a reason to disable working person search.
+Remaining planner/full-list migrations are tracked in the contact design plan.
 
 ## Native authentication cookies
 

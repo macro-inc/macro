@@ -1,4 +1,5 @@
 use super::*;
+use crate::people::contact_key;
 
 fn request(labels: &[&str], matching: ReferenceMatchMode) -> PeopleReferenceRequest {
     PeopleReferenceRequest {
@@ -117,7 +118,7 @@ fn canonical_duplicates_do_not_create_ambiguity_and_missing_names_do_not_invent_
 }
 
 #[test]
-fn malformed_or_foreign_matching_rows_cannot_establish_uniqueness() {
+fn foreign_rows_cannot_change_reference_evidence_or_completeness() {
     let request = request(&["Sam", "Other"], ReferenceMatchMode::PreferFullName);
     let mut collector = ReferenceCollector::new(&request, None).unwrap();
     push(&mut collector, "sam@example.com", Some("Sam"));
@@ -130,7 +131,7 @@ fn malformed_or_foreign_matching_rows_cannot_establish_uniqueness() {
     );
     push(&mut collector, "other@example.com", Some("Other"));
     let result = matches(collector);
-    assert!(!result[0].complete);
+    assert!(result[0].complete);
     assert_eq!(result[0].people.len(), 1);
     assert!(result[1].complete);
 }

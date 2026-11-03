@@ -146,6 +146,7 @@ it('recovers an initially unavailable offline picker after context publication',
       return () => {};
     },
     people: {
+      resolveReferences: async () => ({ kind: 'unsupported' }),
       search,
       context: async () => ({ kind: 'missing' }),
       update: async () => parseCacheRevision('1'),

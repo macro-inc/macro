@@ -1349,6 +1349,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     clientId,
     liveQueries: true,
     people: createPeopleCache({
+      resolveReferences: (request, traceparent) =>
+        initializedRequest({ kind: 'people-references', request, traceparent }),
       context: (scope, traceparent) =>
         initializedRequest({ kind: 'people-context', scope, traceparent }),
       update: (update, traceparent) =>

@@ -1,6 +1,7 @@
 use super::*;
 use cache_core::people::{
-    ContextAction, ContextState, ContextUpdate, PeopleMode, PeopleSearch, PeopleSearchResult,
+    ContextAction, ContextState, ContextUpdate, PeopleMode, PeopleReferenceRequest,
+    PeopleReferenceResult, PeopleSearch, PeopleSearchResult, ReferenceMatchMode,
 };
 
 #[test]
@@ -29,6 +30,23 @@ fn native_person_policy_preserves_scope_and_publication() {
             serde_json::json!({"user":{"id":viewer,"contacts":{"nodes":[{"__typename":"GraphqlContact","id":contact,"userId":user,"name":"Private label","email":"person@example.com"}],"nextCursor":null}}}),
             Some(viewer.into()), Some(scope.clone()),
         ).await.unwrap();
+        let references = PeopleReferenceRequest {
+            scope: scope.clone(),
+            labels: vec!["Private".into(), "Private label".into(), "missing".into()],
+            matching: ReferenceMatchMode::PreferFullName,
+            exclude_secondary_inboxes: false,
+        };
+        let PeopleReferenceResult::Resolved { matches, .. } = handle
+            .people_resolve_references(references.clone())
+            .await
+            .unwrap()
+        else {
+            panic!("resolved")
+        };
+        assert_eq!(matches[0].people[0].user_id.as_ref(), user);
+        assert_eq!(matches[1].people[0].name.as_deref(), Some("Private label"));
+        assert!(matches[2].people.is_empty());
+        assert!(matches.iter().all(|entry| entry.complete));
         let epoch = "00000000-0000-4000-8000-000000000002".parse().unwrap();
         handle
             .people_update(ContextUpdate {
@@ -85,6 +103,14 @@ fn native_person_policy_preserves_scope_and_publication() {
             format!("GraphqlContact:{contact}")
         );
         handle.clear().await.unwrap();
+        assert_eq!(
+            handle
+                .people_resolve_references(references)
+                .await
+                .err()
+                .as_deref(),
+            Some("cache hydration scope changed")
+        );
         assert_eq!(
             handle.people_update(commit).await.err().as_deref(),
             Some("cache hydration scope changed")

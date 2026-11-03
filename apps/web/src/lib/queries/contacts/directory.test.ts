@@ -85,6 +85,7 @@ it('reads context-ranked windows with pinned continuations and no unbounded mate
   const cache = {
     ...base,
     people: {
+      resolveReferences: vi.fn<PeopleCache['resolveReferences']>(),
       search,
       context: vi.fn<PeopleCache['context']>(),
       update: vi.fn<PeopleCache['update']>(),
@@ -152,6 +153,7 @@ it('uses bounded server fallback when the native policy predates recipient exclu
   const cache = {
     ...host(),
     people: {
+      resolveReferences: vi.fn<PeopleCache['resolveReferences']>(),
       search: vi.fn<PeopleCache['search']>().mockResolvedValue({
         kind: 'page',
         policyVersion: 3,

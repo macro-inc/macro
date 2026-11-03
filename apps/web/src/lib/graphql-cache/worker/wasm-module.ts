@@ -1,6 +1,8 @@
 import type {
   PeopleContextState,
   PeopleContextUpdate,
+  PeopleReferenceRequest,
+  PeopleReferenceResult,
   PeopleScope,
   PeopleSearch,
   PeopleSearchResult,
@@ -111,6 +113,9 @@ export interface CacheEngine {
   search(
     request: SearchCacheArgs & { nowMs: number }
   ): Promise<SearchCachePage>;
+  peopleResolveReferences?(
+    request: PeopleReferenceRequest
+  ): Promise<PeopleReferenceResult>;
   peopleContext?(scope: PeopleScope): Promise<PeopleContextState>;
   peopleUpdate?(update: PeopleContextUpdate): Promise<WriteResult>;
   peopleSearch?(request: PeopleSearch): Promise<PeopleSearchResult>;

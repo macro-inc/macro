@@ -1,6 +1,7 @@
 {
   "maxBatch": 500,
   "maxQueryBytes": 512,
+  "maxReferenceWitnesses": 2,
   "policyVersion": 4,
   "schemas": {
     "PeopleContextState": {

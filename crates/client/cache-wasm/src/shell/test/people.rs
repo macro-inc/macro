@@ -25,6 +25,14 @@ async fn people_abi_preserves_scope_publication_and_winning_identity() {
         js(serde_json::json!({"user":{"id":viewer,"contacts":{"nodes":[{"__typename":"GraphqlContact","id":contact,"userId":user,"name":"Private label","email":"person@example.com"}],"nextCursor":null}}})),
         Some(viewer.into()), js(scope.clone()),
     )).await;
+    let references = serde_json::json!({"scope":scope,"labels":["Private", "Private label", "missing"],"matching":"preferFullName","excludeSecondaryInboxes":false});
+    let matched: serde_json::Value =
+        from_js(resolved(engine.people_resolve_references(js(references.clone()))).await);
+    assert_eq!(matched["kind"], "resolved");
+    assert_eq!(matched["matches"][0]["people"][0]["userId"], user);
+    assert_eq!(matched["matches"][1]["people"][0]["name"], "Private label");
+    assert_eq!(matched["matches"][2]["people"], serde_json::json!([]));
+    assert_eq!(matched["matches"][0]["complete"], true);
     let begin = serde_json::json!({"scope":scope,"epoch":epoch,"action":{"kind":"begin","previousEpoch":null}});
     resolved(engine.people_update(js(begin))).await;
     let request = serde_json::json!({"scope":scope,"query":"private","mode":"command","limit":1,"excluded":[],"nowMs":0});
@@ -50,6 +58,11 @@ async fn people_abi_preserves_scope_publication_and_winning_identity() {
     );
     assert!(
         JsFuture::from(engine.people_search(js(request)))
+            .await
+            .is_err()
+    );
+    assert!(
+        JsFuture::from(engine.people_resolve_references(js(references)))
             .await
             .is_err()
     );

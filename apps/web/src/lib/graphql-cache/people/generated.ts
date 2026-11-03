@@ -4,6 +4,8 @@ import { z } from 'zod/v3';
 
 export const PEOPLE_POLICY_VERSION = 4;
 
+export const MAX_REFERENCE_WITNESSES = 2;
+
 export const MAX_PEOPLE_BATCH = 500;
 
 export const MAX_PEOPLE_QUERY_BYTES = 512;
