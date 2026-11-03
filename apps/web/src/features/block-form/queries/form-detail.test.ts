@@ -259,6 +259,7 @@ describe('the booking step', () => {
     ).toEqual({ kind: 'stopped', sectionId: 'fit', message: 'Not a fit yet.' });
     expect(
       toMyResponse({
+        kind: 'saved',
         response: {
           id: 'response-1',
           formId: 'form-1',
