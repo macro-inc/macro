@@ -453,11 +453,6 @@ export type FormSource =
        * for a channel poll.
        */
       isHiddenInDrive?: boolean;
-      /**
-       * Make the form anonymous from the start: its table gets no
-       * Respondent column.
-       */
-      anonymous?: boolean;
       kind: 'new';
     }
   | {
@@ -3802,9 +3797,9 @@ export type EntityItem =
        */
       botId: string;
       /**
-       * Whether the session is archived.
+       * Who or what archived the session; absent while it is active.
        */
-      isArchived: boolean;
+      archivedBy?: SessionArchiveCause | null;
       /**
        * Runtime connection status.
        */
@@ -3938,9 +3933,15 @@ export type EntityItem =
       tags?: AppliedTag[];
     };
 /**
- * The caller's level on a form: view responds (and reads responses when
- * they are shared), edit changes questions and reads responses, owner
- * also sets the audience, closes and trashes it.
+ * Who or what archived an agent session.
+ */
+export type SessionArchiveCause =
+  | 'user'
+  | 'pull_request_merged'
+  | 'runtime_closed';
+/**
+ * The caller's level on a form: view responds, edit changes questions and
+ * reads responses, owner also sets the audience, closes and trashes it.
  */
 export type FormAccess = 'view' | 'edit' | 'owner';
 /**
@@ -4305,6 +4306,10 @@ export type ToolActivityAction =
       };
       type: 'unknown';
     };
+/**
+ * Who or what archived a session.
+ */
+export type ArchiveCause = 'user' | 'pull_request_merged' | 'runtime_closed';
 /**
  * The two sides of a session conversation.
  */
@@ -7875,8 +7880,7 @@ export interface Form {
   submittedColumnId?: string | null;
   /**
    * The person column each signed-in submission names its respondent in;
-   * `null` once deleted, and on a form created anonymous. An anonymous
-   * form never writes it.
+   * `null` once deleted.
    */
   respondentColumnId?: string | null;
   audience: Audience;
@@ -7884,16 +7888,6 @@ export interface Form {
    * Whether respondents may read option tallies.
    */
   tallyVisible: boolean;
-  /**
-   * Whether people with View may read individual response rows.
-   */
-  responsesVisible: boolean;
-  /**
-   * Whether nobody, the owner included, can see who gave which response.
-   * Who responded is kept apart from the responses, only so nobody
-   * responds twice. Fixed once anyone has responded.
-   */
-  anonymous: boolean;
   status: FormStatus;
   /**
    * When it stops taking responses, if it does.
@@ -13284,9 +13278,14 @@ export interface SessionConversation {
    */
   botId: string;
   /**
-   * Whether the session is archived and read-only.
+   * Who or what archived the session, or `None` while it is active. An archived session
+   * is read-only.
    */
-  isArchived: boolean;
+  archivedBy?: ArchiveCause | null;
+  /**
+   * When the session was archived.
+   */
+  archivedAt?: string | null;
   /**
    * Configured runtime.
    */
@@ -15624,7 +15623,7 @@ export interface SetFavoriteResponse {
   favorite: boolean;
 }
 /**
- * Open, close or share a saved form immediately. Requires Form Owner. Supply complete audience/status/deadline/tally settings and explicit channel grant deltas; empty deltas change no grants. Optional responsesVisible lets View holders read response rows; optional anonymous makes the form anonymous to everyone, its owner included (who responded is kept apart from the responses), and is refused once anyone has responded. Public allows anonymous responses. View allows responding without database access unless responses are shared; channel Edit grants editing of the entire backing database. Uses the existing Forms settings and sharing services without a review step. This never posts a message or sends invitations. Settings and channel grants are separate writes; inspect partial results before retrying. Returns actual access, canonical links and acceptingResponses; a URL alone does not mean the form is open.
+ * Open, close or share a saved form immediately. Requires Form Owner. Supply complete audience/status/deadline/tally settings and explicit channel grant deltas; empty deltas change no grants. Public allows anonymous responses. View allows responding without database access; channel Edit grants editing of the entire backing database. Uses the existing Forms settings and sharing services without a review step. This never posts a message or sends invitations. Settings and channel grants are separate writes; inspect partial results before retrying. Returns actual access, canonical links and acceptingResponses; a URL alone does not mean the form is open.
  */
 export interface SetFormAccess {
   formId: FormId;
@@ -15644,15 +15643,6 @@ export interface AccessDraft {
    * Whether respondents can see aggregate choice tallies.
    */
   tallyVisible: boolean;
-  /**
-   * Whether people with View may read individual response rows.
-   */
-  responsesVisible?: boolean | null;
-  /**
-   * Whether nobody, the owner included, can see who gave which response;
-   * refused once anyone has responded.
-   */
-  anonymous?: boolean | null;
   /**
    * Direct channel changes only; this does not post messages or send invitations.
    */

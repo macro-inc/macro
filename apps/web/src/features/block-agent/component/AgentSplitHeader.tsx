@@ -26,11 +26,13 @@ import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
 import GitBranch from '@icon/system/regular/git-branch.svg';
 import TrayIcon from '@icon/system/regular/tray.svg';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
+import { isSessionArchived } from '@service-agent-harness/session-archive';
 import { For, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
 import { changeSessionArchiveState } from '../queries/change-session-archive-state';
 import { AgentPullRequestChip } from './AgentPullRequestChip';
 import { AgentTaskChip } from './AgentTaskChip';
+import { useAutoArchiveFileOperations } from './auto-archive-file-operations';
 import {
   harnessTitle,
   sessionHarnessTitle,
@@ -42,18 +44,21 @@ export { harnessTitle, sessionRepositoryUrl };
 export function agentSessionFileOperations(
   session: AgentSessionResponse | undefined,
   permissions: Permissions,
-  setArchived: () => void
+  setArchived: () => void,
+  autoArchive: FileOperation[]
 ): FileOperation[] {
   const repositoryUrl = sessionRepositoryUrl(session);
+  const archived = isSessionArchived(session);
   return [
-    ...(!session?.isArchived ? [{ op: 'rename' } as const] : []),
+    ...(!archived ? [{ op: 'rename' } as const] : []),
     ...(permissions === Permissions.OWNER
       ? [
           {
-            label: session?.isArchived ? 'Unarchive' : 'Archive',
+            label: archived ? 'Unarchive' : 'Archive',
             icon: TrayIcon,
             action: setArchived,
           },
+          ...autoArchive,
         ]
       : []),
     { op: 'delete' },
@@ -113,7 +118,8 @@ export function AgentSplitHeader(props: {
       type: 'agent_session',
       id,
       name: title(),
-      isArchived: session.isArchived,
+      archivedBy: session.archivedBy,
+      archivedAt: session.archivedAt,
       ownerId: session.ownerId,
       botId: session.botId,
       status:
@@ -167,10 +173,22 @@ export function AgentSplitHeader(props: {
   const setArchived = async () => {
     const id = sessionId();
     if (!id || !props.session) return;
-    await changeSessionArchiveState(id, !props.session.isArchived);
+    await changeSessionArchiveState(id, !isSessionArchived(props.session));
   };
+  const autoArchive = useAutoArchiveFileOperations({
+    sessionId,
+    enabled: () =>
+      permissions() === Permissions.OWNER &&
+      props.session !== undefined &&
+      !isSessionArchived(props.session),
+  });
   const ops = () =>
-    agentSessionFileOperations(props.session, permissions(), setArchived);
+    agentSessionFileOperations(
+      props.session,
+      permissions(),
+      setArchived,
+      autoArchive()
+    );
 
   return (
     <>

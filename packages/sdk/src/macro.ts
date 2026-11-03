@@ -245,7 +245,12 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   }
 }
 
-export type { FoldedAgentSessionLog } from './entities/agent-sessions/agent-session';
+export type {
+  ArchiveCause,
+  AutoArchiveOverrides,
+  FoldedAgentSessionLog,
+  SessionAutoArchive,
+} from './entities/agent-sessions/agent-session';
 export type { CodeResult } from './entities/agent-sessions/code-execution';
 export {
   AgentConversation,

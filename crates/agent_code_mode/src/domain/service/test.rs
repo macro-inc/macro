@@ -191,7 +191,10 @@ async fn archived_or_inactive_sessions_never_receive_credentials() {
     let (service, credentials, _, turns) = service();
     let mut session =
         test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7()));
-    session.is_archived = true;
+    session.archived = Some(agent_session::domain::model::SessionArchive {
+        by: agent_session::domain::model::ArchiveCause::User,
+        at: chrono::Utc::now(),
+    });
     assert!(
         service
             .execute(
@@ -205,7 +208,7 @@ async fn archived_or_inactive_sessions_never_receive_credentials() {
             .await
             .is_err()
     );
-    session.is_archived = false;
+    session.archived = None;
     *turns.0.lock().unwrap() = None;
     assert!(
         service
