@@ -1,6 +1,6 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useFeatureFlag, useMaybePosthog } from '@app/lib/analytics/posthog';
 import { recordEmojiUsage } from '@core/component/Emoji/emojiUsage';
-import { enableReminders } from '@core/constant/featureFlags';
+import { enableReminders, isFeatureEnabled } from '@core/constant/featureFlags';
 import type {
   MessageActionEvent,
   MessageActionHandler,
@@ -18,6 +18,7 @@ import StarIcon from '@icon/system/regular/sparkle.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import { cn, Toolbar } from '@ui';
 import {
+  type Accessor,
   type Component,
   createSignal,
   For,
@@ -92,10 +93,19 @@ function ActionButton(props: {
   );
 }
 
+function useRemindersEnabled(): Accessor<boolean> {
+  // The toolbar also mounts from message rows rendered without PostHog, including
+  // unit tests. A missing provider must not abort pointerenter and hide Reply.
+  const posthog = useMaybePosthog();
+  if (!posthog) return () => isFeatureEnabled(enableReminders);
+  const flag = useFeatureFlag(enableReminders);
+  return () => flag().enabled;
+}
+
 function ActionMenuContent(props: ActionMenuProps) {
   const message = useMessage();
   const actions = useMessageActions();
-  const remindersEnabled = useFeatureFlag(enableReminders);
+  const remindersEnabled = useRemindersEnabled();
   const actionMenuVisibility = useMessageActionMenuVisibility();
   const [emojiMenuOpen, setEmojiMenuOpen] = createSignal(false);
   let selectedReplyText: string | undefined;
@@ -181,16 +191,16 @@ function ActionMenuContent(props: ActionMenuProps) {
     },
   ];
 
-  const visibleCompose = composeActions.filter(
-    (item) =>
-      item.onClick &&
-      (item.id !== 'create-reminder' || remindersEnabled().enabled)
-  );
-  const visibleOther = otherActions.filter((item) => item.onClick);
-  const visibleActions = [...visibleCompose, ...visibleOther];
+  const visibleCompose = () =>
+    composeActions.filter(
+      (item) =>
+        item.onClick && (item.id !== 'create-reminder' || remindersEnabled())
+    );
+  const visibleOther = () => otherActions.filter((item) => item.onClick);
+  const visibleActions = () => [...visibleCompose(), ...visibleOther()];
 
   return (
-    <Show when={hasReactAction() || visibleActions.length > 0}>
+    <Show when={hasReactAction() || visibleActions().length > 0}>
       <HoverActions
         class={props.class}
         persistentVisible={emojiMenuOpen()}
@@ -236,14 +246,14 @@ function ActionMenuContent(props: ActionMenuProps) {
                 }}
               />
             </Toolbar.Group>
-            <Show when={visibleActions.length > 0}>
+            <Show when={visibleActions().length > 0}>
               <Toolbar.Divider />
             </Show>
           </Show>
 
-          <Show when={visibleCompose.length > 0}>
+          <Show when={visibleCompose().length > 0}>
             <Toolbar.Group>
-              <For each={visibleCompose}>
+              <For each={visibleCompose()}>
                 {(action) => (
                   <ActionButton
                     action={action}
@@ -258,12 +268,12 @@ function ActionMenuContent(props: ActionMenuProps) {
               </For>
             </Toolbar.Group>
           </Show>
-          <Show when={visibleCompose.length > 0 && visibleOther.length > 0}>
+          <Show when={visibleCompose().length > 0 && visibleOther().length > 0}>
             <Toolbar.Divider />
           </Show>
-          <Show when={visibleOther.length > 0}>
+          <Show when={visibleOther().length > 0}>
             <Toolbar.Group>
-              <For each={visibleOther}>
+              <For each={visibleOther()}>
                 {(action) => (
                   <ActionButton
                     action={action}
