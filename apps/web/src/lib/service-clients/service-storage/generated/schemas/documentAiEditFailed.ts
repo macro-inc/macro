@@ -13,6 +13,6 @@ document before retrying.
 export interface DocumentAiEditFailed {
   /** Always `edit_failed`. */
   error: DocumentAiEditFailedCode;
-  /** What went wrong. */
+  /** What to do next; the cause is logged, never returned. */
   message: string;
 }

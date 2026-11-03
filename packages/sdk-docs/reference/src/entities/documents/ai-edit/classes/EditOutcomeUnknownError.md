@@ -1,8 +1,9 @@
 # Class: EditOutcomeUnknownError
 
-An edit was sent but its outcome is unknown (HTTP 502): it may have applied,
-in part for an instructions edit. Read the document with `content()` before
-retrying; never replay the edit blindly.
+An edit was sent but its outcome is unknown: the service reported a failure
+after the edit started (HTTP 502), timed out (504), or the connection broke
+with no response (status 0). It may have partly applied. Read the document
+with `content()` before retrying; never replay the edit blindly.
 
 ## Extends
 
@@ -12,13 +13,14 @@ retrying; never replay the edit blindly.
 
 ### Constructor
 
-> **new EditOutcomeUnknownError**(`data`): `EditOutcomeUnknownError`
+> **new EditOutcomeUnknownError**(`data`, `status?`): `EditOutcomeUnknownError`
 
 #### Parameters
 
-| Parameter | Type |
-| ------ | ------ |
-| `data` | `unknown` |
+| Parameter | Type | Default value |
+| ------ | ------ | ------ |
+| `data` | `unknown` | `undefined` |
+| `status?` | `number` | `502` |
 
 #### Returns
 

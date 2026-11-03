@@ -18927,6 +18927,12 @@ export const editDocumentWithAiResponse = zod
     changedBlockIds: zod
       .array(zod.string())
       .describe('Durable ids of the blocks the edit touched.'),
+    clarification: zod
+      .string()
+      .nullish()
+      .describe(
+        'What the editor needs to know to finish, when it applied part of the\nedit and stopped; the applied part stays.'
+      ),
     revision: zod
       .string()
       .describe(

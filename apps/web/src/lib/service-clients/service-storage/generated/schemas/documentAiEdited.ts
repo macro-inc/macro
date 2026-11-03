@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { DocumentAiEditedClarification } from './documentAiEditedClarification';
 
 /**
  * A completed edit by instructions.
@@ -11,6 +12,9 @@
 export interface DocumentAiEdited {
   /** Durable ids of the blocks the edit touched. */
   changedBlockIds: string[];
+  /** What the editor needs to know to finish, when it applied part of the
+edit and stopped; the applied part stays. */
+  clarification?: DocumentAiEditedClarification;
   /** The document's version after the edit, as sync-service encodes it. */
   revision: string;
   /** What changed, in words. */

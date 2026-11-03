@@ -10,4 +10,4 @@ document before retrying.
 | Property | Type | Description |
 | ------ | ------ | ------ |
 | <a id="property-error"></a> `error` | [`DocumentAiEditFailedCode`](DocumentAiEditFailedCode.md) | Always `edit_failed`. |
-| <a id="property-message"></a> `message` | `string` | What went wrong. |
+| <a id="property-message"></a> `message` | `string` | What to do next; the cause is logged, never returned. |

@@ -27735,7 +27735,7 @@
           },
           "message": {
             "type": "string",
-            "description": "What went wrong."
+            "description": "What to do next; the cause is logged, never returned."
           }
         }
       },
@@ -27791,6 +27791,10 @@
               "type": "string"
             },
             "description": "Durable ids of the blocks the edit touched."
+          },
+          "clarification": {
+            "type": ["string", "null"],
+            "description": "What the editor needs to know to finish, when it applied part of the\nedit and stopped; the applied part stays."
           },
           "revision": {
             "type": "string",

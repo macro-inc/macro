@@ -704,6 +704,7 @@ export * from './deleteUnthreadedPdfAnchorRequestOneOf';
 export * from './deleteUnthreadedPdfAnchorRequestOneOfAnchorType';
 export * from './directAccess';
 export * from './documentAiEdited';
+export * from './documentAiEditedClarification';
 export * from './documentAiEditFailed';
 export * from './documentAiEditFailedCode';
 export * from './documentAiEditRefused';
