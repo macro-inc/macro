@@ -60,9 +60,13 @@ function Content(props: { children: JSX.Element }) {
   );
 }
 
-function Items(props: { children: JSX.Element }) {
+function Items(props: {
+  label: string;
+  ref?: (element: HTMLElement) => void;
+  children: JSX.Element;
+}) {
   return (
-    <ViewSidebar.Nav aria-label={t('viewMenus.savedTaskViews')}>
+    <ViewSidebar.Nav ref={props.ref} aria-label={props.label} class="relative">
       {props.children}
     </ViewSidebar.Nav>
   );
@@ -87,6 +91,13 @@ function Draft(props: { onSelect: () => void }) {
 
 export const SavedViewList = { Root, Header, Content, Items, Draft };
 
+/** Drag wiring a consumer supplies when its list can be reordered. */
+export type SavedViewRowReorder = {
+  ref: (element: HTMLElement) => void;
+  onMouseDown: (event: MouseEvent) => void;
+  dragging: () => boolean;
+};
+
 /** A row accepts its consumer's menus without owning CRUD or viewer state. */
 export function SavedViewListRow(props: {
   view: SavedView;
@@ -94,6 +105,11 @@ export function SavedViewListRow(props: {
   onSelect: () => void;
   scopeKey: string | undefined;
   menu: (defer: (action: () => void) => void) => JSX.Element;
+  /** Status beside the name, such as an unread marker. */
+  trailing?: JSX.Element;
+  /** Spoken with the name, since the trailing status is decorative. */
+  statusLabel?: string;
+  reorder?: SavedViewRowReorder;
 }) {
   const [menuAnchor, setMenuAnchor] = createSignal<HTMLElement>();
   let pending: { scopeKey: string | undefined; run: () => void } | undefined;
@@ -118,16 +134,25 @@ export function SavedViewListRow(props: {
       action.run();
     });
   };
-  const label = () =>
-    props.view.sharedTeamId
+  const label = () => {
+    const name = props.view.sharedTeamId
       ? t('viewMenus.sharedWithTeam', { name: props.view.name })
       : props.view.name;
+    return props.statusLabel
+      ? t('viewMenus.savedViewWithStatus', { name, status: props.statusLabel })
+      : name;
+  };
   return (
     <ContextMenu>
       <ContextMenuTrigger
         as="div"
-        ref={setMenuAnchor}
+        ref={(element: HTMLElement) => {
+          setMenuAnchor(element);
+          props.reorder?.ref(element);
+        }}
         class="group relative min-w-0"
+        classList={{ 'opacity-40': props.reorder?.dragging() }}
+        onMouseDown={props.reorder?.onMouseDown}
       >
         <ViewSidebar.Item
           active={props.selected}
@@ -140,9 +165,12 @@ export function SavedViewListRow(props: {
             <BookmarkIcon class="size-4" />
           </ViewSidebar.Icon>
           <span class="truncate">{props.view.name}</span>
-          <Show when={props.view.sharedTeamId}>
+          <Show when={props.view.sharedTeamId || props.trailing}>
             <ViewSidebar.Trailing>
-              <UsersIcon class="size-3.5" />
+              {props.trailing}
+              <Show when={props.view.sharedTeamId}>
+                <UsersIcon class="size-3.5" />
+              </Show>
             </ViewSidebar.Trailing>
           </Show>
         </ViewSidebar.Item>

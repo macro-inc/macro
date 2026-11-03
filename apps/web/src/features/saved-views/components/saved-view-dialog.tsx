@@ -63,6 +63,10 @@ export function SavedViewForm(
     title?: string;
     submitLabel?: string;
     summary?: JSX.Element;
+    /** Consumer-owned controls for the definition itself, after the name. */
+    fields?: JSX.Element;
+    /** A consumer's reason the definition cannot be saved yet. */
+    invalid?: boolean;
     team?: { id: string; name: string };
     onSave: (name: string, team: string | null) => void;
   }
@@ -94,6 +98,7 @@ export function SavedViewForm(
           placeholder="e.g. Needs review"
         />
       </label>
+      {props.fields}
       <Show when={props.summary}>
         <div class="flex flex-col gap-2 text-xs text-ink-muted">
           {props.summary}
@@ -133,7 +138,7 @@ export function SavedViewForm(
         <Button
           type="submit"
           variant="primary"
-          disabled={props.pending || !name().trim()}
+          disabled={props.pending || props.invalid || !name().trim()}
         >
           {props.pending ? 'Saving…' : (props.submitLabel ?? 'Save view')}
         </Button>
