@@ -751,7 +751,7 @@ async fn reply_rules_each_stop_the_enrollment(pool: PgPool) {
         incoming(
             &pool,
             OWNER_LINK,
-            "mailer-daemon@googlemail.com",
+            "mailer-daemon@remote.example",
             serde_json::json!([{ "name": "X-Failed-Recipients", "value": "ada@example.com" }]),
             None,
         )

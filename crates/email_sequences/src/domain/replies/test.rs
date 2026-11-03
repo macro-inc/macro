@@ -35,13 +35,13 @@ fn classifier_table() {
                 ),
                 ("Subject", "Delivery Status Notification (Delay)"),
             ],
-            Some("mailer-daemon@googlemail.com"),
+            Some("mailer-daemon@remote.example"),
             Response::AutoReply,
         ),
         (
             "Postfix delay notice",
             vec![("Subject", "Delayed Mail (still being retried)")],
-            Some("MAILER-DAEMON@mx.example.org"),
+            Some("MAILER-DAEMON@mx.example"),
             Response::AutoReply,
         ),
         (
@@ -50,7 +50,7 @@ fn classifier_table() {
                 ("X-Failed-Recipients", "ada@example.com"),
                 ("Subject", "Delivery Status Notification (Delay)"),
             ],
-            Some("mailer-daemon@googlemail.com"),
+            Some("mailer-daemon@remote.example"),
             Response::Bounce,
         ),
         (
@@ -68,7 +68,7 @@ fn classifier_table() {
                 ("X-Failed-Recipients", "ada@example.com"),
                 ("Auto-Submitted", "auto-replied"),
             ],
-            Some("mailer-daemon@googlemail.com"),
+            Some("mailer-daemon@remote.example"),
             Response::Bounce,
         ),
         (
@@ -151,8 +151,8 @@ fn each_rule_matches_on_its_own() {
     let step_message = Uuid::from_u128(1);
     let steps = [SentIdentity {
         message_id: step_message,
-        delivery_message_id: Some("step@send.macro.com".to_owned()),
-        provider_message_id: Some("step@mail.gmail.com".to_owned()),
+        delivery_message_id: Some("step@send.example".to_owned()),
+        provider_message_id: Some("step@mail.example".to_owned()),
     }];
     let enrolled = Enrolled {
         email: "ada@example.com",
@@ -169,7 +169,7 @@ fn each_rule_matches_on_its_own() {
         (
             "1: In-Reply-To names the delivery Message-ID",
             Incoming {
-                references: vec!["step@send.macro.com".to_owned()],
+                references: vec!["step@send.example".to_owned()],
                 ..from_colleague.clone()
             },
             Some(EnrollmentReason::Replied),
@@ -201,7 +201,7 @@ fn each_rule_matches_on_its_own() {
         (
             "4: a bounce naming the enrolled address",
             Incoming {
-                from: Some("mailer-daemon@googlemail.com".to_owned()),
+                from: Some("mailer-daemon@remote.example".to_owned()),
                 failed_recipients: vec!["ada@example.com".to_owned()],
                 response: Response::Bounce,
                 ..from_colleague.clone()
@@ -222,7 +222,7 @@ fn each_rule_matches_on_its_own() {
             "a bounce naming a longer address",
             Incoming {
                 from: Some("mailer-daemon@remote.example".to_owned()),
-                bounce_text: Some("<grada@example.com.au> failed".to_owned()),
+                bounce_text: Some("<grada@example.com.test> failed".to_owned()),
                 response: Response::Bounce,
                 ..from_colleague.clone()
             },
@@ -232,7 +232,7 @@ fn each_rule_matches_on_its_own() {
             "a bounce naming the address in a longer domain",
             Incoming {
                 from: Some("mailer-daemon@remote.example".to_owned()),
-                bounce_text: Some("delivery to ada@example.com.au failed".to_owned()),
+                bounce_text: Some("delivery to ada@example.com.test failed".to_owned()),
                 response: Response::Bounce,
                 ..from_colleague.clone()
             },
@@ -253,11 +253,11 @@ fn each_rule_matches_on_its_own() {
         (
             "a bounce for someone else that quotes the contact in its headers",
             Incoming {
-                from: Some("postmaster@contoso.com".to_owned()),
+                from: Some("postmaster@remote.example".to_owned()),
                 bounce_text: Some(
-                    "your message to bob@contoso.com couldn't be delivered.\n\
+                    "your message to bob@remote.example couldn't be delivered.\n\
                      original message headers:\n\
-                     to: bob@contoso.com\n\
+                     to: bob@remote.example\n\
                      cc: ada <ada@example.com>"
                         .to_owned(),
                 ),
@@ -271,8 +271,8 @@ fn each_rule_matches_on_its_own() {
             Incoming {
                 from: Some("mailer-daemon@remote.example".to_owned()),
                 bounce_text: Some(
-                    "<bob@contoso.com>: 550 no such user\n\
-                     to: bob <bob@contoso.com>,\n \
+                    "<bob@remote.example>: 550 no such user\n\
+                     to: bob <bob@remote.example>,\n \
                      ada <ada@example.com>"
                         .to_owned(),
                 ),
@@ -286,7 +286,7 @@ fn each_rule_matches_on_its_own() {
             Incoming {
                 from: Some("mailer-daemon@remote.example".to_owned()),
                 bounce_text: Some(
-                    "<bob@contoso.com>:\nsorry, no mailbox here by that name.\n\
+                    "<bob@remote.example>:\nsorry, no mailbox here by that name.\n\
                      --- below this line is a copy of the message.\n\
                      hi bob, looping in ada@example.com"
                         .to_owned(),
@@ -299,7 +299,7 @@ fn each_rule_matches_on_its_own() {
         (
             "1: Message-IDs compare without regard to case",
             Incoming {
-                references: vec!["STEP@send.macro.com".to_owned()],
+                references: vec!["STEP@send.example".to_owned()],
                 ..from_colleague.clone()
             },
             Some(EnrollmentReason::Replied),

@@ -246,7 +246,7 @@ fn mentions_address(text: &str, address: &str) -> bool {
         let before = text[..at].chars().next_back();
         let mut after = text[at + found.len()..].chars();
         let next = after.next();
-        // `ada@example.com.au` is another address; `ada@example.com.` ends a sentence.
+        // `ada@example.com.test` is another address; `ada@example.com.` ends a sentence.
         let longer_domain = next == Some('.') && after.next().is_some_and(char::is_alphanumeric);
         !before.is_some_and(part_of_address)
             && !next.is_some_and(|c| c.is_alphanumeric() || c == '-' || c == '_')
