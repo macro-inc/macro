@@ -224,7 +224,10 @@ impl BrainLauncher for MacroBrainLauncher {
     }
 
     fn start(&self, launch: BrainLaunch) {
+        // Its own trace, linked to the request that started it: the launch
+        // outlives the request by minutes.
         let span = tracing::info_span!(
+            parent: None,
             "team_agents.brain.start",
             session_id = %launch.session_id,
             bot_id = %launch.bot_id,
