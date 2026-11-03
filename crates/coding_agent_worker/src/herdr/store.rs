@@ -1,6 +1,7 @@
 //! Durable native-session identities. No prompts or MCP credentials are stored here.
 
 use super::acp_agent::TuiAgent;
+use super::cli::Window;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -17,6 +18,8 @@ pub(crate) struct Record {
     pub native_id: Option<String>,
     pub transcript: Option<PathBuf>,
     pub started: u64,
+    #[serde(default)]
+    pub window: Option<Window>,
 }
 
 pub(crate) struct Store(pub PathBuf);

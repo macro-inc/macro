@@ -14,6 +14,7 @@ fn records_survive_a_new_store_without_exposing_credentials() {
         native_id: Some(id.clone()),
         transcript: Some(PathBuf::from("/log.jsonl")),
         started: 1,
+        window: None,
     };
     Store(root.path().to_owned()).save(&record).unwrap();
     let reopened = Store(root.path().to_owned());

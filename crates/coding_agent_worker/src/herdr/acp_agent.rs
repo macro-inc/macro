@@ -4,9 +4,9 @@
 //! macrod runs this as its harness like any other ACP agent, so sessions
 //! still open, prompt, stream, and stop through Macro's ACP infrastructure.
 //! Behind the protocol, each session is a real interactive `claude` or
-//! `codex` in its own herdr tab, rooted at the session's working directory:
+//! `codex` in its own Herdr workspace, rooted at the session's working directory:
 //!
-//! - the first `session/prompt` opens the tab and starts the agent there
+//! - the first `session/prompt` opens the workspace and starts the agent there
 //!   with the session's model and Macro MCP servers;
 //! - prompts are typed into the TUI with `herdr agent prompt`;
 //! - the agent's own session transcript is tailed and streamed back as
@@ -30,7 +30,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
 use super::HerdrSession;
-use super::cli::{AgentLaunch, HerdrCli, HerdrError};
+use super::cli::{AgentLaunch, HerdrCli, HerdrError, Window};
 use super::hub::title_from;
 use super::store::{Record, Store, write_private};
 use super::tail::Cursor;
@@ -42,6 +42,7 @@ mod commands;
 mod effort;
 mod models;
 mod permission;
+mod windows;
 
 #[cfg(test)]
 use permission::permission_title;
@@ -153,8 +154,6 @@ pub(crate) struct AdapterOptions {
     pub state_dir: Option<PathBuf>,
     /// Native model ID for new sessions.
     pub model: Option<String>,
-    /// Sessions use dispatcher-managed worktrees.
-    pub managed_worktrees: bool,
     /// The agent TUI sessions run.
     pub kind: TuiAgent,
     /// Passed to Claude Code as `--permission-mode`.
@@ -309,6 +308,7 @@ struct Session {
     model: Mutex<String>,
     effort: Mutex<Option<String>>,
     native_id: Mutex<Option<String>>,
+    window: Mutex<Option<Window>>,
     prompt_pending: AtomicBool,
     live: tokio::sync::Mutex<Option<Live>>,
     cancel: Mutex<Option<CancellationToken>>,
@@ -502,6 +502,7 @@ impl Adapter {
                     .unwrap_or_else(|| DEFAULT_MODEL.to_owned()),
             ),
             native_id: Mutex::new(None),
+            window: Mutex::new(None),
             effort: Mutex::new(None),
             prompt_pending: AtomicBool::new(false),
             live: tokio::sync::Mutex::new(None),
@@ -523,6 +524,7 @@ impl Adapter {
                 cwd: session.cwd.clone(),
                 model: lock(&session.model).clone(),
                 native_id: lock(&session.native_id).clone(),
+                window: lock(&session.window).clone(),
                 transcript: live.and_then(|live| live.path.clone()),
                 started: live
                     .map(|live| live.started)
@@ -586,6 +588,7 @@ impl Adapter {
             model: Mutex::new(record.model.clone()),
             effort: Mutex::new(None),
             native_id: Mutex::new(record.native_id),
+            window: Mutex::new(record.window),
             prompt_pending: AtomicBool::new(false),
             live: tokio::sync::Mutex::new(None),
             cancel: Mutex::new(None),
@@ -600,6 +603,11 @@ impl Adapter {
             }
         }
         self.sync_model(&session, &live).await;
+        if let Some(herdr) = &self.herdr
+            && let Ok(info) = herdr.agent_info(&live.name).await
+        {
+            self.remember_window(&session, &live, &info)?;
+        }
         *session.live.lock().await = Some(live);
         lock(&self.sessions).insert(id.to_owned(), session.clone());
         self.observe(&session);
@@ -771,14 +779,16 @@ impl Adapter {
                             "Herdr agent identity no longer matches this session",
                         ));
                     }
+                    self.remember_window(session, live, &info)?;
                 }
                 Err(error) if error.missing_agent() => {
-                    let old = guard.take().expect("live session was checked above");
-                    let mut restarted = self.launch(herdr, session, text).await?;
-                    restarted.path = old.path;
-                    restarted.cursor = old.cursor;
-                    restarted.log = old.log;
-                    restarted.pending = old.pending;
+                    let mut restarted = self.launch(herdr, session, text, guard.as_ref()).await?;
+                    if let Some(old) = guard.take() {
+                        restarted.path = old.path;
+                        restarted.cursor = old.cursor;
+                        restarted.log = old.log;
+                        restarted.pending = old.pending;
+                    }
                     *guard = Some(restarted);
                     self.save(session, guard.as_ref())?;
                 }
@@ -786,7 +796,7 @@ impl Adapter {
             }
         }
         if guard.is_none() {
-            *guard = Some(self.launch(herdr, session, text).await?);
+            *guard = Some(self.launch(herdr, session, text, None).await?);
             self.save(session, guard.as_ref())?;
         }
         let Some(live) = guard.as_mut() else {
@@ -879,19 +889,10 @@ impl Adapter {
         herdr: &HerdrCli,
         session: &Session,
         first_prompt: &str,
+        previous: Option<&Live>,
     ) -> Result<Live, RpcError> {
         let kind = self.options.kind;
         let label = title_from(first_prompt).unwrap_or_else(|| kind.herdr_kind().to_owned());
-        let source = if self.options.managed_worktrees {
-            Some(
-                crate::outbound::git::primary_worktree(&session.cwd)
-                    .await
-                    .map_err(|error| RpcError::internal(error.to_string()))?,
-            )
-        } else {
-            None
-        };
-
         let model = lock(&session.model).clone();
         let mut args = Vec::new();
         let resume = lock(&session.native_id).clone();
@@ -936,26 +937,27 @@ impl Adapter {
         args.extend(self.options.agent_args.iter().cloned());
         let name = agent_name(&session.id);
         let started = std::time::SystemTime::now();
-        let window = herdr
-            .launch_agent(&AgentLaunch {
-                name: &name,
-                kind: kind.herdr_kind(),
-                reports_status: kind.reports_status(),
-                cwd: &session.cwd,
-                label: &label,
-                focus: !self.options.no_focus,
-                worktree_source: source.as_deref(),
-                environment: environment.as_deref(),
-                args: &args,
-            })
+        let launch = AgentLaunch {
+            name: &name,
+            kind: kind.herdr_kind(),
+            reports_status: kind.reports_status(),
+            cwd: &session.cwd,
+            label: &label,
+            focus: !self.options.no_focus,
+            environment: environment.as_deref(),
+            args: &args,
+        };
+        let window = self
+            .session_window(herdr, session, &launch, previous)
             .await?;
+        herdr.start_agent(&launch, &window).await?;
         tracing::info!(
             session = %session.id,
             pane = %window.pane_id,
             agent = kind.herdr_kind(),
             "agent started in herdr"
         );
-        if kind == TuiAgent::Claude {
+        if kind == TuiAgent::Claude && resume.is_none() {
             *lock(&session.native_id) = Some(session.id.clone());
         }
         Ok(Live {
@@ -1046,6 +1048,7 @@ impl Adapter {
             let info = match herdr.agent_info(&live.name).await {
                 Ok(info) => {
                     missing = 0;
+                    self.remember_window(session, live, &info)?;
                     if info.session_id.is_some() {
                         *lock(&session.native_id) = info.session_id.clone();
                     }

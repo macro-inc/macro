@@ -1,5 +1,28 @@
 use super::*;
 
+#[test]
+fn initial_names_use_visible_text_after_hidden_prompt_prefixes() {
+    assert_eq!(
+        title_from(
+            "\n<macrod-runtime>Runtime instructions</macrod-runtime>\n<m-agent-context>{\"text\":\"private context\"}</m-agent-context>\n<m-user-mention>{\"displayName\":\"Helper\"}</m-user-mention> Fix the login flow\nmore details"
+        ),
+        Some("Fix the login flow".to_owned())
+    );
+    assert_eq!(title_from("<m-user-mention>{}</m-user-mention>"), None);
+    assert_eq!(
+        title_from("<macrod-runtime>unfinished hidden instructions"),
+        None
+    );
+    assert_eq!(
+        title_from("<m-agent-context>unfinished private context"),
+        None
+    );
+    assert_eq!(
+        title_from("  Fix <T> parsing\ncontext"),
+        Some("Fix <T> parsing".to_owned())
+    );
+}
+
 fn owner() -> Owner {
     MacroUserIdStr::try_from_email("owner@example.com").unwrap()
 }

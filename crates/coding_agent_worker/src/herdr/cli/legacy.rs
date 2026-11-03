@@ -26,44 +26,39 @@ pub(super) struct Legacy {
 }
 
 impl Legacy {
-    /// Let Herdr create and register a fresh worktree from the fetched main ref.
-    pub(super) async fn create_worktree(
-        &self,
-        source: &Path,
-        path: &Path,
-        branch: &str,
-    ) -> Result<(), HerdrError> {
-        self.run(&[
-            "worktree",
-            "create",
-            "--cwd",
-            &source.to_string_lossy(),
-            "--path",
-            &path.to_string_lossy(),
-            "--branch",
-            branch,
-            "--base",
-            "origin/main",
-            "--no-focus",
-        ])
-        .await
-        .map(drop)
+    pub(super) async fn open_agent(&self, launch: &AgentLaunch<'_>) -> Result<Window, HerdrError> {
+        let output = self
+            .run(&[
+                "workspace",
+                "create",
+                "--cwd",
+                &launch.cwd.to_string_lossy(),
+                "--label",
+                launch.label,
+                if launch.focus {
+                    "--focus"
+                } else {
+                    "--no-focus"
+                },
+            ])
+            .await?;
+        let created: WorkspaceCreated =
+            serde_json::from_str(&output).map_err(|source| HerdrError::Unparsable {
+                command: "workspace create".to_owned(),
+                source,
+            })?;
+        Ok(Window {
+            workspace_id: Some(created.result.workspace.workspace_id),
+            tab_id: created.result.root_pane.tab_id,
+            pane_id: created.result.root_pane.pane_id,
+        })
     }
 
-    pub(super) async fn launch_agent(
+    pub(super) async fn start_in_window(
         &self,
         launch: &AgentLaunch<'_>,
-    ) -> Result<Window, HerdrError> {
-        let window = match launch.worktree_source {
-            Some(source) => {
-                self.open_worktree(source, launch.cwd, launch.label, launch.focus)
-                    .await?
-            }
-            None => {
-                self.open_window(launch.cwd, launch.label, launch.focus)
-                    .await?
-            }
-        };
+        window: &Window,
+    ) -> Result<(), HerdrError> {
         if let Some(environment) = launch.environment {
             self.run(&[
                 "pane",
@@ -84,7 +79,7 @@ impl Legacy {
                 result => break result?,
             }
         }
-        Ok(window)
+        Ok(())
     }
 
     pub(super) async fn open_viewer(
@@ -145,6 +140,17 @@ impl Legacy {
                 source,
             })?;
         Ok(AgentInfo {
+            window: answer.pointer("/result/agent").and_then(|agent| {
+                Some(Window {
+                    workspace_id: None,
+                    pane_id: agent.get("pane_id")?.as_str()?.to_owned(),
+                    tab_id: agent.get("tab_id")?.as_str()?.to_owned(),
+                })
+            }),
+            workspace_id: answer
+                .pointer("/result/agent/workspace_id")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
             cwd: answer
                 .pointer("/result/agent/cwd")
                 .and_then(Value::as_str)
@@ -176,29 +182,67 @@ impl Legacy {
         self.run(&args).await.map(drop)
     }
 
-    /// Reuse Herdr's workspace and its shell pane for a managed session worktree.
-    async fn open_worktree(
+    /// Only an explicitly closed pane permits creating a replacement workspace.
+    pub(super) async fn existing_window(
         &self,
-        source: &Path,
-        path: &Path,
-        label: &str,
-        focus: bool,
-    ) -> Result<Window, HerdrError> {
-        let path = path.to_string_lossy();
+        window: &Window,
+        cwd: &Path,
+    ) -> Result<Option<Window>, HerdrError> {
+        let output = match self.run(&["pane", "get", &window.pane_id]).await {
+            Err(error) if error.has_code("/error/code", "pane_not_found") => return Ok(None),
+            result => result?,
+        };
+        let answer: PaneAnswer =
+            serde_json::from_str(&output).map_err(|source| HerdrError::Unparsable {
+                command: "pane get".to_owned(),
+                source,
+            })?;
+        let pane = answer.result.pane;
+        if pane.foreground_cwd.as_ref().unwrap_or(&pane.cwd) != cwd {
+            return Err(HerdrError::Refused {
+                command: "pane get".to_owned(),
+                stderr: "the session's pane is now in a different directory".to_owned(),
+            });
+        }
+        let current = Window {
+            workspace_id: window
+                .workspace_id
+                .as_ref()
+                .filter(|id| **id == pane.workspace_id)
+                .cloned(),
+            tab_id: pane.tab_id,
+            pane_id: pane.pane_id,
+        };
+        self.available_shell(&current).await?;
+        Ok(Some(current))
+    }
+
+    async fn available_shell(&self, window: &Window) -> Result<(), HerdrError> {
         let output = self
-            .run(&[
-                "worktree",
-                "open",
-                "--cwd",
-                &source.to_string_lossy(),
-                "--path",
-                &path,
-                "--label",
-                label,
-                if focus { "--focus" } else { "--no-focus" },
-            ])
+            .run(&["pane", "process-info", "--pane", &window.pane_id])
             .await?;
-        parse_window(&output)
+        let answer: ProcessAnswer =
+            serde_json::from_str(&output).map_err(|source| HerdrError::Unparsable {
+                command: "pane process-info".to_owned(),
+                source,
+            })?;
+        let info = answer.result.process_info;
+        if info.foreground_process_group_id != Some(info.shell_pid)
+            || info
+                .foreground_processes
+                .iter()
+                .any(|process| process.pid != info.shell_pid)
+        {
+            return Err(HerdrError::NotReady);
+        }
+        Ok(())
+    }
+
+    pub(super) async fn close_window(&self, window: &Window) -> Result<(), HerdrError> {
+        if let Some(workspace) = &window.workspace_id {
+            self.run(&["workspace", "close", workspace]).await?;
+        }
+        Ok(())
     }
 
     /// Open a tab in macrod's workspace, switching herdr to it when `focus`.
@@ -267,6 +311,63 @@ impl Legacy {
 }
 
 #[derive(Deserialize)]
+struct WorkspaceCreated {
+    result: WorkspaceCreatedResult,
+}
+
+#[derive(Deserialize)]
+struct WorkspaceCreatedResult {
+    workspace: WorkspaceId,
+    root_pane: CreatedPane,
+}
+
+#[derive(Deserialize)]
+struct WorkspaceId {
+    workspace_id: String,
+}
+
+#[derive(Deserialize)]
+struct PaneAnswer {
+    result: PaneResult,
+}
+
+#[derive(Deserialize)]
+struct PaneResult {
+    pane: Pane,
+}
+
+#[derive(Deserialize)]
+struct Pane {
+    workspace_id: String,
+    tab_id: String,
+    pane_id: String,
+    cwd: PathBuf,
+    foreground_cwd: Option<PathBuf>,
+}
+
+#[derive(Deserialize)]
+struct ProcessAnswer {
+    result: ProcessResult,
+}
+
+#[derive(Deserialize)]
+struct ProcessResult {
+    process_info: ProcessInfo,
+}
+
+#[derive(Deserialize)]
+struct ProcessInfo {
+    shell_pid: u32,
+    foreground_process_group_id: Option<u32>,
+    foreground_processes: Vec<Process>,
+}
+
+#[derive(Deserialize)]
+struct Process {
+    pid: u32,
+}
+
+#[derive(Deserialize)]
 struct TabCreated {
     result: TabCreatedResult,
 }
@@ -290,6 +391,7 @@ pub(crate) fn parse_window(output: &str) -> Result<Window, HerdrError> {
             source,
         })?;
     Ok(Window {
+        workspace_id: None,
         tab_id: created.result.root_pane.tab_id,
         pane_id: created.result.root_pane.pane_id,
     })

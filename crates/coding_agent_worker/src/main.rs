@@ -74,7 +74,7 @@ enum Command {
         /// Native model ID for new sessions.
         #[arg(long)]
         model: Option<String>,
-        /// Open sessions in dispatcher-managed worktrees.
+        /// Accepted for older daemon launchers; native workspaces are always independent.
         #[arg(long, hide = true)]
         managed_worktrees: bool,
         /// Which agent TUI each session runs.
@@ -210,7 +210,7 @@ async fn main() -> ExitCode {
         Some(Command::HerdrAcp {
             state_dir,
             model,
-            managed_worktrees,
+            managed_worktrees: _,
             kind,
             permission_mode,
             no_focus,
@@ -223,7 +223,6 @@ async fn main() -> ExitCode {
             return match herdr::acp_agent::run(herdr::acp_agent::AdapterOptions {
                 state_dir,
                 model,
-                managed_worktrees,
                 kind,
                 permission_mode,
                 no_focus,

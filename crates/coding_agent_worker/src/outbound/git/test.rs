@@ -83,7 +83,7 @@ async fn refreshes_origin_main_without_changing_the_users_branch_or_files() {
 }
 
 #[tokio::test]
-async fn reopening_a_linked_worktree_uses_the_main_checkout_as_herdr_source() {
+async fn a_linked_worktree_resolves_to_the_main_checkout() {
     let root = tempfile::tempdir().unwrap();
     let source = root.path().join("source with spaces");
     let linked = root.path().join("linked");

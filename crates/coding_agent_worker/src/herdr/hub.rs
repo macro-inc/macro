@@ -360,12 +360,38 @@ impl HubState {
 
 /// The first line of a prompt, short enough for a tab label.
 pub(crate) fn title_from(text: &str) -> Option<String> {
+    use nom::Parser as _;
+    use nom::character::complete::multispace0;
+    let (text, _) = nom::sequence::preceded(
+        multispace0,
+        nom::multi::many0_count(nom::sequence::terminated(hidden_prefix, multispace0)),
+    )
+    .parse(text)
+    .ok()?;
     let line = text.lines().map(str::trim).find(|line| !line.is_empty())?;
     let mut title: String = line.chars().take(TITLE_LIMIT).collect();
     if line.chars().count() > TITLE_LIMIT {
         title.push('…');
     }
     Some(title)
+}
+
+/// Hidden prompt prefixes are never suitable workspace names, including malformed ones.
+fn hidden_prefix(text: &str) -> nom::IResult<&str, ()> {
+    use nom::Parser as _;
+    use nom::bytes::complete::{tag, take_until};
+    use nom::combinator::{cut, value};
+    let (text, closing) = nom::branch::alt((
+        value("</macrod-runtime>", tag("<macrod-runtime>")),
+        value("</m-agent-context>", tag("<m-agent-context>")),
+        value("</m-user-mention>", tag("<m-user-mention>")),
+    ))
+    .parse(text)?;
+    value(
+        (),
+        cut(nom::sequence::terminated(take_until(closing), tag(closing))),
+    )
+    .parse(text)
 }
 
 struct Launcher {

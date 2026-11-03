@@ -97,7 +97,7 @@ pub(crate) enum HerdrSession {
     Legacy {
         /// The `herdr` binary attached to that session.
         bin: PathBuf,
-        /// The workspace macrod's pane belongs to; new windows open there.
+        /// The workspace macrod's pane belongs to; viewer tabs open there.
         workspace_id: Option<String>,
     },
     /// A herdr-core terminal, usually shown by the herdr app.
@@ -168,7 +168,6 @@ pub(crate) fn configure_launch(
     let mut flags = vec![
         "--state-dir".to_owned(),
         state_dir.to_string_lossy().into_owned(),
-        "--managed-worktrees".to_owned(),
     ];
     if let Some(model) = &settings.model {
         flags.push(format!("--model={model}"));

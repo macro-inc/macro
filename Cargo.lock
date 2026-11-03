@@ -4609,6 +4609,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "messages",
+ "nom 8.0.0",
  "openssl-sys",
  "ratatui",
  "reqwest 0.13.4",
