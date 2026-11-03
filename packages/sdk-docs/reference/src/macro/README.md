@@ -40,9 +40,21 @@ Re-exports [AgentOptions](../entities/agents/agent/type-aliases/AgentOptions.md)
 
 ***
 
+### ApplyEditsOptions
+
+Re-exports [ApplyEditsOptions](../entities/document-editing/structure/interfaces/ApplyEditsOptions.md)
+
+***
+
 ### ApplyOpsOptions
 
 Re-exports [ApplyOpsOptions](../entities/databases/database/type-aliases/ApplyOpsOptions.md)
+
+***
+
+### BlockType
+
+Re-exports [BlockType](../vendor/editor-ops/src/document/ops/type-aliases/BlockType.md)
 
 ***
 
@@ -130,6 +142,18 @@ Re-exports [CrmPipeline](../entities/crm/pipeline/classes/CrmPipeline.md)
 
 ***
 
+### DatabaseLocation
+
+Re-exports [DatabaseLocation](../vendor/editor-ops/src/document/document-editor/type-aliases/DatabaseLocation.md)
+
+***
+
+### DatabaseQueryBlock
+
+Re-exports [DatabaseQueryBlock](../vendor/editor-ops/src/document/document-editor/type-aliases/DatabaseQueryBlock.md)
+
+***
+
 ### DatabaseQueryOptions
 
 Re-exports [DatabaseQueryOptions](../entities/databases/query/interfaces/DatabaseQueryOptions.md)
@@ -139,6 +163,12 @@ Re-exports [DatabaseQueryOptions](../entities/databases/query/interfaces/Databas
 ### DatabaseQueryResult
 
 Re-exports [DatabaseQueryResult](../entities/databases/query/interfaces/DatabaseQueryResult.md)
+
+***
+
+### DatabaseQueryView
+
+Re-exports [DatabaseQueryView](../vendor/editor-ops/src/document/ops/type-aliases/DatabaseQueryView.md)
 
 ***
 
@@ -166,6 +196,48 @@ Re-exports [DocumentAnchor](../entities/documents/anchor/classes/DocumentAnchor.
 
 ***
 
+### DocumentEditOptions
+
+Re-exports [DocumentEditOptions](../entities/documents/ai-edit/interfaces/DocumentEditOptions.md)
+
+***
+
+### DocumentEditor
+
+Re-exports [DocumentEditor](../vendor/editor-ops/src/document/document-editor/classes/DocumentEditor.md)
+
+***
+
+### DocumentEditRefusedError
+
+Re-exports [DocumentEditRefusedError](../entities/documents/ai-edit/classes/DocumentEditRefusedError.md)
+
+***
+
+### DocumentEditRejectedError
+
+Re-exports [DocumentEditRejectedError](../entities/document-editing/structure/classes/DocumentEditRejectedError.md)
+
+***
+
+### DocumentEditResult
+
+Re-exports [DocumentEditResult](../entities/documents/ai-edit/interfaces/DocumentEditResult.md)
+
+***
+
+### DocumentOp
+
+Re-exports [DocumentOp](../vendor/editor-ops/src/document/ops/type-aliases/DocumentOp.md)
+
+***
+
+### DocumentStructure
+
+Re-exports [DocumentStructure](../entities/document-editing/structure/classes/DocumentStructure.md)
+
+***
+
 ### DocumentVersion
 
 Re-exports [DocumentVersion](../entities/documents/version/classes/DocumentVersion.md)
@@ -181,6 +253,18 @@ Re-exports [DraftAttachment](../entities/email/draft/classes/DraftAttachment.md)
 ### DraftOptions
 
 Re-exports [DraftOptions](../entities/email/draft/type-aliases/DraftOptions.md)
+
+***
+
+### EditError
+
+Re-exports [EditError](../vendor/editor-ops/src/document/errors/classes/EditError.md)
+
+***
+
+### EditOutcomeUnknownError
+
+Re-exports [EditOutcomeUnknownError](../entities/documents/ai-edit/classes/EditOutcomeUnknownError.md)
 
 ***
 
@@ -277,6 +361,12 @@ Re-exports [FormAnswer](../entities/forms/form/type-aliases/FormAnswer.md)
 ### FormAnswerValue
 
 Re-exports [FormAnswerValue](../entities/forms/form/type-aliases/FormAnswerValue.md)
+
+***
+
+### Format
+
+Re-exports [Format](../vendor/editor-ops/src/document/ops/type-aliases/Format.md)
 
 ***
 
@@ -448,6 +538,12 @@ Re-exports [ListenOptions](../events/receiver/interfaces/ListenOptions.md)
 
 ***
 
+### ListKind
+
+Re-exports [ListKind](../vendor/editor-ops/src/document/ops/type-aliases/ListKind.md)
+
+***
+
 ### MacroEvents
 
 Re-exports [MacroEvents](../events/receiver/classes/MacroEvents.md)
@@ -484,6 +580,12 @@ Re-exports [MentionPart](../mentions/interfaces/MentionPart.md)
 
 ***
 
+### MentionSpec
+
+Re-exports [MentionSpec](../vendor/editor-ops/src/document/ops/type-aliases/MentionSpec.md)
+
+***
+
 ### MessageParent
 
 Re-exports [MessageParent](../entities/messages/thread/type-aliases/MessageParent.md)
@@ -508,6 +610,12 @@ Re-exports [MyFormResponse](../entities/forms/form/type-aliases/MyFormResponse.m
 
 ***
 
+### NodeSpec
+
+Re-exports [NodeSpec](../vendor/editor-ops/src/document/ops/type-aliases/NodeSpec.md)
+
+***
+
 ### OpResultOf
 
 Re-exports [OpResultOf](../entities/databases/database/type-aliases/OpResultOf.md)
@@ -529,6 +637,12 @@ Re-exports [PipelineRow](../entities/crm/pipeline/classes/PipelineRow.md)
 ### PipelineTable
 
 Re-exports [PipelineTable](../entities/crm/pipeline/classes/PipelineTable.md)
+
+***
+
+### Position
+
+Re-exports [Position](../vendor/editor-ops/src/document/ops/type-aliases/Position.md)
 
 ***
 
@@ -616,6 +730,12 @@ Re-exports [RoutineTriggerOptions](../entities/routines/routine/type-aliases/Rou
 
 ***
 
+### Scope
+
+Re-exports [Scope](../vendor/editor-ops/src/document/ops/type-aliases/Scope.md)
+
+***
+
 ### SessionReview
 
 Re-exports [SessionReview](../entities/agent-sessions/review/classes/SessionReview.md)
@@ -655,6 +775,12 @@ Re-exports [StructuredCompletionRequest](../../generated/cognition/types.gen/typ
 ### StructuredCompletionResponse
 
 Re-exports [StructuredCompletionResponse](../../generated/cognition/types.gen/type-aliases/StructuredCompletionResponse.md)
+
+***
+
+### StructuredEditResult
+
+Re-exports [StructuredEditResult](../entities/document-editing/structure/interfaces/StructuredEditResult.md)
 
 ***
 

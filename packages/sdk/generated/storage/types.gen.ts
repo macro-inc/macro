@@ -447,6 +447,21 @@ export type AgentTyping = {
  */
 export type AgentTypingPhase = 'thinking' | 'writing' | 'working' | 'waiting';
 
+/**
+ * Public admission error payload. Handlers with additional fields can reuse the
+ * domain error's code and message and [`admission_status`].
+ */
+export type AiAdmissionErrorBody = {
+    /**
+     * Stable denial or unavailability code.
+     */
+    code: string;
+    /**
+     * Human-readable explanation, without internal billing diagnostics.
+     */
+    error: string;
+};
+
 export type Anchor = PdfAnchor;
 
 export type AnchorId = PdfAnchorId & {
@@ -5347,6 +5362,78 @@ export type DirectAccess = {
 };
 
 /**
+ * The edit failed after it started, so it may have partly applied. Read the
+ * document's structure before retrying.
+ */
+export type DocumentAiEditFailed = {
+    /**
+     * Always `edit_failed`.
+     */
+    error: DocumentAiEditFailedCode;
+    /**
+     * What went wrong.
+     */
+    message: string;
+};
+
+/**
+ * Error code of an edit that failed after it started.
+ */
+export type DocumentAiEditFailedCode = 'edit_failed';
+
+/**
+ * The editor could not do the edit; nothing changed.
+ */
+export type DocumentAiEditRefused = {
+    /**
+     * Always `edit_refused`.
+     */
+    error: DocumentAiEditRefusedCode;
+    /**
+     * Why, in the editor's words: what it needs to know or cannot do.
+     */
+    reason: string;
+};
+
+/**
+ * Error code of an edit the editor refused.
+ */
+export type DocumentAiEditRefusedCode = 'edit_refused';
+
+/**
+ * What to change, in words.
+ */
+export type DocumentAiEditRequest = {
+    /**
+     * Run the single-model fast pipeline, for one small, contained edit.
+     */
+    fast?: boolean;
+    /**
+     * Natural-language instructions. Name the section or quote the text to
+     * change, describe the outcome, and say what must stay as it is.
+     */
+    instructions: string;
+};
+
+/**
+ * A completed edit by instructions.
+ */
+export type DocumentAiEdited = {
+    /**
+     * Durable ids of the blocks the edit touched.
+     */
+    changedBlockIds: Array<string>;
+    /**
+     * The document's version after the edit, as sync-service encodes it.
+     */
+    revision: string;
+    /**
+     * What changed, in words.
+     */
+    summary: string;
+};
+
+/**
  * Returns basic information of a document used for some db queries
  */
 export type DocumentBasic = {
@@ -5500,6 +5587,76 @@ export type DocumentDeletedMetadata = {
      */
     project_id?: string | null;
     sub_type?: null | DocumentSubType;
+};
+
+/**
+ * Ops that failed against the live document; nothing was committed.
+ */
+export type DocumentEditRejected = {
+    /**
+     * Always `edit_rejected`.
+     */
+    error: DocumentEditRejectedCode;
+    /**
+     * Each op that failed, by its index in the batch.
+     */
+    failures: Array<DocumentOpFailure>;
+};
+
+/**
+ * Error code of a refused batch.
+ */
+export type DocumentEditRejectedCode = 'edit_rejected';
+
+/**
+ * The batch was sent to storage but never acknowledged, so it may have
+ * applied. Read the document before retrying.
+ */
+export type DocumentEditUnacknowledged = {
+    /**
+     * Always `unacknowledged`.
+     */
+    error: DocumentEditUnacknowledgedCode;
+    /**
+     * What the editing worker reported.
+     */
+    message: string;
+};
+
+/**
+ * Error code of a batch whose outcome is unknown.
+ */
+export type DocumentEditUnacknowledgedCode = 'unacknowledged';
+
+/**
+ * A committed batch.
+ */
+export type DocumentEditsApplied = {
+    /**
+     * Number of ops applied.
+     */
+    applied: number;
+    /**
+     * Durable ids of the blocks the batch touched.
+     */
+    changedBlockIds: Array<string>;
+    /**
+     * The document's version after the batch, as sync-service encodes it.
+     */
+    revision: string;
+};
+
+/**
+ * A batch of edit ops built against the document's structure.
+ */
+export type DocumentEditsRequest = {
+    /**
+     * 1 to 200 ops, applied in order, all or nothing. Each is a `DocumentOp`
+     * from `@macro-inc/editor-ops`, the op vocabulary's source of truth.
+     */
+    operations: Array<{
+        [key: string]: unknown;
+    }>;
 };
 
 /**
@@ -5657,6 +5814,24 @@ export type DocumentMetadataWithContent = DocumentMetadata & {
      * The task number assigned within the team, for task documents.
      */
     teamTaskId?: number | null;
+};
+
+/**
+ * Why one op of a refused batch could not apply.
+ */
+export type DocumentOpFailure = {
+    /**
+     * Position of the op in the submitted batch.
+     */
+    index: number;
+    /**
+     * Machine-readable failure kind, such as a missing node.
+     */
+    kind: string;
+    /**
+     * What went wrong, for the program that built the op.
+     */
+    message: string;
 };
 
 export type DocumentPermissionsToken = {
@@ -5849,6 +6024,16 @@ export type DocumentResponseMetadataWithContent = DocumentResponseMetadata & {
 };
 
 export type DocumentStorageServiceApiVersion = 'v1' | 'v2';
+
+/**
+ * A markdown document's structure, the format `EditDocument`'s model reads.
+ */
+export type DocumentStructure = {
+    /**
+     * Document XML; every block carries its node id.
+     */
+    xml: string;
+};
 
 /**
  * The document sub type enum represents all values of document sub types.
@@ -21119,6 +21304,65 @@ export type SaveDocumentHandlerResponses = {
 
 export type SaveDocumentHandlerResponse = SaveDocumentHandlerResponses[keyof SaveDocumentHandlerResponses];
 
+export type EditDocumentWithAiData = {
+    body: DocumentAiEditRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/ai-edit';
+};
+
+export type EditDocumentWithAiErrors = {
+    /**
+     * Not a markdown document, or empty instructions
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * AI allowance exhausted
+     */
+    402: AiAdmissionErrorBody;
+    /**
+     * Document edit access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The editor could not do the edit; nothing changed
+     */
+    422: DocumentAiEditRefused;
+    /**
+     * The edit could not start
+     */
+    500: ErrorResponse;
+    /**
+     * The edit failed and may have partly applied
+     */
+    502: DocumentAiEditFailed;
+    /**
+     * AI usage validation unavailable; retry later
+     */
+    503: AiAdmissionErrorBody;
+};
+
+export type EditDocumentWithAiError = EditDocumentWithAiErrors[keyof EditDocumentWithAiErrors];
+
+export type EditDocumentWithAiResponses = {
+    200: DocumentAiEdited;
+};
+
+export type EditDocumentWithAiResponse = EditDocumentWithAiResponses[keyof EditDocumentWithAiResponses];
+
 export type GetDocumentBranchNameData = {
     body?: never;
     path: {
@@ -21177,6 +21421,57 @@ export type CopyDocumentResponses = {
 };
 
 export type CopyDocumentResponse2 = CopyDocumentResponses[keyof CopyDocumentResponses];
+
+export type ApplyDocumentEditsData = {
+    body: DocumentEditsRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/edits';
+};
+
+export type ApplyDocumentEditsErrors = {
+    /**
+     * Not a markdown document, or malformed ops
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document edit access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * Ops failed against the live document; nothing was committed
+     */
+    422: DocumentEditRejected;
+    /**
+     * Editing failed; nothing was committed
+     */
+    500: ErrorResponse;
+    /**
+     * Outcome unknown: the edit may have applied
+     */
+    502: DocumentEditUnacknowledged;
+};
+
+export type ApplyDocumentEditsError = ApplyDocumentEditsErrors[keyof ApplyDocumentEditsErrors];
+
+export type ApplyDocumentEditsResponses = {
+    200: DocumentEditsApplied;
+};
+
+export type ApplyDocumentEditsResponse = ApplyDocumentEditsResponses[keyof ApplyDocumentEditsResponses];
 
 export type ExportDocumentData = {
     body?: never;
@@ -21466,6 +21761,49 @@ export type SimpleSaveResponses = {
 };
 
 export type SimpleSaveResponse = SimpleSaveResponses[keyof SimpleSaveResponses];
+
+export type GetDocumentStructureData = {
+    body?: never;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/structure';
+};
+
+export type GetDocumentStructureErrors = {
+    /**
+     * Not a markdown document
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * Document structure unavailable
+     */
+    500: ErrorResponse;
+};
+
+export type GetDocumentStructureError = GetDocumentStructureErrors[keyof GetDocumentStructureErrors];
+
+export type GetDocumentStructureResponses = {
+    200: DocumentStructure;
+};
+
+export type GetDocumentStructureResponse = GetDocumentStructureResponses[keyof GetDocumentStructureResponses];
 
 export type GetDocumentTeamShareData = {
     body?: never;

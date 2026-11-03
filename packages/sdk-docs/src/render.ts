@@ -18,6 +18,7 @@ export async function renderSdkDocs(root: string, output: string) {
   const sdk = join(root, 'packages/sdk');
   const entryPoints = [
     ...new Bun.Glob('src/entities/**/*.ts').scanSync(sdk),
+    ...new Bun.Glob('src/vendor/editor-ops/**/*.ts').scanSync(sdk),
     ...new Bun.Glob('generated/*/types.gen.ts').scanSync(sdk),
     'src/macro.ts',
     'src/config.ts',

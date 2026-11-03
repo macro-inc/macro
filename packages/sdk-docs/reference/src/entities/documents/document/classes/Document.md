@@ -187,6 +187,82 @@ Remove a property from this entity, given its [properties](#properties) entry.
 
 ***
 
+### edit()
+
+> **edit**(`instructions`, `options?`): `Promise`\<[`DocumentEditResult`](../../ai-edit/interfaces/DocumentEditResult.md)\>
+
+Edit a markdown document or task body by natural-language instructions,
+which an AI editor carries out, merging with anyone editing at the same
+time.
+
+Write instructions like a precise request to a careful editor:
+- Say where: name the section or heading, or quote the text to change.
+- Describe the outcome, not keystrokes: "make the steps a numbered list",
+  not "add a 1. before each line".
+- Say what must stay as it is ("keep the headings").
+- One coherent edit per call; split unrelated changes into separate calls.
+
+It can rewrite, insert, delete, move and format text, headings, lists,
+tables, links, mentions and dates, and place saved database questions
+passed in `options.queries`. It cannot read or write other documents, see
+comments or history, or change a saved question's SQL.
+
+Throws `DocumentEditRefusedError` with the editor's reason when it can't do
+the edit (nothing changed), `EditOutcomeUnknownError` when the outcome is
+unknown (read before retrying), and `AbortError` when `options.signal`
+aborts. AI usage is billed as for any AI edit. A full edit can take tens of
+seconds: pass `fast: true` for small edits, and keep one edit per call
+within the run's deadline.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `instructions` | `string` |
+| `options?` | [`DocumentEditOptions`](../../ai-edit/interfaces/DocumentEditOptions.md) |
+
+#### Returns
+
+`Promise`\<[`DocumentEditResult`](../../ai-edit/interfaces/DocumentEditResult.md)\>
+
+#### Examples
+
+**Rewrite a section.**
+
+```js
+const result = await document.edit(
+  'Rewrite the "Summary" section as three short bullet points covering ' +
+    'scope, timeline and owners. Keep the "Summary" heading.',
+);
+return { data: { summary: result.summary, url: result.webUrl } };
+```
+
+**Insert a saved database question as a live chart.**
+
+```js
+const query = await table.saveQuery({ sql, title: 'Pipeline', display: 'bar' });
+await document.edit(
+  'Insert the saved pipeline chart right after the "Results" heading.',
+  { queries: [query] },
+);
+```
+
+**Fix formatting, cancelled after 20 seconds.**
+
+```js
+try {
+  await task.edit(
+    'Make every line under "Steps" a checklist item, and bold the word "blocked" wherever it appears.',
+    { fast: true, signal: AbortSignal.timeout(20_000) },
+  );
+} catch (error) {
+  if (error.name === 'DocumentEditRefusedError') return { data: { refused: error.reason } };
+  throw error;
+}
+```
+
+***
+
 ### favorite()
 
 > **favorite**(): `Promise`\<`Document`\>
@@ -214,6 +290,42 @@ GitHub pull requests associated with the document.
 #### Returns
 
 `Promise`\<[`GithubPullRequest`](../../../../../generated/storage/types.gen/type-aliases/GithubPullRequest.md)[]\>
+
+***
+
+### insertDatabaseQuery()
+
+> **insertDatabaseQuery**(`afterBlockId`, `query`, `options?`): `Promise`\<[`StructuredEditResult`](../../../document-editing/structure/interfaces/StructuredEditResult.md)\>
+
+Place a saved database question as a live answer, table or chart right
+after the block `afterBlockId`, with no model.
+
+Take the block id from `structure()` or an edit's `changedBlocks`; pass the
+`SavedQuery` handle itself, never its SQL. Throws
+`DocumentEditRejectedError` when the block no longer exists.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `afterBlockId` | `string` |
+| `query` | [`DatabaseQueryBlock`](../../../../vendor/editor-ops/src/document/document-editor/type-aliases/DatabaseQueryBlock.md) |
+| `options?` | [`ApplyEditsOptions`](../../../document-editing/structure/interfaces/ApplyEditsOptions.md) |
+
+#### Returns
+
+`Promise`\<[`StructuredEditResult`](../../../document-editing/structure/interfaces/StructuredEditResult.md)\>
+
+#### Example
+
+```js
+const query = await table.saveQuery({ sql, title: 'Revenue', display: 'line' });
+const { changedBlocks } = await document.edit(
+  'Add a "Revenue" heading at the end of the document.',
+  { fast: true },
+);
+await document.insertDatabaseQuery(changedBlocks[0], query);
+```
 
 ***
 
@@ -473,6 +585,26 @@ Commit a simple document save.
 #### Returns
 
 `Promise`\<[`SaveDocumentResponseData`](../../../../../generated/storage/types.gen/type-aliases/SaveDocumentResponseData.md)\>
+
+***
+
+### structure()
+
+> **structure**(): `Promise`\<[`DocumentStructure`](../../../document-editing/structure/classes/DocumentStructure.md)\>
+
+Read a markdown document or task as XML with durable node ids, for exact,
+model-free edits with `structure.applyEdits(...)`; refused for other types.
+
+#### Returns
+
+`Promise`\<[`DocumentStructure`](../../../document-editing/structure/classes/DocumentStructure.md)\>
+
+#### Example
+
+```js
+const structure = await document.structure();
+await structure.applyEdits((editor) => editor.check('li4'));
+```
 
 ***
 

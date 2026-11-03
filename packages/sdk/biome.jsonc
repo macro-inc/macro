@@ -7,6 +7,8 @@
       "!generated",
       "!dist",
       "!specs",
+      // copies of workspace sources, formatted by their own packages.
+      "!src/vendor",
       "!node_modules"
     ]
   },

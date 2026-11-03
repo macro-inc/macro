@@ -22,6 +22,8 @@ export const descriptions: Record<string, string> = {
   crm: 'Work with CRM records and pipeline tables, columns, rows and sharing.',
   databases: 'Read and edit database schemas, rows, and cells.',
   documents: 'Search, read, create, and manage documents and tasks.',
+  'document-editing':
+    'Edit the content of markdown documents and task descriptions: read their structure, then apply typed edits, including live database answers and charts.',
   email: 'Search, read, draft, and send email.',
   favorites: 'Manage favorites.',
   foreign: 'Resolve linked external entities.',

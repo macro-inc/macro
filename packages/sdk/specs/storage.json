@@ -10415,6 +10415,116 @@
         }
       }
     },
+    "/documents/{document_id}/ai-edit": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Edit a markdown document or task by instructions with the caller's edit\naccess. Runs EditDocument's pipeline as a live collaborator, with its AI\nadmission and billing.",
+        "description": "A client that disconnects aborts the edit: axum drops this handler's\nfuture, which drops the in-flight request to the editing worker, and the\nworker aborts on its request signal. Steps already acknowledged stay.",
+        "operationId": "edit_document_with_ai",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentAiEditRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentAiEdited"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a markdown document, or empty instructions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "402": {
+            "description": "AI allowance exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Document edit access denied"
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "422": {
+            "description": "The editor could not do the edit; nothing changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentAiEditRefused"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The edit could not start",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The edit failed and may have partly applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentAiEditFailed"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI usage validation unavailable; retry later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/{document_id}/branch_name": {
       "get": {
         "tags": ["document"],
@@ -10570,6 +10680,95 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/edits": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Apply typed edit ops to a markdown document or task with the caller's edit\naccess. The batch merges with concurrent collaborators and commits all or\nnothing.",
+        "operationId": "apply_document_edits",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentEditsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentEditsApplied"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a markdown document, or malformed ops",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Document edit access denied"
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "422": {
+            "description": "Ops failed against the live document; nothing was committed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentEditRejected"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Editing failed; nothing was committed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Outcome unknown: the edit may have applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentEditUnacknowledged"
                 }
               }
             }
@@ -11270,6 +11469,65 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/structure": {
+      "get": {
+        "tags": ["document"],
+        "summary": "Read a markdown document or task as XML with durable node ids, the view\n`POST /documents/{document_id}/edits` addresses.",
+        "operationId": "get_document_structure",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentStructure"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a markdown document",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Document access denied"
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "500": {
+            "description": "Document structure unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -20328,6 +20586,21 @@
         "description": "What a typing agent is doing.",
         "enum": ["thinking", "writing", "working", "waiting"]
       },
+      "AiAdmissionErrorBody": {
+        "type": "object",
+        "description": "Public admission error payload. Handlers with additional fields can reuse the\ndomain error's code and message and [`admission_status`].",
+        "required": ["error", "code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable denial or unavailability code."
+          },
+          "error": {
+            "type": "string",
+            "description": "Human-readable explanation, without internal billing diagnostics."
+          }
+        }
+      },
       "Anchor": {
         "oneOf": [
           {
@@ -27390,6 +27663,84 @@
           }
         }
       },
+      "DocumentAiEditFailed": {
+        "type": "object",
+        "description": "The edit failed after it started, so it may have partly applied. Read the\ndocument's structure before retrying.",
+        "required": ["error", "message"],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/DocumentAiEditFailedCode",
+            "description": "Always `edit_failed`."
+          },
+          "message": {
+            "type": "string",
+            "description": "What went wrong."
+          }
+        }
+      },
+      "DocumentAiEditFailedCode": {
+        "type": "string",
+        "description": "Error code of an edit that failed after it started.",
+        "enum": ["edit_failed"]
+      },
+      "DocumentAiEditRefused": {
+        "type": "object",
+        "description": "The editor could not do the edit; nothing changed.",
+        "required": ["error", "reason"],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/DocumentAiEditRefusedCode",
+            "description": "Always `edit_refused`."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why, in the editor's words: what it needs to know or cannot do."
+          }
+        }
+      },
+      "DocumentAiEditRefusedCode": {
+        "type": "string",
+        "description": "Error code of an edit the editor refused.",
+        "enum": ["edit_refused"]
+      },
+      "DocumentAiEditRequest": {
+        "type": "object",
+        "description": "What to change, in words.",
+        "required": ["instructions"],
+        "properties": {
+          "fast": {
+            "type": "boolean",
+            "description": "Run the single-model fast pipeline, for one small, contained edit."
+          },
+          "instructions": {
+            "type": "string",
+            "description": "Natural-language instructions. Name the section or quote the text to\nchange, describe the outcome, and say what must stay as it is.",
+            "minLength": 1
+          }
+        }
+      },
+      "DocumentAiEdited": {
+        "type": "object",
+        "description": "A completed edit by instructions.",
+        "required": ["summary", "changedBlockIds", "revision"],
+        "properties": {
+          "changedBlockIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Durable ids of the blocks the edit touched."
+          },
+          "revision": {
+            "type": "string",
+            "description": "The document's version after the edit, as sync-service encodes it."
+          },
+          "summary": {
+            "type": "string",
+            "description": "What changed, in words."
+          }
+        }
+      },
       "DocumentBasic": {
         "type": "object",
         "description": "Returns basic information of a document used for some db queries",
@@ -27689,6 +28040,88 @@
           }
         }
       },
+      "DocumentEditRejected": {
+        "type": "object",
+        "description": "Ops that failed against the live document; nothing was committed.",
+        "required": ["error", "failures"],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/DocumentEditRejectedCode",
+            "description": "Always `edit_rejected`."
+          },
+          "failures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentOpFailure"
+            },
+            "description": "Each op that failed, by its index in the batch."
+          }
+        }
+      },
+      "DocumentEditRejectedCode": {
+        "type": "string",
+        "description": "Error code of a refused batch.",
+        "enum": ["edit_rejected"]
+      },
+      "DocumentEditUnacknowledged": {
+        "type": "object",
+        "description": "The batch was sent to storage but never acknowledged, so it may have\napplied. Read the document before retrying.",
+        "required": ["error", "message"],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/DocumentEditUnacknowledgedCode",
+            "description": "Always `unacknowledged`."
+          },
+          "message": {
+            "type": "string",
+            "description": "What the editing worker reported."
+          }
+        }
+      },
+      "DocumentEditUnacknowledgedCode": {
+        "type": "string",
+        "description": "Error code of a batch whose outcome is unknown.",
+        "enum": ["unacknowledged"]
+      },
+      "DocumentEditsApplied": {
+        "type": "object",
+        "description": "A committed batch.",
+        "required": ["applied", "changedBlockIds", "revision"],
+        "properties": {
+          "applied": {
+            "type": "integer",
+            "description": "Number of ops applied.",
+            "minimum": 0
+          },
+          "changedBlockIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Durable ids of the blocks the batch touched."
+          },
+          "revision": {
+            "type": "string",
+            "description": "The document's version after the batch, as sync-service encodes it."
+          }
+        }
+      },
+      "DocumentEditsRequest": {
+        "type": "object",
+        "description": "A batch of edit ops built against the document's structure.",
+        "required": ["operations"],
+        "properties": {
+          "operations": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "1 to 200 ops, applied in order, all or nothing. Each is a `DocumentOp`\nfrom `@macro-inc/editor-ops`, the op vocabulary's source of truth.",
+            "maxItems": 200,
+            "minItems": 1
+          }
+        }
+      },
       "DocumentFilters": {
         "type": "object",
         "description": "The document filters used to filter down what documents you search over.",
@@ -27887,6 +28320,26 @@
           }
         ],
         "description": "Full document metadata plus content lifecycle metadata."
+      },
+      "DocumentOpFailure": {
+        "type": "object",
+        "description": "Why one op of a refused batch could not apply.",
+        "required": ["index", "kind", "message"],
+        "properties": {
+          "index": {
+            "type": "integer",
+            "description": "Position of the op in the submitted batch.",
+            "minimum": 0
+          },
+          "kind": {
+            "type": "string",
+            "description": "Machine-readable failure kind, such as a missing node."
+          },
+          "message": {
+            "type": "string",
+            "description": "What went wrong, for the program that built the op."
+          }
+        }
       },
       "DocumentPermissionsToken": {
         "type": "object",
@@ -28227,6 +28680,17 @@
       "DocumentStorageServiceApiVersion": {
         "type": "string",
         "enum": ["v1", "v2"]
+      },
+      "DocumentStructure": {
+        "type": "object",
+        "description": "A markdown document's structure, the format `EditDocument`'s model reads.",
+        "required": ["xml"],
+        "properties": {
+          "xml": {
+            "type": "string",
+            "description": "Document XML; every block carries its node id."
+          }
+        }
       },
       "DocumentSubType": {
         "type": "string",

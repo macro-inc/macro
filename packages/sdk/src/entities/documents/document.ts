@@ -20,7 +20,17 @@ import {
 } from '../../mentions';
 import { MacroApiError, mapConcurrently, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import {
+  type DatabaseQueryBlock,
+  DocumentEditor,
+} from '../../vendor/editor-ops/src/document';
 import { CalendarNote } from '../calendar/note';
+import {
+  type ApplyEditsOptions,
+  applyOperations,
+  DocumentStructure,
+  type StructuredEditResult,
+} from '../document-editing/structure';
 import { PropertiedEntity } from '../entity';
 import {
   MessageThread,
@@ -31,6 +41,11 @@ import { Project } from '../projects/project';
 import { entitySearch } from '../search';
 import { EntityAccess } from '../sharing/access';
 import { User } from '../users/user';
+import {
+  type DocumentEditOptions,
+  type DocumentEditResult,
+  editWithInstructions,
+} from './ai-edit';
 import { DocumentAnchor } from './anchor';
 import { Comment } from './comment';
 import { DocumentVersion } from './version';
@@ -339,6 +354,118 @@ export class Document
         message: 'failed to download document content',
       });
     return res.text();
+  }
+
+  /**
+   * Edit a markdown document or task body by natural-language instructions,
+   * which an AI editor carries out, merging with anyone editing at the same
+   * time.
+   *
+   * Write instructions like a precise request to a careful editor:
+   * - Say where: name the section or heading, or quote the text to change.
+   * - Describe the outcome, not keystrokes: "make the steps a numbered list",
+   *   not "add a 1. before each line".
+   * - Say what must stay as it is ("keep the headings").
+   * - One coherent edit per call; split unrelated changes into separate calls.
+   *
+   * It can rewrite, insert, delete, move and format text, headings, lists,
+   * tables, links, mentions and dates, and place saved database questions
+   * passed in `options.queries`. It cannot read or write other documents, see
+   * comments or history, or change a saved question's SQL.
+   *
+   * Throws `DocumentEditRefusedError` with the editor's reason when it can't do
+   * the edit (nothing changed), `EditOutcomeUnknownError` when the outcome is
+   * unknown (read before retrying), and `AbortError` when `options.signal`
+   * aborts. AI usage is billed as for any AI edit. A full edit can take tens of
+   * seconds: pass `fast: true` for small edits, and keep one edit per call
+   * within the run's deadline.
+   *
+   * @example Rewrite a section.
+   * ```js
+   * const result = await document.edit(
+   *   'Rewrite the "Summary" section as three short bullet points covering ' +
+   *     'scope, timeline and owners. Keep the "Summary" heading.',
+   * );
+   * return { data: { summary: result.summary, url: result.webUrl } };
+   * ```
+   *
+   * @example Insert a saved database question as a live chart.
+   * ```js
+   * const query = await table.saveQuery({ sql, title: 'Pipeline', display: 'bar' });
+   * await document.edit(
+   *   'Insert the saved pipeline chart right after the "Results" heading.',
+   *   { queries: [query] },
+   * );
+   * ```
+   *
+   * @example Fix formatting, cancelled after 20 seconds.
+   * ```js
+   * try {
+   *   await task.edit(
+   *     'Make every line under "Steps" a checklist item, and bold the word "blocked" wherever it appears.',
+   *     { fast: true, signal: AbortSignal.timeout(20_000) },
+   *   );
+   * } catch (error) {
+   *   if (error.name === 'DocumentEditRefusedError') return { data: { refused: error.reason } };
+   *   throw error;
+   * }
+   * ```
+   */
+  edit(
+    instructions: string,
+    options: DocumentEditOptions = {},
+  ): Promise<DocumentEditResult> {
+    return editWithInstructions(this.client, this, instructions, options);
+  }
+
+  /**
+   * Read a markdown document or task as XML with durable node ids, for exact,
+   * model-free edits with `structure.applyEdits(...)`; refused for other types.
+   *
+   * @example
+   * ```js
+   * const structure = await document.structure();
+   * await structure.applyEdits((editor) => editor.check('li4'));
+   * ```
+   */
+  async structure(): Promise<DocumentStructure> {
+    const { xml } = unwrap(
+      await this.client.storage.getDocumentStructure({
+        path: { document_id: this.id },
+      }),
+    );
+    return new DocumentStructure(this.client, this, xml);
+  }
+
+  /**
+   * Place a saved database question as a live answer, table or chart right
+   * after the block `afterBlockId`, with no model.
+   *
+   * Take the block id from `structure()` or an edit's `changedBlocks`; pass the
+   * `SavedQuery` handle itself, never its SQL. Throws
+   * `DocumentEditRejectedError` when the block no longer exists.
+   *
+   * @example
+   * ```js
+   * const query = await table.saveQuery({ sql, title: 'Revenue', display: 'line' });
+   * const { changedBlocks } = await document.edit(
+   *   'Add a "Revenue" heading at the end of the document.',
+   *   { fast: true },
+   * );
+   * await document.insertDatabaseQuery(changedBlocks[0], query);
+   * ```
+   */
+  insertDatabaseQuery(
+    afterBlockId: string,
+    query: DatabaseQueryBlock,
+    options: ApplyEditsOptions = {},
+  ): Promise<StructuredEditResult> {
+    const editor = new DocumentEditor({
+      validIds: [afterBlockId],
+      refs: [crypto.randomUUID()],
+    });
+    editor.insertDatabaseQueryAfter(afterBlockId, query);
+    return applyOperations(this.client, this, editor.drain(), options.signal);
   }
 
   /** Rename the document. */

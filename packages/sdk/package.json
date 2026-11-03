@@ -28,6 +28,8 @@
   },
   "scripts": {
     "sync-specs": "bun scripts/sync-specs.ts",
+    "vendor": "bun scripts/vendor.ts",
+    "vendor:check": "bun scripts/vendor.ts --check",
     "webhook": "bun scripts/webhook.ts",
     "validate-webhook": "bun scripts/validate-webhook.ts",
     "coverage": "bun src/coverage/check.ts",

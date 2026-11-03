@@ -85,14 +85,20 @@ export function packageEntityDocs(
       // Agent and host setup share one discovery topic, as do AI calls and
       // image generation, keeping the classifier request within its
       // 32-question contract as the public API grows.
-      prefixes: (directory === 'agents'
-        ? ['agents', 'harnesses']
-        : directory === 'channels'
-          ? ['channels', 'external-chat', 'whatsapp']
-          : directory === 'ai'
-            ? ['ai', 'images']
-            : [directory]
-      ).map((value) => `src/entities/${value}/`),
+      prefixes: [
+        ...(directory === 'agents'
+          ? ['agents', 'harnesses']
+          : directory === 'channels'
+            ? ['channels', 'external-chat', 'whatsapp']
+            : directory === 'ai'
+              ? ['ai', 'images']
+              : [directory]
+        ).map((value) => `src/entities/${value}/`),
+        // The editor the SDK vendors is documented with the edits it builds.
+        ...(directory === 'document-editing'
+          ? ['src/vendor/editor-ops/src/document/']
+          : []),
+      ],
     })),
     {
       name: 'core',

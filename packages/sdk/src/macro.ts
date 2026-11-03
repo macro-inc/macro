@@ -277,6 +277,18 @@ export type {
   QueryStatement,
   QueryTableVersion,
 } from './entities/databases/query';
+export {
+  type ApplyEditsOptions,
+  DocumentEditRejectedError,
+  DocumentStructure,
+  type StructuredEditResult,
+} from './entities/document-editing/structure';
+export {
+  type DocumentEditOptions,
+  DocumentEditRefusedError,
+  type DocumentEditResult,
+  EditOutcomeUnknownError,
+} from './entities/documents/ai-edit';
 export { DocumentAnchor } from './entities/documents/anchor';
 export { DocumentVersion } from './entities/documents/version';
 export {
@@ -341,3 +353,18 @@ export type {
   WorkspaceTag,
   WorkspaceType,
 } from './entities/workspace/types';
+export {
+  type BlockType,
+  type DatabaseLocation,
+  type DatabaseQueryBlock,
+  type DatabaseQueryView,
+  DocumentEditor,
+  type DocumentOp,
+  EditError,
+  type Format,
+  type ListKind,
+  type MentionSpec,
+  type NodeSpec,
+  type Position,
+  type Scope,
+} from './vendor/editor-ops/src/document';
