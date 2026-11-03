@@ -32,14 +32,16 @@ export function restoreEmailFolderThreads(input: RestoreFolderThreads) {
       start += FOLDER_RESTORE_CONCURRENCY
     ) {
       const batch = ids.slice(start, start + FOLDER_RESTORE_CONCURRENCY);
-      const outcomes = await Promise.allSettled(
-        batch.map((threadId) =>
-          throwOnErr(() =>
-            updateEmailThreadState({
-              thread_id: threadId,
-              field: input.folder === 'spam' ? 'junk' : 'trashed',
-              value: false,
-            })
+      const outcomes = await span.run(() =>
+        Promise.allSettled(
+          batch.map((threadId) =>
+            throwOnErr(() =>
+              updateEmailThreadState({
+                thread_id: threadId,
+                field: input.folder === 'spam' ? 'junk' : 'trashed',
+                value: false,
+              })
+            )
           )
         )
       );
@@ -62,15 +64,17 @@ export function restoreEmailFolderThreads(input: RestoreFolderThreads) {
           restoredIds
             .slice(start, start + FOLDER_RESTORE_CONCURRENCY)
             .map(async (id) => {
-              await refreshEmailThreadCache(id);
-              await Promise.all([
-                queryClient.invalidateQueries({
-                  queryKey: emailKeys.threadMessages(id).queryKey,
-                }),
-                queryClient.invalidateQueries({
-                  queryKey: emailKeys.threadOperations(id).queryKey,
-                }),
-              ]);
+              await span.run(() => refreshEmailThreadCache(id));
+              await span.run(() =>
+                Promise.all([
+                  queryClient.invalidateQueries({
+                    queryKey: emailKeys.threadMessages(id).queryKey,
+                  }),
+                  queryClient.invalidateQueries({
+                    queryKey: emailKeys.threadOperations(id).queryKey,
+                  }),
+                ])
+              );
             })
         );
         if (refreshes.some((result) => result.status === 'rejected'))
@@ -78,8 +82,10 @@ export function restoreEmailFolderThreads(input: RestoreFolderThreads) {
       }
       // A restored thread can enter lists it was absent from, so refresh REST
       // membership and only the GraphQL lists not maintained by the snapshot.
-      invalidateAllSoup();
-      await refreshActiveGraphqlSoupQueries({ unmaintainedOnly: true });
+      span.run(invalidateAllSoup);
+      await span.run(() =>
+        refreshActiveGraphqlSoupQueries({ unmaintainedOnly: true })
+      );
     }
     return { restoredIds, failedIds };
   });

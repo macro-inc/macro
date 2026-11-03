@@ -36,7 +36,7 @@ pub(super) fn push_folder_threads(
     // index even in a prepared query. User-controlled scopes remain bind parameters.
     for source in 0..3 {
         if source > 0 {
-            builder.push(" UNION ");
+            builder.push(" UNION ALL ");
         }
         builder.push(
             "SELECT m.id, m.thread_id, COALESCE(m.internal_date_ts, m.created_at) AS message_ts ",

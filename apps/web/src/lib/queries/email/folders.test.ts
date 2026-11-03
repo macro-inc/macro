@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   invalidate: vi.fn(),
   invalidateSoup: vi.fn(),
   refreshLists: vi.fn(),
+  spanActive: false,
 }));
 vi.mock('./cache-cleanup', () => ({
   updateEmailThreadState: mocks.update,
@@ -21,12 +22,24 @@ vi.mock('../soup/normalized-cache', () => ({
 vi.mock('../soup/graphql/active-queries', () => ({
   refreshActiveGraphqlSoupQueries: mocks.refreshLists,
 }));
-vi.mock('@macro-inc/observability', () => ({
-  Telemetry: {
-    span: (_name: string, run: (span: unknown) => unknown) =>
-      run({ setAttr: vi.fn(), error: vi.fn() }),
-  },
-}));
+vi.mock('@macro-inc/observability', () => {
+  // Match the browser context manager: active context ends at an await.
+  const run = <T>(work: () => T): T => {
+    const previous = mocks.spanActive;
+    mocks.spanActive = true;
+    try {
+      return work();
+    } finally {
+      mocks.spanActive = previous;
+    }
+  };
+  return {
+    Telemetry: {
+      span: (_name: string, work: (span: unknown) => unknown) =>
+        run(() => work({ setAttr: vi.fn(), error: vi.fn(), run })),
+    },
+  };
+});
 
 import { restoreEmailFolderThreads } from './folders';
 
@@ -132,5 +145,32 @@ describe('restore provider folders', () => {
       })
     ).toEqual({ restoredIds: ['one', 'two'], failedIds: [] });
     expect(mocks.invalidateSoup).toHaveBeenCalledOnce();
+  });
+
+  it('keeps writes and follow-up reads in the restore trace across batches', async () => {
+    const dispatched: boolean[] = [];
+    mocks.update.mockImplementation(async () => {
+      dispatched.push(mocks.spanActive);
+      await Promise.resolve();
+      return ok(undefined);
+    });
+    for (const request of [
+      mocks.refresh,
+      mocks.invalidate,
+      mocks.invalidateSoup,
+      mocks.refreshLists,
+    ]) {
+      request.mockImplementation(async () => {
+        dispatched.push(mocks.spanActive);
+        await Promise.resolve();
+      });
+    }
+    const ids = Array.from({ length: 9 }, (_, index) => String(index));
+    expect(
+      await restoreEmailFolderThreads({ folder: 'trash', threadIds: ids })
+    ).toEqual({ restoredIds: ids, failedIds: [] });
+    expect(dispatched).toHaveLength(38);
+    expect(dispatched.every(Boolean)).toBe(true);
+    expect(mocks.spanActive).toBe(false);
   });
 });

@@ -13,6 +13,130 @@ use macro_user_id::cowlike::CowLike;
         )
     )
 )]
+async fn gmail_folder_restore_refreshes_all_mail_before_provider_sync(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use super::thread_archive::{RecordingEnqueuer, service_with_enqueuer};
+    use crate::domain::models::mailbox_action::MailboxAction;
+
+    let enqueuer = RecordingEnqueuer::default();
+    let service = service_with_enqueuer(pool.clone(), enqueuer.clone());
+    let owner = MacroUserIdStr::parse_from_str("macro|mail@example.com")?.into_owned();
+    let link = uuid::uuid!("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+
+    for (thread, message, provider_id, label, folder, action, date) in [
+        (
+            uuid::uuid!("0b000000-0000-0000-0000-000000000103"),
+            uuid::uuid!("0c000000-0000-0000-0000-000000000103"),
+            "all-mail-message-1-3",
+            "TRASH",
+            PreviewViewStandardLabel::Trash,
+            MailboxAction::Trashed(false),
+            Utc.with_ymd_and_hms(2025, 6, 3, 0, 0, 0).unwrap(),
+        ),
+        (
+            uuid::uuid!("0b000000-0000-0000-0000-000000000104"),
+            uuid::uuid!("0c000000-0000-0000-0000-000000000104"),
+            "all-mail-message-1-4",
+            "SPAM",
+            PreviewViewStandardLabel::Spam,
+            MailboxAction::Junk(false),
+            Utc.with_ymd_and_hms(2025, 6, 4, 0, 0, 0).unwrap(),
+        ),
+    ] {
+        service
+            .email_repo
+            .insert_message_labels_batch(&[message], "Label_Work", link)
+            .await?;
+        let mut tx = pool.begin().await?;
+        super::super::thread::update_thread_metadata(&mut tx, thread, link).await?;
+        tx.commit().await?;
+        assert!(
+            service
+                .email_repo
+                .thread_by_id(thread)
+                .await?
+                .unwrap()
+                .latest_non_spam_message_ts
+                .is_none()
+        );
+
+        // Exercise the semantic action and real staged DB write. Repeating
+        // a completed restore must not enqueue another write or add Inbox.
+        for _ in 0..2 {
+            service
+                .change_thread_mailbox_state_impl(owner.clone(), thread, action.clone())
+                .await?;
+        }
+
+        let restored = service.email_repo.thread_by_id(thread).await?.unwrap();
+        assert_eq!(restored.latest_non_spam_message_ts, Some(date));
+        assert!(!restored.inbox_visible);
+        let labels = service.email_repo.labels_by_message_ids(&[message]).await?;
+        assert_eq!(
+            labels[&message]
+                .iter()
+                .map(|l| l.provider_label_id.as_str())
+                .collect::<Vec<_>>(),
+            ["Label_Work"]
+        );
+
+        for view in [folder, PreviewViewStandardLabel::All] {
+            let rows = service
+                .email_repo
+                .previews_for_view_cursor(
+                    PreviewCursorQuery {
+                        view: PreviewView::StandardLabel(view),
+                        link_ids: vec![link],
+                        limit: 100,
+                        team_id: None,
+                        query: Query::new(None, SimpleSortMethod::UpdatedAt, None),
+                    },
+                    owner.clone(),
+                )
+                .await?;
+            let row = rows.iter().find(|row| row.id == thread);
+            if view == PreviewViewStandardLabel::All {
+                assert_eq!(
+                    row.expect("restored thread belongs in All Mail").sort_ts,
+                    date
+                );
+            } else {
+                assert!(row.is_none(), "restored thread leaves its folder");
+            }
+        }
+
+        let writes = enqueuer.0.lock().unwrap();
+        let matching: Vec<_> = writes
+            .iter()
+            .filter(|write| write.1.iter().any(|(id, _)| *id == message))
+            .collect();
+        assert_eq!(matching.len(), 1);
+        assert_eq!(
+            *matching[0],
+            (
+                link,
+                vec![(message, provider_id.to_string())],
+                vec![],
+                vec![label.to_string()]
+            )
+        );
+    }
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts(
+            "email_dynamic_query",
+            "email_outlook_threads",
+            "email_all_mail",
+            "email_folders"
+        )
+    )
+)]
 async fn provider_folders_match_messages_before_pagination(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
