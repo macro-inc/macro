@@ -77,7 +77,7 @@ async fn a_respondent_reads_their_response_back_from_the_row_as_it_is_now() {
     assert_eq!(
         mine,
         MyResponse::Saved {
-            response: FormResponse {
+            response: Box::new(FormResponse {
                 id: response,
                 form_id: RSVP_FORM,
                 status: ResponseStatus::Submitted,
@@ -85,7 +85,7 @@ async fn a_respondent_reads_their_response_back_from_the_row_as_it_is_now() {
                 row: Some(row),
                 submitted_at: start_of_tests(),
                 updated_at: start_of_tests(),
-            },
+            }),
             answers: vec![
                 Answer {
                     question: TEAM_QUESTION,

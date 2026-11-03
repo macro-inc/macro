@@ -120,8 +120,8 @@ pub struct FormResponse {
 pub enum MyResponse {
     /// Their ledger entry, with its answers as the row holds them now.
     Saved {
-        /// The ledger entry.
-        response: FormResponse,
+        /// The ledger entry, boxed to keep the variants a similar size.
+        response: Box<FormResponse>,
         /// The row's cells for the form's current questions, the empty ones
         /// left out; none when the row is gone.
         answers: Vec<Answer>,

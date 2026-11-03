@@ -42,6 +42,10 @@ service.
 - Add a submission rule: `src/domain/service.rs` (`submit`/`answers` modules)
   → `src/outbound/pg_forms_repo.rs`.
 
+## Checks
+
+- `cargo test -p forms --all-features` (`SQLX_OFFLINE` unset).
+
 ## Gotchas
 
 - An anonymous form (`forms.anonymous`) keeps who responded in
@@ -49,13 +53,6 @@ service.
   entries with no respondent, a random v4 id and the day only. Nothing may
   join the two: no span, log, event or row author names a voter next to a
   response.
-
-## Checks
-
-- `cargo test -p forms --all-features` (`SQLX_OFFLINE` unset).
-
-## Gotchas
-
 - A form is filed in a folder on its own (`forms.project_id`, `MoveEntity`,
   owner only); its database stays where it is. The folder's inherited grants
   on the form reach the database through form access, like any form grant.

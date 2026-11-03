@@ -293,8 +293,8 @@ counts, never response rows.
 
 The owner calls `SetFormAccess` with complete audience, open/closed, deadline and
 tally settings. Optional `responsesVisible` lets View holders read response rows;
-optional `respondentHidden` withholds names from those rows while still recording
-who responded. It executes directly without a sharing review card. Channel View
+optional `anonymous` makes the form anonymous to everyone, its owner included,
+and is refused once anyone has responded. It executes directly without a sharing review card. Channel View
 allows responding. When responses are shared it also grants database View.
 Channel Edit also permits reading and editing the entire
 backing database, including columns the form does not ask. Explicit grant deltas

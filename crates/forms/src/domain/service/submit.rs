@@ -507,12 +507,13 @@ where
                 Err(FormError::NoResponse)
             };
         }
-        let response = self
-            .repository
-            .response_of(form.id, &user)
-            .await
-            .map_err(repository_error)?
-            .ok_or(FormError::NoResponse)?;
+        let response = Box::new(
+            self.repository
+                .response_of(form.id, &user)
+                .await
+                .map_err(repository_error)?
+                .ok_or(FormError::NoResponse)?,
+        );
         let Some(row) = response.row else {
             return Ok(MyResponse::Saved {
                 response,

@@ -109,7 +109,7 @@ async fn my_response(forms: &Service, user: &'static str) -> MyResponse {
 
 /// A saved response as `my_response` reads it.
 struct Saved {
-    response: FormResponse,
+    response: Box<FormResponse>,
     answers: Vec<Answer>,
     booking: Option<UnlockedBooking>,
 }
