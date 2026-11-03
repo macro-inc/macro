@@ -3,6 +3,16 @@ import { beforeEach, expect, it } from 'vitest';
 import { createFeedPreferences } from './preferences';
 
 beforeEach(() => localStorage.clear());
+it('keeps defaults current when only dismissals were saved', () =>
+  createRoot((dispose) => {
+    const first = createFeedPreferences('one', 'Original default');
+    first.setHiddenIds(['hidden']);
+    const restored = createFeedPreferences('one', 'Updated default');
+    expect(restored.prompt()).toBe('Updated default');
+    expect(restored.hiddenIds()).toEqual(['hidden']);
+    dispose();
+  }));
+
 it('persists preferences and dismissals only for their account', () =>
   createRoot((dispose) => {
     const first = createFeedPreferences('one', 'default');

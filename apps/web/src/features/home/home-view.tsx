@@ -12,6 +12,7 @@ import type { PreviewSelection } from '@components/app/previewTarget';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { LoadingBlock } from '@core/component/LoadingBlock';
 import { enableForYou } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { lazyNamed } from '@core/util/lazyNamed';
@@ -178,7 +179,7 @@ function HomeViewRoot() {
  * skeleton. Home's persisted state and list query key on the user, so the view
  * itself waits for identity; the frame keeps the screen from going blank.
  */
-export function HomePendingView() {
+function HomePendingContent() {
   const forYou = useFeatureFlag(enableForYou);
   const listSkeleton = (
     <div class="mt-3 min-h-0 min-w-0 flex-1 overflow-hidden touch:mt-0 touch:pt-(--mobile-content-inset-top)">
@@ -217,6 +218,15 @@ export function HomePendingView() {
         </Show>
       </SplitPanel.Body>
     </SplitPanel.Root>
+  );
+}
+
+export function HomePendingView() {
+  const flag = useFeatureFlag(enableForYou);
+  return (
+    <Show when={isTouchDevice() || !flag().loading} fallback={<LoadingBlock />}>
+      <HomePendingContent />
+    </Show>
   );
 }
 
@@ -285,11 +295,14 @@ export function HomeDetailRouteView() {
 
 /** Composable heterogeneous Home built on the shared view and Soup primitives. */
 export function HomeView(props: HomeViewProps) {
+  const flag = useFeatureFlag(enableForYou);
   return (
-    <DebugSuspense name="HomeView.root">
-      <HomeViewProvider initialState={props.initialState}>
-        <HomeViewRoot />
-      </HomeViewProvider>
-    </DebugSuspense>
+    <Show when={isTouchDevice() || !flag().loading} fallback={<LoadingBlock />}>
+      <DebugSuspense name="HomeView.root">
+        <HomeViewProvider initialState={props.initialState}>
+          <HomeViewRoot />
+        </HomeViewProvider>
+      </DebugSuspense>
+    </Show>
   );
 }

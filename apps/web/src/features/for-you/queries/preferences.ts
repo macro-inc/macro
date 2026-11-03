@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { FeedPreferences } from '../context/feed-source';
 
 const preferencesSchema = z.object({
-  prompt: z.string().max(4000),
+  prompt: z.string().max(4000).optional(),
   hiddenIds: z.array(z.string()).max(500),
 });
 
@@ -14,7 +14,7 @@ export function createFeedPreferences(
   defaultPrompt: string
 ): FeedPreferences {
   const storage = createUserScopedStorage('for-you-preferences-v1');
-  let initial = { prompt: defaultPrompt, hiddenIds: [] as string[] };
+  let initial: z.infer<typeof preferencesSchema> = { hiddenIds: [] };
   const raw = storage.read(userId);
   if (raw) {
     try {
@@ -30,7 +30,7 @@ export function createFeedPreferences(
     storage.write(userId, JSON.stringify(next));
   };
   return {
-    prompt: () => preferences().prompt,
+    prompt: () => preferences().prompt ?? defaultPrompt,
     hiddenIds: () => preferences().hiddenIds,
     setPrompt: (prompt) => update({ ...preferences(), prompt }),
     setHiddenIds: (hiddenIds) =>

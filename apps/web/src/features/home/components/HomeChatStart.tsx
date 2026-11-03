@@ -10,12 +10,18 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { ChatInputProvider } from '@core/component/AI/context';
 import { ComposerGreeting } from '@core/component/ComposerGreeting';
+import { LoadingBlock } from '@core/component/LoadingBlock';
 import { enableChatV3Agents, enableForYou } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { Show } from 'solid-js';
+import { lazyNamed } from '@core/util/lazyNamed';
+import { Show, Suspense } from 'solid-js';
 import { HomeChatInput } from '../home-chat-input';
-import { HomeFocusView } from '../views/home-focus-view';
 import { HomeRecommendedActions } from './home-recommended-actions';
+
+const HomeFocusView = lazyNamed(
+  () => import('../views/home-focus-view'),
+  'HomeFocusView'
+);
 
 /** The real Home composer above a local sample-action feed. */
 function FocusHomeChatStart() {
@@ -146,7 +152,9 @@ export function HomeChatStart() {
       when={flag().enabled && !isTouchDevice()}
       fallback={<LegacyHomeChatStart />}
     >
-      <FocusHomeChatStart />
+      <Suspense fallback={<LoadingBlock />}>
+        <FocusHomeChatStart />
+      </Suspense>
     </Show>
   );
 }

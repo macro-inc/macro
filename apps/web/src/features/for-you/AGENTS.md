@@ -13,6 +13,7 @@ It lives at `/app/for-you`, below Home in the outer sidebar.
 - Save money and Make money filter financial benefit tags on generated ideas, not separate feeds. Ideas may match both; All and Ideas show each once. Cached items without tags default to neither until regeneration.
 - Projection keys hash the account, full prompt, model, and output schema so other accounts or older open tabs cannot revise the active projection definition.
 - `queries/preferences.ts` scopes preferences and dismissals to the account. The route remounts the feed on account changes.
+- Persist only customized prompts; saving dismissals must not pin a translated default. Keep the flagged Home calendar lazily loaded and wait for the flag before initializing its sidebar preference.
 - `actions.ts` opens the real agent composer with the suggested instructions unsent, or navigates to the actual source entity. Dismiss only hides a recommendation; it never completes or changes a source task.
 - `context/feed-source.ts` is the injected contract used by state and views. Test data lives only in `tests/`.
 

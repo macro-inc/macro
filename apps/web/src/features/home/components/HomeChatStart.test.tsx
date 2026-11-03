@@ -119,10 +119,10 @@ describe('Home agent composer alignment', () => {
   });
 });
 
-it('mounts the focus preview only for the enabled rollout', () => {
+it('mounts the focus preview only for the enabled rollout', async () => {
   mocks.forYouEnabled = true;
   renderHome();
-  expect(screen.getByTestId('home-focus')).toBeTruthy();
+  expect(await screen.findByTestId('home-focus')).toBeTruthy();
   expect(screen.getByTestId('home-chat-input')).toBeTruthy();
   expect(screen.queryByTestId('home-suggestions')).toBeNull();
 });
