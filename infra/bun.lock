@@ -136,6 +136,13 @@
       "name": "email-suppression-stack",
       "version": "0.0.0",
     },
+    "stacks/environments-cluster": {
+      "name": "environments-cluster-stack",
+      "version": "0.0.0",
+      "dependencies": {
+        "@pulumi/kubernetes": "^4.23.0",
+      },
+    },
     "stacks/fusion-auth": {
       "name": "fusion-auth",
       "version": "0.0.0",
@@ -324,6 +331,8 @@
 
     "@grpc/proto-loader": ["@grpc/proto-loader@0.8.1", "", { "dependencies": { "lodash.camelcase": "^4.3.0", "long": "^5.0.0", "protobufjs": "^7.5.5", "yargs": "^17.7.2" }, "bin": { "proto-loader-gen-types": "build/bin/proto-loader-gen-types.js" } }, "sha512-wtF6h+DY6M3YaDBPAmvuuA6jV8Sif9MjtOI5euKFWRgCDl5PeDpPsHR9u2l6St5ceY8AZgoNDww5+HvEsXFsGg=="],
 
+    "@isaacs/cliui": ["@isaacs/cliui@9.0.0", "", {}, "sha512-AokJm4tuBHillT+FpMtxQ60n8ObyXBatq7jD2/JA9dxbDDokKQm8KMht5ibGzLVU9IJDIKK4TPKgMHEYMn3lMg=="],
+
     "@isaacs/fs-minipass": ["@isaacs/fs-minipass@4.0.1", "", { "dependencies": { "minipass": "^7.0.4" } }, "sha512-wgm9Ehl2jpeqP3zw/7mo3kRHFp5MEDhqAdwy1fTGkHAwnkGOVsgpvQhL8B5n1qlb01jV3n/bI0ZfZp5lWA1k4w=="],
 
     "@isaacs/string-locale-compare": ["@isaacs/string-locale-compare@1.1.0", "", {}, "sha512-SQ7Kzhh9+D+ZW9MA0zkYv3VXhIDNx+LzM6EJ+/65I3QY+enU6Itte7E5XX7EWrqLW2FN4n06GWzBnPoC3th2aQ=="],
@@ -439,6 +448,8 @@
     "@pulumi/docker": ["@pulumi/docker@4.11.2", "", { "dependencies": { "@pulumi/pulumi": "^3.142.0", "semver": "^5.4.0" } }, "sha512-mm8Uscb/3S7OieYyg1E/vvFx3OS4bAkZvtFvi1yTqYda9NbnYOMbJi7a5fU5xB0N0Kd/uliS8olJ/e6nnvVVPg=="],
 
     "@pulumi/docker-build": ["@pulumi/docker-build@0.0.15", "", { "dependencies": { "@pulumi/pulumi": "^3.142.0" } }, "sha512-abtz4zCbePBkpj73M7mJWqXktM9muEAUOxRu8PKErbsqv5M3NfALCMULsDxA1a9vEImHa6ZC9rAe1liXbsinFg=="],
+
+    "@pulumi/kubernetes": ["@pulumi/kubernetes@4.34.3", "", { "dependencies": { "@pulumi/pulumi": "^3.142.0", "glob": "^12.0.0", "shell-quote": "^1.6.1" } }, "sha512-BNEqCTYWe8n6ZFHXafoTMcQoG9Z6PDDjXujKNrtKlr2SGDjdJTSSxCJWUlmFpsO/FCNC4g4wEeGTGnKmLYOthg=="],
 
     "@pulumi/pulumi": ["@pulumi/pulumi@3.250.0", "", { "dependencies": { "@grpc/grpc-js": "^1.10.1", "@logdna/tail-file": "^2.0.6", "@npmcli/arborist": "^9.0.0", "@opentelemetry/api": "^1.9", "@opentelemetry/exporter-trace-otlp-grpc": "^0.57", "@opentelemetry/exporter-zipkin": "^1.30", "@opentelemetry/instrumentation": "^0.57", "@opentelemetry/instrumentation-grpc": "^0.57", "@opentelemetry/resources": "^1.30", "@opentelemetry/sdk-trace-base": "^1.30", "@opentelemetry/sdk-trace-node": "^1.30", "@types/google-protobuf": "^3.15.5", "@types/semver": "^7.5.6", "execa": "^5.1.0", "google-protobuf": "^3.21.4", "ini": "^2.0.0", "js-yaml": "^4.0.0", "minimist": "^1.2.6", "normalize-package-data": "^6.0.0", "require-from-string": "^2.0.1", "semver": "^7.5.2", "source-map-support": "^0.5.6", "upath": "^1.1.0" }, "peerDependencies": { "ts-node": ">= 7.0.1 < 12", "typescript": ">= 3.8.3 < 7" }, "optionalPeers": ["ts-node", "typescript"] }, "sha512-/CaE4gWlOGNFt9eWxip2SscL1Nh1i9ZzzFSkjbrNQol5u9dOjGWNzWlOCerA6riH0603MkT9xNlRnJ4TGstXrw=="],
 
@@ -614,6 +625,8 @@
 
     "env-paths": ["env-paths@2.2.1", "", {}, "sha512-+h1lkLKhZMTYjog1VEpJNG7NZJWcuc2DDk/qsqSTRRCOXiLjeQ1d1/udrUGhqMxUgAlwKNZ0cf2uqan5GLuS2A=="],
 
+    "environments-cluster-stack": ["environments-cluster-stack@workspace:stacks/environments-cluster"],
+
     "es-errors": ["es-errors@1.3.0", "", {}, "sha512-Zf5H2Kxt2xjTvbJvP2ZWLEICxA6j+hAmMzIlypy4xcBg1vKVnx89Wy0GbS+kf5cwCVFFzdCFh2XSCFNULS6csw=="],
 
     "escalade": ["escalade@3.2.0", "", {}, "sha512-WUj2qlxaQtO4g6Pq5c29GTcWGDyd8itL8zTlipgECz3JesAiiOKotd8JU6otB3PACgG6xkJUyVhboMS+bje/jA=="],
@@ -623,6 +636,8 @@
     "exponential-backoff": ["exponential-backoff@3.1.3", "", {}, "sha512-ZgEeZXj30q+I0EN+CbSSpIyPaJ5HVQD18Z1m+u1FXbAeT94mr1zw50q4q6jiiC447Nl/YTcIYSAftiGqetwXCA=="],
 
     "fdir": ["fdir@6.5.0", "", { "peerDependencies": { "picomatch": "^3 || ^4" }, "optionalPeers": ["picomatch"] }, "sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg=="],
+
+    "foreground-child": ["foreground-child@3.3.1", "", { "dependencies": { "cross-spawn": "^7.0.6", "signal-exit": "^4.0.1" } }, "sha512-gIXjKqtFuWEgzFRJA9WCQeSJLZDjgJUOMCMzxtvFq/37KojM1BFGufqsCy0r4qSQmYLsZYMeyRqzIWOMup03sw=="],
 
     "fs-minipass": ["fs-minipass@3.0.3", "", { "dependencies": { "minipass": "^7.0.3" } }, "sha512-XUBA9XClHbnJWSfBzjkm6RvPsyg3sryZt06BEQoXcF7EK/xpGaQYJgQKDJSUH5SGZ76Y7pFx1QBnXz09rU5Fbw=="],
 
@@ -640,7 +655,7 @@
 
     "github-runners-stack": ["github-runners-stack@workspace:stacks/github-runners"],
 
-    "glob": ["glob@13.0.6", "", { "dependencies": { "minimatch": "^10.2.2", "minipass": "^7.1.3", "path-scurry": "^2.0.2" } }, "sha512-Wjlyrolmm8uDpm/ogGyXZXb1Z+Ca2B8NbJwqBVg0axK9GbBeoS7yGV6vjXnYdGm6X53iehEuxxbyiKp8QmN4Vw=="],
+    "glob": ["glob@12.0.0", "", { "dependencies": { "foreground-child": "^3.3.1", "jackspeak": "^4.1.1", "minimatch": "^10.1.1", "minipass": "^7.1.2", "package-json-from-dist": "^1.0.0", "path-scurry": "^2.0.0" }, "bin": { "glob": "dist/esm/bin.mjs" } }, "sha512-5Qcll1z7IKgHr5g485ePDdHcNQY0k2dtv/bjYy0iuyGxQw2qSOiiXUXJ+AYQpg3HNoUMHqAruX478Jeev7UULw=="],
 
     "google-protobuf": ["google-protobuf@3.21.4", "", {}, "sha512-MnG7N936zcKTco4Jd2PX2U96Kf9PxygAPKBug+74LHzmHXmceN16MmRcdgZv+DGef/S9YvQAfRsNCn4cjf9yyQ=="],
 
@@ -677,6 +692,8 @@
     "is-stream": ["is-stream@2.0.1", "", {}, "sha512-hFoiJiTl63nn+kstHGBtewWSKnQLpyb155KHheA1l39uvtO9nWIop1p3udqPcUd/xbF1VLMO4n7OI6p7RbngDg=="],
 
     "isexe": ["isexe@2.0.0", "", {}, "sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw=="],
+
+    "jackspeak": ["jackspeak@4.2.3", "", { "dependencies": { "@isaacs/cliui": "^9.0.0" } }, "sha512-ykkVRwrYvFm1nb2AJfKKYPr0emF6IiXDYUaFx4Zn9ZuIH7MrzEZ3sD5RlqGXNRpHtvUHJyOnCEFxOlNDtGo7wg=="],
 
     "js-yaml": ["js-yaml@4.3.0", "", { "dependencies": { "argparse": "^2.0.1" }, "bin": { "js-yaml": "bin/js-yaml.js" } }, "sha512-1td788aAnnZ5qs7V2QIRl1owjtYpbKt749Y3xauqQgwIIGF/xXWz1wMTEBx5O3LK3lXLVuqXPdPxj2BoFHaW9Q=="],
 
@@ -780,6 +797,8 @@
 
     "p-map": ["p-map@7.0.5", "", {}, "sha512-e8vJF4XdVkzqqSHguEMz41mQO1wKwxKm5ENrUJQUu9kLDCtn83cxbyHZcszr4QC5zEA7WffRRC4gsTecC7J9oA=="],
 
+    "package-json-from-dist": ["package-json-from-dist@1.0.1", "", {}, "sha512-UEZIS3/by4OC8vL3P2dTXRETpebLI2NiI5vIrjaD/5UtrkFX/tNbwjTSRAGC/+7CAo2pIcBaRgWmcBBHcsaCIw=="],
+
     "pacote": ["pacote@21.5.1", "", { "dependencies": { "@gar/promise-retry": "^1.0.0", "@npmcli/git": "^7.0.0", "@npmcli/installed-package-contents": "^4.0.0", "@npmcli/package-json": "^7.0.0", "@npmcli/promise-spawn": "^9.0.0", "@npmcli/run-script": "^10.0.0", "cacache": "^20.0.0", "fs-minipass": "^3.0.0", "minipass": "^7.0.2", "npm-package-arg": "^13.0.0", "npm-packlist": "^10.0.1", "npm-pick-manifest": "^11.0.1", "npm-registry-fetch": "^19.0.0", "proc-log": "^6.0.0", "sigstore": "^4.0.0", "ssri": "^13.0.0", "tar": "^7.4.3" }, "bin": { "pacote": "bin/index.js" } }, "sha512-KvcJ9iy3crysCsgqc4+PknH/w6jkrp8JN36mpZBPwNaDRwTfMZD37YzRazNstiZUOhuF5pno9f78n9mEJBavwg=="],
 
     "parse-conflict-json": ["parse-conflict-json@5.0.1", "", { "dependencies": { "json-parse-even-better-errors": "^5.0.0", "just-diff": "^6.0.0", "just-diff-apply": "^5.2.0" } }, "sha512-ZHEmNKMq1wyJXNwLxyHnluPfRAFSIliBvbK/UiOceROt4Xh9Pz0fq49NytIaeaCUf5VR86hwQ/34FCcNU5/LKQ=="],
@@ -839,6 +858,8 @@
     "shebang-command": ["shebang-command@2.0.0", "", { "dependencies": { "shebang-regex": "^3.0.0" } }, "sha512-kHxr2zZpYtdmrN1qDjrrX/Z1rR1kG8Dx+gkpK1G4eXmvXswmcE1hTWBWYUzlraYw1/yZp6YuDY77YtvbN0dmDA=="],
 
     "shebang-regex": ["shebang-regex@3.0.0", "", {}, "sha512-7++dFhtcx3353uBaq8DDR4NuxBetBzC7ZQOhmTQInHEd6bSrXdiEyzCvG07Z44UYdLShWUyXt5M/yhz8ekcb1A=="],
+
+    "shell-quote": ["shell-quote@1.12.0", "", {}, "sha512-PcByqNyT/38F2kDNi006HAMRJaULuBzq/FOsw3qdZvX/GA9W/jamDaRskgHjubHiftXK5sIFxLNkvrXUwcof6Q=="],
 
     "shimmer": ["shimmer@1.2.1", "", {}, "sha512-sQTKC1Re/rM6XyFM6fIAGHRPVGvyXfgzIDvzoq608vM+jeyVD0Tu1E6Np0Kc2zAIFWIj963V2800iF/9LPieQw=="],
 
@@ -946,13 +967,21 @@
 
     "@npmcli/git/which": ["which@6.0.1", "", { "dependencies": { "isexe": "^4.0.0" }, "bin": { "node-which": "bin/which.js" } }, "sha512-oGLe46MIrCRqX7ytPUf66EAYvdeMIZYn3WaocqqKZAxrBpkqHfL/qvTyJ/bTk5+AqHCjXmrv3CEWgy368zhRUg=="],
 
+    "@npmcli/map-workspaces/glob": ["glob@13.0.6", "", { "dependencies": { "minimatch": "^10.2.2", "minipass": "^7.1.3", "path-scurry": "^2.0.2" } }, "sha512-Wjlyrolmm8uDpm/ogGyXZXb1Z+Ca2B8NbJwqBVg0axK9GbBeoS7yGV6vjXnYdGm6X53iehEuxxbyiKp8QmN4Vw=="],
+
+    "@npmcli/package-json/glob": ["glob@13.0.6", "", { "dependencies": { "minimatch": "^10.2.2", "minipass": "^7.1.3", "path-scurry": "^2.0.2" } }, "sha512-Wjlyrolmm8uDpm/ogGyXZXb1Z+Ca2B8NbJwqBVg0axK9GbBeoS7yGV6vjXnYdGm6X53iehEuxxbyiKp8QmN4Vw=="],
+
     "@npmcli/promise-spawn/which": ["which@6.0.1", "", { "dependencies": { "isexe": "^4.0.0" }, "bin": { "node-which": "bin/which.js" } }, "sha512-oGLe46MIrCRqX7ytPUf66EAYvdeMIZYn3WaocqqKZAxrBpkqHfL/qvTyJ/bTk5+AqHCjXmrv3CEWgy368zhRUg=="],
 
     "@pulumi/awsx/@pulumi/docker-build": ["@pulumi/docker-build@0.0.14", "", { "dependencies": { "@pulumi/pulumi": "^3.142.0" } }, "sha512-dLCta3BOrYRxHyp22QnVh06qlSiSORtmIypcQ6yb4+GZ2+ThbML06pINyERc5ClgJXGQFSVTtuWhMSiurTWU2w=="],
 
     "@pulumi/docker/semver": ["semver@5.7.2", "", { "bin": { "semver": "bin/semver" } }, "sha512-cBznnQ9KjJqU67B52RMC65CMarK2600WFnbkcaiwWq3xy/5haFJlshgnpjovMVJ+Hff49d8GEn0b87C5pDQ10g=="],
 
+    "cacache/glob": ["glob@13.0.6", "", { "dependencies": { "minimatch": "^10.2.2", "minipass": "^7.1.3", "path-scurry": "^2.0.2" } }, "sha512-Wjlyrolmm8uDpm/ogGyXZXb1Z+Ca2B8NbJwqBVg0axK9GbBeoS7yGV6vjXnYdGm6X53iehEuxxbyiKp8QmN4Vw=="],
+
     "docker-classic/semver": ["semver@5.7.2", "", { "bin": { "semver": "bin/semver" } }, "sha512-cBznnQ9KjJqU67B52RMC65CMarK2600WFnbkcaiwWq3xy/5haFJlshgnpjovMVJ+Hff49d8GEn0b87C5pDQ10g=="],
+
+    "foreground-child/signal-exit": ["signal-exit@4.1.0", "", {}, "sha512-bzyZ1e88w9O1iNJbKnOlvYTrWPDl46O1bG0D3XInv+9tkPrxrN8jUUTiFlDkkmKWgn1M6CfIA13SuGqOa9Korw=="],
 
     "minipass-flush/minipass": ["minipass@3.3.6", "", { "dependencies": { "yallist": "^4.0.0" } }, "sha512-DxiNidxSEK+tHG6zOIklvNOwm3hvCrbUrdtzY74U6HKTJxvIDfOUL5W5P2Ghd3DTkhhKPYGqeNUIh5qcM4YBfw=="],
 
