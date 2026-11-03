@@ -280,10 +280,11 @@ phones use the shared bottom sheet instead of a resize handle.
 Both presentations have a **Close chat and participants** button beside the tabs.
 Dismiss the sheet with that button, its handle, backdrop, or Escape; desktop also
 closes with Escape. Opening and closing animate unless reduced motion is enabled.
-Closing returns focus to the footer button. Switching tabs, closing, and resizing
-preserve the message draft and scroll position. Tab changes keep keyboard focus
-on the selected tab instead of moving it into the composer; reopening retains
-the existing autofocus behavior.
+The desktop sidebar stays anchored to the right edge and closes to the right,
+without crossing the call area. Closing returns focus to the footer button.
+Switching tabs, closing, and resizing preserve the message draft and scroll
+position. Tab changes keep keyboard focus on the selected tab instead of moving
+it into the composer; reopening retains the existing autofocus behavior.
 Message hover actions stay within the chat's scroll viewport, wrapping when the
 sidebar is narrow. Check the first and last visible messages while scrolling.
 Check both signed-in and guest calls.

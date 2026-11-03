@@ -480,9 +480,11 @@ export function CallOverlay(props: {
           showDividers={false}
           captureResizeCtx={setResizeContext}
           class={cn(
+            // Hidden resize panels reset their left offset; keep chat at the right edge.
+            '[&>[data-resize-panel]:has(>[data-call-sidebar])]:left-auto! [&>[data-resize-panel]:has(>[data-call-sidebar])]:right-0',
             !isMobile() &&
               panelMounted() && [
-                '[&>[data-resize-panel]]:transition-[width,left] [&>[data-resize-panel]]:duration-200 [&>[data-resize-panel]]:ease-out [&>[data-resize-panel]]:motion-reduce:transition-none',
+                '[&>[data-resize-panel]]:transition-[width] [&>[data-resize-panel]]:duration-200 [&>[data-resize-panel]]:ease-out [&>[data-resize-panel]]:motion-reduce:transition-none',
                 '[&>[role=separator]]:transition-[left] [&>[role=separator]]:duration-200 [&>[role=separator]]:ease-out [&>[role=separator]]:motion-reduce:transition-none',
                 '[&:has(>[role=separator]:active)>*]:transition-none',
               ]
@@ -643,7 +645,7 @@ export function CallOverlay(props: {
             hidden={() => !widePanel() || !panelOpen()}
             persistent
           >
-            <div ref={setSidebarMount} class="h-full py-2" />
+            <div ref={setSidebarMount} data-call-sidebar class="h-full py-2" />
           </Resize.Panel>
         </Resize.Zone>
         <Show when={panelMounted()}>
