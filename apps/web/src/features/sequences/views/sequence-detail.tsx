@@ -247,13 +247,11 @@ function SequenceDetailContent(props: {
             />
           }
         >
-          <p class="mx-auto mb-5 max-w-3xl rounded-lg bg-panel px-4 py-3 text-xs text-ink-muted">
-            {editable()
-              ? enrolled()
-                ? t('sequences.editsApplyToNew')
-                : t('sequences.draftHint')
-              : t('sequences.pauseToEdit')}
-          </p>
+          <Show when={!editable()}>
+            <p class="mx-auto mb-5 max-w-3xl text-xs text-ink-muted">
+              {t('sequences.pauseToEdit')}
+            </p>
+          </Show>
           <Show when={draft.draft()}>
             {(current) => (
               <SequenceEditor

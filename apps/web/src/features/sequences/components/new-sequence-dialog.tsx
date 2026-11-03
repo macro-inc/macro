@@ -32,9 +32,6 @@ export function NewSequenceDialog(props: {
               <ActionDialogShell.Title>
                 {t('sequences.newSequence')}
               </ActionDialogShell.Title>
-              <ActionDialogShell.Description>
-                {t('sequences.newSequenceHint')}
-              </ActionDialogShell.Description>
             </ActionDialogShell.Header>
             <label class="block space-y-2 text-xs font-medium">
               {t('sequences.name')}

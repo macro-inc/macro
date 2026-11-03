@@ -82,10 +82,7 @@ export function SequenceEditor(props: {
         <span class="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent">
           <FlowArrowIcon class="size-4" aria-hidden="true" />
         </span>
-        <div>
-          <p class="text-sm font-medium">{t('sequences.starts')}</p>
-          <p class="text-xs text-ink-muted">{t('sequences.startsHint')}</p>
-        </div>
+        <p class="text-sm font-medium">{t('sequences.starts')}</p>
       </div>
       <Index each={props.draft.steps}>
         {(step, index) => {
@@ -284,10 +281,7 @@ export function SequenceEditor(props: {
       <div class="space-y-3 rounded-lg bg-panel/50 px-4 py-3">
         <div class="flex items-center gap-3">
           <CheckIcon class="size-4 text-success" aria-hidden="true" />
-          <div>
-            <p class="text-sm font-medium">{t('sequences.ends')}</p>
-            <p class="text-xs text-ink-muted">{t('sequences.endsHint')}</p>
-          </div>
+          <p class="text-sm font-medium">{t('sequences.ends')}</p>
         </div>
         <label class="block space-y-2 text-xs font-medium">
           {t('sequences.footer')}
@@ -299,9 +293,6 @@ export function SequenceEditor(props: {
             placeholder={t('sequences.footerPlaceholder')}
             onInput={(event) => change({ footer: event.currentTarget.value })}
           />
-          <span class="block font-normal text-ink-muted">
-            {t('sequences.footerHint')}
-          </span>
         </label>
       </div>
     </div>

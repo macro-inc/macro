@@ -75,10 +75,7 @@ export function EnrollmentsView(props: {
   }
   return (
     <div class="mx-auto w-full max-w-3xl space-y-4">
-      <div>
-        <h3 class="text-base font-medium">{t('sequences.people')}</h3>
-        <p class="mt-1 text-xs text-ink-muted">{t('sequences.peopleHint')}</p>
-      </div>
+      <h3 class="text-base font-medium">{t('sequences.people')}</h3>
       <Show
         when={props.enrollments.length}
         fallback={

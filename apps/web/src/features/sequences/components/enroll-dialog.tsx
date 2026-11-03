@@ -139,7 +139,6 @@ export function EnrollDialog(props: {
                     }
                   />
                 </label>
-                <p class="text-xs text-ink-muted">{t('sequences.startHint')}</p>
                 <Checkbox
                   class="flex items-start gap-2 text-xs text-ink-muted"
                   checked={props.consent}

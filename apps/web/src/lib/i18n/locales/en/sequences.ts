@@ -8,8 +8,6 @@ export default {
   retry: 'Retry',
   search: 'Search sequences',
   newSequence: 'New sequence',
-  newSequenceHint:
-    'Write a few emails that go out one after another from your Gmail inbox.',
   create: 'Create',
   untitled: 'Untitled sequence',
   noSequences: 'No sequences yet',
@@ -43,23 +41,16 @@ export default {
   reload: 'Reload',
   unsavedChanges: 'Unsaved changes',
   discardChanges: 'Discard',
-  draftHint:
-    'Activate the sequence to start enrolling people. Each person gets these emails with their own details filled in.',
-  pauseToEdit:
-    'Pause the sequence to edit it. People keep getting the emails they were enrolled with.',
-  editsApplyToNew:
-    'Edits apply to people you enroll after saving. People already enrolled keep the emails they were enrolled with.',
-  connectGmail:
-    'Connect a Gmail inbox of your own to send sequences. Shared inboxes and Outlook can’t send them.',
+  pauseToEdit: 'Pause to edit.',
+  connectGmail: 'Connect a Gmail inbox to send.',
   senderDisconnected:
-    'This sequence’s sending inbox was disconnected. Pause the sequence, choose an inbox, and resume it. Then resume the people who need attention.',
+    'Sending inbox disconnected. Pause and choose another inbox.',
   noticeSaved: 'Sequence saved',
   noticeActivated: 'Sequence activated',
   noticePaused: 'Sequence paused',
   noticeDeleted: 'Sequence deleted',
   deleteTitle: 'Delete “{{name}}”?',
-  deleteBody:
-    'Emails not sent yet are canceled. Unsubscribe links in emails already sent keep working.',
+  deleteBody: 'Unsent emails are canceled.',
 
   // Editor
   name: 'Name',
@@ -68,8 +59,6 @@ export default {
   noInbox: 'No Gmail inbox connected',
   inboxNeedsReconnect: '{{email}} (reconnect to send)',
   starts: 'Sequence starts',
-  startsHint:
-    'When you enroll someone, the first email goes out at the start time you pick.',
   emailNumber: 'Email {{position}}',
   moveUp: 'Move up',
   moveEmailUp: 'Move email {{position}} up',
@@ -88,14 +77,10 @@ export default {
   personalizeHint: 'Personalize with {{tokens}}.',
   addEmail: 'Add email',
   ends: 'Sequence ends',
-  endsHint: 'It also stops for anyone who replies, bounces, or unsubscribes.',
   footer: 'Footer',
   footerPlaceholder: 'A line under every email, such as your company address',
-  footerHint: 'An unsubscribe link is added below it.',
 
   // Enrollments
-  peopleHint:
-    'Each person gets the emails as they were when enrolled. Open a row to see them.',
   noEnrollments: 'No one is enrolled yet',
   noEnrollmentsHint: 'Enroll people from Customers to start sending.',
   activateToEnroll: 'Activate the sequence to enroll people.',
@@ -167,8 +152,6 @@ export default {
   noMatchingPeople: 'No matching people',
   noEmail: 'No email address',
   startSending: 'Start sending',
-  startHint:
-    'Later emails go out at the same time of day in your time zone, after each wait.',
   consent: 'These people agreed to receive email from me.',
   selectedCount: { other: '{{count}} of {{max}} selected' },
   enrollCount: { one: 'Enroll {{count}}', other: 'Enroll {{count}}' },
