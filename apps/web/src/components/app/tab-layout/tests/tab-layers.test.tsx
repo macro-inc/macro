@@ -1,0 +1,172 @@
+import {
+  createMemoryHistory,
+  createMemoryPaneStore,
+  createSplitRouter,
+  type Entry,
+  type SplitRouter,
+  type SplitRoutes,
+} from '@app/lib/split-router';
+import { paneRoute } from '@app/routes/app-route';
+import {
+  appRoute,
+  channelDetailRoute,
+  channelsSplitRoute,
+  homeSplitRoute,
+  legacyContentRoute,
+  notFoundRoute,
+} from '@app/routes/routes';
+import { setGlobalTabManager } from '@app/signal/tabLayout';
+import { SplitLayoutContext } from '@components/app/split-layout/context';
+import {
+  createSplitLayout,
+  type SplitManager,
+} from '@components/app/split-layout/layoutManager';
+import { SplitLayout } from '@components/app/split-layout/SplitLayout';
+import { createAppPanePolicy } from '@components/app/split-layout/split-router/app-pane-policy';
+import {
+  resolveContentLocation,
+  splitContentFromLocation,
+} from '@components/app/split-layout/split-router/legacy-route';
+import type { BlockOrchestrator } from '@core/orchestrator';
+import { cleanup, render } from '@solidjs/testing-library';
+import { onCleanup, type ParentProps } from 'solid-js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createTabManager, type TabManager } from '../tab-manager';
+
+const panels = vi.hoisted(() => ({ mounted: 0, unmounted: 0 }));
+
+// Stand-ins that count mounts: the layers decide what stays mounted, not the
+// panel or the resize zone.
+vi.mock('@components/app/split-layout/components/SplitPanel', () => ({
+  SplitPanel: (props: { split: { id: string } }) => {
+    panels.mounted += 1;
+    onCleanup(() => {
+      panels.unmounted += 1;
+    });
+    return <div data-panel={props.split.id} />;
+  },
+}));
+vi.mock('@core/component/Resize', () => ({
+  Resize: {
+    Zone: (props: ParentProps) => <div>{props.children}</div>,
+    Panel: (props: ParentProps) => <div>{props.children}</div>,
+  },
+}));
+
+const routes: SplitRoutes = {
+  definitions: [
+    {
+      ...appRoute,
+      children: [
+        homeSplitRoute,
+        { ...channelsSplitRoute, children: [channelDetailRoute] },
+        legacyContentRoute,
+        notFoundRoute,
+      ],
+    },
+  ],
+  defaultRoute: () => paneRoute({ id: 'view-home', params: {} }),
+};
+
+function setup(url: string) {
+  let router!: SplitRouter;
+  let manager!: SplitManager;
+  let tabManager!: TabManager;
+  render(() => {
+    router = createSplitRouter({
+      routes,
+      history: createMemoryHistory(url),
+      paneStore: createMemoryPaneStore<Entry>(),
+      policy: createAppPanePolicy({
+        manager: () => manager,
+        toContent: splitContentFromLocation,
+        defaultLocation: () => ({ route: routes.defaultRoute() }),
+        stacked: () => false,
+      }),
+    });
+    const orchestrator = {
+      isBlockMounted: () => false,
+      createBlockInstance: vi.fn(),
+    } as unknown as BlockOrchestrator;
+    manager = createSplitLayout(orchestrator, {
+      router,
+      toLocation: (content) => resolveContentLocation(router.routes, content),
+      toContent: splitContentFromLocation,
+      stacked: () => false,
+    });
+    tabManager = createTabManager({
+      router,
+      manager,
+      userId: `user-${Math.random()}`,
+    });
+    setGlobalTabManager(tabManager);
+    return (
+      <SplitLayoutContext.Provider value={{ manager }}>
+        <SplitLayout />
+      </SplitLayoutContext.Provider>
+    );
+  });
+  return { router, tabManager };
+}
+
+async function flush(router: SplitRouter) {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await router.settled();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+const layer = (id: string) =>
+  document.querySelector<HTMLElement>(`[data-split-layer="${id}"]`);
+
+afterEach(() => {
+  setGlobalTabManager(undefined);
+  cleanup();
+  panels.mounted = 0;
+  panels.unmounted = 0;
+});
+
+describe('desktop tab layers', () => {
+  it('switching tabs hides the left tab and shows it again without remounting', async () => {
+    const { router, tabManager } = setup('/channels/channel-one');
+    await flush(router);
+    const first = tabManager.activeTabId();
+    const firstPanel = document.querySelector('[data-panel]');
+    expect(firstPanel).not.toBeNull();
+    expect(panels.mounted).toBe(1);
+
+    tabManager.newTab();
+    await flush(router);
+    const second = tabManager.activeTabId();
+    expect(panels.mounted).toBe(2);
+    expect(panels.unmounted).toBe(0);
+    expect(layer(first)?.inert).toBe(true);
+    expect(layer(first)?.classList.contains('invisible')).toBe(true);
+    expect(layer(second)?.inert).toBe(false);
+
+    tabManager.activateTab(first);
+    await flush(router);
+    tabManager.activateTab(second);
+    await flush(router);
+    tabManager.activateTab(first);
+    await flush(router);
+
+    expect(panels.mounted).toBe(2);
+    expect(panels.unmounted).toBe(0);
+    expect(document.querySelector('[data-panel]')).toBe(firstPanel);
+    expect(layer(first)?.inert).toBe(false);
+    expect(layer(second)?.inert).toBe(true);
+  });
+
+  it('closing a tab unmounts only its panes', async () => {
+    const { router, tabManager } = setup('/channels/channel-one');
+    await flush(router);
+    tabManager.newTab();
+    await flush(router);
+
+    tabManager.closeTab(tabManager.activeTabId());
+    await flush(router);
+    expect(panels.mounted).toBe(2);
+    expect(panels.unmounted).toBe(1);
+    expect(document.querySelectorAll('[data-split-layer]')).toHaveLength(1);
+  });
+});

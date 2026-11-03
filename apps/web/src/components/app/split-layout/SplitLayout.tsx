@@ -1,9 +1,11 @@
 import { CreateContextProvider } from '@app/features/command/context/create-context';
 import { useSplitRouter } from '@app/lib/split-router';
 import { setGlobalSplitManager } from '@app/signal/splitLayout';
+import { globalTabManager } from '@app/signal/tabLayout';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { DesktopTabsController } from '@components/app/tab-layout/DesktopTabsController';
 import { Resize } from '@core/component/Resize';
+import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import { useIsAuthenticated, useUserId } from '@core/context/user';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -12,6 +14,7 @@ import {
   createEffect,
   createMemo,
   createSelector,
+  createSignal,
   For,
   onCleanup,
   type ParentProps,
@@ -22,6 +25,7 @@ import {
 import { PopoverSplitRenderer } from './components/PopoverSplitRenderer';
 import { SplitPanel } from './components/SplitPanel';
 import { SplitLayoutContext } from './context';
+import { INITIAL_LAYER_ID, type SplitLayers, sameIds } from './layers';
 import { createSplitLayout, type SplitId } from './layoutManager';
 import { createMobilePaneStack } from './mobile/createMobilePaneStack';
 import { MobileSplitContainer } from './mobile/MobileSplitContainer';
@@ -75,13 +79,32 @@ export function SplitLayout() {
   const splits = createMemo(splitManager.splits);
   const useBentoLayout = () => !isTouchDevice();
 
+  // <For> on plain ids for stable referential equality
+  const ids = createMemo(() => splits().map(({ id }) => id));
+
+  // Desktop tabs render one layer per tab; without them, one live layer.
+  const layers = (): SplitLayers => {
+    const tabLayers = globalTabManager();
+    if (tabLayers) return tabLayers;
+
+    return {
+      layerIds: () => [INITIAL_LAYER_ID],
+      layerSplits: ids,
+      isLive: () => true,
+    };
+  };
+  const layerIds = createMemo(() => layers().layerIds(), undefined, {
+    equals: sameIds,
+  });
+
   // Drop refs for departed splits by reconciling against the live list:
   // batched mutations can remove several splits in one flush (e.g. closing
   // a Preview Pair), and the events signal only surfaces the last event.
+  // Parked splits stay mounted, so they keep their refs.
   createEffect(() => {
-    const alive = new Set(splits().map(({ id }) => id));
+    splits();
     for (const id of panelRefs.keys()) {
-      if (!alive.has(id)) panelRefs.delete(id);
+      if (!splitManager.splitState(id)) panelRefs.delete(id);
     }
   });
 
@@ -91,30 +114,40 @@ export function SplitLayout() {
     setTabTitle(splitManager.tabTitle());
   });
 
-  // <For> on plain ids for stable referential equality
-  const ids = createMemo(() => splits().map(({ id }) => id));
-
   createSplitFocusTracker({ splitManager, panelRefs, splits });
 
-  return (
-    <>
-      <Show
-        when={paneStack}
-        fallback={
-          <div
-            class="size-full"
-            classList={{ 'py-1.5 pr-1.5': useBentoLayout() }}
-          >
-            <Resize.Zone
-              direction="horizontal"
-              gutter={useBentoLayout() ? 6 : 1}
-              showDividers={!useBentoLayout()}
-              captureResizeCtx={splitManager.setResizeContext}
-            >
-              <For each={ids()}>
-                {(id, index) => (
-                  <Show when={splitManager.getSplit(id)}>
-                    {(handle) => (
+  function SplitLayer(props: { layer: string }) {
+    const live = () => layers().isLive(props.layer);
+    const layerIds = createMemo(() => layers().layerSplits(props.layer), [], {
+      equals: sameIds,
+    });
+    const [resizeContext, setResizeContext] = createSignal<ResizeZoneCtx>();
+    createEffect(() => {
+      const context = resizeContext();
+      if (live() && context) splitManager.setResizeContext(context);
+    });
+
+    return (
+      // A parked layer keeps its views mounted but skips their rendering,
+      // and inert keeps focus, hotkeys, and assistive tech out of it.
+      <div
+        class="absolute inset-0"
+        classList={{ 'invisible [content-visibility:hidden]': !live() }}
+        inert={!live()}
+        data-split-layer={props.layer}
+      >
+        <Resize.Zone
+          direction="horizontal"
+          gutter={useBentoLayout() ? 6 : 1}
+          showDividers={!useBentoLayout()}
+          captureResizeCtx={setResizeContext}
+        >
+          <For each={layerIds()}>
+            {(id, index) => (
+              <Show when={splitManager.getSplit(id)}>
+                {(handle) => (
+                  <Show when={splitManager.splitState(id)}>
+                    {(split) => (
                       <Suspense>
                         <Resize.Panel
                           id={id}
@@ -122,7 +155,7 @@ export function SplitLayout() {
                           index={index()}
                         >
                           <SplitPanel
-                            split={splits()[index()]!}
+                            split={split()}
                             handle={handle()}
                             active={activeSplitSelector(id)}
                             setPanelRef={(panelRef) =>
@@ -135,8 +168,28 @@ export function SplitLayout() {
                     )}
                   </Show>
                 )}
+              </Show>
+            )}
+          </For>
+        </Resize.Zone>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <Show
+        when={paneStack}
+        fallback={
+          <div
+            class="size-full"
+            classList={{ 'py-1.5 pr-1.5': useBentoLayout() }}
+          >
+            <div class="relative size-full">
+              <For each={layerIds()}>
+                {(layer) => <SplitLayer layer={layer} />}
               </For>
-            </Resize.Zone>
+            </div>
           </div>
         }
       >
