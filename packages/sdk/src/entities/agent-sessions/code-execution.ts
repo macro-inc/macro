@@ -4,6 +4,7 @@ import type { MacroClient } from '../../utils/client';
 import { MacroEntity } from '../entity';
 import type { AgentSession } from './agent-session';
 import { type CreateReviewOptions, SessionReview } from './review';
+import { presentView, type SessionView } from './view';
 
 /** A saved code execution belonging to one agent session. */
 export class CodeExecution extends MacroEntity<ExecutionRecord> {
@@ -37,6 +38,12 @@ export class CodeExecution extends MacroEntity<ExecutionRecord> {
     create: (input: CreateReviewOptions) =>
       SessionReview.create(this.client, this, input),
     list: () => SessionReview.list(this.client, this),
+  };
+
+  /** Views: shown to the user at once, with nothing saved. */
+  readonly views = {
+    present: (view: SessionView) =>
+      presentView(this.client, this.parent, view, this),
   };
 
   /** The session this execution belongs to. */

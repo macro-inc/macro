@@ -659,6 +659,12 @@ impl ScheduledActionRepo for UnusedRepo {
     async fn get_execution_records(&self, _: &Uuid) -> Result<Vec<ActionExecutionRecord>> {
         unimplemented!()
     }
+    async fn last_runs(
+        &self,
+        _: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, crate::domain::models::LastRun>> {
+        unimplemented!()
+    }
     async fn update_next_run_at(&self, _: &Uuid) -> Result<()> {
         unimplemented!()
     }
@@ -950,6 +956,7 @@ async fn a_task_status_change_hands_the_agent_the_task_instead_of_its_ids() {
             }],
             project: None,
         },
+        pull_request: None,
     };
     let runner = TargetRunner::new(
         Arc::new(Sessions {

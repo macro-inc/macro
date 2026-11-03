@@ -6,7 +6,15 @@
 
 ## Type Aliases
 
+- [AutoArchiveOverrides](type-aliases/AutoArchiveOverrides.md)
 - [CreateManagedSessionOptions](type-aliases/CreateManagedSessionOptions.md)
 - [FoldedAgentSessionLog](type-aliases/FoldedAgentSessionLog.md)
 - [SelectableRepository](type-aliases/SelectableRepository.md)
+- [SessionAutoArchive](type-aliases/SessionAutoArchive.md)
 - [SessionPullRequest](type-aliases/SessionPullRequest.md)
+
+## References
+
+### ArchiveCause
+
+Re-exports [ArchiveCause](../../../../generated/agent-harness/types.gen/type-aliases/ArchiveCause.md)

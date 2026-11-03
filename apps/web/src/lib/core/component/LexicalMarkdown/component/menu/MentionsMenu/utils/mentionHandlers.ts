@@ -250,7 +250,7 @@ async function handleRoutineMention(
         const { publishRoutineTemplate } = await import(
           '@app/features/routines/queries/templates'
         );
-        await publishRoutineTemplate(routine.id);
+        await span.run(() => publishRoutineTemplate(routine.id));
         return true;
       } catch {
         span.error('Sharing the routine failed');

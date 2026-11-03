@@ -1,4 +1,3 @@
-pub(super) mod all_mail;
 pub(super) mod draft;
 pub(super) mod important;
 pub(super) mod new_inbox;

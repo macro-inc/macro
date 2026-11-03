@@ -40,7 +40,11 @@ export function senderFromStorageId(senderId: string): MessageSender {
   return { type: 'user', id: senderId };
 }
 
-/** Resolve a channel bot sender to its display name. */
+/**
+ * Resolve a channel bot sender to its display name. A bot post a user made
+ * through a client, such as an MCP client, is shown as that client's agent
+ * ("Claude Code"), not as the bot that carried it.
+ */
 export function getBotDisplayName(
   senderId: string,
   sender?: MessageSender,
@@ -53,6 +57,7 @@ export function getBotDisplayName(
   if (parsed.type !== 'bot' && !systemName) return undefined;
 
   return (
+    parsed.triggered_via ??
     parsed.name ??
     systemName ??
     bots.find((bot) => bot.id === parsed.id)?.name ??

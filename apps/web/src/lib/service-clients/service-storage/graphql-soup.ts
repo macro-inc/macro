@@ -1,3 +1,7 @@
+import {
+  captureTraceParentExchange,
+  traceParentExchange,
+} from '@app/lib/urql-solid/trace-parent-exchange';
 import { toast } from '@core/component/Toast/Toast';
 import {
   ENABLE_BEARER_TOKEN_AUTH,
@@ -5,6 +9,7 @@ import {
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
+import { requireNativeUpdate } from '@core/mobile/nativeUpdateRequired';
 import { hasLoginCookie } from '@core/util/cookies';
 import { fetchToken } from '@core/util/fetchWithToken';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -110,12 +115,14 @@ import { shouldRetryGraphqlMutation } from './graphql-mutation-retry';
 import { notificationReceiptExchange } from './graphql-notification-receipt';
 import {
   createGraphqlSoupSubscriptionsLifecycle,
+  createGraphqlSoupWebSocketLiveness,
   createGraphqlSoupWebSocketUrlResolver,
   publishNotificationPatch,
   SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS,
   shouldRetryGraphqlSoupWebSocket,
   waitToRetryGraphqlSoupWebSocket,
 } from './graphql-soup-websocket';
+import { mailCacheProfile } from './mail-cache-profile';
 
 export { emailThreadSortTs } from './email-thread-sort';
 
@@ -135,6 +142,7 @@ async function authorizedDssGraphqlFetch(
   input: RequestInfo | URL,
   init?: RequestInit
 ): Promise<Response> {
+  const parent = Telemetry.captureContext();
   if (ENABLE_BEARER_TOKEN_AUTH) {
     const apiToken = await getMacroApiToken();
     return await platformFetch(input, {
@@ -151,7 +159,7 @@ async function authorizedDssGraphqlFetch(
   let response = await fetchWithCredentials();
   if (response.status !== 401) return response;
 
-  const tokenResult = await fetchToken();
+  const tokenResult = await parent.run(fetchToken);
   if (tokenResult.isErr()) return response;
 
   response = await fetchWithCredentials();
@@ -331,14 +339,21 @@ export async function dssGraphqlFetch(
       const traceHeaders: Record<string, string> = {};
       span.injectTraceHeaders(traceHeaders);
       const requestInit = graphqlSoupTransportRequest(init);
+      const mail = await mailCacheProfile();
+      span.setAttr('mail.cache_profile', mail.profile);
+      span.setAttr('mail.cache_profile_outcome', mail.outcome);
       // Links this request, and a queued mutation attempt above it, to the
       // server's request and `graphql.execute` spans.
       const transportInit: RequestInit = {
         ...requestInit,
-        headers: mergeHeaders(requestInit?.headers, traceHeaders),
+        headers: mergeHeaders(requestInit?.headers, traceHeaders, {
+          'x-macro-mail-cache-profile': mail.profile,
+        }),
       };
       span.event('request_dispatch');
-      const response = await authorizedDssGraphqlFetch(input, transportInit);
+      const response = await span.run(() =>
+        authorizedDssGraphqlFetch(input, transportInit)
+      );
       span.setAttr('graphql.response_headers_ms', performance.now() - started);
       span.setAttr('http.response.status_code', response.status);
       span.event('response_headers');
@@ -367,7 +382,7 @@ export async function dssGraphqlFetch(
       // metadata field and suppress v2 local authority for this session. Backfill
       // still refuses to checkpoint missing required Document supplements.
       soupProjectionServerSupported = false;
-      return await authorizedDssGraphqlFetch(input, legacyInit);
+      return await span.run(() => authorizedDssGraphqlFetch(input, legacyInit));
     } catch (error) {
       // Transport errors may contain query URLs; record a category only.
       span.setAttr('graphql.transport_failed', true);
@@ -378,7 +393,12 @@ export async function dssGraphqlFetch(
 
 const graphqlSoupClient = createClient({
   url: `${dssHost}/items/soup/graphql`,
-  exchanges: [networkRevalidationExchange(), fetchExchange],
+  exchanges: [
+    captureTraceParentExchange,
+    networkRevalidationExchange(),
+    traceParentExchange,
+    fetchExchange,
+  ],
   fetch: dssGraphqlFetch,
   // urql's default ("within-url-limit") sends small documents as GET, but
   // GET on the DSS GraphQL path serves the GraphiQL IDE — only POST
@@ -415,8 +435,16 @@ function createGraphqlSoupWebSocketClient(
     getApiToken: getMacroApiToken,
     refreshCookieAuth: fetchToken,
   });
-  return createGraphqlWsClient({
+  const liveness = createGraphqlSoupWebSocketLiveness(() => client.terminate());
+  const client = createGraphqlWsClient({
     url: resolveWebSocketUrl,
+    connectionParams: () =>
+      Telemetry.span('graphql.websocket.connection_params', async (span) => {
+        const mail = await mailCacheProfile();
+        span.setAttr('mail.cache_profile', mail.profile);
+        span.setAttr('mail.cache_profile_outcome', mail.outcome);
+        return { mailCacheProfile: mail.profile };
+      }),
     // Session cookies live in the native HTTP client's jar, which the WebView's
     // own WebSocket cannot send; the native socket forwards them.
     webSocketImpl:
@@ -427,8 +455,13 @@ function createGraphqlSoupWebSocketClient(
     retryWait: waitToRetryGraphqlSoupWebSocket,
     on: {
       connecting: () => onState('connecting'),
-      closed: () => onState('disconnected'),
-      connected: () => {
+      closed: () => {
+        liveness.closed();
+        onState('disconnected');
+      },
+      pong: liveness.pong,
+      connected: (socket) => {
+        liveness.connected(socket);
         onState('connected');
         onConnected();
         connections += 1;
@@ -438,6 +471,7 @@ function createGraphqlSoupWebSocketClient(
     },
     shouldRetry: shouldRetryGraphqlSoupWebSocket,
   });
+  return client;
 }
 
 function graphqlSoupSubscriptionExchange(websocketClient: GraphqlWsClient) {
@@ -481,9 +515,11 @@ function getUncachedRealtimeClient(): Client {
     url: `${dssHost}/items/soup/graphql`,
     preferGetMethod: false,
     exchanges: [
+      captureTraceParentExchange,
       networkRevalidationExchange(),
       notificationReceiptExchange(publishNotificationPatch),
       graphqlSoupSubscriptionExchange(websocketClient),
+      traceParentExchange,
       fetchExchange,
     ],
     fetch: dssGraphqlFetch,
@@ -746,19 +782,16 @@ export function getGraphqlSoupClient(): Client {
       }
       reportCacheError(error, 'initialization');
       fallbackAfterInitializationFailure(error);
-      toast.failure(
-        error instanceof NativeCacheUpgradeRequiredError
-          ? 'Macro update required'
-          : 'Local cache unavailable',
-        {
+      if (error instanceof NativeCacheUpgradeRequiredError) {
+        requireNativeUpdate(error.message);
+      } else {
+        toast.failure('Local cache unavailable', {
           subtext:
-            error instanceof NativeCacheUpgradeRequiredError
-              ? error.message
-              : cacheRecovery.state() === 'unavailable'
-                ? 'Drafts remain on this device. Reconnect or retry draft synchronization.'
-                : 'Queued changes are preserved. Update or reload Macro to recover local storage.',
-        }
-      );
+            cacheRecovery.state() === 'unavailable'
+              ? 'Drafts remain on this device. Reconnect or retry draft synchronization.'
+              : 'Queued changes are preserved. Update or reload Macro to recover local storage.',
+        });
+      }
       console.warn(
         'graphql cache async init failed; using uncached client',
         error
@@ -797,6 +830,7 @@ export function getGraphqlSoupClient(): Client {
         // See graphqlSoupClient: GET serves GraphiQL on this path.
         preferGetMethod: false,
         exchanges: [
+          captureTraceParentExchange,
           optimisticResolversExchange(soupOptimisticResolvers),
           networkRevalidationExchange(() => host?.disabled === true),
           normalizedCacheExchange(host, {
@@ -814,6 +848,9 @@ export function getGraphqlSoupClient(): Client {
                   'input',
                   'threadId',
                 ]),
+                initiative: entityFromArgument('GraphqlSoupInitiative', [
+                  'initiativeId',
+                ]),
               },
             },
             // Session identity witness: the viewer id present on every soup
@@ -829,6 +866,7 @@ export function getGraphqlSoupClient(): Client {
           }),
           notificationReceiptExchange(publishNotificationPatch),
           graphqlSoupSubscriptionExchange(graphqlWsClient),
+          traceParentExchange,
           fetchExchange,
         ],
         fetch: (input, init) => dssGraphqlFetch(input, init, host),
@@ -1384,6 +1422,20 @@ function mapGraphqlNotificationMetadata(
         }) satisfies NotifEventMember<'inbox_reauth_required'>
     )
     .with(
+      { __typename: 'GraphqlRoutineRunFinishedMetadata' },
+      (metadata) =>
+        ({
+          tag: 'routine_run_finished',
+          content: {
+            routineId: metadata.routineRunFinishedRoutineId,
+            routineName: metadata.routineRunFinishedRoutineName,
+            outcome: metadata.routineRunFinishedSucceeded
+              ? 'succeeded'
+              : 'failed',
+          },
+        }) satisfies NotifEventMember<'routine_run_finished'>
+    )
+    .with(
       { __typename: 'GraphqlInviteToTeamMetadata' },
       (metadata) =>
         ({
@@ -1738,7 +1790,14 @@ export function mapGraphqlAgentSessionRow(
   return {
     id: entity.id,
     name: entity.sessionName,
-    isArchived: entity.isArchived,
+    archivedBy: match(entity.archivedBy)
+      .with('USER', () => 'user' as const)
+      .with('PULL_REQUEST_MERGED', () => 'pull_request_merged' as const)
+      .with('RUNTIME_CLOSED', () => 'runtime_closed' as const)
+      .with(null, () => null)
+      // A cause this build does not know still archived the session.
+      .exhaustive(() => 'user' as const),
+    archivedAt: entity.archivedAt,
     ownerId: entity.ownerId,
     botId: entity.botId,
     harness: entity.harness,

@@ -38,10 +38,9 @@ Unlike Calls, it lists only personal tags; team-shared tags are hidden,
 and its `New tag` action creates a personal tag with no Team sharing option.
 
 Full email client. Desktop groups `Signal` and `Noise` under one `Inbox` sidebar
-item, with pill tabs beside the Inbox title in the content header, matching the
-Chat sidebar tabs; with the Focus flags on, a `Focus` tab leads them. Selecting
-Inbox from another mailbox opens Signal; selecting it while in Focus or Noise
-keeps that tab.
+item, with pill tabs beside the Inbox title in the content header; with the Focus
+flags on, a `Focus` tab leads them. Selecting Inbox from another mailbox opens
+Signal; selecting it while in Focus or Noise keeps that tab.
 The desktop sidebar continues with `Favorites`, `Drafts`, `Sent`, `Scheduled`,
 and `Reminders` (when reminders are enabled), followed by a **Library** section containing `All mail`,
 `Archived`, and `Shared`, then **Tags**. Sidebar number shortcuts follow that
@@ -71,7 +70,12 @@ In every composer `Cmd+Shift+.`, `Cmd+Shift+,` and `Cmd+Shift+D` discard the
 draft exactly like its trash button, `Cmd+Shift+U` opens the attach picker, and
 `Cmd+Shift+X`, `7`, `8` and `9` apply strikethrough, numbered list, bulleted
 list and quote. Check discard from both a reply (the reply closes) and
-standalone compose (the view goes back), with focus in the body.
+standalone compose (the view goes back), with focus in the body. The same
+three keys discard the drafts on the focused or selected rows of a list (Email
+or a soup view) that carry the Draft badge. The thread keeps its row and its
+place, even though its sort time falls back to the last real message, until
+the tab, filters, or sort change; only the badge and preview change back to
+that message. Check it on a reply draft in All: the row must not move.
 
 Star and mute feedback reports what happened to the write. With GraphQL Soup
 enabled, a star queued while offline toasts that it is waiting to sync (for
@@ -81,8 +85,10 @@ waiting for reconnect, so pressing them again works at once.
 
 Recipient fields turn complete addresses into chips when the typed or pasted
 text ends in a comma or semicolon, so `a@example.com, b@example.com,` adds both.
-Enter or a click picks the highlighted suggestion. Type, paste, or Tab straight
-after picking one and check that both recipients stay and the input is empty.
+Enter or a click picks the highlighted suggestion; on a complete typed address,
+Enter or Tab adds that address unless an arrow key picked another row. Type,
+paste, or Tab straight after picking one and check that both recipients stay
+and the input is empty.
 
 Outlook connections support personal Outlook.com and individual Microsoft 365
 inboxes. Choose the inbox explicitly when testing mixed-provider accounts. The
@@ -105,7 +111,10 @@ delivery progress is silent, as on Gmail: a composer or sent message shows a
 notice only for a conflict, uncertain or rejected delivery, revoked access,
 unsavable content, or an inbox move. Use its recovery actions and check the
 provider copy before choosing an explicit resend; a resend in flight shows as
-the send button's pending state. Switching the sender
+the send button's pending state. A new-email draft locked by a conflict or an
+unconfirmed draft or attachment write still discards from its trash and
+Cmd+Shift+D; delivery in progress, unknown or rejected delivery, and revoked
+access keep discard locked. Switching the sender
 inbox copies the draft and attachments into the destination; wait for completion
 before sending. If the copy is interrupted, use retry or keep the original.
 A draft the provider could not save can still switch From, which moves it to an
@@ -122,7 +131,10 @@ further reloads, even while an offline edit is still queued.
 Opening an attachment opens it in a split from its Drive copy, except a
 calendar file: it opens its event (see the calendar invitations section of the
 calendar guide), or downloads when Macro could not read one, and creates no
-Drive file.
+Drive file. Every received attachment chip, of any file type, has a download
+button joined to the filename that saves the file without opening it. Images
+and videos keep their previews and get the same chip. Cloud-reference chips
+stay open-only.
 
 Imported Outlook attachments keep their provider identity, including inline
 images. Cloud-reference attachment chips open the original Outlook message.
@@ -149,8 +161,7 @@ changing the list query. Text search still resolves favorite IDs for the search
 service. An empty favorites list shows `No favorite emails`.
 
 With `enable-email-focus` and `enable-graphql-soup` on, a `Focus` tab leads the
-desktop Inbox tabs (with an `Experimental` badge beside them while it is open)
-and the mobile pills (`Focus · Experimental`). It lists signal
+desktop Inbox tabs and the mobile pills. It lists signal
 threads from the last 30 days that the email focus worker
 (`services/email_focus_worker`) classified as worth attention, including inboxes
 linked to the account, by priority: the importance score halved for every 2 days
@@ -391,7 +402,26 @@ headers use the selected Mail view's indexed timestamps, not a preview cached fr
 another view. Drafts and Sent display their latest eligible message snapshot, even
 when a newer normal message is the ALL preview; no message bodies are needed.
 Sent also requires a canonical outbound timestamp. Trashed messages cannot supply
-any preview. Calendar uses the authoritative thread calendar-attachment flag.
+any preview. All Mail also excludes spam/junk, including its cached preview and
+non-draft baseline after draft edits. Mixed threads show the latest message outside
+spam and trash; excluded messages must not consume a page slot. Drafts and Sent
+keep their own canonical preview membership. Mail profiles v5/v6 require fresh
+server metadata after upgrading, so older spam-inclusive cache entries cannot
+reappear. HTTP and WebSocket clients explicitly negotiate the Mail capsule profile.
+Absent/unknown capabilities receive legacy v2 capsules, preserving old native draft
+queue admission. Browsers advertise v5; native clients do so only after verifying
+installed iOS build 193 or Android build 20 (unknown/desktop builds retain v2).
+Native discovery falls back to v2 after 1.5 seconds and retains that result for
+the session, so unavailable IPC cannot indefinitely delay GraphQL requests.
+The HTTP transport and WebSocket connection-parameter spans record the selected
+profile and whether discovery used the browser, a supported/unsupported native
+build, failed, or timed out; they do not include native error text.
+Current engines treat v2 capsules as incomplete and use the network for Mail lists.
+Deploy the backend (including its CORS capability header) before the new frontend.
+The backend can deploy before store releases; native v5 offline behavior still
+requires the corresponding native cache update.
+Verify Gmail labels and Outlook
+folder state. Calendar uses the authoritative thread calendar-attachment flag.
 
 A successful authoritative `Soup` first page also invalidates cached Mail facts
 that match its supported view/filter but are missing inside its covered sort
@@ -497,10 +527,13 @@ In the new Email view, ordinary row activation opens the thread inside
 `/app/component/mail`. On desktop the thread's header has a Back arrow instead
 of breadcrumbs; it returns to the filtered list (hidden in the reading pane,
 where the list is already beside the thread). The subject, tags and
-participants stay put while only the messages scroll. Pressing `Escape` in the open thread
-with focus outside any input does the same once there is nothing left to unwind
-(an open reply, an expanded body, or a focused message each take one `Escape`
-first); the list keeps the row you came from focused and comes back at the same
+participants stay put while only the messages scroll. The full subject, including
+its last word beside the title action, supports text selection. Pressing `Escape`
+in the open thread with focus outside any input returns to the originating list
+once there is nothing left to unwind (an open reply, an expanded body, or a
+focused message each take one `Escape` first). In the reading pane, it restores
+list focus without closing the thread. The list keeps the row you came from
+focused and comes back at the same
 scroll position, scrolling only if j/k in the thread moved focus off screen. If
 the focused row leaves the list without a list `e` (a reply in Signal marks it
 done, or another device archives it), focus moves to the row that took its
@@ -577,6 +610,9 @@ a failed local save keeps the composer and draft options open. The message list
 stays mounted underneath so closing a reply preserves its scroll position.
 On touch, a saved reply shows as a **Draft** row with its opening words under the
 message it answers (which stays expanded); tapping it reopens the draft.
+Opening a thread whose last message has a reply draft opens the composer once;
+after Back → Save Draft it stays closed while the save finishes, until the
+**Draft** row is tapped or the thread is opened again.
 On desktop, a saved reply that reappears with its thread (opening it, stepping
 to it with j/k, the reading pane following the list) stays unfocused, so the
 next j moves on instead of typing into it; `r` or a click continues it.
@@ -597,9 +633,10 @@ and type; every character must stay in Subject.
 In new emails, replies, reply-alls, and forwards, `Cmd+Shift+C` (`Ctrl+Shift+C`)
 reveals and focuses Cc and `Cmd+Shift+B` does the same for Bcc, expanding a
 collapsed reply header; inside a composer they never fall through to the
-thread's Copy link. `bunx playwright test --config
-src/features/email-compose/browser-test/playwright.app.config.ts` (from
-`apps/web`) checks both shortcuts in all four composers.
+thread's Copy link. Clicking the Cc or Bcc button also focuses the revealed
+field, so typing goes there instead of to app shortcuts. `bunx playwright test
+--config src/features/email-compose/browser-test/playwright.app.config.ts` (from
+`apps/web`) checks both shortcuts and both buttons in all four composers.
 While an editable field is focused, Escape is handled by that field before the
 close-reply shortcut.
 An edited reply remains a draft when navigating away and returning. Standalone
@@ -648,15 +685,22 @@ written message and these controls on desktop and mobile, where sending inserts
 the signature above the quoted thread on Gmail and Outlook.
 Check recipient suggestions from a Gmail and an Outlook inbox. Typing a full
 address and pressing Enter commits that address, ahead of longer matches such
-as `teo+123456@macro.com`, whether or not it is a saved contact. A name or
-address word that starts with the query ranks above recent substring matches
-(`gab` finds Gab Rowan). Opened empty, the list puts colleagues on the sending
-inbox's domain first. A chip shows the name and its hover card the address.
+as `teo+123456@macro.com`, whether or not it is a saved contact. That holds
+when contacts or their names load after typing starts and reorder the list,
+including under a resting pointer, and when the address was typed or pasted
+before suggestions loaded. A name or address word that starts with the query
+ranks above recent substring matches (`gab` finds Gab Rowan). Opened empty,
+the list puts colleagues on the sending inbox's domain first. A chip shows the
+name followed by the address in muted ink.
 Press Send with To empty, then add a recipient: the error clears at once, as a
 missing message or subject error does once filled in. Suggestions leave out
 automated addresses (`notifications@`, `mailer-daemon@`, `postmaster@`,
 `bounce@` and no-reply or do-not-reply addresses); typing one in full still adds
 it. Reply on a bounce goes to its sender, as for any other message.
+With a typed address chip in To or Cc, type text that is not an address
+(`notanemail`) and press Enter, or `bad@@x..com` and Tab: the chip stays, and
+the text stays in the field to be corrected. A typed address already chosen is
+not listed again in the suggestions.
 When checking draft autosave, edit the body of a draft with uploaded or forwarded
 attachments, wait for the save, and reopen it; the attachments should remain visible.
 In a long thread, scroll away from the bottom while a draft save is pending.
@@ -739,8 +783,8 @@ local copy rather than recreating the sent message. The REST compose path keeps
 its existing behavior.
 
 Native draft recovery requires a full app update containing queue inspection and
-durable mutation metadata support. An older app receiving an OTA bundle shows
-**Macro update required** and uses the existing uncached fallback. Its old queue
+durable mutation metadata support. An older app receiving an OTA bundle opens
+the update-required dialog once and uses the existing uncached fallback. Its old queue
 must remain intact, with no new claims or queued writes, until the native update.
 When the cache becomes unavailable, draft saves and discards must not bypass its
 preserved queue through GraphQL or REST fallback. Local editing stays durable;
@@ -794,6 +838,30 @@ signature. Plaintext and Macro Markdown use the existing Markdown renderer;
 Macro Markdown messages retain document mentions. Ordinary HTML bodies use an
 open shadow root: Playwright text locators can reach them, but a card's ordinary
 `innerText` or `querySelector` does not traverse that root.
+
+### Read receipts
+
+With `enable-email-read-receipts` on and read receipts on for an inbox, which
+is the default (see [Settings](settings.md#email-read-receipts)), messages sent from that
+inbox show **Opened** or **Not opened** beside the date in the expanded
+message header. The desktop tooltip and the expanded header details (tap the
+header caret on touch) give the count and first and last open times. Only
+people with access to the sending inbox see it, and the thread refreshes it
+about once a minute. Turning the setting off stops tracking new messages;
+statuses already recorded for that inbox stay visible while another of the
+viewer's inboxes has read receipts on, and every status hides once none does.
+A recipient who reads their own copy in Macro counts as
+an open; the reader loads the pixel only on copies in an inbox the viewer owns
+or is a delegate of that were not sent from one of the viewer's addresses or
+send-as aliases. The sender's copy never loads it, including a copy the sender
+received by CC'ing themselves, and neither does a thread seen only through
+sharing or any copy while the viewer's inboxes load. Quoted replies and
+forwards always drop it, so new recipients never inherit the original's pixel.
+With the image proxy on, a browser caches the pixel, so a recipient's repeat
+opens in Macro on one device count once. Verify with two Macro accounts: open
+the recipient's copy, then check the sender's status; the sender's own views
+must not change it. Opens need the email service's public URL, which the local
+Docker stack cannot serve.
 
 Sending a reply from an inbox thread marks that thread done but stays on it.
 Send and mark done (Shift+Cmd+Enter) and Mark done open the next email, counted

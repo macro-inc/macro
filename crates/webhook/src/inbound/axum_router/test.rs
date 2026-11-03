@@ -125,6 +125,7 @@ impl MacroAuthorizationService for FakeAuthorizationService {
             .map(|user_id| macro_authorization::MacroUserAuthentication {
                 origin: macro_authorization::CredentialOrigin::Bot,
                 agent_id: None,
+                agent_via: None,
                 macro_user_id: MacroUserIdStr::try_from(user_id).unwrap(),
                 user_context: UserContext::default(),
             });

@@ -770,7 +770,6 @@ export default {
     goForward: 'ไปข้างหน้า',
     createNewSplit: 'สร้างแผงใหม่',
     close: 'ปิด',
-    returnToList: 'กลับไปที่รายการ',
     previousItem: 'รายการก่อนหน้า',
     nextItem: 'รายการถัดไป',
     itemNavigation: 'การนำทางรายการ',

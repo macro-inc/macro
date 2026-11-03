@@ -40,6 +40,7 @@ connection_gateway_models = { path = "../../crates/connection_gateway_models" }
 cowlike = { path = "../../crates/cowlike" }
 dashmap = { workspace = true }
 ensure_exists = { path = "../../crates/ensure_exists", features = ["dynamodb"] }
+entity_access = { path = "../../crates/entity_access", default-features = false, features = ["outbound"] }
 frecency = { path = "../../crates/frecency", features = [
   "inbound",
   "outbound",

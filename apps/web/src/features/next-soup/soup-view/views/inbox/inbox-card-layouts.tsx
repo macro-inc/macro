@@ -34,6 +34,7 @@ import BellSimpleIcon from '@icon/system/regular/bell-simple.svg?component-solid
 import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg?component-solid';
 import ChatTeardropIcon from '@icon/system/regular/chat-teardrop.svg?component-solid';
 import ChatTextIcon from '@icon/system/regular/chat-text.svg?component-solid';
+import ClockIcon from '@icon/system/regular/clock-clockwise.svg?component-solid';
 import FilesIcon from '@icon/system/regular/files.svg';
 import GitMergeIcon from '@icon/system/regular/git-merge.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
@@ -53,6 +54,7 @@ import type { PropertyApiValues, Property as PropertyT } from '@property/types';
 import { senderFromStorageId } from '@queries/messages/message-sender';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-storage/generated/schemas';
+import { Key } from '@solid-primitives/keyed';
 import { Avatar, cn, Tooltip } from '@ui';
 import { parseISO } from 'date-fns';
 import { createMemo, For, type JSX, Match, Show, Switch } from 'solid-js';
@@ -266,6 +268,9 @@ const tagBubbleIcon = (tag: NotificationTag) =>
     .with('agent_session_mentioned', () => () => (
       <AtIcon class={AVATAR_GLYPH_CLASS} />
     ))
+    .with('routine_run_finished', () => () => (
+      <ClockIcon class={AVATAR_GLYPH_CLASS} />
+    ))
     .with('reminder', () => () => <BellSimpleIcon class={AVATAR_GLYPH_CLASS} />)
     .with('calendar_event_reminder', () => () => (
       <CalendarBlankIcon class={AVATAR_GLYPH_CLASS} />
@@ -363,9 +368,9 @@ function PropertyPills(props: { entityId: string; properties?: PropertyT[] }) {
         saveHandler={saveHandler}
       >
         <div class="flex flex-wrap items-center gap-1 text-xs">
-          <For each={properties()}>
-            {(property) => <ListPropertyValue property={property} />}
-          </For>
+          <Key each={properties()} by="propertyDefinitionId">
+            {(property) => <ListPropertyValue property={property()} />}
+          </Key>
         </div>
       </PropertiesProvider>
     </Show>

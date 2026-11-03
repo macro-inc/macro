@@ -18,6 +18,10 @@ export type ChatSummary = {
   unreadCount: number;
   /** False for viewers who can only read. */
   canSend: boolean;
+  /** Why the viewer can't send, when they can't. */
+  sendReason?: ExternalChatReplyBlock;
+  /** Importing earlier messages from the owner's phone. */
+  backfill?: ChatBackfill;
   /** The provider community the group belongs to. */
   community?: { id: string; name: string; announcements: boolean };
 };
@@ -222,15 +226,16 @@ export function backfillStatus(
   viewerOwns: boolean
 ): string | undefined {
   if (!backfill) return undefined;
-  return match(backfill.state)
-    .with(P.union('pending', 'running'), () => 'Importing history…')
-    .with('waiting_for_phone', () =>
-      viewerOwns
-        ? 'Waiting for your phone to import history'
-        : "Waiting for the owner's phone to import history"
-    )
-    .with(P.union('waiting_for_message', 'done', 'partial'), () => undefined)
-    .exhaustive();
+  return (
+    match(backfill.state)
+      .with(P.union('pending', 'running'), () => 'Importing history…')
+      // The owner gets the import bar with its button instead.
+      .with('waiting_for_phone', () =>
+        viewerOwns ? undefined : "Earlier messages wait for the owner's phone"
+      )
+      .with(P.union('waiting_for_message', 'done', 'partial'), () => undefined)
+      .exhaustive()
+  );
 }
 
 /** "Launch · Design", or "Launch · Announcements" for its announcement group. */

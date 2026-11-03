@@ -6,7 +6,7 @@ const INTERNAL_KEY: &str = "test-internal-key";
 /// A routine its owner created, then handed to the team.
 async fn team_action(service: &Arc<TestService>) -> Uuid {
     let app = router_with(Arc::clone(service), FakeEntityAccessService::owner_only());
-    let (_, created) = request(&app, "POST", "/scheduled-actions", "owner", legacy()).await;
+    let (_, created) = request(&app, "POST", "/scheduled-actions", "owner", cron_action()).await;
     let id = Uuid::parse_str(created["id"].as_str().unwrap()).unwrap();
     set_stored_owner(service, id, Owner::Team(TEAM_ID));
     id

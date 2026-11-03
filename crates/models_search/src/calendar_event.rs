@@ -94,8 +94,10 @@ pub struct CalendarEventSearchOccurrence {
     pub time: CalendarEventSearchTime,
 }
 
-/// The event's organizer — its creator, in Google's model. Either field can be
-/// absent when the source does not name it.
+/// The organizer the provider names on the event. Either field can be absent
+/// when the source does not name it. On a read-only Outlook calendar, such as
+/// its holidays, Microsoft names the mailbox owner on every event, so this
+/// does not say the user organized anything: `role` does.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CalendarEventOrganizer {
@@ -105,6 +107,18 @@ pub struct CalendarEventOrganizer {
     /// Organizer email address, when known.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub email: Option<String>,
+}
+
+/// What the user is on one copy of an event, through the inbox holding it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CalendarEventSearchRole {
+    /// The inbox organizes the event, or the event has no guests and is the
+    /// user's own. Writing someone else's calendar is not this, nor is a
+    /// read-only calendar naming them organizer.
+    Organizer,
+    /// The inbox is invited to the event.
+    Guest,
 }
 
 /// A single response item, part of the CalendarEventSearchResponse object
@@ -147,9 +161,29 @@ pub struct CalendarEventMetadata {
     pub conference_url: Option<String>,
     /// Whether the canonical source prohibits mutation.
     pub is_read_only: bool,
-    /// The event's organizer (creator), when the source names one.
+    /// The organizer the provider names, when it names one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub organizer: Option<CalendarEventOrganizer>,
+    /// Display name of the calendar holding this copy. Absent on an event
+    /// shared with the user, which is on none of their calendars.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub calendar_name: Option<String>,
+    /// Whether a calendar holding this copy is on the user's schedule. The
+    /// user can see calendars that are not theirs, such as a colleague's: a
+    /// row without this, and that they do not attend, says what that calendar
+    /// shows, not where the user is.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub contributes_to_availability: Option<bool>,
+    /// The connected inbox syncing that calendar. It stays the user's own
+    /// address on a colleague's calendar, so it never says whose calendar it
+    /// is.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inbox: Option<String>,
+    /// Whether the user organizes this copy or is a guest on it. Absent when
+    /// they are neither, when they can only write that calendar, or when a
+    /// read-only calendar names them organizer.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub role: Option<CalendarEventSearchRole>,
     /// Free-text description, when the event carries one. May contain HTML from
     /// the source; clients render a plain-text preview.
     #[serde(skip_serializing_if = "Option::is_none")]

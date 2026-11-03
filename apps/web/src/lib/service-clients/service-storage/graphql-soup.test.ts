@@ -230,7 +230,8 @@ it('maps agent sessions without discarding persona, favorites or notifications',
     entityType: 'AGENT_SESSION',
     displayName: 'Fix mentions',
     sessionName: 'Fix mentions',
-    isArchived: false,
+    archivedBy: 'PULL_REQUEST_MERGED',
+    archivedAt: '2026-01-03T00:00:00Z',
     ownerId: 'macro|owner@example.com',
     botId: 'bot',
     harness: 'cursor',
@@ -266,6 +267,8 @@ it('maps agent sessions without discarding persona, favorites or notifications',
     data: {
       id: 'session',
       name: 'Fix mentions',
+      archivedBy: 'pull_request_merged',
+      archivedAt: '2026-01-03T00:00:00Z',
       bot: { name: 'Ada' },
       harness: 'cursor',
       repoUrl: 'https://github.com/macro/macro',
@@ -413,7 +416,8 @@ vi.mock('@core/constant/featureFlags', () => ({
   enableGraphqlSoup: { key: 'enable-graphql-soup' },
   isFeatureEnabled: () => mocks.graphqlEnabled,
 }));
-vi.mock('@core/constant/servers', () => ({
+vi.mock('@core/constant/servers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/servers')>()),
   SERVER_HOSTS: { 'document-storage-service': 'http://dss.test' },
 }));
 vi.mock('@core/util/cookies', () => ({
@@ -464,8 +468,10 @@ vi.mock('@macro-inc/observability', () => ({
   Telemetry: {
     error: mocks.telemetryError,
     warn: mocks.telemetryWarn,
+    captureContext: () => ({ run: <T>(work: () => T) => work() }),
     span: (_name: string, work: (span: unknown) => Promise<unknown>) =>
       work({
+        run: <T>(work: () => T) => work(),
         event: vi.fn(),
         setAttr: vi.fn(),
         injectTraceHeaders: (headers: Record<string, string>) => {
@@ -494,6 +500,11 @@ vi.mock('./graphql-soup-websocket', () => ({
   shouldRetryGraphqlSoupWebSocket: () => false,
   waitToRetryGraphqlSoupWebSocket: vi.fn(),
   createGraphqlSoupWebSocketUrlResolver: () => () => 'ws://dss.test',
+  createGraphqlSoupWebSocketLiveness: () => ({
+    connected: vi.fn(),
+    pong: vi.fn(),
+    closed: vi.fn(),
+  }),
   createGraphqlSoupSubscriptionsLifecycle: () => ({
     replace: mocks.replaceSubscriptions,
     dispose: vi.fn(() => mocks.recordSubscriptionDisposal()),
@@ -852,6 +863,9 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(payload.query).toContain('cacheProjection');
     expect(payload.query).toContain('@include');
     expect(payload.variables).toEqual({ includeId: true });
+    expect(
+      new Headers(transport.headers).get('x-macro-mail-cache-profile')
+    ).toBe('soup-mail-v5');
     expect(new Headers(transport.headers).get('traceparent')).toBe(
       mocks.traceparent
     );
@@ -1418,14 +1432,13 @@ describe('GraphQL Soup browser cache session gate', () => {
     const { NativeCacheUpgradeRequiredError } = await import(
       '@graphql-cache/host/tauri-host'
     );
+    const { nativeUpdateRequired, resetNativeUpdateRequiredForTests } =
+      await import('@core/mobile/nativeUpdateRequired');
+    resetNativeUpdateRequiredForTests();
     const cached = soup.getGraphqlSoupClient();
     mocks.failInitialization(new NativeCacheUpgradeRequiredError());
-    expect(mocks.toastFailure).toHaveBeenCalledWith(
-      'Macro update required',
-      expect.objectContaining({
-        subtext: expect.stringContaining('queued drafts are preserved'),
-      })
-    );
+    expect(nativeUpdateRequired()).toContain('queued drafts are preserved');
+    expect(mocks.toastFailure).not.toHaveBeenCalled();
     expect(soup.graphqlCacheEnabled()).toBe(false);
     expect(soup.getGraphqlSoupClient()).not.toBe(cached);
     expect(mocks.host.dispose).toHaveBeenCalledOnce();

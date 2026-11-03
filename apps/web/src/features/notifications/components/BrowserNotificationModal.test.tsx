@@ -13,21 +13,18 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BrowserNotificationModal } from './BrowserNotificationModal';
 
+type PromptOptions = {
+  persistent?: boolean;
+  region?: string;
+  onUserDismiss?: () => void;
+};
+
 const mocks = vi.hoisted(() => ({
-  custom: vi.fn(
-    (
-      _config: CustomToastConfig,
-      _options: {
-        persistent: boolean;
-        region: string;
-        onUserDismiss: () => void;
-      }
-    ) => 1
-  ),
+  custom: vi.fn((_config: CustomToastConfig, _options?: PromptOptions) => 1),
   dismiss: vi.fn(),
-  dismissPrompt: vi.fn(),
   toggle: vi.fn(async (_enabled: boolean) => {}),
   mobile: false,
+  dismissPrompt: vi.fn(),
 }));
 
 vi.mock('@core/component/Toast/Toast', () => ({
@@ -45,13 +42,14 @@ vi.mock('../notification-settings', () => ({
     shouldPrompt: () => true,
     dismissPrompt: mocks.dismissPrompt,
     toggle: mocks.toggle,
+    isEnabled: () => true,
   }),
 }));
 
 function MockToaster() {
   return (
     <>
-      <button onClick={() => mocks.custom.mock.lastCall?.[1].onUserDismiss()}>
+      <button onClick={() => mocks.custom.mock.lastCall?.[1]?.onUserDismiss?.()}>
         Dismiss
       </button>
       <button
@@ -80,17 +78,17 @@ afterEach(() => {
 });
 
 describe('browser notification prompt', () => {
-  it('waits in the phone prompt region, which steps aside for open sheets', () => {
+  it('waits in the phone prompt region, which open sheets cover', () => {
     mocks.mobile = true;
     renderPrompt();
 
     expect(mocks.custom).toHaveBeenCalledWith(
       expect.objectContaining({ title: 'Enable Browser Notifications' }),
-      {
+      expect.objectContaining({
         persistent: true,
         region: 'mobile-prompt-region',
         onUserDismiss: expect.any(Function),
-      }
+      })
     );
   });
 
@@ -98,11 +96,21 @@ describe('browser notification prompt', () => {
     mocks.mobile = false;
     renderPrompt();
 
-    expect(mocks.custom).toHaveBeenCalledWith(expect.anything(), {
-      persistent: true,
-      region: 'prompt-region',
-      onUserDismiss: expect.any(Function),
-    });
+    expect(mocks.custom).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        persistent: true,
+        region: 'prompt-region',
+        onUserDismiss: expect.any(Function),
+      })
+    );
+  });
+
+  it('offers Enable as its only action', () => {
+    renderPrompt();
+
+    const [config] = mocks.custom.mock.calls[0]!;
+    expect(config.actions?.map((action) => action.label)).toEqual(['Enable']);
   });
 
   it('persists user dismissal through notification settings', () => {

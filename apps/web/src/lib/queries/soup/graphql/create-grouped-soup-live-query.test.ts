@@ -41,17 +41,6 @@ vi.mock('../../../service-clients/service-storage/graphql-soup', () => ({
   getGraphqlSoupCacheHost: mocks.host,
   getGraphqlSoupClient: mocks.client,
 }));
-vi.mock('@macro-inc/observability', () => ({
-  Telemetry: {
-    span: () => ({
-      setAttr: vi.fn(),
-      error: vi.fn(),
-      end: vi.fn(),
-      run: (operation: () => unknown) => operation(),
-    }),
-    error: vi.fn(),
-  },
-}));
 
 const cleanups: Array<() => void> = [];
 afterEach(() => {
@@ -191,8 +180,9 @@ function page(
         bins: [
           {
             key: 'todo',
-            label: null,
             items,
+            displayOrder: null,
+            label: null,
             totalCount: 20,
             nextCursor: cursor,
           },
@@ -578,6 +568,7 @@ describe('grouped Soup live ownership', () => {
       key: 'done',
       label: null,
       items: [],
+      displayOrder: null,
       totalCount: 12,
       nextCursor: 'done-next',
     });

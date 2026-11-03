@@ -3,9 +3,23 @@ import type {
   PaneId,
   SplitLocation,
   SplitPanePolicy,
+  SplitSide,
 } from '@app/lib/split-router';
 import { paneRootMatch } from '@app/routes/app-route';
-import type { SplitContent, SplitId, SplitManager } from '../layoutManager';
+import {
+  type SplitContent,
+  type SplitManager,
+  splitOf,
+} from '../layoutManager';
+
+declare module '@app/lib/split-router/panes/types' {
+  interface OpenIntent {
+    /** The manager already checked for room. */
+    readonly direct?: boolean;
+    /** Split this pane, with the new one on `side`. */
+    readonly split?: { readonly pane: PaneId; readonly side: SplitSide };
+  }
+}
 
 type AppPanePolicyOptions = {
   manager: () => SplitManager | undefined;
@@ -21,8 +35,6 @@ function isShellComponent(content: SplitContent): boolean {
 
   return parseAgentsRoute(content.id) === undefined;
 }
-
-const splitOf = (pane: PaneId) => pane as string as SplitId;
 
 /** The app's decisions about panes: where new ones go, what closing one does, and focus. */
 export function createAppPanePolicy(
@@ -53,9 +65,9 @@ export function createAppPanePolicy(
         intent.direct !== true && !options.manager()?.canAppendSplit();
       if (full && fallback) return { pane: fallback };
 
-      const { insertIndex } = intent;
-      if (typeof insertIndex === 'number') {
-        return { insertAt: Math.max(0, Math.min(insertIndex, panes.length)) };
+      const { split } = intent;
+      if (split && panes.includes(split.pane)) {
+        return { split: split.pane, side: split.side };
       }
 
       return { insertAt: panes.length };

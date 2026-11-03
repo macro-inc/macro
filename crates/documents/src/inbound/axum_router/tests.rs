@@ -415,6 +415,7 @@ impl DocumentService for FakeDocumentService {
         &self,
         _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
         _credited_user: Option<MacroUserIdStr<'static>>,
+        _source: Option<models_properties::service::property_change_source::PropertyChangeSource>,
         _status: &str,
     ) -> Result<(), DocumentError> {
         panic!("unexpected update_task_status call")
@@ -913,6 +914,7 @@ impl MacroAuthorizationService for FakeAuthorizationService {
                 .map(|user_id| MacroUserAuthentication {
                     origin: macro_authorization::CredentialOrigin::Bot,
                     agent_id: None,
+                    agent_via: None,
                     macro_user_id: user(&user_id),
                     user_context: user_context(&user_id),
                 }),

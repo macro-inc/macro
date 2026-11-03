@@ -1,7 +1,4 @@
-use crate::{
-    AuthedClient, Result,
-    error::{FusionAuthClientError, GenericErrorResponse},
-};
+use crate::{AuthedClient, Result, error::FusionAuthClientError};
 
 /// Revokes a single refresh token. A token FusionAuth does not know (already
 /// revoked or expired) counts as revoked, so callers can retry.
@@ -21,29 +18,13 @@ pub(crate) async fn revoke_refresh_token(
         .form(&[("token", refresh_token)])
         .send()
         .await
-        .map_err(|e| {
-            FusionAuthClientError::Generic(GenericErrorResponse {
-                message: e.to_string(),
-            })
-        })?;
+        .map_err(FusionAuthClientError::transport)?;
 
     match res.status() {
         reqwest::StatusCode::OK | reqwest::StatusCode::NOT_FOUND => {
             tracing::trace!("refresh token revoked");
             Ok(())
         }
-        status => {
-            let body = res.text().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
-
-            tracing::error!(body=%body, %status, "unexpected response from fusionauth");
-
-            Err(FusionAuthClientError::Generic(GenericErrorResponse {
-                message: body,
-            }))
-        }
+        _ => Err(FusionAuthClientError::unexpected_response(res).await),
     }
 }

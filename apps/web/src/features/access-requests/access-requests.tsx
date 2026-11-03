@@ -1,4 +1,5 @@
 import { useIsAuthenticated } from '@core/auth';
+import NotFound from '@core/component/AccessErrorViews/NotFound';
 import Unauthorized from '@core/component/AccessErrorViews/Unauthorized';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Button } from '@ui';
@@ -52,28 +53,37 @@ export function AccessDenied(props: {
   const authenticated = useIsAuthenticated();
   createEffect(
     on(
-      () => props.source.state()?.accessLevel,
+      () =>
+        props.source.loading() || props.source.notFound()
+          ? undefined
+          : props.source.state()?.accessLevel,
       (level) => {
         if (level) props.onAccessGranted();
       }
     )
   );
   return (
-    <Unauthorized noun={props.noun}>
-      <Show when={authenticated()}>
-        <div class="mt-6 flex w-full flex-col gap-3 text-sm">
-          <Show when={props.source.loading()}>
-            <span class="text-ink-muted">Loading access requests…</span>
-          </Show>
-          <RequestAccessView
-            source={props.source}
-            allowedLevels={['view', 'comment', 'edit']}
-          />
-          <PermissionRequestsView source={props.source} />
-          <AccessRequestError source={props.source} />
-        </div>
-      </Show>
-    </Unauthorized>
+    <Show when={!props.source.notFound()} fallback={<NotFound />}>
+      <Unauthorized noun={props.noun}>
+        <Show when={authenticated()}>
+          <div class="mt-6 flex w-full flex-col gap-3 text-sm">
+            <Show
+              when={!props.source.loading()}
+              fallback={
+                <span class="text-ink-muted">Loading access requests…</span>
+              }
+            >
+              <RequestAccessView
+                source={props.source}
+                allowedLevels={['view', 'comment', 'edit']}
+              />
+              <PermissionRequestsView source={props.source} />
+              <AccessRequestError source={props.source} />
+            </Show>
+          </div>
+        </Show>
+      </Unauthorized>
+    </Show>
   );
 }
 
