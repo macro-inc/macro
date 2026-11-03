@@ -607,6 +607,64 @@
         }
       }
     },
+    "/properties/entities/{entity_type}/{entity_id}/{property_id}/crm-references": {
+      "post": {
+        "tags": ["Properties"],
+        "summary": "Append record links to a file without replacing existing or concurrent links.",
+        "operationId": "append_crm_file_references",
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "description": "DOCUMENT",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/PropertyTargetEntityType"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "description": "Source document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "property_id",
+            "in": "path",
+            "description": "Companies or Contacts property ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetEntityPropertyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "References appended; existing links and file access preserved"
+          },
+          "400": {
+            "description": "Expected multi_entity_reference for Companies or Contacts on a non-task file"
+          },
+          "403": {
+            "description": "No edit access to the source document"
+          }
+        }
+      }
+    },
     "/properties/entities/{entity_type}/{entity_id}/{property_id}/options/{option_id}": {
       "post": {
         "tags": ["Properties"],

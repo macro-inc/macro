@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddEntityPropertyOptionData, AddEntityPropertyOptionErrors, AddEntityPropertyOptionResponses, AddPropertyOptionData, AddPropertyOptionErrors, AddPropertyOptionResponses, BulkUpdateEntitiesPropertyOptionsData, BulkUpdateEntitiesPropertyOptionsErrors, BulkUpdateEntitiesPropertyOptionsResponses, BulkUpdateEntityPropertyOptionsData, BulkUpdateEntityPropertyOptionsErrors, BulkUpdateEntityPropertyOptionsResponses, CreatePropertyDefinitionData, CreatePropertyDefinitionErrors, CreatePropertyDefinitionResponses, DeleteEntityPropertyData, DeleteEntityPropertyErrors, DeleteEntityPropertyResponses, DeletePropertyDefinitionData, DeletePropertyDefinitionErrors, DeletePropertyDefinitionResponses, DeletePropertyOptionData, DeletePropertyOptionErrors, DeletePropertyOptionResponses, EnsureTagSetData, EnsureTagSetErrors, EnsureTagSetResponses, GetBulkEntityPropertiesData, GetBulkEntityPropertiesErrors, GetBulkEntityPropertiesResponses, GetEntityPropertiesData, GetEntityPropertiesErrors, GetEntityPropertiesResponses, GetPropertyDefinitionData, GetPropertyDefinitionErrors, GetPropertyDefinitionResponses, GetPropertyOptionsData, GetPropertyOptionsErrors, GetPropertyOptionsResponses, ListPropertiesData, ListPropertiesErrors, ListPropertiesResponses, ListTagsData, ListTagsErrors, ListTagsResponses, MergeTagData, MergeTagErrors, MergeTagResponses, PromoteTagData, PromoteTagErrors, PromoteTagResponses, RemoveEntityPropertyOptionData, RemoveEntityPropertyOptionErrors, RemoveEntityPropertyOptionResponses, SetEntityPropertyData, SetEntityPropertyErrors, SetEntityPropertyResponses, UpdatePropertyOptionData, UpdatePropertyOptionErrors, UpdatePropertyOptionResponses } from './types.gen';
+import type { AddEntityPropertyOptionData, AddEntityPropertyOptionErrors, AddEntityPropertyOptionResponses, AddPropertyOptionData, AddPropertyOptionErrors, AddPropertyOptionResponses, AppendCrmFileReferencesData, AppendCrmFileReferencesErrors, AppendCrmFileReferencesResponses, BulkUpdateEntitiesPropertyOptionsData, BulkUpdateEntitiesPropertyOptionsErrors, BulkUpdateEntitiesPropertyOptionsResponses, BulkUpdateEntityPropertyOptionsData, BulkUpdateEntityPropertyOptionsErrors, BulkUpdateEntityPropertyOptionsResponses, CreatePropertyDefinitionData, CreatePropertyDefinitionErrors, CreatePropertyDefinitionResponses, DeleteEntityPropertyData, DeleteEntityPropertyErrors, DeleteEntityPropertyResponses, DeletePropertyDefinitionData, DeletePropertyDefinitionErrors, DeletePropertyDefinitionResponses, DeletePropertyOptionData, DeletePropertyOptionErrors, DeletePropertyOptionResponses, EnsureTagSetData, EnsureTagSetErrors, EnsureTagSetResponses, GetBulkEntityPropertiesData, GetBulkEntityPropertiesErrors, GetBulkEntityPropertiesResponses, GetEntityPropertiesData, GetEntityPropertiesErrors, GetEntityPropertiesResponses, GetPropertyDefinitionData, GetPropertyDefinitionErrors, GetPropertyDefinitionResponses, GetPropertyOptionsData, GetPropertyOptionsErrors, GetPropertyOptionsResponses, ListPropertiesData, ListPropertiesErrors, ListPropertiesResponses, ListTagsData, ListTagsErrors, ListTagsResponses, MergeTagData, MergeTagErrors, MergeTagResponses, PromoteTagData, PromoteTagErrors, PromoteTagResponses, RemoveEntityPropertyOptionData, RemoveEntityPropertyOptionErrors, RemoveEntityPropertyOptionResponses, SetEntityPropertyData, SetEntityPropertyErrors, SetEntityPropertyResponses, UpdatePropertyOptionData, UpdatePropertyOptionErrors, UpdatePropertyOptionResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -187,6 +187,20 @@ export class Sdk extends HeyApiClient {
     public setEntityProperty<ThrowOnError extends boolean = false>(options: Options<SetEntityPropertyData, ThrowOnError>): RequestResult<SetEntityPropertyResponses, SetEntityPropertyErrors, ThrowOnError> {
         return (options.client ?? this.client).put<SetEntityPropertyResponses, SetEntityPropertyErrors, ThrowOnError>({
             url: '/properties/entities/{entity_type}/{entity_id}/{property_id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Append record links to a file without replacing existing or concurrent links.
+     */
+    public appendCrmFileReferences<ThrowOnError extends boolean = false>(options: Options<AppendCrmFileReferencesData, ThrowOnError>): RequestResult<AppendCrmFileReferencesResponses, AppendCrmFileReferencesErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<AppendCrmFileReferencesResponses, AppendCrmFileReferencesErrors, ThrowOnError>({
+            url: '/properties/entities/{entity_type}/{entity_id}/{property_id}/crm-references',
             ...options,
             headers: {
                 'Content-Type': 'application/json',

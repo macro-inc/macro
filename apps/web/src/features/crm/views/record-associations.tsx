@@ -1,11 +1,11 @@
 import EmptyStateCallsGraphic from '@design/empty-state-calls.svg';
-import EmptyStateDocGraphic from '@design/empty-state-doc.svg';
 import { createSignal, Show } from 'solid-js';
 import { CrmListEmpty, CrmListSkeleton } from '../components/list-state';
 import { RecordSection } from '../components/record-section';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmRecordScope } from '../core/record';
 import { CrmDatabasesView } from './databases';
+import { RecordFiles } from './record-files';
 import { RecordItemList } from './record-item-list';
 
 /**
@@ -13,38 +13,7 @@ import { RecordItemList } from './record-item-list';
  * plus attachments of emails exchanged with its people.
  */
 export function RecordFilesSection(props: { scope?: CrmRecordScope }) {
-  const [search, setSearch] = createSignal('');
-  const crm = useCrmContext();
-  const files = crm.createRecordFiles(() => props.scope);
-  return (
-    <RecordSection
-      title="Files"
-      search={search()}
-      onSearchChange={setSearch}
-      createAction={{
-        label: 'New note',
-        onClick: () => crm.openCreateItem('notes'),
-      }}
-    >
-      <RecordItemList
-        source={files}
-        search={search()}
-        pending={!props.scope}
-        onClearSearch={() => setSearch('')}
-        emptyContent={
-          <CrmListEmpty
-            graphic={EmptyStateDocGraphic}
-            title="No files linked yet"
-            description={`Create a note and link it to this ${props.scope?.type ?? 'record'} through its Companies or Contacts property.`}
-            action={{
-              label: 'New note',
-              onClick: () => crm.openCreateItem('notes'),
-            }}
-          />
-        }
-      />
-    </RecordSection>
-  );
+  return <RecordFiles scope={props.scope} />;
 }
 
 /**

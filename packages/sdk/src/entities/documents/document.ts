@@ -20,6 +20,8 @@ import {
 } from '../../mentions';
 import { MacroApiError, mapConcurrently, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import type { Company } from '../crm/company';
+import type { Contact } from '../crm/contact';
 import { PropertiedEntity } from '../entity';
 import {
   MessageThread,
@@ -39,6 +41,12 @@ type DocumentDetail = GetDocumentResponses[200]['data']['documentMetadata'];
 /** Thread reads in flight at once while `comments()` expands a document's roots. */
 const THREAD_FETCH_CONCURRENCY = 8;
 
+/** Stable Companies/Contacts definitions from SystemPropertyKey. */
+const CRM_FILE_PROPERTIES = {
+  crm_company: '00000001-0000-0000-0000-00000000000c',
+  crm_contact: '00000001-0000-0000-0000-000000000013',
+} as const;
+
 /** One of a document's comment threads: its state and its comments. */
 export interface CommentThread {
   /** The thread state: root id, resolved flag, owner, anchor, timestamps. */
@@ -55,6 +63,35 @@ export class Document
   extends PropertiedEntity<DocumentDetail>
   implements Mentionable
 {
+  /**
+   * Attach this file to a CRM record, preserving its other record links and
+   * classification. Requires edit access to this non-task document; does not
+   * grant access to the file. Repeating the same attachment is idempotent.
+   */
+  async attachTo(record: Company | Contact): Promise<void> {
+    await this.mutate((client) =>
+      client.properties.appendCrmFileReferences({
+        path: {
+          entity_type: 'DOCUMENT',
+          entity_id: this.id,
+          property_id: CRM_FILE_PROPERTIES[record.entityType],
+        },
+        body: {
+          value: {
+            type: 'multi_entity_reference',
+            references: [
+              {
+                entity_id: record.id,
+                entity_type:
+                  record.entityType === 'crm_company' ? 'COMPANY' : 'CONTACT',
+              },
+            ],
+          },
+        },
+      }),
+    );
+  }
+
   /** PDF annotations in this document. */
   async anchors(): Promise<DocumentAnchor[]> {
     return unwrap(

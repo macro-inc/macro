@@ -69,6 +69,24 @@ rasterizes an `<img>` at its layout size, so a `scale()` transform blurs it.
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 
+CRM typed files use the team's single-select `File type` property on source documents.
+Keep Overview and Files grouping aligned; file edits require source edit access.
+Use the same entity `ListGroupHeader` as Tasks for type disclosure and counts;
+preserve option-ID collapse state through refreshes, reset it per record/session,
+and keep explicit paging reachable while groups are collapsed.
+Preserve option identity during catalog polling so open rename drafts survive refreshes.
+Route file-type writes through TanStack mutations; management spans include team IDs,
+read/write phases and outcomes without recording type labels.
+Keep these REST writes immediate and bound to the session that started them.
+Report reader refresh failures in telemetry without failing an already saved change.
+Their record, dialog and mobile browser regression is
+`bunx playwright test --config src/features/crm/browser-test/playwright.config.ts files.browser.e2e.ts`.
+REST property mutations refresh individual, batched, and active GraphQL readers
+through `lib/queries/properties/invalidation.ts`. GraphQL mutations refresh
+TanStack readers and retain normalized-cache ownership of optimistic and offline
+reconciliation. Initiative property changes also refetch their GraphQL property
+list because the returned property record does not contain its link changes.
+
 Phone sheets stacked on each other (Connect email over Settings, Add guests,
 RSVP scope and the delete confirmation over event details) have a backend-free
 browser regression for backdrop taps that must not press what the scrim covers,

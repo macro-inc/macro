@@ -225,6 +225,14 @@ export const propertiesServiceClient = {
     return result.map(() => ({ success: true }));
   },
 
+  appendCrmFileReferences: async (args: SetEntityPropertyArgs) => {
+    const result = await propertiesFetch<{}>(
+      `/properties/entities/${args.entity_type}/${args.entity_id}/${args.property_id}/crm-references`,
+      { method: 'POST', body: JSON.stringify(args.body) }
+    );
+    return result.map(() => ({ success: true }));
+  },
+
   deleteEntityProperty: async (args: DeleteEntityPropertyArgs) => {
     const result = await propertiesFetch<{}>(
       `/properties/entity_properties/${args.entity_property_id}`,

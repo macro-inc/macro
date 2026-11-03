@@ -14,6 +14,11 @@ List selection checkmarks update without animation. Selection subscriptions noti
 only changed rows; task and project focus subscriptions update the old and new
 rows without invalidating every visible row.
 
+`composed/list-entity/list-group-header.tsx` owns the shared Tasks and typed-file
+disclosure chrome, count badge and responsive row geometry. Hosts supply labels,
+optional icons, expansion state and keyboard ownership; Tasks retains its grid
+roles, status tints and roving focus, while record files use native tab stops.
+
 Task list priority and status editing use `extractors-property/task-property-control.tsx`
 in that order before the title. Status glyphs use 18px on desktop
 and phones; priority glyphs use 16px on desktop and 20px on phones and never

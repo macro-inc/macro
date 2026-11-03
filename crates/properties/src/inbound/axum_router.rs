@@ -177,6 +177,10 @@ where
             "/entities/{entity_type}/{entity_id}/{property_id}",
             put(entities::set_entity_property::<S, A, Auth>),
         )
+        .route(
+            "/entities/{entity_type}/{entity_id}/{property_id}/crm-references",
+            post(entities::append_crm_file_references::<S, A, Auth>),
+        )
         // Atomic single-option delta on a multi-select value (merges concurrent edits)
         .route(
             "/entities/{entity_type}/{entity_id}/{property_id}/options/{option_id}",

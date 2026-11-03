@@ -56,6 +56,7 @@ import {
 } from './creation-adapter';
 import { createAppCrmDisplayOptions } from './display-adapter';
 import { downloadCrmCsv } from './download-adapter';
+import { createAppFileTypes } from './file-types-adapter';
 import {
   copyCrmPipelineLink,
   copyCrmRecordLink,
@@ -218,6 +219,7 @@ export function createAppCrmContext(): CrmContext {
   };
   const createSettings = () => useTeamCrmConfig(deps);
   return {
+    createFileTypes: () => createAppFileTypes(userId),
     registerTaskComposerRecord(source) {
       if (!panel) return () => {};
       return createContext.register(panel.handle.id, () => ({

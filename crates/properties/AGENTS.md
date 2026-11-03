@@ -47,6 +47,11 @@ events to the `macro.properties` Kafka topic.
 
 ## Tool contracts
 
+- `append_crm_file_references` atomically appends Companies/Contacts to a non-task
+  document under its edit receipt. Preserve existing links, deduplicate retries,
+  and publish the normal property event only when the value changes; never grant
+  file access from a CRM link.
+
 - AI property/tag adapters omit legacy chat targets; this does not change persisted property entity types.
 
 ## Checks

@@ -44,6 +44,31 @@ booleans through component props or the CRM source contract.
 
 Shared entity representations, transport clients, property editors, and
 collection mechanics remain shared. CRM owns its record queries and cache updates.
+
+`file-types-adapter.ts` supplies the shared team-owned, single-select `File type`
+property. Team members can initialize its Contract/Proposal/Invoice/Notes options
+and add, rename or remove options through the normal property API. Classification
+is a value on the source document and requires document edit access. Overview
+and Files both show automatic nonempty type groups, followed by Unclassified;
+unreadable values remain distinct as Type unavailable. There is no per-record
+classification or section configuration. The existing associated-file query
+still controls which source files the viewer can see.
+Type sections reuse Tasks' shared entity `ListGroupHeader` presentation. Native
+buttons support Enter/Space and left/right disclosure; touch keeps the same
+44px target. Collapse state follows option IDs through renames and refreshes,
+and resets for another record or session. Counts describe loaded files. While
+a visible group is collapsed, explicit More files and retry controls remain
+outside the groups so hidden rows cannot automatically drain every page.
+`createFileAttachment` retains a created document through retry and stops when
+the account or team changes. The CRM-reference append API preserves concurrent
+record links, and neither attaching nor classifying changes file permissions.
+Files sections, dialogs and the type selector render interface messages through `crmFiles`;
+keep the stored `File type` property name and team-defined option labels unchanged.
+Attachment failures stay as semantic codes until the dialog renders them.
+Files supplies localized messages to shared record controls; other record tabs keep
+their existing copy. Synthetic group labels are translated by the view, while the
+core grouping helper remains independent of interface language.
+
 CRM supplies row/header/empty state slots, filter choices, grouping policy, and
 its own collection state to the shared collection renderer. Shared collection code must not acquire CRM hooks or
 CRM-specific state again.

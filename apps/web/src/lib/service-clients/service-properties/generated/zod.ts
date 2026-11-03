@@ -1605,6 +1605,187 @@ export const setEntityPropertyBody = zod
   .describe('Type-safe request for setting entity property values.');
 
 /**
+ * @summary Append record links to a file without replacing existing or concurrent links.
+ */
+export const appendCrmFileReferencesParams = zod.object({
+  entity_type: zod
+    .enum([
+      'CALL_RECORD',
+      'CHANNEL',
+      'CHAT',
+      'COMPANY',
+      'DATABASE_ROW',
+      'DOCUMENT',
+      'INITIATIVE',
+      'PROJECT',
+      'THREAD',
+      'USER',
+    ])
+    .describe('DOCUMENT'),
+  entity_id: zod.string().describe('Source document ID'),
+  property_id: zod.uuid().describe('Companies or Contacts property ID'),
+});
+
+export const appendCrmFileReferencesBody = zod
+  .object({
+    value: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                type: zod.enum(['boolean']),
+                value: zod.boolean(),
+              })
+              .describe('Boolean true\/false value'),
+            zod
+              .object({
+                type: zod.enum(['date']),
+                value: zod.iso.datetime({}),
+              })
+              .describe('Date and time value'),
+            zod
+              .object({
+                type: zod.enum(['date_range']),
+                value: zod
+                  .object({
+                    end: zod.iso.datetime({}),
+                    start: zod.iso.datetime({}),
+                  })
+                  .describe(
+                    'A span of time from `start` to `end`, both included. The end is never\nbefore the start: a range that would end earlier does not deserialize.'
+                  ),
+              })
+              .describe('Date range value'),
+            zod
+              .object({
+                type: zod.enum(['number']),
+                value: zod.number(),
+              })
+              .describe('Numeric value'),
+            zod
+              .object({
+                type: zod.enum(['string']),
+                value: zod.string(),
+              })
+              .describe('String\/text value'),
+            zod
+              .object({
+                option_id: zod.uuid(),
+                type: zod.enum(['select_option']),
+              })
+              .describe('Select option by ID (for select-type properties)'),
+            zod
+              .object({
+                option_ids: zod.array(zod.uuid()),
+                type: zod.enum(['multi_select_option']),
+              })
+              .describe(
+                'Multiple select options by ID (for multi-select properties)'
+              ),
+            zod
+              .object({
+                reference: zod
+                  .object({
+                    entity_id: zod.string(),
+                    entity_type: zod
+                      .enum([
+                        'CALENDAR_EVENT',
+                        'CALL_RECORD',
+                        'CHANNEL',
+                        'CHAT',
+                        'COMPANY',
+                        'DATABASE_ROW',
+                        'CONTACT',
+                        'DOCUMENT',
+                        'INITIATIVE',
+                        'PROJECT',
+                        'TASK',
+                        'THREAD',
+                        'USER',
+                      ])
+                      .describe(
+                        'Type of entity that can be referenced by entity properties.'
+                      ),
+                    specific_message_id: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                      ),
+                  })
+                  .describe(
+                    'Entity reference for entity-type property values.'
+                  ),
+                type: zod.enum(['entity_reference']),
+              })
+              .describe('Entity reference'),
+            zod
+              .object({
+                references: zod.array(
+                  zod
+                    .object({
+                      entity_id: zod.string(),
+                      entity_type: zod
+                        .enum([
+                          'CALENDAR_EVENT',
+                          'CALL_RECORD',
+                          'CHANNEL',
+                          'CHAT',
+                          'COMPANY',
+                          'DATABASE_ROW',
+                          'CONTACT',
+                          'DOCUMENT',
+                          'INITIATIVE',
+                          'PROJECT',
+                          'TASK',
+                          'THREAD',
+                          'USER',
+                        ])
+                        .describe(
+                          'Type of entity that can be referenced by entity properties.'
+                        ),
+                      specific_message_id: zod
+                        .uuid()
+                        .nullish()
+                        .describe(
+                          'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                        ),
+                    })
+                    .describe(
+                      'Entity reference for entity-type property values.'
+                    )
+                ),
+                type: zod.enum(['multi_entity_reference']),
+              })
+              .describe(
+                'Multiple entity references (for multi-select entity properties)'
+              ),
+            zod
+              .object({
+                type: zod.enum(['link']),
+                url: zod.string(),
+              })
+              .describe('Link value'),
+            zod
+              .object({
+                type: zod.enum(['multi_link']),
+                urls: zod.array(zod.string()),
+              })
+              .describe(
+                'Multiple link values (for multi-select link properties)'
+              ),
+          ])
+          .describe(
+            'Type-safe enum for setting entity property values - provides compile-time validation.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe('Type-safe request for setting entity property values.');
+
+/**
  * Atomic delta: the option is appended to the current stored value (deduped,
 attaching the property if needed), so concurrent edits to the same value
 merge rather than overwrite each other. Prefer this over the full-value PUT

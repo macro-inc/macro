@@ -1162,6 +1162,46 @@ export type SetEntityPropertyResponses = {
 
 export type SetEntityPropertyResponse = SetEntityPropertyResponses[keyof SetEntityPropertyResponses];
 
+export type AppendCrmFileReferencesData = {
+    body: SetEntityPropertyRequest;
+    path: {
+        /**
+         * DOCUMENT
+         */
+        entity_type: PropertyTargetEntityType;
+        /**
+         * Source document ID
+         */
+        entity_id: string;
+        /**
+         * Companies or Contacts property ID
+         */
+        property_id: string;
+    };
+    query?: never;
+    url: '/properties/entities/{entity_type}/{entity_id}/{property_id}/crm-references';
+};
+
+export type AppendCrmFileReferencesErrors = {
+    /**
+     * Expected multi_entity_reference for Companies or Contacts on a non-task file
+     */
+    400: unknown;
+    /**
+     * No edit access to the source document
+     */
+    403: unknown;
+};
+
+export type AppendCrmFileReferencesResponses = {
+    /**
+     * References appended; existing links and file access preserved
+     */
+    204: void;
+};
+
+export type AppendCrmFileReferencesResponse = AppendCrmFileReferencesResponses[keyof AppendCrmFileReferencesResponses];
+
 export type RemoveEntityPropertyOptionData = {
     body?: never;
     path: {

@@ -37,9 +37,10 @@ import {
   mapGraphqlProperties,
 } from '@service-storage/graphql-soup';
 import { CombinedError, type OperationResult } from '@urql/core';
-import { type Accessor, createMemo } from 'solid-js';
+import { type Accessor, createEffect, createMemo, onCleanup } from 'solid-js';
 import { match } from 'ts-pattern';
 import { v5 as uuidv5 } from 'uuid';
+import { queryClient } from '../../client';
 import {
   type buildOptimisticGroupedPropertyUpdates,
   createGroupedPropertyPreparation,
@@ -47,6 +48,7 @@ import {
   type PrepareGroupedPropertyUpdates,
 } from '../../soup/grouped/graphql-optimistic';
 import { buildOptimisticSetEntityProperty } from '../graphql-optimistic';
+import { registerEntityPropertyReader } from '../invalidation';
 import { buildPropertyAssignmentLinks } from './assignment-links';
 import { observePropertyMutationSettlements } from './mutation-settlements';
 
@@ -126,6 +128,17 @@ export function createGraphqlEntityPropertiesQuery(
           }
         ),
     };
+  });
+
+  createEffect(() => {
+    const current = input();
+    if (!current) return;
+    onCleanup(
+      registerEntityPropertyReader(queryClient, {
+        entityId: options.entityId(),
+        refetch: () => result.refetch({ requestPolicy: 'network-only' }),
+      })
+    );
   });
 
   return {

@@ -1,8 +1,8 @@
 # Class: Task
 
-A Macro task: a document with sub-type `task`. Inherits the full document
-surface ([Document.rename](../../../documents/document/classes/Document.md#rename), move, delete, restore, content, events)
-and adds task-specific state.
+A Macro task: a document with sub-type `task`. Inherits shared document
+operations ([Document.rename](../../../documents/document/classes/Document.md#rename), move, delete, restore, content, events)
+and adds task-specific state. Tasks cannot be attached as CRM files.
 
 ## Extends
 

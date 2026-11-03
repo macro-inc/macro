@@ -886,6 +886,28 @@ fn json_request(method: &str, uri: &str, body: serde_json::Value) -> Request<Bod
 }
 
 #[tokio::test]
+async fn crm_file_append_requires_edit_access_to_the_source_file() {
+    let access = FakeEntityAccessService::default();
+    let router = properties_router(no_op_properties_service(), access.clone());
+    let property = system_properties::SystemPropertyKey::COMPANIES_UUID;
+    let response = router
+        .oneshot(json_request(
+            "POST",
+            &format!("/entities/DOCUMENT/denied-file/{property}/crm-references"),
+            serde_json::json!({"value": {"type": "multi_entity_reference", "references": [
+                {"entity_type": "COMPANY", "entity_id": Uuid::from_u128(2)}
+            ]}}),
+        ))
+        .await
+        .expect("request should complete");
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert!(access.calls().iter().any(|call| matches!(
+        call, AccessCall::GenerateReceipt {entity_id, entity_type: EntityType::Document, ..}
+        if entity_id == "denied-file"
+    )));
+}
+
+#[tokio::test]
 async fn creating_a_managed_team_definition_is_forbidden() {
     let router = managed_router(
         no_op_properties_service(),

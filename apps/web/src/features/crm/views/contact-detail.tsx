@@ -19,6 +19,7 @@ import {
   RecordFilesSection,
   RecordReferencesSection,
 } from './record-associations';
+import { RecordFiles } from './record-files';
 import { useContactQuery, useIsTeamAdmin } from './use-crm';
 
 /**
@@ -101,6 +102,7 @@ function ContactContent(props: ContactProps) {
                     onOpenPipeline={props.onOpenPipeline}
                   />
                 </Show>
+                <RecordFiles scope={scope()} overview />
                 <ContactDiscussionSection contactId={props.contactId} />
               </RecordOverview>
             </Match>

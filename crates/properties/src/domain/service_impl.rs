@@ -805,6 +805,63 @@ where
         })
     }
 
+    #[tracing::instrument(skip_all, fields(document_id = %access.entity_id(), property_id = %property_definition_id), err)]
+    async fn append_crm_file_references(
+        &self,
+        access: &EditReceipt,
+        property_definition_id: Uuid,
+        mut references: Vec<EntityReference>,
+    ) -> Result<(), PropertiesErr> {
+        let expected_type = match property_definition_id {
+            SystemPropertyKey::COMPANIES_UUID => EntityType::Company,
+            SystemPropertyKey::CONTACTS_UUID => EntityType::Contact,
+            _ => {
+                return Err(PropertiesErr::Validation(
+                    "Only Companies and Contacts can be appended to files".to_string(),
+                ));
+            }
+        };
+        if access.entity_type() != AccessEntityType::Document
+            || self.resolve_subject(access).await?.storage_entity_type != EntityType::Document
+            || references.is_empty()
+            || references.len() > 100
+            || references.iter().any(|reference| {
+                reference.entity_type != expected_type || reference.specific_message_id.is_some()
+            })
+        {
+            return Err(PropertiesErr::Validation(
+                "Expected company or contact references on a non-task document".to_string(),
+            ));
+        }
+        // Record association reads and reference deduplication compare stored
+        // strings, so every accepted UUID spelling must use the canonical form.
+        for reference in &mut references {
+            reference.entity_id = Uuid::parse_str(&reference.entity_id)
+                .map_err(|_| PropertiesErr::Validation("Invalid record UUID".to_string()))?
+                .to_string();
+        }
+        let mutation = self
+            .repository
+            .add_entity_property_references(
+                access.entity_id(),
+                EntityType::Document,
+                property_definition_id,
+                references,
+            )
+            .await
+            .map_err(anyhow::Error::from)?;
+        if mutation.value != mutation.previous_value {
+            self.publish_property_event(Self::entity_property_updated_event(
+                &mutation.property,
+                &mutation.value,
+                &mutation.previous_value,
+                access,
+                None,
+            ));
+        }
+        Ok(())
+    }
+
     #[tracing::instrument(skip_all, err)]
     async fn inherit_project_agent_assignees(
         &self,

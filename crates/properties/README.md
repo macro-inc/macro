@@ -195,7 +195,18 @@ event documented here currently uses version 1. To remain forward compatible,
 consumers must tolerate unknown `event_type` values and ignore unknown metadata
 fields; additive event variants and fields do not require a version change.
 
+## CRM file links
+
+The `POST /properties/entities/DOCUMENT/{entity_id}/{property_id}/crm-references`
+endpoint appends Companies or Contacts references to an editable non-task file.
+It uses the existing atomic reference writer, retaining links added concurrently
+and deduplicating retries. A changed value emits `entity_property.updated` with
+the full previous/current snapshots; a duplicate append emits no event. Linking
+does not change file permissions or other properties, including the team's
+single-select `File type` classification.
+
 ## Rollout
+
 
 Provision `macro.properties` before or alongside deploying DSS. Deploy the
 Kafka cluster stack so it consumes the regenerated

@@ -65,6 +65,7 @@ vi.mock('@components/app/side-panel', () => ({
 }));
 vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
 vi.mock('./copy-link-button', () => ({ CrmCopyLinkButton: () => null }));
+vi.mock('./record-files', () => ({ RecordFiles: () => null }));
 vi.mock('../components/record-tabs', () => ({
   RecordTabs: (props: { onChange(section: CrmRecordSection): void }) => (
     <button type="button" onClick={() => props.onChange('emails')}>

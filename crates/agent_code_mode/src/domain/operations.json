@@ -326,6 +326,7 @@
   "properties.getEntityProperties": "Get Entity Properties",
   "properties.bulkUpdateEntityPropertyOptions": "Bulk Update Entity Property Options",
   "properties.setEntityProperty": "Set Entity Property",
+  "properties.appendCrmFileReferences": "Append Crm File References",
   "properties.removeEntityPropertyOption": "Remove Entity Property Option",
   "properties.addEntityPropertyOption": "Add Entity Property Option",
   "properties.deleteEntityProperty": "Delete Entity Property",

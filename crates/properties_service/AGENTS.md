@@ -19,6 +19,8 @@ the routes and domain logic now live entirely in `properties`.
   `properties::inbound::axum_router::router()`.
 - `src/openapi.rs`: the standalone OpenAPI-generation binary
   (`properties_service_openapi`).
+- `src/api/swagger.rs` registers the generic property routes, including the
+  source-edit-authorized CRM file-reference append endpoint.
 
 ## Scope
 

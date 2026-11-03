@@ -8,6 +8,7 @@ import type { PropertyOption } from '../../service-clients/service-properties/ge
 import type { UpdatePropertyOptionRequest } from '../../service-clients/service-properties/generated/schemas/updatePropertyOptionRequest';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
+import { invalidateAllPropertyReads } from './invalidation';
 import { propertiesKeys } from './keys';
 
 // Stable empty default so `data` is never undefined: a shared query that errors
@@ -41,10 +42,10 @@ export function usePropertyOptionsQuery(
   );
 }
 
-function invalidatePropertyOptions(propertyDefinitionId: string) {
-  queryClient.invalidateQueries({
-    queryKey: propertiesKeys.options({ propertyDefinitionId }).queryKey,
-  });
+function invalidatePropertyOptions() {
+  // Options also appear in definition catalogs and entity values. Deletion can
+  // clear values on any file that used this option, including batched reads.
+  return invalidateAllPropertyReads(queryClient);
 }
 
 export type AddPropertyOptionAsyncMutation = ReturnType<
@@ -87,8 +88,8 @@ export function useUpdatePropertyOptionMutation(
           console.error('Failed to update property option', error);
           toast.failure('Failed to update option');
         },
-        onSuccess: (_data, variables) => {
-          invalidatePropertyOptions(variables.propertyDefinitionId);
+        onSuccess: () => {
+          return invalidatePropertyOptions();
         },
       },
       callbacks
@@ -120,8 +121,8 @@ export function useDeletePropertyOptionMutation(
           console.error('Failed to delete property option', error);
           toast.failure('Failed to delete option');
         },
-        onSuccess: (_data, variables) => {
-          invalidatePropertyOptions(variables.propertyDefinitionId);
+        onSuccess: () => {
+          return invalidatePropertyOptions();
         },
       },
       callbacks
@@ -149,8 +150,8 @@ export function useAddPropertyOptionMutation(
           console.error('Failed to add property option', error);
           toast.failure('Failed to add option');
         },
-        onSuccess: (_data, variables) => {
-          invalidatePropertyOptions(variables.propertyDefinitionId);
+        onSuccess: () => {
+          return invalidatePropertyOptions();
         },
       },
       callbacks

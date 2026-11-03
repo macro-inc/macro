@@ -46,6 +46,26 @@ PDF annotations in this document.
 
 ***
 
+### attachTo()
+
+> **attachTo**(`record`): `Promise`\<`void`\>
+
+Attach this file to a CRM record, preserving its other record links and
+classification. Requires edit access to this non-task document; does not
+grant access to the file. Repeating the same attachment is idempotent.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `record` | [`Company`](../../../crm/company/classes/Company.md) \| [`Contact`](../../../crm/contact/classes/Contact.md) |
+
+#### Returns
+
+`Promise`\<`void`\>
+
+***
+
 ### branchName()
 
 > **branchName**(): `Promise`\<`string`\>

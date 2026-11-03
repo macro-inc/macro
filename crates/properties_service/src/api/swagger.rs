@@ -39,6 +39,7 @@ use utoipa::OpenApi;
         properties::inbound::axum_router::entities::get_entity_properties,
         properties::inbound::axum_router::entities::get_bulk_entity_properties,
         properties::inbound::axum_router::entities::set_entity_property,
+        properties::inbound::axum_router::entities::append_crm_file_references,
         properties::inbound::axum_router::entities::add_entity_property_option,
         properties::inbound::axum_router::entities::remove_entity_property_option,
         properties::inbound::axum_router::entities::bulk_update_entity_property_options,

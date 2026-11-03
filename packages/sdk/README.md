@@ -479,6 +479,17 @@ returns thread handles alongside reminder snapshots.
 
 ### CRM pipelines and initiatives
 
+Use `document.attachTo(companyOrContact)` to attach an editable, non-task file to
+a CRM record. It appends the record atomically, preserves other links and the
+file's classification, and grants no additional access. Repeating the same link
+is safe:
+
+```ts
+const contract = macro.documents.byId('contract-document');
+await contract.attachTo(macro.crm.companyById('customer-company'));
+await contract.attachTo(macro.crm.contactById('customer-contact'));
+```
+
 `macro.crm.pipelines.create/list/byId` returns pipeline handles. Rename, sharing,
 permissions and trash operations live on the pipeline. `pipeline.table()` returns
 its table handle, with column and row handles. `rows()` and `queryRows({ rows, query })`

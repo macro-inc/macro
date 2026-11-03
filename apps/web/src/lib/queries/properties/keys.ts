@@ -5,6 +5,18 @@ import type { PropertyScope } from '../../service-clients/service-properties/gen
 export const propertiesKeys = createQueryKeys('properties', {
   all: null,
   tags: null,
+  /** Batched property reads, invalidated alongside individual entity reads. */
+  entityBatch: (params: {
+    userId: string | undefined;
+    entityType: EntityType;
+    propertyIds: string[];
+    entityIds: string[];
+  }) => [
+    params.userId,
+    params.entityType,
+    params.propertyIds,
+    ...params.entityIds,
+  ],
   entity: (params: { entityType: EntityType; entityId: string }) => ({
     queryKey: ['entity', params.entityType, params.entityId],
   }),

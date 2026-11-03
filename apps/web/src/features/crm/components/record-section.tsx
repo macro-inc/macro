@@ -24,6 +24,7 @@ export function RecordSection(
     search: string;
     onSearchChange: (value: string) => void;
     searchPlaceholder?: string;
+    searchLabel?: string;
     onSearchEscape?: () => void;
     actions?: JSX.Element;
     createAction?: RecordCreateAction;
@@ -39,7 +40,7 @@ export function RecordSection(
       <div class="flex min-h-12 min-w-0 shrink-0 flex-wrap items-center gap-3 px-4 py-2 touch:flex-nowrap touch:pt-[calc(var(--mobile-content-inset-top,0px)+1rem)] touch:pb-4">
         <SearchBar
           size="sm"
-          label={`Search ${props.title.toLowerCase()}`}
+          label={props.searchLabel ?? `Search ${props.title.toLowerCase()}`}
           placeholder={
             props.searchPlaceholder ?? `Search ${props.title.toLowerCase()}…`
           }

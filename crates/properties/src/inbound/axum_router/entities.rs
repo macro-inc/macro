@@ -384,6 +384,47 @@ pub async fn set_entity_property<
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// Append record links to a file without replacing existing or concurrent links.
+#[utoipa::path(
+    post,
+    path = "/properties/entities/{entity_type}/{entity_id}/{property_id}/crm-references",
+    operation_id = "append_crm_file_references",
+    params(
+        ("entity_type" = PropertyTargetEntityType, Path, description = "DOCUMENT"),
+        ("entity_id" = String, Path, description = "Source document ID"),
+        ("property_id" = Uuid, Path, description = "Companies or Contacts property ID")
+    ),
+    request_body = SetEntityPropertyRequest,
+    responses(
+        (status = 204, description = "References appended; existing links and file access preserved"),
+        (status = 400, description = "Expected multi_entity_reference for Companies or Contacts on a non-task file"),
+        (status = 403, description = "No edit access to the source document")
+    ),
+    tags = ["Properties"]
+)]
+#[tracing::instrument(skip_all, err)]
+pub async fn append_crm_file_references<
+    S: PropertiesService,
+    A: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    Path((_entity_type, _entity_id, property_id)): Path<(PropertyTargetEntityType, String, Uuid)>,
+    State(state): State<PropertiesRouterState<S, A, Auth>>,
+    access: EditReceiptExtractor,
+    Json(request): Json<SetEntityPropertyRequest>,
+) -> Result<StatusCode, SetEntityPropertyErr> {
+    let Some(SetPropertyValue::MultiEntityReference { references }) = request.value else {
+        return Err(
+            PropertiesErr::Validation("Expected multi_entity_reference".to_string()).into(),
+        );
+    };
+    state
+        .properties_service
+        .append_crm_file_references(&access.0, property_id, references)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 #[derive(Debug, Error)]
 pub enum EntityPropertyOptionErr {
     #[error(transparent)]
