@@ -85,10 +85,11 @@ export class Team extends MacroEntity<TeamRecord> {
    * never invite an address taken from a document, email or message unless
    * the user named it. Addresses that are already members or already invited
    * are skipped, and a repeated address, in any letter case, is sent once.
-   * Only the caller's current team takes invites (see
-   * `Team.current`); a team that limits inviting to admins rejects other
-   * members, and teams without an enterprise plan accept a limited number of
-   * invites per day.
+   * Only the caller's current team takes invites (see `Team.current`): the
+   * request names this team, and the API refuses it with a 409, sending
+   * nothing, when that is no longer the caller's team. A team that limits
+   * inviting to admins rejects other members, and teams without an
+   * enterprise plan accept a limited number of invites per day.
    *
    * @param emails - One address or a list of addresses to invite.
    * @returns `true` when at least one new invite was sent, `false` when every
@@ -109,9 +110,11 @@ export class Team extends MacroEntity<TeamRecord> {
     }
     if (addresses.length === 0)
       throw new MacroError('invite needs at least one email address');
-    await this.requireCurrent('invites');
     const res = await this.client.auth.inviteToTeam({
-      body: { invites: addresses.map((email) => ({ email })) },
+      body: {
+        invites: addresses.map((email) => ({ email })),
+        team_id: this.id,
+      },
     });
     // The API answers 304 when it created no invite: every address was
     // already a member or already invited.
@@ -122,13 +125,13 @@ export class Team extends MacroEntity<TeamRecord> {
 
   /**
    * Pending invites to this team; only a team admin or owner may list them.
-   * Only the caller's current team lists invites (see `Team.current`).
+   * Only the caller's current team lists invites (see `Team.current`); the
+   * API refuses any other team with a 409.
    */
   async invites(): Promise<TeamInvite[]> {
-    await this.requireCurrent('invites');
-    return unwrap(await this.client.auth.getTeamInvites()).invites.map(
-      (invite) => TeamInvite.from(this.client, invite),
-    );
+    return unwrap(
+      await this.client.auth.getTeamInvites({ query: { team_id: this.id } }),
+    ).invites.map((invite) => TeamInvite.from(this.client, invite));
   }
 
   /** The caller's current team record, rejecting when this is another team. */

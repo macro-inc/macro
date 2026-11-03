@@ -61,28 +61,27 @@ const INVITE = {
 };
 
 describe('Team.invite', () => {
-  test('invites trimmed addresses to the current team', async () => {
+  test('invites trimmed addresses to the team the handle names', async () => {
     const requests = serve({
-      'GET /team': currentTeam,
       'POST /team/invite': () => new Response(null, { status: 201 }),
     });
     const sent = await macro()
       .teams.byId(TEAM_ID)
       .invite([' first@example.com ', '', 'second@example.com']);
     expect(sent).toBe(true);
-    const post = requests.find((request) => request.method === 'POST');
-    expect(await post?.json()).toEqual({
+    expect(requests).toHaveLength(1);
+    expect(await requests[0]?.json()).toEqual({
       invites: [
         { email: 'first@example.com' },
         { email: 'second@example.com' },
       ],
+      team_id: TEAM_ID,
     });
-    expect(post?.headers.get('x-macro-user-api-key')).toBe('mak_test');
+    expect(requests[0]?.headers.get('x-macro-user-api-key')).toBe('mak_test');
   });
 
   test('sends a repeated address once, whatever its letter case', async () => {
     const requests = serve({
-      'GET /team': currentTeam,
       'POST /team/invite': () => new Response(null, { status: 201 }),
     });
     await macro()
@@ -93,16 +92,16 @@ describe('Team.invite', () => {
         'second@example.com',
         'first@example.com',
       ]);
-    const post = requests.find((request) => request.method === 'POST');
-    expect(await post?.json()).toEqual({
+    expect(await requests[0]?.json()).toEqual({
       invites: [
         { email: 'first@example.com' },
         { email: 'second@example.com' },
       ],
+      team_id: TEAM_ID,
     });
   });
 
-  test('accepts a single address', async () => {
+  test('accepts a single address on the current team', async () => {
     const requests = serve({
       'GET /team': currentTeam,
       'POST /team/invite': () => new Response(null, { status: 201 }),
@@ -113,12 +112,12 @@ describe('Team.invite', () => {
     const post = requests.find((request) => request.method === 'POST');
     expect(await post?.json()).toEqual({
       invites: [{ email: 'solo@example.com' }],
+      team_id: TEAM_ID,
     });
   });
 
   test('reports false when every address was already a member or invited', async () => {
     serve({
-      'GET /team': currentTeam,
       'POST /team/invite': () => new Response(null, { status: 304 }),
     });
     expect(
@@ -126,12 +125,22 @@ describe('Team.invite', () => {
     ).toBe(false);
   });
 
-  test('refuses a team other than the current one before inviting', async () => {
-    const requests = serve({ 'GET /team': currentTeam });
-    await expect(
-      macro().teams.byId(OTHER_TEAM_ID).invite('someone@example.com'),
-    ).rejects.toThrow('invites are only available for the current team');
-    expect(requests.map((request) => request.method)).toEqual(['GET']);
+  test("surfaces the refusal when the team is no longer the caller's", async () => {
+    const requests = serve({
+      'POST /team/invite': () =>
+        Response.json(
+          { message: "the requested team is not the caller's current team" },
+          { status: 409 },
+        ),
+    });
+    const error = await macro()
+      .teams.byId(OTHER_TEAM_ID)
+      .invite('someone@example.com')
+      .catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(MacroApiError);
+    expect((error as MacroApiError).status).toBe(409);
+    expect(requests).toHaveLength(1);
+    expect(await requests[0]?.json()).toMatchObject({ team_id: OTHER_TEAM_ID });
   });
 
   test('refuses an empty list without calling the API', async () => {
@@ -144,7 +153,6 @@ describe('Team.invite', () => {
 
   test('surfaces the server refusal', async () => {
     serve({
-      'GET /team': currentTeam,
       'POST /team/invite': () =>
         Response.json(
           { message: 'only admins can invite to this team' },
@@ -171,9 +179,8 @@ describe('Team.current', () => {
 });
 
 describe('Team.invites', () => {
-  test('lists pending invites as seeded handles', async () => {
+  test('lists the pending invites of the team the handle names', async () => {
     const requests = serve({
-      'GET /team': currentTeam,
       'GET /team/invites': () => Response.json({ invites: [INVITE] }),
     });
     const [pending, ...rest] = await macro().teams.byId(TEAM_ID).invites();
@@ -183,14 +190,18 @@ describe('Team.invites', () => {
     expect(await pending?.role()).toBe('member');
     expect(await pending?.lastSentAt()).toBe('2026-01-02T00:00:00Z');
     expect((await pending?.invitedBy())?.id).toBe('macro|owner@example.com');
+    expect(
+      requests.map((request) =>
+        new URL(request.url).searchParams.get('team_id'),
+      ),
+    ).toEqual([TEAM_ID]);
     // Seeded from the listing: reading fields fetched nothing more.
-    expect(requests).toHaveLength(2);
+    expect(requests).toHaveLength(1);
   });
 
   test('revokes an invite, after which it no longer resolves', async () => {
     let revoked = false;
     const requests = serve({
-      'GET /team': currentTeam,
       'GET /team/invites': () =>
         Response.json({ invites: revoked ? [] : [INVITE] }),
       [`DELETE /team/invite/${INVITE_ID}`]: () => {
@@ -204,11 +215,7 @@ describe('Team.invites', () => {
       requests.map(
         (request) => `${request.method} ${new URL(request.url).pathname}`,
       ),
-    ).toEqual([
-      'GET /team',
-      'GET /team/invites',
-      `DELETE /team/invite/${INVITE_ID}`,
-    ]);
+    ).toEqual(['GET /team/invites', `DELETE /team/invite/${INVITE_ID}`]);
     await expect(pending?.email()).rejects.toBeInstanceOf(MacroNotFoundError);
   });
 });
