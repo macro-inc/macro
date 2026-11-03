@@ -1,4 +1,4 @@
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   agentStep,
@@ -134,6 +134,26 @@ describe('adding one step with AI', () => {
       'Escalate blocking tasks',
       'Post a summary',
     ]);
+  });
+
+  it('asks again once when the model’s answer is rejected', async () => {
+    clients.structuredCompletion
+      .mockResolvedValueOnce(
+        err([{ code: 'HTTP_ERROR', message: 'does not match the schema' }])
+      )
+      .mockResolvedValueOnce(
+        completed({ step: wire('good'), reason: 'same every run' })
+      );
+    clients.checkCode.mockResolvedValue(checks(1, []));
+    const added = await composeStep({
+      description: 'post a summary in updates',
+      routine: { triggers: [daily], steps: [escalate] },
+      context,
+      model: 'claude' as never,
+    });
+    if (typeof added === 'string') throw new Error(added);
+    expect(added.step).toMatchObject({ kind: 'code', source: 'good' });
+    expect(clients.structuredCompletion).toHaveBeenCalledTimes(2);
   });
 
   it('writes Ask AI when asked, but only once per routine', async () => {

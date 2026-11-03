@@ -48,6 +48,9 @@ export type CodeGuidance = {
 /** Times the drafter may fix code the type checker rejects before it gives up. */
 export const MAX_CODE_FIXES = 3;
 
+/** Tries for one model answer before giving up on it. */
+const COMPLETION_ATTEMPTS = 2;
+
 /** A drafted code step the type checker rejects, and what to fix it with. */
 export type CodeFailure = {
   /** Which code step, in program order from zero. */
@@ -373,19 +376,23 @@ export async function completeAs(
   instructions: string,
   schema: OutputSchema
 ): Promise<unknown> {
-  const response = await cognitionApiServiceClient.structuredCompletion({
-    model,
-    prompt,
-    output_schema: schema,
-    additional_instructions: instructions,
-    toolset: { type: 'none' },
-    // Thinking at length took Gemini past the request's deadline; a quick
-    // answer that the type checker corrects is faster.
-    thinking: 'low',
-  });
-  if (response.isErr()) return undefined;
-  const outcome = response.value.outcome;
-  return outcome.status === 'completed' ? outcome.result : undefined;
+  // A quick answer now and then breaks the schema, and the same request
+  // usually succeeds when asked again.
+  for (let attempt = 0; attempt < COMPLETION_ATTEMPTS; attempt++) {
+    const response = await cognitionApiServiceClient.structuredCompletion({
+      model,
+      prompt,
+      output_schema: schema,
+      additional_instructions: instructions,
+      toolset: { type: 'none' },
+      // Thinking at length took Gemini past the request's deadline; a quick
+      // answer that the type checker corrects is faster.
+      thinking: 'low',
+    });
+    if (response.isOk() && response.value.outcome.status === 'completed')
+      return response.value.outcome.result;
+  }
+  return undefined;
 }
 
 /**
