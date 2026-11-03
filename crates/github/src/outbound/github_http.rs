@@ -90,6 +90,7 @@ impl<'a> GithubRequest<'a> {
     }
 
     /// A request with a JSON body. GraphQL queries are reads sent as POST.
+    #[cfg(feature = "link")]
     pub(crate) fn with_body(
         method: Method,
         access_token: &'a str,
@@ -119,6 +120,7 @@ pub(crate) struct GithubResponse {
 impl GithubResponse {
     /// Reads a response from outside the API, such as the OAuth code
     /// exchange, which is neither paced nor cached.
+    #[cfg(feature = "link")]
     pub(crate) async fn read(response: reqwest::Response) -> Result<Self, GithubError> {
         let status = response.status();
         let headers = response.headers().clone();
@@ -436,6 +438,7 @@ fn upstream(failure: UpstreamFailure) -> GithubError {
 }
 
 /// A request outside the API that got no usable answer from GitHub.
+#[cfg(feature = "link")]
 pub(crate) fn transport_error(error: reqwest::Error) -> GithubError {
     upstream(transport_failure(error))
 }
