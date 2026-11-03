@@ -27,6 +27,8 @@ export type PollBar = {
   /** Share of the votes, 0–100, rounded. */
   percent: number;
   mine: boolean;
+  /** Who chose it, as user ids; absent when the viewer may not see voters. */
+  voters?: readonly string[];
 };
 
 /** One bar per option, in option order, zero counts included. */
@@ -34,7 +36,8 @@ export function pollBars(
   poll: Poll,
   counts: ReadonlyMap<string, number> | undefined,
   responses: number,
-  mine: readonly string[]
+  mine: readonly string[],
+  voters?: ReadonlyMap<string, readonly string[]>
 ): PollBar[] {
   return poll.column.options.map((option) => {
     const count = counts?.get(option.id) ?? 0;
@@ -44,6 +47,7 @@ export function pollBars(
       count,
       percent: responses > 0 ? Math.round((count / responses) * 100) : 0,
       mine: mine.includes(option.id),
+      voters: voters ? (voters.get(option.id) ?? []) : undefined,
     };
   });
 }

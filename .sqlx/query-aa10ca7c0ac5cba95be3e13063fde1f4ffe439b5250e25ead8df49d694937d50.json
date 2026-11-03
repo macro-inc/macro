@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE forms SET updated_at = $2\n            WHERE id = $1 AND trashed_at IS NULL\n            RETURNING id, name, description, owner_id, database_id, table_id,\n                      submitted_column_id, respondent_column_id, audience, tally_visible,\n                      status, closes_at, confirmation_message, logo_file_id, cover_file_id, accent_color,\n                   created_at, updated_at, trashed_at,\n                      name_follows_database, is_hidden_in_drive, project_id\n            ",
+  "query": "\n            UPDATE forms SET name = $2, updated_at = $3\n            WHERE id = $1 AND trashed_at IS NULL\n            RETURNING id, name, description, owner_id, database_id, table_id,\n                      submitted_column_id, respondent_column_id, audience, tally_visible,\n                      status, closes_at, confirmation_message, logo_file_id, cover_file_id, accent_color,\n                   created_at, updated_at, trashed_at,\n                   name_follows_database, is_hidden_in_drive, project_id, responses_visible, anonymous\n            ",
   "describe": {
     "columns": [
       {
@@ -112,11 +112,22 @@
         "ordinal": 21,
         "name": "project_id",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 22,
+        "name": "responses_visible",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 23,
+        "name": "anonymous",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
       "Left": [
         "Uuid",
+        "Text",
         "Timestamptz"
       ]
     },
@@ -142,8 +153,10 @@
       true,
       false,
       false,
-      true
+      true,
+      false,
+      false
     ]
   },
-  "hash": "a0d8f93ed3ea9193ed2a2365c0951e3518e6976d42074d483e916153bf5bb17c"
+  "hash": "aa10ca7c0ac5cba95be3e13063fde1f4ffe439b5250e25ead8df49d694937d50"
 }
