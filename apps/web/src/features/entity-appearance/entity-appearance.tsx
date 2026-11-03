@@ -1,5 +1,10 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { EntityIcon, getEntityIconType } from '@core/component/EntityIcon';
+import {
+  enableEntityAppearance,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { Button } from '@ui/components/Button';
@@ -18,7 +23,12 @@ export function useChangeEntityIcon() {
   const userId = useUserId();
   return (entity: EntityData, element?: HTMLElement) => {
     const actor = userId();
-    if (!actor || !supportsEntityAppearance(entity)) return;
+    if (
+      !isFeatureEnabled(enableEntityAppearance) ||
+      !actor ||
+      !supportsEntityAppearance(entity)
+    )
+      return;
     const rect = element?.getBoundingClientRect();
     return openDialog(
       AppearanceDialog,
@@ -59,23 +69,29 @@ export function EntityAppearanceTrigger(props: {
 
 function EditableAppearanceTrigger(props: { entity: EntityData }) {
   const changeIcon = useChangeEntityIcon();
+  const flag = useFeatureFlag(enableEntityAppearance);
+  const icon = (
+    <EntityIcon
+      targetType={getEntityIconType(props.entity)}
+      appearance={props.entity.appearance}
+      size="xs"
+    />
+  );
   return (
-    <Button
-      variant="ghost"
-      size="icon-xs"
-      aria-label={t('appearance.title')}
-      tooltip={t('appearance.title')}
-      onClick={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        changeIcon(props.entity, event.currentTarget);
-      }}
-    >
-      <EntityIcon
-        targetType={getEntityIconType(props.entity)}
-        appearance={props.entity.appearance}
-        size="xs"
-      />
-    </Button>
+    <Show when={flag().enabled} fallback={icon}>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        aria-label={t('appearance.title')}
+        tooltip={t('appearance.title')}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          changeIcon(props.entity, event.currentTarget);
+        }}
+      >
+        {icon}
+      </Button>
+    </Show>
   );
 }

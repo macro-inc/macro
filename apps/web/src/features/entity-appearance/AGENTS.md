@@ -37,6 +37,8 @@ snippets, task projects (initiatives), forms, and databases.
 
 ## Gotchas
 
+- Gate every editor entry point with `enableEntityAppearance` (`enable-entity-appearance`); dev defaults on and `VITE_ENABLE_ENTITY_APPEARANCE` overrides locally.
+- When the flag is off, close open pickers but retain saved appearance rendering and API/SDK access; keep authorization independent.
 - Do not change content recency or send notifications when appearance changes.
 - Apply each icon, emoji, color, or Remove pick immediately without closing the editor; dismissal never undoes a pick.
 - Keep mutations account-scoped, update every reader optimistically, and roll back rejected writes without overwriting newer edits.

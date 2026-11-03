@@ -1,6 +1,8 @@
 import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { useChangeEntityIcon } from '@app/features/entity-appearance/entity-appearance';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
+import { enableEntityAppearance } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
@@ -63,6 +65,7 @@ export function DatabasePageActions(props: {
   const [reading, setReading] = createSignal(false);
   const [confirmDelete, setConfirmDelete] = createSignal(false);
   const changeIcon = useChangeEntityIcon();
+  const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const [deleting, setDeleting] = createSignal(false);
   const [deleteError, setDeleteError] = createSignal('');
   const [draft, setDraft] = createSignal<{ data: DatabaseCsv; name: string }>();
@@ -187,7 +190,7 @@ export function DatabasePageActions(props: {
             {(actions) => (
               <>
                 <Dropdown.Group>
-                  <Show when={editable()}>
+                  <Show when={editable() && appearanceFlag().enabled}>
                     <Dropdown.Item
                       onSelect={() =>
                         changeIcon(

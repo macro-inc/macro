@@ -12,7 +12,11 @@ import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
-import { enableGantt, enableProjects } from '@core/constant/featureFlags';
+import {
+  enableEntityAppearance,
+  enableGantt,
+  enableProjects,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -170,6 +174,7 @@ function ProjectsCollectionHost(props: ProjectsTabProps) {
   const copyLink = makeCopyLinkAction();
   const copyId = makeCopyEntityIdAction();
   const changeIcon = useChangeEntityIcon();
+  const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const [sharing, setSharing] = createSignal<string>();
   return (
     <>
@@ -202,14 +207,17 @@ function ProjectsCollectionHost(props: ProjectsTabProps) {
         }
         onCopyId={(id) => fireAndForget(copyId.executeById(id), 'projects')}
         onShare={(projectId) => setSharing(projectId)}
-        onChangeIcon={(project) =>
-          changeIcon({
-            type: 'initiative',
-            id: project.id,
-            name: project.name,
-            ownerId: '',
-            appearance: project.appearance,
-          })
+        onChangeIcon={
+          appearanceFlag().enabled
+            ? (project) =>
+                changeIcon({
+                  type: 'initiative',
+                  id: project.id,
+                  name: project.name,
+                  ownerId: '',
+                  appearance: project.appearance,
+                })
+            : undefined
         }
       />
       <Show when={sharing()} keyed>

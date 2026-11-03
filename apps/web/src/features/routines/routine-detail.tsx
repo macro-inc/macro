@@ -7,7 +7,10 @@ import { useHasPaidAccess } from '@core/auth/license';
 import { useBlockId } from '@core/block';
 import { defaultModelForPlan } from '@core/component/AI/constant';
 import { toast } from '@core/component/Toast/Toast';
-import { enableRoutineSharing } from '@core/constant/featureFlags';
+import {
+  enableEntityAppearance,
+  enableRoutineSharing,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { getOwner, onMount, Show } from 'solid-js';
@@ -58,6 +61,7 @@ export function RoutineDetail(props: {
   const userId = useUserId();
   const hasPaidAccess = useHasPaidAccess();
   const sharing = useFeatureFlag(enableRoutineSharing);
+  const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const back = () =>
     props.onBack ? props.onBack() : openAgentsPage(layout, 'routines');
   const open = (id: string) =>
@@ -123,10 +127,14 @@ export function RoutineDetail(props: {
             )}
           </Show>
         }
-        onChangeIcon={() => {
-          const entity = source.entity();
-          if (entity && ownedByViewer()) changeIcon(entity);
-        }}
+        onChangeIcon={
+          appearanceFlag().enabled
+            ? () => {
+                const entity = source.entity();
+                if (entity && ownedByViewer()) changeIcon(entity);
+              }
+            : undefined
+        }
         defaultModel={defaultModelForPlan(hasPaidAccess())}
         initialTab={props.initialTab}
         onBack={back}

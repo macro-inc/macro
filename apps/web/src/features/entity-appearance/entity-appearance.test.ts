@@ -1,13 +1,39 @@
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { openDialog } from '@ui/components/ImperativeDialog';
-import { createComponent } from 'solid-js';
+import { createComponent, createRoot, createSignal, onCleanup } from 'solid-js';
 import { spread } from 'solid-js/web';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { EntityAppearanceTrigger } from './entity-appearance';
+import { AppearanceDialog } from './appearance-dialog';
+import {
+  EntityAppearanceTrigger,
+  useChangeEntityIcon,
+} from './entity-appearance';
 
+const flag = vi.hoisted(() => ({
+  enabled: (): boolean => true,
+  mounted: vi.fn(),
+  unmounted: vi.fn(),
+}));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: flag.enabled() }),
+}));
+vi.mock('@core/constant/featureFlags', async (original) => ({
+  ...(await original<typeof import('@core/constant/featureFlags')>()),
+  isFeatureEnabled: () => flag.enabled(),
+}));
+vi.mock('./views/appearance-editor', () => ({
+  AppearanceEditor: () => {
+    flag.mounted();
+    onCleanup(flag.unmounted);
+    return null;
+  },
+}));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'editor' }));
 vi.mock('@ui/components/ImperativeDialog', () => ({ openDialog: vi.fn() }));
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  flag.enabled = () => true;
+});
 
 const DOCUMENT = {
   type: 'document' as const,
@@ -49,5 +75,41 @@ describe('header icon editing', () => {
     );
     expect(screen.queryByRole('button')).toBeNull();
     expect(openDialog).not.toHaveBeenCalled();
+  });
+
+  it('checks the current rollout before a captured launcher opens the editor', () => {
+    const [enabled, setEnabled] = createSignal(false);
+    flag.enabled = enabled;
+    createRoot((dispose) => {
+      const changeIcon = useChangeEntityIcon();
+      changeIcon(DOCUMENT);
+      expect(openDialog).not.toHaveBeenCalled();
+      setEnabled(true);
+      changeIcon(DOCUMENT);
+      expect(openDialog).toHaveBeenCalledOnce();
+      setEnabled(false);
+      changeIcon(DOCUMENT);
+      expect(openDialog).toHaveBeenCalledOnce();
+      dispose();
+    });
+  });
+
+  it('disposes an open editor when the remote rollout is disabled', () => {
+    const [enabled, setEnabled] = createSignal(true);
+    flag.enabled = enabled;
+    const onOpenChange = vi.fn();
+    render(() =>
+      createComponent(AppearanceDialog, {
+        entity: DOCUMENT,
+        userId: 'editor',
+        open: true,
+        onOpenChange,
+        isCurrent: () => true,
+      })
+    );
+    expect(flag.mounted).toHaveBeenCalledOnce();
+    setEnabled(false);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(flag.unmounted).toHaveBeenCalledOnce();
   });
 });

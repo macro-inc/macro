@@ -5,6 +5,7 @@ import {
   makeCopyLinkAction,
 } from '@app/features/next-soup/actions';
 import type { ComposeTaskProps } from '@app/features/task-composer/core/types';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { useNavigate } from '@app/lib/split-router';
 import {
@@ -21,6 +22,7 @@ import {
 import { EntityIcon, getIconConfig } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import { enableEntityAppearance } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import SquaresFourIcon from '@icon/system/regular/squares-four.svg';
@@ -122,6 +124,7 @@ function ProjectTitleMenu(props: {
   const copyLink = makeCopyLinkAction();
   const copyId = makeCopyEntityIdAction();
   const changeIcon = useChangeEntityIcon();
+  const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const [renaming, setRenaming] = createSignal(false);
   const [deleting, setDeleting] = createSignal(false);
   const [error, setError] = createSignal<string>();
@@ -174,14 +177,17 @@ function ProjectTitleMenu(props: {
           })
         }
         onRename={() => setRenaming(true)}
-        onChangeIcon={(row) =>
-          changeIcon({
-            type: 'initiative',
-            id: row.project.id,
-            name: row.project.name,
-            ownerId: props.project.ownerId,
-            appearance: row.project.appearance,
-          })
+        onChangeIcon={
+          appearanceFlag().enabled
+            ? (row) =>
+                changeIcon({
+                  type: 'initiative',
+                  id: row.project.id,
+                  name: row.project.name,
+                  ownerId: props.project.ownerId,
+                  appearance: row.project.appearance,
+                })
+            : undefined
         }
         onSetOption={(_, property, optionId) =>
           fireAndForget(setOption(property, optionId), 'projects')

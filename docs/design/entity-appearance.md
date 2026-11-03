@@ -10,6 +10,15 @@ Appearance belongs to the shared entity, not the viewer. Every identity surface,
 including public/read-only views, uses the saved appearance. Navigation category
 icons and task status icons retain their existing behavior.
 
+## Rollout
+
+The PostHog flag `enable-entity-appearance` gates web editing only. It defaults on
+in development and supports the `VITE_ENABLE_ENTITY_APPEARANCE` override. While
+loading or disabled, hide editing controls; disabling closes open pickers. Saved
+icons and colors remain visible, and API/SDK access and edit permissions stay
+unchanged. Configure the remote rollout separately; an absent flag stays off
+outside development.
+
 ## Contract
 
 The shared Rust `model_entity::EntityAppearance` contains an optional icon and

@@ -26,7 +26,11 @@ import { useItemOperations } from '@core/component/FileList/useItemOperations';
 import { Permissions } from '@core/component/SharePermissions';
 import { toast } from '@core/component/Toast/Toast';
 import { resolveBlockAlias } from '@core/constant/allBlocks';
-import { enableProjects, enableReminders } from '@core/constant/featureFlags';
+import {
+  enableEntityAppearance,
+  enableProjects,
+  enableReminders,
+} from '@core/constant/featureFlags';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
@@ -363,6 +367,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
   const [open, setOpen] = createSignal(false);
   const [assigningProject, setAssigningProject] = createSignal(false);
   const projectsFlag = useFeatureFlag(enableProjects);
+  const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const itemOperations = useItemOperations();
   const quickAccess = useQuickAccess();
   const favoriteAction = makeFavoriteAction();
@@ -400,7 +405,12 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
   });
   const appearanceOp = (): SplitFileMenuAction | undefined => {
     const entity = menuEntity();
-    if (!entity || !supportsEntityAppearance(entity)) return;
+    if (
+      !appearanceFlag().enabled ||
+      !entity ||
+      !supportsEntityAppearance(entity)
+    )
+      return;
     if (
       props.permissions !== Permissions.OWNER &&
       props.permissions !== Permissions.CAN_EDIT

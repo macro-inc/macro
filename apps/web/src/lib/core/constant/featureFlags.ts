@@ -150,6 +150,13 @@ export const PROD_MODE_ENV = import.meta.env.MODE === 'production';
 
 const onInDev = DEV_MODE_ENV || undefined;
 
+/** Controls appearance editing only; saved icons and colors remain visible. */
+export const enableEntityAppearance = defineFlag({
+  key: 'enable-entity-appearance',
+  env: 'ENABLE_ENTITY_APPEARANCE',
+  default: onInDev,
+});
+
 /** Browser-style tabs in the macOS desktop title bar; each tab holds a split layout. */
 export const enableDesktopTabs = defineFlag({
   key: 'enable-desktop-tabs',

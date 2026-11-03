@@ -44,7 +44,11 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import { itemToBlockName } from '@core/constant/allBlocks';
-import { enableProjects, isFeatureEnabled } from '@core/constant/featureFlags';
+import {
+  enableEntityAppearance,
+  enableProjects,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
@@ -117,6 +121,7 @@ export function createSoupEntityActions(
 } {
   const analytics = useAnalytics();
   const projectsFlag = useFeatureFlag(enableProjects);
+  const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const userId = useUserId();
   const changeIcon = useChangeEntityIcon();
   const selectedEntity = () => {
@@ -340,6 +345,7 @@ export function createSoupEntityActions(
     }
     const entity = entities.length === 1 ? entities[0] : undefined;
     if (
+      appearanceFlag().enabled &&
       entity &&
       supportsEntityAppearance(entity) &&
       (entity.ownerId === userId() ||

@@ -59,6 +59,10 @@ still navigate. Sidebar category icons do not change. Drive folders, tasks,
 skills, and internal descriptions do not have appearance editing.
 Document content titles have no leading icon. Without a custom icon, **Add icon**
 appears before the other title pills for editors.
+Editing requires `enable-entity-appearance`; disabled or loading flags hide all
+entry points, and disabling closes an open picker. Saved appearance remains
+visible, including public/read-only views; API/SDK access and permissions do not
+change. Development defaults on; `VITE_ENABLE_ENTITY_APPEARANCE` overrides it.
 
 Desktop uses a compact 344px anchored popover; phones use a bottom sheet with
 **Remove**, Icons/Emoji tabs, and **Done**. Picks save immediately and the picker
