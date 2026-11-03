@@ -1,0 +1,155 @@
+diff --git a/dist/index.js b/dist/index.js
+index c5248382bac4a58b510b48e023e27d14b89c390c..ccef9dbfd66b7b4a97c53c7096eb572a2cb60baa 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -301,10 +301,12 @@ var DrawerContent = (props) => {
+       drawerContext().setTransitionState("snapping");
+       drawerContext().setIsDragging(false);
+     });
++    const atSnapPoint = drawerContext().translate() === closestSnapPoint.offset;
+     batch(() => {
+       drawerContext().setActiveSnapPoint(closestSnapPoint.value);
+       if (closestSnapPoint.offset === drawerContext().drawerSize()) {
+         dialogContext().setOpen(false);
++        if (atSnapPoint) drawerContext().closeDrawer();
+       } else {
+         drawerContext().setTranslate(closestSnapPoint.offset);
+         const transitionDuration = parseFloat(drawerContext().drawerStyles().transitionDuration);
+@@ -336,6 +338,7 @@ var DrawerContent = (props) => {
+       batch(() => {
+         if (drawerContext().transitionState() === "closing") {
+           drawerContext().closeDrawer();
++          return;
+         }
+         if (drawerContext().transitionState() !== "resizing") {
+           drawerContext().setTransitionState(null);
+@@ -468,15 +471,21 @@ var DrawerRoot = (props) => {
+     return getComputedStyle(contentRef);
+   });
+   const [transitionAwareOpen, setTransitionAwareOpen] = createSignal(false);
++  let requestGeneration = 0;
+   createEffect(() => {
+     const _open = open();
++    const generation = ++requestGeneration;
++    onCleanup(() => {
++      requestGeneration++;
++    });
+     untrack(() => {
+-      if (transitionAwareOpen() === _open) {
++      if (transitionAwareOpen() === _open && !(_open && transitionState() === "closing")) {
+         return;
+       }
+       if (_open) {
+         setTransitionAwareOpen(true);
+         afterPaint(() => {
++          if (generation !== requestGeneration || !open()) return;
+           batch(() => {
+             setTransitionState("opening");
+             setActiveSnapPoint(localProps.defaultSnapPoint);
+@@ -487,13 +496,15 @@ var DrawerRoot = (props) => {
+           }
+         });
+       } else {
++        const noMovement = transitionState() !== "snapping" && (activeSnapPoint() === 0 || (drawerSize() > 0 && translate() === drawerSize()));
+         batch(() => {
+           setTransitionState("closing");
+           setActiveSnapPoint(0);
+         });
+         afterPaint(() => {
++          if (generation !== requestGeneration || open()) return;
+           const transitionDuration = parseFloat(drawerStyles().transitionDuration);
+-          if (transitionDuration === 0) {
++          if (transitionDuration === 0 || noMovement) {
+             closeDrawer();
+           }
+         });
+@@ -501,6 +512,7 @@ var DrawerRoot = (props) => {
+     });
+   });
+   const closeDrawer = () => {
++    if (open()) return;
+     batch(() => {
+       setTransitionAwareOpen(false);
+       setTransitionState(null);
+diff --git a/dist/index.jsx b/dist/index.jsx
+index fa3ca91ca526e9c11a10819a8bda27dcbb884af7..2a9b3963d6a586ccdac140d7afbd70810c7f3a1a 100644
+--- a/dist/index.jsx
++++ b/dist/index.jsx
+@@ -350,10 +350,12 @@ var DrawerContent = (props) => {
+       drawerContext().setTransitionState("snapping");
+       drawerContext().setIsDragging(false);
+     });
++    const atSnapPoint = drawerContext().translate() === closestSnapPoint.offset;
+     batch(() => {
+       drawerContext().setActiveSnapPoint(closestSnapPoint.value);
+       if (closestSnapPoint.offset === drawerContext().drawerSize()) {
+         dialogContext().setOpen(false);
++        if (atSnapPoint) drawerContext().closeDrawer();
+       } else {
+         drawerContext().setTranslate(closestSnapPoint.offset);
+         const transitionDuration = parseFloat(
+@@ -386,6 +388,7 @@ var DrawerContent = (props) => {
+       batch(() => {
+         if (drawerContext().transitionState() === "closing") {
+           drawerContext().closeDrawer();
++          return;
+         }
+         if (drawerContext().transitionState() !== "resizing") {
+           drawerContext().setTransitionState(null);
+@@ -558,36 +561,40 @@ var DrawerRoot = (props) => {
+     return getComputedStyle(contentRef);
+   });
+   const [transitionAwareOpen, setTransitionAwareOpen] = createSignal(false);
++  let requestGeneration = 0;
+   createEffect2(() => {
+     const _open = open();
++    const generation = ++requestGeneration;
++    onCleanup(() => {
++      requestGeneration++;
++    });
+     untrack(() => {
+-      if (transitionAwareOpen() === _open) {
++      if (transitionAwareOpen() === _open && !(_open && transitionState() === "closing")) {
+         return;
+       }
+       if (_open) {
+         setTransitionAwareOpen(true);
+         afterPaint(() => {
++          if (generation !== requestGeneration || !open()) return;
+           batch2(() => {
+             setTransitionState("opening");
+             setActiveSnapPoint(localProps.defaultSnapPoint);
+           });
+-          const transitionDuration = parseFloat(
+-            drawerStyles().transitionDuration
+-          );
++          const transitionDuration = parseFloat(drawerStyles().transitionDuration);
+           if (transitionDuration === 0) {
+             setTransitionState(null);
+           }
+         });
+       } else {
++        const noMovement = transitionState() !== "snapping" && (activeSnapPoint() === 0 || (drawerSize() > 0 && translate() === drawerSize()));
+         batch2(() => {
+           setTransitionState("closing");
+           setActiveSnapPoint(0);
+         });
+         afterPaint(() => {
+-          const transitionDuration = parseFloat(
+-            drawerStyles().transitionDuration
+-          );
+-          if (transitionDuration === 0) {
++          if (generation !== requestGeneration || open()) return;
++          const transitionDuration = parseFloat(drawerStyles().transitionDuration);
++          if (transitionDuration === 0 || noMovement) {
+             closeDrawer();
+           }
+         });
+@@ -595,6 +602,7 @@ var DrawerRoot = (props) => {
+     });
+   });
+   const closeDrawer = () => {
++    if (open()) return;
+     batch2(() => {
+       setTransitionAwareOpen(false);
+       setTransitionState(null);
