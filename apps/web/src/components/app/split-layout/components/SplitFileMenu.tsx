@@ -623,11 +623,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
               return {
                 label: t('entityActions.moveToFolder'),
                 action: () => {
-                  const entity = buildEntityData({
-                    id: props.id,
-                    name: props.name,
-                    blockName: props.entityKind,
-                  });
+                  const entity = menuEntity();
                   if (!entity) return;
                   setOpen(false);
                   openBulkEditModal({

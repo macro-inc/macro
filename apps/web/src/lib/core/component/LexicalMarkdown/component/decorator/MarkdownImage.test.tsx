@@ -55,6 +55,34 @@ describe('markdown media loading', () => {
     );
   });
 
+  it('sends the session cookie to the image proxy', () => {
+    const view = render(() => (
+      <MarkdownImage
+        {...unsetMedia}
+        key="proxied"
+        url="https://example.com/shot.gif"
+        alt="Shot"
+      />
+    ));
+    expect(
+      view.container.querySelector('img')!.getAttribute('crossorigin')
+    ).toBe('use-credentials');
+  });
+
+  it('loads a static file anonymously', () => {
+    const view = render(() => (
+      <MarkdownImage
+        {...unsetMedia}
+        key="static"
+        url={`${SERVER_HOSTS['static-file']}/file/299c189c-df42-4a9a-b42b-7220264b607b`}
+        alt="Static"
+      />
+    ));
+    expect(
+      view.container.querySelector('img')!.getAttribute('crossorigin')
+    ).toBe('anonymous');
+  });
+
   it('shows a reserved image card while the file has no size yet', () => {
     render(() => (
       <MarkdownImage

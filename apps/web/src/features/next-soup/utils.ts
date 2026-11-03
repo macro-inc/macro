@@ -16,6 +16,7 @@ import {
   type CalendarViewTarget,
 } from '@app/features/calendar-view/types';
 import { callsHostedContent } from '@app/features/calls-view/calls-hosted-content';
+import { markCrmNotificationsSeenOnOpen } from '@app/features/crm/mark-record-notifications-seen';
 import { driveHostedContent } from '@app/features/drive-view/drive-hosted-content';
 import { projectHostedContent } from '@app/features/projects/open-project';
 import { reviewsHostedContent } from '@app/features/reviews-view/reviews-hosted-content';
@@ -765,29 +766,36 @@ export const openEntityInSplitFromUnifiedList = async (
     splitContent = withListNavigationSource(splitContent, splitHandle);
   }
 
-  const hydrateNotificationsAndMarkSeen = async (
+  const hydrateNotificationsAndMarkSeen = (
     channel: ChannelEntity,
     notificationSource: NotificationSource
-  ) => {
-    try {
-      const hydrated = await hydrateChannelNotificationSelection(
-        channel,
-        notificationSource.withLocalOverrides
-      );
-      const view = splitManager.findOpenView(content);
-      // A late response must not mark a closed conversation or a mobile pane
-      // that the user has already left. Hydration never reopens or retargets it.
-      if (!view || (isTouchDevice() && !view.topLevelSplit?.isActive())) return;
-      markChannelNotificationsSeenOnOpen(hydrated, notificationSource, {
-        channelReadScope: options.channelReadScope,
-      });
-    } catch (error) {
-      console.error('Failed to load conversation notifications after opening', {
-        channelId: channel.id,
-        error,
-      });
-    }
-  };
+  ) =>
+    Telemetry.span('channel.open.notifications', async (span) => {
+      span.setAttr('channel.id', channel.id);
+      try {
+        const hydrated = await hydrateChannelNotificationSelection(
+          channel,
+          notificationSource.withLocalOverrides
+        );
+        const view = splitManager.findOpenView(content);
+        // A late response must not mark a closed conversation or a mobile pane
+        // that the user has already left. Hydration never reopens or retargets it.
+        if (!view || (isTouchDevice() && !view.topLevelSplit?.isActive())) {
+          span.setAttr('channel.open.outcome', 'left');
+          return;
+        }
+        markChannelNotificationsSeenOnOpen(hydrated, notificationSource, {
+          channelReadScope: options.channelReadScope,
+        });
+        span.setAttr('channel.open.outcome', 'loaded');
+      } catch (error) {
+        span.setAttr('channel.open.outcome', 'failed');
+        console.error(
+          'Failed to load conversation notifications after opening',
+          { channelId: channel.id, error }
+        );
+      }
+    });
 
   let markedNotifications = false;
   const markNotificationsSeen = () => {
@@ -890,7 +898,7 @@ export function markChannelNotificationsSeenOnOpen(
 
 /**
  * Clear the dots of rows whose opened view has no block that marks the row's
- * loaded notifications read: calendar events and agent sessions.
+ * loaded notifications read: calendar events, agent sessions, and CRM records.
  */
 export function markRowNotificationsSeenOnOpen(
   entity: EntityWithRawNotifications<EntityData>,
@@ -898,6 +906,7 @@ export function markRowNotificationsSeenOnOpen(
 ) {
   markCalendarNotificationSeenOnOpen(entity, notificationSource);
   markAgentSessionNotificationsSeenOnOpen(entity, notificationSource);
+  markCrmNotificationsSeenOnOpen(entity, notificationSource);
 }
 
 /**

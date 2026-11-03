@@ -979,6 +979,15 @@ pub trait AgentCreations: Clone + Send + Sync + 'static {
         before: DateTime<Utc>,
     ) -> impl Future<Output = Result<Option<DateTime<Utc>>, Self::Err>> + Send;
 
+    /// When `person` last wrote anywhere in `channel_id` before `before`: the
+    /// request a bot message that starts its own thread is answering.
+    fn channel_request_sent_at(
+        &self,
+        channel_id: Uuid,
+        person: &MacroUserIdStr<'static>,
+        before: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Option<DateTime<Utc>>, Self::Err>> + Send;
+
     /// The `items` that `bot` recorded creating on `person`'s behalf at or after `since`.
     fn created_since(
         &self,

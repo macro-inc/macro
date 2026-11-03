@@ -883,6 +883,24 @@ describe('spreadsheet interactions', () => {
 });
 
 describe('presence and reveal', () => {
+  // JSDOM has no layout: every label's cell edge reads as in view.
+  beforeEach(() => {
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(
+          private readonly callback: (
+            entries: { isIntersecting: boolean }[]
+          ) => void
+        ) {}
+        observe() {
+          this.callback([{ isIntersecting: true }]);
+        }
+        disconnect() {}
+      }
+    );
+  });
+  afterEach(() => vi.unstubAllGlobals());
   it('marks the cell a remote viewer is on and shares the focused cell', () => {
     const onCellFocus = vi.fn();
     const [remoteUsers, setRemoteUsers] = createSignal([
@@ -899,6 +917,13 @@ describe('presence and reveal', () => {
         editing: true,
       },
       { userId: 'macro|pat@example.com', editing: false },
+      {
+        userId: 'macro|lee@example.com',
+        rowId: 'two',
+        columnId: 'name',
+        editing: false,
+        canEdit: false,
+      },
     ]);
     const [highlightRowId, setHighlightRowId] = createSignal<string>();
     render(() => (
@@ -937,18 +962,29 @@ describe('presence and reveal', () => {
     expect(alexCell.dataset.gridRow).toBe('1');
     expect(alexCell.dataset.gridColumn).toBe('2');
     expect(alexCell.dataset.remoteUsers).toBe('macro|alex@example.com');
-    expect(alexCell.style.borderTop).toContain('2px solid');
-    expect(alexCell.style.backgroundColor).toContain('color-mix');
+    // The outline is an overlay, so the cell itself gains no border.
+    expect(alexCell.style.borderTop).toBe('');
+    const alexOutline = alexCell.querySelector<HTMLElement>(
+      '[data-remote-outline]'
+    )!;
+    expect(alexOutline.style.borderTop).toContain('2px solid');
+    expect(alexOutline.style.backgroundColor).toContain('color-mix');
     // Sam has no cached profile: the email name is shown, dashed while editing.
     const samTag = screen.getByRole('note', { name: 'Sam is editing' });
-    const samCell = samTag.closest<HTMLElement>('[data-grid-cell]')!;
-    expect(samCell.style.borderTop).toContain('dashed');
-    expect(samCell.style.borderTop).not.toBe(alexCell.style.borderTop);
+    const samOutline = samTag
+      .closest<HTMLElement>('[data-grid-cell]')!
+      .querySelector<HTMLElement>('[data-remote-outline]')!;
+    expect(samOutline.style.borderTop).toContain('dashed');
+    expect(samOutline.style.borderTop).not.toBe(alexOutline.style.borderTop);
+    // Lee can only view: marked as viewing.
+    expect(
+      screen.getByRole('note', { name: 'Lee is viewing' }).textContent
+    ).toBe('Lee');
     // Pat is on the table with no cell: nothing to draw.
-    expect(document.querySelectorAll('[data-remote-users]')).toHaveLength(2);
+    expect(document.querySelectorAll('[data-remote-users]')).toHaveLength(3);
     setRemoteUsers([]);
     expect(screen.queryByRole('note')).toBeNull();
-    expect(alexCell.style.borderTop).toBe('');
+    expect(document.querySelector('[data-remote-outline]')).toBeNull();
 
     const secondNotes = screen
       .getAllByRole('row')[2]
