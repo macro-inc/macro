@@ -127,8 +127,11 @@ Event details placement has a backend-free browser regression: the desktop
 popover stays beside its event when join requests arrive after it opens, and
 slides into a short window; the phone drawer shows late requests. The same
 suite covers the Add guests and Forward invitation editors (the real
-`EventGuests` over a stand-in contact picker) on desktop and phone:
-`bunx playwright test --config src/features/calendar-view/browser-test/playwright.config.ts`.
+`EventGuests` over a stand-in contact picker) on desktop and phone, and long
+guest addresses wrapping in both: `just test-calendar-details-browser`. CI runs
+it when calendar details or `src/lib/queries/calendar` change. Its fixture
+aliases those query modules to `preview-adapters.tsx`, so a module export or
+callback argument the adapters lack leaves every page blank; mirror it there.
 Keep the popover's `flip` limited to `left-start`: an end fallback re-places it
 above the event whenever a late section changes its height. Keep the guest
 editors' `overlap`: without it their height follows the room below the button,

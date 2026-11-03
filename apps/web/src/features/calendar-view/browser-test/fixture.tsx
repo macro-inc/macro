@@ -13,6 +13,21 @@ for (const [token, value] of Object.entries(macroLightTheme.colorTokens)) {
 document.documentElement.dataset.themeLight = 'true';
 
 const params = new URLSearchParams(location.search);
+// `?addresses=long` adds a named guest and an address-only guest whose
+// addresses have no spaces, so they must break inside their rows.
+const longAddressGuests: CalendarEvent['attendees'] =
+  params.get('addresses') === 'long'
+    ? [
+        'quarterly.planning.review.coordinator.northeast@facilities-and-operations.example.com',
+        'shared.conference.room.booking.notifications@resource-scheduling.example.com',
+      ].map((email) => ({
+        email,
+        isOptional: false,
+        isOrganizer: false,
+        isSelf: false,
+        responseStatus: 'accepted',
+      }))
+    : [];
 const calendar = { id: 'calendar-1', name: 'Calendar', color: '#609fe2' };
 const sampleEvent: CalendarEvent = {
   id: 'planning-review',
@@ -61,6 +76,7 @@ const sampleEvent: CalendarEvent = {
       isSelf: false,
       responseStatus: 'needs_action',
     },
+    ...longAddressGuests,
   ],
   organizerEmail: 'you@example.com',
   sourceCalendarIds: [calendar.id],
