@@ -297,7 +297,7 @@ async fn fetch_inbox_details_joins_settings_backfill_and_photo(
         insert_inbox_with_thread_and_message(&pool, CHILD, "sharedbox@corp.test").await;
     insert_settings(&pool, link_id, true, Some("<p>sig</p>")).await;
     sqlx::query!(
-        "UPDATE email_settings SET read_receipts_enabled = TRUE WHERE link_id = $1",
+        "UPDATE email_settings SET read_receipts_enabled = FALSE WHERE link_id = $1",
         link_id
     )
     .execute(&pool)
@@ -337,7 +337,7 @@ async fn fetch_inbox_details_joins_settings_backfill_and_photo(
     assert_eq!(inbox.link.id, link_id);
     assert!(inbox.settings.signature_on_replies_forwards);
     assert_eq!(inbox.settings.signature.as_deref(), Some("<p>sig</p>"));
-    assert!(inbox.settings.read_receipts_enabled);
+    assert!(!inbox.settings.read_receipts_enabled);
     assert_eq!(
         inbox.latest_backfill_status,
         Some(BackfillJobStatus::Failed)
@@ -630,7 +630,7 @@ async fn fetch_inbox_details_defaults_settings_when_row_missing(
     assert_eq!(inbox.link.id, link_id);
     assert!(!inbox.settings.signature_on_replies_forwards);
     assert!(inbox.settings.signature.is_none());
-    assert!(!inbox.settings.read_receipts_enabled);
+    assert!(inbox.settings.read_receipts_enabled);
 
     Ok(())
 }

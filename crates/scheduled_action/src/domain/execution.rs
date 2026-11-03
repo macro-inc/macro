@@ -235,6 +235,7 @@ fn finished_run(
     Some(FinishedRoutineRun {
         owner: action.owner_user().ok()?.clone(),
         routine_id: action.id?,
+        routine_name: action.name.clone(),
         trigger,
         target,
         end,

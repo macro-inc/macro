@@ -2123,6 +2123,30 @@ export const listTypedNotificationsResponse = zod
                     .describe(
                       'A channel member asked to be added as a guest of an event the\nuser shared with the channel.'
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          outcome: zod
+                            .enum(['succeeded', 'failed'])
+                            .describe(
+                              'How a routine run ended, as its notification reports it.'
+                            ),
+                          routineId: zod
+                            .uuid()
+                            .describe('The routine that ran.'),
+                          routineName: zod
+                            .string()
+                            .describe("The routine's name when it ran."),
+                        })
+                        .describe(
+                          "One of the recipient's routines finished a run. Every run notifies,\nwhether it succeeded or failed."
+                        ),
+                      tag: zod.enum(['routine_run_finished']),
+                    })
+                    .describe(
+                      "One of the user's routines finished a run, successfully or not."
+                    ),
                 ])
                 .describe(
                   'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -4148,6 +4172,30 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .describe(
                       'A channel member asked to be added as a guest of an event the\nuser shared with the channel.'
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          outcome: zod
+                            .enum(['succeeded', 'failed'])
+                            .describe(
+                              'How a routine run ended, as its notification reports it.'
+                            ),
+                          routineId: zod
+                            .uuid()
+                            .describe('The routine that ran.'),
+                          routineName: zod
+                            .string()
+                            .describe("The routine's name when it ran."),
+                        })
+                        .describe(
+                          "One of the recipient's routines finished a run. Every run notifies,\nwhether it succeeded or failed."
+                        ),
+                      tag: zod.enum(['routine_run_finished']),
+                    })
+                    .describe(
+                      "One of the user's routines finished a run, successfully or not."
+                    ),
                 ])
                 .describe(
                   'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -6167,6 +6215,30 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .describe(
                       'A channel member asked to be added as a guest of an event the\nuser shared with the channel.'
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          outcome: zod
+                            .enum(['succeeded', 'failed'])
+                            .describe(
+                              'How a routine run ended, as its notification reports it.'
+                            ),
+                          routineId: zod
+                            .uuid()
+                            .describe('The routine that ran.'),
+                          routineName: zod
+                            .string()
+                            .describe("The routine's name when it ran."),
+                        })
+                        .describe(
+                          "One of the recipient's routines finished a run. Every run notifies,\nwhether it succeeded or failed."
+                        ),
+                      tag: zod.enum(['routine_run_finished']),
+                    })
+                    .describe(
+                      "One of the user's routines finished a run, successfully or not."
+                    ),
                 ])
                 .describe(
                   'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -8035,6 +8107,28 @@ export const getTypedNotificationByIdResponse = zod
             })
             .describe(
               'A channel member asked to be added as a guest of an event the\nuser shared with the channel.'
+            ),
+          zod
+            .object({
+              content: zod
+                .object({
+                  outcome: zod
+                    .enum(['succeeded', 'failed'])
+                    .describe(
+                      'How a routine run ended, as its notification reports it.'
+                    ),
+                  routineId: zod.uuid().describe('The routine that ran.'),
+                  routineName: zod
+                    .string()
+                    .describe("The routine's name when it ran."),
+                })
+                .describe(
+                  "One of the recipient's routines finished a run. Every run notifies,\nwhether it succeeded or failed."
+                ),
+              tag: zod.enum(['routine_run_finished']),
+            })
+            .describe(
+              "One of the user's routines finished a run, successfully or not."
             ),
         ])
         .describe(
