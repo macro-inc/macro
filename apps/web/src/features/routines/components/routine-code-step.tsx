@@ -1,4 +1,4 @@
-import { Badge, Button, cn } from '@ui';
+import { Button, cn } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { CallStatus, HistoryCall } from '../core/history';
@@ -8,7 +8,7 @@ import {
   sentenceParts,
   withKnobValue,
 } from '../core/knobs';
-import { type CodeStepDraft, WRITE_SCOPE_LABELS } from '../core/routine-steps';
+import type { CodeStepDraft } from '../core/routine-steps';
 import { callCount } from '../core/step-history';
 import { KnobSettings, StepSentence } from './routine-step-knobs';
 import { Field, useSteps } from './routine-steps';
@@ -94,22 +94,6 @@ export function CodeStepBody(props: {
           </div>
         )}
       </Show>
-      <Field label="Can change">
-        <div class="flex min-w-0 flex-wrap gap-1">
-          <For
-            each={props.step.writes}
-            fallback={
-              <span class="text-xs text-ink-muted">Nothing; it only reads</span>
-            }
-          >
-            {(scope) => (
-              <Badge variant="secondary" size="xs">
-                {WRITE_SCOPE_LABELS[scope]}
-              </Badge>
-            )}
-          </For>
-        </div>
-      </Field>
       <div class="grid min-w-0 gap-2">
         <Button
           type="button"

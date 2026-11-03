@@ -768,12 +768,12 @@ the step is removed.
 Code steps (written by AI through Draft it, CreateRoutine or the starter
 templates) open on the routine's Overview as a sentence of what they do,
 with each knob in place: values underlined, and what AI decides dotted with a
-sparkle. Clicking one opens an editor (text, a number within its bounds, a
-choice, or the question AI is asked; on/off flips in place), and saving
-changes only that value, never the code. Knobs the sentence doesn't show are
-listed under **Settings**; a step without a sentence shows its summary. Then
-come the **Can change** scopes and **Show code**, which reveals the code,
-folded by default. A closed step's line reads its sentence with the values
+sparkle. A choice opens a menu that saves the option picked; text, a number
+within its bounds, or the question AI is asked open an editor with **Save**;
+on/off flips in place. Each change saves only that value, never the code.
+Knobs the sentence doesn't show are listed under **Settings**; a step without
+a sentence shows its summary. **Show code** reveals the code, folded by
+default. A closed step's line reads its sentence with the values
 filled in. The starters that sort email, set task priorities and
 post updates come from the scheduler as code; where code can't be saved they
 start with an Ask AI step instead. When an SDK release

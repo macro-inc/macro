@@ -1,6 +1,8 @@
+import CheckIcon from '@icon/system/regular/check.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { Popover } from '@kobalte/core/popover';
-import { Button, TextField } from '@ui';
+import { Button, Dropdown, TextField } from '@ui';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import {
   type Knob,
@@ -83,7 +85,10 @@ export function KnobSettings(props: { knobs: Knob[]; onKnob: KnobChange }) {
   );
 }
 
-/** One knob's value; on/off flips in place, the rest open an editor. */
+/**
+ * One knob's value: on/off flips in place, a choice opens a menu that saves
+ * the option picked, and the rest open an editor.
+ */
 function KnobControl(props: {
   knob: Knob;
   onChange(value: Knob['value']): void;
@@ -92,6 +97,9 @@ function KnobControl(props: {
     <Switch
       fallback={<KnobPopover knob={props.knob} onChange={props.onChange} />}
     >
+      <Match when={props.knob.type === 'choice' && props.knob}>
+        {(knob) => <KnobChoiceMenu knob={knob()} onChange={props.onChange} />}
+      </Match>
       <Match when={props.knob.type === 'boolean' && props.knob}>
         {(knob) => (
           <button
@@ -106,6 +114,58 @@ function KnobControl(props: {
         )}
       </Match>
     </Switch>
+  );
+}
+
+function KnobChoiceMenu(props: {
+  knob: Extract<Knob, { type: 'choice' }>;
+  onChange(value: Knob['value']): void;
+}) {
+  const [open, setOpen] = createSignal(false);
+  let trigger: HTMLButtonElement | undefined;
+  return (
+    <Dropdown
+      open={open()}
+      onOpenChange={setOpen}
+      placement="bottom-start"
+      modal={false}
+    >
+      {/* The menu's own trigger, so the value stays an underlined word. */}
+      <DropdownMenu.Trigger
+        ref={trigger}
+        class={VALUE}
+        aria-label={`${props.knob.label}: ${props.knob.value}. Change it`}
+      >
+        {props.knob.value}
+      </DropdownMenu.Trigger>
+      <Dropdown.Content
+        portalScope="local"
+        mount={menuMount(trigger)}
+        class="min-w-44"
+      >
+        <Dropdown.Group>
+          <Dropdown.GroupLabel>{props.knob.label}</Dropdown.GroupLabel>
+          <Dropdown.RadioGroup
+            value={props.knob.value}
+            onChange={(value) => {
+              setOpen(false);
+              if (value !== props.knob.value) props.onChange(value);
+            }}
+          >
+            <For each={props.knob.options}>
+              {(option) => (
+                <Dropdown.RadioItem value={option}>
+                  <span class="flex-1">{option}</span>
+                  <Dropdown.ItemIndicator>
+                    <CheckIcon class="size-3.5 text-accent" />
+                  </Dropdown.ItemIndicator>
+                </Dropdown.RadioItem>
+              )}
+            </For>
+          </Dropdown.RadioGroup>
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
   );
 }
 
@@ -195,28 +255,6 @@ function KnobEditor(props: {
   const invalid = () => (props.problem ? 'invalid' : 'valid');
   return (
     <Switch>
-      <Match when={props.knob.type === 'choice' && props.knob}>
-        {(knob) => (
-          <fieldset class="grid gap-1">
-            <legend class="mb-1 text-xs font-medium text-ink-muted">
-              {knob().label}
-            </legend>
-            <For each={knob().options}>
-              {(option) => (
-                <label class="flex min-h-9 items-center gap-2 rounded-lg px-2 text-sm hover:bg-hover">
-                  <input
-                    type="radio"
-                    name={knob().name}
-                    checked={props.value === option}
-                    onChange={() => props.onInput(option)}
-                  />
-                  {option}
-                </label>
-              )}
-            </For>
-          </fieldset>
-        )}
-      </Match>
       <Match when={props.knob.type === 'number' && props.knob}>
         {(knob) => (
           <TextField

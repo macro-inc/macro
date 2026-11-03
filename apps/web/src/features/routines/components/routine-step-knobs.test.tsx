@@ -16,6 +16,13 @@ const knobs: Knob[] = [
   },
   { type: 'number', name: 'days', label: 'Days', value: 7, min: 1 },
   { type: 'boolean', name: 'notify', label: 'Notify me', value: true },
+  {
+    type: 'choice',
+    name: 'priority',
+    label: 'Priority',
+    value: 'High',
+    options: ['Low', 'High', 'Urgent'],
+  },
 ];
 
 function renderSentence(sentence: string) {
@@ -73,6 +80,27 @@ describe('a step’s sentence', () => {
         .disabled
     ).toBe(true);
     expect(current()[2]).toMatchObject({ value: 7 });
+  });
+
+  it('saves the option picked from a choice’s menu', () => {
+    const current = renderSentence('Set it to {priority}.');
+    const trigger = screen.getByRole('button', {
+      name: 'Priority: High. Change it',
+    });
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+    expect(
+      screen
+        .getByRole('menuitemradio', { name: 'High' })
+        .getAttribute('aria-checked')
+    ).toBe('true');
+    fireEvent.keyDown(screen.getByRole('menuitemradio', { name: 'Urgent' }), {
+      key: 'Enter',
+    });
+    expect(current()[4]).toMatchObject({ value: 'Urgent' });
+    expect(
+      screen.getByRole('button', { name: 'Priority: Urgent. Change it' })
+    ).toBeTruthy();
   });
 
   it('flips an on/off knob in place', () => {
