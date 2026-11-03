@@ -7,7 +7,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { createSignal, type JSX, Show } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LocalRuntimePrompt } from './local-runtime-prompt';
 
@@ -18,7 +18,9 @@ const mocks = vi.hoisted(() => ({
   statusPhase: 'stopped',
   inspect: undefined as Promise<{ paired: boolean }> | undefined,
   listen: undefined as Promise<() => void> | undefined,
-  openSettings: vi.fn(),
+  setupProps: undefined as
+    | { defaultWorkspace?: string; autoStart?: boolean }
+    | undefined,
   onStatus: undefined as ((status: { phase: string }) => void) | undefined,
   unlisten: vi.fn(),
 }));
@@ -26,13 +28,32 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@core/util/platform', () => ({
   isDesktopPlatform: () => mocks.desktop,
 }));
-vi.mock('@core/constant/SettingsState', () => ({
-  useSettingsState: () => ({ openSettings: mocks.openSettings }),
+vi.mock('@app/features/local-runtime/views/local-runtime-setup-dialog', () => ({
+  LocalRuntimeSetupDialog: (props: {
+    open: boolean;
+    children: JSX.Element;
+  }) => (
+    <Show when={props.open}>
+      <div role="dialog">{props.children}</div>
+    </Show>
+  ),
+}));
+vi.mock('@app/features/local-runtime/local-runtime-setup', () => ({
+  LocalRuntimeSetup: (props: {
+    defaultWorkspace?: string;
+    autoStart?: boolean;
+  }) => {
+    mocks.setupProps = props;
+    return <div>Local setup</div>;
+  },
 }));
 let currentUser: () => string | undefined = () => 'user-1';
 vi.mock('@core/context/user', () => ({ useUserId: () => currentUser }));
 vi.mock('@macro/tauri/macrod', () => ({
-  macrodSupport: async () => ({ supported: mocks.supported }),
+  macrodSupport: async () => ({
+    supported: mocks.supported,
+    defaultWorkspace: '/Users/me/Macro',
+  }),
   macrodInspect: () =>
     mocks.inspect ?? Promise.resolve({ paired: mocks.paired }),
   macrodStatus: async () => ({ phase: mocks.statusPhase }),
@@ -49,7 +70,7 @@ beforeEach(() => {
   mocks.statusPhase = 'stopped';
   mocks.inspect = undefined;
   mocks.listen = undefined;
-  mocks.openSettings.mockClear();
+  mocks.setupProps = undefined;
   mocks.unlisten.mockClear();
   mocks.onStatus = undefined;
   currentUser = () => 'user-1';
@@ -60,7 +81,7 @@ afterEach(() => {
 });
 
 describe('local runtime invitation', () => {
-  it('opens local setup from both mounted composer prompts and dismisses both on this computer', async () => {
+  it('sets up in place from both mounted composer prompts and dismisses both on this computer', async () => {
     render(() => (
       <>
         <LocalRuntimePrompt />
@@ -74,7 +95,11 @@ describe('local runtime invitation', () => {
     );
 
     fireEvent.click(screen.getAllByText('Set up')[0]);
-    expect(mocks.openSettings).toHaveBeenCalledWith('Harness');
+    expect(await screen.findByText('Local setup')).toBeTruthy();
+    expect(mocks.setupProps).toMatchObject({
+      defaultWorkspace: '/Users/me/Macro',
+      autoStart: true,
+    });
 
     fireEvent.click(
       screen.getAllByRole('button', {
