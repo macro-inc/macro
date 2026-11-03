@@ -1,4 +1,5 @@
 import { createTagFacetContext } from '@app/features/soup';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { t } from '@app/lib/i18n';
 import { replacePaneSearchParams } from '@app/lib/split-router';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
@@ -132,6 +133,7 @@ type BuilderProps = ManagedDialogProps & {
         title?: string;
         submitLabel?: string;
         templates: boolean;
+        source: 'builder' | 'save_filters' | 'duplicate';
       }
     | { mode: 'edit'; record: SavedView }
   );
@@ -139,12 +141,15 @@ type BuilderProps = ManagedDialogProps & {
 /** The view builder: the shared name dialog around the email conditions. */
 function EmailSavedViewDialog(props: BuilderProps) {
   const { users } = useCombinedRecipients();
+  const analytics = useAnalytics();
   const [filters, setFilters] = createSignal(props.initial);
+  const [template, setTemplate] = createSignal<EmailSavedViewTemplateId>();
   // Templates remount the fields so their typed lists show the new values.
   const [revision, setRevision] = createSignal(0);
   const config = () => configOf(filters());
   const applyTemplate = (id: EmailSavedViewTemplateId) => {
     setFilters(emailSavedViewTemplate(id));
+    setTemplate(id);
     setRevision((value) => value + 1);
   };
   const fields = (
@@ -193,6 +198,14 @@ function EmailSavedViewDialog(props: BuilderProps) {
       title={props.title}
       submitLabel={props.submitLabel}
       fields={fields}
+      onSaved={(created) => {
+        analytics.track('email_saved_view_created', {
+          savedViewId: created.id,
+          source: props.source,
+          template: template(),
+        });
+        props.onSaved(created);
+      }}
     />
   );
 }
@@ -248,6 +261,11 @@ function useOpenEmailSavedViewBuilder(owner: Owner | null = getOwner()) {
         title: copyOf ? t('emailViews.duplicateTitle') : undefined,
         submitLabel: copyOf ? t('emailViews.duplicate') : undefined,
         templates: opening.templates,
+        source: copyOf
+          ? ('duplicate' as const)
+          : opening.templates
+            ? ('builder' as const)
+            : ('save_filters' as const),
         onSaved: (created: SavedView) => {
           if (request.isCurrent()) selectSavedView(created.id);
         },
@@ -382,8 +400,17 @@ function EmailSavedViewRow(props: {
   onMoveUp?: () => void;
   onMoveDown?: () => void;
 }) {
-  const { savedViews, selectSavedView, viewerAddresses } = useEmailView();
+  const { savedViews, savedViewsList, selectSavedView, viewerAddresses } =
+    useEmailView();
   const viewerId = useUserId();
+  const analytics = useAnalytics();
+  const open = () => {
+    analytics.track('email_saved_view_opened', {
+      savedViewId: props.record.id,
+      viewCount: savedViewsList?.items()?.length ?? 0,
+    });
+    selectSavedView(props.record.id);
+  };
   const tagSets = useTagSets();
   const tagSetsReady = useTagSetsReady();
   const unread = useEmailSavedViewUnread({
@@ -401,7 +428,7 @@ function EmailSavedViewRow(props: {
       view={props.record}
       selected={selected()}
       scopeKey={viewerId()}
-      onSelect={() => props.run(() => selectSavedView(props.record.id))}
+      onSelect={() => props.run(open)}
       trailing={
         <Show when={unread()}>
           <UnreadDot />

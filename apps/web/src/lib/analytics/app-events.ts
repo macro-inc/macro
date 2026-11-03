@@ -402,6 +402,19 @@ export type AppEvents = {
     trigger: 'manual';
     targetKind?: 'agent' | 'model';
   };
+
+  // --- Saved email views ---------------------------------------------------
+  /** A confirmed create; `template` is the last starter applied, if any. */
+  email_saved_view_created: {
+    savedViewId: string;
+    source: 'builder' | 'save_filters' | 'duplicate';
+    template?: 'principals' | 'fyi' | 'action-required';
+  };
+  /** Opened from the sidebar or picker; `viewCount` is how many the viewer has. */
+  email_saved_view_opened: {
+    savedViewId: string;
+    viewCount: number;
+  };
 };
 
 export type AppEventNames = keyof AppEvents;
