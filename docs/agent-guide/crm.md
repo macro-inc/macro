@@ -501,7 +501,9 @@ stops email sync for it and hides the company that owns it, that company's
 people, and contacts without a company at that domain; unblocking shows them
 again. A contact attached to a company follows that company's domains, so
 blocking `gmail.com` does not hide a Gmail address filed under another company. Only admins and owners change either; members see them read-only.
-Contacts without a company never grant team access to email threads.
+Contacts without a company never grant team access to email threads, but
+hiding one (by hand or by blocking its domain) keeps members out of threads it
+is on, as hiding a company's contact does.
 
 `Export` opens options for companies. Choose Current view
 (respects filters/search) or All records across views (each visible record once), then
