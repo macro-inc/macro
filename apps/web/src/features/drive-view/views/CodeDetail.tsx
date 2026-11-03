@@ -26,6 +26,7 @@ import {
 } from '../queries/code-document';
 import { documentDownloadName } from '../util/document-download-name';
 import type { FileDetailContext } from '../util/file-detail-context';
+import { DriveUploadedWorkbook } from './DriveUploadedWorkbook';
 
 export type CodeDetailContext = FileDetailContext<CodeDocumentData>;
 
@@ -96,11 +97,16 @@ function CodeDetailSession(props: {
         operations,
         download,
       })}
-      <CodeDetailContent
-        documentId={props.documentId}
-        data={props.data}
-        text={text}
-        onTextChange={setText}
+      <DriveUploadedWorkbook
+        documentMetadata={props.data.documentMetadata}
+        fallback={
+          <CodeDetailContent
+            documentId={props.documentId}
+            data={props.data}
+            text={text}
+            onTextChange={setText}
+          />
+        }
       />
     </>
   );

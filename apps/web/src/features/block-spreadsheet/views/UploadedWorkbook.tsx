@@ -7,7 +7,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
 import { createQuery } from '@tanstack/solid-query';
 import { Button } from '@ui';
-import { createSignal, For, onCleanup, Show } from 'solid-js';
+import { type Accessor, createSignal, For, onCleanup, Show } from 'solid-js';
 import { SpreadsheetSkeleton } from '../components/SpreadsheetSkeleton';
 import {
   prepareSpreadsheetImport,
@@ -29,13 +29,30 @@ import { SpreadsheetEditor } from './SpreadsheetEditor';
 
 /** Used by both the old /unknown URLs and CSV blocks, including channel splits. */
 export default function UploadedWorkbook() {
-  const id = useBlockId();
+  const name = useBlockDocumentName('Imported spreadsheet');
+  return (
+    <UploadedWorkbookFile
+      documentId={useBlockId()}
+      version={blockMetadataSignal.get()?.documentVersionId ?? 0}
+      fileType={blockMetadataSignal.get()?.fileType ?? ''}
+      name={name()}
+    />
+  );
+}
+
+/** Read-only preview of an uploaded .xlsx, .xlsm or .csv version, outside a block. */
+export function UploadedWorkbookFile(props: {
+  documentId: string;
+  version: number;
+  fileType: string;
+  name: string;
+}) {
   const query = createQuery(() =>
     uploadedWorkbookQuery(
       {
-        id,
-        version: blockMetadataSignal.get()?.documentVersionId ?? 0,
-        fileType: blockMetadataSignal.get()?.fileType ?? '',
+        id: props.documentId,
+        version: props.version,
+        fileType: props.fileType,
       },
       importWorkbookFile
     )
@@ -68,14 +85,19 @@ export default function UploadedWorkbook() {
         </Show>
       }
     >
-      {(workbook) => <UploadedWorkbookImport workbook={workbook} />}
+      {(workbook) => (
+        <UploadedWorkbookImport workbook={workbook} name={() => props.name} />
+      )}
     </Show>
   );
 }
 
 /** Write the workbook into a local document in steps, so a large file
  * leaves the page responsive, then show it. */
-function UploadedWorkbookImport(props: { workbook: WorkbookFileData }) {
+function UploadedWorkbookImport(props: {
+  workbook: WorkbookFileData;
+  name: Accessor<string>;
+}) {
   const source = createLocalSpreadsheetSource();
   const [ready, setReady] = createSignal(false);
   const [error, setError] = createSignal('');
@@ -125,7 +147,11 @@ function UploadedWorkbookImport(props: { workbook: WorkbookFileData }) {
         </Show>
       }
     >
-      <UploadedWorkbookPreview source={source} workbook={props.workbook} />
+      <UploadedWorkbookPreview
+        source={source}
+        workbook={props.workbook}
+        name={props.name}
+      />
     </Show>
   );
 }
@@ -133,9 +159,10 @@ function UploadedWorkbookImport(props: { workbook: WorkbookFileData }) {
 function UploadedWorkbookPreview(props: {
   source: ReturnType<typeof createLocalSpreadsheetSource>;
   workbook: WorkbookFileData;
+  name: Accessor<string>;
 }) {
   const panel = useSplitPanelOrThrow();
-  const name = useBlockDocumentName('Imported spreadsheet');
+  const name = props.name;
   const source = props.source;
   const store = createSpreadsheetStore({ source, canEdit: () => false });
   const actions = createDraftActions({

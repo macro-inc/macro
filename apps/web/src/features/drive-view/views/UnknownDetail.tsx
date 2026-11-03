@@ -1,3 +1,5 @@
+import { isUploadedWorkbook } from '@app/features/block-spreadsheet/core/uploaded-workbook';
+import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import { UnknownContent } from '@block-unknown/component/UnknownContent';
 import { getPermissions } from '@core/component/SharePermissions';
 import { useShareModal } from '@core/component/TopBar/shareModal';
@@ -14,6 +16,7 @@ import {
 } from '../queries/unknown-document';
 import { documentDownloadName } from '../util/document-download-name';
 import type { FileDetailContext } from '../util/file-detail-context';
+import { DriveUploadedWorkbook } from './DriveUploadedWorkbook';
 
 export type UnknownDetailContext = FileDetailContext<UnknownDocumentData>;
 
@@ -30,6 +33,9 @@ export function UnknownDetailDocument(props: {
     userPermissions: getPermissions(props.data.userAccessLevel),
     owner: props.data.documentMetadata.owner,
   }));
+  const spreadsheets = useSpreadsheetAccess();
+  const workbook = () =>
+    spreadsheets() && isUploadedWorkbook(props.data.documentMetadata.fileType);
   const download = createFileDownload(() => {
     const documentId = props.documentId;
     const metadata = props.data.documentMetadata;
@@ -56,7 +62,7 @@ export function UnknownDetailDocument(props: {
       documentId={props.documentId}
       documentMetadata={props.data.documentMetadata}
       userAccessLevel={props.data.userAccessLevel}
-      defaultSidePanelOpen
+      defaultSidePanelOpen={!workbook()}
     >
       {props.children?.({
         data: props.data,
@@ -65,11 +71,16 @@ export function UnknownDetailDocument(props: {
         operations,
         download,
       })}
-      <UnknownContent
-        fileName={props.data.documentMetadata.documentName}
-        onShare={openShare}
-        onDownload={() =>
-          fireAndForget(download.start(), 'drive-file-download')
+      <DriveUploadedWorkbook
+        documentMetadata={props.data.documentMetadata}
+        fallback={
+          <UnknownContent
+            fileName={props.data.documentMetadata.documentName}
+            onShare={openShare}
+            onDownload={() =>
+              fireAndForget(download.start(), 'drive-file-download')
+            }
+          />
         }
       />
     </FileDetailLayout>
