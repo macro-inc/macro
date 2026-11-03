@@ -87,7 +87,7 @@ impl<S: AgentSessionRepo, H: AgentSessionNotificationRecipient> ReviewActions fo
                 .owner_user()
                 .cloned()
                 .map_err(|_| CodeModeError::Forbidden)?,
-            archived: row.is_archived,
+            archived: row.is_archived(),
             prompter: self
                 .sessions
                 .turn_prompter(session)
@@ -186,7 +186,9 @@ impl<S: AgentSessionRepo, H: AgentSessionNotificationRecipient> ReviewActions fo
                     tool_call_id: format!("view_{}", view.id),
                     title: "mcp__macro_internal__PresentView".into(),
                     raw_input: serde_json::json!({"view": view.view}),
-                    raw_output: serde_json::json!({"message": "Presented to the user"}),
+                    // Readers render the decoded view from the result, as
+                    // they do a DisplayResults result.
+                    raw_output: serde_json::json!({"view": view.view}),
                 },
             )
             .await

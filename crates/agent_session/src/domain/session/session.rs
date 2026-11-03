@@ -19,6 +19,7 @@ use agent_runtime_protocol::domain::action::{
 use agent_runtime_protocol::domain::schema::v0::{
     AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage,
 };
+use agent_runtime_protocol::domain::turn::RuntimeSessionClosedNotification;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::PROTOCOL_VERSION;
@@ -491,6 +492,10 @@ impl<Token> SessionMachine<Token> {
                 }
                 return;
             }
+            if self.reports_runtime_closed(&frame) {
+                effects.push(Effect::RuntimeClosed);
+                return;
+            }
             self.on_permission_request(&frame, effects);
             self.hold_or_refuse_elicitation(&frame, effects);
             return;
@@ -827,6 +832,25 @@ impl<Token> SessionMachine<Token> {
                 .meta(self.session_meta()),
             SessionOpening::New,
         )
+    }
+
+    /// Whether `frame` is the runtime's `_session/closed` for the live ACP
+    /// session. One naming another session, or unreadable, says nothing.
+    fn reports_runtime_closed(&self, frame: &RawJsonRpcMessage) -> bool {
+        let (RawJsonRpcMessage::Notification(notification), SessionPhase::Live { session_id, .. }) =
+            (frame, &self.phase)
+        else {
+            return false;
+        };
+        RuntimeSessionClosedNotification::matches_method(&notification.method)
+            && notification
+                .params
+                .clone()
+                .and_then(|params| {
+                    serde_json::from_value::<RuntimeSessionClosedNotification>(params.into_value())
+                        .ok()
+                })
+                .is_some_and(|closed| &closed.session_id == session_id)
     }
 
     /// A `session/request_permission` from the agent. The agent blocks until

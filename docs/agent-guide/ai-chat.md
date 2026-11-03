@@ -776,7 +776,12 @@ the shimmer.
   and quoting remain available.
   Archived sessions are read-only: Rename and all message controls are unavailable,
   and an **Unarchive** action replaces the composer at the bottom. Archive /
-  Unarchive is also available from the title dropdown.
+  Unarchive is also available from the title dropdown. The footer says when the
+  session was archived and, if it archived itself, why (its pull requests
+  merged, or its machine session closed). For the owner of an unarchived session that has never
+  archived itself, the title dropdown also has **Archive when PRs merge** and
+  **Archive when session closes** submenus, each with **Use default (On/Off)**,
+  **On**, and **Off**; the defaults live in Settings → Agents → **Auto-archive**.
 - Users without `enable-chat-v3-agents` retain the Owned / Running / Shared /
   Automations / Skills list. With the flag enabled, touch devices use the new
   conversation list described above. Touch conversation links open standalone
@@ -1624,19 +1629,19 @@ a review with nothing saved; there is no direct view tool.
 The agent decides when to present one without being asked, usually at the end
 of a turn that made, changed or sent something, or to answer a question about
 workspace data, and it does not mention again in its reply what the view shows.
-The view is checked against the renderer's schema before it is drawn: a view
-that does not match is never presented, and the agent is told what to fix.
+The server decodes the view before it is drawn: a view that does not decode
+is never presented, and the agent is told what to fix.
 The call the harness presents (`view_<id>`) draws the view directly in the
 reply and stays visible without opening a tool row. Every agent chain with
 `ExecuteCode`, including external coding agents connected through Macro's MCP
-server, can present one. Older sessions' `DisplayResults` calls, and AI chat's, still render
-the same way.
+server, can present one. AI chat's `DisplayResults` calls render the same
+way, from the view the call returns; nothing draws while the call streams.
 
 A presented view breaks tool groups before and after itself; later calls start
 a separate group. Its dashboard supports markdown, timelines, entity lists, and
-channel messages, using the same full-width view as AI chat. Malformed views
-show **Couldn't render dashboard**; failed calls show a **Failed** summary row
-without a disclosure.
+channel messages, using the same full-width view as AI chat. A finished call
+with no view shows **Couldn't render dashboard**; failed calls show a
+**Failed** summary row without a disclosure.
 
 The development gallery at `/app/component/agent-ui` includes **Replay tool
 calls** and **Replay fast batch**, both using the message renderer. Check that

@@ -1,4 +1,6 @@
 {
+  "agent-harness.getAgentAutoArchivePreferences": "Get Agent Auto Archive Preferences",
+  "agent-harness.putAgentAutoArchivePreferences": "Put Agent Auto Archive Preferences",
   "agent-harness.discoverAgentCapabilitiesHandler": "Discover Agent Capabilities",
   "agent-harness.getAgentCodingPreferences": "Get Agent Coding Preferences",
   "agent-harness.putAgentCodingPreferences": "Put Agent Coding Preferences",
@@ -20,6 +22,8 @@
   "agent-harness.getAgentSession": "Get Agent Session",
   "agent-harness.reportAgentSessionAppConnected": "Report Agent Session App Connected",
   "agent-harness.setAgentSessionArchived": "Set Agent Session Archived",
+  "agent-harness.getAgentSessionAutoArchive": "Get Agent Session Auto Archive",
+  "agent-harness.putAgentSessionAutoArchive": "Put Agent Session Auto Archive",
   "agent-harness.getAgentSessionChanges": "Get Agent Session Changes",
   "agent-harness.getAgentSessionChangesPatch": "Get Agent Session Changes Patch",
   "agent-harness.refreshAgentSessionChanges": "Refresh Agent Session Changes",

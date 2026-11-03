@@ -37,7 +37,7 @@ describe('selectOpenPullRequests', () => {
     const archived: AgentSessionEntity = {
       ...session,
       id: 'archived',
-      isArchived: true,
+      archivedBy: 'pull_request_merged',
     };
     const chatMode: AgentSessionEntity = {
       ...session,

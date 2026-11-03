@@ -37,6 +37,8 @@ function offsite(): FormDetail {
       status: 'open',
       closesAt: null,
       tallyVisible: false,
+      responsesVisible: false,
+      anonymous: false,
       confirmationMessage: 'See you there!',
       branding: { logoFileId: null, coverFileId: null, accentColor: null },
       submittedColumnId: null,
@@ -403,6 +405,39 @@ describe('RespondView', () => {
     expect(
       screen.getByRole('button', { name: 'Edit my response' })
     ).toBeTruthy();
+  });
+
+  it('shows an anonymous respondent that they responded, with no answers to show or edit', () => {
+    const detail = offsite();
+    detail.form.responsesVisible = true;
+    detail.form.anonymous = true;
+    const { context } = createMockFormContext({
+      detail,
+      mine: {
+        status: 'submitted',
+        booking: null,
+        submittedAt: undefined,
+        answers: [],
+        anonymous: true,
+      },
+    });
+    let opened = 0;
+    render(() => (
+      <FormProvider value={context}>
+        <RespondView
+          detail={detail}
+          compact={false}
+          refetch={async () => true}
+          onOpenResponses={() => opened++}
+        />
+      </FormProvider>
+    ));
+    expect(screen.queryByRole('button', { name: 'Edit my response' })).toBe(
+      null
+    );
+    expect(screen.queryByRole('region', { name: 'Your answers' })).toBe(null);
+    fireEvent.click(screen.getByRole('button', { name: 'See responses' }));
+    expect(opened).toBe(1);
   });
 
   it('shows a closed form’s saved response with the reason it can no longer be edited', () => {
