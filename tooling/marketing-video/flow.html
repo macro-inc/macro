@@ -9,7 +9,7 @@
    or "Replace 27+ apps" opener). Its callout lines come alive and become a diagram: one demo call flows into the CRM,
    a task and the calendar; an agent picks up all of it and drafts the follow-up; the team picks it up; you send it
    and everything syncs. Then the diagram folds into one shared context and the end card (price, CTA, proof).
-   ?cut=full|30|15  &hook=notion|slack|replace  &word=<tool>  &fmt=916|45|11 */
+   ?cut=full|30|15  &hook=notion|slack|replace  &word=<tool>  &static=dark (opener stills only)  &fmt=916|45|11 */
 @font-face { font-family: "Inter"; src: url("fonts/inter-variable.woff2") format("woff2"); font-weight: 100 900; font-display: block; }
 @font-face { font-family: "display"; src: url("fonts/roboto-slab-variable.woff2") format("woff2"); font-weight: 100 900; font-display: block; }
 :root { --bg: #f5f1e8; --rail: #efebe3; --panel: #e9e5dc; --surf: #ece8df; --tile: #dfdbd3; --ink: #1d1c1a; --body: #54524f; --lab: #72706c; --mut: #8f8c86;
@@ -62,6 +62,10 @@ html.render body { display: block; min-height: 0; }
   box-shadow: 0 20px 44px -20px #1d1c1aa6, inset 0 1px 0 #ffffff26; }
 .spin { display: inline-flex; }
 .prow { display: inline-flex; align-items: center; gap: 9px; white-space: nowrap; color: var(--body); }
+/* &static=dark: the dark static's page, headline and mark (the opener only) */
+html.sdark { --bg: #000; }
+html.sdark #ah0, html.sdark #ah1 { color: #fff; }
+html.sdark #lock svg { fill: #fff; }
 </style>
 <script src="icons.js"></script>
 <script src="phx.js"></script>
@@ -400,30 +404,39 @@ const MODS = [["Calendar", "calendar-blank", 323, 460], ["Booking links", "link"
 const EC = [546, 700];
 const MOD_ORDER = MODS.map((m, i) => [i, Math.hypot(m[2] - EC[0], m[3] - EC[1])]).sort((a, b) => a[1] - b[1]).map((x) => x[0]);
 const TAP = REPLACE ? pp(323, 460 + EDY) : pp(557, 934);          // the thumb taps Calendar just before the drop
+// &static=dark draws the opener (frame 0, which is the static ad) in the dark static's colors: black page, white slab
+// and mark, a near-black window. Only the opener is themed, so use it for stills, not for the video.
+const SDARK = Q.get("static") === "dark";
+if (SDARK) document.documentElement.classList.add("sdark");
+const OP = SDARK
+  ? { win: "#101211", winRing: "#ffffff1c", side: "#060606", sideEdge: "#ffffff10", head: "#121413", headEdge: "#ffffff10", ink: "#ffffff", plusIc: "#000000",
+      icon: "#e6e7e6", dotRing: "#060606", title: "#f4f4f2", label: "#8a8c8b", row: "#e6e7e6", line: "#ffffff", lineOp: ".26", diamond: "#6f7170", callout: "#d4d5d4", hover: "#ffffff12" }
+  : { win: "#e9e5dc", winRing: "#1d1c1a3a", side: "linear-gradient(#efebe2,#f4f0e7 85%)", sideEdge: "#1d1c1a14", head: "#e4e0d9", headEdge: "#1d1c1a14", ink: "var(--ink)", plusIc: "#f5f1e8",
+      icon: "#1d1c1a", dotRing: "#f1ede4", title: "#121110", label: "#6d6a64", row: "#2a2824", line: "#1d1c1a", lineOp: ".22", diamond: "#8c897f", callout: "#3a3833", hover: "#1d1c1a12" };
 if (!REPLACE) {
   add(LP, `<div class="a" id="win" style="left:0;top:0;width:${FW}px;height:${FH}px;transform-origin:0 0">
-    <div class="a" style="inset:0;border-radius:40px 0 0 40px;overflow:hidden;background:#e9e5dc;box-shadow:inset 0 0 0 1.5px #1d1c1a3a">
-      <div class="a" style="left:0;top:0;bottom:0;width:87px;background:linear-gradient(#efebe2,#f4f0e7 85%);box-shadow:inset -1px 0 0 #1d1c1a14"></div>
-      <div class="a" style="left:87px;right:0;top:0;height:67px;background:#e4e0d9;box-shadow:inset 0 -1px 0 #1d1c1a14"></div>
-      <div class="a" style="left:0;top:202px;width:4px;height:36px;border-radius:0 3px 3px 0;background:var(--ink)"></div>
+    <div class="a" style="inset:0;border-radius:40px 0 0 40px;overflow:hidden;background:${OP.win};box-shadow:inset 0 0 0 1.5px ${OP.winRing}">
+      <div class="a" style="left:0;top:0;bottom:0;width:87px;background:${OP.side};box-shadow:inset -1px 0 0 ${OP.sideEdge}"></div>
+      <div class="a" style="left:87px;right:0;top:0;height:67px;background:${OP.head};box-shadow:inset 0 -1px 0 ${OP.headEdge}"></div>
+      <div class="a" style="left:0;top:202px;width:4px;height:36px;border-radius:0 3px 3px 0;background:${OP.ink}"></div>
       ${SIDE.map(([n, y], i) => `<div class="a flex" id="as${i}" style="left:${41.5 - 24}px;top:${y - 24}px;width:48px;height:48px;justify-content:center">
-        <div class="a" id="ash${i}" style="inset:-4px;border-radius:50%;background:#1d1c1a12;opacity:0"></div>
-        ${i === 0 ? `<div class="flex" style="width:48px;height:48px;border-radius:50%;background:var(--ink);justify-content:center">${pxb("plus", 26, "#f5f1e8")}</div>` : pxb(n, 32, "#1d1c1a")}
-        ${n === "envelope" || n === "chats-circle" ? `<div class="a" style="right:5px;top:4px;width:8px;height:8px;border-radius:50%;background:var(--ink);box-shadow:0 0 0 2px #f1ede4"></div>` : ""}</div>`).join("")}
+        <div class="a" id="ash${i}" style="inset:-4px;border-radius:50%;background:${OP.hover};opacity:0"></div>
+        ${i === 0 ? `<div class="flex" style="width:48px;height:48px;border-radius:50%;background:${OP.ink};justify-content:center">${pxb("plus", 26, OP.plusIc)}</div>` : pxb(n, 32, OP.icon)}
+        ${n === "envelope" || n === "chats-circle" ? `<div class="a" style="right:5px;top:4px;width:8px;height:8px;border-radius:50%;background:${OP.ink};box-shadow:0 0 0 2px ${OP.dotRing}"></div>` : ""}</div>`).join("")}
       <div class="a" style="left:${41.5 - 32}px;top:${839 - 32}px">${photo("jacob", 64)}</div>
-      ${T1(118, 35, 24, "Home", "font-weight:600;color:#121110")}
-      ${T1(118, 122, 19, "Last few minutes", "color:#6d6a64")}
-      ${T1(120, 455, 19, "Earlier today", "color:#6d6a64")}
-      ${ROWS_A.map(([n, x, y]) => `<div class="a flex nowrap" style="left:121px;top:${y - 13}px;height:26px;gap:19px;font-size:22px;color:#2a2824">${n === "julia" ? photo("julia", 26) : pxb(n, 26, "#2a2824")}<span>${x}</span></div>`).join("")}
+      ${T1(118, 35, 24, "Home", `font-weight:600;color:${OP.title}`)}
+      ${T1(118, 122, 19, "Last few minutes", `color:${OP.label}`)}
+      ${T1(120, 455, 19, "Earlier today", `color:${OP.label}`)}
+      ${ROWS_A.map(([n, x, y]) => `<div class="a flex nowrap" style="left:121px;top:${y - 13}px;height:26px;gap:19px;font-size:22px;color:${OP.row}">${n === "julia" ? photo("julia", 26) : pxb(n, 26, OP.row)}<span>${x}</span></div>`).join("")}
     </div>
   </div>`);
   add(LP, `<svg class="a" id="acall" width="1080" height="1350" viewBox="0 0 1080 1350" style="left:0;top:0;overflow:visible">
-    ${CALL.map(([, ly, iy], i) => { const x1 = edgeX(iy) - 5; return `<path id="acl${i}" d="M${x1.toFixed(1)} ${iy} L472 ${iy} L385 ${ly} L342 ${ly}" fill="none" stroke="#1d1c1a" stroke-opacity=".22" stroke-width="1.6"/>
-      <rect id="acd${i}" x="${(x1 - 4).toFixed(1)}" y="${iy - 4}" width="8" height="8" transform="rotate(45 ${x1.toFixed(1)} ${iy})" fill="#8c897f"/>`; }).join("")}
-    <path id="alead" d="M843 282 L843 357" fill="none" stroke="#1d1c1a" stroke-opacity=".3" stroke-width="1.6"/>
+    ${CALL.map(([, ly, iy], i) => { const x1 = edgeX(iy) - 5; return `<path id="acl${i}" d="M${x1.toFixed(1)} ${iy} L472 ${iy} L385 ${ly} L342 ${ly}" fill="none" stroke="${OP.line}" stroke-opacity="${OP.lineOp}" stroke-width="1.6"/>
+      <rect id="acd${i}" x="${(x1 - 4).toFixed(1)}" y="${iy - 4}" width="8" height="8" transform="rotate(45 ${x1.toFixed(1)} ${iy})" fill="${OP.diamond}"/>`; }).join("")}
+    <path id="alead" d="M843 282 L843 357" fill="none" stroke="${OP.line}" stroke-opacity=".3" stroke-width="1.6"/>
     ${CALL.map((_, i) => PULSE("ap" + i)).join("")}${PULSE("apL")}
   </svg>`);
-  CALL.forEach(([l, ly], i) => add(LP, T1(18, ly - 3, 22, l, "width:300px;text-align:right;color:#3a3833", "acx" + i)));
+  CALL.forEach(([l, ly], i) => add(LP, T1(18, ly - 3, 22, l, `width:300px;text-align:right;color:${OP.callout}`, "acx" + i)));
   add(LP, slabLine("ah0", [WORD, "wasn’t"], 84.5, 170, 94));
   add(LP, slabLine("ah1", ["built", "like"], 84.5, 274, 94));
 } else {
