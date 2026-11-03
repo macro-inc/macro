@@ -15,6 +15,13 @@ const API_KEY_HEADER: &str = "x-macro-user-api-key";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 /// The harness waits up to 180 seconds for the runtime to open a session.
 const SESSION_CREATE_TIMEOUT: Duration = Duration::from_secs(200);
+/// macrod rereads its bound agents every 10 seconds and only then listens for
+/// the new bot's session requests, which are published once and never
+/// replayed. Asking before then is lost, so give it that long first.
+const RUNTIME_PICKUP_DELAY: Duration = Duration::from_secs(15);
+/// Session requests made before the runtime was listening, kept short of
+/// hammering a runtime that is really gone.
+const SESSION_CREATE_ATTEMPTS: u8 = 3;
 /// Handle of the bot that runs an agent's brain. Bots are unique per owner,
 /// and each agent owns exactly one.
 const BRAIN_HANDLE: &str = "brain";
@@ -119,19 +126,43 @@ impl MacroBrainLauncher {
         Ok(response.json().await?)
     }
 
+    async fn create_session(&self, launch: &BrainLaunch) -> Result<(), BrainLaunchError> {
+        let mut attempt = 1;
+
+        loop {
+            let created: Result<serde_json::Value, _> = Self::send(
+                self.client
+                    .post(format!("{}/agent-sessions", self.harness_url))
+                    .timeout(SESSION_CREATE_TIMEOUT)
+                    .json(&serde_json::json!({
+                        "id": launch.session_id,
+                        "botId": launch.bot_id,
+                    })),
+                &launch.api_key,
+                "/agent-sessions",
+            )
+            .await;
+
+            match created {
+                Ok(_) => return Ok(()),
+                Err(BrainLaunchError::Status { status, .. })
+                    if status == reqwest::StatusCode::CONFLICT
+                        && attempt < SESSION_CREATE_ATTEMPTS =>
+                {
+                    tracing::warn!(
+                        attempt,
+                        "the runtime did not open the brain's session; asking again"
+                    );
+                    attempt += 1;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+    }
+
     async fn launch(&self, launch: BrainLaunch) -> Result<(), BrainLaunchError> {
-        let _: serde_json::Value = Self::send(
-            self.client
-                .post(format!("{}/agent-sessions", self.harness_url))
-                .timeout(SESSION_CREATE_TIMEOUT)
-                .json(&serde_json::json!({
-                    "id": launch.session_id,
-                    "botId": launch.bot_id,
-                })),
-            &launch.api_key,
-            "/agent-sessions",
-        )
-        .await?;
+        tokio::time::sleep(RUNTIME_PICKUP_DELAY).await;
+        self.create_session(&launch).await?;
 
         let _: serde_json::Value = Self::send(
             self.client
