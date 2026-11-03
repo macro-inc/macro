@@ -106,7 +106,9 @@ async fn open_direct_message_returns_the_channel() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/channels/get_or_create_dm"))
-        .and(body_partial_json(json!({"recipient_id": "macro|owner@example.com"})))
+        .and(body_partial_json(
+            json!({"recipient_id": "macro|owner@example.com"}),
+        ))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"channel_id": "dm1"})))
         .expect(1)
         .mount(&server)
