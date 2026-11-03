@@ -22,6 +22,7 @@ import type {
   CreateGtmInviteLinkRequest,
   CreateInProgressLinkResponse,
   CreatePortalSessionRequest,
+  CreateTeamAgent,
   CreateTeamRequest,
   CreditCheckoutRequestBody,
   CreditCheckoutResponse,
@@ -32,6 +33,8 @@ import type {
   CursorModelsResponse,
   EmailConnectionProviders,
   EmailConnectionProvidersParams,
+  EmailMessage,
+  EmailMessages,
   EmptyResponse,
   EnrichGithubPullRequestsProxyRequest,
   EnrichGithubPullRequestsResponse,
@@ -61,6 +64,7 @@ import type {
   InviteToTeamRequest,
   JoinTeamByInviteLinkResponse,
   ListGtmInviteLinksParams,
+  ListMyTeamAgentEmailParams,
   MacroApiTokenParams,
   MacroApiTokenResponse,
   MergeGithubPullRequestRequest,
@@ -89,9 +93,11 @@ import type {
   RedeemGtmInviteLinkRequest,
   ResendFusionauthVerifyUserEmailRequest,
   SendDomainNoticeResponse,
+  SendEmail,
   SendInviteBody,
   SendMobileWelcomeEmailRequest,
   SendMobileWelcomeEmailResponse,
+  SentEmail,
   SetGithubPullRequestDraftRequest,
   SetGithubPullRequestDraftResponse,
   SetGithubPullRequestStateRequest,
@@ -104,6 +110,7 @@ import type {
   SystemStatus,
   SystemStatusHistory,
   Team,
+  TeamAgent,
   TeamInviteLinkResponse,
   TeamInviteLinkTeam,
   TeamInviteLinkTokenRequest,
@@ -5945,6 +5952,365 @@ export const getUserInvites = async (
     status: res.status,
     headers: res.headers,
   } as getUserInvitesResponse;
+};
+
+/**
+ * @summary Create a team agent on the caller's team. Requires a team admin or owner.
+ */
+export type createTeamAgentResponse201 = {
+  data: TeamAgent;
+  status: 201;
+};
+
+export type createTeamAgentResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type createTeamAgentResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type createTeamAgentResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type createTeamAgentResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type createTeamAgentResponseSuccess = createTeamAgentResponse201 & {
+  headers: Headers;
+};
+export type createTeamAgentResponseError = (
+  | createTeamAgentResponse400
+  | createTeamAgentResponse401
+  | createTeamAgentResponse403
+  | createTeamAgentResponse500
+) & {
+  headers: Headers;
+};
+
+export type createTeamAgentResponse =
+  | createTeamAgentResponseSuccess
+  | createTeamAgentResponseError;
+
+export const getCreateTeamAgentUrl = () => {
+  return `/team_agents`;
+};
+
+export const createTeamAgent = async (
+  createTeamAgent: CreateTeamAgent,
+  options?: RequestInit
+): Promise<createTeamAgentResponse> => {
+  const res = await fetch(getCreateTeamAgentUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createTeamAgent),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createTeamAgentResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createTeamAgentResponse;
+};
+
+/**
+ * @summary The calling team agent's own profile.
+ */
+export type getMyTeamAgentResponse200 = {
+  data: TeamAgent;
+  status: 200;
+};
+
+export type getMyTeamAgentResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getMyTeamAgentResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getMyTeamAgentResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getMyTeamAgentResponseSuccess = getMyTeamAgentResponse200 & {
+  headers: Headers;
+};
+export type getMyTeamAgentResponseError = (
+  | getMyTeamAgentResponse401
+  | getMyTeamAgentResponse404
+  | getMyTeamAgentResponse500
+) & {
+  headers: Headers;
+};
+
+export type getMyTeamAgentResponse =
+  | getMyTeamAgentResponseSuccess
+  | getMyTeamAgentResponseError;
+
+export const getGetMyTeamAgentUrl = () => {
+  return `/team_agents/me`;
+};
+
+export const getMyTeamAgent = async (
+  options?: RequestInit
+): Promise<getMyTeamAgentResponse> => {
+  const res = await fetch(getGetMyTeamAgentUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getMyTeamAgentResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getMyTeamAgentResponse;
+};
+
+/**
+ * @summary The calling team agent's newest emails.
+ */
+export type listMyTeamAgentEmailResponse200 = {
+  data: EmailMessages;
+  status: 200;
+};
+
+export type listMyTeamAgentEmailResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type listMyTeamAgentEmailResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type listMyTeamAgentEmailResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type listMyTeamAgentEmailResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type listMyTeamAgentEmailResponseSuccess =
+  listMyTeamAgentEmailResponse200 & {
+    headers: Headers;
+  };
+export type listMyTeamAgentEmailResponseError = (
+  | listMyTeamAgentEmailResponse401
+  | listMyTeamAgentEmailResponse404
+  | listMyTeamAgentEmailResponse502
+  | listMyTeamAgentEmailResponse503
+) & {
+  headers: Headers;
+};
+
+export type listMyTeamAgentEmailResponse =
+  | listMyTeamAgentEmailResponseSuccess
+  | listMyTeamAgentEmailResponseError;
+
+export const getListMyTeamAgentEmailUrl = (
+  params?: ListMyTeamAgentEmailParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/team_agents/me/email/messages?${stringifiedParams}`
+    : `/team_agents/me/email/messages`;
+};
+
+export const listMyTeamAgentEmail = async (
+  params?: ListMyTeamAgentEmailParams,
+  options?: RequestInit
+): Promise<listMyTeamAgentEmailResponse> => {
+  const res = await fetch(getListMyTeamAgentEmailUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listMyTeamAgentEmailResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listMyTeamAgentEmailResponse;
+};
+
+/**
+ * @summary One of the calling team agent's emails, with its body.
+ */
+export type getMyTeamAgentEmailResponse200 = {
+  data: EmailMessage;
+  status: 200;
+};
+
+export type getMyTeamAgentEmailResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getMyTeamAgentEmailResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getMyTeamAgentEmailResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type getMyTeamAgentEmailResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type getMyTeamAgentEmailResponseSuccess =
+  getMyTeamAgentEmailResponse200 & {
+    headers: Headers;
+  };
+export type getMyTeamAgentEmailResponseError = (
+  | getMyTeamAgentEmailResponse401
+  | getMyTeamAgentEmailResponse404
+  | getMyTeamAgentEmailResponse502
+  | getMyTeamAgentEmailResponse503
+) & {
+  headers: Headers;
+};
+
+export type getMyTeamAgentEmailResponse =
+  | getMyTeamAgentEmailResponseSuccess
+  | getMyTeamAgentEmailResponseError;
+
+export const getGetMyTeamAgentEmailUrl = (messageId: string) => {
+  return `/team_agents/me/email/messages/${messageId}`;
+};
+
+export const getMyTeamAgentEmail = async (
+  messageId: string,
+  options?: RequestInit
+): Promise<getMyTeamAgentEmailResponse> => {
+  const res = await fetch(getGetMyTeamAgentEmailUrl(messageId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getMyTeamAgentEmailResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getMyTeamAgentEmailResponse;
+};
+
+/**
+ * @summary Send an email as the calling team agent.
+ */
+export type sendTeamAgentEmailResponse200 = {
+  data: SentEmail;
+  status: 200;
+};
+
+export type sendTeamAgentEmailResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type sendTeamAgentEmailResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type sendTeamAgentEmailResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type sendTeamAgentEmailResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type sendTeamAgentEmailResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type sendTeamAgentEmailResponseSuccess =
+  sendTeamAgentEmailResponse200 & {
+    headers: Headers;
+  };
+export type sendTeamAgentEmailResponseError = (
+  | sendTeamAgentEmailResponse400
+  | sendTeamAgentEmailResponse401
+  | sendTeamAgentEmailResponse404
+  | sendTeamAgentEmailResponse502
+  | sendTeamAgentEmailResponse503
+) & {
+  headers: Headers;
+};
+
+export type sendTeamAgentEmailResponse =
+  | sendTeamAgentEmailResponseSuccess
+  | sendTeamAgentEmailResponseError;
+
+export const getSendTeamAgentEmailUrl = () => {
+  return `/team_agents/me/email/send`;
+};
+
+export const sendTeamAgentEmail = async (
+  sendEmail: SendEmail,
+  options?: RequestInit
+): Promise<sendTeamAgentEmailResponse> => {
+  const res = await fetch(getSendTeamAgentEmailUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(sendEmail),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: sendTeamAgentEmailResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as sendTeamAgentEmailResponse;
 };
 
 /**

@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO team_agents\n                (user_id, team_id, created_by, job_description, personality, harness_id, mailbox_id)\n            VALUES ($1, $2, $3, $4, $5, $6, $7)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0fe3ca42ce24a588f1834c3e8ccb5fb9b207290d3ca8970e6bf6d71483ef4498"
+}

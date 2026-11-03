@@ -46,6 +46,10 @@ pub enum StreamAudience {
         /// Owning workspace id.
         workspace_id: String,
     },
+    /// These people, through any of their workspaces: a user-scoped stream
+    /// of one of them, or a team-scoped stream of a team one of them is on.
+    /// Persisted webhooks expand people the same way.
+    People(Vec<MacroUserIdStr<'static>>),
     /// Anyone in any of these audiences. Used when an event belongs to more
     /// than one grant at once, such as a departed session whose owner keeps
     /// ownership even after losing access to the parent it came from.
@@ -181,6 +185,37 @@ where
                     ));
                 }
                 Ok(current.as_deref() == Some(workspace_id.as_str()))
+            }
+            StreamAudience::People(people) => {
+                let current = self.scoped_workspace_id().await?;
+                let Some(current) = current else {
+                    return Err(rootcause::report!(
+                        "team-scoped stream lost team membership"
+                    ));
+                };
+
+                if self.scope == WebhookScope::User {
+                    return Ok(people.iter().any(|person| person.as_ref() == current));
+                }
+
+                for person in people {
+                    let team = self
+                        .workspace_resolver
+                        .get_user_team_workspace_id(person.clone())
+                        .await
+                        .map_err(|error| {
+                            let error: anyhow::Error = error.into();
+                            rootcause::report!(
+                                "failed to resolve a person's team workspace: {error:?}"
+                            )
+                        })?;
+
+                    if team.as_deref() == Some(current.as_str()) {
+                        return Ok(true);
+                    }
+                }
+
+                Ok(false)
             }
             StreamAudience::Entity {
                 entity_id,

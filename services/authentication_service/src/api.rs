@@ -142,6 +142,16 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
                 },
             ),
         )
+        .nest(
+            "/team_agents",
+            team_agents::inbound::axum_router::team_agents_router(
+                team_agents::inbound::axum_router::TeamAgentsRouterState {
+                    service: state.team_agents_service.clone(),
+                    entity_access_service: state.entity_access_service.clone(),
+                    authorization_state: state.authorization_state.clone(),
+                },
+            ),
+        )
         .merge(
             teams::inbound::axum_router::domain_notice::domain_notice_router(
                 teams::inbound::axum_router::domain_notice::DomainNoticeRouterState {

@@ -146,6 +146,11 @@ pub enum TeamJoinMethod {
     DomainAutoJoin,
     /// The user opened the team's shareable invite link.
     InviteLink,
+    /// A team admin created this account as a team agent.
+    TeamAgent {
+        /// Admin who created the agent.
+        added_by: MacroUserIdStr<'static>,
+    },
 }
 
 /// Metadata for [`TeamTopicEvent::MemberJoined`].

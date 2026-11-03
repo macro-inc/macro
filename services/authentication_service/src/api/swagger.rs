@@ -206,6 +206,13 @@ use model::user::{
                 teams::inbound::axum_router::invite_link::get_team_handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::invite_link::join_handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
 
+                /// /team_agents
+                team_agents::inbound::axum_router::create_team_agent_handler::<crate::api::context::TeamAgentsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                team_agents::inbound::axum_router::get_my_team_agent_handler::<crate::api::context::TeamAgentsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                team_agents::inbound::axum_router::list_my_email_handler::<crate::api::context::TeamAgentsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                team_agents::inbound::axum_router::get_my_email_handler::<crate::api::context::TeamAgentsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                team_agents::inbound::axum_router::send_my_email_handler::<crate::api::context::TeamAgentsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+
                 /// /user/language
                 user_language::inbound::axum_router::get_user_language_handler::<crate::api::context::UserLanguageServiceType, crate::api::context::AuthorizationService>,
                 user_language::inbound::axum_router::put_user_language_handler::<crate::api::context::UserLanguageServiceType, crate::api::context::AuthorizationService>,
@@ -363,6 +370,12 @@ use model::user::{
                         ToggleAutoJoinDomainResponse,
                         SendDomainNoticeResponse,
                         ToggleNonAdminInvitesResponse,
+                        team_agents::domain::models::TeamAgent,
+                        team_agents::domain::models::CreateTeamAgent,
+                        team_agents::domain::models::EmailMessage,
+                        team_agents::domain::models::EmailMessages,
+                        team_agents::domain::models::SendEmail,
+                        team_agents::domain::models::SentEmail,
                         TeamInviteLinkResponse,
                         CreatedTeamInviteLinkResponse,
                         JoinTeamByInviteLinkResponse,

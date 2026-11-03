@@ -1,6 +1,9 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { enableTeamAgents } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
+import { lazyNamed } from '@core/util/lazyNamed';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
@@ -19,7 +22,7 @@ import {
 } from '@queries/team/teams';
 import type { Team as TeamSummary } from '@service-auth/generated/schemas/team';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
-import { Button, cn, Dialog, Panel, Tooltip } from '@ui';
+import { Button, cn, Dialog, Panel, Tabs, Tooltip } from '@ui';
 import {
   type Accessor,
   createMemo,
@@ -36,6 +39,11 @@ import { z } from 'zod';
 import { SettingsCard, SettingsPage, SettingsSection } from './primitives';
 import { TeamInviteLinkSection } from './TeamInviteLinkSection';
 import { isTeamAdminOrOwner } from './teamMemberPermissions';
+
+const CreateTeamAgentForm = lazyNamed(
+  () => import('./components/create-team-agent-form'),
+  'CreateTeamAgentForm'
+);
 
 const emailSchema = z.string().email();
 
@@ -478,9 +486,15 @@ export function InviteToTeamDialog(props: {
     return !hasError;
   };
 
+  const teamAgents = useFeatureFlag(enableTeamAgents);
+  const [mode, setMode] = createSignal<InviteMode>('people');
+  // Creating an agent adds a member directly, so it takes an admin.
+  const canCreateAgents = () => teamAgents().enabled && props.canManageLink;
+
   const close = () => {
     setInvites([EMPTY_INVITE]);
     setInviteErrors([]);
+    setMode('people');
     props.onClose();
   };
 
@@ -510,47 +524,103 @@ export function InviteToTeamDialog(props: {
           </Dialog.Title>
         </Panel.Header>
 
-        <Panel.Body class="p-3 flex flex-col gap-3">
-          <TeamInviteLinkSection
-            teamId={props.teamId}
-            canManage={props.canManageLink}
-          />
-          <div class="h-px bg-edge-muted" />
-          <div class="text-sm text-ink">Invite by email</div>
-          <InviteEmailsInput
-            invites={invites()}
-            onChange={setInvites}
-            errors={inviteErrors()}
-            onErrorsChange={setInviteErrors}
-          />
-          <div class="flex justify-end gap-1 pt-2">
-            <Button
-              variant="ghost"
-              disabled={inviteToTeamMutation.isPending}
-              onClick={close}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={!hasValidInvites() || inviteToTeamMutation.isPending}
-              onClick={handleInvite}
-            >
-              <Show
-                when={inviteToTeamMutation.isPending}
-                fallback={
-                  invites().length > 1
-                    ? `Send ${invites().length} Invites`
-                    : 'Send Invite'
-                }
-              >
-                <SpinnerIcon class="size-4 animate-spin" />
-              </Show>
-            </Button>
-          </div>
+        <Panel.Body scroll class="p-3 flex flex-col gap-3">
+          <Show when={canCreateAgents()}>
+            <Tabs
+              size="sm"
+              touch="segmented"
+              aria-label="Invite a person or create an agent"
+              value={mode()}
+              options={INVITE_MODE_OPTIONS}
+              onChange={setMode}
+            />
+          </Show>
+          <Show
+            when={mode() === 'agent' && canCreateAgents()}
+            fallback={
+              <InviteByEmail
+                teamId={props.teamId}
+                canManageLink={props.canManageLink}
+                pending={inviteToTeamMutation.isPending}
+                invites={invites()}
+                onInvitesChange={setInvites}
+                errors={inviteErrors()}
+                onErrorsChange={setInviteErrors}
+                canSend={hasValidInvites()}
+                onCancel={close}
+                onSend={handleInvite}
+              />
+            }
+          >
+            <Suspense>
+              <CreateTeamAgentForm teamId={props.teamId} onDone={close} />
+            </Suspense>
+          </Show>
         </Panel.Body>
       </Panel>
     </Dialog>
+  );
+}
+
+const INVITE_MODE_OPTIONS = [
+  { value: 'people', label: 'People' },
+  { value: 'agent', label: 'Agent' },
+] as const;
+
+type InviteMode = (typeof INVITE_MODE_OPTIONS)[number]['value'];
+
+function InviteByEmail(props: {
+  teamId: string;
+  canManageLink: boolean;
+  pending: boolean;
+  invites: InviteEntry[];
+  onInvitesChange: (invites: InviteEntry[]) => void;
+  errors: (string | undefined)[];
+  onErrorsChange: (errors: (string | undefined)[]) => void;
+  canSend: boolean;
+  onCancel: () => void;
+  onSend: () => void;
+}) {
+  return (
+    <>
+      <TeamInviteLinkSection
+        teamId={props.teamId}
+        canManage={props.canManageLink}
+      />
+      <div class="h-px bg-edge-muted" />
+      <div class="text-sm text-ink">Invite by email</div>
+      <InviteEmailsInput
+        invites={props.invites}
+        onChange={props.onInvitesChange}
+        errors={props.errors}
+        onErrorsChange={props.onErrorsChange}
+      />
+      <div class="flex justify-end gap-1 pt-2">
+        <Button
+          variant="ghost"
+          disabled={props.pending}
+          onClick={props.onCancel}
+        >
+          Cancel
+        </Button>
+        <Button
+          variant="secondary"
+          disabled={!props.canSend || props.pending}
+          onClick={props.onSend}
+        >
+          <Show
+            when={props.pending}
+            fallback={
+              props.invites.length > 1
+                ? `Send ${props.invites.length} Invites`
+                : 'Send Invite'
+            }
+          >
+            <SpinnerIcon class="size-4 animate-spin" />
+          </Show>
+        </Button>
+      </div>
+    </>
   );
 }
 

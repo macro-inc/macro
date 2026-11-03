@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                mui.macro_user_id,\n                mui.first_name,\n                mui.last_name,\n                EXISTS (\n                    SELECT 1 FROM team_agents a\n                    JOIN \"User\" u ON u.id = a.user_id\n                    WHERE u.macro_user_id = mui.macro_user_id\n                ) AS \"is_agent!\"\n            FROM macro_user_info mui\n            WHERE mui.macro_user_id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "macro_user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "first_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "last_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "is_agent!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "d35a07a7c4ef1d69ef8764d8dd282d50bc3d3677db432ffbebabfc6588953655"
+}

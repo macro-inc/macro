@@ -175,10 +175,12 @@ system_status = { path = "../../crates/system_status", features = [
   "postgres",
 ] }
 teams = { path = "../../crates/teams" }
+team_agents = { path = "../../crates/team_agents", features = ["inbound", "outbound"] }
 thiserror = { workspace = true }
 time = { workspace = true }
 tokio = { workspace = true, features = ["signal"] }
 tokio-util = { workspace = true, features = ["rt"] }
+user_api_key = { path = "../../crates/user_api_key", features = ["ports", "postgres"] }
 tower = { workspace = true }
 tower-cookies = { version = "0.11.0" }
 tower-http = { workspace = true }

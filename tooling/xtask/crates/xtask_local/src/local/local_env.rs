@@ -199,6 +199,10 @@ impl LocalEnv {
             "OVERRIDE_APP_SERVICE_URL".into(),
             self.frontend_origin.clone(),
         );
+        env.insert(
+            "OVERRIDE_API_GATEWAY_URL".into(),
+            self.frontend_origin.clone(),
+        );
         self.infra.write(&mut env);
         self.storage.write(&mut env);
         self.queues.write(&mut env);

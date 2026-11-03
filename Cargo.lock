@@ -272,6 +272,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent_brain"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "cron",
+ "eventsource-stream",
+ "futures",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "wiremock",
+]
+
+[[package]]
 name = "agent_changes"
 version = "0.1.0"
 dependencies = [
@@ -2250,6 +2271,7 @@ dependencies = [
  "sqs_client",
  "strum 0.27.2",
  "system_status",
+ "team_agents",
  "teams",
  "thiserror 2.0.18",
  "time",
@@ -2262,6 +2284,7 @@ dependencies = [
  "upstream_error",
  "url",
  "urlencoding",
+ "user_api_key",
  "user_language",
  "user_quota",
  "utoipa",
@@ -20036,6 +20059,35 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "team_agents"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "entity_access",
+ "feature_flags",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_tower_layers",
+ "macro_user_id",
+ "model-error-response",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "teams",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "user_api_key",
  "utoipa",
  "uuid",
  "workspace-hack",

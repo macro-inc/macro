@@ -23,7 +23,8 @@ for the authenticated Macro user, where one load returns a stable
 
 - Depends on: `macro_user_id`.
 - Used by: `agent_harness_service` (agent modes, routine templates) and
-  `authentication_service` (`enable-outlook`); each composition root wires the
+  `authentication_service` (`enable-outlook`, and `enable-team-agents` via
+  `crates/team_agents`); each composition root wires the
   PostHog adapter when `POSTHOG_API_KEY` is set.
 
 ## Recipes

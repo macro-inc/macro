@@ -268,7 +268,7 @@ pub async fn run() -> anyhow::Result<()> {
                 cipher,
             )
             .with_connections_enabled(config.outlook_connections_enabled)
-            .with_feature_flags(feature_flags),
+            .with_feature_flags(feature_flags.clone()),
         ) as Arc<dyn MicrosoftAuth>
     });
 
@@ -716,7 +716,7 @@ pub async fn run() -> anyhow::Result<()> {
             onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo::new(db.clone()),
             stripe_client.clone(),
             internal_key,
-            harness_url,
+            harness_url.clone(),
             scheduled_action_url,
         )
         .map_err(|error| anyhow::anyhow!("{error:?}"))?,
@@ -752,6 +752,37 @@ pub async fn run() -> anyhow::Result<()> {
     let bots = Arc::new(bots::domain::service::BotServiceImpl::new(
         PgBotsRepo::new(db.clone()),
         macro_event_broker.clone(),
+    ));
+
+    // Team agents start their brains in the background; drained at shutdown.
+    let team_agent_launches = TaskTracker::new();
+    let team_agents_service = Arc::new(team_agents::domain::service::TeamAgentServiceImpl::new(
+        team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(db.clone()),
+        team_agents::outbound::team_membership::TeamsMembership::new(teams_service.clone()),
+        team_agents::outbound::agent_api_keys::UserApiKeys::new(Arc::new(
+            user_api_key::domain::service::UserApiKeyServiceImpl::new(
+                user_api_key::outbound::pg_user_api_keys_repo::PgUserApiKeysRepo::new(db.clone()),
+            ),
+        )),
+        team_agents::outbound::dead_simple_email::DeadSimpleEmail::new(
+            config.dead_simple_mail_api_key.value().map(str::to_string),
+        )
+        .map_err(|error| anyhow::anyhow!("{error:?}"))?,
+        team_agents::outbound::macro_brain_launcher::MacroBrainLauncher::new(
+            DocumentStorageServiceUrl::new()?.to_string(),
+            harness_url.clone(),
+            team_agent_launches.clone(),
+        )
+        .map_err(|error| anyhow::anyhow!("{error:?}"))?,
+        // Gates creating agents per admin (`enable-team-agents`). Without a
+        // PostHog key (local, tests) creation is open.
+        feature_flags.clone(),
+        // The brain runs on its own machine, so it reaches Macro through the
+        // public gateway, never this container's in-network addresses.
+        team_agents::domain::service::BrainEnvironment {
+            environment: config.environment.to_string(),
+            gateway_url: macro_service_urls::ApiGatewayUrl::new()?.to_string(),
+        },
     ));
 
     let server_result = api::setup_and_serve(
@@ -797,6 +828,7 @@ pub async fn run() -> anyhow::Result<()> {
             stripe_webhook_secret,
             user_roles_and_permissions_service: Arc::new(user_roles_and_permissions_service),
             teams_service,
+            team_agents_service,
             domain_notice_service,
             channel_service: Arc::new(channel_service),
             channel_messages,
@@ -853,6 +885,14 @@ pub async fn run() -> anyhow::Result<()> {
         );
     }
 
+    team_agent_launches.close();
+    if tokio::time::timeout(TEAM_AGENT_LAUNCH_DRAIN_TIMEOUT, team_agent_launches.wait())
+        .await
+        .is_err()
+    {
+        tracing::warn!("timed out waiting for team agent brains to finish starting");
+    }
+
     tracing::info!("waiting for event broker publishes to drain");
     event_broker_tracker.close();
     match tokio::time::timeout(EVENT_BROKER_DRAIN_TIMEOUT, event_broker_tracker.wait()).await {
@@ -871,6 +911,8 @@ pub async fn run() -> anyhow::Result<()> {
 
 const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 const INVITE_REMINDER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
+/// How long shutdown waits for team agent brains that are still starting.
+const TEAM_AGENT_LAUNCH_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 const MICROSOFT_GRANT_CLEANUP_INTERVAL: Duration = Duration::from_secs(5 * 60);
 /// PostHog's US ingestion origin, used when `POSTHOG_HOST` is unset.
 const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
