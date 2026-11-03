@@ -794,6 +794,8 @@ export * from './documentTeamShareResponse';
 export * from './documentTeamShareResponseTeamId';
 export * from './documentTextContent';
 export * from './documentTextContentText';
+export * from './duplicateDatabaseRequest';
+export * from './duplicateDatabaseRequestName';
 export * from './editAnchorRequest';
 export * from './editAnchorRequestOneOf';
 export * from './editAnchorRequestOneOfAllOf';

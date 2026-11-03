@@ -53,6 +53,7 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
 | Adding collaborative markdown to a feature | [Collab surface core skill](.agents/skills/collab-surface-core/SKILL.md) |
 | Editing frontend or backend code that adds a flow, view, or hot path, or tracing one | `instrumentation` skill |
 | Finding slow web or desktop app flows in Datadog | `perf-investigation` skill |
+| Adding, reading or removing a feature flag (web or backend) | `feature-flags` skill |
 | Rust code, builds, or tests | [Rust development](docs/development/rust.md) |
 | SQLx queries, migrations, DB tests, or cache errors | [Database development](docs/development/database.md) |
 | Web frontend | [Web agent guide](apps/web/AGENTS.md) |

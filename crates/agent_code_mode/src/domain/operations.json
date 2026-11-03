@@ -476,6 +476,7 @@
   "storage.getDatabase": "Get Database",
   "storage.shareDatabaseAwareness": "Share Database Awareness",
   "storage.undoDatabaseChange": "Undo Database Change",
+  "storage.duplicateDatabase": "Duplicate Database",
   "storage.importDatabaseTable": "Import Database Table",
   "storage.applyDatabaseOps": "Apply Database Ops",
   "storage.getDatabasePermissions": "Get Database Permissions",

@@ -6047,6 +6047,16 @@ export type DocumentUpdatedMetadata = {
     share_permission_updated: boolean;
 };
 
+/**
+ * Request body for duplicating a database.
+ */
+export type DuplicateDatabaseRequest = {
+    /**
+     * The copy's name; left out, "<name> copy".
+     */
+    name?: string | null;
+};
+
 export type EditAnchorRequest = EditPdfAnchorRequest & {
     fileType: 'pdf';
 };
@@ -20173,6 +20183,31 @@ export type UndoDatabaseChangeResponses = {
 };
 
 export type UndoDatabaseChangeResponse = UndoDatabaseChangeResponses[keyof UndoDatabaseChangeResponses];
+
+export type DuplicateDatabaseData = {
+    body: DuplicateDatabaseRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/duplicate';
+};
+
+export type DuplicateDatabaseErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DuplicateDatabaseError = DuplicateDatabaseErrors[keyof DuplicateDatabaseErrors];
+
+export type DuplicateDatabaseResponses = {
+    201: Database;
+};
+
+export type DuplicateDatabaseResponse = DuplicateDatabaseResponses[keyof DuplicateDatabaseResponses];
 
 export type ImportDatabaseTableData = {
     body: ImportTable;
