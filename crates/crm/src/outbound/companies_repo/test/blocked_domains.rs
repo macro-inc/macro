@@ -223,3 +223,23 @@ async fn change_domains_while_company_locked(
     second.await??;
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn unblocking_a_domain_that_was_never_blocked_keeps_hand_hidden_records(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    seed_team(&pool, team_id, OWNER).await?;
+    enable_crm_for_team(&pool, team_id).await?;
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    let acme = insert_company(&pool, team_id, true, &["example.com"]).await?;
+    let jane = insert_contact(&pool, acme, "jane@example.com").await?;
+    repo.set_company_hidden(&team_id, &acme, true).await?;
+    repo.set_contact_hidden(&team_id, &jane, true).await?;
+
+    repo.unblock_domain(&team_id, "example.com").await?;
+
+    assert!(fetch_company_hidden(&pool, acme).await? == Some(true));
+    assert!(fetch_contact_hidden(&pool, jane).await? == Some(true));
+    Ok(())
+}

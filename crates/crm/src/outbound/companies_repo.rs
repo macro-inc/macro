@@ -222,7 +222,7 @@ impl CompaniesRepositoryImpl {
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         } else {
-            sqlx::query!(
+            let removed = sqlx::query!(
                 r#"DELETE FROM crm_blocked_domains WHERE team_id = $1 AND domain = $2"#,
                 team_id,
                 domain,
@@ -230,6 +230,14 @@ impl CompaniesRepositoryImpl {
             .execute(&mut *tx)
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            // Unblocking a domain that wasn't blocked changes nothing; skip the
+            // recompute so it can't show records someone hid by hand.
+            if removed.rows_affected() == 0 {
+                return tx
+                    .commit()
+                    .await
+                    .map_err(|e| CrmError::StorageLayerError(e.into()));
+            }
         }
 
         // Different domains have different advisory locks but can share a
