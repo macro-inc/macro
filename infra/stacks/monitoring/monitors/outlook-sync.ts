@@ -64,9 +64,10 @@ const spanTag = (path: string): SpanGroupBy => ({
   tagName: path,
 });
 
-// Span-based metrics count every ingested span. Outlook spans are ingested in
-// full (the 2026-11-03 errors in APM stats and in span search match exactly),
-// so these are true counts.
+// Span-based metrics count every ingested span, and the ratio monitors need
+// every success, so Outlook spans must not be head-sampled (the field
+// contract says so). They are ingested in full today: on 2026-11-03 the Graph
+// errors in APM stats and in span search matched exactly.
 const SYNC = 'resource_name:outlook.sync.*';
 const GRAPH = '@outlook.throttle_origin:*';
 const TOKEN = '@outlook.token_cache:*';
@@ -337,19 +338,20 @@ const dashboard = new datadog.Dashboard('outlook-sync', {
   ],
 });
 
-// Every claimable message waited at least 5 minutes, and no message imported
-// in the 5 minutes before each snapshot, for 15 minutes: nothing imported for
-// 20 minutes while work was waiting. The 5-minute floor keeps a mailbox's
-// first snapshots (fresh backlog, nothing imported yet) from alerting. Links
-// that need reauthorization stall by design and have their own monitor.
+// For 10 minutes, every snapshot showed a message claimable for at least 5
+// minutes and no import in the 5 minutes before it: nothing imported for 15
+// minutes while a message waited 15. The 5-minute floor keeps a new link's
+// first snapshots (fresh backlog, nothing imported yet) from alerting on a
+// partial window. Links that need reauthorization stall by design and have
+// their own monitor.
 prodMonitor('outlook-mailbox-stalled', {
   title: TITLES.stalled,
   service: 'email-service',
-  query: `min(last_15m):${QUERIES.stalled} >= 1`,
+  query: `min(last_10m):${QUERIES.stalled} >= 1`,
   monitorThresholds: { critical: '1' },
   pages: false,
   description:
-    'Mailbox {{link_id.name}} has had claimable messages for 15 minutes and imported none in 20. The first production import moved about 2,100 messages in 15 minutes. Throttled messages are parked, not claimable, so this means claims stopped.',
+    'Mailbox {{link_id.name}} has had a message claimable for 15 minutes and imported none in that time. The first production import moved about 2,100 messages in 15 minutes. Throttled messages are parked, not claimable, so this means claims stopped.',
   dashboard: dashboard.url,
   runbook: `${RUNBOOK}#stalled-mailbox`,
   alertDetail: 'mailbox {{link_id.name}} stalled',

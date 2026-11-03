@@ -29,7 +29,7 @@ production.
 
 ## Stalled mailbox
 
-A mailbox has had claimable messages for 15 minutes and imported none in 20.
+A mailbox has had a message claimable for 15 minutes and imported none in that time.
 
 - Read its latest snapshot: `leased` above zero with no imports means workers
   claimed work and never finished it; zero `leased` means nothing is claiming.
