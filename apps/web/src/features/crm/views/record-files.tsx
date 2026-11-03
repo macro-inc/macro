@@ -107,6 +107,11 @@ export function RecordFiles(props: {
         source={files}
         pending={!props.scope}
         search={search()}
+        groupScopeKey={JSON.stringify([
+          types.sessionKey(),
+          props.scope?.type,
+          props.scope?.id,
+        ])}
         empty={
           props.scope?.type === 'company'
             ? t('crmFiles.noCompanyFiles')
@@ -122,6 +127,7 @@ export function RecordFiles(props: {
           loadMoreFailed: t('crmFiles.loadMoreFailed'),
           loadingMore: t('crmFiles.loadingMore'),
           retry: t('crmFiles.retry'),
+          more: t('crmFiles.moreFiles'),
         }}
         groupItems={(items) => {
           const catalog = types.data();

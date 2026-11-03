@@ -4,6 +4,7 @@ import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { ItemDndProvider } from '@components/app/ItemDragAndDrop';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { UserContextProvider } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { DocumentEntity } from '@entity';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { Button } from '@ui';
@@ -14,6 +15,8 @@ import type { ItemListSource } from '../context/crm-sources';
 import type { FileTypesSource } from '../context/file-types';
 import { DEFAULT_FILE_TYPES, type FileTypeCatalog } from '../core/file-types';
 import { RecordFiles } from '../views/record-files';
+
+document.documentElement.dataset.touchDevice = String(isTouchDevice());
 
 // Real record/files/dialog components with in-memory storage; no account writes.
 function Fixture() {
@@ -51,11 +54,16 @@ function Fixture() {
   const [created, setCreated] = createSignal(0);
   const [opened, setOpened] = createSignal('');
   const [failLink, setFailLink] = createSignal(false);
+  const [session, setSession] = createSignal('viewer:team');
+  const [pages, setPages] = createSignal(0);
+  const [loadedPages, setLoadedPages] = createSignal(0);
+  const [failPage, setFailPage] = createSignal(false);
+  const [pageError, setPageError] = createSignal(false);
   const [readState, setReadState] = createSignal<
     'ready' | 'catalog-loading' | 'values-loading' | 'no-team' | 'catalog-error'
   >('ready');
   const source: FileTypesSource = {
-    sessionKey: () => 'viewer:team',
+    sessionKey: session,
     data: () =>
       readState() === 'ready' || readState() === 'values-loading'
         ? catalog()
@@ -163,10 +171,39 @@ function Fixture() {
     isEnabled: true,
     isLoading: false,
     isError: false,
-    hasNextPage: false,
+    get hasNextPage() {
+      return pages() > 0;
+    },
     isFetchingNextPage: false,
-    isFetchNextPageError: false,
-    fetchNextPage: async () => {},
+    get isFetchNextPageError() {
+      return pageError();
+    },
+    fetchNextPage: async () => {
+      if (failPage()) {
+        setFailPage(false);
+        setPageError(true);
+        return;
+      }
+      setPageError(false);
+      if (pages() === 0) return;
+      setPages((count) => count - 1);
+      setLoadedPages((count) => count + 1);
+      const id = `page-${loadedPages()}`;
+      setDocuments((current) => [
+        ...current,
+        {
+          id,
+          type: 'document',
+          name: `Paged contract ${loadedPages()}`,
+          fileType: 'pdf',
+          ownerId: '',
+        },
+      ]);
+      setValues((current) => new Map(current).set(id, 'Contract'));
+      setLinks((current) =>
+        new Map(current).set(record(), [...(current.get(record()) ?? []), id])
+      );
+    },
     refetch: async () => {},
   };
   const context: Pick<
@@ -214,6 +251,19 @@ function Fixture() {
             Simulate unavailable type
           </Button>
           <span aria-label="Opened file">{opened()}</span>
+          <Button onClick={() => setSession((value) => `${value}:next`)}>
+            Switch session
+          </Button>
+          <Button
+            onClick={() =>
+              setDocuments((current) => current.map((file) => ({ ...file })))
+            }
+          >
+            Refresh files
+          </Button>
+          <Button onClick={() => setPages(3)}>Enable more files</Button>
+          <Button onClick={() => setFailPage(true)}>Fail next page</Button>
+          <span aria-label="Loaded pages">{loadedPages()}</span>
           <For
             each={
               [

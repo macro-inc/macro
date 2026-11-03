@@ -10,14 +10,18 @@ import {
   ListLayoutProvider,
   type NarrowLayoutVariant,
 } from '@entity';
+import { ListGroupHeader } from '@entity/composed/list-entity/list-group-header';
 import { Key } from '@solid-primitives/keyed';
+import { createWritableMemo } from '@solid-primitives/memo';
 import { Button } from '@ui';
 import {
   createMemo,
   createSignal,
+  createUniqueId,
   For,
   type JSX,
   Match,
+  on,
   Show,
   Switch,
 } from 'solid-js';
@@ -53,6 +57,8 @@ export function RecordItemList(props: {
   groupItems?: (
     items: EntityData[]
   ) => { id: string; name: string; files: EntityData[] }[];
+  /** Reset local disclosure state when the record or signed-in session changes. */
+  groupScopeKey?: string;
   rowActions?: (entity: EntityData) => JSX.Element;
   /** Property IDs to display as inline reference pills when needed. */
   referencePropertyIds?: readonly string[];
@@ -69,6 +75,7 @@ export function RecordItemList(props: {
     loadMoreFailed: string;
     loadingMore: string;
     retry: string;
+    more?: string;
   };
 }) {
   const { openEntity } = useCrmContext().createNavigation();
@@ -90,13 +97,31 @@ export function RecordItemList(props: {
         { id: 'all', name: '', files: filteredItems() },
       ]
   );
+  const groupScopeKey = createMemo(() => props.groupScopeKey);
+  const [collapsed, setCollapsed] = createWritableMemo(
+    on(groupScopeKey, () => new Set<string>())
+  );
+  const setExpanded = (id: string, expanded: boolean) => {
+    setCollapsed((previous) => {
+      const next = new Set(previous);
+      if (expanded) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  // A short collapsed group must not repeatedly load pages whose rows stay hidden.
+  // Keep explicit paging outside the groups, including when every group is closed.
+  const manualPaging = () =>
+    groups().some((group) => group.name && collapsed().has(group.id));
   const [listRef, setListRef] = createSignal<HTMLElement>();
   const [sentinelRef, setSentinelRef] = createSignal<HTMLDivElement>();
 
   useInfiniteScrollSentinel({
     sentinel: sentinelRef,
     hasNextPage: () =>
-      (props.source.hasNextPage ?? false) && !props.source.isFetchNextPageError,
+      (props.source.hasNextPage ?? false) &&
+      !props.source.isFetchNextPageError &&
+      !manualPaging(),
     isFetchingNextPage: () => props.source.isFetchingNextPage,
     fetchNextPage: () => props.source.fetchNextPage(),
   });
@@ -210,7 +235,7 @@ export function RecordItemList(props: {
             <ListLayoutProvider ref={listRef} narrowLayout={props.narrowLayout}>
               <div
                 ref={setListRef}
-                class="flex flex-col"
+                class="soup-list flex flex-col"
                 classList={{ 'min-h-0 flex-1': filteredItems().length === 0 }}
               >
                 <Show when={filteredItems().length === 0}>
@@ -250,6 +275,9 @@ export function RecordItemList(props: {
                 </Show>
                 <Key each={groups()} by="id">
                   {(group) => {
+                    const contentId = createUniqueId();
+                    const expanded = () =>
+                      !group().name || !collapsed().has(group().id);
                     const dateHeadings = createMemo(() => {
                       if (!props.groupByDate) return [];
                       const now = new Date();
@@ -274,55 +302,75 @@ export function RecordItemList(props: {
                     return (
                       <section aria-label={group().name || undefined}>
                         <Show when={group().name}>
-                          <h3 class="flex items-center gap-2 px-3 pb-2 pt-4 text-sm font-medium">
-                            {group().name}
-                            <span class="text-xs text-ink-muted">
-                              {group().files.length.toLocaleString(
-                                formatLocale()
-                              )}
-                            </span>
-                          </h3>
+                          <ListGroupHeader
+                            label={group().name}
+                            count={group().files.length.toLocaleString(
+                              formatLocale()
+                            )}
+                            expanded={expanded()}
+                            controls={contentId}
+                            onToggle={() =>
+                              setExpanded(group().id, !expanded())
+                            }
+                            onKeyDown={(event) => {
+                              if (
+                                event.key !== 'ArrowLeft' &&
+                                event.key !== 'ArrowRight'
+                              )
+                                return;
+                              event.preventDefault();
+                              event.stopPropagation();
+                              setExpanded(
+                                group().id,
+                                event.key === 'ArrowRight'
+                              );
+                            }}
+                          />
                         </Show>
-                        <For each={group().files}>
-                          {(entity, index) => (
-                            <>
-                              <Show when={dateHeadings()[index()]}>
-                                {(label) => (
-                                  <DateGroupHeading
-                                    label={label()}
-                                    isFirst={index() === 0}
-                                  />
-                                )}
-                              </Show>
-                              <div class="flex min-w-0 items-center gap-2 touch:flex-wrap">
-                                <div class="min-w-0 flex-1">
-                                  <ListEntity
-                                    entity={entity}
-                                    hideCheckbox
-                                    timestamp={entity.updatedAt}
-                                    onClick={(event) => {
-                                      if (
-                                        !workspace?.host.record.openItem(
-                                          entity,
-                                          event
-                                        )
-                                      )
-                                        openEntity(entity);
-                                    }}
-                                    referencePropertyIds={
-                                      props.referencePropertyIds
-                                    }
-                                  />
-                                </div>
-                                <Show when={props.rowActions}>
-                                  <div class="w-36 shrink-0 pr-2">
-                                    {props.rowActions?.(entity)}
+                        <div id={contentId}>
+                          <Show when={expanded()}>
+                            <For each={group().files}>
+                              {(entity, index) => (
+                                <>
+                                  <Show when={dateHeadings()[index()]}>
+                                    {(label) => (
+                                      <DateGroupHeading
+                                        label={label()}
+                                        isFirst={index() === 0}
+                                      />
+                                    )}
+                                  </Show>
+                                  <div class="flex min-w-0 items-center gap-2 touch:flex-wrap">
+                                    <div class="min-w-0 flex-1">
+                                      <ListEntity
+                                        entity={entity}
+                                        hideCheckbox
+                                        timestamp={entity.updatedAt}
+                                        onClick={(event) => {
+                                          if (
+                                            !workspace?.host.record.openItem(
+                                              entity,
+                                              event
+                                            )
+                                          )
+                                            openEntity(entity);
+                                        }}
+                                        referencePropertyIds={
+                                          props.referencePropertyIds
+                                        }
+                                      />
+                                    </div>
+                                    <Show when={props.rowActions}>
+                                      <div class="w-36 shrink-0 pr-2">
+                                        {props.rowActions?.(entity)}
+                                      </div>
+                                    </Show>
                                   </div>
-                                </Show>
-                              </div>
-                            </>
-                          )}
-                        </For>
+                                </>
+                              )}
+                            </For>
+                          </Show>
+                        </div>
                       </section>
                     );
                   }}
@@ -343,7 +391,23 @@ export function RecordItemList(props: {
             }
           >
             <Show when={props.source.hasNextPage}>
-              <div ref={setSentinelRef} class="h-px" />
+              <Show
+                when={manualPaging()}
+                fallback={<div ref={setSentinelRef} class="h-px" />}
+              >
+                <div class="flex justify-center p-3">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={props.source.isFetchingNextPage}
+                    onClick={() =>
+                      fireAndForget(props.source.fetchNextPage(), 'crm')
+                    }
+                  >
+                    {props.messages?.more ?? 'Load more'}
+                  </Button>
+                </div>
+              </Show>
             </Show>
             <Show when={props.source.isFetchingNextPage}>
               <CrmListSkeleton

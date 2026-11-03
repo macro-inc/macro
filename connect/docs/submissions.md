@@ -88,8 +88,9 @@ Submission agents use Macro Connect's own Chromium, never the shared agent
 browser: `connect/tooling/browser/run.sh` starts it (Docker, loopback only)
 with a profile volume that holds only `connect@macro.com` sessions.
 
-- Agents drive it over CDP at `http://localhost:9333` (raw CDP over a
-  WebSocket; Playwright's `connectOverCDP` hangs against this image).
+- Agents drive it over CDP at `http://localhost:9333` with
+  `bun connect/tooling/browser/cdp.ts` (raw CDP; Playwright's
+  `connectOverCDP` hangs against this image). Pipe secrets to `type -`.
 - The human watches and takes over at `http://localhost:6081/vnc.html`,
   through `ssh -L 6081:localhost:6081 <host>` from their machine.
 - Sessions persist across restarts. When a sign-in is needed, the agent fills

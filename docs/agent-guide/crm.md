@@ -11,6 +11,11 @@ There are no built-in company views or Board/List layout. Companies and People
 are plain soup lists with the shared pagination. Existing personal/team saved
 views stay in the toolbar's Views menu.
 
+Opening a company or contact row in Companies or People clears its blue unread
+dot, including desktop preview activation, keyboard opening, and phone navigation.
+The read is saved in the background; a failed request restores the dot so opening
+it again can retry. Marking read does not mark the notification done.
+
 **Rollout:** Tasks, Email, Notes, Calls and Databases require PostHog `enable-crm-activity`
 (off by default; local override: `VITE_ENABLE_CRM_ACTIVITY=true`). CRM also uses
 this flag to decide whether to supply its task-composer preset; the shared
@@ -300,6 +305,14 @@ keeps the same type everywhere within the team. Once type data has loaded,
 undefined or unmatched classifications show **Type unavailable**; files with no
 assigned type show **Unclassified**. Files stay ungrouped while type data is
 loading, when there is no team, or when the type catalog cannot be loaded.
+
+Type groups use the same disclosure headers and count badges as Tasks. Click or
+tap a header to collapse or expand it; with its button focused, Enter/Space
+toggles and Left/Right collapses/expands. Renaming a type or refreshing files
+keeps its collapse state, while another record or signed-in session starts
+expanded. Counts reflect the files loaded so far. If a group is collapsed,
+**More files** loads the next page explicitly and a failed page still offers
+**Retry**, even with every group closed.
 
 **Add file** offers **Existing file** and **New note**. Select a file you can edit
 and a type, or leave **Keep current type** to preserve its classification. A new

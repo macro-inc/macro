@@ -8,7 +8,7 @@ submitted:
 last_contact:
 next_action: Human confirms whether Macro already has an MCP app
 next_action_owner: human
-due:
+due: 2026-11-09
 ---
 
 ## Requirements

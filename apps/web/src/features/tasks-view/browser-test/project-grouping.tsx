@@ -4,6 +4,7 @@ import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { enableGraphqlSoup, enableProjects } from '@core/constant/featureFlags';
 import { UserContextProvider } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { authKeys } from '@queries/auth/keys';
 import { queryClient } from '@queries/client';
@@ -16,6 +17,7 @@ import { TaskGroupHeader } from '../components/task-list/TaskGroupHeader';
 
 enableProjects.override = true;
 enableGraphqlSoup.override = false;
+document.documentElement.dataset.touchDevice = String(isTouchDevice());
 const VIEWER_ID = 'macro|project-grouping@example.test';
 const PROJECT_ONE = 'ad000000-0000-0000-0000-000000000001';
 const PROJECT_TWO = 'ad000000-0000-0000-0000-000000000002';

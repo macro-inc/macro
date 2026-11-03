@@ -503,6 +503,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     );
 
     let tool_service_context = ai_tools::ToolServiceContext {
+        memory_tool_context: ai_tools::memory::build_memory_tool_context(
+            pool.clone(),
+            recorder.clone(),
+        ),
         cognition_tool_context: Default::default(),
         connector_tool_context: ai_tools::build_connector_tool_context(pool.clone(), None, None),
         search_service_client: search_service_client.clone(),
@@ -656,11 +660,9 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         (import_service, onboarding_service, mcp_selector)
     };
 
-    let memory_repo = memory::outbound::pg_memory_repo::PgMemoryRepo::new(pool.clone());
-    let memory_service = Arc::new(memory::domain::service::MemoryServiceImpl::new(
-        memory_repo,
+    let memory_service = Arc::new(ai_tools::memory::build_memory_service(
+        pool.clone(),
         tool_service_context.clone(),
-        all_tools,
     ));
 
     let usage_service = Arc::new(

@@ -44,6 +44,5 @@ exec chromium \
   --window-size="${WIDTH},${HEIGHT}" \
   --window-position=0,0 \
   --remote-debugging-port=9333 \
-  --remote-allow-origins='*' \
   --user-data-dir=/data/chrome-profile \
   about:blank

@@ -32,6 +32,13 @@ The root adapters construct production dependencies. `context` defines the
 capabilities; it does not import their implementations. Views consume these
 capabilities, primitives receive narrow inputs, and components render props.
 Core modules remain independent of Solid, service clients, and app state.
+`mark-record-notifications-seen.ts` integrates with shared list activation so
+opening a company or contact clears its row's unread notifications immediately.
+It uses the row's attached notifications before falling back to an entity read;
+the shared notification source owns optimistic state and failure rollback.
+The REST fallback waits for the notification feed before reading its snapshot.
+The discussion's message reader remains visibility-gated and reads a separate
+global feed, so it cannot guarantee that opening a record clears its row's dot.
 UI rollout gates read `useFeatureFlag` directly where used; do not pass rollout
 booleans through component props or the CRM source contract.
 
@@ -46,6 +53,12 @@ and Files both show automatic nonempty type groups, followed by Unclassified;
 unreadable values remain distinct as Type unavailable. There is no per-record
 classification or section configuration. The existing associated-file query
 still controls which source files the viewer can see.
+Type sections reuse Tasks' shared entity `ListGroupHeader` presentation. Native
+buttons support Enter/Space and left/right disclosure; touch keeps the same
+44px target. Collapse state follows option IDs through renames and refreshes,
+and resets for another record or session. Counts describe loaded files. While
+a visible group is collapsed, explicit More files and retry controls remain
+outside the groups so hidden rows cannot automatically drain every page.
 `createFileAttachment` retains a created document through retry and stops when
 the account or team changes. The CRM-reference append API preserves concurrent
 record links, and neither attaching nor classifying changes file permissions.

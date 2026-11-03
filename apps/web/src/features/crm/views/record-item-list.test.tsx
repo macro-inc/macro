@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, type ParentProps } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
+import { useInfiniteScrollSentinel } from '../../../lib/primitives/infinite-scroll-sentinel';
 import type { ItemListSource } from '../context/crm-sources';
 import { RecordItemList } from './record-item-list';
 
@@ -23,6 +24,8 @@ vi.mock('@entity', () => ({
   ListLayoutProvider: (props: ParentProps) => props.children,
 }));
 vi.mock('@ui', () => ({
+  Layer: (props: ParentProps) => props.children,
+  ComposerSurface: (props: ParentProps) => <div>{props.children}</div>,
   cn: (...classes: (string | undefined)[]) => classes.filter(Boolean).join(' '),
   EmptyStatePanel: (props: {
     title?: string;
@@ -168,6 +171,68 @@ it('keeps the paging marker mounted when a local filter removes an entire page',
   screen.getByRole('status', { name: 'Searching more items' });
   expect(screen.queryByText('Nothing')).toBeNull();
   expect(view.container.querySelector('.h-px')).not.toBeNull();
+});
+
+it('pauses already queued automatic paging when any group collapses and keeps manual retry available', () => {
+  const [failed, setFailed] = createSignal(false);
+  const list = source({
+    hasNextPage: true,
+    data: {
+      entities: [
+        {
+          id: 'contract',
+          type: 'document',
+          name: 'Contract file',
+          fileType: 'pdf',
+          ownerId: '',
+        },
+        {
+          id: 'notes',
+          type: 'document',
+          name: 'Notes file',
+          fileType: 'md',
+          ownerId: '',
+        },
+      ],
+    },
+  });
+  // Keep the reactive error accessor rather than copying its initial value.
+  Object.defineProperty(list, 'isFetchNextPageError', { get: failed });
+  render(() => (
+    <RecordItemList
+      source={list}
+      groupItems={(files) => [
+        {
+          id: 'contract',
+          name: 'Contract',
+          files: files.filter((file) => file.id === 'contract'),
+        },
+        {
+          id: 'notes',
+          name: 'Notes',
+          files: files.filter((file) => file.id === 'notes'),
+        },
+      ]}
+    />
+  ));
+  const sentinel = vi.mocked(useInfiniteScrollSentinel).mock.calls.at(-1)?.[0];
+  if (!sentinel) throw new Error('List must register pagination');
+  expect(sentinel.hasNextPage()).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: /^Contract/ }));
+  expect(sentinel.hasNextPage()).toBe(false);
+  expect(screen.queryByText('Contract file')).toBeNull();
+  screen.getByText('Notes file');
+  fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+  expect(list.fetchNextPage).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole('button', { name: /^Notes/ }));
+  setFailed(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  expect(list.fetchNextPage).toHaveBeenCalledTimes(2);
+  setFailed(false);
+  fireEvent.click(screen.getByRole('button', { name: /^Contract/ }));
+  expect(sentinel.hasNextPage()).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: /^Notes/ }));
+  expect(sentinel.hasNextPage()).toBe(true);
 });
 
 it.each([false, true])(

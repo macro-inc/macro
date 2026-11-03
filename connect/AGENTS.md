@@ -22,11 +22,11 @@ roles are in [`docs/building.md`](docs/building.md).
 | `registry/apps/<id>/` | One app per directory: `app.toml` and `icon.svg`. The catalog's source of truth; spec in [`docs/catalog.md`](docs/catalog.md). |
 | `submissions/` | One record per vendor OAuth app submission; process in [`docs/submissions.md`](docs/submissions.md). |
 | `crates/` | Rust crates, all named `connect_*`. `connect_client` is the public client. |
-| `services/` | Deployable services; `connect_api` first. |
+| `services/` | Deployable services: `connect_api` and the standalone `connect_demo` customer app. |
 | `infra/` | Standalone Pulumi project for Connect's ECS, ALB, database, KMS key, and runtime secret. |
-| `docker-compose.yml` | Local Connect API and PostgreSQL 17. |
+| `docker-compose.yml` | Local Connect API, demo, and PostgreSQL 17. |
 | `packages/` | TypeScript packages; `@macro-connect/sdk` is the public web SDK. |
-| `docs/` | Plan, decisions, catalog spec, probing, submissions, research, and deployment runbooks. |
+| `docs/` | Plan, decisions, catalog spec, probing, submissions, [test accounts](docs/test-accounts.md), research, and deployment runbooks. |
 | `tasks/` | One spec per builder task, with its Result; process in [`docs/building.md`](docs/building.md). |
 | `tooling/` | `dispatch.sh` runs a builder on a task spec; `builder-brief.md` is its shared prompt. |
 | `.agents/skills/` | Workflows: `connect-pm`, `connect-add-app`, `connect-submission`. `.claude/skills` symlinks here. |

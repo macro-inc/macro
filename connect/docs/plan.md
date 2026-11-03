@@ -53,7 +53,7 @@ the Pipedream integration (`pipedream_mcp`) is replaced by an adapter over
 | Part | Where | Does |
 | --- | --- | --- |
 | Registry | `connect/registry/apps/<id>/` | One directory per app: `app.toml` (name, description, MCP URL, access, client registration, scopes, Pipedream slugs it replaces) and `icon.svg`. Source of truth for the catalog. |
-| Connect API | `connect/services/connect_api` | Catalog, connect flow (authorize, callback), connection list and delete, token export. Its own Postgres database and Secrets Manager runtime secret. |
+| Connect API | `connect/services/connect_api` | Catalog, connect flow (authorize, callback), per-user and customer-wide paginated connection lists, complete paginated user list, customer connection summary, delete, token export. Its own Postgres database and Secrets Manager runtime secret. |
 | Hosting | `connect/infra` | Its own Pulumi project: ECS cluster, ALB and certificate (`connect-dev.macro.com`), RDS, KMS key, Secrets Manager. Touches nothing of Macro's but one DNS record. |
 | MCP gateway | in `connect_api` | Per-connection MCP endpoint: injects the vendor token, refreshes it, forwards to the vendor's server. Customers call this, as Macro called Pipedream's remote MCP. |
 | OAuth client | `connect/crates/` | Client registration in order: CIMD, DCR, then Macro Connect's own OAuth app. Ported from Macro's `mcp_client`, which already does all three. |
@@ -109,6 +109,11 @@ connections, 2026-10-30):
 
 3,973 of 4,057 connections are classified; the rest are apps with one
 connection each.
+
+As of 2026-10-31, 30 self-registering OAuth catalog entries are live
+candidates, covering 1,160 Pipedream connections. Vendor sign-in and tool
+conformance are still pending; the remaining used entries are classified in
+[`catalog.md`](catalog.md#conformance-2026-10-31).
 
 Users who connected through Pipedream's own OAuth apps must reconnect;
 Pipedream does not export those grants.

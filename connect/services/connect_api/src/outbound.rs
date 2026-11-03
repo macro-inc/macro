@@ -17,8 +17,9 @@ use zeroize::Zeroizing;
 #[cfg(test)]
 use crate::domain::StoredGrant;
 use crate::domain::{
-    Connection, ConnectionStatus, CustomerApiKey, Envelope, Error, Grant, GrantCipher, GrantData,
-    Repository,
+    AppConnectionsSummary, Connection, ConnectionPosition, ConnectionStatus, ConnectionsSummary,
+    CustomerApiKey, Envelope, Error, Grant, GrantCipher, GrantData, ListedConnection, ListedUser,
+    Repository, UserPosition,
 };
 
 pub mod mcp;
@@ -123,6 +124,45 @@ struct ConnectionRow {
     created_at: DateTime<Utc>,
 }
 
+#[derive(sqlx::FromRow)]
+struct ListedConnectionRow {
+    id: Uuid,
+    external_user_id: String,
+    app_id: String,
+    status: String,
+    scopes: Vec<String>,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    access_token_expires_at: Option<DateTime<Utc>>,
+}
+
+#[derive(sqlx::FromRow)]
+struct ListedUserRow {
+    first_connected_at: DateTime<Utc>,
+    id: Uuid,
+    external_user_id: String,
+    app_id: String,
+    status: String,
+    scopes: Vec<String>,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    access_token_expires_at: Option<DateTime<Utc>>,
+}
+
+#[derive(sqlx::FromRow)]
+struct SummaryRow {
+    users: i64,
+    connections: i64,
+    needs_reauth: i64,
+}
+
+#[derive(sqlx::FromRow)]
+struct AppSummaryRow {
+    app_id: String,
+    active: i64,
+    needs_reauth: i64,
+}
+
 #[cfg(test)]
 #[derive(sqlx::FromRow)]
 struct GrantRow {
@@ -171,6 +211,151 @@ impl Repository for PostgresRepository {
                 })
             })
             .collect()
+    }
+
+    #[tracing::instrument(name = "connect.db.list_customer_connections", skip_all, fields(customer_id = %customer_id, count), err)]
+    async fn list_customer_connections(
+        &self,
+        customer_id: Uuid,
+        limit: i64,
+        position: Option<ConnectionPosition>,
+        app_id: Option<&str>,
+        status: Option<ConnectionStatus>,
+    ) -> Result<Vec<ListedConnection>, Error> {
+        let time = position.as_ref().map(|position| position.created_at);
+        let id = position.as_ref().map(|position| position.id);
+        let status = status.map(|status| status.to_string());
+        let rows = sqlx::query_as::<_, ListedConnectionRow>(
+            "SELECT c.id, c.external_user_id, c.app_id, c.status, c.scopes, c.created_at, c.updated_at, g.access_token_expires_at \
+             FROM connections c LEFT JOIN grants g ON g.connection_id = c.id \
+             WHERE c.customer_id = $1 AND ($2::timestamptz IS NULL OR (c.created_at, c.id) < ($2, $3)) \
+             AND ($4::text IS NULL OR c.app_id = $4) AND ($5::text IS NULL OR c.status = $5) \
+             ORDER BY c.created_at DESC, c.id DESC LIMIT $6"
+        ).bind(customer_id).bind(time).bind(id).bind(app_id).bind(status).bind(limit)
+            .fetch_all(&self.pool).await.map_err(storage)?;
+        tracing::Span::current().record("count", rows.len());
+        rows.into_iter()
+            .map(|row| {
+                Ok(ListedConnection {
+                    id: row.id,
+                    external_user_id: row.external_user_id,
+                    app_id: row.app_id,
+                    status: row.status.parse().map_err(|error| {
+                        Error::Storage(rootcause::Report::new(error).into_dynamic())
+                    })?,
+                    scopes: row.scopes,
+                    created_at: row.created_at,
+                    updated_at: row.updated_at,
+                    access_token_expires_at: row.access_token_expires_at,
+                })
+            })
+            .collect()
+    }
+
+    #[tracing::instrument(name = "connect.db.list_users", skip_all, fields(customer_id = %customer_id, count), err)]
+    async fn list_users(
+        &self,
+        customer_id: Uuid,
+        limit: i64,
+        position: Option<UserPosition>,
+        app_id: Option<&str>,
+        status: Option<ConnectionStatus>,
+    ) -> Result<Vec<ListedUser>, Error> {
+        let time = position
+            .as_ref()
+            .map(|position| position.first_connected_at);
+        let user_id = position
+            .as_ref()
+            .map(|position| position.external_user_id.as_str());
+        let status = status.map(|status| status.to_string());
+        let rows = sqlx::query_as::<_, ListedUserRow>(
+            "WITH matching AS ( \
+               SELECT external_user_id, MIN(created_at) AS first_connected_at \
+               FROM connections WHERE customer_id = $1 \
+               GROUP BY external_user_id \
+               HAVING BOOL_OR(($4::text IS NULL OR app_id = $4) AND ($5::text IS NULL OR status = $5)) \
+             ), page AS ( \
+               SELECT external_user_id, first_connected_at FROM matching \
+               WHERE $2::timestamptz IS NULL OR (first_connected_at, external_user_id) < ($2, $3) \
+               ORDER BY first_connected_at DESC, external_user_id DESC LIMIT $6 \
+             ) \
+             SELECT page.first_connected_at, c.id, c.external_user_id, c.app_id, c.status, c.scopes, \
+                    c.created_at, c.updated_at, g.access_token_expires_at \
+             FROM page JOIN connections c ON c.customer_id = $1 AND c.external_user_id = page.external_user_id \
+             LEFT JOIN grants g ON g.connection_id = c.id \
+             ORDER BY page.first_connected_at DESC, page.external_user_id DESC, c.app_id"
+        ).bind(customer_id).bind(time).bind(user_id).bind(app_id).bind(status).bind(limit)
+            .fetch_all(&self.pool).await.map_err(storage)?;
+        let mut users: Vec<ListedUser> = Vec::new();
+        for row in rows {
+            if users
+                .last()
+                .is_none_or(|user| user.external_user_id != row.external_user_id)
+            {
+                users.push(ListedUser {
+                    external_user_id: row.external_user_id.clone(),
+                    first_connected_at: row.first_connected_at,
+                    connections: Vec::new(),
+                });
+            }
+            if let Some(user) = users.last_mut() {
+                user.connections.push(ListedConnection {
+                    id: row.id,
+                    external_user_id: row.external_user_id,
+                    app_id: row.app_id,
+                    status: row.status.parse().map_err(|error| {
+                        Error::Storage(rootcause::Report::new(error).into_dynamic())
+                    })?,
+                    scopes: row.scopes,
+                    created_at: row.created_at,
+                    updated_at: row.updated_at,
+                    access_token_expires_at: row.access_token_expires_at,
+                });
+            }
+        }
+        tracing::Span::current().record("count", users.len());
+        Ok(users)
+    }
+
+    #[tracing::instrument(name = "connect.db.connections_summary", skip_all, fields(customer_id = %customer_id), err)]
+    async fn connections_summary(&self, customer_id: Uuid) -> Result<ConnectionsSummary, Error> {
+        let row = sqlx::query_as::<_, SummaryRow>(
+            "SELECT COUNT(DISTINCT external_user_id) AS users, COUNT(*) AS connections, \
+             COUNT(*) FILTER (WHERE status = 'needs_reauth') AS needs_reauth \
+             FROM connections WHERE customer_id = $1",
+        )
+        .bind(customer_id)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(storage)?;
+        let apps = sqlx::query_as::<_, AppSummaryRow>(
+            "SELECT app_id, COUNT(*) FILTER (WHERE status = 'active') AS active, \
+             COUNT(*) FILTER (WHERE status = 'needs_reauth') AS needs_reauth \
+             FROM connections WHERE customer_id = $1 GROUP BY app_id ORDER BY app_id",
+        )
+        .bind(customer_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(storage)?;
+        let count = |value| {
+            u64::try_from(value)
+                .map_err(|error| Error::Storage(rootcause::Report::new(error).into_dynamic()))
+        };
+        Ok(ConnectionsSummary {
+            users: count(row.users)?,
+            connections: count(row.connections)?,
+            needs_reauth: count(row.needs_reauth)?,
+            apps: apps
+                .into_iter()
+                .map(|app| {
+                    Ok(AppConnectionsSummary {
+                        app_id: app.app_id,
+                        active: count(app.active)?,
+                        needs_reauth: count(app.needs_reauth)?,
+                    })
+                })
+                .collect::<Result<_, Error>>()?,
+        })
     }
 
     async fn delete(&self, customer_id: Uuid, user_id: &str, app_id: &str) -> Result<bool, Error> {
