@@ -27,6 +27,8 @@ A managed or externally hosted coding-agent session.
 | `reviews.create` | `public` | (`input`) => `Promise`\<[`SessionReview`](../../review/classes/SessionReview.md)\> | - | - |
 | <a id="property-sandboxsize"></a> `sandboxSize` | `readonly` | () => `Promise`\<[`SandboxSize`](../../../../../generated/agent-harness/types.gen/type-aliases/SandboxSize.md)\> | Compute tier of the managed sandbox. | - |
 | <a id="property-status"></a> `status` | `readonly` | () => `Promise`\<[`SessionStatusDto`](../../../../../generated/agent-harness/types.gen/type-aliases/SessionStatusDto.md)\> | The session's latest runtime status. | - |
+| <a id="property-views"></a> `views` | `readonly` | \{ `present`: (`view`) => `Promise`\<`void`\>; \} | Views shown in this session at once, with nothing saved. | - |
+| `views.present` | `public` | (`view`) => `Promise`\<`void`\> | - | - |
 | <a id="property-workspace"></a> `workspace` | `readonly` | () => `Promise`\<`string`\> | The directory in which the agent harness runs. | - |
 
 ## Methods
@@ -408,7 +410,12 @@ What the caller's new coding sessions are told to do beyond their assignment.
 
 > `static` **createManaged**(`client`, `opts?`): `Promise`\<`AgentSession`\>
 
-Create a managed session, optionally delivering its first prompt.
+Create a managed session as `agent` when one is named, otherwise the
+deployment's default coding persona. List personas with
+AgentNamespace.list and construct one with [Agent.byId](../../../agents/agent/classes/Agent.md#byid).
+Unknown or inaccessible personas fail. `model` and `instructions`
+outrank the persona's. `repoUrl` is honored for Cursor; omit `agent`
+and it starts as Cursor.
 
 #### Parameters
 

@@ -5,7 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Audience } from './audience';
+import type { FormBranding } from './formBranding';
 import type { FormClosesAt } from './formClosesAt';
+import type { FormProjectId } from './formProjectId';
 import type { FormRespondentColumnId } from './formRespondentColumnId';
 import type { FormStatus } from './formStatus';
 import type { FormSubmittedColumnId } from './formSubmittedColumnId';
@@ -16,6 +18,8 @@ import type { FormSubmittedColumnId } from './formSubmittedColumnId';
 export interface Form {
   /** Who may respond. */
   audience: Audience;
+  /** Its logo, cover image and accent color. */
+  branding: FormBranding;
   /** When it stops taking responses, if it does. */
   closesAt: FormClosesAt;
   /** What a respondent reads once their response is saved; empty for the
@@ -37,6 +41,8 @@ a form attached to an existing table has its own name. */
   name: string;
   /** Its owner. */
   ownerId: string;
+  /** The folder it is filed in; `null` at the root. */
+  projectId: FormProjectId;
   /** The person column each signed-in submission names its respondent in;
 `null` once deleted. */
   respondentColumnId: FormRespondentColumnId;

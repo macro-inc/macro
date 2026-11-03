@@ -5,6 +5,11 @@ export type ClientOptions = {
 };
 
 /**
+ * A color as `#rrggbb`, kept in lowercase.
+ */
+export type AccentColor = string;
+
+/**
  * Ordered from least to most access top -> bottom
  */
 export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
@@ -1216,6 +1221,11 @@ export type Awareness = {
  * when the server relayed it so receivers can drop older relays.
  */
 export type AwarenessRelay = {
+    /**
+     * Whether the viewer's grant lets them edit; a viewer who cannot is
+     * shown as viewing.
+     */
+    canEdit: boolean;
     /**
      * The database the viewer is in.
      */
@@ -5070,6 +5080,10 @@ export type Database = {
      */
     owner_id: string;
     /**
+     * The folder it is filed in; `null` at the root.
+     */
+    project_id: string | null;
+    /**
      * Set when trashed.
      */
     trashed_at: string | null;
@@ -6026,6 +6040,16 @@ export type DocumentUpdatedMetadata = {
      * Whether share permissions were updated.
      */
     share_permission_updated: boolean;
+};
+
+/**
+ * Request body for duplicating a database.
+ */
+export type DuplicateDatabaseRequest = {
+    /**
+     * The copy's name; left out, "<name> copy".
+     */
+    name?: string | null;
 };
 
 export type EditAnchorRequest = EditPdfAnchorRequest & {
@@ -7746,6 +7770,10 @@ export type Form = {
      */
     audience: Audience;
     /**
+     * Its logo, cover image and accent color.
+     */
+    branding: FormBranding;
+    /**
      * When it stops taking responses, if it does.
      */
     closesAt: string | null;
@@ -7785,6 +7813,10 @@ export type Form = {
      */
     ownerId: string;
     /**
+     * The folder it is filed in; `null` at the root.
+     */
+    projectId: string | null;
+    /**
      * The person column each signed-in submission names its respondent in;
      * `null` once deleted.
      */
@@ -7816,6 +7848,21 @@ export type Form = {
  * reads responses, owner also sets the audience, closes and trashes it.
  */
 export type FormAccess = 'view' | 'edit' | 'owner';
+
+/**
+ * A form's logo, cover image and accent color, each unset by default.
+ */
+export type FormBranding = {
+    accentColor: null | AccentColor;
+    /**
+     * The static file shown as a banner across the top of the page.
+     */
+    coverFileId: string | null;
+    /**
+     * The static file shown as the logo above the title.
+     */
+    logoFileId: string | null;
+};
 
 /**
  * A ready collaborative form and the result of publishing its latest draft.
@@ -7858,7 +7905,7 @@ export type FormDetail = {
 /**
  * What went wrong with a forms request.
  */
-export type FormErrorCode = 'tableAlreadyHasForm' | 'notFound' | 'forbidden' | 'ownerOnly' | 'signInRequired' | 'closed' | 'tableGone' | 'alreadyResponded' | 'noResponse' | 'unknownQuestion' | 'repeatedAnswer' | 'missingAnswer' | 'invalidAnswer' | 'widgetMismatch' | 'fileUploadNeedsSignIn' | 'invalidLayout' | 'invalidName' | 'invalidSharing' | 'tallyHidden' | 'conflict' | 'internal';
+export type FormErrorCode = 'tableAlreadyHasForm' | 'notFound' | 'forbidden' | 'ownerOnly' | 'signInRequired' | 'closed' | 'tableGone' | 'alreadyResponded' | 'noResponse' | 'unknownQuestion' | 'repeatedAnswer' | 'missingAnswer' | 'invalidAnswer' | 'widgetMismatch' | 'fileUploadNeedsSignIn' | 'invalidLayout' | 'invalidName' | 'invalidSharing' | 'tallyHidden' | 'invalidBranding' | 'conflict' | 'internal';
 
 /**
  * Why a forms request was refused or failed.
@@ -15867,11 +15914,15 @@ export type UpdateCrmTeamSettingsRequest = {
 };
 
 /**
- * A change to a form's facts; what is left out stays. The description and
- * confirmation message take edit, the rest owner. A form is renamed
+ * A change to a form's facts; what is left out stays. The description,
+ * confirmation message and branding take edit, the rest owner. A form is renamed
  * through the entity mutation router.
  */
 export type UpdateForm = {
+    /**
+     * A new accent color, or `null` for the default.
+     */
+    accentColor?: string | null;
     /**
      * Who may respond from now on.
      */
@@ -15885,9 +15936,17 @@ export type UpdateForm = {
      */
     confirmationMessage?: string;
     /**
+     * A new cover image, or `null` to remove it.
+     */
+    coverFileId?: string | null;
+    /**
      * Its new description.
      */
     description?: string;
+    /**
+     * A new logo, or `null` to remove it.
+     */
+    logoFileId?: string | null;
     /**
      * Open or close it.
      */
@@ -20118,6 +20177,31 @@ export type UndoDatabaseChangeResponses = {
 };
 
 export type UndoDatabaseChangeResponse = UndoDatabaseChangeResponses[keyof UndoDatabaseChangeResponses];
+
+export type DuplicateDatabaseData = {
+    body: DuplicateDatabaseRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/duplicate';
+};
+
+export type DuplicateDatabaseErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DuplicateDatabaseError = DuplicateDatabaseErrors[keyof DuplicateDatabaseErrors];
+
+export type DuplicateDatabaseResponses = {
+    201: Database;
+};
+
+export type DuplicateDatabaseResponse = DuplicateDatabaseResponses[keyof DuplicateDatabaseResponses];
 
 export type ImportDatabaseTableData = {
     body: ImportTable;

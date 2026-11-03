@@ -8,12 +8,13 @@ use entity_access::domain::models::{
     AccessLevel, EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use uuid::Uuid;
 
 use crate::domain::models::{
     Audience, DatabaseId, ForbiddenWidget, Form, FormDetail, FormError, FormId, FormLayout,
     FormResponse, FormResponseId, FormSectionId, FormTally, FormUpdate, LayoutReplacement,
     ListedForm, MyResponse, RecordedResponse, ResponseCounts, ResponseSummary, RowId, StoredForm,
-    Submission, SubmissionOutcome, TableId, UpdateForm,
+    StoredImageFile, Submission, SubmissionOutcome, TableId, UpdateForm,
 };
 
 /// Where a new form's responses go, with the access the caller proved.
@@ -63,6 +64,19 @@ pub trait FormAccessDirectory: Send + Sync + 'static {
         &self,
         user: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<(FormId, AccessLevel)>, Self::Error>> + Send;
+}
+
+/// Uploaded files, so a form's branding shows only images their uploader
+/// chose.
+pub trait FormImageFiles: Send + Sync + 'static {
+    /// The error type returned by lookups.
+    type Error: std::error::Error + Send + Sync + 'static;
+
+    /// The file, or `None` when there is no such file.
+    fn image_file(
+        &self,
+        file: Uuid,
+    ) -> impl Future<Output = Result<Option<StoredImageFile>, Self::Error>> + Send;
 }
 
 /// Liveness: tell the form's open pages it changed, so each re-reads what it
@@ -178,6 +192,15 @@ pub trait FormsRepo: Send + Sync + 'static {
 
     /// Bring a form back from the trash; `false` when it is gone.
     fn restore_form(&self, id: FormId) -> impl Future<Output = Result<bool, Self::Error>> + Send;
+
+    /// File a live form in a folder, or at the root when `project_id` is
+    /// `None`, swapping the grants it inherits from folders to match;
+    /// `false` when it is trashed or gone.
+    fn move_form(
+        &self,
+        id: FormId,
+        project_id: Option<&str>,
+    ) -> impl Future<Output = Result<bool, Self::Error>> + Send;
 
     /// Remove a form, its layout, ledger and grants.
     fn delete_form(&self, id: FormId) -> impl Future<Output = Result<(), Self::Error>> + Send;

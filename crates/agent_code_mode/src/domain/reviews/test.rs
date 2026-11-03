@@ -123,6 +123,7 @@ struct Actions {
     calls: Mutex<Vec<String>>,
     actors: Mutex<Vec<String>>,
     presentations: Mutex<Vec<ReviewId>>,
+    views: Mutex<Vec<(AgentSessionId, PresentedView)>>,
     fail_presentation: AtomicBool,
     block_actions: AtomicBool,
     action_gate: tokio::sync::Notify,
@@ -202,6 +203,16 @@ impl ReviewActions for Actions {
         }
         Ok(())
     }
+    async fn present_view(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        session: AgentSessionId,
+        view: &PresentedView,
+    ) -> Result<(), CodeModeError> {
+        assert_eq!(owner, &self.owner);
+        self.views.lock().unwrap().push((session, view.clone()));
+        Ok(())
+    }
 }
 struct Fixture {
     service: ReviewService,
@@ -225,6 +236,7 @@ impl Fixture {
             calls: Mutex::default(),
             actors: Mutex::default(),
             presentations: Mutex::default(),
+            views: Mutex::default(),
             fail_presentation: AtomicBool::new(false),
             block_actions: AtomicBool::new(false),
             action_gate: tokio::sync::Notify::new(),
@@ -1047,4 +1059,112 @@ async fn a_chat_submit_waits_until_the_review_is_approvable() {
         settled.items.states()[0].status,
         ReviewItemStatus::Completed
     );
+}
+
+fn a_view() -> Value {
+    json!({ "title": "Launch", "widgets": [{ "type": "md", "markdown": "Shipped." }] })
+}
+
+#[tokio::test]
+async fn a_view_is_presented_to_the_session_and_nothing_is_saved() {
+    let f = Fixture::new();
+    f.service
+        .present_view(
+            &f.edit(),
+            &f.actions.owner,
+            PresentView {
+                view: a_view(),
+                execution_id: Some(f.execution),
+            },
+        )
+        .await
+        .unwrap();
+    let views = f.actions.views.lock().unwrap();
+    assert_eq!(views.len(), 1);
+    assert_eq!(views[0].0, f.session);
+    assert_eq!(views[0].1.view, a_view());
+    assert!(f.store.0.lock().unwrap().is_empty());
+    assert!(f.store.2.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_view_the_renderer_would_not_draw_is_turned_back_with_what_to_fix() {
+    let f = Fixture::new();
+    let widgets = (0..12)
+        .map(|_| json!({ "type": "chart" }))
+        .collect::<Vec<_>>();
+    let Err(CodeModeError::Invalid(message)) = f
+        .service
+        .present_view(
+            &f.edit(),
+            &f.actions.owner,
+            PresentView {
+                view: json!({ "widgets": widgets }),
+                execution_id: None,
+            },
+        )
+        .await
+    else {
+        panic!("the view is turned back");
+    };
+    let types = r#""md", "timeline", "list", "channelMessage", "container""#;
+    let listed = (0..10)
+        .map(|index| format!("- view.widgets[{index}].type should be one of {types}\n"))
+        .collect::<String>();
+    assert_eq!(
+        message,
+        format!(
+            "The view was not presented: it does not match the PresentView schema.\n{listed}- and 2 more\nFix these and present the whole view again."
+        )
+    );
+    assert!(f.actions.views.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn an_oversized_view_is_turned_back() {
+    let f = Fixture::new();
+    let view = json!({ "widgets": [{ "type": "md", "markdown": "x".repeat(40 * 1024) }] });
+    assert!(matches!(
+        f.service
+            .present_view(
+                &f.edit(),
+                &f.actions.owner,
+                PresentView {
+                    view,
+                    execution_id: None
+                }
+            )
+            .await,
+        Err(CodeModeError::Invalid(message)) if message.contains("over the 32768-byte limit")
+    ));
+    assert!(f.actions.views.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_view_is_presented_only_by_its_session_and_execution() {
+    let f = Fixture::new();
+    let stranger = MacroUserIdStr::parse_from_str("macro|other@macro.local")
+        .unwrap()
+        .into_owned();
+    let input = |execution_id| PresentView {
+        view: a_view(),
+        execution_id,
+    };
+    assert!(matches!(
+        f.service
+            .present_view(&f.edit(), &stranger, input(None))
+            .await,
+        Err(CodeModeError::Forbidden)
+    ));
+    assert!(matches!(
+        f.service
+            .present_view(
+                &f.edit(),
+                &f.actions.owner,
+                input(Some(ExecutionId::mint()))
+            )
+            .await,
+        Err(CodeModeError::NotFound)
+    ));
+    assert!(f.actions.views.lock().unwrap().is_empty());
 }

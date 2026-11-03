@@ -25,7 +25,7 @@ export const agentReviewClient = {
     review: string,
     decision: ReviewDecision_Deserialize
   ) {
-    const span = Telemetry.clientSpan('agent.review.decide');
+    const span = Telemetry.span('agent.review.decide', { kind: 'client' });
     span.setAttr('agent.session.id', session);
     span.setAttr('agent.review.id', review);
     span.setAttr('agent.review.action', decision.action);
@@ -45,6 +45,7 @@ export const agentReviewClient = {
           response.status === 400
             ? { code: INVALID_REVIEW_DECISION, message: await response.text() }
             : statusError(response.status),
+        trace: { parentSpan: span },
       });
       if (result.isErr()) span.error('Review decision failed');
       return result;

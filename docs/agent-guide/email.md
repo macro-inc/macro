@@ -70,7 +70,12 @@ In every composer `Cmd+Shift+.`, `Cmd+Shift+,` and `Cmd+Shift+D` discard the
 draft exactly like its trash button, `Cmd+Shift+U` opens the attach picker, and
 `Cmd+Shift+X`, `7`, `8` and `9` apply strikethrough, numbered list, bulleted
 list and quote. Check discard from both a reply (the reply closes) and
-standalone compose (the view goes back), with focus in the body.
+standalone compose (the view goes back), with focus in the body. The same
+three keys discard the drafts on the focused or selected rows of a list (Email
+or a soup view) that carry the Draft badge. The thread keeps its row and its
+place, even though its sort time falls back to the last real message, until
+the tab, filters, or sort change; only the badge and preview change back to
+that message. Check it on a reply draft in All: the row must not move.
 
 Star and mute feedback reports what happened to the write. With GraphQL Soup
 enabled, a star queued while offline toasts that it is waiting to sync (for

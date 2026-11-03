@@ -97,7 +97,14 @@ export function CanvasReadOnlyView(props: {
     >
       <GraphicsSurface
         editor={props.editor}
-        input={{ editing: false, tool }}
+        input={{
+          editing: false,
+          tool,
+          ignoreTarget: (target) =>
+            target instanceof Element &&
+            !!target.closest('[data-graphics-item]') &&
+            !!target.closest('button,a,input,select,textarea,[role="button"]'),
+        }}
         gridColor="transparent"
         renderers={{
           connector: (p) => (

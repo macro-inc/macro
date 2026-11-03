@@ -78,7 +78,9 @@ enum CodeHost {
         "\n",
         include_str!("toolset/shared/program.md"),
         "\n",
-        include_str!("toolset/shared/runtime.md")
+        include_str!("toolset/shared/runtime.md"),
+        "\nPresentView schema; execution.views.present(view) takes its view property:\n",
+        include_str!("../../../dynamic_ui/src/present_view.schema.generated.json")
     )
 )]
 pub struct ExecuteCode {
@@ -234,7 +236,7 @@ pub enum CodeGuideTopic {
     Ai,
     /// Local Handlebars rendering.
     Templates,
-    /// Worked examples, including email triage and structured extraction.
+    /// Worked examples: check-then-create in one execution, email triage, extraction.
     Examples,
 }
 

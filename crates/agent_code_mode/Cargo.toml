@@ -10,6 +10,7 @@ chrono = { workspace = true }
 cognition = { path = "../cognition" }
 agent_session = { path = "../agent_session", default-features = false }
 ai_toolset = { path = "../ai_toolset" }
+dynamic_ui = { path = "../dynamic_ui" }
 async-trait = { workspace = true }
 anyhow = { workspace = true }
 axum = { workspace = true }

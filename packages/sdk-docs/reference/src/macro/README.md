@@ -46,12 +46,6 @@ Re-exports [ApplyOpsOptions](../entities/databases/database/type-aliases/ApplyOp
 
 ***
 
-### CalendarNote
-
-Re-exports [CalendarNote](../entities/calendar/note/classes/CalendarNote.md)
-
-***
-
 ### CallMessage
 
 Re-exports [CallMessage](../entities/calls/message/classes/CallMessage.md)
@@ -625,6 +619,12 @@ Re-exports [RoutineTriggerOptions](../entities/routines/routine/type-aliases/Rou
 ### SessionReview
 
 Re-exports [SessionReview](../entities/agent-sessions/review/classes/SessionReview.md)
+
+***
+
+### SessionView
+
+Re-exports [SessionView](../entities/agent-sessions/view/type-aliases/SessionView.md)
 
 ***
 

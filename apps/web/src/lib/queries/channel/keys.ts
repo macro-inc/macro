@@ -18,7 +18,12 @@ export const channelKeys = createQueryKeys('channel', {
     queryKey: [channelID],
   }),
   activity: null,
-  listChannels: null,
+  listChannels: {
+    queryKey: null,
+    contextQueries: {
+      account: (actorId?: string) => [actorId ?? 'signed-out'],
+    },
+  },
   quickAccessGraphql: (cacheClientId: string) => ({
     queryKey: [cacheClientId],
   }),

@@ -87,6 +87,7 @@ fn user_authentication(user_id: &str) -> MacroUserAuthentication {
     MacroUserAuthentication {
         origin: macro_authorization::CredentialOrigin::Session,
         agent_id: None,
+        agent_via: None,
         macro_user_id: MacroUserIdStr::try_from(user_id.to_string()).expect("valid user id"),
         user_context: UserContext {
             user_id: user_id.to_string(),

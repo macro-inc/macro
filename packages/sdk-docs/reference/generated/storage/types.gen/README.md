@@ -2,6 +2,7 @@
 
 ## Type Aliases
 
+- [AccentColor](type-aliases/AccentColor.md)
 - [AccessiblePipeline](type-aliases/AccessiblePipeline.md)
 - [AccessLevel](type-aliases/AccessLevel.md)
 - [AccessRequest](type-aliases/AccessRequest.md)
@@ -610,6 +611,12 @@
 - [DocumentTextContent](type-aliases/DocumentTextContent.md)
 - [DocumentTopicEvent](type-aliases/DocumentTopicEvent.md)
 - [DocumentUpdatedMetadata](type-aliases/DocumentUpdatedMetadata.md)
+- [DuplicateDatabaseData](type-aliases/DuplicateDatabaseData.md)
+- [DuplicateDatabaseError](type-aliases/DuplicateDatabaseError.md)
+- [DuplicateDatabaseErrors](type-aliases/DuplicateDatabaseErrors.md)
+- [DuplicateDatabaseRequest](type-aliases/DuplicateDatabaseRequest.md)
+- [DuplicateDatabaseResponse](type-aliases/DuplicateDatabaseResponse.md)
+- [DuplicateDatabaseResponses](type-aliases/DuplicateDatabaseResponses.md)
 - [EditAnchorData](type-aliases/EditAnchorData.md)
 - [EditAnchorError](type-aliases/EditAnchorError.md)
 - [EditAnchorErrors](type-aliases/EditAnchorErrors.md)
@@ -840,6 +847,7 @@
 - [ForeignEntityFilters](type-aliases/ForeignEntityFilters.md)
 - [Form](type-aliases/Form.md)
 - [FormAccess](type-aliases/FormAccess.md)
+- [FormBranding](type-aliases/FormBranding.md)
 - [FormCollaboration](type-aliases/FormCollaboration.md)
 - [FormDetail](type-aliases/FormDetail.md)
 - [FormErrorCode](type-aliases/FormErrorCode.md)

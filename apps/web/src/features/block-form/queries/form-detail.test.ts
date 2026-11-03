@@ -114,10 +114,12 @@ describe('the booking step', () => {
     closesAt: null,
     tallyVisible: false,
     confirmationMessage: '',
+    branding: { logoFileId: null, coverFileId: null, accentColor: null },
     submittedColumnId: null,
     respondentColumnId: null,
     createdAt: '2026-10-01T12:00:00Z',
     updatedAt: '2026-10-01T12:00:00Z',
+    projectId: null,
     isHiddenInDrive: false,
   } as const;
 

@@ -7735,6 +7735,96 @@
         }
       }
     },
+    "/databases/{id}/duplicate": {
+      "post": {
+        "tags": ["databases"],
+        "summary": "Copy a database, with its tables, columns, views and rows, into a new one\nthe caller owns. Its sharing, forms, webhooks and history stay behind.",
+        "operationId": "duplicate_database",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DuplicateDatabaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Database"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/databases/{id}/import": {
       "post": {
         "tags": ["databases"],
@@ -19699,6 +19789,11 @@
   },
   "components": {
     "schemas": {
+      "AccentColor": {
+        "type": "string",
+        "description": "A color as `#rrggbb`, kept in lowercase.",
+        "pattern": "^#[0-9a-fA-F]{6}$"
+      },
       "AccessLevel": {
         "type": "string",
         "description": "Ordered from least to most access top -> bottom",
@@ -21549,8 +21644,12 @@
       "AwarenessRelay": {
         "type": "object",
         "description": "The [`AWARENESS_MESSAGE_TYPE`] payload: one viewer's awareness, stamped\nwhen the server relayed it so receivers can drop older relays.",
-        "required": ["databaseId", "userId", "state", "relayedAt"],
+        "required": ["databaseId", "userId", "canEdit", "state", "relayedAt"],
         "properties": {
+          "canEdit": {
+            "type": "boolean",
+            "description": "Whether the viewer's grant lets them edit; a viewer who cannot is\nshown as viewing."
+          },
           "databaseId": {
             "type": "string",
             "format": "uuid",
@@ -27017,7 +27116,14 @@
       "Database": {
         "type": "object",
         "description": "A database: a named collection of tables, owned and shared as one entity.",
-        "required": ["id", "name", "owner_id", "created_at", "trashed_at"],
+        "required": [
+          "id",
+          "name",
+          "owner_id",
+          "created_at",
+          "trashed_at",
+          "project_id"
+        ],
         "properties": {
           "created_at": {
             "type": "string",
@@ -27036,6 +27142,10 @@
           "owner_id": {
             "type": "string",
             "description": "Owning user."
+          },
+          "project_id": {
+            "type": ["string", "null"],
+            "description": "The folder it is filed in; `null` at the root."
           },
           "trashed_at": {
             "type": ["string", "null"],
@@ -28607,6 +28717,16 @@
           "share_permission_updated": {
             "type": "boolean",
             "description": "Whether share permissions were updated."
+          }
+        }
+      },
+      "DuplicateDatabaseRequest": {
+        "type": "object",
+        "description": "Request body for duplicating a database.",
+        "properties": {
+          "name": {
+            "type": ["string", "null"],
+            "description": "The copy's name; left out, \"<name> copy\"."
           }
         }
       },
@@ -31729,14 +31849,20 @@
           "status",
           "closesAt",
           "confirmationMessage",
+          "branding",
           "createdAt",
           "updatedAt",
+          "projectId",
           "isHiddenInDrive"
         ],
         "properties": {
           "audience": {
             "$ref": "#/components/schemas/Audience",
             "description": "Who may respond."
+          },
+          "branding": {
+            "$ref": "#/components/schemas/FormBranding",
+            "description": "Its logo, cover image and accent color."
           },
           "closesAt": {
             "type": ["string", "null"],
@@ -31778,6 +31904,10 @@
             "type": "string",
             "description": "Its owner."
           },
+          "projectId": {
+            "type": ["string", "null"],
+            "description": "The folder it is filed in; `null` at the root."
+          },
           "respondentColumnId": {
             "type": ["string", "null"],
             "format": "uuid",
@@ -31812,6 +31942,34 @@
         "type": "string",
         "description": "The caller's level on a form: view responds, edit changes questions and\nreads responses, owner also sets the audience, closes and trashes it.",
         "enum": ["view", "edit", "owner"]
+      },
+      "FormBranding": {
+        "type": "object",
+        "description": "A form's logo, cover image and accent color, each unset by default.",
+        "required": ["logoFileId", "coverFileId", "accentColor"],
+        "properties": {
+          "accentColor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccentColor",
+                "description": "The color of the page's buttons and selected answers."
+              }
+            ]
+          },
+          "coverFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The static file shown as a banner across the top of the page."
+          },
+          "logoFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The static file shown as the logo above the title."
+          }
+        }
       },
       "FormCollaboration": {
         "type": "object",
@@ -31877,6 +32035,7 @@
           "invalidName",
           "invalidSharing",
           "tallyHidden",
+          "invalidBranding",
           "conflict",
           "internal"
         ]
@@ -44566,8 +44725,13 @@
       },
       "UpdateForm": {
         "type": "object",
-        "description": "A change to a form's facts; what is left out stays. The description and\nconfirmation message take edit, the rest owner. A form is renamed\nthrough the entity mutation router.",
+        "description": "A change to a form's facts; what is left out stays. The description,\nconfirmation message and branding take edit, the rest owner. A form is renamed\nthrough the entity mutation router.",
         "properties": {
+          "accentColor": {
+            "type": ["string", "null"],
+            "description": "A new accent color, or `null` for the default.",
+            "pattern": "^#[0-9a-fA-F]{6}$"
+          },
           "audience": {
             "$ref": "#/components/schemas/Audience",
             "description": "Who may respond from now on."
@@ -44581,9 +44745,19 @@
             "type": "string",
             "description": "Its new confirmation message."
           },
+          "coverFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "A new cover image, or `null` to remove it."
+          },
           "description": {
             "type": "string",
             "description": "Its new description."
+          },
+          "logoFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "A new logo, or `null` to remove it."
           },
           "status": {
             "$ref": "#/components/schemas/FormStatus",

@@ -1,4 +1,5 @@
 import { useCalendarFocus } from '@app/features/calendar-view/calendar-focus-target';
+import { beginInteraction } from '@app/observability/flow';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { subscribeToTeamCalendarReset } from '@queries/calendar/team-cache';
 import {
@@ -97,8 +98,16 @@ export const [CalendarViewContextProvider, useCalendarView] =
       const calendarFocus = useCalendarFocus();
       // A selection made while a row waits for its chip wins over that row.
       const selectEvent: typeof selection.select = (...args) => {
-        calendarFocus.cancelOccurrence();
-        selection.select(...args);
+        // Ends one paint after the details open; a flow they mount joins it.
+        const interaction = beginInteraction('calendar.event.open', {
+          attributes: { 'calendar.event.origin': args[2] ?? 'grid' },
+        });
+        try {
+          calendarFocus.cancelOccurrence();
+          selection.select(...args);
+        } finally {
+          interaction.end();
+        }
       };
       // A revoked OOO agenda entry can lie outside every mounted viewport.
       // Close detached selections synchronously when authorization resets data.

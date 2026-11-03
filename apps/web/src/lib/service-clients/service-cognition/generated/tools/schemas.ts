@@ -3555,8 +3555,14 @@ export const MutationResult = z.object({
             .union([z.string().datetime({ offset: true }), z.null()])
             .optional(),
           confirmationMessage: z.string(),
+          branding: z.object({
+            logoFileId: z.union([z.string().uuid(), z.null()]).optional(),
+            coverFileId: z.union([z.string().uuid(), z.null()]).optional(),
+            accentColor: z.union([z.string(), z.null()]).optional(),
+          }),
           createdAt: z.string().datetime({ offset: true }),
           updatedAt: z.string().datetime({ offset: true }),
+          projectId: z.union([z.string(), z.null()]).optional(),
           isHiddenInDrive: z.boolean(),
         }),
         layout: z.object({
@@ -4876,13 +4882,13 @@ export const DispatchCodingAgent = z
   .object({ agent_id: z.string().uuid(), prompt: z.string() })
   .strict();
 
-export const DisplayResults = z.object({ view: z.any() });
-
-export const DisplayResultsResponse = z.object({ message: z.string() });
-
 export const DuplicateItem = z.object({
   entityType: z.any().superRefine((x, ctx) => {
-    const schemas = [z.literal('document'), z.literal('chat')];
+    const schemas = [
+      z.literal('document'),
+      z.literal('database'),
+      z.literal('chat'),
+    ];
     const errors = schemas.reduce<z.ZodError[]>(
       (errors, schema) =>
         ((result) => (result.error ? [...errors, result.error] : errors))(
@@ -4905,7 +4911,11 @@ export const DuplicateItem = z.object({
 
 export const DuplicateItemResponse = z.object({
   entityType: z.any().superRefine((x, ctx) => {
-    const schemas = [z.literal('document'), z.literal('chat')];
+    const schemas = [
+      z.literal('document'),
+      z.literal('database'),
+      z.literal('chat'),
+    ];
     const errors = schemas.reduce<z.ZodError[]>(
       (errors, schema) =>
         ((result) => (result.error ? [...errors, result.error] : errors))(
@@ -9351,6 +9361,23 @@ export const GetThreadResponse = z.object({
   summary: z.string(),
 });
 
+export const GetUserActivity = z.object({
+  userId: z.union([z.string(), z.null()]).optional(),
+  start: z.string().date(),
+  end: z.string().date(),
+});
+
+export const ActivityReports = z.object({
+  reports: z.array(
+    z.object({
+      granularity: z.enum(['day', 'week', 'month', 'summary']),
+      periodStart: z.string().date(),
+      periodEnd: z.string().date(),
+      content: z.string(),
+    })
+  ),
+});
+
 export const ImportCompaniesCsv = z.object({
   csv: z.union([z.string(), z.null()]).optional(),
   documentId: z.union([z.string().uuid(), z.null()]).optional(),
@@ -11036,8 +11063,14 @@ export const ListResult = z.object({
           .union([z.string().datetime({ offset: true }), z.null()])
           .optional(),
         confirmationMessage: z.string(),
+        branding: z.object({
+          logoFileId: z.union([z.string().uuid(), z.null()]).optional(),
+          coverFileId: z.union([z.string().uuid(), z.null()]).optional(),
+          accentColor: z.union([z.string(), z.null()]).optional(),
+        }),
         createdAt: z.string().datetime({ offset: true }),
         updatedAt: z.string().datetime({ offset: true }),
+        projectId: z.union([z.string(), z.null()]).optional(),
         isHiddenInDrive: z.boolean(),
       }),
       access: z.any().superRefine((x, ctx) => {
@@ -13781,8 +13814,14 @@ export const ReadResult = z.any().superRefine((x, ctx) => {
             .union([z.string().datetime({ offset: true }), z.null()])
             .optional(),
           confirmationMessage: z.string(),
+          branding: z.object({
+            logoFileId: z.union([z.string().uuid(), z.null()]).optional(),
+            coverFileId: z.union([z.string().uuid(), z.null()]).optional(),
+            accentColor: z.union([z.string(), z.null()]).optional(),
+          }),
           createdAt: z.string().datetime({ offset: true }),
           updatedAt: z.string().datetime({ offset: true }),
+          projectId: z.union([z.string(), z.null()]).optional(),
           isHiddenInDrive: z.boolean(),
         }),
         layout: z.object({
@@ -14394,8 +14433,14 @@ export const ReadResult = z.any().superRefine((x, ctx) => {
             .union([z.string().datetime({ offset: true }), z.null()])
             .optional(),
           confirmationMessage: z.string(),
+          branding: z.object({
+            logoFileId: z.union([z.string().uuid(), z.null()]).optional(),
+            coverFileId: z.union([z.string().uuid(), z.null()]).optional(),
+            accentColor: z.union([z.string(), z.null()]).optional(),
+          }),
           createdAt: z.string().datetime({ offset: true }),
           updatedAt: z.string().datetime({ offset: true }),
+          projectId: z.union([z.string(), z.null()]).optional(),
           isHiddenInDrive: z.boolean(),
         }),
         access: z.any().superRefine((x, ctx) => {
@@ -15012,6 +15057,13 @@ export const ProjectActivityResult = z.object({
       z.null(),
     ])
     .optional(),
+});
+
+export const ReadMemory = z.record(z.any());
+
+export const ExplicitMemory = z.object({
+  content: z.string(),
+  revision: z.number().int(),
 });
 
 export const ReadMetadata = z.object({ documentId: z.string().uuid() });
@@ -17096,6 +17148,40 @@ export const UpdateInitiativeSharing = z.object({
     .optional(),
 });
 
+export const UpdateMemory = z.object({
+  revision: z.number().int(),
+  edit: z.any().superRefine((x, ctx) => {
+    const schemas = [
+      z.object({
+        line: z.number().int().gte(0),
+        content: z.string(),
+        action: z.literal('insert'),
+      }),
+      z.object({
+        line: z.number().int().gte(0),
+        content: z.string(),
+        action: z.literal('replace'),
+      }),
+      z.object({ line: z.number().int().gte(0), action: z.literal('delete') }),
+    ];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
+});
+
 export const UpdatePipelineEntries = z.object({
   pipelineId: z.string().uuid(),
   updates: z.array(
@@ -17532,6 +17618,10 @@ export const WebSearchResponse = z.object({
   ]),
   tool_use_id: z.string(),
 });
+
+export const DisplayResults = z.object({ view: z.any() });
+
+export const DisplayResultsResponse = z.object({ message: z.string() });
 
 export const DescribeCodeTools = z
   .object({

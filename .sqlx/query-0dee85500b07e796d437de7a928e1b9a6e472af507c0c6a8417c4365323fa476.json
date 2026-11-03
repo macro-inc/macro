@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH due AS (\n                SELECT j.user_id, COALESCE(p.through_date + 1, (j.created_at AT TIME ZONE 'UTC')::date - 1) AS day\n                FROM memory_refresh_job j LEFT JOIN memory_profile p ON p.user_id = j.user_id\n                WHERE j.lease_until < NOW() AND (p.through_date IS NULL OR p.through_date < $1)\n                ORDER BY j.lease_until, j.user_id LIMIT 1 FOR UPDATE OF j SKIP LOCKED\n            )\n            UPDATE memory_refresh_job j SET lease_token = $2, lease_until = NOW() + INTERVAL '25 minutes'\n            FROM due WHERE j.user_id = due.user_id RETURNING j.user_id, due.day AS \"day!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "day!",
+        "type_info": "Date"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Date",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "0dee85500b07e796d437de7a928e1b9a6e472af507c0c6a8417c4365323fa476"
+}
