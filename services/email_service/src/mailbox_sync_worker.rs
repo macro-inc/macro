@@ -47,7 +47,7 @@ pub async fn run<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest>(
     }
 }
 
-/// For units that report their own outcome and deferral on their span.
+/// For units that log their own deferrals and failures with their mailbox.
 fn reported(result: Result<bool, MailboxError>) -> bool {
     result.unwrap_or(false)
 }
@@ -150,9 +150,9 @@ pub async fn run_contacts<R, G, S>(
 {
     loop {
         let cycle = async {
-            let mut worked = record(service.sync_once().await);
+            let mut worked = reported(service.sync_once().await);
             for _ in 0..8 {
-                if !record(service.photo_once().await) {
+                if !reported(service.photo_once().await) {
                     break;
                 }
                 worked = true;
@@ -176,7 +176,7 @@ pub async fn run_drafts<R, G, M>(
     M: email::domain::mailbox::drafts::ports::DraftMaterializer,
 {
     loop {
-        let worked = tokio::select! { biased; _ = cancellation.cancelled() => return, result = service.execute_once() => record(result) };
+        let worked = tokio::select! { biased; _ = cancellation.cancelled() => return, result = service.execute_once() => reported(result) };
         if !worked {
             tokio::select! { biased; _ = cancellation.cancelled() => return, _ = tokio::time::sleep(Duration::from_secs(1)) => {} }
         }
@@ -216,7 +216,7 @@ pub async fn run_commands<R, G>(
     G: email::domain::mailbox::commands::MailboxCommandGateway,
 {
     loop {
-        let worked = tokio::select! { biased; _ = cancellation.cancelled() => return, result = service.execute_once() => record(result) };
+        let worked = tokio::select! { biased; _ = cancellation.cancelled() => return, result = service.execute_once() => reported(result) };
         if !worked {
             tokio::select! { biased; _ = cancellation.cancelled() => return, _ = tokio::time::sleep(Duration::from_secs(1)) => {} }
         }
@@ -254,7 +254,7 @@ pub async fn run_settings<R, G>(
     G: email::domain::mailbox::settings::MailboxSettingsGateway,
 {
     loop {
-        let worked = tokio::select! {biased;_ = cancellation.cancelled()=>return,result=service.execute_once()=>record(result)};
+        let worked = tokio::select! {biased;_ = cancellation.cancelled()=>return,result=service.execute_once()=>reported(result)};
         if !worked {
             tokio::select! {biased;_ = cancellation.cancelled()=>return,_ = tokio::time::sleep(Duration::from_secs(1))=>{}}
         }
@@ -269,7 +269,7 @@ pub async fn run_watches<R, G>(
     G: email::domain::mailbox::watches::MailboxWatchGateway,
 {
     loop {
-        let worked = tokio::select! {biased;_ = cancellation.cancelled()=>return,result=service.execute_once()=>record(result)};
+        let worked = tokio::select! {biased;_ = cancellation.cancelled()=>return,result=service.execute_once()=>reported(result)};
         if !worked {
             tokio::select! {biased;_ = cancellation.cancelled()=>return,_ = tokio::time::sleep(Duration::from_secs(5))=>{}}
         }

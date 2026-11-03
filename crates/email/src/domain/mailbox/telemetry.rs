@@ -76,6 +76,17 @@ pub(super) fn record_failed(span: &Span, link_id: Uuid, error: &MailboxError) {
     }
 }
 
+/// Logs why a unit of the other mailbox loops (contacts, drafts, commands,
+/// settings, watches), which have no span, stopped or was deferred.
+pub(super) fn log_unit_error(link_id: Uuid, error: &MailboxError) {
+    let reason = defer_reason(error);
+    if is_gate_refusal(error) || matches!(error, MailboxError::Stale) {
+        tracing::debug!(%link_id, defer_reason = reason, %error, "mailbox sync work deferred");
+    } else {
+        tracing::warn!(%link_id, defer_reason = reason, %error, "mailbox sync work deferred");
+    }
+}
+
 /// A claim query failed, so no unit (and no mailbox) was involved yet.
 pub(super) fn claim_failed(unit: &'static str, error: MailboxError) -> MailboxError {
     tracing::warn!(unit, defer_reason = defer_reason(&error), %error, "mailbox sync claim failed");

@@ -122,24 +122,31 @@ impl<R: MailboxCommandRepository, G: MailboxCommandGateway> MailboxCommandServic
         let Some(lease) = self
             .repo
             .claim_command(macro_uuid::generate_uuid_v7())
-            .await?
+            .await
+            .map_err(|error| super::telemetry::claim_failed("commands", error))?
         else {
             return Ok(false);
         };
-        let result =
-            super::maintain_lease(self.execute(&lease), || self.repo.renew_command(&lease)).await;
-        if let Err(error) = &result {
-            self.repo
-                .release_command(
-                    &lease,
-                    match error {
-                        MailboxError::Provider(e) => super::retry_seconds(e),
-                        _ => 30,
-                    },
-                )
-                .await?;
+        let link_id = lease.mailbox.link_id;
+        async {
+            let result =
+                super::maintain_lease(self.execute(&lease), || self.repo.renew_command(&lease))
+                    .await;
+            if let Err(error) = &result {
+                self.repo
+                    .release_command(
+                        &lease,
+                        match error {
+                            MailboxError::Provider(e) => super::retry_seconds(e),
+                            _ => 30,
+                        },
+                    )
+                    .await?;
+            }
+            result.map(|()| true)
         }
-        result.map(|()| true)
+        .await
+        .inspect_err(|error| super::telemetry::log_unit_error(link_id, error))
     }
 
     async fn execute(&self, lease: &CommandLease) -> Result<(), MailboxError> {
