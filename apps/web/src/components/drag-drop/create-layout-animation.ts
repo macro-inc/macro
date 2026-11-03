@@ -1,5 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-export type KanbanAnimationItem = {
+export type LayoutAnimationItem = {
   /** Unique placement, including the lane for cards with several placements. */
   key: string;
   /** Shared identity lets a card animate across remounted placements. */
@@ -11,7 +11,7 @@ export type KanbanAnimationItem = {
   layout: HTMLElement;
 };
 
-export type KanbanAnimationOrigin = {
+export type LayoutAnimationOrigin = {
   /** Placement identity survives source virtualization at drag release. */
   key: string;
   element: HTMLElement;
@@ -19,7 +19,7 @@ export type KanbanAnimationOrigin = {
   parentKey: string;
 };
 
-type Snapshot = KanbanAnimationItem & {
+type Snapshot = LayoutAnimationItem & {
   rect: DOMRect;
   clone?: HTMLElement;
   dragOrigin?: boolean;
@@ -32,9 +32,9 @@ const TIMING: KeyframeAnimationOptions = {
 };
 
 /** Observe layout during a drag hover or host-owned move, never ordinary paging. */
-export function createKanbanAnimation(options: {
+export function createLayoutAnimation(options: {
   viewport(): HTMLElement | undefined;
-  items(): KanbanAnimationItem[];
+  items(): LayoutAnimationItem[];
 }) {
   let snapshots = new Map<string, Snapshot>();
   let observer: MutationObserver | undefined;
@@ -111,8 +111,8 @@ export function createKanbanAnimation(options: {
 
   // A wrapper inherits every animated ancestor, although it has no local animation.
   function normalizedRect(
-    item: KanbanAnimationItem,
-    byKey: Map<string, KanbanAnimationItem>
+    item: LayoutAnimationItem,
+    byKey: Map<string, LayoutAnimationItem>
   ): DOMRect {
     const rect = item.layout.getBoundingClientRect();
     let x = rect.left;
@@ -204,7 +204,7 @@ export function createKanbanAnimation(options: {
         }
       }
     };
-    fireAndForget(finish(), 'kanban-animation');
+    fireAndForget(finish(), 'layout-animation');
   }
 
   function fly(
@@ -500,7 +500,7 @@ export function createKanbanAnimation(options: {
   function begin(
     identity: string,
     destinationParentKey?: string,
-    origin?: KanbanAnimationOrigin
+    origin?: LayoutAnimationOrigin
   ) {
     const viewport = options.viewport();
 

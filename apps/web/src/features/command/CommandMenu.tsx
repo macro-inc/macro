@@ -454,6 +454,8 @@ function CommandSearchMenu(
       : CommandState.categoryFilter();
 
   const { popoverSplit } = useSplitLayout();
+  const canOpenInNewSplit = () =>
+    globalSplitManager()?.canAppendSplit() ?? false;
 
   const [attachHotkeys, hotkeyScope] = useHotkeyDOMScope('command-menu');
 
@@ -697,6 +699,24 @@ function CommandSearchMenu(
       const item = selectedItem();
       if (item) {
         handleItemAction(item, false);
+        return true;
+      }
+      return false;
+    },
+    runWithInputFocused: true,
+  });
+
+  // Universal Input mounts its own menu and scope, so there Shift+Enter
+  // stays a newline in its editor.
+  const confirmSplitHotkey = registerHotkey({
+    hotkey: 'shift+enter',
+    scopeId: hotkeyScope,
+    description: () => t('commandMenu.openInNewSplit'),
+    keyDownHandler: (event) => {
+      if (event?.isComposing) return false;
+      const item = selectedItem();
+      if (item) {
+        handleItemAction(item, true);
         return true;
       }
       return false;
@@ -965,6 +985,12 @@ function CommandSearchMenu(
               command={confirmHotkey}
               label={t('commandMenu.hintSearch')}
             />
+            <Show when={canOpenInNewSplit()}>
+              <HotkeyHint
+                command={confirmSplitHotkey}
+                label={t('commandMenu.hintSearchInNewSplit')}
+              />
+            </Show>
           </Match>
           <Match when={selectedIsAskAi()}>
             <HotkeyHint
@@ -977,6 +1003,12 @@ function CommandSearchMenu(
               command={confirmHotkey}
               label={t('commandMenu.hintOpen')}
             />
+            <Show when={canOpenInNewSplit()}>
+              <HotkeyHint
+                command={confirmSplitHotkey}
+                label={t('commandMenu.openInNewSplit')}
+              />
+            </Show>
           </Match>
         </Switch>
 

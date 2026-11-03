@@ -31,6 +31,7 @@ type DragOperationContextValue = {
 
 export type ItemDragOverlayData = {
   overlayIcon?: () => JSXElement;
+  overlayContent?: () => JSXElement;
 };
 
 const DragOperationContext = createContext<DragOperationContextValue>();
@@ -55,6 +56,10 @@ function ItemDragOverlay() {
   });
   const overlayIcon = () =>
     (activeDraggable()?.data as ItemDragOverlayData | undefined)?.overlayIcon;
+
+  const overlayContent = () =>
+    (activeDraggable()?.data as ItemDragOverlayData | undefined)
+      ?.overlayContent;
 
   const iconType = createMemo((): EntityIconSelector => {
     const data = activeDraggable()?.data;
@@ -91,17 +96,24 @@ function ItemDragOverlay() {
         class="w-auto max-w-75 flex flex-col gap-2 bg-surface p-2 rounded-lg z-drag shadow-md shadow-drop-shadow pointer-events-none"
         style={besidePointerStyle()}
       >
-        <div class="flex flex-row items-center gap-2">
-          <Show
-            when={overlayIcon()}
-            fallback={<EntityIcon size="xs" targetType={iconType()} />}
-          >
-            {(icon) => icon()()}
-          </Show>
-          <TruncatedText size="xs">
-            {activeDraggable()?.data.name}
-          </TruncatedText>
-        </div>
+        <Show
+          when={overlayContent()}
+          fallback={
+            <div class="flex flex-row items-center gap-2">
+              <Show
+                when={overlayIcon()}
+                fallback={<EntityIcon size="xs" targetType={iconType()} />}
+              >
+                {(icon) => icon()()}
+              </Show>
+              <TruncatedText size="xs">
+                {activeDraggable()?.data.name}
+              </TruncatedText>
+            </div>
+          }
+        >
+          {(content) => content()()}
+        </Show>
         <Show when={additionalCount() > 0}>
           <div class="pl-6 text-xs text-ink-muted">
             {t('entityActions.dragMoreItems', { count: additionalCount() })}

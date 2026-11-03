@@ -21,7 +21,9 @@ import {
 } from './ViewShell';
 import { ViewSidebar } from './ViewSidebar';
 
-const measurement = vi.hoisted(() => ({ width: (): number => 1200 }));
+const measurement = vi.hoisted(() => ({
+  width: (): number | undefined => 1200,
+}));
 
 vi.mock('@core/hotkey/hotkeys', () => ({ registerHotkey: vi.fn() }));
 
@@ -902,6 +904,34 @@ describe('automatic docked navigation exit', () => {
     }
   });
 
+  it.each([
+    [undefined, 600],
+    [undefined, 1000],
+    [0, 600],
+    [0, 1000],
+  ] as const)(
+    'settles an initial width of %s at %s without animating the Home content',
+    async (initialWidth, settledWidth) => {
+      const [width, setWidth] = createSignal<number | undefined>(initialWidth);
+      measurement.width = width;
+      const view = render(() => <Workspace app="home" />);
+      const savePreference = vi.spyOn(localStorage, 'setItem');
+
+      setWidth(settledWidth);
+      await Promise.resolve();
+
+      expect(animate).not.toHaveBeenCalled();
+      expect(
+        view.container.querySelectorAll('[data-view-shell-aside]')
+      ).toHaveLength(settledWidth === 600 ? 0 : 1);
+      expect(savePreference).not.toHaveBeenCalled();
+
+      setWidth(settledWidth === 600 ? 1000 : 600);
+      await Promise.resolve();
+      expect(animate).toHaveBeenCalled();
+    }
+  );
+
   it('retains and collapses the docked host until its 140ms exit finishes', async () => {
     const [width, setWidth] = createSignal(1000);
     measurement.width = width;
@@ -948,28 +978,34 @@ describe('automatic docked navigation exit', () => {
     expect(savePreference).not.toHaveBeenCalled();
   });
 
-  it('ignores stale exits after a rapid wide reversal and reuses the docked host', async () => {
-    const [width, setWidth] = createSignal(1000);
-    measurement.width = width;
-    const view = render(() => <Workspace app="tasks" />);
-    const docked = view.container.querySelector<HTMLElement>(
-      '[data-view-shell-aside]'
-    )!.parentElement!;
-    setWidth(600);
-    await Promise.resolve();
-    const stale = animations.find(({ target }) => target === docked)?.animation;
-    setWidth(1000);
-    stale?.onfinish?.(new Event('finish') as AnimationPlaybackEvent);
-    await Promise.resolve();
-    expect(docked.isConnected).toBe(true);
-    expect(docked.classList.contains('hidden')).toBe(false);
-    expect(
-      view.container.querySelectorAll('[data-view-shell-aside]')
-    ).toHaveLength(1);
-    expect(
-      screen.getByRole('button', { name: 'Hide navigation' })
-    ).toBeTruthy();
-  });
+  it.each([undefined, 0, 600])(
+    'ignores stale exits after width %s during a wide reversal',
+    async (intermediateWidth) => {
+      const [width, setWidth] = createSignal<number | undefined>(1000);
+      measurement.width = width;
+      const view = render(() => <Workspace app="tasks" />);
+      const docked = view.container.querySelector<HTMLElement>(
+        '[data-view-shell-aside]'
+      )!.parentElement!;
+      setWidth(600);
+      await Promise.resolve();
+      const stale = animations.find(
+        ({ target }) => target === docked
+      )?.animation;
+      setWidth(intermediateWidth);
+      setWidth(1000);
+      stale?.onfinish?.(new Event('finish') as AnimationPlaybackEvent);
+      await Promise.resolve();
+      expect(docked.isConnected).toBe(true);
+      expect(docked.classList.contains('hidden')).toBe(false);
+      expect(
+        view.container.querySelectorAll('[data-view-shell-aside]')
+      ).toHaveLength(1);
+      expect(
+        screen.getByRole('button', { name: 'Hide navigation' })
+      ).toBeTruthy();
+    }
+  );
 
   it('cancels an exit before its animation starts when the breakpoint reverses', async () => {
     const [width, setWidth] = createSignal(1000);

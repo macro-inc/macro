@@ -16,7 +16,8 @@ Components, styling, and interaction conventions.
 - **FE-23** Disclosure carets rotate 180° to point down when expanded, matching
   Discussion, SplitFileMenu, CollapsibleMessage, etc.
 - **FE-24** Truncated/collapsed controls get a tooltip (matching the app's
-  tooltip pattern) so the lost label stays discoverable.
+  tooltip pattern) so the lost label stays discoverable. Use shared tooltips or
+  popovers instead of native `title`; give each target one hint surface.
 - **FE-25** Semantic color tokens, not raw Tailwind palette classes — the
   default palette is disabled via `--color-*: initial` in
   `apps/web/src/index.css`, so classes like `text-red-500` silently render

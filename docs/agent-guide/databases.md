@@ -331,7 +331,11 @@ after, so a 1 PM to 5 PM range contains its day. Properties of type **Time range
 edit with the same fields.
 Invalid numbers remain in the editor for correction.
 Drag across table cells to select a rectangle, or Shift-click another cell to
-extend from the first cell. Delete or Backspace clears editable cells in that
+extend from the first cell. From the keyboard, Shift+Arrow grows or shrinks the
+rectangle from the focused cell, Shift+Cmd/Ctrl+Arrow runs to the edge of the
+data, Shift+Home/End to the ends of the row, and Cmd/Ctrl+A selects every loaded
+cell; a plain arrow collapses it. Inside an open cell editor Shift+Arrow selects
+text as usual. Delete or Backspace clears editable cells in that
 rectangle as one undoable change; read-only cells are skipped. Newly saved rows
 can be included immediately; unsaved insertion rows are excluded. Escape clears
 the selection. Other participants see the selected range with a colored outline and
