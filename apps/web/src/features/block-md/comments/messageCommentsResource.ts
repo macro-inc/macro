@@ -1,6 +1,31 @@
 import { useMessageActions } from '@queries/messages/document-messages';
-import type { PostMessage } from '@service-storage/messages';
+import {
+  entityMessagesClient,
+  type MessageCursor,
+  type PostMessage,
+} from '@service-storage/messages';
 import { useMarkdownDocument } from '../context/markdown-document-context';
+
+/** Check the complete persisted root list, never the optimistic comment cache. */
+export async function hasPostedComment(documentId: string, markId: string) {
+  let cursor: MessageCursor | null | undefined;
+  do {
+    const page = await entityMessagesClient.list(
+      { type: 'document', id: documentId },
+      { anchored: true, limit: 100, cursor: cursor ?? undefined }
+    );
+    if (
+      page.items.some(
+        (root) =>
+          root.state.anchor?.type === 'markdown' &&
+          root.state.anchor.mark_id === markId
+      )
+    )
+      return true;
+    cursor = page.next_cursor;
+  } while (cursor);
+  return false;
+}
 
 function useDocumentMessageActions() {
   const { documentId } = useMarkdownDocument();

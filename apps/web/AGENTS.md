@@ -1042,13 +1042,20 @@ and bot personas share one renderer; keep surface sizing in the caller.
 
 ### Inline comment drafts
 
-Keep draft marks separate from saved marks until posting; overlapping comments
-must retain each saved range through cancel, save, and collaboration updates.
+Keep collaborative drafts as cursor-based overlays outside the shared editor tree.
+Flush pending text, publish the mark from an isolated peer with `PeerCommentUpdate`,
+and post the message only after acknowledgement. Refused operations never enter
+the editor's WAL. Preserve input on failure. Cancelled publications retry mark
+cleanup from the user/document-scoped IndexedDB queue; preserve marks when a
+message request's outcome is uncertain. Overlapping comments must retain each
+saved range through cancel, save, and collaboration updates.
 Comment controls preserve editor focus on both pointerdown and mousedown.
 The backend-free browser regression is
 `bunx playwright test --config src/features/block-md/comments/browser-test/playwright.config.ts`.
-It exercises selection, press, cancel, and retry; the comment provider and sync
-unit suites cover composer state, multi-paragraph anchors, and saved ranges.
+It exercises selection, press, cancel, retry, and repeated posting in editor and
+commenter modes. The collaboration fixture includes concurrent remote edits and
+rejected updates; provider tests cover message metadata arriving on either side
+of posting, multi-paragraph anchors, saved ranges, and cancellation during posting.
 
 ## Performance
 

@@ -48,7 +48,11 @@ mutation barrier across HTTP requests, WebSocket messages, alarms and closes.
 
 Socket write policy allows viewers to read, document commenters to change only
 comment marks, and editors to write full updates. Surface commenters cannot
-write. The HTTP API schema is generated with `just openapi`; WebSocket messages
+write. `PeerCommentUpdate` requires comment-only validation even on an editor's
+connection, so a staged annotation cannot alter document text. Deploy support
+for this message before deploying clients that send it; older workers refuse
+the unknown variant without acknowledging or applying it. The HTTP API schema
+is generated with `just openapi`; WebSocket messages
 continue to use the Bebop schema. Regenerate the HTTP types from
 `apps/web/src/lib/service-clients` with
 `bun run orval --config orval.config.ts --project syncService`. The existing web
@@ -61,9 +65,11 @@ Document commenters authenticate to lexical-service with the worker secret
 `LEXICAL_SERVICE_AUTH_KEY`. Provision it in each deployed environment with the
 matching lexical-service `INTERNAL_AUTH_KEY` through `wrangler secret put`.
 Never store its value in Wrangler vars or source control. Missing or invalid
-credentials fail closed: message creation can succeed independently while the
-anchor update remains unacknowledged in the client's WAL and local snapshot.
-A separate browser then cannot display that inline comment.
+credentials fail closed. Current clients stage anchors outside the live editor,
+wait for acknowledgement, and retain the draft instead of posting a message when
+validation fails. Older clients can create the message independently while the
+anchor remains unacknowledged in their WAL and local snapshot; another browser
+then cannot display that inline comment.
 
 CI and the `just deploy-*` recipes run `check-secrets` before migrations or
 worker deployment. This checks binding names only, not credential validity;
@@ -76,8 +82,15 @@ The bebop schema is defined in `./bebop/schema.bop`.
 #### Generating typescript bindings locally
 The typescript bindings are primarily used for testing and QA environemnt.
 ```bash
-cd bebop && npx bebop-tools build
+\cd bebop
+../../../node_modules/.bin/bebopc build
 ```
+
+Use the repository-pinned generator. Copy `schema.bop` to
+`packages/collaboration/src/sync-service/generated/schema.bop` and run
+`../../node_modules/.bin/bebopc build` from `packages/collaboration` to update
+the web bindings from the same schema. The package's `generate-sync-schema`
+command fetches the deployed schema and is unsuitable for an unreleased change.
 
 #### Generating rust bindings locally
 Rust bindings get automatically generated when building the worker.

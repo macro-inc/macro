@@ -28,6 +28,7 @@ import {
   type LexicalEditor,
   type LexicalNode,
   type NodeKey,
+  type RangeSelection,
 } from 'lexical';
 import { v7 } from 'uuid';
 
@@ -112,6 +113,13 @@ type CommentPluginProps = {
   ops: CommentOperations;
   peerId: () => string | undefined;
   documentId?: string;
+  /** Collaborative drafts keep their selection outside the document tree. */
+  draft?: {
+    current: () => string | undefined;
+    create: (id: string, selection: RangeSelection) => boolean;
+    discard: () => void;
+    commit: () => void;
+  };
 };
 
 function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
@@ -166,6 +174,11 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
   };
 
   const $selectMarksAtCaret = () => {
+    const localDraft = props.draft?.current();
+    if (localDraft) {
+      markSelected([localDraft]);
+      return;
+    }
     const selection = $getSelection();
     if (selection === null) return;
     let hasActiveIds = false;
@@ -256,12 +269,27 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
           }
           // Retrying Comment while a composer is open must not create a second
           // draft with the same UI thread ID.
+          const localDraft = props.draft?.current();
+          if (localDraft) {
+            markSelected([localDraft]);
+            span.setAttr('comment.outcome', 'existing_draft');
+            return true;
+          }
           if (draftMarkId && markNodeMap.has(draftMarkId)) {
             markSelected([draftMarkId]);
             span.setAttr('comment.outcome', 'existing_draft');
             return true;
           }
           const markId = generateMarkId();
+          if (props.draft) {
+            const created = props.draft.create(markId, selection);
+            if (created) markSelected([markId]);
+            span.setAttr(
+              'comment.outcome',
+              created ? 'created' : 'unsynced_selection'
+            );
+            return created;
+          }
           draftMarkId = markId;
           $wrapSelectionInMarkNode(
             selection,
@@ -290,6 +318,7 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
     editor.registerCommand(
       DISCARD_DRAFT_COMMENT_COMMAND,
       () => {
+        props.draft?.discard();
         if (draftMarkId) {
           draftMarkId = null;
         }
@@ -301,6 +330,10 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
     editor.registerCommand(
       DELETE_COMMENT_COMMAND,
       ([markId, forceDelete]) => {
+        if (props.draft?.current() === markId) {
+          props.draft.discard();
+          return true;
+        }
         const markNodeKeys = markNodeMap.get(markId);
         if (!markNodeKeys) return false;
 
@@ -341,6 +374,10 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
     editor.registerCommand(
       COMMIT_COMMENT_MARK_COMMAND,
       ({ markId }) => {
+        if (props.draft?.current() === markId) {
+          props.draft.commit();
+          return true;
+        }
         const markNodeKeys = markNodeMap.get(markId);
         if (!markNodeKeys) return false;
         for (const key of markNodeKeys) {

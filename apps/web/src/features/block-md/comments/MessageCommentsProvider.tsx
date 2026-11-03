@@ -51,6 +51,8 @@ import { createStore, reconcile } from 'solid-js/store';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { useDeleteNewComments } from './commentOperations';
 import type { Mark, ThreadStore } from './commentType';
+import { createLocalCommentDraft } from './LocalCommentDraft';
+import { hasPostedComment } from './messageCommentsResource';
 
 function getHighlightThread(
   highlight: Mark
@@ -96,6 +98,7 @@ export const MessageCommentsProvider: VoidComponent<{
     documentId: getDocumentId,
     permissions,
     state,
+    documentSource,
   } = useMarkdownDocument();
   const { comments: commentState, setCommentState } = state;
   const documentId = getDocumentId();
@@ -592,6 +595,35 @@ export const MessageCommentsProvider: VoidComponent<{
     )
   );
 
+  const localDraft = createLocalCommentDraft({
+    userId,
+    hasPostedComment: (markId) => hasPostedComment(documentId, markId),
+    editor,
+    manager: props.loroManager,
+    mapping: wrapper.mapping,
+    interactable: wrapper.isInteractable,
+    source: () => {
+      const source = documentSource();
+      return source.type === 'sync' ? source.source : undefined;
+    },
+    add: (id, element, publication) => {
+      setMarks(id, {
+        id,
+        existsOnServer: false,
+        isDraft: true,
+        owner: userId(),
+        markNodes: { draft: element },
+        publication,
+      });
+    },
+    remove: (id) => {
+      // A posted mark has its own mounted ranges by now.
+      if (marks[id]?.existsOnServer)
+        setMarks(id, 'markNodes', 'draft', undefined);
+      else setMarks(id, undefined);
+    },
+  });
+
   plugins.use(
     commentPlugin({
       ops: {
@@ -602,8 +634,9 @@ export const MessageCommentsProvider: VoidComponent<{
       },
       peerId: currentPeerId,
       documentId,
+      draft: localDraft,
     })
   );
 
-  return null;
+  return <localDraft.Highlight />;
 };

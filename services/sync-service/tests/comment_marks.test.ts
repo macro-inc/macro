@@ -79,7 +79,11 @@ async function seed(verdict: Verdict, instance = mf) {
 	return id;
 }
 
-async function connect(id: string, access: "comment" | "edit", instance = mf) {
+async function connect(
+	id: string,
+	access: "view" | "comment" | "edit",
+	instance = mf,
+) {
 	const token = jwt.sign(
 		{
 			document_id: id,
@@ -114,16 +118,18 @@ type Client = Awaited<ReturnType<typeof connect>>;
 async function send(
 	client: Client,
 	write: (doc: LoroDoc) => void,
+	commentOnly = false,
 ): Promise<boolean> {
 	const from = client.doc.oplogVersion();
 	write(client.doc);
 	client.doc.commit();
 	const id = crypto.randomUUID();
+	const update = { updates: [client.doc.export({ mode: "update", from })], id };
 	client.send(
-		FromPeer.fromPeerUpdate({
-			updates: [client.doc.export({ mode: "update", from })],
-			id,
-		}).encode(),
+		(commentOnly
+			? FromPeer.fromPeerCommentUpdate(update)
+			: FromPeer.fromPeerUpdate(update)
+		).encode(),
 	);
 	try {
 		for (;;) {
@@ -215,6 +221,39 @@ test("an editor update is stored without a check", async () => {
 
 	expect(checks).toEqual([]);
 	expect(await stored(id)).toEqual({ root: { title: id, body: "rewritten" } });
+});
+
+test.each(["comment", "edit"] as const)(
+	"staged comment publication validates %s access",
+	async (access) => {
+		const id = await seed("not_comment_only");
+		const client = await connect(id, access);
+		expect(
+			await send(
+				client,
+				(doc) => doc.getMap("root").set("body", "moved text"),
+				true,
+			),
+		).toBe(false);
+		expect(await stored(id)).toEqual({ root: { title: id } });
+		const accepted = await seed("comment_only");
+		const fresh = await connect(accepted, access);
+		expect(
+			await send(fresh, (doc) => doc.getMap("root").set("mark", "saved"), true),
+		).toBe(true);
+		expect(await stored(accepted)).toEqual({
+			root: { title: accepted, mark: "saved" },
+		});
+	},
+);
+
+test("staged publication grants no write access to viewers", async () => {
+	const id = await seed("comment_only");
+	const viewer = await connect(id, "view");
+	expect(
+		await send(viewer, (doc) => doc.getMap("root").set("mark", "saved"), true),
+	).toBe(false);
+	expect(await stored(id)).toEqual({ root: { title: id } });
 });
 
 // A missing deployment binding must never let commenters edit body content.

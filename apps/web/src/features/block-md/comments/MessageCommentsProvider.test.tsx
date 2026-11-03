@@ -1,19 +1,25 @@
+import 'fake-indexeddb/auto';
 import {
   DRAFT_THREAD_ID,
   type MessageCommentOperations,
 } from '@core/comments/commentType';
+import { FLUSH_COLLABORATION_COMMAND } from '@core/component/LexicalMarkdown/collaboration/flush';
 import {
   LexicalWrapperContext,
   type LexicalWrapperWithMapping,
 } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import type { PluginManager } from '@core/component/LexicalMarkdown/plugins';
 import { CREATE_DRAFT_COMMENT_COMMAND } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
-import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
+import { LoroManager } from '@macro-inc/collaboration/collab/manager';
+import { createNoopLiveSyncSource } from '@macro-inc/collaboration/collab/source';
 import {
   $createCommentNode,
+  $updateAllNodeIds,
   CommentNode,
   peerIdPlugin,
 } from '@macro-inc/lexical-core';
+import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
+import { markdownToLoroSnapshot } from '@macro-inc/lexical-core/markdown-loro-snapshot';
 import type { MessageListItem } from '@service-storage/messages';
 import { cleanup, render } from '@solidjs/testing-library';
 import {
@@ -22,6 +28,7 @@ import {
   $createTextNode,
   $getRoot,
   $setSelection,
+  COMMAND_PRIORITY_NORMAL,
   createEditor,
   type LexicalEditor,
 } from 'lexical';
@@ -39,18 +46,34 @@ const mocks = vi.hoisted(() => ({
   rootId: (): string | null => 'root',
   navigationCount: (): number => 0,
   post: vi.fn(),
+  publish: vi.fn().mockResolvedValue(true),
+  removePublished: vi.fn().mockResolvedValue(true),
+}));
+
+vi.mock('./publishCommentMark', () => ({
+  publishCommentMark: (...args: unknown[]) => mocks.publish(...args),
+  removePublishedCommentMark: (...args: unknown[]) =>
+    mocks.removePublished(...args),
+}));
+vi.mock('@core/component/LexicalMarkdown/component/core/Highlights', () => ({
+  LocationHighlight: () => null,
 }));
 
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
 }));
 vi.mock('./messageCommentsResource', () => ({
+  hasPostedComment: async () => false,
   useCreateMarkedMessageResource: () => mocks.post,
   useCreateMessageReplyResource: () => mocks.post,
 }));
 vi.mock('../context/markdown-document-context', () => ({
   useMarkdownDocument: () => ({
     documentId: () => 'document',
+    documentSource: () => ({
+      type: 'sync',
+      source: createNoopLiveSyncSource('document'),
+    }),
     state: mocks.state,
     permissions: { canEdit: () => false, canComment: () => true },
   }),
@@ -109,9 +132,15 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  mocks.publish.mockReset().mockResolvedValue(true);
+  mocks.removePublished.mockReset().mockResolvedValue(true);
+  mocks.post.mockReset();
 });
 
 function setup(lateEditor = false) {
+  const manager: LoroManager = new LoroManager(MARKDOWN_LORO_SCHEMA, {
+    documentId: 'document',
+  });
   const state = createMarkdownDocumentState();
   mocks.state = state;
   const [threads, setThreads] = createSignal<MessageListItem[]>([]);
@@ -158,6 +187,16 @@ function setup(lateEditor = false) {
           onCleanup(
             peerIdPlugin({ peerId: () => '1', nodes: [CommentNode] })(editor)
           );
+          onCleanup(
+            editor.registerCommand(
+              FLUSH_COLLABORATION_COMMAND,
+              (done) => {
+                done(true);
+                return true;
+              },
+              COMMAND_PRIORITY_NORMAL
+            )
+          );
           onMount(() => editor.setRootElement(el));
           onCleanup(() => editor.setRootElement(null));
         }}
@@ -165,7 +204,7 @@ function setup(lateEditor = false) {
       <Posting />
       <MessageCommentsProvider
         activeComment={activeComment}
-        loroManager={{ peerIdStr: '1' } as unknown as LoroManager}
+        loroManager={manager}
       />
     </LexicalWrapperContext.Provider>
   ));
@@ -174,6 +213,17 @@ function setup(lateEditor = false) {
     editor,
     state,
     post: (input: Parameters<typeof post>[0]) => post(input),
+    synchronize: async () => {
+      editor.update(() => $updateAllNodeIds(wrapper.mapping), {
+        discrete: true,
+      });
+      if (!manager.initialized) {
+        const snapshot = await markdownToLoroSnapshot('Initial text');
+        if (!snapshot) throw new Error('Missing snapshot');
+        await manager.initializeFromSnapshot(snapshot);
+      }
+      await manager.syncToLoro({ ...editor.getEditorState().toJSON() });
+    },
     setThreads,
     scroll,
     loadComments: () =>
@@ -206,6 +256,136 @@ function setup(lateEditor = false) {
 }
 
 describe('inline comment link navigation', () => {
+  it('keeps the draft and posts no message when its anchor is not acknowledged', async () => {
+    const f = setup();
+    f.editor.update(
+      () => {
+        const text = $createTextNode('Selected passage');
+        $getRoot().append($createParagraphNode().append(text));
+        text.select(0, 8);
+      },
+      { discrete: true }
+    );
+    await f.synchronize();
+    f.editor.update(
+      () => {
+        f.editor.dispatchCommand(CREATE_DRAFT_COMMENT_COMMAND, undefined);
+      },
+      { discrete: true }
+    );
+    const anchorId = f.state.comments.threads[DRAFT_THREAD_ID]!.anchorId;
+    mocks.publish.mockResolvedValueOnce(false);
+    expect(
+      await f.post({ threadId: DRAFT_THREAD_ID, content: 'Keep this comment' })
+    ).toBeNull();
+    expect(mocks.post).not.toHaveBeenCalled();
+    expect(f.state.comments.threads[DRAFT_THREAD_ID]?.anchorId).toBe(anchorId);
+  });
+
+  it('does not post or clear a newer draft when an abandoned publication finishes', async () => {
+    const f = setup();
+    f.editor.update(
+      () => {
+        const text = $createTextNode('First and second');
+        $getRoot().append($createParagraphNode().append(text));
+        text.select(0, 5);
+      },
+      { discrete: true }
+    );
+    await f.synchronize();
+    f.editor.update(
+      () => {
+        f.editor.dispatchCommand(CREATE_DRAFT_COMMENT_COMMAND, undefined);
+      },
+      { discrete: true }
+    );
+    const firstId = f.state.comments.threads[DRAFT_THREAD_ID]!.anchorId;
+    let finish!: (accepted: boolean) => void;
+    let started!: () => void;
+    const publicationStarted = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const publication = new Promise<boolean>((resolve) => {
+      finish = resolve;
+    });
+    mocks.publish.mockImplementationOnce(() => {
+      started();
+      return publication;
+    });
+    const firstPost = f.post({
+      threadId: DRAFT_THREAD_ID,
+      content: 'First comment',
+    });
+    await publicationStarted;
+    f.state.setCommentState('activeCommentThread', null);
+    f.editor.update(
+      () => {
+        $getRoot().getAllTextNodes()[0].select(10, 16);
+        f.editor.dispatchCommand(CREATE_DRAFT_COMMENT_COMMAND, undefined);
+      },
+      { discrete: true }
+    );
+    const secondId = f.state.comments.threads[DRAFT_THREAD_ID]!.anchorId;
+    expect(secondId).not.toBe(firstId);
+    finish(true);
+    expect(await firstPost).toBeNull();
+    expect(mocks.post).not.toHaveBeenCalled();
+    expect(mocks.removePublished).toHaveBeenCalledWith(
+      expect.objectContaining({ markId: firstId })
+    );
+    expect(f.state.comments.threads[DRAFT_THREAD_ID]?.anchorId).toBe(secondId);
+  });
+
+  it.each([false, true])(
+    'handles cancellation after message failure, outcome uncertain: %s',
+    async (uncertain) => {
+      const f = setup();
+      f.editor.update(
+        () => {
+          const text = $createTextNode('Selected passage');
+          $getRoot().append($createParagraphNode().append(text));
+          text.select(0, 8);
+        },
+        { discrete: true }
+      );
+      await f.synchronize();
+      f.editor.update(
+        () => {
+          f.editor.dispatchCommand(CREATE_DRAFT_COMMENT_COMMAND, undefined);
+        },
+        { discrete: true }
+      );
+      const anchorId = f.state.comments.threads[DRAFT_THREAD_ID]!.anchorId;
+      if (uncertain)
+        mocks.post.mockRejectedValueOnce(new Error('response lost'));
+      else mocks.post.mockResolvedValueOnce(null);
+      const post = f.post({
+        threadId: DRAFT_THREAD_ID,
+        content: 'Unsent message',
+      });
+      if (uncertain) {
+        await expect(post).rejects.toThrow('response lost');
+        f.state.setCommentState('activeCommentThread', null);
+        expect(mocks.removePublished).not.toHaveBeenCalled();
+        return;
+      }
+      expect(await post).toBeNull();
+      let finishRemoval!: () => void;
+      const removed = new Promise<void>((resolve) => {
+        finishRemoval = resolve;
+      });
+      mocks.removePublished.mockImplementationOnce(async () => {
+        finishRemoval();
+        return true;
+      });
+      f.state.setCommentState('activeCommentThread', null);
+      await removed;
+      expect(mocks.removePublished).toHaveBeenCalledWith(
+        expect.objectContaining({ markId: anchorId })
+      );
+    }
+  );
+
   it.each([false, true])(
     'opens another comment after posting, metadata first: %s',
     async (metadataFirst) => {
@@ -222,6 +402,7 @@ describe('inline comment link navigation', () => {
         { discrete: true }
       );
       for (let attempt = 0; attempt < 3; attempt++) {
+        await f.synchronize();
         f.editor.update(
           () => {
             const text = $getRoot()
@@ -268,6 +449,7 @@ describe('inline comment link navigation', () => {
     f.loadMarks();
     f.loadComments();
     f.finishLoading();
+    await f.synchronize();
     f.editor.update(
       () => {
         const text = $getRoot().getAllTextNodes()[0];
@@ -285,7 +467,7 @@ describe('inline comment link navigation', () => {
     expect(f.state.comments.threads.root?.anchorId).toBe('mark');
     expect(f.editor.getRootElement()?.textContent).toBe('Commented text');
   });
-  it('retains every anchor fragment for a draft spanning paragraphs', () => {
+  it('keeps a draft spanning paragraphs outside the document tree', async () => {
     const f = setup();
     f.editor.update(
       () => {
@@ -299,6 +481,12 @@ describe('inline comment link navigation', () => {
         selection.anchor.set(first.getKey(), 0, 'text');
         selection.focus.set(last.getKey(), 4, 'text');
         $setSelection(selection);
+      },
+      { discrete: true }
+    );
+    await f.synchronize();
+    f.editor.update(
+      () => {
         f.editor.dispatchCommand(CREATE_DRAFT_COMMENT_COMMAND, undefined);
       },
       { discrete: true }
@@ -309,7 +497,11 @@ describe('inline comment link navigation', () => {
       Object.values(f.state.comments.marks[draft!.anchorId]!.markNodes).filter(
         Boolean
       )
-    ).toHaveLength(2);
+    ).toHaveLength(1);
+    expect(f.state.comments.marks[draft!.anchorId]!.publication?.text()).toBe(
+      'First paragraph\nLast'
+    );
+    expect(f.editor.getRootElement()?.querySelectorAll('mark')).toHaveLength(0);
   });
 
   it.each([false, true])(
@@ -324,6 +516,7 @@ describe('inline comment link navigation', () => {
         },
         { discrete: true }
       );
+      await f.synchronize();
       f.editor.update(
         () => {
           expect(
@@ -335,7 +528,7 @@ describe('inline comment link navigation', () => {
       expect(f.state.comments.activeCommentThread).toBe(DRAFT_THREAD_ID);
       expect(f.state.comments.threads[DRAFT_THREAD_ID]?.isNew).toBe(true);
       expect(f.editor.getRootElement()?.querySelectorAll('mark')).toHaveLength(
-        1
+        0
       );
       f.state.setCommentState('activeCommentThread', null);
       await Promise.resolve();
