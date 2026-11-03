@@ -11,7 +11,17 @@ pub async fn get_user_name(db: &sqlx::PgPool, macro_user_id: &str) -> anyhow::Re
     let macro_user_id = macro_uuid::string_to_uuid(macro_user_id)?;
     let name: Option<UserName> = sqlx::query!(
         r#"
-            SELECT macro_user_id, first_name, last_name FROM macro_user_info WHERE macro_user_id = $1
+            SELECT
+                mui.macro_user_id,
+                mui.first_name,
+                mui.last_name,
+                EXISTS (
+                    SELECT 1 FROM team_agents a
+                    JOIN "User" u ON u.id = a.user_id
+                    WHERE u.macro_user_id = mui.macro_user_id
+                ) AS "is_agent!"
+            FROM macro_user_info mui
+            WHERE mui.macro_user_id = $1
         "#,
         &macro_user_id
     )
@@ -19,6 +29,7 @@ pub async fn get_user_name(db: &sqlx::PgPool, macro_user_id: &str) -> anyhow::Re
         id: row.macro_user_id.to_string(), // TODO: this may mess up FE?
         first_name: row.first_name,
         last_name: row.last_name,
+        is_agent: row.is_agent,
     })
     .fetch_optional(db)
     .await?;
@@ -30,6 +41,7 @@ pub async fn get_user_name(db: &sqlx::PgPool, macro_user_id: &str) -> anyhow::Re
         id: macro_user_id.to_string(),
         first_name: None,
         last_name: None,
+        is_agent: false,
     }))
 }
 
@@ -43,7 +55,8 @@ pub async fn get_user_names(
             SELECT 
                 u.id as user_profile_id, 
                 mui.first_name, 
-                mui.last_name
+                mui.last_name,
+                EXISTS (SELECT 1 FROM team_agents a WHERE a.user_id = u.id) AS "is_agent!"
             FROM macro_user_info mui
             JOIN "User" u ON mui.macro_user_id = u.macro_user_id
             WHERE u.id = ANY($1)
@@ -54,6 +67,7 @@ pub async fn get_user_names(
         id: row.user_profile_id,
         first_name: row.first_name,
         last_name: row.last_name,
+        is_agent: row.is_agent,
     })
     .fetch_all(db)
     .await?;
@@ -93,7 +107,8 @@ pub async fn get_user_names_with_email(
                     THEN NULLIF(TRIM(SUBSTRING(contact.name FROM POSITION(' ' IN contact.name) + 1)), '')
                     ELSE NULL
                 END
-            END as "last_name"
+            END as "last_name",
+            EXISTS (SELECT 1 FROM team_agents a WHERE a.user_id = req.id) AS "is_agent!"
         FROM requested_ids req
         LEFT JOIN "User" u ON u.id = req.id
         LEFT JOIN macro_user_info mui ON mui.macro_user_id = u.macro_user_id
@@ -118,6 +133,7 @@ pub async fn get_user_names_with_email(
             id: row.user_profile_id,
             first_name: row.first_name,
             last_name: row.last_name,
+            is_agent: row.is_agent,
         })
         .fetch_all(db)
         .await?;

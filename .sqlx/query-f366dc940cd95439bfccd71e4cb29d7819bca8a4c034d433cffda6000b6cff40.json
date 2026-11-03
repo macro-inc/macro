@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE team_agents\n            SET brain_bot_id = $2, brain_session_id = $3\n            WHERE user_id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f366dc940cd95439bfccd71e4cb29d7819bca8a4c034d433cffda6000b6cff40"
+}

@@ -610,6 +610,18 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         &self,
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<TeamMember<'static>>, JoinTeamDirectlyError>> + Send;
+
+    /// Adds a team agent's account to the caller's team directly, with the
+    /// same billing / roles / channel side effects as any member joining.
+    /// Only team admins and above may add an agent.
+    ///
+    /// Returns the new team member, or None when the account is already a
+    /// member.
+    fn add_team_agent(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+        agent_user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<TeamMember<'static>>, JoinTeamDirectlyError>> + Send;
 }
 
 /// Manages a team's shareable invite link and joins users through it.

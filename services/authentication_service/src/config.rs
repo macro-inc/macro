@@ -68,6 +68,11 @@ maybe_env_vars! {
     pub struct PosthogApiKey;
     pub struct PosthogHost;
     pub struct LoopsApiKey;
+    /// AgentMail API key. When set, each team agent gets an email inbox.
+    pub struct AgentmailApiKey;
+    /// Verified AgentMail domain for team agents' addresses. AgentMail's own
+    /// domain when unset.
+    pub struct AgentmailDomain;
     /// JSON array of exact email addresses allowed to sign up in Develop.
     pub struct DevelopmentSignupAllowlistJson;
     /// Stripe promotion code GTM invite links grant at checkout. Defaults to `1MF`.
@@ -186,6 +191,11 @@ pub struct Config {
     /// Loops API key (optional). When set, Macro sign-ups are added to our
     /// Loops audience.
     pub loops_api_key: LoopsApiKey,
+    /// AgentMail API key (optional). Without it, team agents get a
+    /// placeholder address and no inbox.
+    pub agentmail_api_key: AgentmailApiKey,
+    /// AgentMail domain for team agents' addresses (optional).
+    pub agentmail_domain: AgentmailDomain,
     /// JSON array of exact non-Macro email addresses allowed to sign up in Develop.
     ///
     /// All `@macro.com` email addresses are allowed by the Develop policy automatically.

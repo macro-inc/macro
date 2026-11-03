@@ -2704,4 +2704,28 @@ where
         self.join_team_directly(&team_id, user_id, TeamJoinMethod::DomainAutoJoin)
             .await
     }
+
+    #[tracing::instrument(skip(self, entity_access_receipt), err)]
+    async fn add_team_agent(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+        agent_user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<TeamMember<'static>>, JoinTeamDirectlyError> {
+        let team_id = macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id)
+            .map_err(|_| JoinTeamError::TeamError(TeamError::TeamDoesNotExist))?;
+        let added_by =
+            entity_access_receipt
+                .acting_user_id()
+                .cloned()
+                .ok_or(TeamError::AccessError(
+                    entity_access::domain::models::AccessError::Unauthorized,
+                ))?;
+
+        self.join_team_directly(
+            &team_id,
+            agent_user_id,
+            TeamJoinMethod::TeamAgent { added_by },
+        )
+        .await
+    }
 }

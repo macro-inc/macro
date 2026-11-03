@@ -522,6 +522,14 @@ impl TeamService for FakeTeamService {
     ) -> Result<Option<TeamMember<'static>>, JoinTeamDirectlyError> {
         panic!("unexpected try_join_team_by_domain call")
     }
+
+    async fn add_team_agent(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+        _agent_user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<TeamMember<'static>>, JoinTeamDirectlyError> {
+        panic!("unexpected add_team_agent call")
+    }
 }
 
 impl TeamInviteLinkService for FakeTeamService {

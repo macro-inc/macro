@@ -1,0 +1,28 @@
+[package]
+description = "Composable parts for a Macro team agent's long-running daemon: events, relevance, queues, wake-ups, and schedules."
+edition = "2024"
+name = "agent_brain"
+publish = false
+version = "0.1.0"
+
+# Built on team agents' own machines as a git dependency, so this crate depends
+# only on third-party crates: no workspace-hack and no other workspace crate.
+[dependencies]
+chrono = { workspace = true }
+cron = { workspace = true }
+eventsource-stream = { workspace = true }
+futures = { workspace = true }
+reqwest = { workspace = true, features = ["query", "stream"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["fs", "io-util", "process", "signal", "sync", "time"] }
+tokio-util = { workspace = true, features = ["rt"] }
+tracing = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }
+tracing-subscriber = { workspace = true }
+wiremock = { workspace = true }
