@@ -28,7 +28,7 @@ vi.mock('@app/features/block-md/util/taskComposerProperties', () => ({
 it('feeds inferred due dates into the standard task property picker while preserving a cleared manual date', () => {
   createRoot((dispose) => {
     try {
-      const source = createTaskFieldSource('me');
+      const source = createTaskFieldSource('me', () => []);
       const fields = fieldsSchema.parse({ due_date: '2026-10-22' });
       expect(
         source.values(fields).values[SYSTEM_PROPERTY_IDS.DUE_DATE]
@@ -67,7 +67,7 @@ it('loads a cold catalog through the shared query before supplying inference and
         },
       ];
       query.refetch.mockResolvedValue({ isSuccess: true, data: catalog });
-      const source = createTaskFieldSource('me');
+      const source = createTaskFieldSource('me', () => []);
       expect(await source.definitions()).toEqual([
         { name: 'Assignees', options: [] },
       ]);
@@ -126,7 +126,7 @@ it('creates with Companies and Contacts without offering them to extraction', as
 it('rejects impossible inferred due dates and permits a manual correction', () => {
   createRoot((dispose) => {
     try {
-      const source = createTaskFieldSource('me');
+      const source = createTaskFieldSource('me', () => []);
       const fields = fieldsSchema.parse({ due_date: '2026-02-30' });
       expect(
         source.values(fields).values[SYSTEM_PROPERTY_IDS.DUE_DATE]
@@ -151,6 +151,44 @@ it('rejects impossible inferred due dates and permits a manual correction', () =
   });
 });
 
+it('keeps planner people resolution independent of the bounded Quick Access window', () => {
+  query.data = [
+    {
+      definition: {
+        id: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+        display_name: 'Assignees',
+        data_type: 'ENTITY',
+        is_multi_select: true,
+        specific_entity_type: 'USER',
+        is_metadata: false,
+        is_system: true,
+        owner: { scope: 'system' },
+        created_at: '',
+        updated_at: '',
+      },
+      property_options: [],
+    },
+  ];
+  createRoot((dispose) => {
+    const people = Array.from({ length: 100 }, (_, index) => ({
+      id: `macro|person${index}@example.com`,
+      email: `person${index}@example.com`,
+      name: `Person ${index}`,
+    }));
+    const source = createTaskFieldSource('me', () => people);
+    const fields = fieldsSchema.parse({
+      properties: JSON.stringify([
+        { name: 'Assignees', values: ['person99@example.com'] },
+      ]),
+    });
+    expect(source.values(fields).unresolved).toEqual([]);
+    expect(JSON.stringify(source.values(fields).values)).toContain(
+      'macro|person99@example.com'
+    );
+    dispose();
+  });
+});
+
 it('reports a catalog failure instead of extracting or creating with empty definitions', async () => {
   await createRoot(async (dispose) => {
     try {
@@ -159,7 +197,7 @@ it('reports a catalog failure instead of extracting or creating with empty defin
         isSuccess: false,
         error: new Error('Task fields unavailable'),
       });
-      const source = createTaskFieldSource('me');
+      const source = createTaskFieldSource('me', () => []);
       await expect(source.definitions()).rejects.toThrow(
         'Task fields unavailable'
       );

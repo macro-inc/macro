@@ -38,7 +38,7 @@ function isPeopleTraceparent(value: unknown): boolean {
 }
 
 /** Version of the topology envelope and routed cache RPC surface. */
-export const CACHE_COORDINATOR_PROTOCOL_VERSION = 13 as const;
+export const CACHE_COORDINATOR_PROTOCOL_VERSION = 14 as const;
 /**
  * Startup phases in order. The engine may touch storage only in
  * `opening-database`, which begins once it holds the database owner lock. It

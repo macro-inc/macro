@@ -43,6 +43,7 @@ it('keeps off-page selections and self without reordering clicked rows or retain
         loading: () => false,
         error: () => null,
         next: () => {},
+        loadNext: async () => {},
         restart: () => {},
         retry: vi.fn(),
       },

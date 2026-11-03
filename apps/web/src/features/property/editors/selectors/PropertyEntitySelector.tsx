@@ -15,6 +15,7 @@ import {
 import CheckIcon from '@icon/system/regular/check.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { useSearchInputFocus } from '@property/utils';
+import { usePinnedContactUsers } from '@queries/contacts/use-directory';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { debounce } from '@solid-primitives/scheduled';
@@ -150,7 +151,11 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
   // Get items from quickAccess based on entity type
   const { items: quickAccessItems, isLoading: isQuickAccessLoading } =
-    useQuickAccessEntities(() => props.config.specificEntityType);
+    useQuickAccessEntities(
+      () => props.config.specificEntityType,
+      searchTerm,
+      () => !(props.config.specificEntityType === 'USER' && props.config.users)
+    );
 
   // Fetch emails for browsing (only when THREAD type or generic ENTITY)
   const needsEmailSearch = () =>
@@ -211,6 +216,14 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     ].map((user) => userToEntity(augmentUserWithDmActivity(user)));
   });
 
+  const pinnedUsers = usePinnedContactUsers(
+    props.selectedOptions,
+    () =>
+      (!props.config.specificEntityType ||
+        props.config.specificEntityType === 'USER') &&
+      !props.config.users
+  );
+
   // Convert quickAccess items to CombinedEntity format.
   const entities = createMemo((): CombinedEntity[] => {
     const scoped = scopedUserEntities();
@@ -224,10 +237,12 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
     // Convert quickAccess items to CombinedEntity
     const items = quickAccessItems();
-    const additionalUsers =
-      specificEntityType === 'USER'
+    const additionalUsers = [
+      ...(specificEntityType === 'USER'
         ? (props.config.additionalUsers?.() ?? [])
-        : [];
+        : []),
+      ...pinnedUsers(),
+    ];
     const converted: CombinedEntity[] = additionalUsers.map(userToEntity);
     const additionalIds = new Set(additionalUsers.map((user) => user.id));
 
@@ -539,6 +554,11 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                               fallback={
                                 <UserIcon
                                   id={entity.id}
+                                  name={
+                                    entity.kind === 'user'
+                                      ? entity.data.name
+                                      : undefined
+                                  }
                                   size="sm"
                                   isDeleted={false}
                                   suppressClick={true}

@@ -2,6 +2,7 @@ import { t } from '@app/lib/i18n';
 import type { ListNavActions } from '@core/util/useListKeyBindings';
 import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
 import { useTeamMembers } from '@queries/team/members';
+import { usePinnedContactUsers } from '@queries/contacts/use-directory';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import {
   CommandMenuEmptyState,
@@ -24,7 +25,6 @@ import {
   type CombinedEntity,
   getEntityName,
   getEntityType,
-  useQuickAccessEntities,
 } from '../editors/selectors/entityUtils';
 import { OptionCheckBox } from '../editors/selectors/OptionCheckBox';
 import { scopedUserOptions } from '../editors/selectors/scoped-user-options';
@@ -150,14 +150,14 @@ export function EntityPropertyEditor(props: {
   const localSelectedIds = createMemo(() =>
     localSelectedRefs().map((ref) => ref.entity_id)
   );
-  const { items: people } = useQuickAccessEntities(() => 'USER');
+  const people = usePinnedContactUsers(localSelectedIds, isAssignees);
   const users = createMemo(() => {
     if (!isCompanyOwner() && !isAssignees()) return undefined;
     const pool = [...agents(), ...team.users()];
     if (!isAssignees()) return pool;
     return scopedUserOptions(
       pool,
-      people().map((item) => item.data),
+      people(),
       localSelectedIds()
     );
   });
@@ -166,6 +166,7 @@ export function EntityPropertyEditor(props: {
     props.searchValue,
     {
       users,
+      selectedUserIds: localSelectedIds,
       selectedIds: () => {
         if (!isAssignees()) return undefined;
 

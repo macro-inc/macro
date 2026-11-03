@@ -103,7 +103,11 @@ export function createInputActions(
       label: channel.data.name,
       kind: 'channel',
     }));
-  const taskFields = createTaskFieldSource(userId);
+  const taskFields = createTaskFieldSource(userId, () =>
+    combined
+      .users()
+      .flatMap((item) => (item.kind === 'user' ? [item.data] : []))
+  );
   const noteTags = createDocumentComposerTags(
     {},
     {

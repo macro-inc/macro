@@ -5,6 +5,7 @@ import {
   type UserItem,
   useQuickAccess,
 } from '@core/context/quickAccess';
+import { BUCKET_COMBINATIONS } from '@core/context/quickAccess/types';
 import type { IUser } from '@core/user';
 import type { FreshSortConfig, TimestampedItem } from '@core/util/freshSort';
 import type {
@@ -20,7 +21,7 @@ import type {
   TaskEntity,
 } from '@entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import type { Accessor } from 'solid-js';
+import { type Accessor, createMemo } from 'solid-js';
 import { match, P } from 'ts-pattern';
 
 export type EntityTypeItemMap = {
@@ -68,7 +69,9 @@ function entityTypeToBuckets(entityType: EntityType): readonly Bucket[] {
  * Returns items from the appropriate buckets based on entity type.
  */
 export function useQuickAccessEntities<T extends EntityType>(
-  entityType: Accessor<T | T[] | null | undefined>
+  entityType: Accessor<T | T[] | null | undefined>,
+  searchTerm: Accessor<string> = () => '',
+  enabled: Accessor<boolean> = () => true
 ): { items: Accessor<EntityTypeItemMap[T][]>; isLoading: Accessor<boolean> } {
   const quickAccess = useQuickAccess();
 
@@ -79,17 +82,19 @@ export function useQuickAccessEntities<T extends EntityType>(
       return entityType_.flatMap(entityTypeToBuckets);
     return entityTypeToBuckets(entityType_);
   };
-  const items = (): EntityTypeItemMap[T][] => {
+  const list = createMemo(() => {
     const b = buckets();
-    if (b === null) {
-      return quickAccess.useList().items() as EntityTypeItemMap[T][];
-    }
-    if (b.length === 0) {
-      return [];
-    }
-    return quickAccess.useList(...b).items() as EntityTypeItemMap[T][];
-  };
-  return { items, isLoading: quickAccess.isLoading };
+    if (b?.length === 0) return;
+    return quickAccess.useList({
+      buckets: b ?? BUCKET_COMBINATIONS.all,
+      searchTerm,
+      enabled,
+      peopleMode: 'property',
+    });
+  });
+  const items = (): EntityTypeItemMap[T][] =>
+    (list()?.items() ?? []) as EntityTypeItemMap[T][];
+  return { items, isLoading: () => list()?.isLoading() ?? false };
 }
 
 /** Combined entity type for unified handling across entity selectors */

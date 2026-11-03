@@ -83,6 +83,7 @@ export const PeopleSearchSchema = z
       z.literal('command'),
       z.literal('recipient'),
       z.literal('mention'),
+      z.literal('property'),
     ]),
     nowMs: z.number().int(),
     query: z.string(),
@@ -124,6 +125,7 @@ export const PeopleSearchResultSchema = z.union([
         userId: z.string(),
       })
     ),
+    policyVersion: z.number().int().gte(0),
     truncated: z.boolean(),
   }),
 ]);

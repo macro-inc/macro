@@ -3,7 +3,12 @@ import type { CacheHost } from '@graphql-cache/host/types';
 import { MAX_PEOPLE_BATCH } from '@graphql-cache/people/generated';
 import { queryReadyGate } from '@queries/gate';
 import { subscribeToVisibleCacheChanges } from '@queries/subscribe-to-visible-cache-changes';
-import { hashKey, queryOptions, useQuery } from '@tanstack/solid-query';
+import {
+  hashKey,
+  queryOptions,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/solid-query';
 import {
   type Accessor,
   batch,
@@ -11,6 +16,7 @@ import {
   createMemo,
   createSignal,
   createUniqueId,
+  on,
   onCleanup,
   untrack,
 } from 'solid-js';
@@ -77,6 +83,7 @@ export function createContactDirectoryWindow(
   } = {}
 ) {
   const owner = createUniqueId();
+  const client = useQueryClient();
   const [ownSearch, setSearch] = createSignal('');
   const search = options.search ?? ownSearch;
   const debouncedSearch = debouncedDependent(search, 200);
@@ -163,6 +170,33 @@ export function createContactDirectoryWindow(
       )
     );
   });
+  createEffect(
+    on(
+      () => query.error,
+      (error) => {
+        if (
+          error instanceof ContactDirectoryScopeError &&
+          options.policy &&
+          untrack(cursor)?.source === 'people'
+        ) {
+          setCursor(undefined);
+          invalidate();
+        }
+      }
+    )
+  );
+  const advance = () => {
+    const next = data()?.nextCursor;
+    if (!next || !enabled()) return false;
+    setFresh(false);
+    // Never retain a previous query-store proxy as the continuation.
+    setCursor(
+      next.source === 'cache'
+        ? { ...next, after: { ...next.after } }
+        : { ...next }
+    );
+    return true;
+  };
   return {
     search,
     setSearch: (value: string) => {
@@ -176,17 +210,20 @@ export function createContactDirectoryWindow(
     loading: () => query.isFetching || search() !== debouncedSearch(),
     error: () => query.error,
     next: () => {
-      const next = data()?.nextCursor;
-      if (next) {
-        setFresh(false);
-        // Query data is a Solid store. Retain plain cursor values, not a proxy
-        // tied to the previous result/window or its owner.
-        setCursor(
-          next.source === 'cache'
-            ? { ...next, after: { ...next.after } }
-            : { ...next }
-        );
-      }
+      advance();
+    },
+    loadNext: async () => {
+      if (!advance()) return;
+      await client.fetchQuery(
+        contactWindowOptions(
+          owner,
+          scope().userId,
+          scope().host,
+          generation(),
+          request(),
+          reader
+        )
+      );
     },
     restart: () =>
       batch(() => {

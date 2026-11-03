@@ -27,6 +27,7 @@ vi.mock('@app/features/crm/record-adapter', () => ({
     mocks.requestedBuckets.push('crm_contact');
     return {
       entities: () => mocks.contacts,
+      users: () => [],
       totalCount: () => mocks.contacts.length,
       hasMore: () => mocks.hasMoreContacts,
       isLoadingMore: () => false,
@@ -108,6 +109,7 @@ vi.mock('@queries/external-chats', () => ({
 }));
 vi.mock('@core/context/quickAccess', () => ({
   useQuickAccess: () => ({
+    interactionForUser: () => undefined,
     usesRecordSelection: () => false,
     usesSearchProjection: () => false,
     useList: (...args: unknown[]) => {
@@ -166,6 +168,13 @@ vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
 vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => null }));
 vi.mock('@ui', () => ({
   Surface: (props: ParentProps) => <div>{props.children}</div>,
+  Button: (
+    props: ParentProps<{ onClick?: () => void; disabled?: boolean }>
+  ) => (
+    <button onClick={props.onClick} disabled={props.disabled}>
+      {props.children}
+    </button>
+  ),
   cn: (...classes: unknown[]) =>
     classes.filter((c) => typeof c === 'string').join(' '),
 }));

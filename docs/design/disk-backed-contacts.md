@@ -17,9 +17,12 @@ for safely publishing local DM/inbox facts.
 The context publisher now shares Soup's leader/rollout/generation lifecycle,
 uses the scoped channel/activity/link queries, and emits bounded snapshot/delta writes.
 The bounded directory reader now accepts a menu policy and external query, with
-ranked cache continuations instead of a cursorless cap. UI callers are not yet switched.
-**Next step:** cut Quick Access/shared recipients over to the bounded host API. Their old full-list source remains until that wiring lands.
-Soup/CRM owner filters and Tasks' AI-filter catalog also remain.
+ranked cache continuations instead of a cursorless cap. Quick Access now uses that
+reader without a global person index. Commands, document mentions, property pickers
+and Soup people facets pass queries through; CRM aliases resolve only the current
+50-row window. Shared recipients and AI task people pools still retain legacy arrays.
+**Next step:** migrate shared recipients and their AI-planner dependencies, then
+finish the remaining callers, bounded display-name storage, and whole-app verification.
 
 ## Goal and scope
 
@@ -145,7 +148,7 @@ and compare-and-set epochs; incomplete snapshots report pending. Context-only
 stubs cannot become contacts. SQL-filtered records stream into at most `limit + 1`
 unique winners, with exclusions and DM deduplication applied before the limit.
 The API is now exposed through browser/native `CacheHost.people`, with generated
-Rust/Zod contracts, coordinator protocol 13, and dedicated native commands. Missing
+Rust/Zod contracts, coordinator protocol 14, and dedicated native commands. Missing
 capabilities return unsupported on reads and reject writes; scope/storage failures
 never downgrade to legacy hydration. Successful context writes send only person
 hydration hints. The leader publisher now sends complete snapshots before commit,
@@ -159,7 +162,12 @@ aliases with bounded memory; a short/empty window may still continue. Incrementa
 row changes retain ordinary keyset semantics. Server fallback remains ID-ordered,
 never a claimed globally ranked page. The generic single-window reader now exposes
 this policy path without appending or retaining query history.
-**Quick Access still does not use the reader**; consumer cutover remains pending.
+Quick Access now uses the reader and never puts personal-contact winners in its
+global item cache. Menus replace person windows rather than appending them; CRM
+alias resolution is independently windowed and does not recreate a user catalog.
+Native policy version 3 matches final mention-menu tiers/weights and property
+picker self/domain boosts before the limit; older native policy responses use
+the bounded server path.
 Publisher input maps scale with existing DM peers/inboxes, not the personal contact
 directory. The existing full channel sources remain in memory; this is not a claim
 of constant whole-app memory or of completed 100k UI verification.
@@ -187,7 +195,8 @@ claim the UI cutover or whole-app memory goal complete from these engine tests.
 - [ ] Wire DM recency, deduplication, and secondary-inbox exclusions end to end.
   The core policy, scoped context lifecycle and before-limit tests are implemented;
   browser/native transport and the scoped channel/inbox context publisher are
-  implemented. Consumer reader wiring remains pending.
+  implemented. Quick Access commands/mentions consume ranked windows; shared
+  recipient controls are still pending.
   Relationship `updated_at` is not equivalent to DM activity.
 - [x] Add bounded search/browse under `apps/web/src/lib/queries/contacts`, with
   pending/error, snapshot/partial/cold, and offline/source status. Cursors bind to
@@ -212,8 +221,9 @@ claim the UI cutover or whole-app memory goal complete from these engine tests.
   Search responses now advertise `projectionVersion`; missing or below 5 means
   the engine lacks contact projection/retention. The background runner and native
   guarded-write boundary and the bounded UI reader now gate on this capability.
-- [ ] Wire Quick Access `person` materialization and query-driven shared recipient
-  selection; remove global contact indexing and full-directory recipient transforms.
+- [x] Wire Quick Access `person` materialization and remove its global contact index.
+  Pass command/mention searches to bounded windows; resolve CRM aliases separately.
+- [ ] Migrate shared recipient selection and remove full-directory recipient transforms.
 
 ### Synchronization: keep the first implementation small
 
@@ -241,16 +251,23 @@ checkpoint describes a cached snapshot, not current authoritative membership.
 
 - [ ] Email recipients, channel creation/invites, sharing, calls, and other
   `useCombinedRecipients()` consumers: query-driven suggestions and separate selection.
-- [ ] Calendar guests, event editors, participant menus, and mentions: bounded
-  search plus explicit resolution of attendees/participants already present.
+- [x] Default document mentions use bounded person search; explicit channel/custom
+  participant pools remain caller-owned, with group/bot behavior unchanged.
+- [ ] Calendar guests, event editors and participant menus: bounded suggestions
+  plus explicit resolution of attendees/participants already present.
 - [x] Drive creator and CRM Notes creator filters: lazy sources in the existing
   desktop submenu and mobile drawer, bounded search/browse, and independent
   persisted-ID resolution. Self is an explicit pin, selected/unknown IDs survive
   off-page searches, and Only changes only its own group.
-- [ ] Tasks, Soup, and CRM owner filters: searchable pages plus explicit
+- [x] Soup sender/speaker/assignee/creator facets: lazy desktop/mobile search,
+  independent selected-ID labels and self pins. Property selectors pass typed
+  queries and resolve selected users/self separately; team-only pools stay scoped.
+- [ ] Tasks and CRM owner filters: searchable pages plus explicit
   resolution of persisted selected IDs. Tasks currently passes the whole people
   catalog to its AI filter planner; replacing that catalog with a suggestion page
   would silently lose people and must not be used as a migration shortcut.
+  Universal task inference likewise keeps an explicit pool from the existing
+  shared-recipient source rather than substituting a 50-person suggestion window.
 - [x] Calendar search organizer/attendee filters: bounded suggestion pages and
   separate selected-email lookup, with desktop/phone focus and keyboard coverage.
   Render resolved names through `UserIcon.name` rather than filling the global

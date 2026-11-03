@@ -47,6 +47,7 @@ import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownCon
 import { ChannelsContextProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessContextProvider } from '@core/context/quickAccess/context';
+import { createPersonList } from '@core/context/quickAccess/person-list';
 import type { QuickAccessContextValue } from '@core/context/quickAccess/types';
 import { UserContextProvider } from '@core/context/user';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
@@ -63,6 +64,7 @@ import {
 import { resolveRecipients } from '../core/recipients';
 import { createUniversalInput } from '../primitives/universal-input';
 import { UniversalComposer } from '../views/universal-composer';
+import { registerContactFixture } from './contact-directory-fixture';
 
 const [commandSubmissions, setCommandSubmissions] = createSignal<Submission[]>(
   []
@@ -286,6 +288,9 @@ export function UniversalInputFixture(
       sortTimestamp: 0,
       timestamps: {},
     });
+  registerContactFixture(
+    records.flatMap((item) => (item.kind === 'user' ? [item.data] : []))
+  );
   records.push({
     id: 'sales-channel',
     kind: 'entity',
@@ -340,20 +345,35 @@ export function UniversalInputFixture(
           previous.at(-1) === query ? previous : [...previous, query]
         );
     });
+    const people = createPersonList({
+      scope: () => ({ userId: 'macro|viewer@example.com' }),
+      search: () => options?.searchTerm?.() ?? '',
+      enabled: () =>
+        enabled() && (!buckets.length || buckets.includes('person')),
+      policy: () => ({ mode: options?.peopleMode ?? 'command', excluded: [] }),
+      activity: () => new Map(),
+      conversation: () => undefined,
+      excluded: () => false,
+    });
     const items = () =>
       enabled()
-        ? records.filter(
-            (record) => !buckets.length || buckets.includes(record.bucket)
-          )
+        ? [
+            ...records.filter(
+              (record) =>
+                record.kind !== 'user' &&
+                (!buckets.length || buckets.includes(record.bucket))
+            ),
+            ...people.items(),
+          ]
         : [];
     return {
       items,
       totalCount: () => items().length,
-      hasMore: () => false,
-      isLoading: () => false,
-      isLoadingMore: () => false,
-      error: () => undefined,
-      loadMore: async () => {},
+      hasMore: people.hasMore,
+      isLoading: people.isLoading,
+      isLoadingMore: people.isLoadingMore,
+      error: people.error,
+      loadMore: people.loadMore,
     };
   }
   const quickAccess: QuickAccessContextValue = {
@@ -363,6 +383,7 @@ export function UniversalInputFixture(
     isLoading: () => false,
     refresh: () => {},
     getById: () => undefined,
+    interactionForUser: () => undefined,
   };
   const queryClient = new QueryClient({
     defaultOptions: { queries: { enabled: false, retry: false } },

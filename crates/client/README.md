@@ -321,7 +321,9 @@ hosts now expose state/update/search through dedicated commands. Rust-derived
 transport schemas are checked in `src/people/schema.json` and regenerated from
 `apps/web` with `bun run gen-cache-people-schema --rust`. The frontend now publishes
 channel/inbox context under Soup's leader in bounded snapshot/delta batches;
-Quick Access/recipient reader migration is still pending. Ranked person windows
+Quick Access now uses bounded person windows; shared recipient migration remains
+pending. Native policy version 3 applies final mention-menu tiers and property-picker
+self/domain boosts before limiting results. Ranked person windows
 now continue with opaque scope/policy/epoch-bound cursors and a pinned scoring
 clock. Continuing command searches may make a second streamed pass to omit DM
 aliases already emitted on previous pages, without retaining page history or a

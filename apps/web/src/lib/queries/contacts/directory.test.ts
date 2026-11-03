@@ -65,6 +65,7 @@ it('reads context-ranked windows with pinned continuations and no unbounded mate
   const base = host();
   const search = vi.fn<PeopleCache['search']>().mockResolvedValue({
     kind: 'page',
+    policyVersion: 3,
     people: [
       {
         recordKey: document.recordKey,

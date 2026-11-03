@@ -7,7 +7,9 @@ import {
   resolveContactPeople,
   toCrmContactItem,
 } from '@core/context/quickAccess/crm-contacts';
+import { emailToMacroId } from '@core/user/macroId';
 import type { CrmContactEntity } from '@entity';
+import { crmContactEmailKey } from '@entity/types/entity';
 import type { CommandMenuItem } from './useCommandItems';
 
 function directMessageRecipient(
@@ -27,7 +29,11 @@ export function commandSearchResultKey(
   item: CommandMenuItem,
   viewerId: string | undefined
 ): string {
-  return directMessageRecipient(item, viewerId) ?? item.id;
+  return (
+    ('searchKey' in item ? item.searchKey : undefined) ??
+    directMessageRecipient(item, viewerId) ??
+    item.id
+  );
 }
 
 function directMessagesByUser(
@@ -58,10 +64,15 @@ export function mergeCommandPeople<T extends CommandMenuItem>(
   for (const item of items) {
     if (item.kind === 'user' && item.id === viewerId) continue;
     const conversation =
-      item.kind === 'user' ? conversations.get(item.id) : undefined;
+      item.kind === 'user'
+        ? (item.commandTarget ?? conversations.get(item.id))
+        : undefined;
     const resolved = conversation
       ? {
           ...conversation,
+          ...('searchKey' in item && item.searchKey
+            ? { searchKey: item.searchKey }
+            : {}),
           searchText: `${conversation.searchText} | ${item.searchText}`,
         }
       : item;
@@ -95,9 +106,12 @@ export function contactCommandItems(options: {
     options.contacts.map(toCrmContactItem),
     options.users
   ).map(({ contact, user }) => {
-    if (!user) return contact;
+    const searchKey =
+      emailToMacroId(crmContactEmailKey(contact.data.email)) ?? contact.id;
+    if (!user) return { ...contact, searchKey };
     return {
       ...user,
+      searchKey,
       searchText: `${user.searchText} | ${contact.searchText}`,
     };
   });

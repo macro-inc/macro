@@ -114,6 +114,7 @@ const QUICK_ACCESS: QuickAccessContextValue = {
   isLoading: () => false,
   refresh: () => {},
   getById: (id) => ITEMS.find((item) => item.id === id),
+  interactionForUser: () => undefined,
 };
 
 /** Real channel composer and mention menu over a controlled Quick Access source. */

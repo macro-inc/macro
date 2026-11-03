@@ -8,7 +8,12 @@ const mocks = vi.hoisted(() => ({
   users: (): UserItem[] => [],
 }));
 vi.mock('@core/context/quickAccess', () => ({
-  useQuickAccess: () => ({ useList: () => ({ items: () => mocks.users() }) }),
+  useQuickAccess: () => ({
+    useList: () => ({ items: () => mocks.users() }),
+    interactionForUser: (id: string) =>
+      mocks.users().find((user) => user.id === id)?.timestamps
+        .lastInteraction ?? undefined,
+  }),
 }));
 vi.mock('@core/context/user', () => ({
   useEmail: () => () => 'gab@macro.com',

@@ -40,6 +40,7 @@ pub(super) fn fingerprint(request: &PeopleSearch, epoch: Uuid) -> Result<String,
     // Limit may change between windows. The injected clock is carried in the
     // cursor; all inputs affecting eligibility/order are bound here instead.
     let bytes = serde_json::to_vec(&(
+        "people-policy-v3",
         request.scope.clone(),
         epoch,
         request.mode,

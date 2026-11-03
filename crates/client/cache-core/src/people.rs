@@ -97,6 +97,8 @@ pub enum PeopleMode {
     Recipient,
     /// Name/email relevance and user interaction recency for mentions.
     Mention,
+    /// Property user pickers: personal interaction, domain preference and self pinning.
+    Property,
 }
 
 /// A ranked window over the current cached directory, not a completeness claim.
@@ -162,6 +164,10 @@ pub enum PeopleSearchResult {
     ContextPending,
     /// Bounded ranked results from the cache snapshot.
     Page {
+        /// Menu-policy contract version; older native binaries cannot rank the
+        /// updated mention surface before its result limit.
+        #[serde(rename = "policyVersion")]
+        policy_version: u32,
         /// Fully materialized winners only.
         people: Vec<PersonHit>,
         /// Additional matches were seen.

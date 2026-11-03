@@ -1,10 +1,13 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableCrm } from '@core/constant/featureFlags';
+import { useDmActivityByUserId } from '@core/context/channels';
 import type { EntityItem } from '@core/context/quickAccess';
 import { useQuickAccess } from '@core/context/quickAccess/context';
 import { toCrmContactItem } from '@core/context/quickAccess/crm-contacts';
+import { contactUserItem } from '@core/context/quickAccess/person-items';
 import { debouncedDependent } from '@core/util/debounce';
 import { isCrmContactEntity } from '@entity/types/entity';
+import { createContactAliasWindow } from '@queries/contacts/alias-window';
 import { queryReadyGate } from '@queries/gate';
 import { storageServiceClient } from '@service-storage/client';
 import { useQueryClient } from '@tanstack/solid-query';
@@ -52,7 +55,8 @@ export { materializeCachedGraphqlCrmContacts } from './queries/graphql';
 /** Server-filtered mention results include contacts beyond the initial cache feed. */
 export function useCrmContactMentionSource(
   search: Accessor<string>,
-  enabled: Accessor<boolean>
+  enabled: Accessor<boolean>,
+  resolveUsers: Accessor<boolean> = () => true
 ) {
   const query = useCrmContactsQuery(
     { client: useQueryClient() },
@@ -68,15 +72,32 @@ export function useCrmContactMentionSource(
         )
       : []
   );
-  return {
-    entities,
-    totalCount: () => entities().length,
+  const aliases = createContactAliasWindow({
+    rows: entities,
+    email: (item) => (item.data.type === 'crm_contact' ? item.data.email : ''),
+    search,
+    enabled,
+    resolveUsers,
     hasMore: () => !!query.hasNextPage,
-    isLoading: () => query.isLoading,
-    isLoadingMore: () => query.isFetchingNextPage,
     loadMore: async () => {
       await query.fetchNextPage();
     },
+  });
+  const activity = useDmActivityByUserId();
+  return {
+    entities: aliases.rows,
+    windowKey: aliases.windowKey,
+    users: () =>
+      aliases
+        .users()
+        .map((user) =>
+          contactUserItem({ ...user, lastInteraction: activity().get(user.id) })
+        ),
+    totalCount: () => aliases.rows().length,
+    hasMore: aliases.hasMore,
+    isLoading: () => query.isLoading || aliases.loading(),
+    isLoadingMore: () => query.isFetchingNextPage || aliases.isLoadingMore(),
+    loadMore: aliases.loadMore,
   };
 }
 
@@ -102,7 +123,7 @@ export function useCrmContactDiscovery(
     () => enabled() && serverQuery().length > 0,
     serverQuery
   );
-  return createContactDiscovery({
+  const discovery = createContactDiscovery({
     query,
     active: enabled,
     cached: {
@@ -142,4 +163,29 @@ export function useCrmContactDiscovery(
       },
     },
   });
+  const aliases = createContactAliasWindow({
+    rows: discovery.contacts,
+    email: (contact) => contact.email,
+    search: query,
+    enabled,
+    hasMore: discovery.hasMore,
+    loadMore: discovery.loadMore,
+  });
+  const activity = useDmActivityByUserId();
+  return {
+    ...discovery,
+    contacts: aliases.rows,
+    windowKey: aliases.windowKey,
+    users: () =>
+      aliases
+        .users()
+        .map((user) =>
+          contactUserItem({ ...user, lastInteraction: activity().get(user.id) })
+        ),
+    isLoading: () => discovery.isLoading() || aliases.loading(),
+    error: () => discovery.error() ?? aliases.error() ?? undefined,
+    hasMore: aliases.hasMore,
+    isLoadingMore: () => discovery.isLoadingMore() || aliases.isLoadingMore(),
+    loadMore: aliases.loadMore,
+  };
 }

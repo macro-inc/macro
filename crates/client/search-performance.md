@@ -103,8 +103,9 @@ The existing joined-record path decodes one matching record at a time; it does
 not retain the directory but is slower than the covering-only generic search.
 Scope publication, secondary-inbox/explicit exclusions, late DM winners and
 conversation deduplication are checked separately over native and OPFS storage.
-Host transport and scoped context publishing are implemented; Quick Access reader
-wiring is not yet enabled. Publisher batches/pending IDs cap at 500, while its input
+Host transport, scoped context publishing and the Quick Access person reader are
+implemented. UI person windows and CRM alias resolution do not append private
+contact history; shared recipients and planner pools still need migration. Publisher batches/pending IDs cap at 500, while its input
 maps scale with existing DM peers/inboxes, not directory contacts. These engine
 timings do not measure that frontend derivation or the remaining channel catalogs.
 They also measure first windows only: ranked command continuations can perform a

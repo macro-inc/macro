@@ -113,7 +113,7 @@ async function cachedPage(
         request.cursor?.source === 'people' ? request.cursor.after : undefined,
     });
     signal.throwIfAborted();
-    if (result.kind !== 'page') return;
+    if (result.kind !== 'page' || result.policyVersion < 3) return;
     if (result.people.length > limit)
       throw new Error('Contact response exceeds its window');
     await assertContactCacheScope(host, viewer, generation, signal);

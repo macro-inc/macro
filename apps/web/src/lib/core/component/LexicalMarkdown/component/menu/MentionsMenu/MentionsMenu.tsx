@@ -19,6 +19,7 @@ import {
   useQuickAccess,
 } from '@core/context/quickAccess';
 import { deduplicateContactItems } from '@core/context/quickAccess/crm-contacts';
+import { exclude } from '@core/context/quickAccess/types';
 import { useUserId } from '@core/context/user';
 import clickOutside from '@core/directive/clickOutside';
 import { isMobile } from '@core/mobile/isMobile';
@@ -35,7 +36,7 @@ import type { HistoryItem as Item } from '@queries/history/history';
 import { Key } from '@solid-primitives/keyed';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { createVirtualizer } from '@tanstack/solid-virtual';
-import { Surface } from '@ui';
+import { Button, Surface } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import {
   type Accessor,
@@ -43,6 +44,7 @@ import {
   createMemo,
   createSignal,
   For,
+  on,
   onCleanup,
   onMount,
   Show,
@@ -165,18 +167,23 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     }))
   );
 
-  const allItems = props.entities ?? quickAccess!.useList().items;
+  const allItems =
+    props.entities ?? quickAccess!.useList(...exclude('person')).items;
 
   const { isKeypressActive } = useIsKeyPressActive();
 
   const legacyBlockId = useMaybeBlockId();
   const blockId = props.sourceDocumentId ?? legacyBlockId;
 
-  const { usersAndGroups, groups } = useUsersMention({
+  const userMention = useUsersMention({
     users: props.users,
     searchTerm,
     isChannelBlock: props.block === 'channel',
+    enabled: () =>
+      props.menu.isOpen() &&
+      (!props.sources || props.sources.includes('users')),
   });
+  const { usersAndGroups, groups } = userMention;
 
   const customDocs = props.entities
     ? useEntityMentionFromList({
@@ -234,14 +241,19 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     props.includeContacts !== false && sourceEnabled('crm');
   const contactMention = isFeatureEnabled(enableCrm)
     ? props.entities
-      ? useEntityMentionFromList({
-          items: props.entities,
-          buckets: ['crm_contact'],
-          searchTerm,
-        })
+      ? {
+          ...useEntityMentionFromList({
+            items: props.entities,
+            buckets: ['crm_contact'],
+            searchTerm,
+          }),
+          users: () => [],
+          windowKey: () => undefined,
+        }
       : useCrmContactMentionSource(
           activeSearchTerm,
-          () => props.menu.isOpen() && contactsEnabled()
+          () => props.menu.isOpen() && contactsEnabled(),
+          () => false
         )
     : undefined;
 
@@ -405,6 +417,25 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     (usersAndGroups() ?? []).filter(
       (item) => props.includeGroups !== false || item.kind !== 'group'
     );
+  const peopleWindowKey = () => {
+    if (userMention.isLoading()) return;
+    return userMention.windowKey();
+  };
+  let previousPeopleWindow: string | undefined;
+  let previousPeopleQuery = '';
+  createEffect(
+    on(peopleWindowKey, (key) => {
+      if (key === undefined) return;
+      if (
+        previousPeopleWindow !== undefined &&
+        key !== previousPeopleWindow &&
+        previousPeopleQuery === searchTerm()
+      )
+        controller.selectItem(0);
+      previousPeopleWindow = key;
+      previousPeopleQuery = searchTerm();
+    })
+  );
   const mobileAllItems = createLazyMemo((): MentionItem[] => {
     const users = sourceEnabled('users') ? mentionUsers() : [];
     const combined: MentionItem[] = [
@@ -433,6 +464,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         {
           id: 'all',
           label: 'All',
+          windowKey: peopleWindowKey,
           getData: mobileAllItems,
           getFullCount: () =>
             (sourceEnabled('bookingLinks') ? bookingLinks().length : 0) +
@@ -447,17 +479,20 @@ function MentionsMenuInner(props: MentionsMenuProps) {
             (sourceEnabled('calendarEvents') ? calendarEvents().length : 0) +
             (sourceEnabled('dates') ? (dates()?.length ?? 0) : 0),
           hasMore: () =>
+            (sourceEnabled('users') && userMention.hasMore()) ||
             (sourceEnabled('documents') && docsMention.hasMore()) ||
             (sourceEnabled('channels') && channelsMention.hasMore()) ||
             (sourceEnabled('crm') && crmMention.hasMore()) ||
             (sourceEnabled('emails') && hasMoreEmails()),
           isLoadingMore: () =>
+            (sourceEnabled('users') && userMention.isLoadingMore()) ||
             (sourceEnabled('documents') && docsMention.isLoadingMore()) ||
             (sourceEnabled('channels') && channelsMention.isLoadingMore()) ||
             (sourceEnabled('crm') && crmMention.isLoadingMore()) ||
             (sourceEnabled('emails') && isLoadingMoreEmails()),
           loadMore: async () => {
             await Promise.all([
+              sourceEnabled('users') && userMention.loadMore(),
               sourceEnabled('documents') && docsMention.loadMore(),
               sourceEnabled('channels') && channelsMention.loadMore(),
               sourceEnabled('crm') && crmMention.loadMore(),
@@ -477,12 +512,16 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       },
       {
         id: 'users',
+        windowKey: peopleWindowKey,
         label:
           props.includeGroups !== false && groups().length > 0
             ? 'People & Groups'
             : 'People',
         getData: mentionUsers,
         getFullCount: () => mentionUsers().length,
+        hasMore: userMention.hasMore,
+        isLoadingMore: userMention.isLoadingMore,
+        loadMore: userMention.loadMore,
       },
       {
         id: 'documents',
@@ -566,7 +605,9 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       ? buckets.filter((bucket) => sourcesFilter.includes(bucket.id))
       : buckets;
 
-    return filtered.filter((bucket) => bucket.getFullCount() > 0);
+    return filtered.filter(
+      (bucket) => bucket.getFullCount() > 0 || bucket.hasMore?.()
+    );
   });
 
   const controller = useMentionsMenuController(bucketConfigs, {
@@ -937,6 +978,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                 setIndex={setSelectedIndexFromMouse}
                 setOpen={setMenuOpen}
                 maxHeight={contentMaxHeight()}
+                windowKey={activeViewAllBucket()?.windowKey?.()}
                 hasMore={activeViewAllBucket()?.hasMore?.() ?? false}
                 isLoadingMore={
                   activeViewAllBucket()?.isLoadingMore?.() ?? false
@@ -965,6 +1007,7 @@ function VirtualizedItemList(props: {
   setIndex: (index: number) => void;
   setOpen: (open: boolean) => void;
   maxHeight?: number;
+  windowKey?: string;
   hasMore: boolean;
   isLoadingMore: boolean;
   onEndReached: () => void;
@@ -980,6 +1023,21 @@ function VirtualizedItemList(props: {
     overscan: 5,
   });
 
+  createEffect(
+    on(
+      () => props.windowKey,
+      (key, previous) => {
+        if (
+          key !== undefined &&
+          previous !== undefined &&
+          key !== previous &&
+          scrollContainerRef
+        )
+          scrollContainerRef.scrollTop = 0;
+      }
+    )
+  );
+
   // Scroll selected item into view
   createEffect(() => {
     const index = props.selectedIndex;
@@ -993,7 +1051,8 @@ function VirtualizedItemList(props: {
     <div
       ref={scrollContainerRef}
       onScroll={(event) => {
-        if (!props.hasMore || props.isLoadingMore) return;
+        if (!props.items.length || !props.hasMore || props.isLoadingMore)
+          return;
         const target = event.currentTarget;
         const remaining =
           target.scrollHeight - target.scrollTop - target.clientHeight;
@@ -1046,6 +1105,15 @@ function VirtualizedItemList(props: {
           }}
         </For>
       </div>
+      <Show
+        when={
+          props.items.every((item) => item.kind === 'group') && props.hasMore
+        }
+      >
+        <Button disabled={props.isLoadingMore} onClick={props.onEndReached}>
+          {t('viewMenus.nextOptions')}
+        </Button>
+      </Show>
     </div>
   );
 }

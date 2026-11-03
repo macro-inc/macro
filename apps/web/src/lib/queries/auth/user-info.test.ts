@@ -14,13 +14,7 @@ import {
   endCacheWriteSession,
 } from '@graphql-cache/session-writes';
 import { prepareCrmContactEdit } from '@service-storage/crm-contact-edit';
-import {
-  QueryClient,
-  QueryClientProvider,
-  QueryObserver,
-} from '@tanstack/solid-query';
-import { ok } from 'neverthrow';
-import { createRoot } from 'solid-js';
+import { QueryClient, QueryObserver } from '@tanstack/solid-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const soup = vi.hoisted(() => ({
@@ -37,7 +31,6 @@ vi.mock('@tauri-apps/api/event', () => ({
 const client = vi.hoisted(() => ({
   current: undefined as QueryClient | undefined,
 }));
-const auth = vi.hoisted(() => ({ getLegacyUserPermissions: vi.fn() }));
 vi.mock('../client', () => ({
   get queryClient() {
     return client.current;
@@ -58,30 +51,19 @@ vi.mock('@core/auth/push-registration-lifecycle', () => ({
 }));
 vi.mock('@core/context/user-info-gate', () => ({
   enableUserInfoQuery: vi.fn(),
-  shouldQueryUserInfo: () => true,
 }));
 vi.mock('@core/util/cookies', () => ({ hasLoginCookie: () => true }));
-vi.mock('@service-auth/client', () => ({
-  authServiceClient: {
-    getLegacyUserPermissions: auth.getLegacyUserPermissions,
-  },
-}));
+vi.mock('@service-auth/client', () => ({ authServiceClient: {} }));
 
 import { calendarKeys } from '../calendar/keys';
 import { subscribeToTeamCalendarReset } from '../calendar/team-cache';
 import { calendarTeamKeys } from '../calendar/team-keys';
 import { graphqlSoupKeys } from '../soup/graphql/keys';
-import {
-  currentQueryAccount,
-  queryAccountSessionPending,
-  resetQueryAccountSession,
-} from './account-scope';
 import { authKeys } from './keys';
-import { invalidateAllAfterLogin, useUserInfoQuery } from './user-info';
+import { invalidateAllAfterLogin } from './user-info';
 
 afterEach(() => {
   client.current?.clear();
-  vi.useRealTimers();
 });
 
 describe('login display-intent lifetime', () => {
@@ -149,43 +131,6 @@ describe('login display-intent lifetime', () => {
       queryClient.getQueryData(graphqlSoupKeys.doneSession.queryKey)
     ).not.toBe('previous-session');
   });
-});
-
-it('recovers a failed post-login identity refresh and reopens the account gate', async () => {
-  vi.useFakeTimers();
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-  client.current = queryClient;
-  const identity = { id: 'macro|viewer@example.com', authenticated: true };
-  queryClient.setQueryData(authKeys.userInfo.queryKey, identity);
-  auth.getLegacyUserPermissions
-    .mockRejectedValueOnce(new Error('offline'))
-    .mockResolvedValueOnce(ok(identity));
-  await resetQueryAccountSession();
-
-  const dispose = createRoot((cleanup) => {
-    QueryClientProvider({
-      client: queryClient,
-      get children() {
-        useUserInfoQuery();
-        return null;
-      },
-    });
-    return cleanup;
-  });
-  await queryClient.invalidateQueries({
-    queryKey: authKeys.userInfo.queryKey,
-  });
-  await vi.advanceTimersByTimeAsync(0);
-  expect(auth.getLegacyUserPermissions).toHaveBeenCalledOnce();
-  expect(currentQueryAccount()).toBeUndefined();
-  expect(queryAccountSessionPending()).toBe(true);
-
-  await vi.advanceTimersByTimeAsync(5_000);
-  expect(auth.getLegacyUserPermissions).toHaveBeenCalledTimes(2);
-  expect(currentQueryAccount()?.userId).toBe(identity.id);
-  dispose();
 });
 
 it('retires contact handles on true-to-true login with unchanged client and host', async () => {

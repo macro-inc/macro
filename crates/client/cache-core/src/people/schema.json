@@ -314,6 +314,11 @@
               "const": "mention",
               "description": "Name/email relevance and user interaction recency for mentions.",
               "type": "string"
+            },
+            {
+              "const": "property",
+              "description": "Property user pickers: personal interaction, domain preference and self pinning.",
+              "type": "string"
             }
           ]
         }
@@ -513,6 +518,12 @@
               },
               "type": "array"
             },
+            "policyVersion": {
+              "description": "Menu-policy contract version; older native binaries cannot rank the\nupdated mention surface before its result limit.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
             "truncated": {
               "description": "Additional matches were seen.",
               "type": "boolean"
@@ -520,6 +531,7 @@
           },
           "required": [
             "kind",
+            "policyVersion",
             "people",
             "truncated"
           ],

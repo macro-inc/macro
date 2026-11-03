@@ -1,11 +1,13 @@
 import { defaultTaskPropertyValues } from '@app/features/block-md/util/taskComposerProperties';
 import { useQuickAccess } from '@core/context/quickAccess';
+import type { IUser } from '@core/user/types';
 import {
   getBuiltinPropertyIds,
   SYSTEM_PROPERTY_IDS,
 } from '@property/constants';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import type { PropertyDefinitionResponse } from '@service-properties/generated/schemas/propertyDefinitionResponse';
+import type { Accessor } from 'solid-js';
 import { CUSTOMER_CONTACT_PROPERTY_IDS } from '../../task-composer/customer-contact';
 import type { InputFields } from '../core/input';
 import {
@@ -16,7 +18,10 @@ import {
 } from './suggested-task-properties';
 import { parseTaskProperties } from './task-properties';
 
-export function createTaskFieldSource(userId: string) {
+export function createTaskFieldSource(
+  userId: string,
+  people: Accessor<readonly IUser[]>
+) {
   const query = useListPropertiesQuery(() => ({
     scope: 'system',
     includeOptions: true,
@@ -27,12 +32,7 @@ export function createTaskFieldSource(userId: string) {
     SYSTEM_PROPERTY_IDS.PROJECT,
   ]);
   const creatable = new Set([...allowed, ...CUSTOMER_CONTACT_PROPERTY_IDS]);
-  const items = useQuickAccess().useList(
-    'person',
-    'initiative',
-    'task',
-    'document'
-  );
+  const items = useQuickAccess().useList('initiative', 'task', 'document');
   const fromRows = (
     rows: PropertyDefinitionResponse[],
     ids: ReadonlySet<string> = allowed
@@ -57,29 +57,33 @@ export function createTaskFieldSource(userId: string) {
       throw result.error ?? new Error('Could not load task fields');
     return result.data;
   };
-  const references = (): TaskReference[] =>
-    items.items().map((item) =>
-      item.kind === 'user'
-        ? {
-            id: item.id,
-            type: 'USER',
-            labels: [
-              item.data.name ?? '',
-              item.data.email,
-              item.data.name?.split(' ')[0] ?? '',
-            ].filter(Boolean),
-          }
-        : {
-            id: item.id,
-            type:
-              item.bucket === 'initiative'
-                ? 'INITIATIVE'
-                : item.bucket === 'task'
-                  ? 'TASK'
-                  : 'DOCUMENT',
-            labels: [item.data.name],
-          }
-    );
+  // The planner still needs its explicit full people pool until its resolver is
+  // migrated. Do not silently substitute a bounded Quick Access suggestion page.
+  const references = (): TaskReference[] => [
+    ...people().map(
+      (user): TaskReference => ({
+        id: user.id,
+        type: 'USER',
+        labels: [
+          user.name ?? '',
+          user.email,
+          user.name?.split(' ')[0] ?? '',
+        ].filter(Boolean),
+      })
+    ),
+    ...items.items().map(
+      (item): TaskReference => ({
+        id: item.id,
+        type:
+          item.bucket === 'initiative'
+            ? 'INITIATIVE'
+            : item.bucket === 'task'
+              ? 'TASK'
+              : 'DOCUMENT',
+        labels: [item.data.name],
+      })
+    ),
+  ];
   return {
     definitions: async () =>
       fromRows(await loadRows())

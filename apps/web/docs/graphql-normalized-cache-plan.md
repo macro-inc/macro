@@ -1198,7 +1198,7 @@ Contact synchronization shares Soup's authenticated leader and rollout gate.
 Fetch-only transport returns one 500-row page for explicit scoped admission:
 the core checks the captured generation and expected/response identities under
 the same engine lock as the write, without switching accounts. Coordinator
-protocol 13 forwards that scope; native hosts refuse guarded writes on older
+protocol 14 forwards that scope; native hosts refuse guarded writes on older
 engines. Checkpoints advance only after persistence and a generation recheck.
 Invalidations coalesce on a 15-minute cadence without interrupting active scans;
 hourly passes refresh names. Scan omissions never delete records.
@@ -1240,7 +1240,7 @@ snapshots report pending, not an empty directory. Search streams matching record
 into at most `limit + 1` unique winners, applying exclusions and DM deduplication
 before that limit. This joined-record path costs more than ordinary covering-only
 search; it does not change storage schema 12. `CacheHost.people` now exposes state,
-update and search through coordinator protocol 13 and dedicated native commands.
+update and search through coordinator protocol 14 and dedicated native commands.
 Ranked person continuations bind the scope, policy and publication epoch and pin
 the first window's scoring clock. A bounded-memory second pass suppresses prior
 DM aliases; short/empty pages can still continue. Ordinary incremental changes
@@ -1259,7 +1259,13 @@ new epoch. Missing inputs pause rather than publish emptiness. Source changes
 coalesce for 250 ms, with three exponential retries and reconnect wakeup; lost
 scope or unsupported hosts stop until the lifecycle changes. Context maps scale
 with existing DM peers/inboxes; full channel sources are still in memory.
-Quick Access/recipient reader cutover and whole-app memory verification remain pending.
+Quick Access now reads a replaceable person window rather than `useContacts()` or
+its global item index. Commands/mentions forward typed queries; CRM alias matching
+uses exact lookup for only the current 50-row CRM window. Soup facets and property
+pickers preserve selections separately. Native policy version 3 applies final
+mention-menu scoring and property-picker self/domain boosts before the result limit. Shared recipients and AI planner
+pools still retain their explicit legacy sources; whole-app memory verification
+and bounded shared display-name storage remain pending.
 
 ## Cached email Quick Access
 

@@ -115,7 +115,7 @@ impl<'a> PeopleRanker<'a> {
         let normalized_email = user_id.email_str();
         let name = match record.fields.get("name") {
             Some(CacheValue::String(value)) => value.as_str(),
-            None | Some(CacheValue::Null) => email.split('@').next().unwrap_or(email),
+            Some(CacheValue::Null) => email.split('@').next().unwrap_or(email),
             _ => return,
         };
         let facts = match record.fields.get(CONTEXT_FIELD) {
@@ -165,7 +165,9 @@ impl<'a> PeopleRanker<'a> {
         let (fuzzy, time, brevity, gap, start) = match self.request.mode {
             PeopleMode::Command => (0.7, 0.7, 0.0, 0.4, 0.2),
             PeopleMode::Recipient => (0.5, 1.5, 1.0, 0.0, 0.0),
-            PeopleMode::Mention => (0.5, 0.4, 0.1, 0.0, 0.0),
+            PeopleMode::Mention if self.query.is_empty() => (0.0, 0.9, 0.0, 0.0, 0.0),
+            PeopleMode::Mention => (0.7, 0.2, 0.1, 0.4, 0.2),
+            PeopleMode::Property => (0.5, 0.4, 0.1, 0.0, 0.0),
         };
         let Some(quality) = match_quality_normalized(rank_label, text, &self.query, gap, start)
         else {
@@ -178,6 +180,14 @@ impl<'a> PeopleRanker<'a> {
                     .is_some_and(|(_, email_domain)| email_domain.eq_ignore_ascii_case(domain))
             });
             multiplier = match self.request.mode {
+                PeopleMode::Mention => {
+                    if self.query.is_empty() {
+                        1.2
+                    } else {
+                        1.6
+                    }
+                }
+                PeopleMode::Property if user == self.request.scope.identity => 11.0,
                 PeopleMode::Recipient if !self.query.is_empty() => {
                     1.25 + if same_domain { 0.0625 } else { 0.0 }
                 }
@@ -191,17 +201,24 @@ impl<'a> PeopleRanker<'a> {
             };
         }
         let match_rank = if self.query.is_empty() {
-            0
+            u8::from(
+                self.request.mode == PeopleMode::Property && user == self.request.scope.identity,
+            )
         } else {
             match self.request.mode {
                 PeopleMode::Command => name_match_rank_normalized(rank_label, &self.query),
                 PeopleMode::Recipient => {
                     recipient_match_rank_normalized(&base_text, Some(normalized_email), &self.query)
                 }
-                PeopleMode::Mention => 0,
+                PeopleMode::Mention => name_match_rank_normalized(rank_label, &self.query),
+                PeopleMode::Property => 0,
             }
         };
-        let score = if self.request.mode == PeopleMode::Command && self.query.is_empty() {
+        let score = if matches!(
+            self.request.mode,
+            PeopleMode::Command | PeopleMode::Property
+        ) && self.query.is_empty()
+        {
             0.0
         } else {
             blend(
@@ -324,6 +341,7 @@ impl<'a> PeopleRanker<'a> {
             None
         };
         Ok(PeopleSearchResult::Page {
+            policy_version: 3,
             people: hits
                 .into_iter()
                 .filter(|hit| {
