@@ -88,15 +88,19 @@ export class CrmNamespace {
 
   /**
    * Block a domain (like `acme.com`): email sync skips it, and the company
-   * and contacts already in the CRM for it are hidden. Requires a team admin.
+   * that owns it, that company's contacts, and contacts without a company at
+   * the domain are hidden. A contact attached to another company follows that
+   * company's domains. Requires a team admin.
    */
   async blockDomain(domain: string): Promise<void> {
     unwrap(await this.client.storage.blockCrmDomain({ path: { domain } }));
   }
 
   /**
-   * Unblock a domain: email sync resumes and what blocking hid is shown
-   * again. Requires a team admin.
+   * Unblock a domain: email sync resumes for addresses the team's
+   * personal-email and generic-provider filters allow, and what blocking hid
+   * is shown again. This clears the hidden flag on the domain's company even
+   * if it was hidden by hand before blocking. Requires a team admin.
    */
   async unblockDomain(domain: string): Promise<void> {
     unwrap(await this.client.storage.unblockCrmDomain({ path: { domain } }));
