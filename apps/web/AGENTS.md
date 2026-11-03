@@ -365,8 +365,9 @@ not to account-wide paired runtime count; a user can pair several computers.
 
 ### General
 
-- Keep CRM removal and restoration visible on company/contact Overview pages;
-  use the existing hidden mutations and confirm company contact/email-sync effects.
+- Keep contact removal and restoration beside Copy contact link in both record
+  headers; keep company actions on Overview. Reuse the hidden mutations and
+  confirm company contact/email-sync effects.
 
 - Keep selection controls on shared `Checkbox`, `ToggleSwitch`, and `RadioGroup`;
   preserve their native input semantics and use root sizing instead of internal

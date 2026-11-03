@@ -220,10 +220,13 @@ queries or creation actions. Copy-link islands are 40px square on touch with
 a 24px icon. Verify both record types, section changes, dismissal, copy feedback,
 and header fit at phone and tablet widths.
 
-To remove a company or person manually, open its **Overview**, choose **Remove
-from CRM** below its details, and confirm. On phones the confirmation is a bottom
-sheet. Only team admins and owners can remove or restore records; other members
-see a disabled action and an explanation. Removal hides the record from the
+To remove a person manually, choose the eye-slash **Remove from CRM** button
+beside **Copy contact link** in the top toolbar and confirm. Hidden people show
+the regular eye **Restore to CRM** action in the same place. Both the Customers
+record header and standalone contact header offer it on every section; there is
+no second action in Overview. Company removal stays below the details on
+**Overview**. On phones the confirmation is a bottom sheet. Only team admins
+and owners can remove or restore records; other members see a disabled action. Removal hides the record from the
 team's CRM lists without permanently deleting it. The page stays open and offers
 **Restore to CRM**; admins can also reopen the record's direct link to restore it.
 Hiding a company hides all its contacts and turns off team email sync. Restoring

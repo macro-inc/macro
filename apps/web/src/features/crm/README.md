@@ -56,7 +56,7 @@ CRM supplies row/header/empty state slots, filter choices, grouping policy, and
 its own collection state to the shared collection renderer. Shared collection code must not acquire CRM hooks or
 CRM-specific state again.
 
-Company and contact Overview pages expose `RecordVisibilityAction` for removal
+Company Overview and contact headers expose `RecordVisibilityAction` for removal
 and restoration through the existing hidden mutations. Keep admin/owner checks,
 confirmation of the company-wide contact cascade, and the restore action on the
 open record. The information panel's visibility checkbox uses the same state.

@@ -43,6 +43,7 @@ for (const device of [
         await expect(dialog).not.toHaveAttribute('data-transitioning');
         await page.keyboard.press('Escape');
         await expect(dialog).not.toBeVisible();
+        if (kind === 'contact') await expect(remove).toBeFocused();
         await expect(page.getByLabel('Visibility writes')).toHaveText('0');
 
         await remove.click();

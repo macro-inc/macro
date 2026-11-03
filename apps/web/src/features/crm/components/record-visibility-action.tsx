@@ -1,7 +1,9 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import EyeIcon from '@icon/system/regular/eye.svg';
 import EyeSlashIcon from '@icon/system/regular/eye-slash.svg';
-import { Button, ConfirmDialog } from '@ui';
+import { Button, ButtonGroup, ConfirmDialog } from '@ui';
 import { createSignal, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 
 type RecordVisibilityActionProps = {
   recordId: string;
@@ -10,6 +12,8 @@ type RecordVisibilityActionProps = {
   hidden: boolean;
   canManage: boolean;
   pending: boolean;
+  iconOnly?: boolean;
+  grouped?: boolean;
   onChange: (hidden: boolean, onSuccess: () => void) => void;
 };
 
@@ -24,27 +28,47 @@ export function RecordVisibilityAction(props: RecordVisibilityActionProps) {
 
 function VisibilityControl(props: RecordVisibilityActionProps) {
   const [confirming, setConfirming] = createSignal(false);
+  let button: HTMLButtonElement | undefined;
   const label = () => (props.hidden ? 'Restore to CRM' : 'Remove from CRM');
+  const size = () => {
+    if (!props.iconOnly) return;
+    if (isTouchDevice()) return 'icon-lg';
+    return props.grouped ? 'icon-sm' : 'icon-md';
+  };
 
   return (
-    <div class="flex flex-col items-start gap-2">
-      <Button
-        variant="secondary"
+    <div
+      class={props.iconOnly ? 'contents' : 'flex flex-col items-start gap-2'}
+    >
+      <Dynamic
+        component={props.grouped ? ButtonGroup.Button : Button}
+        ref={button}
+        variant={props.iconOnly ? 'ghost' : 'secondary'}
+        size={size()}
+        aria-label={label()}
+        tooltip={props.iconOnly ? label() : undefined}
         disabled={!props.canManage || props.pending}
         onClick={() => setConfirming(true)}
       >
-        <Show when={props.hidden} fallback={<EyeSlashIcon class="size-4" />}>
-          <EyeIcon class="size-4" />
+        <Show
+          when={props.hidden}
+          fallback={
+            <EyeSlashIcon
+              class={props.iconOnly ? 'size-4 touch:size-6' : 'size-4'}
+            />
+          }
+        >
+          <EyeIcon class={props.iconOnly ? 'size-4 touch:size-6' : 'size-4'} />
         </Show>
-        {label()}
-      </Button>
-      <Show when={props.hidden}>
+        <Show when={!props.iconOnly}>{label()}</Show>
+      </Dynamic>
+      <Show when={props.hidden && !props.iconOnly}>
         <p class="text-xs text-ink-muted">
           This {props.kind === 'company' ? 'company' : 'person'} is hidden from
           your team's CRM lists.
         </p>
       </Show>
-      <Show when={!props.canManage}>
+      <Show when={!props.canManage && !props.iconOnly}>
         <p class="text-xs text-ink-muted">
           Ask a team admin or owner to remove or restore this record.
         </p>
@@ -52,8 +76,22 @@ function VisibilityControl(props: RecordVisibilityActionProps) {
       <ConfirmDialog
         open={confirming()}
         onOpenChange={setConfirming}
+        onCloseAutoFocus={
+          props.iconOnly
+            ? (event) => {
+                event.preventDefault();
+                button?.focus();
+              }
+            : undefined
+        }
         title={`${label()}?`}
-        confirmLabel={label()}
+        confirmLabel={
+          props.iconOnly ? (
+            <span class="whitespace-normal">{label()}</span>
+          ) : (
+            label()
+          )
+        }
         pending={props.pending}
         onConfirm={() => {
           if (!props.canManage || props.pending) return;

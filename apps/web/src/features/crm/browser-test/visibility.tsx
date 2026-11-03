@@ -35,6 +35,7 @@ function Fixture() {
           {kind === 'company' ? 'Acme' : 'Maya Chen'}
         </h1>
         <RecordVisibilityAction
+          iconOnly={kind === 'contact'}
           recordId={recordId()}
           kind={kind}
           name={kind === 'company' ? 'Acme' : 'Maya Chen'}
