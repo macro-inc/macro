@@ -23,9 +23,10 @@ replacement agents. Changing the configured provider does not convert existing
 sessions into sessions for the other provider.
 
 After macrod restarts or its runtime connection reconnects, the harness service
-asks which sessions still have a running Herdr agent (`_macro/live_sessions`)
-and loads each one. That replays local history Macro missed and resumes
-forwarding without a Macro prompt. Agents closed in Herdr are not reopened.
+initializes the new connection and calls ACP `session/list`. herdr-acp lists
+the sessions whose Herdr agent still runs, and the service loads each one. That
+replays local history Macro missed and resumes forwarding without a Macro
+prompt. Agents closed in Herdr are not reopened.
 
 A background reader forwards local TUI turns even without a Macro prompt.
 Complete JSONL records are read in bounded batches. Partial lines wait for the

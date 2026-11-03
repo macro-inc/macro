@@ -201,10 +201,10 @@ where
     }
 }
 
-/// Ask a new connection which sessions its runtime still serves.
+/// Initialize a new connection and ask which sessions its runtime serves.
 ///
-/// Runtimes without the extension answer with an error, which is the
-/// ordinary "none" and not worth more than a debug line.
+/// An agent that does not advertise `session/list` lists none; an error
+/// listing is not worth more than a debug line either.
 #[tracing::instrument(
     name = "agent.runtime.live_sessions",
     skip_all,
@@ -218,7 +218,7 @@ async fn report_live_sessions<Sender>(
     Sender: TransportSender<ToRuntimeMessage>,
 {
     let acp_sessions =
-        match tokio::time::timeout(LIVE_SESSIONS_TIMEOUT, connection.live_sessions()).await {
+        match tokio::time::timeout(LIVE_SESSIONS_TIMEOUT, connection.list_sessions()).await {
             Ok(Ok(acp_sessions)) => acp_sessions,
             Ok(Err(error)) => {
                 tracing::debug!(error = %error, "the runtime listed no live sessions");

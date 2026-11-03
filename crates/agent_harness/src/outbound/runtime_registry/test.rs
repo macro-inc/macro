@@ -276,23 +276,40 @@ async fn attach_and_close_report_presence() {
 }
 
 #[tokio::test]
-async fn a_dial_reports_the_sessions_its_runtime_still_serves() {
+async fn a_dial_initializes_and_reports_the_sessions_its_runtime_lists() {
     let (live_sessions, mut reports) = mpsc::unbounded_channel();
     let registry = RuntimeRegistry::<ContainerSender>::reporting_live_sessions(live_sessions);
     let runtime = ContainerMock::default();
     registry.attach(HarnessId::TEST_A, runtime.clone());
+    runtime.sends_ready();
 
     let agent = runtime.agent();
     agent.wait_for_requests(1).await;
-    let Some(agent_client_protocol::RawJsonRpcMessage::Request(request)) =
-        agent.received_frames().into_iter().next()
+    agent.completes_initialize(
+        agent_client_protocol::schema::v1::InitializeResponse::new(agent_session::PROTOCOL_VERSION)
+            .agent_capabilities(
+                agent_client_protocol::schema::v1::AgentCapabilities::new()
+                    .load_session(true)
+                    .session_capabilities(
+                        agent_client_protocol::schema::v1::SessionCapabilities::new().list(
+                            agent_client_protocol::schema::v1::SessionListCapabilities::new(),
+                        ),
+                    ),
+            ),
+    );
+    agent.wait_for_requests(2).await;
+    let Some(agent_client_protocol::RawJsonRpcMessage::Request(list)) =
+        agent.received_frames().into_iter().nth(1)
     else {
-        panic!("expected the live sessions request");
+        panic!("expected session/list after initialize");
     };
-    assert_eq!(request.method.as_ref(), "_macro/live_sessions");
+    assert_eq!(list.method.as_ref(), "session/list");
     agent.sends_reply(
-        request.id,
-        serde_json::json!({"sessionIds": ["acp-1", "acp-2"]}),
+        list.id,
+        serde_json::json!({"sessions": [
+            {"sessionId": "acp-1", "cwd": "/srv"},
+            {"sessionId": "acp-2", "cwd": "/srv"},
+        ]}),
     );
 
     let report = reports.recv().await.expect("the dial reports");

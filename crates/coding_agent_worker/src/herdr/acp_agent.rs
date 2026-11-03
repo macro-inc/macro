@@ -34,9 +34,10 @@ use super::cli::{AgentLaunch, HerdrCli, HerdrError};
 use super::hub::title_from;
 use super::store::{Record, Store, write_private};
 use super::tail::Cursor;
-use agent_client_protocol::schema::v1::SessionId;
+use agent_client_protocol::schema::v1::{
+    ListSessionsRequest, ListSessionsResponse, SessionId, SessionInfo,
+};
 use agent_fold::domain::transcript::{Fold, LogEvent};
-use agent_runtime_protocol::domain::live_sessions::{LIVE_SESSIONS_METHOD, LiveSessionsResponse};
 use claude_fold::ClaudeLog;
 use codex_fold::CodexLog;
 
@@ -449,13 +450,18 @@ impl Adapter {
                 "protocolVersion": 1,
                 "agentCapabilities": {
                     "loadSession": true,
+                    "sessionCapabilities": {"list": {}},
                     "promptCapabilities": {"image": false, "audio": false, "embeddedContext": false},
                 },
                 "authMethods": [],
                 "agentInfo": {"name": "macrod-herdr", "version": env!("CARGO_PKG_VERSION")},
             })),
-            LIVE_SESSIONS_METHOD => serde_json::to_value(self.live_sessions().await)
-                .map_err(|error| RpcError::internal(error.to_string())),
+            "session/list" => {
+                let request = serde_json::from_value::<ListSessionsRequest>(params)
+                    .map_err(|error| RpcError::invalid(error.to_string()))?;
+                serde_json::to_value(self.list_sessions(request.cwd.as_deref()).await)
+                    .map_err(|error| RpcError::internal(error.to_string()))
+            }
             "session/new" => self.new_session(&params),
             "session/load" => self.load_session(&params).await,
             "session/set_config_option" => {
@@ -486,22 +492,20 @@ impl Adapter {
         }
     }
 
-    /// Stored sessions whose Herdr agent still runs, oldest first. Read-only:
-    /// the service's following `session/load` attaches them. A closed agent
-    /// is not live, so it is never reopened; other lookup failures are
-    /// retried before a session is left out.
-    async fn live_sessions(&self) -> LiveSessionsResponse {
+    /// `session/list`: stored sessions whose Herdr agent still runs, oldest
+    /// first, in `cwd` when given. Read-only: the client's following
+    /// `session/load` attaches them. A closed agent is not live, so it is
+    /// never reopened; other lookup failures are retried before a session is
+    /// left out.
+    async fn list_sessions(&self, cwd: Option<&Path>) -> ListSessionsResponse {
         use futures::StreamExt as _;
         let Some(herdr) = &self.herdr else {
-            return LiveSessionsResponse {
-                session_ids: Vec::new(),
-            };
+            return ListSessionsResponse::new(Vec::new());
         };
         let mut records: Vec<Record> = futures::stream::iter(
-            self.store
-                .list()
-                .into_iter()
-                .filter(|record| record.kind == self.options.kind),
+            self.store.list().into_iter().filter(|record| {
+                record.kind == self.options.kind && cwd.is_none_or(|cwd| record.cwd == cwd)
+            }),
         )
         .map(|record| async move {
             let name = agent_name(&record.id);
@@ -521,12 +525,12 @@ impl Adapter {
         .collect()
         .await;
         records.sort_by(|a, b| a.started.cmp(&b.started).then_with(|| a.id.cmp(&b.id)));
-        LiveSessionsResponse {
-            session_ids: records
+        ListSessionsResponse::new(
+            records
                 .into_iter()
-                .map(|record| SessionId::new(record.id))
+                .map(|record| SessionInfo::new(SessionId::new(record.id), record.cwd))
                 .collect(),
-        }
+        )
     }
 
     fn new_session(self: &Arc<Self>, params: &Value) -> Result<Value, RpcError> {

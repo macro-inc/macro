@@ -10,8 +10,6 @@ pub mod channel;
 pub mod connection;
 /// The log frame an agent leaves when it summarizes its own context.
 pub mod context;
-/// Which ACP sessions a redialed runtime still serves.
-pub mod live_sessions;
 /// The physical transport port.
 pub mod ports;
 /// Versioned protocol message types.
