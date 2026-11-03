@@ -551,3 +551,40 @@ fn queue_converts_to_string() {
 
     assert_eq!(queue_string, "borrowed-queue");
 }
+
+#[test]
+fn local_queue_base_url_prefixes_local_names_only() {
+    with_mock_override_env(
+        |name| match name {
+            LOCAL_QUEUE_BASE_URL_ENV_VAR => Ok("http://sqs:4566/000000000000".to_owned()),
+            _ => Err(std::env::VarError::NotPresent),
+        },
+        || {
+            assert_eq!(
+                TestQueue::new_for_environment(Environment::Local).as_str(),
+                "http://sqs:4566/000000000000/test-queue"
+            );
+            assert_eq!(
+                TestQueue::new_for_environment(Environment::Production).as_str(),
+                "test-queue-prod"
+            );
+        },
+    );
+}
+
+#[test]
+fn a_queue_override_beats_the_local_base_url() {
+    with_mock_override_env(
+        |name| match name {
+            "OVERRIDE_TEST_QUEUE" => Ok("explicit".to_owned()),
+            LOCAL_QUEUE_BASE_URL_ENV_VAR => Ok("http://sqs:4566/000000000000".to_owned()),
+            _ => Err(std::env::VarError::NotPresent),
+        },
+        || {
+            assert_eq!(
+                TestQueue::new_for_environment(Environment::Local).as_str(),
+                "explicit"
+            );
+        },
+    );
+}

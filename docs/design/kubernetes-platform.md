@@ -1,7 +1,8 @@
 # Macro on Kubernetes, declared in Nix
 
-Status: approved spec. Nothing in this document is implemented yet. The
-earlier compose-to-Helm prototype on this branch is superseded (see
+Status: approved spec, partly implemented. See
+[Implementation status](#implementation-status). The earlier compose-to-Helm
+prototype on this branch is superseded (see
 [What happens to the prototype](#what-happens-to-the-prototype)).
 
 ## Goals
@@ -308,6 +309,43 @@ maintained twice:
    phase 3).
 9. **Prod cutover.** A separate plan for data migration (RDS → CNPG, DynamoDB
    → ExtendDB, S3 → RustFS) and rollback.
+
+## Implementation status
+
+Built and exercised on the local cluster (`infra/platform`, `cargo x platform`):
+
+- **Phase 1:** k3s with the nix snapshotter on the machine, through a NixOS
+  module.
+- **Phase 2:** the instance module, ingress, per-instance TLS, and
+  NetworkPolicy isolation; two instances verified side by side.
+- **Phase 3, for the core app:** every Rust service in the inventory, lexical,
+  websocket, the edge, and the frontend. Sign-up, onboarding, team creation,
+  and creating and reloading a document work in a browser.
+- **Phase 4, in part:** RustFS, ExtendDB, local-kms, and ElasticMQ behind one
+  AWS gateway; sync-service as a celld fleet; Valkey for Redis.
+
+Not built yet:
+
+- ai-editing-worker and analytics-proxy (celld lacks their Browser Rendering
+  and rate-limit bindings), convert-service, and the remaining Lambda handlers
+  (only the upload finalizer runs, as its local worker).
+- Queues on Kafka (services still use the SQS API, on ElasticMQ), OpenBao for
+  KMS, the email and push ports, and KEDA.
+- Phases 5 to 9: CI runners and bots, AWS, self-hosting, gRPC and service
+  splits, and the prod cutover.
+- The parity check, and release images from crane. Every image today wraps a
+  host-built debug binary.
+- The E2E suite has not been run against an instance.
+
+Deviations from the decisions above, to revisit in the AWS phase:
+
+- Postgres, Kafka, and OpenSearch run as plain single-replica Deployments, not
+  under CloudNativePG, Strimzi, or an OpenSearch operator. There is no failover
+  or backup yet, so this is not prod-ready.
+- Provisioning (migrations, topics, buckets, queues, indices) and the celld
+  deploy run from the operator's machine through port-forwards, not as
+  in-cluster Jobs.
+- The env Secret comes from `cargo x platform`, not External Secrets.
 
 ## Resolved questions
 

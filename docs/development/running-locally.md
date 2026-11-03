@@ -10,6 +10,7 @@ If you change a backend service, the database, or behavior that must stay on you
 
 - **Frontend against hosted services.** Vite on your machine. APIs on hosted `*-dev` services. See [Run the frontend against hosted services](#run-the-frontend-against-hosted-services).
 - **Local stack.** Docker, local infrastructure, and local Rust services. See [Run the local stack](#run-the-local-stack).
+- **Kubernetes instance (in progress).** The same services on a local k3s cluster, declared in Nix. See [`infra/platform`](../../infra/platform/AGENTS.md).
 
 ## Shared prerequisites
 

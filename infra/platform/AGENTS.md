@@ -60,10 +60,15 @@ images are `nix:0/nix/store/...` references. `cargo x platform` (in
   redirected there.
 - `/tmp` survives container restarts within a pod, so entrypoints must be
   idempotent.
+- `macro_queues` local defaults are bare names, which LocalStack accepts and
+  ElasticMQ rejects. The instance env sets `OVERRIDE_LOCAL_QUEUE_BASE_URL`, and
+  `queue_urls` in `platform.rs` expands the env's queue variables.
 - Services publish not-ready addresses (compose DNS semantics). Kafka's
   controller dials itself through its Service before it is ready.
 - The AWS gateway (`localstack:4566`) routes by signed service name, and the
   backends verify SigV4, including the Host header. Keep `Host` unchanged
   through every proxy.
-- The local AWS key must start with `AKIA` (ExtendDB). Its zeros keep it out
-  of the secret scanners' pattern.
+- ExtendDB accepts only AWS-shaped keys. `platform up` generates one per
+  instance, kept in `macro-env`; never commit one.
+- Certificates name only their instance's host: the shared ingress picks by
+  SNI, and a wildcard entry would serve one instance's certificate for another.

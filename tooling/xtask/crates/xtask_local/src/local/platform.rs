@@ -252,6 +252,12 @@ fn up(args: &UpArgs) -> Result<()> {
         secret_access_key: key_secret,
     };
     let mut shared_env = queue_urls(shared_env);
+    shared_env.insert(
+        macro_queues::LOCAL_QUEUE_BASE_URL_ENV_VAR.into(),
+        super::resources::queue_url("")
+            .trim_end_matches('/')
+            .to_owned(),
+    );
     shared_env.insert("AWS_ACCESS_KEY_ID".into(), aws_key.access_key_id.clone());
     shared_env.insert(
         "AWS_SECRET_ACCESS_KEY".into(),
@@ -745,25 +751,39 @@ fn prune(stage: &Stage, name: &InstanceName, desired: &[Value]) -> Result<()> {
     Ok(())
 }
 
+/// Wait for each Deployment's rollout. `wait --for=condition=Available` is not
+/// enough: during a rolling update the old pods keep a Deployment available.
 fn wait_ready(stage: &Stage, namespace: &str, tier: Option<&str>) -> Result<()> {
-    let mut cmd = kubectl();
-    cmd.args([
-        "-n",
-        namespace,
-        "wait",
-        "deployment",
-        "--for=condition=Available",
-        "--timeout=20m",
-    ]);
-    match tier {
-        Some(t) => cmd.args(["-l", &format!("macro.com/tier={t}")]),
-        None => cmd.arg("--all"),
-    };
+    let mut list = kubectl();
+    list.args(["-n", namespace, "get", "deployments", "-o", "name"]);
+    if let Some(t) = tier {
+        list.args(["-l", &format!("macro.com/tier={t}")]);
+    }
+    let out = list.output().context("listing deployments")?;
+    ensure!(out.status.success(), "kubectl get deployments failed");
     let label = match tier {
         Some(t) => format!("Waiting for {t} workloads"),
         None => "Waiting for every workload".to_owned(),
     };
-    let result = stage.run(&label, &mut cmd);
+    let names = String::from_utf8(out.stdout)?;
+    let result = stage.run_step(&label, || {
+        for deployment in names.lines() {
+            let status = kubectl()
+                .args([
+                    "-n",
+                    namespace,
+                    "rollout",
+                    "status",
+                    deployment,
+                    "--timeout=20m",
+                ])
+                .stdout(Stdio::null())
+                .status()
+                .context("running kubectl rollout status")?;
+            ensure!(status.success(), "{deployment} did not roll out");
+        }
+        Ok(())
+    });
     if result.is_err() {
         let _ = kubectl().args(["-n", namespace, "get", "pods"]).status();
     }
@@ -956,15 +976,6 @@ fn deploy_sync(
         .filter(|i| i["kind"] == "Deployment" && i["metadata"]["name"] == "sync-service")
         .collect();
     apply_items(stage, "sync-service node", &node)?;
-    let mut restart = kubectl();
-    restart.args([
-        "-n",
-        &name.namespace(),
-        "rollout",
-        "restart",
-        "deploy/sync-service",
-    ]);
-    stage.run("Restarting the sync node", &mut restart)?;
     let mut wait = kubectl();
     wait.args([
         "-n",
@@ -1002,7 +1013,8 @@ fn deploy_sync(
                 return Ok(());
             }
             last = String::from_utf8_lossy(&out.stderr).into_owned();
-            if !last.contains("no node leases") {
+            // A lease can name a node that just stopped until it expires.
+            if !last.contains("no node leases") && !last.contains("reach the database") {
                 break;
             }
             std::thread::sleep(std::time::Duration::from_secs(2));

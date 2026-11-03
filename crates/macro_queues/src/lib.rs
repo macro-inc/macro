@@ -14,6 +14,10 @@
 
 use std::{borrow::Cow, fmt, ops::Deref};
 
+/// Base URL prepended to local queue names when set. LocalStack accepts a bare
+/// name as a queue URL; SQS-compatible servers such as ElasticMQ do not.
+pub const LOCAL_QUEUE_BASE_URL_ENV_VAR: &str = "OVERRIDE_LOCAL_QUEUE_BASE_URL";
+
 #[doc(hidden)]
 pub use macro_env;
 #[doc(hidden)]
@@ -246,6 +250,11 @@ macro_rules! queue {
                 $v fn new_for_environment(environment: $crate::macro_env::Environment) -> Self {
                     if let Some(value) = $crate::read_override_env(Self::OVERRIDE_ENV_VAR_NAME) {
                         return Self($crate::Queue::owned(value));
+                    }
+                    if matches!(environment, $crate::macro_env::Environment::Local)
+                        && let Some(base) = $crate::read_override_env($crate::LOCAL_QUEUE_BASE_URL_ENV_VAR)
+                    {
+                        return Self($crate::Queue::owned(format!("{base}/{}", Self::LOCAL)));
                     }
 
                     Self::default_for_environment(environment)

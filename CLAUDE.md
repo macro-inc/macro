@@ -60,6 +60,7 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
 | Android Play releases from pull requests | [Android development](docs/development/android.md) |
 | Email body rendering or snapshots | [Standalone renderer](packages/email-renderer/README.md) |
 | Running the frontend or backend on a local machine | [Running locally](docs/development/running-locally.md) |
+| Running Macro on the local k3s cluster, declared in Nix | [`infra/platform`](infra/platform/AGENTS.md), [design](docs/design/kubernetes-platform.md) |
 | Giving the user a local preview link | `local-preview` skill |
 | Working inside Cursor Cloud | [Cursor Cloud](docs/development/cursor-cloud.md) |
 | Driving the app through a browser | [App agent guide](docs/agent-guide/README.md) |
