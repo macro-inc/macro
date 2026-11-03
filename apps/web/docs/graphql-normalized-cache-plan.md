@@ -800,11 +800,14 @@ property in its ordinary create request. Project descriptions use the project's
 collaborative surface, provisioned by an authoritative ensure mutation.
 
 Permissions and server-owned membership still revalidate on activity, focus, and
-the existing project polling interval. A denied mounted read stays hidden across
-cache hits until an authorized network response succeeds. Disabled detail reads
-and results for another viewer are not exposed. Mentions also refresh on session
-rename, deletion, metadata updates, and reconnect when the normalized cache is
-unavailable.
+the existing project polling interval. Project denials are scoped to the client,
+viewer, project, and operation, surviving row remounts until a fresh authorized
+network response succeeds. Recovery requests capture the current denial version;
+older responses and cache updates cannot clear a newer denial. A rejected
+previous-viewer cache hit triggers one immediate network recovery per activation.
+Disabled reads and results for another viewer are not exposed. Other query
+consumers retain mount-local denial state. Mentions also refresh on session rename,
+deletion, metadata updates, and reconnect when the normalized cache is unavailable.
 Invalidations arriving during a refresh cause a trailing authorized read instead
 of being discarded; simultaneous refresh requests share one read.
 
