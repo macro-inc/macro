@@ -523,7 +523,8 @@ export function createBulkCopyDssEntityMutation() {
   const isUnsupportedEntity = (entity: EntityData) =>
     (entity.type !== 'chat' &&
       entity.type !== 'document' &&
-      entity.type !== 'project') ||
+      entity.type !== 'project' &&
+      entity.type !== 'database') ||
     !canDuplicateItemType(entity.type);
 
   return useMutation(() => ({
