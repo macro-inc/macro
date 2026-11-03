@@ -7,7 +7,7 @@ use ai_toolset::{
 use async_trait::async_trait;
 use rootcause::compat::boxed_error::IntoBoxedError;
 use schemars::JsonSchema;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use super::{
     AttendeeInput, CalendarEventTypeInput, CalendarLabels, CalendarToolContext,
@@ -21,7 +21,7 @@ use crate::domain::{
 };
 
 /// Create a calendar event.
-#[derive(Debug, Deserialize, JsonSchema, Clone)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema, specta::Type, Clone)]
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "CreateCalendarEvent",
