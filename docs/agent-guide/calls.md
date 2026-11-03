@@ -239,11 +239,12 @@ header; Invite remains available on setup screens, desktop, and tablets. Back
 returns to the app without hanging up; when a channel has no navigation history, Back opens its
 Messages tab instead. Only **Leave call** ends participation.
 
-Click or tap a participant, including your own tile, to focus them. Focusing
+Focus is unavailable when you are the only participant. Otherwise, click or tap
+a participant, including your own tile, to focus them. Focusing
 someone else keeps your own tile in the small picture-in-picture window;
 focusing yourself moves the remote participant grid into that window instead.
-Tap a tile in the small window to switch focus, or click or tap the focused tile
-again (**Back to grid**) to restore the grid. If that participant leaves, the grid
+Tap a tile in the small window to switch focus, or use the solid **Back to grid**
+button on the focused tile to restore the grid. If that participant leaves, the grid
 returns automatically. Focus changes keep the existing video tracks mounted.
 A talking participant has an accent-colored border above their video or avatar.
 
@@ -260,7 +261,7 @@ with small gaps between controls when space allows. Chat stays separate on the
 right with a 48px tap target. The row keeps its side gutters; without chat, the
 control bar stays centered without an empty chat column.
 On desktop, chat stays at the bottom-right and Copy Meeting Url stays at the
-bottom-left. On phones, Copy Meeting Url uses the shared `CopyButton` in a
+bottom-left, without horizontal padding on the footer row. On phones, Copy Meeting Url uses the shared `CopyButton` in a
 standard 40px header island, without custom button colors or sizing. Media
 controls and chat occupy a separate row below the video, never over it. Controls
 remain visible while idle; auto-hide is disabled for now. Header islands also

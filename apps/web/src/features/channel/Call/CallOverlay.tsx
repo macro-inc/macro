@@ -10,6 +10,7 @@ import ChatIcon from '@icon/system/regular/chat-circle.svg';
 import { Button, cn } from '@ui';
 import type { RemoteParticipant, Track } from 'livekit-client';
 import {
+  createEffect,
   createSignal,
   createUniqueId,
   For,
@@ -82,13 +83,17 @@ function ParticipantTileWrapper(props: {
           aria-label={props.focusLabel}
           aria-pressed={props.isFocused ?? false}
           onClick={props.onToggleFocus}
+        />
+      </Show>
+      <Show when={props.isFocused && props.onToggleFocus}>
+        <Button
+          variant="primary"
+          size="sm"
+          class="absolute right-2 top-2 z-40"
+          onClick={props.onToggleFocus}
         >
-          <Show when={props.isFocused}>
-            <span class="absolute right-2 top-2 rounded bg-surface/80 px-2 py-1 text-xs text-ink">
-              Back to grid
-            </span>
-          </Show>
-        </button>
+          Back to grid
+        </Button>
       </Show>
     </div>
   );
@@ -351,6 +356,9 @@ export function CallOverlay(props: {
   const [selectedParticipant, setSelectedParticipant] = createSignal<
     RemoteParticipant | 'local'
   >();
+  createEffect(() => {
+    if (participants().length === 0) setSelectedParticipant(undefined);
+  });
   const focusedParticipant = () => {
     const selected = selectedParticipant();
     return selected === 'local' ||
@@ -488,7 +496,6 @@ export function CallOverlay(props: {
                     currentUserName()
                   }
                   isFocused={focusedParticipant() === 'local'}
-                  onToggleFocus={() => toggleParticipantFocus('local')}
                 />
               }
             >
@@ -560,7 +567,7 @@ export function CallOverlay(props: {
           >
             <div
               class={cn(
-                'grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-2 mobile:px-[max(16px,var(--mobile-chrome-gutter))] mobile:@max-[21rem]/call-stage:gap-1 @3xl/call-stage:grid-cols-[minmax(0,1fr)_minmax(18rem,2fr)_minmax(0,1fr)]',
+                'grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 mobile:px-[max(16px,var(--mobile-chrome-gutter))] mobile:@max-[21rem]/call-stage:gap-1 @3xl/call-stage:grid-cols-[minmax(0,1fr)_minmax(18rem,2fr)_minmax(0,1fr)]',
                 canChat()
                   ? 'mobile:grid-cols-[minmax(0,1fr)_auto]'
                   : 'mobile:grid-cols-1'

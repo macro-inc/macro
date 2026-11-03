@@ -355,6 +355,27 @@ describe('CallOverlay muted microphone badges', () => {
     ).toBeNull();
   });
 
+  it('disables solo focus and clears it when the last remote participant leaves', () => {
+    const controls = setUpCallState();
+    render(() => <CallOverlay onLeave={() => undefined} />);
+    expect(screen.queryByRole('button', { name: 'Focus yourself' })).toBeNull();
+    const remote = createRemoteParticipant('remote', {}, 'Remote participant');
+    controls.setParticipants(new Map([[remote.identity, remote]]));
+    fireEvent.click(screen.getByRole('button', { name: 'Focus yourself' }));
+    expect(screen.getByRole('button', { name: 'Back to grid' })).toBeTruthy();
+    controls.setParticipants(new Map());
+    expect(screen.queryByRole('button', { name: 'Focus yourself' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Back to grid' })).toBeNull();
+    controls.setParticipants(new Map([[remote.identity, remote]]));
+    expect(screen.queryByRole('button', { name: 'Back to grid' })).toBeNull();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Focus Remote participant' })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Back to grid' }));
+    expect(
+      screen.getByRole('button', { name: 'Focus Remote participant' })
+    ).toBeTruthy();
+  });
   it('focuses a participant without remounting video and restores the grid when they leave', () => {
     const first = createRemoteParticipant(
       'first',
