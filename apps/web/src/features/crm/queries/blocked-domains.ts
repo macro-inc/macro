@@ -8,7 +8,10 @@
 
 import { throwOnErr } from '@core/util/result';
 import { soupKeys } from '@queries/soup/keys';
-import { invalidateCachedCrmContacts } from '@service-storage/crm-contacts';
+import {
+  invalidateCachedCrmCompanies,
+  invalidateCachedCrmContacts,
+} from '@service-storage/crm-contacts';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { BlockedDomainsSource } from '../context/crm-sources';
 import type { CrmQueryDependencies } from './dependencies';
@@ -37,7 +40,12 @@ function setDomainBlockedOptions(deps: CrmQueryDependencies) {
           : deps.storage.unblockCrmDomain({ domain })
       );
     },
-    onSuccess: () => invalidateCachedCrmContacts(),
+    // Blocking hides the domain's company as well as its contacts.
+    onSuccess: () =>
+      Promise.all([
+        invalidateCachedCrmContacts(),
+        invalidateCachedCrmCompanies(),
+      ]),
     // Covers the blocklist itself and the records it hid or showed.
     onSettled: () =>
       Promise.all([

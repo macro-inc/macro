@@ -25,8 +25,18 @@ vi.mock('@service-storage/client', () => ({
 
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupCacheHost: () => ({
-    search: async () => ({
-      documents: [...state.records].map((recordKey) => ({ recordKey })),
+    search: async ({ buckets }: { buckets: string[] }) => ({
+      documents: [...state.records]
+        .filter((recordKey) =>
+          buckets.some((bucket) =>
+            recordKey.startsWith(
+              bucket === 'crm_company'
+                ? 'GraphqlSoupCrmCompany:'
+                : 'GraphqlSoupCrmContact:'
+            )
+          )
+        )
+        .map((recordKey) => ({ recordKey })),
       nextCursor: null,
     }),
     deleteRecords: async (keys: string[]) => {
@@ -57,6 +67,7 @@ beforeEach(() => {
   state.blocked = false;
   state.records.clear();
   state.records.add('GraphqlSoupCrmContact:contact-1');
+  state.records.add('GraphqlSoupCrmCompany:company-1');
   state.block.mockReset().mockImplementation(async () => {
     state.blocked = true;
     return ok(undefined);
@@ -87,7 +98,7 @@ function mount() {
 }
 
 it.each([true, false])(
-  'evicts cached contacts and reloads server visibility when blocked=%s',
+  'evicts cached contacts and companies and reloads server visibility when blocked=%s',
   async (blocked) => {
     state.blocked = !blocked;
     const source = mount();
@@ -113,6 +124,9 @@ it('keeps cached contacts when the server rejects the block', async () => {
     source.setBlocked.mutateAsync({ domain: 'example.com', blocked: true })
   ).rejects.toBeDefined();
 
-  expect([...state.records]).toEqual(['GraphqlSoupCrmContact:contact-1']);
+  expect([...state.records]).toEqual([
+    'GraphqlSoupCrmContact:contact-1',
+    'GraphqlSoupCrmCompany:company-1',
+  ]);
   expect(state.blocked).toBe(false);
 });
