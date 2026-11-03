@@ -1,5 +1,6 @@
 import { untrack } from 'solid-js';
 import type { HistoryAdapter } from '../history/types';
+import { layoutShape } from '../panes/layout-tree';
 import { encodePanes, sameExternalLocation } from '../routes/codec';
 import type { SplitRoutesManifest } from '../routes/manifest';
 import type { ExternalLocation, PaneId, WriteMode } from '../routes/types';
@@ -40,7 +41,11 @@ export function createUrl(options: {
       const { landed } = writeOptions;
       const basis = landed ?? lastKnown;
       const keepHash = landed !== undefined;
-      const next = encodePanes(routes, shown, basis, { keepHash });
+      const layout = untrack(panes.layout);
+      const next = encodePanes(routes, shown, basis, {
+        keepHash,
+        layout: layout && layoutShape(layout),
+      });
       if (sameExternalLocation(next, lastKnown)) return;
 
       // A write that throws never reached the URL, so it isn't known yet.
