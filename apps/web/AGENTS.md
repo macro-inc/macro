@@ -242,7 +242,8 @@ Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '
 Remote database selections have a backend-free desktop/phone regression that
 measures every row and cell while collaborators move, share a cell, or select a
 range, and checks their name labels above the header and under it once
-scrolled: `just test-database-browser`. Keep the outline an overlay, never a
+scrolled, and keyboard (Shift+Arrow) ranges whose moving corner stays in
+view: `just test-database-browser`. Keep the outline an overlay, never a
 border on the cell. Virtual rows are transformed, so each is its own stacking
 context: a row carrying labels rises above the header only while its top edge
 is in view.

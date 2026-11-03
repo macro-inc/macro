@@ -257,6 +257,7 @@ export type {
 } from './entities/agent-sessions/review';
 export { ReviewItem, SessionReview } from './entities/agent-sessions/review';
 export { ToolApproval } from './entities/agent-sessions/tool-approval';
+export type { SessionView } from './entities/agent-sessions/view';
 export { Agent, type AgentOptions } from './entities/agents/agent';
 export { UserApiKey } from './entities/api-keys/api-key';
 export { ChannelAccessRequest } from './entities/channels/access-request';

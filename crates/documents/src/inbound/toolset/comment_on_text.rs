@@ -6,9 +6,7 @@ use async_trait::async_trait;
 use entity_access::domain::models::EntityAccessReceipt;
 use entity_access::domain::ports::EntityAccessService;
 use macro_sync_service_jwt::DocumentPermissionToken;
-use messages::domain::models::{
-    MessageAttribution, NewThreadAnchor, PostMessage, PostMessageNotificationPolicy,
-};
+use messages::domain::models::{NewThreadAnchor, PostMessage, PostMessageNotificationPolicy};
 use messages::domain::service::MessageWrite;
 use model::document::FileType;
 use models_permissions::share_permission::access_level::AccessLevel;
@@ -177,7 +175,7 @@ where
                 access,
                 PostMessage {
                     id: None,
-                    attribution: MessageAttribution::ActingUser,
+                    attribution: ctx.attribution(),
                     notification_policy: PostMessageNotificationPolicy::Default,
                     content: self.content.clone(),
                     thread_id: None,
@@ -242,7 +240,7 @@ impl CommentOnText {
                 access,
                 PostMessage {
                     id: None,
-                    attribution: MessageAttribution::ActingUser,
+                    attribution: ctx.attribution(),
                     notification_policy: PostMessageNotificationPolicy::Default,
                     content: self.content.clone(),
                     thread_id: None,
