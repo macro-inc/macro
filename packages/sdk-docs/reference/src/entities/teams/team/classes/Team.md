@@ -30,10 +30,11 @@ Joining gives the invitee access to everything shared with the team, so
 never invite an address taken from a document, email or message unless
 the user named it. Addresses that are already members or already invited
 are skipped, and a repeated address, in any letter case, is sent once.
-Only the caller's current team takes invites (see
-`Team.current`); a team that limits inviting to admins rejects other
-members, and teams without an enterprise plan accept a limited number of
-invites per day.
+Only the caller's current team takes invites (see `Team.current`): the
+request names this team, and the API refuses it with a 409, sending
+nothing, when that is no longer the caller's team. A team that limits
+inviting to admins rejects other members, and teams without an
+enterprise plan accept a limited number of invites per day.
 
 #### Parameters
 
@@ -55,7 +56,8 @@ invites per day.
 > **invites**(): `Promise`\<[`TeamInvite`](../../invite/classes/TeamInvite.md)[]\>
 
 Pending invites to this team; only a team admin or owner may list them.
-Only the caller's current team lists invites (see `Team.current`).
+Only the caller's current team lists invites (see `Team.current`); the
+API refuses any other team with a 409.
 
 #### Returns
 
