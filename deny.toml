@@ -217,6 +217,7 @@ deny = [
   ], reason = "Use macro_aws_config for AWS configuration in workspace crates" },
   { crate = "tracing-subscriber", wrappers = [
     "agent",                     # GenAI span tests
+    "agent_brain",               # Example daemon; runs on team agents' machines, off macro_entrypoint
     "agent_harness",             # Warm-claim and handshake span tests
     "agent_inmem",               # GenAI trace propagation tests
     "agent_session",             # GenAI span tests

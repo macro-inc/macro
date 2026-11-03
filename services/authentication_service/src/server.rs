@@ -765,10 +765,7 @@ pub async fn run() -> anyhow::Result<()> {
             ),
         )),
         team_agents::outbound::dead_simple_email::DeadSimpleEmail::new(
-            config
-                .dead_simple_mail_api_key
-                .value()
-                .map(str::to_string),
+            config.dead_simple_mail_api_key.value().map(str::to_string),
         )
         .map_err(|error| anyhow::anyhow!("{error:?}"))?,
         team_agents::outbound::macro_brain_launcher::MacroBrainLauncher::new(

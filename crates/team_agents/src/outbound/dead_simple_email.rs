@@ -210,7 +210,9 @@ impl Mailboxes for DeadSimpleEmail {
         let list: MessageList = self
             .call(
                 self.client
-                    .get(format!("{DEAD_SIMPLE_EMAIL_API}/inboxes/{mailbox_id}/messages"))
+                    .get(format!(
+                        "{DEAD_SIMPLE_EMAIL_API}/inboxes/{mailbox_id}/messages"
+                    ))
                     .query(&[("limit", limit)]),
             )
             .await?;
@@ -221,7 +223,11 @@ impl Mailboxes for DeadSimpleEmail {
     }
 
     #[tracing::instrument(name = "team_agents.mailbox.get", skip(self), err)]
-    async fn get(&self, mailbox_id: &str, message_id: &str) -> Result<EmailMessage, TeamAgentError> {
+    async fn get(
+        &self,
+        mailbox_id: &str,
+        message_id: &str,
+    ) -> Result<EmailMessage, TeamAgentError> {
         let message: Message = self
             .call(self.client.get(format!(
                 "{DEAD_SIMPLE_EMAIL_API}/inboxes/{mailbox_id}/messages/{message_id}"
@@ -236,7 +242,9 @@ impl Mailboxes for DeadSimpleEmail {
         let sent: Sent = self
             .call(
                 self.client
-                    .post(format!("{DEAD_SIMPLE_EMAIL_API}/inboxes/{mailbox_id}/messages"))
+                    .post(format!(
+                        "{DEAD_SIMPLE_EMAIL_API}/inboxes/{mailbox_id}/messages"
+                    ))
                     .json(&Send {
                         to: &email.to,
                         subject: &email.subject,
