@@ -23,6 +23,10 @@
 
 ## Verifying a change in a real browser
 
+ID-only user mention rendering, name lookup failure, and composer save/reopen
+are covered on desktop/tablet/phone by `user-mentions.browser.e2e.ts` in the
+LexicalMarkdown core browser suite (see its README).
+
 During iterative visual tweaks, use focused browser verification; defer full typechecks and CI checks until the batch is ready or the user requests them.
 
 Any user-visible change should be exercised in a browser before you call it fixed — type-check, biome, and vitest all pass on code that still has the interaction bug.
