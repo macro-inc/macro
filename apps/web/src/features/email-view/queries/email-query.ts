@@ -114,7 +114,8 @@ function participantsClause(scope: EmailSavedViewScope): TargetExpr {
       .with({ type: 'domain' }, ({ domain }) =>
         domains.add(domain.toLowerCase())
       )
-      .exhaustive();
+      // A person kind this build doesn't know adds no one.
+      .exhaustive(() => undefined);
   }
   const leaves = participantFields.flatMap((field) => [
     ...[...addresses].map((address) =>
