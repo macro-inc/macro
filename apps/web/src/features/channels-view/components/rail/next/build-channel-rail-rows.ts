@@ -272,24 +272,8 @@ export function buildChannelRailRows(
     });
   }
 
-  const labelledIds = new Set(
-    channelSectionRows.flatMap((row) =>
-      row.kind === 'conversation' && row.labelId ? [row.channel.id] : []
-    )
-  );
-  // Membership still hides channels when their section is collapsed.
-  for (const row of channelSectionRows) {
-    if (row.kind === 'label') {
-      for (const id of row.label.channelIds) {
-        labelledIds.add(id);
-      }
-    }
-  }
-
   for (const group of ['team_channels', 'channels'] as const) {
-    const channels = items[group].filter(
-      (channel) => group === 'team_channels' || !labelledIds.has(channel.id)
-    );
+    const channels = items[group];
 
     if (group === 'channels' && channels.length === 0) {
       continue;
