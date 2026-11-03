@@ -36,7 +36,7 @@ listings, and calls all go through Connect, with no Pipedream fallback.
   Connect's directory and tool listings, and their Pipedream rows are
   refused; everyone else stays on Pipedream. A Connect row always reaches
   Connect.
-- `src/domain/service/connect.rs`: `start_connect_session` and
+- `src/domain/service/connect.rs`: `connections_to_reconnect` (Pipedream rows Connect now serves, listed by `/pipedream/mcp/reconnects` and kept apart from the connections list), `start_connect_session` and
   `complete_connect_connection` record Connect connections; the router only
   calls them for users on Connect alone (`MacroConnect::connect_only`).
 

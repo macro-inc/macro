@@ -303,7 +303,34 @@ where
         && previous.provider == ConnectionProvider::Pipedream
     {
         revoke(backends, &previous).await;
+        tracing::info!(app_slug = %record.app_slug, "connection moved from pipedream to connect");
     }
 
     Ok(record)
+}
+
+/// The Pipedream connections a user on Connect alone must reconnect: enabled
+/// ones whose app Connect serves. Pipedream never exports grants, so each
+/// needs a new consent; those for apps Connect lacks stay hidden.
+#[tracing::instrument(skip(store, connect), err)]
+pub async fn connections_to_reconnect<S, C>(
+    store: &S,
+    connect: &C,
+    user_id: &MacroUserIdStr<'static>,
+) -> anyhow::Result<Vec<PipedreamConnection>>
+where
+    S: ConnectionStore,
+    C: MacroConnect,
+    anyhow::Error: From<S::Err>,
+{
+    let mut reconnect = Vec::new();
+    for record in store.list(user_id).await.map_err(anyhow::Error::from)? {
+        if record.enabled
+            && record.provider == ConnectionProvider::Pipedream
+            && connect.app_for_slug(&record.app_slug).await?.is_some()
+        {
+            reconnect.push(record);
+        }
+    }
+    Ok(reconnect)
 }
