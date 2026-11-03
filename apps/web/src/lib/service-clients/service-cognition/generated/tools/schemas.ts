@@ -11558,6 +11558,7 @@ export const ListSkillsResponse = z.object({
     z.object({
       documentId: z.string().uuid(),
       name: z.string(),
+      description: z.union([z.string(), z.null()]).optional(),
       updatedAt: z
         .union([z.string().datetime({ offset: true }), z.null()])
         .optional(),
@@ -15959,6 +15960,7 @@ export const SearchSkillsResponse = z.object({
     z.object({
       documentId: z.string().uuid(),
       name: z.string(),
+      description: z.union([z.string(), z.null()]).optional(),
       updatedAt: z
         .union([z.string().datetime({ offset: true }), z.null()])
         .optional(),
