@@ -38,8 +38,8 @@ vi.mock('./queries/use-guest-call-chat', () => ({
     refresh: mocks.refresh,
   }),
 }));
-vi.mock('./components/CallChatPanel', () => ({
-  CallChatPanel: (props: {
+vi.mock('./components/CallChatBody', () => ({
+  CallChatBody: (props: {
     open: boolean;
     children: JSX.Element;
     composer: JSX.Element;
@@ -63,7 +63,6 @@ it('reads member messages, keeps drafts on close, and retries the same submissio
     <GuestCallChat
       callId="call"
       session={{ token: 'token', participantId: 'guest' }}
-      id="chat"
       open={open()}
       onClose={() => setOpen(false)}
     />
@@ -93,7 +92,6 @@ it('does not submit Shift+Enter or composition Enter', () => {
     <GuestCallChat
       callId="call"
       session={{ token: 'token', participantId: 'guest' }}
-      id="chat"
       open
       onClose={() => {}}
     />
@@ -111,7 +109,6 @@ it('keeps Enter for newlines on touch and sends with the button', async () => {
     <GuestCallChat
       callId="call"
       session={{ token: 'token', participantId: 'guest' }}
-      id="chat"
       open
       onClose={() => {}}
     />

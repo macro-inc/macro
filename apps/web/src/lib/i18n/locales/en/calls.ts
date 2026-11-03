@@ -1,4 +1,8 @@
 export default {
+  panel: 'Call sidebar',
+  chat: 'Chat',
+  openPanel: 'Open chat and participants',
+  closePanel: 'Close chat and participants',
   participants: 'Participants',
   participantsCount: { other: 'Participants ({{count}})' },
   inCallParticipants: 'In-call participants',

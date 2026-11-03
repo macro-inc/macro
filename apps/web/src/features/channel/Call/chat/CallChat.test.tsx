@@ -38,8 +38,8 @@ vi.mock('@channel/Input', () => ({
     return <div data-testid="call-composer" />;
   },
 }));
-vi.mock('./components/CallChatPanel', () => ({
-  CallChatPanel: (props: { children: JSX.Element; composer: JSX.Element }) => (
+vi.mock('./components/CallChatBody', () => ({
+  CallChatBody: (props: { children: JSX.Element; composer: JSX.Element }) => (
     <>
       {props.children}
       {props.composer}
@@ -114,9 +114,7 @@ it.each(['user-id', 'another-user'])(
       failed: () => false,
       refresh: mocks.refresh,
     };
-    render(() => (
-      <CallChat callId="call-id" id="chat" open onClose={() => {}} />
-    ));
+    render(() => <CallChat callId="call-id" open onClose={() => {}} />);
     const draft: InputSnapshot = {
       value: 'Existing draft',
       mentions: [{ itemType: 'user', itemId: 'bot|owned-agent' }],

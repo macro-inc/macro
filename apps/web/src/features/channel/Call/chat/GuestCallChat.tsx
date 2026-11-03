@@ -3,13 +3,12 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { Button, TextField } from '@ui';
 import { createEffect, createSignal, For, on, Show, Suspense } from 'solid-js';
 import { v7 as newMessageId } from 'uuid';
-import { CallChatPanel } from './components/CallChatPanel';
+import { CallChatBody } from './components/CallChatBody';
 import { useGuestCallChat } from './queries/use-guest-call-chat';
 
 type GuestCallChatProps = {
   callId: string;
   session: { token: string; participantId: string };
-  id: string;
   open: boolean;
   onClose: () => void;
 };
@@ -55,8 +54,8 @@ function GuestCallChatContent(props: GuestCallChatProps) {
   }
 
   return (
-    <CallChatPanel
-      {...props}
+    <CallChatBody
+      open={props.open}
       composer={
         <form
           onSubmit={(event) => {
@@ -142,6 +141,6 @@ function GuestCallChatContent(props: GuestCallChatProps) {
           </div>
         )}
       </For>
-    </CallChatPanel>
+    </CallChatBody>
   );
 }

@@ -1,6 +1,5 @@
 import { useCallContext } from '@channel/Call/CallContext';
 import { CallOverlay } from '@channel/Call/CallOverlay';
-import { CallParticipantsMenu } from '@channel/Call/CallParticipantsMenu';
 import { getMeetingUrl } from '@channel/Call/call-link';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useIsAuthenticated, useUserId } from '@core/context/user';
@@ -153,7 +152,6 @@ function NewMeetingSetup(props: {
         },
         disconnect: call.meetingSession.disconnect,
       }}
-      renderCallActions={(name) => <CallParticipantsMenu localName={name()} />}
       renderCall={(onLeave, name, _credentials, copyButton) => (
         <div class="flex h-full min-h-0 flex-col">
           <Show when={draft.inviteError()}>

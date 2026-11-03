@@ -8,7 +8,7 @@ import { createSignal, type JSX, type Setter } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CallState } from '../CallContext';
 import { CallOverlay } from '../CallOverlay';
-import { CallParticipantsMenu } from '../CallParticipantsMenu';
+import { CallParticipantsList } from '../CallParticipantsList';
 
 const mocks = vi.hoisted(() => ({
   callContext: undefined as unknown,
@@ -48,6 +48,7 @@ vi.mock('@ui', async () => ({
   Layer: (await import('@ui/components/Layer')).Layer,
   cn: (...classes: Array<string | false | null | undefined>) =>
     classes.filter(Boolean).join(' '),
+  TabSelector: (await import('@ui/components/TabSelector')).TabSelector,
   Dropdown: (await import('@ui/components/Dropdown')).Dropdown,
   SingleSelectCheck: (await import('@ui/components/Checkbox'))
     .SingleSelectCheck,
@@ -207,13 +208,44 @@ describe('CallOverlay muted microphone badges', () => {
     expect(screen.queryByRole('button', { name: /^Call sharing:/ })).toBeNull();
   });
 
+  it('restores the phone sidebar trigger after Escape', async () => {
+    vi.useFakeTimers();
+    mocks.mobile = true;
+    setUpCallState();
+    const view = render(() => (
+      <>
+        <button>Previous focus</button>
+        <CallOverlay onLeave={() => undefined} />
+      </>
+    ));
+    try {
+      screen.getByRole('button', { name: 'Previous focus' }).focus();
+      const trigger = screen.getByRole('button', {
+        name: 'Open chat and participants',
+      });
+      fireEvent.click(trigger);
+      await vi.advanceTimersByTimeAsync(500);
+      fireEvent.keyDown(screen.getByRole('tab', { name: 'Chat' }), {
+        key: 'Escape',
+      });
+      await vi.advanceTimersByTimeAsync(500);
+      expect(trigger.getAttribute('aria-expanded')).toBe('false');
+      expect(document.activeElement).toBe(trigger);
+    } finally {
+      view.unmount();
+      vi.useRealTimers();
+    }
+  });
+
   it('opens chat for a standalone meeting without a channel', async () => {
     const controls = setUpCallState();
     controls.setChannelId(null);
     render(() => (
       <CallOverlay onLeave={() => undefined} showTeamSharing={false} />
     ));
-    fireEvent.click(screen.getByRole('button', { name: 'Open chat' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Open chat and participants' })
+    );
     expect(
       await screen.findByRole('textbox', { name: 'Message this call' })
     ).toBeTruthy();
@@ -221,21 +253,30 @@ describe('CallOverlay muted microphone badges', () => {
     expect(screen.queryByRole('button', { name: /^Call sharing:/ })).toBeNull();
   });
 
-  it('does not mount authenticated message queries for a guest', () => {
+  it('keeps the roster available without mounting unavailable message queries', () => {
     const controls = setUpCallState();
     controls.setChannelId(null);
     render(() => <CallOverlay onLeave={() => undefined} showChat={false} />);
-    expect(screen.queryByRole('button', { name: 'Open chat' })).toBeNull();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Open chat and participants' })
+    );
     expect(
-      screen.queryByRole('complementary', { name: 'Call chat' })
-    ).toBeNull();
+      screen.getByRole('list', { name: 'In-call participants' })
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('tab', { name: 'Chat' }).hasAttribute('disabled')
+    ).toBe(true);
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.queryByText('call-id')).toBeNull();
   });
 
   it('opens the call thread without remounting video and restores focus when closed', async () => {
     setUpCallState();
     render(() => <CallOverlay onLeave={() => undefined} />);
     const video = screen.getByTestId('track-local-camera');
-    const toggle = screen.getByRole('button', { name: 'Open chat' });
+    const toggle = screen.getByRole('button', {
+      name: 'Open chat and participants',
+    });
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     fireEvent.click(toggle);
     const composer = await screen.findByRole('textbox', {
@@ -243,6 +284,14 @@ describe('CallOverlay muted microphone badges', () => {
     });
     fireEvent.input(composer, { target: { value: 'Draft' } });
     expect(screen.getByText('call-id')).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: /Participants/ }));
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(composer.isConnected).toBe(true);
+    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
+    expect(screen.getByRole('textbox', { name: 'Message this call' })).toBe(
+      composer
+    );
+    expect((composer as HTMLInputElement).value).toBe('Draft');
     expect(screen.getByTestId('track-local-camera')).toBe(video);
     fireEvent.click(screen.getByRole('button', { name: 'Close sidebar' }));
     expect(document.activeElement).toBe(toggle);
@@ -476,42 +525,12 @@ describe('CallOverlay muted microphone badges', () => {
   );
 });
 
-describe('CallParticipantsMenu live roster', () => {
-  it('restores the phone drawer trigger after an unfocused touch opens it', async () => {
-    vi.useFakeTimers();
-    mocks.mobile = true;
-    setUpCallState();
-    const view = render(() => (
-      <>
-        <button>Previous focus</button>
-        <CallParticipantsMenu />
-      </>
-    ));
-    try {
-      screen.getByRole('button', { name: 'Previous focus' }).focus();
-      const trigger = screen.getByRole('button', { name: 'Participants (1)' });
-      fireEvent.click(trigger);
-      await vi.advanceTimersByTimeAsync(500);
-      expect(screen.getByRole('dialog').id).toBe(
-        trigger.getAttribute('aria-controls')
-      );
-      fireEvent.keyDown(document, { key: 'Escape' });
-      fireEvent.transitionEnd(screen.getByRole('dialog'));
-      await vi.advanceTimersByTimeAsync(500);
-      expect(trigger.getAttribute('aria-expanded')).toBe('false');
-      expect(document.activeElement).toBe(trigger);
-    } finally {
-      view.unmount();
-      vi.useRealTimers();
-    }
-  });
-
+describe('CallParticipantsList live roster', () => {
   it('tracks human arrivals and departures without counting recording agents', () => {
     const guest = createRemoteParticipant('guest-1', {}, 'Guest attendee');
     const agent = createRemoteParticipant('agent-1', {}, 'Recorder', true);
     const controls = setUpCallState([guest, agent]);
-    render(() => <CallParticipantsMenu localName="Local attendee" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Participants (2)' }));
+    render(() => <CallParticipantsList localName="Local attendee" />);
     const list = screen.getByRole('list', { name: 'In-call participants' });
     expect(within(list).getAllByRole('listitem')).toHaveLength(2);
     expect(list.textContent).toContain('Local attendee');
@@ -543,8 +562,7 @@ describe('CallParticipantsMenu live roster', () => {
       'Guest attendee'
     );
     const controls = setUpCallState([guest]);
-    render(() => <CallParticipantsMenu />);
-    fireEvent.click(screen.getByRole('button', { name: 'Participants (2)' }));
+    render(() => <CallParticipantsList />);
     const row = screen.getByText('Guest attendee').closest('li')!;
     expect(
       within(row).getByRole('img', { name: 'Microphone off' })

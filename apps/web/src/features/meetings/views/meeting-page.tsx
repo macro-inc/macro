@@ -58,8 +58,6 @@ export function MeetingPage(props: {
   onBack?: () => void;
   /** Supplied only for the creator's New Call setup flow. */
   renderInvite?: (joining: Accessor<boolean>) => JSX.Element;
-  /** In-call actions supplied by the live room host. */
-  renderCallActions?: (name: Accessor<string>) => JSX.Element;
   /** Login redirect for channel-linked calls, which are members-only. */
   onSignIn?: () => void;
   renderCall: (
@@ -196,7 +194,6 @@ export function MeetingPage(props: {
             </Button>
           </HeaderIsland>
           <div class="flex items-center gap-2">
-            {props.renderCallActions?.(displayName)}
             <Show when={props.url}>
               {(url) => <MeetingCopyButton url={url()} onCopy={props.onCopy} />}
             </Show>
@@ -246,11 +243,6 @@ export function MeetingPage(props: {
               title={ready()?.title || 'Call'}
               onRename={props.onRename}
             />
-          </Show>
-          <Show when={inCall()}>
-            <div class="ml-auto flex items-center gap-2">
-              {props.renderCallActions?.(displayName)}
-            </div>
           </Show>
         </header>
       </Show>

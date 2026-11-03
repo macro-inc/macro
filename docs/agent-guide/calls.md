@@ -248,31 +248,36 @@ button on the focused tile to restore the grid. If that participant leaves, the 
 returns automatically. Focus changes keep the existing video tracks mounted.
 A talking participant has an accent-colored border above their video or avatar.
 
-The **Participants** header button shows the live attendee count and opens a
-scrollable roster: a popover on desktop and tablet, or a bottom drawer on phones.
-It includes you and connected guests, excludes recording agents, and updates as
-people join or leave. Rows show names, avatars, microphone/camera state, and a
-speaking indicator. This is the current call roster, not the channel member list.
-Dismiss with the backdrop or Escape to return focus to the header button.
+Open **Chat** and **Participants** from the button beside the media controls.
+The sidebar and phone drawer share two tabs at the top. **Participants** shows
+the live attendee count and a scrollable roster, including you and connected
+guests but excluding recording agents. Rows show names, avatars, microphone and
+camera state, and a speaking indicator. This is the current call roster, not the
+channel member list. Participant controls remain read-only. The roster remains
+available when chat is unavailable, without starting message queries.
 
-Open live chat with **Open chat** alongside the media controls. On phones, the
-fully rounded control bar fits its buttons instead of filling the available width,
-with small gaps between controls when space allows. Chat stays separate on the
-right with a 48px tap target. The row keeps its side gutters; without chat, the
-control bar stays centered without an empty chat column.
-On desktop, chat stays at the bottom-right and Copy Meeting Url stays at the
-bottom-left, without horizontal padding on the footer row. On phones, Copy Meeting Url uses the shared `CopyButton` in a
-standard 40px header island, without custom button colors or sizing. Media
-controls and chat occupy a separate row below the video, never over it. Controls
-remain visible while idle; auto-hide is disabled for now. Header islands also
-stay visible. Check 320px phones, safe-area insets, and rotation.
-Desktop chat fills the call content height alongside both
-the video and its media controls, with a rounded, raised background and a gap from
-the participant tiles. Narrow desktop panes overlay chat instead; phones use the
-shared bottom sheet.
-Dismiss the sheet with its handle, backdrop, or Escape; desktop chat closes with
-**Close chat** or Escape. Closing returns focus to the toggle and preserves the
-message draft and scroll position. Check both signed-in and guest calls.
+On phones, the fully rounded control bar fits its buttons instead of filling the
+available width, with small gaps between controls when space allows. The sidebar
+button stays separate on the right with a 48px tap target and the row keeps its
+side gutters. On desktop, the sidebar button stays at the bottom-right and Copy
+Meeting Url stays at the bottom-left, without horizontal padding on the footer
+row. On phones, Copy Meeting Url uses the shared `CopyButton` in a standard 40px
+header island, without custom button colors or sizing. Media controls occupy a
+separate row below the video, never over it. Controls remain visible while idle;
+auto-hide is disabled for now. Header islands also stay visible. Check 320px
+phones, safe-area insets, and rotation.
+
+In wide desktop panes, the sidebar fills the call content height alongside the
+video and controls, with a rounded, raised background. Drag its divider, or focus
+the divider and use the arrow keys, to resize it between 280px and 480px while
+leaving at least 320px for the call. It starts at 360px and retains its resized
+width when closed and reopened. Narrow desktop panes overlay the sidebar;
+phones use the shared bottom sheet instead of a resize handle.
+
+Dismiss the sheet with its handle, backdrop, or Escape; desktop closes with
+**Close chat and participants** or Escape. Closing returns focus to the footer
+button. Switching tabs, closing, and resizing preserve the message draft and
+scroll position. Check both signed-in and guest calls.
 
 ### Browser call diagnostics
 

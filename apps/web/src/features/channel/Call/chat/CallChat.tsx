@@ -23,12 +23,11 @@ import {
   Suspense,
 } from 'solid-js';
 import { buildCallMessageLink } from './build-call-message-link';
-import { CallChatPanel } from './components/CallChatPanel';
+import { CallChatBody } from './components/CallChatBody';
 import { useCallChat } from './queries/use-call-chat';
 
 export default function CallChat(props: {
   callId: string;
-  id: string;
   open: boolean;
   onClose: () => void;
 }) {
@@ -36,11 +35,11 @@ export default function CallChat(props: {
   return (
     <Suspense
       fallback={
-        <CallChatPanel {...props} composer={null}>
+        <CallChatBody open={props.open} composer={null}>
           <p role="status" class="text-sm text-ink-muted">
             Loading chat…
           </p>
-        </CallChatPanel>
+        </CallChatBody>
       }
     >
       <CallChatContent {...props} />
@@ -50,7 +49,6 @@ export default function CallChat(props: {
 
 function CallChatContent(props: {
   callId: string;
-  id: string;
   open: boolean;
   onClose: () => void;
 }) {
@@ -107,10 +105,8 @@ function CallChatContent(props: {
       }}
     >
       <StaticMarkdownContext>
-        <CallChatPanel
-          id={props.id}
+        <CallChatBody
           open={props.open}
-          onClose={props.onClose}
           composer={
             <div inert={!canSend()} classList={{ 'opacity-50': !canSend() }}>
               <Show when={sendFailed()}>
@@ -190,7 +186,7 @@ function CallChatContent(props: {
               />
             )}
           </Show>
-        </CallChatPanel>
+        </CallChatBody>
       </StaticMarkdownContext>
     </MessageReferenceNavigation.Provider>
   );

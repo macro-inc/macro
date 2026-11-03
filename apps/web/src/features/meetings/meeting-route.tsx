@@ -1,6 +1,5 @@
 import { useCallContext } from '@channel/Call/CallContext';
 import { CallOverlay } from '@channel/Call/CallOverlay';
-import { CallParticipantsMenu } from '@channel/Call/CallParticipantsMenu';
 import { getMeetingUrl } from '@channel/Call/call-link';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useIsAuthenticated, useUserId } from '@core/context/user';
@@ -130,7 +129,6 @@ export function MeetingRouteContent(props: {
           }),
         disconnect: call.meetingSession.disconnect,
       }}
-      renderCallActions={(name) => <CallParticipantsMenu localName={name()} />}
       renderCall={(onLeave, name, credentials, copyButton) => (
         <CallOverlay
           onLeave={onLeave}

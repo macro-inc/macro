@@ -1,19 +1,13 @@
-import { formatLocale, t } from '@app/lib/i18n';
-import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
+import { t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useUserId } from '@core/context/user';
-import { isMobile } from '@core/mobile/isMobile';
 import { getDisplayName, tryMacroId } from '@core/user';
 import Microphone from '@icon/system/regular/microphone.svg';
 import MicrophoneSlash from '@icon/system/regular/microphone-slash.svg';
-import Users from '@icon/system/regular/users.svg';
 import VideoCamera from '@icon/system/regular/video-camera.svg';
 import VideoCameraSlash from '@icon/system/regular/video-camera-slash.svg';
-import { Popover } from '@kobalte/core/popover';
-import { Button, type ButtonProps, Layer } from '@ui';
 import type { RemoteParticipant } from 'livekit-client';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createMemo, For, Show } from 'solid-js';
 import { useCallContext } from './CallContext';
 import { LK_TRACK_SOURCE } from './livekit-loader';
 
@@ -97,18 +91,15 @@ function RemoteParticipantRow(props: { participant: RemoteParticipant }) {
 }
 
 /** Shows current human attendees from the live room, not channel membership. */
-export function CallParticipantsMenu(props: { localName?: string }) {
+export function CallParticipantsList(props: { localName?: string }) {
   const call = useCallContext();
   const author = useAuthor();
   const currentUserId = useUserId();
-  const [open, setOpen] = createSignal(false);
-  const [trigger, setTrigger] = createSignal<HTMLButtonElement>();
   const participants = createMemo(() =>
     Array.from(call.remoteParticipants().values()).filter(
       (participant) => !participant.isAgent
     )
   );
-  const count = () => participants().length + 1;
   const localName = () =>
     props.localName?.trim() ||
     call.room()?.localParticipant.name?.trim() ||
@@ -122,19 +113,7 @@ export function CallParticipantsMenu(props: { localName?: string }) {
       tryMacroId(currentUserId() ?? '')
     );
   };
-  const Trigger = (triggerProps: ButtonProps) => (
-    <Button
-      {...triggerProps}
-      variant="ghost"
-      size={isMobile() ? 'lg' : 'sm'}
-      aria-label={t('calls.participantsCount', { count: count() })}
-      tooltip={t('calls.participants')}
-    >
-      <Users class="size-4 mobile:size-5" />
-      <span>{count().toLocaleString(formatLocale())}</span>
-    </Button>
-  );
-  const List = () => (
+  return (
     <ul aria-label={t('calls.inCallParticipants')} class="ph-no-capture">
       <ParticipantRow
         name={localName()}
@@ -148,57 +127,5 @@ export function CallParticipantsMenu(props: { localName?: string }) {
         {(participant) => <RemoteParticipantRow participant={participant} />}
       </For>
     </ul>
-  );
-
-  return (
-    <HeaderIsland class="px-1">
-      <Show
-        when={isMobile()}
-        fallback={
-          <Popover
-            open={open()}
-            onOpenChange={setOpen}
-            placement="bottom-end"
-            gutter={8}
-          >
-            <Popover.Trigger as={Trigger} />
-            <Popover.Portal>
-              <Layer depth={3}>
-                <Popover.Content class="menu-surface z-modal min-w-80 max-w-[calc(100vw-2rem)] p-1">
-                  <Popover.Title class="px-3 py-2 text-sm font-medium">
-                    {t('calls.participantsCount', { count: count() })}
-                  </Popover.Title>
-                  <div class="max-h-80 overflow-y-auto">
-                    <List />
-                  </div>
-                </Popover.Content>
-              </Layer>
-            </Popover.Portal>
-          </Popover>
-        }
-      >
-        <MobileDrawer
-          open={open()}
-          onOpenChange={setOpen}
-          finalFocusEl={trigger()}
-          restoreFocus
-          noOutsidePointerEvents
-        >
-          <MobileDrawer.Trigger as={Trigger} ref={setTrigger} />
-          <MobileDrawer.Portal>
-            <MobileDrawer.Overlay />
-            <MobileDrawer.Content>
-              <MobileDrawer.Handle />
-              <MobileDrawer.Title class="px-6 pb-3 text-sm font-medium">
-                {t('calls.participantsCount', { count: count() })}
-              </MobileDrawer.Title>
-              <MobileDrawer.ScrollBody>
-                <List />
-              </MobileDrawer.ScrollBody>
-            </MobileDrawer.Content>
-          </MobileDrawer.Portal>
-        </MobileDrawer>
-      </Show>
-    </HeaderIsland>
   );
 }

@@ -5,7 +5,6 @@ import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTa
 import { useChannelBotManagement } from '@channel/Bots/use-channel-bot-management';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { CallEventSync } from '@channel/Call/CallEventSync';
-import { CallParticipantsMenu } from '@channel/Call/CallParticipantsMenu';
 import { ChannelCallAutoJoin } from '@channel/Call/ChannelCallAutoJoin';
 import { ChannelCallButton } from '@channel/Call/ChannelCallButton';
 import { ChannelCallTab } from '@channel/Call/ChannelCallTab';
@@ -199,9 +198,6 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
           )}
         </Show>
       </HeaderActionGroup>
-      <Show when={activeTab() === 'call' && call.isInThisChannel()}>
-        <CallParticipantsMenu />
-      </Show>
       <Show
         when={!isMobile() || activeTab() !== 'call' || !call.isInThisChannel()}
       >
