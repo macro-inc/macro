@@ -136,6 +136,7 @@ export function MessageContainer(props: MessageContainerProps) {
       onFocus={scrollFocusedCardIntoView}
       onOpenAttachment={rendering.openAttachment}
       onDownloadAttachment={rendering.downloadAttachment}
+      hiddenActions={context.permissions().isOwner ? undefined : ['forward']}
       onReply={
         context.permissions().canReply
           ? (replyType) =>

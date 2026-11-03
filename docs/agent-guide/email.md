@@ -587,9 +587,10 @@ new thread or clear its highlight. Closing the split cancels pending positioning
 The thread's **Share** dialog forwards it to people or channels at **Can edit**
 by default; its access dropdown also offers **Can view**, and the People tab
 changes an existing recipient between the two. Edit lets a recipient reply:
-they get Reply, Reply all, and Forward and the inline reply box, sending from an
-inbox of their own (their primary unless they pick another in From), never the
-owner's. The reply starts a thread in their inbox and threads under the original
+they get Reply, Reply all, and the inline reply box, sending from an inbox of
+their own (their primary unless they pick another in From), never the owner's.
+Forward stays with the owner, since it re-sends attachments held in the
+owner's inbox. The reply starts a thread in their inbox and threads under the original
 for every other participant through `In-Reply-To`/`References`; the owner's
 thread is untouched. View recipients read without a reply box, and only the
 owner keeps tags and side-panel edits. To verify, share a thread from one

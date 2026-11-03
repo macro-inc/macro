@@ -53,6 +53,8 @@ export interface EmailMessageViewProps {
   onUnhover?: () => void;
   onFocus?: (element: HTMLElement) => void;
   onReply?: (action: EmailMessageAction) => void;
+  /** Reply actions to leave out when `onReply` is set. */
+  hiddenActions?: EmailMessageAction[];
   onOpenAttachment?: (attachment: EmailAttachment) => void;
   onDownloadAttachment?: (attachment: EmailAttachment) => void;
   children?: JSX.Element;
@@ -184,7 +186,9 @@ export function EmailMessageView(props: EmailMessageViewProps) {
             viewerEmail={props.viewerEmail}
             readReceipt={props.readReceipt}
             hiddenActions={
-              props.onReply ? undefined : ['reply', 'reply-all', 'forward']
+              props.onReply
+                ? props.hiddenActions
+                : ['reply', 'reply-all', 'forward']
             }
             avatar={
               <div class="shrink-0 flex justify-center items-center size-6">
