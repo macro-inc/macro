@@ -82,12 +82,11 @@ export function useChannelSectionNotifications(
       section === 'team_channels' ||
       section === 'direct_messages'
     ) {
-      // Named channels assigned to custom sections no longer belong to the
-      // built-in section. DMs remain in their built-in section as well.
+      // Only All channels excludes custom-section assignments.
       const excludedIds =
-        section === 'direct_messages'
-          ? []
-          : options.labels().flatMap((label) => label.channelIds);
+        section === 'channels'
+          ? options.labels().flatMap((label) => label.channelIds)
+          : [];
 
       return Telemetry.span('channels.section.members', () =>
         fetchChannelGroupIds(section, excludedIds, signal)

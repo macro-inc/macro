@@ -58,7 +58,7 @@ import {
 import type { VirtualizerHandle } from 'virtua/solid';
 import { useChannelsView } from '../../channels-view-context';
 import {
-  canLabelChannel,
+  canAssignChannel,
   filterChannelLabelMembers,
 } from '../../core/channel-label-eligibility';
 import { resolveChannelLabelMemberships } from '../../core/smart-tags';
@@ -143,6 +143,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     setSelectedChannel,
     setSortBy,
     setSectionPreferences,
+    setSectionOrder,
     setTab,
     tab,
     threadsEnabled,
@@ -543,6 +544,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
       channelSectionRows(),
       {
         preferences: state.sectionPreferences,
+        order: state.sectionOrder,
         channelById,
         unreadChannelIds: channelActivity.unreadChannelIds(),
         referenceStatuses: referenceStatuses(),
@@ -1029,6 +1031,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     renameLabel,
     deleteLabel,
     setChannelLabel,
+    addChannelsToLabel,
     markLabelRead,
     canLabelChannelId,
     labelChannelById,
@@ -1105,7 +1108,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
       const labelId = drop.target.labelId;
       const label = labels().find((label) => label.id === labelId);
 
-      if (!label || !canLabelChannel(labelChannelById(drag.channelId), label)) {
+      if (
+        !label ||
+        !canAssignChannel(labelChannelById(drag.channelId), label)
+      ) {
         return undefined;
       }
     }
@@ -1246,6 +1252,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     createSmartTag,
     editSmartTag: renameLabel,
     canShareSections: () => sharedLabels(),
+    addChannelsToLabel,
     renameLabel,
     deleteLabel,
     setChannelLabel,
@@ -1256,6 +1263,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
     sectionNotificationsDisabled,
     sortBy: (group) => state.sortBy[group],
     setSortBy,
+    sectionOrder: () => state.sectionOrder,
+    setSectionOrder,
     sectionPreferences: (section) => {
       let sort: ChannelSectionPreferences['sort'];
 
