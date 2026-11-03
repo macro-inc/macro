@@ -327,6 +327,7 @@ export function EntityRowTags(props: {
   const createDocTags = () =>
     useSoupDocTags(props.entityId, props.entityType, () => props.properties);
   const [pickerActive, setPickerActive] = createSignal(false);
+  const [activeChipId, setActiveChipId] = createSignal<string>();
   const [visibleLimit, setVisibleLimit] = createSignal(Infinity);
   const id = createUniqueId();
   const limit = createMemo(() =>
@@ -358,8 +359,30 @@ export function EntityRowTags(props: {
       );
     }
   });
-  const visible = () => appliedTags().slice(0, maxVisible());
-  const hidden = () => appliedTags().slice(maxVisible());
+  const visible = () => {
+    const tags = appliedTags();
+    const count = maxVisible();
+    const activeId = activeChipId();
+    if (
+      !activeId ||
+      count === 0 ||
+      !tags.some((tag) => tag.optionId === activeId)
+    ) {
+      return tags.slice(0, count);
+    }
+    const selected = new Set(
+      tags
+        .filter((tag) => tag.optionId !== activeId)
+        .slice(0, Math.max(0, count - 1))
+        .map((tag) => tag.optionId)
+    );
+    selected.add(activeId);
+    return tags.filter((tag) => selected.has(tag.optionId));
+  };
+  const hidden = () => {
+    const visibleIds = new Set(visible().map((tag) => tag.optionId));
+    return appliedTags().filter((tag) => !visibleIds.has(tag.optionId));
+  };
   const [editingTag, setEditingTag] = createSignal<ResolvedTag>();
 
   return (
@@ -379,7 +402,10 @@ export function EntityRowTags(props: {
               createDocTags={createDocTags}
               onFilterByTag={props.onFilterByTag}
               onEdit={setEditingTag}
-              onActiveChange={setPickerActive}
+              onActiveChange={(active) => {
+                setActiveChipId(active ? tag().optionId : undefined);
+                setPickerActive(active);
+              }}
               withClickBlock
             />
           )}

@@ -159,7 +159,10 @@ to compact rows like the session's tool rows: the label, and **Failed** or
 Documents, sessions, pull requests, and contacts an agent's reply mentions are
 set in the accent color.
 Stored activity snapshots keep the status and label but omit commands and tool
-input details, in both shared threads and DMs. The line follows the session
+input details, in both shared threads and DMs. A view the agent presents
+(`execution.views.present`) is part of the reply: it is stored with its run and
+drawn after the run's line or summary, never folded into it, and each item it
+shows loads with the reader's own access. The line follows the session
 live while the run is open; the summary shows the snapshot saved in the
 message. Readers without session access always see that snapshot. Only the
 turn's last message notifies. Previews and search
@@ -328,14 +331,17 @@ verify that its tool response includes the matching attachment URLs.
 
 ## Messages sent through an MCP client
 
-A message a user's MCP client (Claude Code, Cursor, ChatGPT) sends through
-Macro MCP's `SendChannelMessage` is posted by the Macro bot with a
-**from <user> via <client>** pill under the sender name, where the client is the
-name it registered with Macro's OAuth broker. A self-hosted agent's message
-shows the agent as the sender with **from <user>**, and a message sent with a
-pasted Macro API key shows the Macro bot with **from <user>**. To check this,
-connect an MCP client over OAuth, ask it to post in a channel, and confirm the
-pill names both you and the client on desktop and at phone width.
+A message, comment, or thread reply a user's MCP client (Claude Code, Cursor,
+ChatGPT) posts through Macro MCP, with a direct tool such as
+`SendChannelMessage` or from code mode (`ExecuteCode`), shows the client as its
+sender: **Claude Code · Agent** with the client's initial as its avatar and a
+**from <user>** pill underneath. The client is the name it registered with
+Macro's OAuth broker, or "MCP client" if it registered none. Notifications name
+the client as the sender too. A self-hosted agent's message shows the agent as
+the sender with **from <user>**, and a message sent with a pasted Macro API key
+shows the Macro bot with **from <user>**. To check this, connect an MCP client
+over OAuth, ask it to post in a channel and to comment on a document, and
+confirm both show the client and the user on desktop and at phone width.
 
 ## Message composer
 
@@ -432,10 +438,32 @@ An `@` inside a word stays literal text. Check hardware-keyboard input too;
 it should open only one menu.
 The same software-keyboard check applies to `:` for emoji and `/` for formatting
 commands: type a search and tap a result without sending the draft.
-Type `/gif` or choose **GIF** from `+`. The picker opens above the composer on
-phones and stays visible after you choose the action, including with the iOS
-keyboard open. Trending GIFs show first; tap search to filter, then tap a GIF
-to insert it without sending the draft.
+Type `/gif` or choose **GIF** from `+`. The rounded picker replaces any active
+formatting or link menu, opens above the composer on phones, and stays visible
+after you choose the action, including with the iOS keyboard open. Both the `/`
+formatting menu and the GIF picker span the available chat width on phones,
+using the mentions menu's side gutters.
+If the browser has no caret selection or its range has no rendered geometry,
+the GIF picker anchors to its editor rather than staying hidden.
+The larger desktop GIF picker stays within the viewport on narrow screens.
+Repeat after scrolling the page: the picker must stay beside the composer,
+without adding the page's scroll offset to its fixed position.
+Open and dismiss the keyboard while the picker is open: it must recalculate
+its placement and available height. Focusing search must not scroll the page
+away from the composer.
+Trending GIFs show first, with the large search field focused on both desktop
+and phones. Search keeps the composer expanded, and tapping anywhere in the
+search field keeps focus there. Tap a GIF to download its original animated bytes
+and upload them to Macro's static-file service before insertion, without sending
+the draft. The picker shows upload progress and prevents duplicate selections;
+a failure removes the unused upload and leaves the picker open for retry. Closing
+the picker, changing the draft, or losing edit permission prevents a late insertion.
+Cancellation aborts the transfer and discards any completed upload that was not inserted.
+On desktop, arrow keys move through the two-column grid and scroll the full
+selection outline into view; Enter inserts it and Escape closes the picker.
+Check that GIFs animate in the picker, in the draft, after sending, after copying
+and pasting, and in the enlarged image viewer. Newly inserted GIFs use static-file references; picker
+previews and existing Klipy URL images still load directly with anonymous CORS.
 
 Closed mention menus do not gather, rank, or paginate candidates. When checking
 channel-switch performance, include touch navigation back to the list and reopening
@@ -962,26 +990,32 @@ between Threads, All, and Recent preserves an already-open navigation overlay.
 ### Sectioned sidebar (flag on)
 
 With the flag on, desktop Chat has one conversation sidebar, without All, Recent,
-or Threads view tabs. Favorites appears first, followed by Direct messages, the
-team's channels, and custom sections. The team heading is **[Team name] channels**,
-with **Team channels** as the fallback while the name is unavailable.
-Other joined public and private channels remain in Channels until assigned to a
-personal section. Each custom section is a top-level heading, independent of the
-Team channels disclosure. Empty sections remain visible with a short hint; empty
-Favorites explains how to add a favorite. Private conversations use a lock icon in
-the sidebar and mobile feed, including favorited private conversations.
+or Threads view tabs. The default order is Favorites, Direct messages, the
+team's channels, custom sections, then **All channels**. The team heading is
+**[Team name] channels**, with **Team channels** as the fallback while the name
+is unavailable. The team section always shows joined team channels, including
+channels assigned to manual or smart custom sections. All channels is the renamed
+remaining-public/private list: its membership is unchanged, so it excludes team
+channels and channels assigned to custom sections. Each custom section is a
+top-level heading, independent of the Team channels disclosure. Empty sections
+use padded, bordered cards like saved views, with a subtle background and secondary
+actions; empty Favorites explains how to add a favorite. Private conversations
+use a lock icon in the sidebar and mobile feed, including favorited private
+conversations.
 All section headers use the shared collapsible-section styling without leading
-icons or top padding; the section stack supplies an 8px flex gap. Custom-section
-drop zones and highlights cover both the header and its content, including the
+icons or top padding; the section stack supplies a compact 2px flex gap.
+Custom-section drop zones and highlights cover both the header and its content, including the
 empty state.
 Section, DM, and search containers use the 8px outer sidebar gutter; headings
 and rows add their own item padding so headings align with the Chat title.
-Content is indented by 8px under every section, including Favorites, custom
-sections, DMs, and empty states. Search results remain unindented. The
+Rows are indented by 8px under every section, including Favorites, custom
+sections, and DMs. Empty-state actions and search results avoid this extra indent. The
 caret stays hidden in expanded sections until hover and remains visible when
 collapsed. Team-shared sections show a neutral Shared
-badge next to the name, before the caret. Personal sections have no scope icon or
-badge. Header focus backgrounds fill the entire header row, including its
+badge next to the name, before the caret. Below 256px of section width, a users
+icon replaces the badge to leave more room for the name. Separate short tooltips
+explain the name and sharing, without overlapping native title hints. Personal
+sections have no scope icon or badge. Header focus backgrounds fill the entire header row, including its
 trailing controls, with no extra right padding.
 
 The sidebar scrolls through all sections. Each expanded section has its own
@@ -996,6 +1030,16 @@ width. Heights adapt to filtered content and smaller panes without discarding
 the saved preference. Search covers channels and DMs regardless of section
 placement and restores the selected row in its section when closed. Mobile
 retains the recent-conversation feed below.
+
+Use the drag grip in the left gutter before the section name to reorder sections,
+or focus the grip and use Up/Down. The grip does not shift the header's text or
+controls. An insertion line shows the destination. Section order is a personal
+preference, including for shared sections, and survives reloads. The dragged
+section appears as a card preview while its source is subdued. Other sections
+animate into their new positions on drop or keyboard reorder, except with reduced
+motion enabled. Dragging near the sidebar's top or bottom uses the same edge-scroll
+mechanism as Gantt; wheel scrolling remains available during a drag. Resize drags compensate for sidebar scroll movement,
+and the rounded resize grips retain pointer capture until release or cancellation.
 
 Section membership comes from the server's complete visible channel-ID lists.
 The sidebar shows available channel rows immediately. One shared by-ID query
@@ -1033,7 +1077,11 @@ the label service and its feature flag.
 Use **New → New section** to create a section. The wider dialog has a name field
 and a **Smart section** switch in its body. **Shared with team** sits on the left
 of the footer, with the action buttons on the right. With both switches off, the
-section is personal and manual; smart grouping reveals its name rule and preview.
+section is personal and manual. Smart grouping reveals a separate input below
+**Name contains** and a matching-channel count. Hover or focus that count to preview
+matched channels; larger results show the remaining count. Switching sharing scope
+refreshes the preview without replacing the form. A zero shared count explains
+that only joined team channels match; public and private channels remain personal.
 Edit and delete through each section's sliders menu. Personal sections are
 private to the account, including for team members, and accept joined team,
 public, or private channels. Shared sections
@@ -1045,7 +1093,16 @@ Each heading has one sliders-icon menu, also available by right-clicking the hea
 **Sort** opens its independent single-select options with a checkmark on the right.
 **Filter** contains **Unread only**. The unread label sits on the left and its
 switch on the right; toggling it keeps the submenu open.
-Custom sections include editing, Mark all as read, notification actions, and a
+Manual sections have a **+** header action and **Add channels** menu entry.
+The picker searches all eligible joined channels, not just rows loaded in the
+sidebar, and excludes channels already in the section. The wider, shorter picker
+keeps its actions visible while the channel list scrolls. Compact helper text
+explains the scope and assignment move. Adding a channel moves its
+manual assignment within the same scope without changing the other scope.
+Partial failures keep successful additions and retry only the failed selection.
+Empty manual sections offer **Add channels**, empty smart sections offer **Edit
+rule**, and unread-filtered empty sections offer **Show all channels**.
+Custom sections also include editing, Mark all as read, notification actions, and a
 destructive Delete action in the same menu. Click and right-click menus use the
 same standard context-menu rows, spacing, and selection indicators. Use the heading's caret
 to expand/collapse it; this is not repeated
@@ -1056,15 +1113,16 @@ Filtered-out channels retain their membership and do not reappear ungrouped.
 Shared name and rule edits apply to the team; personal edits affect only the account.
 Deleting a section does not delete its conversations or change channel access.
 
-Every desktop section menu, including **Favorites**, **Channels**,
+Every desktop section menu, including **Favorites**, **All channels**,
 **[team name] channels**, and **Direct messages**, offers **Mute all channels**,
 **Unmute all channels**, and **Snooze all channels…**. These update only your
 notifications, including for shared sections. Each action uses the section's
 complete current membership, including filtered-out and unloaded channels;
 channels added later do not inherit the change. Built-in lists resolve all pages
-before applying an action, exclude channels assigned to custom sections just as
-the sidebar does, and never include unjoined channels. Favorites targets only
-channel favorites, not documents or other favorite types. Snooze uses the usual
+before applying an action and never include unjoined channels. The team section
+includes custom-section members; only All channels excludes those assignments.
+Favorites targets only channel favorites, not documents or other favorite types.
+Snooze uses the usual
 duration/date picker and resumes notifications at the chosen time. A partial
 failure keeps successful updates and reports the failures; snooze retries only
 failed channels. Empty or unavailable custom sections and empty Favorites disable
@@ -1078,6 +1136,10 @@ and shared assignments remain independent.
 Choose smart grouping in the section dialog for automatic name matching.
 Smart sections match channel names literally and without regard to capitalization. They preserve ordinary section permissions and are not manual
 drop targets. Channels can appear in multiple matching smart sections.
+Hovering an incompatible item over a section shows a not-allowed cursor and an
+explanation over the section, including automatic membership, shared-scope
+restrictions, and channels already in the section. Returning a channel to its
+matching built-in channel group removes only its existing manual assignment.
 
 Support is organized manually through a personal section. The app does not
 classify support channels by their names or silently create a Support section.
@@ -1089,10 +1151,10 @@ empty sections, assignment failures, and one channel in both scopes. Check the
 New menu, both dialog switches, keyboard access, edit-dialog focus, destructive
 deletion, and per-section unread and sort preferences after reload. Confirm
 unread filtering does not change section
-membership or another section's rows. Scroll a long sidebar with many sections
-and confirm that Direct messages remains immediately below Favorites. Keyboard
-navigation and section shortcuts must follow
-the same order as the rendered rows.
+membership or another section's rows. Scroll a long sidebar with many sections,
+reorder both custom and built-in sections, and confirm the order survives reload.
+Keyboard navigation and section shortcuts must follow the same order as the
+rendered rows.
 Drag a channel between sections and confirm the sidebar stays visible while
 lookups refetch, including with a slow or paused connection.
 When a channel belongs to both a personal and a shared section, drag its
@@ -1102,6 +1164,7 @@ verify the opposite scope.
 
 ### Creation actions
 
+The sidebar's **New** dropdown spans its button's full width.
 **New** offers separate **New channel** and **New direct message** actions in
 both sidebar layouts. **New channel** opens the existing
 [name, visibility, and optional invitations flow](#create-a-channel).

@@ -60,7 +60,7 @@ the build-time `VITE_ENABLE_GRAPHQL_SOUP=true` override; see the
 
 Category/mode changes keep the same input mounted and focused. Return inserts
 a newline and keeps the keyboard open; the Search bar expands with the text.
-When **enable-universal-input** is on, three words or 24 characters reveal
+When **enable-universal-input** is on, 34 characters (regardless of word count) reveal
 Universal Input's suggested form above the bar. The editor stays mounted while
 classification and extraction update the form. Shorter edits keep the form until
 the input is cleared. While the card is active, the normal search results and top

@@ -138,6 +138,7 @@ export type ChannelEntity = EntityBase & {
     createdAt: DateValue;
   }[];
   channelType: 'direct_message' | 'private' | 'public' | 'team';
+  teamId?: string;
   interactedAt?: DateValue | null;
   participantIds?: string[];
   /**
