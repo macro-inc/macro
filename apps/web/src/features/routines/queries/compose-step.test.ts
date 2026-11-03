@@ -97,6 +97,27 @@ beforeEach(() => {
 });
 
 describe('adding one step with AI', () => {
+  it('asks for code wherever code can do it, with AI writing text inside it', async () => {
+    clients.structuredCompletion.mockResolvedValue(
+      completed({ step: wire('good'), reason: 'one message to send' })
+    );
+    clients.checkCode.mockResolvedValue(checks(1, []));
+    await composeStep({
+      description: 'send a message to the team with a follow up',
+      routine: { triggers: [daily], steps: [escalate] },
+      context,
+      model: 'claude' as never,
+    });
+    const [request] = clients.structuredCompletion.mock.calls[0] ?? [];
+    expect(request.additional_instructions).toContain(
+      'Make it code whenever code can do it'
+    );
+    expect(request.additional_instructions).toContain(
+      'macro.ai.structuredCompletion({ model: "claude"'
+    );
+    expect(request.additional_instructions).not.toContain('drafting');
+  });
+
   it('drafts the next step, checks it after the steps before it, and fixes it', async () => {
     clients.structuredCompletion
       .mockResolvedValueOnce(

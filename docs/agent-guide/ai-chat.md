@@ -781,9 +781,10 @@ with new words marked, **Rewritten and checked** (or its errors, which block
 keeping it), changed values, **Keep**, **Undo** and **Show code changes**;
 the step is unchanged until **Keep**. **Show code** reveals the code, folded
 by default. Under the steps, one box (**Then… say what should happen next**)
-adds a step at the end: AI writes it as code when it does the same thing
-every run and as Ask AI when it needs judgment each run, and a line says
-which and why, with **Ask AI each run instead** / **Write it once instead**
+adds a step at the end: AI writes it as code whenever code can do it
+(sending a message, changing items, with AI judging or writing the text
+inside the code) and as Ask AI only for open-ended work such as research,
+and a line says which and why, with **Ask AI each run instead** / **Write it once instead**
 and **Undo**. A closed step's line reads its sentence with the values
 filled in. The starters that sort email, set task priorities and
 post updates come from the scheduler as code; where code can't be saved they

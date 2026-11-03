@@ -147,10 +147,10 @@ Triggers:
 Steps run in order:
 ${
   code
-    ? `- {"type":"code","id"?:"lowercase_id","title":TEXT,"summary":TEXT,"writes":[AREAS],"knobs":[KNOBS],"sentence":TEXT,"source":TYPESCRIPT} runs code against Macro's SDK; see Code steps below. Use it for everything that acts or decides: labeling, archiving, setting properties, creating tasks, posting messages, going through many items, and judging them with macro.ai.decide. One code step usually does all of it. Put the values the person may want to change, and the questions it asks AI, in knobs, and say what it does in its sentence.
+    ? `- {"type":"code","id"?:"lowercase_id","title":TEXT,"summary":TEXT,"writes":[AREAS],"knobs":[KNOBS],"sentence":TEXT,"source":TYPESCRIPT} runs code against Macro's SDK; see Code steps below. Use it for everything that acts or decides: labeling, archiving, setting properties, creating tasks, sending or posting messages, going through many items, judging them with macro.ai.decide, and writing text from what it read (a message, reply or summary) with macro.ai.structuredCompletion({ model: "${context.defaultModel}", prompt, output_schema, toolset: { type: "none" } }), whose answer is outcome.result when outcome.status is "completed" (add "ai" to writes). One code step usually does all of it. Put the values the person may want to change, and the questions it asks AI, in knobs, and say what it does in its sentence.
 `
     : ''
-}- {"type":"agent","model":"${context.defaultModel}","instructions":TEXT} ("Ask AI") hands off open-ended work (drafting, research, summarizing, filling in CRM details) to AI with tools. Use {"agent":{"bot_id":ID}} instead of model to delegate to a named agent. A routine has at most one, and it goes last.
+}- {"type":"agent","model":"${context.defaultModel}","instructions":TEXT} ("Ask AI") hands off open-ended work that code can't lay out ahead of time, such as research across sources or filling in CRM details, to AI with tools. Use {"agent":{"bot_id":ID}} instead of model to delegate to a named agent. A routine has at most one, and it goes last.
 ${
   context.decisions
     ? ''

@@ -146,8 +146,8 @@ Add ONE step at the end that does what the person describes. ${
         ? 'It must be a code step.'
         : only === 'agent'
           ? 'It must be an Ask AI step.'
-          : 'Make it code when it does the same thing every run; make it Ask AI when it needs judgment or writing on every run.'
-    } It can read what the steps before it return. Return {"step": STEP, "reason": REASON}, where REASON is one finished phrase of at most 12 words saying why it is code or Ask AI, such as "writing the summary takes judgment each run". Decide before answering; never think out loud in REASON.`;
+          : 'Make it code whenever code can do it: sending or posting a message, creating or changing items and going through them are code, even when AI judges something (macro.ai.decide) or writes the text (macro.ai.structuredCompletion) inside it. Make it Ask AI only for open-ended work whose actions depend on what it finds, such as research across many sources.'
+    } It can read what the steps before it return. Return {"step": STEP, "reason": REASON}, where REASON is one finished phrase of at most 12 words saying why it is code or Ask AI, such as "one message to send, with AI writing the text". Decide before answering; never think out loud in REASON.`;
     const schema = stepSchema(only !== 'agent' && !!code, {
       reason: {
         type: 'string',
