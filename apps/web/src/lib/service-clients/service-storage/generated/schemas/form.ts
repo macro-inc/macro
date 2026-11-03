@@ -15,6 +15,10 @@ import type { FormSubmittedColumnId } from './formSubmittedColumnId';
  * A form: a view of one database table whose rows are its responses.
  */
 export interface Form {
+  /** Whether nobody, the owner included, can see who gave which response.
+Who responded is kept apart from the responses, only so nobody
+responds twice. Fixed once anyone has responded. */
+  anonymous: boolean;
   /** Who may respond. */
   audience: Audience;
   /** Its logo, cover image and accent color. */
@@ -41,12 +45,9 @@ a form attached to an existing table has its own name. */
   /** Its owner. */
   ownerId: string;
   /** The person column each signed-in submission names its respondent in;
-`null` once deleted. When `respondent_hidden`, the form still owns
-this column but does not write it. */
+`null` once deleted, and on a form created anonymous. An anonymous
+form never writes it. */
   respondentColumnId: FormRespondentColumnId;
-  /** Whether respondent identity is withheld from response rows. The
-ledger still records who responded so they cannot submit twice. */
-  respondentHidden: boolean;
   /** Whether people with View may read individual response rows. */
   responsesVisible: boolean;
   /** Whether its owner closed it. */

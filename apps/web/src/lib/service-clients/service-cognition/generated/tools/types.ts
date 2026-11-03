@@ -453,6 +453,11 @@ export type FormSource =
        * for a channel poll.
        */
       isHiddenInDrive?: boolean;
+      /**
+       * Make the form anonymous from the start: its table gets no
+       * Respondent column.
+       */
+      anonymous?: boolean;
       kind: 'new';
     }
   | {
@@ -7847,8 +7852,8 @@ export interface Form {
   submittedColumnId?: string | null;
   /**
    * The person column each signed-in submission names its respondent in;
-   * `null` once deleted. When `respondent_hidden`, the form still owns
-   * this column but does not write it.
+   * `null` once deleted, and on a form created anonymous. An anonymous
+   * form never writes it.
    */
   respondentColumnId?: string | null;
   audience: Audience;
@@ -7861,10 +7866,11 @@ export interface Form {
    */
   responsesVisible: boolean;
   /**
-   * Whether respondent identity is withheld from response rows. The
-   * ledger still records who responded so they cannot submit twice.
+   * Whether nobody, the owner included, can see who gave which response.
+   * Who responded is kept apart from the responses, only so nobody
+   * responds twice. Fixed once anyone has responded.
    */
-  respondentHidden: boolean;
+  anonymous: boolean;
   status: FormStatus;
   /**
    * When it stops taking responses, if it does.
@@ -15565,7 +15571,7 @@ export interface SetFavoriteResponse {
   favorite: boolean;
 }
 /**
- * Open, close or share a saved form immediately. Requires Form Owner. Supply complete audience/status/deadline/tally settings and explicit channel grant deltas; empty deltas change no grants. Optional responsesVisible lets View holders read response rows; optional respondentHidden withholds names from those rows while still recording who responded. Public allows anonymous responses. View allows responding without database access unless responses are shared; channel Edit grants editing of the entire backing database. Uses the existing Forms settings and sharing services without a review step. This never posts a message or sends invitations. Settings and channel grants are separate writes; inspect partial results before retrying. Returns actual access, canonical links and acceptingResponses; a URL alone does not mean the form is open.
+ * Open, close or share a saved form immediately. Requires Form Owner. Supply complete audience/status/deadline/tally settings and explicit channel grant deltas; empty deltas change no grants. Optional responsesVisible lets View holders read response rows; optional anonymous makes the form anonymous to everyone, its owner included (who responded is kept apart from the responses), and is refused once anyone has responded. Public allows anonymous responses. View allows responding without database access unless responses are shared; channel Edit grants editing of the entire backing database. Uses the existing Forms settings and sharing services without a review step. This never posts a message or sends invitations. Settings and channel grants are separate writes; inspect partial results before retrying. Returns actual access, canonical links and acceptingResponses; a URL alone does not mean the form is open.
  */
 export interface SetFormAccess {
   formId: FormId;
@@ -15590,9 +15596,10 @@ export interface AccessDraft {
    */
   responsesVisible?: boolean | null;
   /**
-   * Whether respondent identity is withheld from response rows.
+   * Whether nobody, the owner included, can see who gave which response;
+   * refused once anyone has responded.
    */
-  respondentHidden?: boolean | null;
+  anonymous?: boolean | null;
   /**
    * Direct channel changes only; this does not post messages or send invitations.
    */
