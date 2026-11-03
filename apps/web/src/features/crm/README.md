@@ -49,6 +49,9 @@ contact suggestions from the GraphQL cache before refreshing CRM and Soup
 queries. Refresh mounted GraphQL lists that can contain CRM records too: the
 REST mutation returns no changed rows, and hidden records are absent from the
 search index. Failed mutations leave those cached records intact.
+Company selection snapshots and deduplicates the company's domains, waits for
+every domain request, and retains failed domains for retry after the company
+disappears from suggestions. Keep successful blocks when another domain fails.
 CRM supplies row/header/empty state slots, filter choices, grouping policy, and
 its own collection state to the shared collection renderer. Shared collection code must not acquire CRM hooks or
 CRM-specific state again.

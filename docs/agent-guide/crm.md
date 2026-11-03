@@ -496,7 +496,7 @@ send to someone on a personal provider (gmail.com, outlook.com, …) adds them a
 a contact without a company; mail they send you only updates a contact that
 already exists. Vendor, brand and bulk-sender domains stay out. Turning the
 toggle back on only stops future sync; contacts it already added stay.
-Blocking a domain (typed, or every domain of a company picked from the menu)
+Blocking a domain (typed, or selected from a company's current domains)
 stops email sync for it and hides the company that owns it, that company's
 people, and contacts without a company at that domain; unblocking shows them
 again once none of the company's domains remain blocked. Contacts without a
@@ -505,6 +505,11 @@ company follows that company's domains, so
 blocking `gmail.com` does not hide a Gmail address filed under another company.
 A new contact added by hand without a company at an already blocked domain
 stays visible; a later block operation for that domain hides it.
+Selecting a company attempts each of its current domains separately. Controls
+stay disabled until all requests settle. Successful domains remain blocked;
+failed domains stay listed with **Retry failed domains**, even if the company
+disappears from the picker. Verify an early request failure followed by a later
+success, then retry only the failed domains without undoing successful blocks.
 After blocking or unblocking, verify that already-cached company lists and
 contact suggestions refresh to the new visibility without reloading the app,
 including a previously hidden company returning after unblocking.
