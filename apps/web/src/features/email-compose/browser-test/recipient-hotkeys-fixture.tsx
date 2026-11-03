@@ -65,6 +65,7 @@ const context: EmailComposeContext = {
       alert: () => {},
       dismiss: () => {},
     },
+    pushUndo: () => ({ dispose: () => {} }),
     blockingNotice: async () => {},
     confirm: async () => false,
     reportError: () => {},

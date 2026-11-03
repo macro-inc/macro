@@ -886,8 +886,10 @@ or using a reply shortcut.
 Sending a new email opens its thread with the message already shown as sent; it
 must not show the draft or **Loading draft…** first.
 
-After a send is queued, its notice offers `Undo`. Undo restores the
-sent envelope and editable content, including when the reply used another inbox;
+After a send is queued, its notice offers `Undo`. Until the undo window
+ends, `z` in Email and `Cmd+Z` anywhere undo the send too, even after
+another notice replaces it. Undo restores the sent envelope and editable
+content, including when the reply used another inbox;
 a slow background refresh must not keep the restored editor disabled. A rejected
 send reports failure and restores its original reply editor if it is still mounted.
 A failure from an older, unmounted editor must not overwrite a newer edited reply.

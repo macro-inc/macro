@@ -71,6 +71,7 @@ export function createComposeContext(): EmailComposeContext & {
         alert: vi.fn(),
         dismiss: vi.fn(),
       },
+      pushUndo: vi.fn(() => ({ dispose: vi.fn() })),
       blockingNotice: vi.fn(async () => {}),
       confirm: vi.fn(async () => false),
       reportError: vi.fn(),

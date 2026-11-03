@@ -1399,7 +1399,7 @@ export function createReplyComposer(
         });
       // The outbox delivers an online send right away; offline it waits on this device.
       const offline = props.connectivity.looksOffline();
-      announceQueuedSend({
+      const announcement = announceQueuedSend({
         notices: props.notices,
         delivery: props.delivery,
         sendAttemptId: result.sendAttemptId,
@@ -1429,6 +1429,9 @@ export function createReplyComposer(
               // Marking done can finish after the send was undone or failed.
               if (returnedToInbox)
                 fireAndForget(returnToInbox(), 'email-compose');
+              // Undoing the send also returns the thread to the inbox, so
+              // the undo keys reach the send first.
+              else announcement.raiseUndo();
             },
             navigate: markDone,
             cancelled: () =>
