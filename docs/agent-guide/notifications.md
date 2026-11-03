@@ -21,6 +21,13 @@ marking it read. Local-only drafts must not issue a mailbox read.
 Channel/thread rows retain their scoped reads, and message readers still require
 actual visibility; opening another entity must not mark hidden replies seen.
 
+With GraphQL Soup enabled, modern project **Mark read** and **Mark done** actions
+target all of the project's notifications, including notifications absent from
+the loaded feed. The target is `INITIATIVE`; legacy Drive folders retain the
+separate `PROJECT` target.
+Check both actions with a partially loaded notification feed. This mapping does
+not add read-on-open behavior to project routes or folder navigation.
+
 ## Notifications
 
 Browser notifications must arrive while Macro is in a background tab, not just

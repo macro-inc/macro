@@ -545,6 +545,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   owning inbox, and keep channel/external-message visibility policies separate.
   Ready document/chat/PR/email details mark read on mount for direct links.
   Calendar grid selections and links mark the canonical event, excluding team projections.
+- Target modern projects as `initiative` / `INITIATIVE` for entity-wide
+  notification writes; reserve `project` / `PROJECT` for legacy Drive folders.
 - Route explicit meeting-page exits using the server's `callEnded` result: ended
   calls open their record; ongoing channel and scheduled calls return to the
   channel and Calendar. Leaving from a channel's Call tab stays in the channel. Preserve the session ID and send the server leave before media
