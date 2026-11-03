@@ -56,7 +56,6 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   DiscoverConnectors: null,
   DescribeCodeTools: null,
   DispatchCodingAgent: (whose) => `start a coding agent with ${whose} access`,
-  DisplayResults: (whose) => `show results from ${whose} workspace`,
   DuplicateItem: (whose) => `duplicate items in ${whose} workspace`,
   EditBookingLink: (whose) => `edit ${whose} booking links`,
   ApplyCanvasEdits: (whose) => `edit ${whose} canvases`,

@@ -3,7 +3,7 @@ import type { ItemType } from '@service-storage/client';
 import { cn } from '@ui';
 import { For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
-import type { EntityRef, WidgetOf } from '../schema';
+import type { EntityRef, WidgetOf } from '../view';
 import { TEXT } from '../tokens';
 
 export type TimelineProps = Omit<WidgetOf<'timeline'>, 'type'>;

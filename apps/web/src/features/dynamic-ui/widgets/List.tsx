@@ -22,7 +22,7 @@ import {
 } from '@queries/soup/items';
 import { cn } from '@ui';
 import { createMemo, Show, Suspense } from 'solid-js';
-import type { EntityRef, WidgetOf } from '../schema';
+import type { EntityRef, WidgetOf } from '../view';
 import { SURFACE, TEXT } from '../tokens';
 
 /**

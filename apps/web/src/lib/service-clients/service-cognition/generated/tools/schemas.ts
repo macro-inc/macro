@@ -17503,10 +17503,6 @@ export const WebSearchResponse = z.object({
   tool_use_id: z.string(),
 });
 
-export const DisplayResults = z.object({ view: z.any() });
-
-export const DisplayResultsResponse = z.object({ message: z.string() });
-
 export const DescribeCodeTools = z
   .object({
     task: z.union([z.string(), z.null()]).optional(),
