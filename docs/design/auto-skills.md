@@ -203,10 +203,12 @@ One source per topic:
 The hybrid still holds, with three changes now that most guidance lives in
 skills.
 
-1. **Candidates.** The built-ins (about 11, fixed), plus up to 53 of the
-   user's skills by recency, giving at most 64 questions and two parallel Jev
-   calls. Skills already loaded in this session, and skills the message
-   explicitly mentions, are skipped.
+1. **Candidates.** The built-ins (about 11, fixed) plus every skill the user
+   can read, most recently updated first. They are split into
+   `ceil(candidates / 32)` parallel Jev calls, capped at 8 calls (256
+   candidates). Skills past the cap are not routed but stay reachable through
+   the catalog and `ReadSkill`. Skills already loaded in this session, and
+   skills the message explicitly mentions, are skipped.
 2. **Route.** Jev gets the last user message plus the previous one, and one
    independent question per candidate, so several skills can match. "Every
    Monday, summarise new rows in Leads" loads both `routines` and
@@ -230,7 +232,7 @@ skills.
 5. **Catalog.**
    - Built-in names and descriptions go in `shared`. They are identical for
      everyone, so they are cached.
-   - User skills go in `rest`, at most 64 lines.
+   - User skills go in `rest`, at most 256 lines; past that, `SearchSkills`.
    - The model can load anything Jev missed with `ReadSkill`, which also
      loads the skill's tools.
 6. **Backstop.** Loading a tool a skill owns loads the skill.
@@ -336,7 +338,9 @@ Domain tests with a fake `Cognition`:
 - An unreadable user skill is never a candidate.
 - An `AgentOnly` skill is absent from `/documents/system_skills`.
 - Loading a skill's tool loads the skill.
-- The 32-question split and the size budgets hold.
+- Candidates split into `ceil(n / 32)` calls, at most 8; the 257th candidate
+  is not routed.
+- The size budgets hold.
 
 ## Implementation PRs
 
@@ -347,18 +351,18 @@ Domain tests with a fake `Cognition`:
    span.
 3. **Loading in agent sessions,** behind the `auto-skills` flag: sticky
    loading, tool loading, the tool backstop, and the catalog.
-4. **Move areas into built-ins.** `databases` and `crm` first, then the rest,
-   one area per PR. Each PR measures the prompt and deferred catalog before
-   and after, and re-runs the evaluation. Code-mode entity selection moves to
-   the router as entities gain skills.
-5. **Chat, channel bot and MCP instructions.**
+4. **Move areas into built-ins**, one area per PR, until `crates/prompt`
+   holds no area guidance (`databases.md`, `crm_pipelines.md`, `email`,
+   `user_tools`, `tasks`, `document_content_links`, `coding_agents`, the polls
+   rules). Each PR reports the prompt size before and after and the
+   evaluation hit rate.
+5. **Skill-driven entity loading.** Loaded skills bring their SDK entity
+   indexes, and `select_documentation` is removed.
 6. **Docs:** `skills.mdx`, the agent guide and the `AGENTS.md` files, in each
    PR they affect.
 
 ## Open questions
 
-- How many skills a real user has. The design assumes tens. If many users
-  have hundreds, a name-search pre-filter shortlists them before Jev.
 - Whether `finding-things` loads so often that it belongs in the always-on
   prompt. The traffic sample decides.
 - Whether providers other than Anthropic tolerate tools added mid-session
