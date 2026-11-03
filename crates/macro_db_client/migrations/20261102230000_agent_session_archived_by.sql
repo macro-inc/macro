@@ -1,4 +1,6 @@
 -- Who archived a session, and when. NULL is an active session.
+SET LOCAL lock_timeout = '5s';
+
 CREATE TYPE agent_session_archive_cause AS ENUM ('user', 'pull_request_merged', 'runtime_closed');
 
 ALTER TABLE agent_session
@@ -15,7 +17,7 @@ UPDATE agent_session SET archived_by = 'user', archived_at = modified_at WHERE i
 
 ALTER TABLE agent_session
     ADD CONSTRAINT agent_session_archived_by_with_archived_at
-    CHECK ((archived_by IS NULL) = (archived_at IS NULL));
+    CHECK ((archived_by IS NULL) = (archived_at IS NULL)) NOT VALID;
 
 -- Code from before archived_by still reads and writes is_archived until every replica runs
 -- the new code; keep both in step until is_archived is dropped.
