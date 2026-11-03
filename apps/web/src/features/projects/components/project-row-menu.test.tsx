@@ -1,4 +1,5 @@
 import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProjectRow } from '../context/projects-context';
 import type { ProjectAccess } from '../core/project';
@@ -113,6 +114,39 @@ describe('project actions dropdown', () => {
         },
       ])
     );
+  });
+
+  it('updates editing capability without changing the targets of an open menu', async () => {
+    const original = project('owner');
+    const [rows, setRows] = createSignal([original]);
+    const [editing, setEditing] = createSignal(true);
+    const changeIcon = vi.fn();
+    render(() => (
+      <ProjectMenuDropdown
+        targets={rows}
+        canOpenInNewSplit
+        onOpenInNewSplit={vi.fn()}
+        onRename={vi.fn()}
+        onChangeIcon={editing() ? changeIcon : undefined}
+        onSetOption={vi.fn()}
+        onCopyLink={vi.fn()}
+        onCopyId={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    ));
+    await openMenu();
+    expect(screen.getByRole('menuitem', { name: 'Change icon…' })).toBeTruthy();
+
+    setEditing(false);
+    expect(screen.getByRole('menu')).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: 'Change icon…' })).toBeNull();
+
+    setRows([
+      { project: { ...original.project, id: 'other' }, properties: [] },
+    ]);
+    setEditing(true);
+    click(screen.getByRole('menuitem', { name: 'Change icon…' }));
+    await waitFor(() => expect(changeIcon).toHaveBeenCalledWith(original));
   });
 
   it('keeps view access to navigation and links', async () => {

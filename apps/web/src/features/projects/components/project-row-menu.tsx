@@ -297,10 +297,11 @@ export function ProjectMenuDropdown(props: ProjectMenuProps) {
 }
 
 function ProjectMenuItems(props: ProjectMenuProps) {
-  // Mounted per opening, so the entries match the rows they act on.
-  const entries = projectMenuEntries(props, props.targets());
+  // Freeze action targets per opening; keep available actions reactive.
+  const rows = props.targets();
+  const entries = () => projectMenuEntries(props, rows);
   return (
-    <For each={entries}>
+    <For each={entries()}>
       {(group, index) => (
         <>
           <Show when={index() > 0}>
