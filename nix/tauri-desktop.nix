@@ -86,7 +86,7 @@
           && !(lib.hasPrefix "apps/web/dist/" rel)
           && !(lib.hasPrefix "apps/web/tauri/target/" rel)
           && !(lib.hasPrefix "apps/web/src/lib/graphql-cache/wasm/" rel)
-          && !(lib.hasPrefix "apps/web/src/lib/core/agent-fold/wasm/" rel)
+          && builtins.match "apps/web/src/lib/core/[^/]+/wasm(/.*)?" rel == null
           && !(lib.hasPrefix "packages/lexical-core/node_modules/" rel)
           && !(lib.hasPrefix "services/lexical-service/node_modules/" rel)
           && !(lib.hasPrefix "packages/loro-mirror/node_modules/" rel)
@@ -97,8 +97,7 @@
           && rel != "apps/web/node_modules"
           && rel != "apps/web/dist"
           && rel != "apps/web/tauri/target"
-          && rel != "apps/web/src/lib/graphql-cache/wasm"
-          && rel != "apps/web/src/lib/core/agent-fold/wasm";
+          && rel != "apps/web/src/lib/graphql-cache/wasm";
       };
 
       rootCargoVendorDir = craneLib.vendorCargoDeps {
@@ -142,33 +141,102 @@
         src = jsRoot;
       };
 
-      agentFoldWasmPackage = craneLib.mkCargoDerivation {
-        pname = "macro-agent-fold-wasm";
-        version = appVersion;
-        src = jsSrc;
-        cargoArtifacts = null;
-        cargoVendorDir = rootCargoVendorDir;
-        nativeBuildInputs = [
-          pkgs.binaryen
-          pkgs.wasm-bindgen-cli_0_2_126
-          pkgs.wasm-pack
-        ];
-        doCheck = false;
-        preBuild = cacheWasmPackage.preBuild;
-        buildPhaseCargoCommand = ''
-          wasm-pack build crates/folds/agent_fold \
-            --target web \
-            --release \
-            --mode no-install \
-            --out-dir "$PWD/apps/web/src/lib/core/agent-fold/wasm" \
-            -- --no-default-features
-        '';
-        installPhaseCommand = ''
-          mkdir -p $out
-          cp -a apps/web/src/lib/core/agent-fold/wasm/. $out/
-        '';
-        doInstallCargoArtifacts = false;
-      };
+      # Builds one wasm-pack package into apps/web/src/lib/core/<dir>/wasm,
+      # the way its `build-*-wasm` recipe in apps/web/justfile does.
+      mkCoreWasmPackage =
+        {
+          name,
+          crate,
+          dir,
+          simd ? false,
+          profile ? null,
+          cargoArgs ? "",
+        }:
+        let
+          outDir = "apps/web/src/lib/core/${dir}/wasm";
+        in
+        craneLib.mkCargoDerivation (
+          {
+            pname = "macro-${dir}-wasm";
+            version = appVersion;
+            src = jsSrc;
+            cargoArtifacts = null;
+            cargoVendorDir = rootCargoVendorDir;
+            nativeBuildInputs = [
+              pkgs.binaryen
+              pkgs.wasm-bindgen-cli_0_2_126
+              pkgs.wasm-pack
+            ];
+            doCheck = false;
+            preBuild = cacheWasmPackage.preBuild;
+            buildPhaseCargoCommand = ''
+              wasm-pack build ${crate} \
+                --target web \
+                ${if profile == null then "--release" else "--profile ${profile}"} \
+                --mode no-install \
+                --out-dir "$PWD/${outDir}" ${cargoArgs}
+            '';
+            installPhaseCommand = ''
+              mkdir -p $out
+              cp -a ${outDir}/. $out/
+            '';
+            doInstallCargoArtifacts = false;
+            passthru = { inherit dir; wasmName = name; };
+          }
+          // lib.optionalAttrs simd {
+            CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS = "-C target-feature=+simd128";
+          }
+        );
+
+      # Every package `just build-wasm` builds besides the cache. Vite leaves a
+      # missing package's `new URL()` unchanged, so one left out here ships a
+      # desktop bundle that cannot open that kind of file.
+      coreWasmPackages = map mkCoreWasmPackage [
+        {
+          name = "agent_fold";
+          crate = "crates/folds/agent_fold";
+          dir = "agent-fold";
+          cargoArgs = "-- --no-default-features";
+        }
+        {
+          name = "database_sql";
+          crate = "crates/database_sql";
+          dir = "database-sql";
+        }
+        {
+          name = "pptx_engine";
+          crate = "crates/pptx_engine";
+          dir = "pptx-engine";
+          simd = true;
+        }
+        {
+          name = "docx_engine";
+          crate = "crates/docx_engine";
+          dir = "docx-engine";
+          simd = true;
+        }
+        {
+          name = "fig_engine";
+          crate = "crates/fig_engine";
+          dir = "fig-engine";
+          simd = true;
+          profile = "fig-engine-wasm";
+        }
+        {
+          name = "psd_engine";
+          crate = "crates/psd_engine";
+          dir = "psd-engine";
+          simd = true;
+          profile = "psd-engine-wasm";
+        }
+        {
+          name = "ai_engine";
+          crate = "crates/ai_engine";
+          dir = "ai-engine";
+          simd = true;
+          profile = "ai-engine-wasm";
+        }
+      ];
 
       # The macrod agent daemon, bundled with the desktop app as a Tauri
       # sidecar so "run agents on this computer" needs no separate download.
@@ -257,8 +325,10 @@
           printf production > apps/web/tauri/src-tauri/.macro-tauri-env
           mkdir -p apps/web/src/lib/graphql-cache/wasm
           cp -a ${cacheWasmPackage}/. apps/web/src/lib/graphql-cache/wasm/
-          mkdir -p apps/web/src/lib/core/agent-fold/wasm
-          cp -a ${agentFoldWasmPackage}/. apps/web/src/lib/core/agent-fold/wasm/
+          ${lib.concatMapStrings (pkg: ''
+            mkdir -p apps/web/src/lib/core/${pkg.dir}/wasm
+            cp -a ${pkg}/. apps/web/src/lib/core/${pkg.dir}/wasm/
+          '') coreWasmPackages}
           (
             cd apps/web
             MODE=production NODE_ENV=production bun ../../node_modules/vite/bin/vite.js build -c vite.config.ts
@@ -284,8 +354,10 @@
         doCheck = true;
         checkPhase = ''
           runHook preCheck
-          for asset in apps/web/dist/assets/agent_fold-*.js apps/web/dist/assets/agent_fold_bg-*.wasm; do
-            test -s "$asset" || { echo "Missing agent fold bundle asset: $asset" >&2; exit 1; }
+          for name in ${lib.concatMapStringsSep " " (pkg: pkg.wasmName) coreWasmPackages}; do
+            for asset in "apps/web/dist/assets/$name-"*.js "apps/web/dist/assets/''${name}_bg-"*.wasm; do
+              test -s "$asset" || { echo "Missing $name wasm bundle asset: $asset" >&2; exit 1; }
+            done
           done
           runHook postCheck
         '';
