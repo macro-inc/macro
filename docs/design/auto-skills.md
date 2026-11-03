@@ -376,7 +376,7 @@ Results with every layer, 21 prompts × 3 runs at the shipped thresholds: the
 exact expected skills load in 52 of 63 runs, 48 of 51 expected loads happen,
 and 2 of the 18 runs of prompts that need no skill load one. Routed prompts
 are about 8k characters shorter than unrouted ones on every host, and
-unrouted prompts about 3k shorter than before.
+unrouted prompts about 2.4k shorter than before (chat: 44,985 → 42,544; routed: 34,860).
 
 Not built yet: user skill descriptions (migration, API, SDK, UI), the tool
 backstop, and routing for chat and the channel bot.
