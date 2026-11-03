@@ -1281,7 +1281,10 @@ chips also use lazy windows; closed-chip labels resolve explicit IDs independent
 without directory-sized maps. Unassigned is a local value, not membership.
 Query-driven comboboxes retain typed input across page/metadata replacement.
 Native policy version 4 retains mention
-scoring and property self/domain boosts, and excludes automated recipient mailboxes
+scoring and property self/domain boosts. Document/project/call discussion mentions
+also delegate to that window; channel/CRM/explicit rosters stay scoped even while
+empty. Agent transforms decorate only current rows, keeping original native
+metadata for unchanged people. Recipient policy excludes automated mailboxes
 before the result limit unless a full address was typed. The policy floor is generated
 from Rust alongside the transport schemas; older replies use bounded server fallback.
 Creation/sharing and main email recipient controls now own paged sources; email

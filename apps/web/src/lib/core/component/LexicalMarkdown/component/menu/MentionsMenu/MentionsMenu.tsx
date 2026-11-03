@@ -99,8 +99,9 @@ const DEFAULT_DOCUMENT_BUCKETS: EntityBucket[] = [
 
 type MentionsMenuProps = {
   menu: MenuOperations;
-  /** pass in a custom users list if necessary */
-  users?: Accessor<IUser[]>;
+  /** Undefined delegates to personal search; an empty list stays scoped empty. */
+  users?: Accessor<IUser[] | undefined>;
+  transformUsers?: (users: readonly IUser[]) => IUser[];
   /** pass in custom entity items to replace quickAccess data (e.g. sandbox data for onboarding) */
   entities?: Accessor<EntityItem[]>;
   /** whether the menu checks against block boundary in floating middleware. uses floating-ui default if false. */
@@ -177,6 +178,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
   const userMention = useUsersMention({
     users: props.users,
+    transformUsers: props.transformUsers,
     searchTerm,
     isChannelBlock: props.block === 'channel',
     enabled: () =>

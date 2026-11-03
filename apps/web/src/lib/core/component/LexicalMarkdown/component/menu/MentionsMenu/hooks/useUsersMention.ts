@@ -8,8 +8,9 @@ import type { GroupMentionItem } from '../../../../utils/mentionsUtils';
 import { isBotMentionUser } from '../utils/botMention';
 
 type UseUsersMentionOptions = {
-  /** Custom users list if necessary */
-  users?: Accessor<IUser[]>;
+  /** Undefined uses personal search; [] remains a closed, empty scope. */
+  users?: Accessor<IUser[] | undefined>;
+  transformUsers?: (users: readonly IUser[]) => IUser[];
   searchTerm: Accessor<string>;
   enabled?: Accessor<boolean>;
   /**
@@ -52,11 +53,13 @@ export function useUsersMention(
 ): UseUsersMentionResult {
   const { users: customUsers, searchTerm, isChannelBlock } = options;
   const quickAccess = useQuickAccess();
+  const usesDirectory = () =>
+    options.enabled?.() !== false && customUsers?.() === undefined;
   const workspace = quickAccess.useList({
     buckets: ['person'],
     searchTerm,
     peopleMode: 'mention',
-    enabled: () => !customUsers && options.enabled?.() !== false,
+    enabled: usesDirectory,
   });
   const workspaceUsers = workspace.items;
   const currentUserEmail = useEmail();
@@ -67,24 +70,34 @@ export function useUsersMention(
   };
 
   const usersList = createLazyMemo((): UserItem[] => {
-    if (!customUsers) return workspaceUsers();
-
-    // Custom lists scope who can be mentioned, but should retain the same
-    // interaction ranking as the document body's workspace list.
-    return customUsers().map((user) => ({
-      id: user.id,
-      data: user,
-      kind: 'user',
-      bucket: 'person',
-      sortTimestamp: new Date(
-        quickAccess.interactionForUser(user.id) ?? user.lastInteraction ?? 0
-      ).getTime(),
-      timestamps: {
-        lastInteraction:
-          quickAccess.interactionForUser(user.id) ?? user.lastInteraction,
-      },
-      searchText: `${user.name || user.email} | ${user.email}`,
-    }));
+    if (options.enabled?.() === false) return [];
+    const scoped = customUsers?.();
+    if (scoped === undefined && !options.transformUsers)
+      return workspaceUsers();
+    const window = scoped === undefined ? workspaceUsers() : [];
+    const rows = new Map(window.map((item) => [item.id, item]));
+    const base = scoped ?? window.map((item) => item.data);
+    const users = options.transformUsers?.(base) ?? base;
+    // Scoped lists retain their supplied display data. Untouched native rows
+    // retain the context/timestamps used to rank that window before limiting.
+    return users.map((user): UserItem => {
+      const row = rows.get(user.id);
+      if (row?.data === user) return row;
+      return {
+        id: user.id,
+        data: user,
+        kind: 'user',
+        bucket: 'person',
+        sortTimestamp: new Date(
+          quickAccess.interactionForUser(user.id) ?? user.lastInteraction ?? 0
+        ).getTime(),
+        timestamps: {
+          lastInteraction:
+            quickAccess.interactionForUser(user.id) ?? user.lastInteraction,
+        },
+        searchText: `${user.name || user.email} | ${user.email}`,
+      };
+    });
   });
 
   const userSearch = () => {
@@ -140,12 +153,12 @@ export function useUsersMention(
     currentUserDomain,
     groups,
     usersAndGroups,
-    windowKey: () => (!customUsers ? workspace.windowKey?.() : undefined),
-    hasMore: () => !customUsers && workspace.hasMore(),
-    isLoading: () => !customUsers && workspace.isLoading(),
-    isLoadingMore: () => !customUsers && workspace.isLoadingMore(),
+    windowKey: () => (usesDirectory() ? workspace.windowKey?.() : undefined),
+    hasMore: () => usesDirectory() && workspace.hasMore(),
+    isLoading: () => usesDirectory() && workspace.isLoading(),
+    isLoadingMore: () => usesDirectory() && workspace.isLoadingMore(),
     loadMore: async () => {
-      if (!customUsers) await workspace.loadMore();
+      if (usesDirectory()) await workspace.loadMore();
     },
   };
 }

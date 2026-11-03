@@ -1517,6 +1517,12 @@ and many recent tasks containing “task”: the project should appear in the fi
 preview rows and stay near the top in **View all**. Select it with Enter or a
 phone tap and confirm a project mention is inserted.
 
+Document, project and call discussion composers (including replies and edits)
+use the same paged personal directory. Channel people remain participant-scoped,
+and CRM discussions remain team-scoped; an empty or loading roster never opens
+personal-directory search. Available agents are added to the current window or
+scope with the existing rollout rules. Group mentions remain channel-only.
+
 Counts describe loaded results, not the full server corpus. Scans through
 incomplete or already-visible cache hits are bounded per action; continue
 navigating/scrolling, or narrow the query, to resume from the saved cursor.

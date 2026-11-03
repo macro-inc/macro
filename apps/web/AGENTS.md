@@ -59,7 +59,14 @@ Quick Access person lists are per-observer windows, never global item-cache rows
 Forward live queries from commands, mentions and property selectors; resolve CRM
 aliases only for their current window. Reset virtual focus/scroll on window
 replacement, not label updates. Keep explicit participant/team pools scoped and
-selected IDs/self independent of suggestion pages. `RecipientSelector.createSource`
+selected IDs/self independent of suggestion pages. Discussion mentions on documents,
+projects and calls delegate to the same bounded directory. In mention configuration,
+`users()` returning undefined selects that directory; [] remains an explicit empty
+scope, including while channel/CRM rosters load. `transformUsers` applies agent
+policy only to the current window or scoped roster, never a full personal pool.
+Keep native row timestamps and forwarding through both editor configuration and
+`MarkdownShell`; the channel mention browser suite exercises the real composition.
+`RecipientSelector.createSource`
 constructs a per-picker source from live query/open/self/domain inputs; use
 `useContactRecipientSource` or `useCombinedRecipientSource` for personal suggestions
 and keep `options` for explicit scoped extras. Closing releases the page and reopening

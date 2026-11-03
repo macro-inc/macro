@@ -1,4 +1,5 @@
 import type { UserItem } from '@core/context/quickAccess';
+import type { QuickAccessListOptions } from '@core/context/quickAccess/types';
 import type { IUser } from '@core/user';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -6,10 +7,18 @@ import { useUsersMention } from './useUsersMention';
 
 const mocks = vi.hoisted(() => ({
   users: (): UserItem[] => [],
+  loadMore: vi.fn<() => Promise<void>>(),
 }));
 vi.mock('@core/context/quickAccess', () => ({
   useQuickAccess: () => ({
-    useList: () => ({ items: () => mocks.users() }),
+    useList: (options: QuickAccessListOptions) => ({
+      items: () => (options.enabled?.() === false ? [] : mocks.users()),
+      windowKey: () => 'window',
+      hasMore: () => true,
+      isLoading: () => false,
+      isLoadingMore: () => false,
+      loadMore: mocks.loadMore,
+    }),
     interactionForUser: (id: string) =>
       mocks.users().find((user) => user.id === id)?.timestamps
         .lastInteraction ?? undefined,
@@ -47,6 +56,8 @@ const userItem = (user: IUser, lastInteraction?: Date): UserItem => ({
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-09-29T12:00:00Z'));
+  mocks.loadMore.mockReset();
+  mocks.loadMore.mockResolvedValue(undefined);
   mocks.users = () => [
     userItem(sean),
     userItem(alias),
@@ -113,6 +124,69 @@ it('preserves explicitly empty participant lists', () => {
     const mention = useUsersMention({ searchTerm: () => '', users: () => [] });
     expect(mention.users()).toEqual([]);
     dispose();
+  });
+});
+
+it('decorates only the current window and never widens an empty or explicit roster', async () => {
+  await createRoot(async (dispose) => {
+    try {
+      const person: IUser = {
+        id: 'macro|person@example.com',
+        name: 'Directory person',
+        email: 'person@example.com',
+      };
+      const agent: IUser = {
+        id: 'macro|agent@example.com',
+        name: 'Available agent',
+        email: 'agent@example.com',
+      };
+      const item = userItem(person, new Date('2026-01-01'));
+      const [window, setWindow] = createSignal([item]);
+      mocks.users = window;
+      const [scope, setScope] = createSignal<IUser[] | undefined>(undefined);
+      const mention = useUsersMention({
+        searchTerm: () => '',
+        users: scope,
+        transformUsers: (users) => [...users, agent],
+      });
+      expect(mention.availableUsers().map((row) => row.id)).toEqual([
+        person.id,
+        agent.id,
+      ]);
+      expect(mention.availableUsers()[0]).toBe(item);
+      expect(mention.hasMore()).toBe(true);
+      await mention.loadMore();
+      expect(mocks.loadMore).toHaveBeenCalledOnce();
+      setWindow([
+        userItem({
+          id: 'macro|next@example.com',
+          name: 'Next window',
+          email: 'next@example.com',
+        }),
+      ]);
+      expect(mention.availableUsers().map((row) => row.id)).toEqual([
+        'macro|next@example.com',
+        agent.id,
+      ]);
+      setScope([]);
+      expect(mention.availableUsers().map((row) => row.id)).toEqual([agent.id]);
+      expect(mention.hasMore()).toBe(false);
+      expect(mention.windowKey()).toBeUndefined();
+      await mention.loadMore();
+      expect(mocks.loadMore).toHaveBeenCalledOnce();
+      setScope([person]);
+      expect(mention.availableUsers().map((row) => row.id)).toEqual([
+        person.id,
+        agent.id,
+      ]);
+      setScope(undefined);
+      expect(mention.availableUsers().map((row) => row.id)).toEqual([
+        'macro|next@example.com',
+        agent.id,
+      ]);
+    } finally {
+      dispose();
+    }
   });
 });
 
