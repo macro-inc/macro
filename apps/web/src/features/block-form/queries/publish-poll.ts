@@ -2,7 +2,8 @@
  * `/poll` (RFC 03 §3): a poll is a form with one required choice question.
  * Create the form (and its database), add the Select column with the options
  * under ids minted here, place it as the only question, and set whether
- * respondents see the results.
+ * respondents see the results. An anonymous poll is anonymous from creation,
+ * so its table never gets a Respondent column.
  */
 import { createDatabaseColumn } from '@block-database/queries/columns';
 import { createForm, putFormLayout, updateForm } from '@queries/storage/forms';
@@ -41,7 +42,14 @@ export function publishPoll(
   if (labels.length < 2)
     return errAsync({ message: 'Give at least two options.' });
   return createForm(
-    { name: question, source: { kind: 'new', isHiddenInDrive: true } },
+    {
+      name: question,
+      source: {
+        kind: 'new',
+        isHiddenInDrive: true,
+        anonymous: draft.anonymous,
+      },
+    },
     'poll'
   )
     .mapErr(writeFailureOf)
@@ -102,7 +110,6 @@ export function publishPoll(
           updateForm(formId, {
             tallyVisible: draft.showResults,
             responsesVisible: draft.shareResponses,
-            anonymous: draft.anonymous,
           }).mapErr(writeFailureOf)
         )
         .orElse(abandon)

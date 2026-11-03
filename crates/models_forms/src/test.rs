@@ -247,7 +247,8 @@ fn a_create_request_names_its_source_by_kind() {
     assert_eq!(
         new.source,
         FormSource::New {
-            is_hidden_in_drive: false
+            is_hidden_in_drive: false,
+            anonymous: false,
         }
     );
 
@@ -258,7 +259,8 @@ fn a_create_request_names_its_source_by_kind() {
     assert_eq!(
         hidden.source,
         FormSource::New {
-            is_hidden_in_drive: true
+            is_hidden_in_drive: true,
+            anonymous: false,
         }
     );
 

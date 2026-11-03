@@ -11,10 +11,12 @@ import { type Poll, type PollBar, pollBars, pollSummary } from '../core/tally';
 
 /**
  * Voting on a poll: a vote is a submission, changing it edits the viewer's
- * response. Results come from the tally, refreshed as votes land.
+ * response. Results come from the tally, refreshed as votes land. A vote on
+ * an anonymous poll is final, and which option it was isn't known after.
  */
 export function createPollVoting(options: {
   poll: Accessor<Poll>;
+  anonymous: Accessor<boolean>;
   mine: Accessor<MyResponse | null | undefined>;
   tally: Accessor<QuestionTally[] | undefined>;
   submit: (
@@ -28,6 +30,8 @@ export function createPollVoting(options: {
   /** The vote as just cast, ahead of the stored response being read again. */
   const [cast, setCast] = createSignal<string[]>();
   const [pending, setPending] = createSignal(false);
+  /** The server refused a vote on an anonymous poll this viewer voted in. */
+  const [votedElsewhere, setVotedElsewhere] = createSignal(false);
 
   const stored = (): string[] => {
     const mine = options.mine();
@@ -41,7 +45,10 @@ export function createPollVoting(options: {
     );
   };
   const myVote = () => cast() ?? stored();
-  const voted = () => myVote().length > 0;
+  const voted = () =>
+    myVote().length > 0 || !!options.mine()?.anonymous || votedElsewhere();
+  /** Voted on an anonymous poll, so the vote can't change. */
+  const final = () => options.anonymous() && voted();
   const questionTally = () =>
     options
       .tally()
@@ -70,7 +77,7 @@ export function createPollVoting(options: {
   const responses = () => questionTally()?.responses ?? 0;
 
   async function vote(optionId: string) {
-    if (pending()) return;
+    if (pending() || final()) return;
     const poll = options.poll();
     const current = myVote();
     const next = poll.multi
@@ -93,8 +100,16 @@ export function createPollVoting(options: {
     let result = await (editing
       ? options.editMine(answers)
       : options.submit(answers));
-    if (result.isErr() && result.error.refusal === 'already-responded')
+    if (result.isErr() && result.error.refusal === 'already-responded') {
+      if (options.anonymous()) {
+        setPending(false);
+        setCast(undefined);
+        setVotedElsewhere(true);
+        options.notify('You already voted in this anonymous poll.');
+        return;
+      }
       result = await options.editMine(answers);
+    }
     setPending(false);
     if (result.isErr()) {
       setCast(undefined);
@@ -110,6 +125,7 @@ export function createPollVoting(options: {
   return {
     myVote,
     voted,
+    final,
     pending,
     vote,
     bars: (): PollBar[] =>

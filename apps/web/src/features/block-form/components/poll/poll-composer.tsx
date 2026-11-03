@@ -178,7 +178,7 @@ export function PollComposer(props: {
             </Checkbox>
             <p class="pl-6 text-xs leading-5 text-ink-muted">
               {anonymous()
-                ? 'Names stay off the Responses table. People can still only vote once.'
+                ? 'Nobody in Macro, you included, can see who voted for what. People can still only vote once, and can’t change their vote.'
                 : 'Each response names who voted.'}
             </p>
           </div>

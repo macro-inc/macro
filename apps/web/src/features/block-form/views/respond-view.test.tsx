@@ -354,7 +354,7 @@ describe('RespondView', () => {
     ).toBeTruthy();
   });
 
-  it('offers the shared Responses table from a saved response and says names stay off it', () => {
+  it('shows an anonymous respondent that they responded, with no answers to show or edit', () => {
     const detail = offsite();
     detail.form.responsesVisible = true;
     detail.form.anonymous = true;
@@ -363,10 +363,9 @@ describe('RespondView', () => {
       mine: {
         status: 'submitted',
         booking: null,
-        submittedAt: '2026-10-01T09:00:00Z',
-        answers: [
-          { question: 'q-name', value: { type: 'text', value: 'Ada' } },
-        ],
+        submittedAt: undefined,
+        answers: [],
+        anonymous: true,
       },
     });
     let opened = 0;
@@ -380,11 +379,10 @@ describe('RespondView', () => {
         />
       </FormProvider>
     ));
-    expect(
-      screen.getByText(
-        /Everyone who can open this form sees your answers, without your name\./
-      )
-    ).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Edit my response' })).toBe(
+      null
+    );
+    expect(screen.queryByRole('region', { name: 'Your answers' })).toBe(null);
     fireEvent.click(screen.getByRole('button', { name: 'See responses' }));
     expect(opened).toBe(1);
   });

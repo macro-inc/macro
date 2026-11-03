@@ -380,7 +380,13 @@ export function RespondView(props: {
                 message={form().confirmationMessage}
                 fresh={confirmation().fresh}
                 submittedAt={confirmation().submittedAt}
-                receipt={receipt(confirmation().answers)}
+                receipt={
+                  // An anonymous response's answers are known only to the
+                  // visit that gave them.
+                  form().anonymous && !confirmation().fresh
+                    ? []
+                    : receipt(confirmation().answers)
+                }
                 canEdit={confirmation().canEdit}
                 compact={props.compact}
                 renderEntityLabel={context.ui.renderEntityLabel}
@@ -390,15 +396,27 @@ export function RespondView(props: {
                 }}
                 notice={
                   <>
-                    <Show when={!confirmation().fresh && !open()}>
+                    <Show
+                      when={
+                        !confirmation().fresh && !open() && !form().anonymous
+                      }
+                    >
                       <p class="text-xs text-ink">
                         This form is closed, so your response can’t be changed.
                       </p>
                     </Show>
                     <Show when={confirmation().alreadyResponded}>
                       <p class="text-xs text-ink">
-                        You had already responded, so the answers you just gave
-                        weren’t sent. This is your saved response.
+                        {form().anonymous
+                          ? 'You had already responded, so the answers you just gave weren’t sent.'
+                          : 'You had already responded, so the answers you just gave weren’t sent. This is your saved response.'}
+                      </p>
+                    </Show>
+                    <Show when={!confirmation().fresh && form().anonymous}>
+                      <p class="text-xs text-ink">
+                        You responded. This form is anonymous, so your answers
+                        aren’t kept with your name and can’t be shown or
+                        changed.
                       </p>
                     </Show>
                   </>
@@ -431,12 +449,10 @@ export function RespondView(props: {
                     </Show>
                     <p class="px-1 text-xs text-ink-muted">
                       Stored as a row in a database the form owner controls.{' '}
-                      {props.detail.form.responsesVisible
-                        ? props.detail.form.anonymous
-                          ? 'Everyone who can open this form sees your answers, without your name.'
-                          : 'Everyone who can open this form sees your answers and your name.'
-                        : props.detail.form.anonymous
-                          ? 'The form’s editors see your answers, without your name.'
+                      {props.detail.form.anonymous
+                        ? 'This form is anonymous: nobody in Macro, its owner included, can see which response is yours, and it can’t be changed.'
+                        : props.detail.form.responsesVisible
+                          ? 'Everyone who can open this form sees your answers and your name.'
                           : 'Your answers are visible to the form’s editors.'}
                     </p>
                   </>

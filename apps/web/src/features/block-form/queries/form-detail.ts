@@ -278,6 +278,15 @@ export function toSubmitOutcome(outcome: SubmissionOutcome): SubmitOutcome {
 }
 
 export function toMyResponse(mine: WireMyResponse): MyResponse {
+  if (mine.kind === 'anonymous')
+    return {
+      status: 'submitted',
+      submittedAt: undefined,
+      answers: [],
+      booking: null,
+      anonymous: true,
+    };
+  // Before `kind`, the service sent only saved responses.
   return {
     status: mine.response.status,
     submittedAt: mine.response.submittedAt,

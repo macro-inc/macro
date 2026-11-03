@@ -36,6 +36,7 @@ function PollCardBody(props: {
   );
   const voting = createPollVoting({
     poll: () => props.poll,
+    anonymous: () => props.detail.form.anonymous,
     mine: mine.response,
     tally: tally.value,
     submit: (answers) =>
@@ -52,7 +53,7 @@ function PollCardBody(props: {
         bars={voting.bars()}
         showResults={voting.hasTally()}
         multi={props.poll.multi}
-        disabled={!context.viewer.userId() || !open()}
+        disabled={!context.viewer.userId() || !open() || voting.final()}
         pending={voting.pending()}
         summary={voting.summary()}
         hiddenNote={
@@ -81,6 +82,13 @@ function PollCardBody(props: {
               : undefined
         }
       />
+      <Show when={props.detail.form.anonymous}>
+        <p class="text-xs text-ink-muted">
+          {voting.final()
+            ? 'You voted. Anonymous poll: votes aren’t linked to people, so yours can’t be changed.'
+            : 'Anonymous poll: votes aren’t linked to people, not even for the poll’s owner.'}
+        </p>
+      </Show>
       <Show when={!open()}>
         <p class="text-xs text-ink-muted">
           {availabilityLine(availability(), new Date())}

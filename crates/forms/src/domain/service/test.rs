@@ -24,6 +24,7 @@ use crate::domain::models::{
     FormSectionId, FormStatus, QuestionLayout, StoredForm, Widget,
 };
 
+mod anonymous;
 mod authoring_workflow;
 mod booking;
 mod catalog;

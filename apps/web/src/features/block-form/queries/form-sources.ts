@@ -89,6 +89,7 @@ function refusalOf(code: FormErrorCode): FormRefusal {
     .with('tableAlreadyHasForm', () => 'table-already-has-form')
     .with('alreadyResponded', () => 'already-responded')
     .with('noResponse', () => 'no-response')
+    .with('anonymousResponseFinal', () => 'anonymous-response-final')
     .with('unknownQuestion', () => 'unknown-question')
     .with('repeatedAnswer', () => 'repeated-answer')
     .with('missingAnswer', () => 'missing-answer')

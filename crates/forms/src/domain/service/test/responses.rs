@@ -76,7 +76,7 @@ async fn a_respondent_reads_their_response_back_from_the_row_as_it_is_now() {
         .unwrap();
     assert_eq!(
         mine,
-        MyResponse {
+        MyResponse::Saved {
             response: FormResponse {
                 id: response,
                 form_id: RSVP_FORM,
@@ -243,30 +243,6 @@ async fn an_edit_rewrites_every_question_of_the_row_and_clears_dropped_answers()
         Some(&CellValue::Date(start_of_tests()))
     );
     assert_eq!(cells.get(&DIET), None);
-}
-
-#[tokio::test]
-async fn a_hidden_respondent_edits_their_row_as_the_owner() {
-    let world = world();
-    seed_rsvp(&world, Audience::Members);
-    world.lock().unwrap().forms[0].form.anonymous = true;
-    let forms = service(&world);
-    respond(&forms, VIEWER, answers(EMPLOYEE, Some("Vegan"))).await;
-
-    forms
-        .edit_my_response(
-            form_receipt::<ViewAccessLevel>(RSVP_FORM, VIEWER, AccessLevel::View),
-            Submission {
-                answers: answers(EMPLOYEE, None),
-            },
-        )
-        .await
-        .unwrap();
-
-    let world = world.lock().unwrap();
-    assert_eq!(world.batches.len(), 2);
-    assert_eq!(world.batches[0].viewer, OWNER);
-    assert_eq!(world.batches[1].viewer, OWNER);
 }
 
 #[tokio::test]
@@ -588,7 +564,7 @@ async fn respondents_see_who_voted_only_when_the_responses_are_shared() {
 }
 
 #[tokio::test]
-async fn nobody_sees_who_voted_when_the_form_hides_respondents() {
+async fn nobody_sees_who_voted_on_an_anonymous_form_not_even_its_owner() {
     let world = world();
     seed_rsvp(&world, Audience::Members);
     {

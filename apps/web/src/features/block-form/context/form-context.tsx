@@ -42,6 +42,7 @@ export type FormRefusal =
   | 'table-already-has-form'
   | 'already-responded'
   | 'no-response'
+  | 'anonymous-response-final'
   | 'unknown-question'
   | 'repeated-answer'
   | 'missing-answer'
@@ -203,10 +204,16 @@ export type SubmitOutcome =
 /** The viewer's own response: `null` before they respond. */
 export type MyResponse = {
   status: 'submitted' | 'stopped';
-  submittedAt: string;
+  /** Unknown for a response to an anonymous form. */
+  submittedAt: string | undefined;
   answers: SubmittedAnswer[];
   /** The booking step, while the saved answers still pass the form's gates. */
   booking: UnlockedBooking | null;
+  /**
+   * Responded to an anonymous form: nothing links the response to the
+   * viewer, so its answers and time aren't known and it can't change.
+   */
+  anonymous?: true;
 };
 
 export type MyResponseSource = {

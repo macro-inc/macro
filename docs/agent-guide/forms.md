@@ -31,8 +31,11 @@ decides who may respond.
   it. Closing the dialog while it posts sends nothing and trashes the poll.
   With results hidden, respondents answer without counts and editors review
   votes in the Responses tab. **Share responses with team** lets everyone who
-  can vote open that table. **Anonymous** still records who voted so they
-  cannot vote twice, but leaves names off the table.
+  can vote open that table. **Anonymous** makes votes anonymous to everyone
+  in Macro, the poll's owner included: the server keeps who voted apart from
+  what they chose, so each person still votes once, but no vote can be
+  traced to them. An anonymous poll's table has no Respondent column, its
+  vote times keep only the day, and a vote can't be changed.
 
 ## The form page
 
@@ -231,8 +234,9 @@ content-sized layout.
 
 Use the Responses tab grid, or open the database (`/app/database/<uuid>`) linked
 in the form's banner. Each submission is a row; the `Submitted` and
-`Respondent` columns are written by the form, except that an anonymous form
-leaves Respondent empty. They can be renamed and moved,
+`Respondent` columns are written by the form. An anonymous form never writes
+Respondent (a poll created anonymous has none), stamps Submitted with the day
+only, and writes rows as its owner. They can be renamed and moved,
 but their types cannot change and they cannot be deleted while the form exists
 (including while it is in the trash). Permanently deleting the form releases
 those protections and preserves its database, columns, and answer rows.

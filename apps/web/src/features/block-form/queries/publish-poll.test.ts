@@ -85,7 +85,7 @@ describe('publishPoll', () => {
   });
 });
 
-it('patches tally, shared responses and anonymity after the layout is valid', async () => {
+it('creates an anonymous poll anonymous and patches tally and shared responses after the layout is valid', async () => {
   storage.createForm.mockReturnValue(
     created([{ id: 'section-1', kind: 'questions' }])
   );
@@ -104,10 +104,16 @@ it('patches tally, shared responses and anonymity after the layout is valid', as
     () => okAsync(undefined)
   );
   expect(result.isOk()).toBe(true);
+  expect(storage.createForm).toHaveBeenCalledWith(
+    {
+      name: 'Lunch?',
+      source: { kind: 'new', isHiddenInDrive: true, anonymous: true },
+    },
+    'poll'
+  );
   expect(storage.updateForm).toHaveBeenCalledWith('form-1', {
     tallyVisible: false,
     responsesVisible: true,
-    anonymous: true,
   });
 });
 
