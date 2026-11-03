@@ -95,7 +95,8 @@ pub struct FormResponseSubmittedMetadata {
     pub form_id: FormId,
     /// The ledger entry.
     pub response_id: FormResponseId,
-    /// The signed-in respondent; `None` for an anonymous one.
+    /// The signed-in respondent; `None` for an anonymous visitor or when
+    /// the form hides respondents. The ledger still records them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub respondent: Option<MacroUserIdStr<'static>>,
     /// The row holding the answers.

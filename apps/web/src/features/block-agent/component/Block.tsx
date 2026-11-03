@@ -18,6 +18,7 @@ import { nativeNetworkStatus } from '@core/mobile/native-network-status';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import type { NotificationSource } from '@notifications/notification-source';
+import { isSessionArchived } from '@service-agent-harness/session-archive';
 import { useSearchParams } from '@solidjs/router';
 import { EmptyStatePanel } from '@ui';
 import {
@@ -177,10 +178,12 @@ function AgentBlockContent(props: {
                 >
                   <div class="macro-message-width mx-auto flex flex-col gap-2">
                     <Show
-                      when={!session()?.isArchived}
+                      when={!isSessionArchived(session())}
                       fallback={
-                        <Show when={sessionId()}>
-                          {(id) => <ArchivedSessionFooter sessionId={id()} />}
+                        <Show when={session()}>
+                          {(current) => (
+                            <ArchivedSessionFooter session={current()} />
+                          )}
                         </Show>
                       }
                     >

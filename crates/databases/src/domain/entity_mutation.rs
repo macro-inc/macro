@@ -1,16 +1,21 @@
 //! The entity-mutation capabilities for databases: rename, move between
-//! folders, trash, restore and permanent delete; the router reports the rest
-//! unsupported.
+//! folders, duplicate, trash, restore and permanent delete; the router
+//! reports the rest unsupported.
 
-use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel};
+use entity_access::domain::models::{
+    EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
+};
 use entity_mutation::{
-    DeleteEntityPermanently, EntityMutationEffect, EntityMutationErrorCode, MoveEntity,
-    RenameEntity, RestoreEntity, TrashEntity, capability::MoveEntityRequest, project_refs,
+    DeleteEntityPermanently, DuplicateEntity, EntityMutationEffect, EntityMutationErrorCode,
+    MoveEntity, RenameEntity, RestoreEntity, TrashEntity, capability::MoveEntityRequest,
+    project_refs,
 };
 use macro_event_broker::MacroEventBroker;
-use model_entity::Entity;
+use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::{Entity, EntityType};
 
 use super::{
+    duplicate::{DatabaseDuplicateRepo, DatabaseDuplicateService},
     models::DatabaseError,
     ports::{
         AccessDirectory, CellStore, ColumnDefinitionStore, DatabasesRepo, DatabasesService,
@@ -93,6 +98,34 @@ where
                     .map(EntityMutationEffect::updated),
             )
             .collect())
+    }
+}
+
+impl<Repository, Definitions, Cells, Events, Access, Broker> DuplicateEntity
+    for DatabasesServiceImpl<Repository, Definitions, Cells, Events, Access, Broker>
+where
+    Repository: DatabasesRepo,
+    Definitions: ColumnDefinitionStore,
+    Cells: CellStore + DatabaseDuplicateRepo,
+    Events: TableEventPublisher,
+    Access: AccessDirectory,
+    Broker: MacroEventBroker,
+{
+    type Receipt = ViewAccessLevel;
+
+    async fn duplicate_entity(
+        &self,
+        _entity: Entity<'static>,
+        receipt: EntityAccessReceipt<Self::Receipt>,
+        user_id: MacroUserIdStr<'static>,
+        display_name: Option<String>,
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
+        let copy =
+            DatabaseDuplicateService::duplicate_database(self, receipt, user_id, display_name)
+                .await?;
+        Ok(vec![EntityMutationEffect::updated(
+            EntityType::Database.with_entity_string(copy.id.to_string()),
+        )])
     }
 }
 

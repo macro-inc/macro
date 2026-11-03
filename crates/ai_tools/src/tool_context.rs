@@ -1467,17 +1467,19 @@ pub type ToolProjectToolContext = ProjectToolContext<
     ToolEntityAccessService,
     ToolDocumentService,
     ToolUserEmailService,
+    ToolDatabasesService,
 >;
 
 /// Build the project tool context from shared domain and access services.
-/// The move services must be the same instances the document and
-/// email tool contexts run on so moves share their side-effect wiring.
+/// The move services must be the same instances the document, email and
+/// databases tool contexts run on so mutations share their side-effect wiring.
 pub fn build_project_tool_context(
     pool: sqlx::PgPool,
     macro_event_broker: ToolEventBroker,
     entity_access_service: Arc<ToolEntityAccessService>,
     document_service: Arc<ToolDocumentService>,
     email_service: Arc<ToolUserEmailService>,
+    databases_service: Arc<ToolDatabasesService>,
 ) -> ToolProjectToolContext {
     let project_service = projects::domain::service::ProjectServiceImpl::new(
         projects::outbound::PgProjectRepo::new(
@@ -1499,6 +1501,7 @@ pub fn build_project_tool_context(
         entity_access_service,
         document_service,
         email_service,
+        databases_service,
     )
 }
 

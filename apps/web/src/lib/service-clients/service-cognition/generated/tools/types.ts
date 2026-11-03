@@ -453,6 +453,11 @@ export type FormSource =
        * for a channel poll.
        */
       isHiddenInDrive?: boolean;
+      /**
+       * Make the form anonymous from the start: its table gets no
+       * Respondent column.
+       */
+      anonymous?: boolean;
       kind: 'new';
     }
   | {
@@ -1180,7 +1185,7 @@ export type DiscoveryResult =
 /**
  * The kind of item to duplicate.
  */
-export type DuplicableEntityType = 'document' | 'chat';
+export type DuplicableEntityType = 'document' | 'database' | 'chat';
 /**
  * Targeted layout operations. Removing placements always retains response columns.
  */
@@ -3797,9 +3802,9 @@ export type EntityItem =
        */
       botId: string;
       /**
-       * Whether the session is archived.
+       * Who or what archived the session; absent while it is active.
        */
-      isArchived: boolean;
+      archivedBy?: SessionArchiveCause | null;
       /**
        * Runtime connection status.
        */
@@ -3933,8 +3938,16 @@ export type EntityItem =
       tags?: AppliedTag[];
     };
 /**
- * The caller's level on a form: view responds, edit changes questions and
- * reads responses, owner also sets the audience, closes and trashes it.
+ * Who or what archived an agent session.
+ */
+export type SessionArchiveCause =
+  | 'user'
+  | 'pull_request_merged'
+  | 'runtime_closed';
+/**
+ * The caller's level on a form: view responds (and reads responses when
+ * they are shared), edit changes questions and reads responses, owner
+ * also sets the audience, closes and trashes it.
  */
 export type FormAccess = 'view' | 'edit' | 'owner';
 /**
@@ -4299,6 +4312,10 @@ export type ToolActivityAction =
       };
       type: 'unknown';
     };
+/**
+ * Who or what archived a session.
+ */
+export type ArchiveCause = 'user' | 'pull_request_merged' | 'runtime_closed';
 /**
  * The two sides of a session conversation.
  */
@@ -7869,7 +7886,8 @@ export interface Form {
   submittedColumnId?: string | null;
   /**
    * The person column each signed-in submission names its respondent in;
-   * `null` once deleted.
+   * `null` once deleted, and on a form created anonymous. An anonymous
+   * form never writes it.
    */
   respondentColumnId?: string | null;
   audience: Audience;
@@ -7877,6 +7895,16 @@ export interface Form {
    * Whether respondents may read option tallies.
    */
   tallyVisible: boolean;
+  /**
+   * Whether people with View may read individual response rows.
+   */
+  responsesVisible: boolean;
+  /**
+   * Whether nobody, the owner included, can see who gave which response.
+   * Who responded is kept apart from the responses, only so nobody
+   * responds twice. Fixed once anyone has responded.
+   */
+  anonymous: boolean;
   status: FormStatus;
   /**
    * When it stops taking responses, if it does.
@@ -8359,7 +8387,7 @@ export interface CreateProjectResponse {
   projectName: string;
 }
 /**
- * Schedule recurring or one-off work for a model or agent. To schedule yourself, use your persona/bot ID as the agent target; to delegate, select an accessible agent from ListAgents using its bot.botId. Routines run as the authenticated user after this session ends, using the selected agent’s tools and configuration. Use Once with a future RFC3339 timestamp for a single run; use Cron for repetition. Returns the saved routine ID and next firing. In Macro app replies, mention the created routine as `<m-document-mention>{"documentId":"ID","documentName":"NAME","blockName":"routine"}</m-document-mention>`, replacing ID with the returned ID and NAME with the saved routine name. In external MCP replies, follow the MCP item-linking instructions. Do not use reminders for work that should execute. Do not automatically create a new routine on every run of an existing routine.
+ * Schedule recurring or one-off work for a model or agent. To schedule yourself, use your persona/bot ID as the agent target; to delegate, select an accessible agent from ListAgents using its bot.botId: a built-in agent, or one the user owns or can use, including one on a self-hosted runtime. That runtime need not be online to save the routine; a run it cannot serve fails and shows in ReadRoutine history. Routines run as the authenticated user after this session ends, using the selected agent’s tools and configuration. Use Once with a future RFC3339 timestamp for a single run; use Cron for repetition. Returns the saved routine ID and next firing. In Macro app replies, mention the created routine as `<m-document-mention>{"documentId":"ID","documentName":"NAME","blockName":"routine"}</m-document-mention>`, replacing ID with the returned ID and NAME with the saved routine name. In external MCP replies, follow the MCP item-linking instructions. Do not use reminders for work that should execute. Do not automatically create a new routine on every run of an existing routine.
  */
 export interface CreateRoutine {
   configuration: RoutineConfiguration;
@@ -8996,7 +9024,7 @@ export interface DispatchCodingAgent {
   prompt: string;
 }
 /**
- * Make a copy of a document (including a task), owned by the user, as the Duplicate action in the app does. Requires view access to the original. Returns the copy's id.
+ * Make a copy of a document (including a task) or a database, owned by the user, as the Duplicate action in the app does. A database copy has every table, column, view and row, except relation columns into other databases the user cannot view, which it leaves out; its sharing, forms and history stay with the original. Requires view access to the original. Returns the copy's id.
  */
 export interface DuplicateItem {
   entityType: DuplicableEntityType;
@@ -9005,7 +9033,7 @@ export interface DuplicateItem {
    */
   entityId: string;
   /**
-   * Name for the copy of a document. Omit to use "<original name> copy".
+   * Name for the copy. Omit to use "<original name> copy".
    */
   name?: string | null;
 }
@@ -13267,9 +13295,14 @@ export interface SessionConversation {
    */
   botId: string;
   /**
-   * Whether the session is archived and read-only.
+   * Who or what archived the session, or `None` while it is active. An archived session
+   * is read-only.
    */
-  isArchived: boolean;
+  archivedBy?: ArchiveCause | null;
+  /**
+   * When the session was archived.
+   */
+  archivedAt?: string | null;
   /**
    * Configured runtime.
    */
@@ -15607,7 +15640,7 @@ export interface SetFavoriteResponse {
   favorite: boolean;
 }
 /**
- * Open, close or share a saved form immediately. Requires Form Owner. Supply complete audience/status/deadline/tally settings and explicit channel grant deltas; empty deltas change no grants. Public allows anonymous responses. View allows responding without database access; channel Edit grants editing of the entire backing database. Uses the existing Forms settings and sharing services without a review step. This never posts a message or sends invitations. Settings and channel grants are separate writes; inspect partial results before retrying. Returns actual access, canonical links and acceptingResponses; a URL alone does not mean the form is open.
+ * Open, close or share a saved form immediately. Requires Form Owner. Supply complete audience/status/deadline/tally settings and explicit channel grant deltas; empty deltas change no grants. Optional responsesVisible lets View holders read response rows; optional anonymous makes the form anonymous to everyone, its owner included (who responded is kept apart from the responses), and is refused once anyone has responded. Public allows anonymous responses. View allows responding without database access unless responses are shared; channel Edit grants editing of the entire backing database. Uses the existing Forms settings and sharing services without a review step. This never posts a message or sends invitations. Settings and channel grants are separate writes; inspect partial results before retrying. Returns actual access, canonical links and acceptingResponses; a URL alone does not mean the form is open.
  */
 export interface SetFormAccess {
   formId: FormId;
@@ -15627,6 +15660,15 @@ export interface AccessDraft {
    * Whether respondents can see aggregate choice tallies.
    */
   tallyVisible: boolean;
+  /**
+   * Whether people with View may read individual response rows.
+   */
+  responsesVisible?: boolean | null;
+  /**
+   * Whether nobody, the owner included, can see who gave which response;
+   * refused once anyone has responded.
+   */
+  anonymous?: boolean | null;
   /**
    * Direct channel changes only; this does not post messages or send invitations.
    */

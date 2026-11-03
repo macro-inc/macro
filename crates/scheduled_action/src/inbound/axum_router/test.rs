@@ -698,7 +698,7 @@ async fn target_errors_have_deliberate_sanitized_status_codes() {
             StatusCode::BAD_REQUEST,
         ),
         (
-            TargetValidationError::AgentsDisabled.into(),
+            TargetValidationError::SessionsUnavailable.into(),
             StatusCode::BAD_REQUEST,
         ),
         (
@@ -786,7 +786,7 @@ async fn agent_replacement_requires_explicit_null_and_unavailable_agent_remains_
         tx,
         Arc::new(FakeGrants::all(repo)),
     )
-    .with_target_validation(TargetValidation::new(sessions.clone(), true));
+    .with_target_validation(TargetValidation::new(sessions.clone()));
     let app = router_with(Arc::new(svc), FakeEntityAccessService::owner_only());
     let mut input = cron_action();
     input["task"] = agent_task();
