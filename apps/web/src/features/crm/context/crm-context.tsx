@@ -53,6 +53,13 @@ import type {
   PipelineTransfer,
 } from './pipelines';
 
+export type CrmEmailAccount = {
+  id: string;
+  address: string;
+  /** The viewer's own inbox, rather than one shared with them. */
+  personal: boolean;
+};
+
 export type CrmContext = {
   createPipelines(teamId: Accessor<string | undefined>): PipelinesSource;
   PipelineEditor: PipelineEditor;
@@ -102,7 +109,24 @@ export type CrmContext = {
   /** Databases containing CRM-linked rows; undefined selects the workspace scope. */
   createDatabases(scope: Accessor<CrmRecordScope | undefined>): ItemListSource;
   openCreateItem(kind: 'notes' | 'calls' | 'databases'): void;
-  openEmailComposer(recipient?: string): void;
+  /**
+   * Opens a new email split. Several recipients are the To line; `inboxId`
+   * chooses which connected account sends it.
+   */
+  openEmailComposer(
+    recipient?: string | readonly string[],
+    inboxId?: string
+  ): void;
+  /** Connected accounts that can send, split into the viewer's own and the rest. */
+  emailAccounts(): Accessor<CrmEmailAccount[]>;
+  /** Opens a direct message with this address, in a new split. */
+  openDirectMessage(email: string): Promise<void>;
+  /** Opens an agent split with this company or contact attached. */
+  openRecordChat(record: {
+    type: 'company' | 'contact';
+    id: string;
+    name: string;
+  }): void;
   createActivityState(
     tab: CrmSoupActivityTab
   ): readonly [

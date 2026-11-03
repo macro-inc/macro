@@ -203,9 +203,12 @@ title with the unavailable-state message when the flag is off, without database
 queries or creation actions. Copy-link islands are 40px square on touch with
 a 24px icon. Verify both record types, section changes, dismissal, copy feedback,
 and header fit at phone and tablet widths.
-Their information panel starts closed and opens as a floating bubble at every
-width, without shrinking the record content. Click outside the bubble or use
-the toggle to dismiss it; the open state is not restored on a later visit.
+Their information panel is the same floating bubble. On a pane at least 960px
+wide it opens beside the record on each visit and the overview pads so the
+bubble does not cover it; clicks on the record leave it open. Narrower panes
+keep it closed until the toggle, and then it covers the record until a click
+outside or the toggle dismisses it. Touch uses the bottom drawer. The open
+state is not restored on a later visit.
 It copies the record's direct URL and shows a confirmation toast; this is also
 available in the embedded company and contact breadcrumb header.
 
@@ -237,9 +240,17 @@ checkboxes, including on touch devices.
 A company is laid out like a project. On desktop, its split header or embedded
 breadcrumb header shows rounded view tabs for `Overview`, `Team`, `Emails`,
 `Files`, `Tasks`, `Calls`, and `Databases`, collapsing to icons when narrow.
-Touch headers use the section drawer described above. Overview shows the name, pills
-for each domain and `Last interacted`, the generated description, a
-**Pipelines** section and the Discussion. Pipelines stacks one full-width card
+Touch headers use the section drawer described above. Overview shows the name with **Add person**, **Email team**, and **Add to
+pipeline** (pipeline only when that rollout is on), then pills for each domain
+and `Last interacted`, the generated description, a **Pipelines** section,
+**Recent emails**, and the Discussion. Add person opens the contact dialog for
+the company's first domain and stays disabled until the company has one. Email
+team addresses every person at the company; with more than one connected
+account it asks whether to send from a personal inbox or a company inbox. Add
+to pipeline lists company pipelines the viewer can edit, skips a company
+already on that pipeline, and refreshes the pipeline cards. Recent emails shows
+up to five threads with the company, collapses, and its View all opens the
+Emails section. Pipelines stacks one full-width card
 per row of a pipeline you can open that references the record. A card's header
 strip names the pipeline (a lock marks a private one); below it, the row's first
 four fields sit side by side, label over value (two per row on a narrow card),
@@ -276,8 +287,15 @@ inaccessible), it replaces its rows with `Couldn't load this list.` and
 `Try again` reloads it; a failed later page keeps the rows and shows `Couldn't
 load more.`
 A contact has the same layout with `Overview`, `Emails`, `Files`, `Tasks`, `Calls`, and
-`Databases`: Overview pills show the email, the company (opens it) and `Last
-interacted`, followed by the contact's Pipelines cards. Its Files, Tasks, Calls,
+`Databases`: the name sits beside a profile photo when one exists, otherwise
+initials. **Email**, **Message**, **Add task**, and **Ask AI** follow the name.
+Email addresses that person; with more than one connected account it asks
+whether to send from a personal inbox or a company inbox. Message opens a
+direct conversation in a new split. Add task uses the record's task composer.
+Ask AI opens a new agent split with either this person or their company
+attached. Overview pills show the email, the company (opens it) and `Last
+interacted`, followed by the contact's Pipelines cards and up to five recent
+emails (collapsible; View all opens Emails) above the Discussion. Its Files, Tasks, Calls,
 and References show items associated with the contact itself (its `Contacts`
 property or an @mention of it), not everything associated with its company;
 Files also includes attachments of emails with its address. Tasks created from a

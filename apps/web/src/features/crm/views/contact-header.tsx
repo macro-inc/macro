@@ -6,7 +6,7 @@ import ContactIcon from '@icon/system/regular/address-book.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import { Avatar, Badge, badgeTriggerClasses, Tooltip } from '@ui';
-import { Show } from 'solid-js';
+import { type JSX, Show } from 'solid-js';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmContact as CrmContactResponse } from '../core/contact';
 import { useCompanyQuery, useSetContactNameMutation } from './use-crm';
@@ -67,10 +67,12 @@ function CompanyPill(props: {
 export function ContactHeader(props: {
   contact?: CrmContactResponse;
   onOpenCompany?: (companyId: string) => boolean;
+  actions?: JSX.Element;
 }) {
-  const { contactInitials: getInitialsFromName } = useCrmContext();
-  // Default avatar mirrors the channel user avatar: initials on a flat circle.
-  // Contacts have no photo, so initials come from the name or email.
+  const context = useCrmContext();
+  const { contactInitials: getInitialsFromName } = context;
+  const photo = context.createContactPhoto?.(props.contact?.email ?? '');
+  // Initials until a profile photo exists for this address.
   const initials = () => {
     const email = props.contact?.email;
     if (!email) return undefined;
@@ -79,30 +81,36 @@ export function ContactHeader(props: {
 
   return (
     <div>
-      <div class="flex items-center gap-3">
-        <Avatar size="lg" class="shrink-0">
-          <Show
-            when={initials()}
-            fallback={
-              <Avatar.Fallback>
-                <ContactIcon class="size-5 text-ink-muted" />
-              </Avatar.Fallback>
-            }
-            keyed
-          >
-            {(value) => (
-              <Avatar.Fallback class="font-semibold">{value}</Avatar.Fallback>
-            )}
-          </Show>
-        </Avatar>
-        <h1 class="min-w-0 flex-1 text-2xl font-semibold">
-          <Show
-            when={props.contact}
-            fallback={<ListSkeleton.Bar class="h-6 w-48" />}
-          >
-            {(contact) => <TitleEditor contact={contact()} />}
-          </Show>
-        </h1>
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="flex min-w-0 flex-1 items-center gap-3">
+          <Avatar size="lg" class="shrink-0">
+            <Show when={photo?.()}>
+              {(url) => <Avatar.Image src={url()} alt="" />}
+            </Show>
+            <Show
+              when={initials()}
+              fallback={
+                <Avatar.Fallback>
+                  <ContactIcon class="size-5 text-ink-muted" />
+                </Avatar.Fallback>
+              }
+              keyed
+            >
+              {(value) => (
+                <Avatar.Fallback class="font-semibold">{value}</Avatar.Fallback>
+              )}
+            </Show>
+          </Avatar>
+          <h1 class="min-w-0 flex-1 text-2xl font-semibold">
+            <Show
+              when={props.contact}
+              fallback={<ListSkeleton.Bar class="h-6 w-48" />}
+            >
+              {(contact) => <TitleEditor contact={contact()} />}
+            </Show>
+          </h1>
+        </div>
+        {props.actions}
       </div>
       <Show when={props.contact}>
         {(contact) => (

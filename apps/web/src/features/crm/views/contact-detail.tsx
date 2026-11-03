@@ -12,6 +12,8 @@ import { ContactDiscussionSection } from './contact-discussion-section';
 import { ContactEmailsSection } from './contact-emails-section';
 import { ContactHeader } from './contact-header';
 import { ContactSharingSection } from './contact-sharing-section';
+import { ContactRecentEmails } from './recent-emails';
+import { ContactRecordActions } from './record-actions';
 import {
   RecordCallsSection,
   RecordDatabasesSection,
@@ -32,6 +34,7 @@ export function Contact(props: {
   headerToggle?: boolean;
   onOpenCompany?: (companyId: string) => boolean;
   onOpenPipeline?: (pipelineId: string) => void;
+  onShowEmails?: () => void;
 }) {
   const context = useCrmContext();
   const pipelinesEnabled = context.pipelinesEnabled();
@@ -65,6 +68,7 @@ export function Contact(props: {
     <SidePanel.Layout
       headerToggle={props.headerToggle}
       floating
+      besideWhenWide
       defaultOpen={false}
     >
       <div class="flex size-full min-h-0 min-w-0 flex-col">
@@ -75,6 +79,7 @@ export function Contact(props: {
                 <ContactHeader
                   contact={contact()}
                   onOpenCompany={props.onOpenCompany}
+                  actions={<ContactRecordActions contact={contact()} />}
                 />
                 <Show when={pipelinesEnabled()}>
                   <context.PipelineEntries
@@ -82,6 +87,10 @@ export function Contact(props: {
                     onOpenPipeline={props.onOpenPipeline}
                   />
                 </Show>
+                <ContactRecentEmails
+                  email={contact()?.email}
+                  onViewAll={props.onShowEmails}
+                />
                 <ContactDiscussionSection contactId={props.contactId} />
               </RecordOverview>
             </Match>

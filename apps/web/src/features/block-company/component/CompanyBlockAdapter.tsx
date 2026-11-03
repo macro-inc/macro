@@ -62,7 +62,11 @@ export function CompanyBlockAdapter() {
         </HeaderIsland>
       </SplitHeaderRight>
       <ParamsProvider state={params}>
-        <Company companyId={companyId} section={section()} />
+        <Company
+          companyId={companyId}
+          section={section()}
+          onShowEmails={() => setSection('emails')}
+        />
       </ParamsProvider>
     </>
   );

@@ -56,6 +56,11 @@ const FLOATING_INSET_PX = 12;
  * content that makes room for it where the pane is wide enough.
  */
 const FLOATING_CLEARANCE_PX = FLOATING_WIDTH_PX + 2 * FLOATING_INSET_PX;
+/**
+ * A floating panel opens beside the content, instead of covering it, once the
+ * pane is at least this wide. Narrower panes keep the closed overlay.
+ */
+const BESIDE_MIN_PX = 960;
 
 /**
  * Wide-mode open state for a side panel.
@@ -198,6 +203,11 @@ function Layout(
     headerToggle?: boolean;
     /** Render the panel over the block instead of reserving horizontal space. */
     floating?: boolean;
+    /**
+     * When the pane is wide enough, open the floating panel beside the content
+     * on this visit. Narrow panes and touch stay closed until the toggle.
+     */
+    besideWhenWide?: boolean;
   }>
 ) {
   const parentContext = useContext(SidePanelContext);
@@ -222,6 +232,7 @@ function Layout(
             setIsOpen={ctx.setIsOpen}
             setIsOverlayMode={ctx.setIsOverlayMode}
             floating={props.floating ?? ctx.isFloating()}
+            besideWhenWide={props.besideWhenWide}
           >
             {props.children}
           </SidePanelLayoutInner>
@@ -257,6 +268,7 @@ function SidePanelLayoutInner(
     setIsOpen: (next: boolean | ((prev: boolean) => boolean)) => void;
     setIsOverlayMode: Setter<boolean>;
     floating: boolean;
+    besideWhenWide?: boolean;
   }>
 ) {
   const resolved = children(() => props.children);
@@ -270,6 +282,23 @@ function SidePanelLayoutInner(
     () => isMobile() || zoneCtx.size() < NARROW_THRESHOLD_PX
   );
   const hasSections = createMemo(() => props.sections().length > 0);
+  const wideEnoughToSitBeside = createMemo(
+    () =>
+      props.besideWhenWide === true &&
+      props.floating &&
+      !isTouchDevice() &&
+      !isMobile() &&
+      zoneCtx.size() >= BESIDE_MIN_PX
+  );
+  // Decide once the pane has a real width, so a later resize does not pop the
+  // panel open after the reader closed it.
+  let settledBeside = false;
+  createEffect(() => {
+    if (!props.besideWhenWide || settledBeside) return;
+    if (zoneCtx.size() <= 0) return;
+    settledBeside = true;
+    if (wideEnoughToSitBeside()) props.setIsOpen(true);
+  });
 
   createEffect(() =>
     props.setIsOverlayMode(props.floating || isTouchDevice() || isNarrow())
@@ -294,11 +323,22 @@ function SidePanelLayoutInner(
   const showFloating = createMemo(
     () => !isTouchDevice() && props.floating && hasSections() && props.isOpen()
   );
+  const beside = createMemo(() => wideEnoughToSitBeside() && showFloating());
 
   return (
     <>
       <Resize.Panel id="side-panel-main" minSize={MAIN_MIN_PX} index={0}>
-        {resolved()}
+        <div
+          class="flex size-full min-h-0 min-w-0 flex-col"
+          data-side-panel-beside={beside() ? '' : undefined}
+          style={{
+            'padding-right': beside()
+              ? `${FLOATING_CLEARANCE_PX}px`
+              : undefined,
+          }}
+        >
+          {resolved()}
+        </div>
       </Resize.Panel>
       <Show when={showSplit()}>
         <Resize.Panel
@@ -373,7 +413,7 @@ function SidePanelLayoutInner(
       </Show>
       <Show when={props.floating && !isTouchDevice()}>
         <div class="absolute inset-0 z-split-panel-chrome pointer-events-none">
-          <Show when={showFloating()}>
+          <Show when={showFloating() && !beside()}>
             <div
               class="absolute inset-0 pointer-events-auto bg-transparent"
               onClick={() => props.setIsOpen(false)}

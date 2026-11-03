@@ -52,6 +52,8 @@ export function RecordItemList(props: {
   groupByDate?: boolean;
   /** Date field matching the list's server-side ordering. */
   dateField?: 'updated_at' | 'created_at' | 'viewed_at';
+  /** Show only the first rows and stop paging. */
+  limit?: number;
 }) {
   const { openEntity } = useCrmContext().createNavigation();
   // Reading `data` before the first page resolves would suspend the tab.
@@ -65,6 +67,11 @@ export function RecordItemList(props: {
   const filteredItems = createMemo(() =>
     rows().filter((item) => recordItemMatchesSearch(item, props.search ?? ''))
   );
+  const visibleItems = createMemo(() => {
+    const items = filteredItems();
+    return props.limit === undefined ? items : items.slice(0, props.limit);
+  });
+  const contained = () => props.limit !== undefined;
   const dateHeadings = createMemo(() => {
     if (!props.groupByDate) return [];
     const now = new Date();
@@ -99,11 +106,17 @@ export function RecordItemList(props: {
     props.pending || (props.source.isPending && props.source.isEnabled);
 
   return (
-    <div class="flex min-h-0 w-full flex-1 flex-col">
+    <div class={contained() ? 'w-full' : 'flex min-h-0 w-full flex-1 flex-col'}>
       <Switch>
         <Match when={loading()}>
           <CrmListSkeleton
-            count={props.narrowLayout === 'condensed' ? 2 : undefined}
+            count={
+              props.limit !== undefined
+                ? Math.min(props.limit, 3)
+                : props.narrowLayout === 'condensed'
+                  ? 2
+                  : undefined
+            }
           />
         </Match>
         <Match when={props.source.isError}>
@@ -200,7 +213,7 @@ export function RecordItemList(props: {
                     </Show>
                   </Show>
                 </Show>
-                <For each={filteredItems()}>
+                <For each={visibleItems()}>
                   {(entity, index) => (
                     <>
                       <Show when={dateHeadings()[index()]}>
@@ -233,10 +246,10 @@ export function RecordItemList(props: {
               />
             }
           >
-            <Show when={props.source.hasNextPage}>
+            <Show when={!contained() && props.source.hasNextPage}>
               <div ref={setSentinelRef} class="h-px" />
             </Show>
-            <Show when={props.source.isFetchingNextPage}>
+            <Show when={!contained() && props.source.isFetchingNextPage}>
               <CrmListSkeleton label="Loading more items" count={2} />
             </Show>
           </Show>

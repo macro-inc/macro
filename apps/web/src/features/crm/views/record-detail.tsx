@@ -232,6 +232,7 @@ export function CrmRecordDetail(props: {
                         headerToggle={false}
                         onHidden={back}
                         onOpenPipeline={props.onOpenPipeline}
+                        onShowEmails={() => props.onSectionChange('emails')}
                         onOpenContact={(contact) =>
                           open({
                             type: 'contact',
@@ -247,6 +248,7 @@ export function CrmRecordDetail(props: {
                       section={contactSection()}
                       headerToggle={false}
                       onOpenPipeline={props.onOpenPipeline}
+                      onShowEmails={() => props.onSectionChange('emails')}
                       onOpenCompany={(companyId) => {
                         open({ type: 'company', id: companyId, name: '' });
                         return true;

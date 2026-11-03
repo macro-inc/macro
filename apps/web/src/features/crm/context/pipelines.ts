@@ -70,4 +70,6 @@ export type PipelineSharing = Component<{
 export type PipelineEntriesView = Component<{
   record: PipelineEntryRecord;
   onOpenPipeline?: (pipelineId: string) => void;
+  /** Increment after a new row is saved so the cards reload. */
+  refreshToken?: number;
 }>;

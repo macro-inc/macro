@@ -62,7 +62,11 @@ export function ContactBlockAdapter() {
         </HeaderIsland>
       </SplitHeaderRight>
       <ParamsProvider state={params}>
-        <Contact contactId={contactId} section={section()} />
+        <Contact
+          contactId={contactId}
+          section={section()}
+          onShowEmails={() => setSection('emails')}
+        />
       </ParamsProvider>
     </>
   );

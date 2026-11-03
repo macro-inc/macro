@@ -10,7 +10,14 @@ import ClockIcon from '@icon/system/regular/clock.svg';
 import GlobeIcon from '@icon/system/regular/globe.svg';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Badge, Tooltip } from '@ui';
-import { createEffect, createSignal, For, onMount, Show } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  For,
+  type JSX,
+  onMount,
+  Show,
+} from 'solid-js';
 import { useSetCompanyNameMutation } from './use-crm';
 
 function Description(props: { text: string }) {
@@ -75,21 +82,27 @@ function TitleEditor(props: { company: CrmCompanyEntity }) {
  * Company overview header laid out like a project: the name, the company's
  * facts as pills beneath it, then its pre-generated description.
  */
-export function CompanyHeader(props: { company?: CrmCompanyEntity }) {
+export function CompanyHeader(props: {
+  company?: CrmCompanyEntity;
+  actions?: JSX.Element;
+}) {
   return (
     <div>
-      <div class="flex items-center gap-3">
-        <div class="size-8 shrink-0">
-          <EntityIcon targetType="crm_company" size="fill" />
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="flex min-w-0 flex-1 items-center gap-3">
+          <div class="size-8 shrink-0">
+            <EntityIcon targetType="crm_company" size="fill" />
+          </div>
+          <h1 class="min-w-0 flex-1 text-2xl font-semibold">
+            <Show
+              when={props.company}
+              fallback={<ListSkeleton.Bar class="h-6 w-48" />}
+            >
+              {(company) => <TitleEditor company={company()} />}
+            </Show>
+          </h1>
         </div>
-        <h1 class="min-w-0 flex-1 text-2xl font-semibold">
-          <Show
-            when={props.company}
-            fallback={<ListSkeleton.Bar class="h-6 w-48" />}
-          >
-            {(company) => <TitleEditor company={company()} />}
-          </Show>
-        </h1>
+        {props.actions}
       </div>
       <Show when={props.company}>
         {(company) => (

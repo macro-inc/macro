@@ -1,5 +1,13 @@
 import { SidePanel } from '@components/app/side-panel';
-import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  Match,
+  onCleanup,
+  Show,
+  Suspense,
+  Switch,
+} from 'solid-js';
 import { CrmListSkeleton } from '../components/list-state';
 import { RecordOverview } from '../components/record-overview';
 import { useCrmContext } from '../context/crm-context';
@@ -16,6 +24,8 @@ import { CompanyHeader } from './company-header';
 import { CompanyListsSection } from './company-list-membership';
 import { CompanyPropertiesSection } from './company-properties-section';
 import { CompanySharingSection } from './company-sharing-section';
+import { CompanyRecentEmails } from './recent-emails';
+import { CompanyRecordActions } from './record-actions';
 import {
   RecordCallsSection,
   RecordDatabasesSection,
@@ -38,6 +48,7 @@ export function Company(props: {
   onHidden?: () => void;
   onOpenContact?: (contact: CompanyContact) => void;
   onOpenPipeline?: (pipelineId: string) => void;
+  onShowEmails?: () => void;
 }) {
   const context = useCrmContext();
   onCleanup(
@@ -49,6 +60,7 @@ export function Company(props: {
   const listsEnabled = context.listsEnabled();
   const pipelinesEnabled = context.pipelinesEnabled();
   const { company, contacts } = useCompanyQuery(() => props.companyId);
+  const [pipelineRefresh, setPipelineRefresh] = createSignal(0);
   const section = () => props.section ?? 'overview';
   const scope = createMemo(
     (): CrmRecordScope | undefined => {
@@ -68,6 +80,7 @@ export function Company(props: {
     <SidePanel.Layout
       headerToggle={props.headerToggle}
       floating
+      besideWhenWide
       defaultOpen={false}
     >
       <div class="flex size-full min-h-0 min-w-0 flex-col">
@@ -75,13 +88,29 @@ export function Company(props: {
           <Switch>
             <Match when={section() === 'overview'}>
               <RecordOverview>
-                <CompanyHeader company={company()} />
+                <CompanyHeader
+                  company={company()}
+                  actions={
+                    <CompanyRecordActions
+                      company={company()}
+                      contacts={contacts()}
+                      onAddedToPipeline={() =>
+                        setPipelineRefresh((token) => token + 1)
+                      }
+                    />
+                  }
+                />
                 <Show when={pipelinesEnabled()}>
                   <context.PipelineEntries
                     record={{ type: 'company', id: props.companyId }}
                     onOpenPipeline={props.onOpenPipeline}
+                    refreshToken={pipelineRefresh()}
                   />
                 </Show>
+                <CompanyRecentEmails
+                  company={company()}
+                  onViewAll={props.onShowEmails}
+                />
                 <CompanyDiscussionSection companyId={props.companyId} />
               </RecordOverview>
             </Match>

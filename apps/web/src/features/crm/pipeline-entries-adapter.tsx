@@ -1,6 +1,7 @@
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
-import { createSignal } from 'solid-js';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { createEffect, createSignal, on } from 'solid-js';
 import {
   DatabaseMentionPicker,
   DatabaseMentionValue,
@@ -28,6 +29,15 @@ export function createCrmPipelineEntries(
 ): PipelineEntriesView {
   return (props) => {
     const query = createPipelineEntriesQuery(deps.graphql, () => props.record);
+    createEffect(
+      on(
+        () => props.refreshToken,
+        (token) => {
+          if (token) fireAndForget(query.refetch(), 'crm');
+        },
+        { defer: true }
+      )
+    );
     // A saved value shows until the refetched row replaces it.
     const [pending, setPending] = createSignal<
       Record<string, DatabaseCellValue>

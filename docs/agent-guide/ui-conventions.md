@@ -267,8 +267,12 @@ with a slight slide from the right and a 120ms fade;
 closing fades it out in 70ms.
 This applies across Markdown/tasks,
 snippets, email, calls, agents, pull requests, projects, and all file blocks
-including PDFs, images, code, video, canvas, unknown file types, and CRM company
-and contact views (both inside the CRM workspace and in standalone blocks).
+including PDFs, images, code, video, canvas, and unknown file types.
+CRM company and contact views (inside the CRM workspace and in standalone
+blocks) are the exception: a pane at least 960px wide opens the bubble beside
+the record and pads the overview, and clicks on the record do not dismiss it.
+Narrower CRM panes keep the closed overlay described above. See the
+[CRM guide](crm.md).
 
 ## Interface icon review
 

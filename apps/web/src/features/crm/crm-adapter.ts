@@ -1,11 +1,14 @@
+import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
 import { useCreateContext } from '@app/features/command/context/create-context';
 import { useQuickAccessCrmCompaniesQuery } from '@app/features/crm/crm-search';
 import { composeEmail } from '@app/features/email-view/compose-email';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
+import { chatAttachmentMentionToMarkdown } from '@core/component/AI/util/chatAttachmentMention';
 import { toast } from '@core/component/Toast/Toast';
 import {
   enableCrmActivity,
@@ -20,6 +23,8 @@ import { idToEmail } from '@core/user/util';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
+import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
+import { useEmailLinksQuery } from '@queries/email/link';
 import { queryReadyGate } from '@queries/gate';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
@@ -198,6 +203,7 @@ export function createAppCrmContext(): CrmContext {
     feedback: toast,
   };
   const userId = useUserId();
+  const directMessage = useGetOrCreateDirectMessageMutation();
   const layout = useSplitLayout();
   const panel = useSplitPanel();
   const createContext = useCreateContext();
@@ -271,12 +277,57 @@ export function createAppCrmContext(): CrmContext {
         () => !!userId() && databasesFlag().enabled
       ),
     openCreateItem: (kind) => fireAndForget(openCreateItem(kind), 'crm'),
-    openEmailComposer: (recipient) =>
+    openEmailComposer: (recipient, inboxId) => {
+      const recipients =
+        recipient === undefined
+          ? undefined
+          : typeof recipient === 'string'
+            ? [recipient]
+            : [...recipient];
       composeEmail(
         layout.openWithSplit,
-        undefined,
-        recipient ? [recipient] : undefined
-      ),
+        inboxId ? [inboxId] : undefined,
+        recipients
+      );
+    },
+    emailAccounts() {
+      const links = useEmailLinksQuery();
+      return () => {
+        if (!queryReadyGate(links)) return [];
+        const owner = userId();
+        return (links.data.links ?? []).map((link) => ({
+          id: link.id,
+          address: link.email_address,
+          personal: !!owner && link.macro_id === owner,
+        }));
+      };
+    },
+    async openDirectMessage(email) {
+      const recipientId = emailToMacroId(email.trim().toLowerCase());
+      if (!recipientId) {
+        toast.failure(t('crmRecord.unableToMessage'));
+        return;
+      }
+      try {
+        const { channel_id } = await directMessage.mutateAsync({
+          recipient_id: recipientId,
+        });
+        layout.openWithSplit(
+          { type: 'channel', id: channel_id },
+          { activate: true, preferNewSplit: true }
+        );
+      } catch {
+        toast.failure(t('crmRecord.unableToMessage'));
+      }
+    },
+    openRecordChat(record) {
+      const mention = chatAttachmentMentionToMarkdown({
+        documentId: record.id,
+        documentName: record.name,
+        blockName: record.type === 'company' ? 'company' : 'contact',
+      });
+      fireAndForget(openChatWithInput(`${mention} `), 'crm');
+    },
     createActivity: (tab, options) => {
       const tags = useTagSets();
       const tagsReady = useTagSetsReady();

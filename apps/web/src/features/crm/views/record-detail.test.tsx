@@ -38,6 +38,31 @@ vi.mock('../context/crm-context', () => ({
     pipelinesEnabled: () => () => false,
     isTeamAdmin: () => () => false,
     openCreateContact: vi.fn(),
+    openEmailComposer: vi.fn(),
+    openDirectMessage: vi.fn(async () => {}),
+    openRecordChat: vi.fn(),
+    openTaskComposer: vi.fn(),
+    emailAccounts: () => () => [],
+    feedback: { success: vi.fn(), failure: vi.fn() },
+    createPipelines: () => ({
+      pipelines: () => [],
+      loading: () => false,
+      error: () => false,
+      refresh: async () => {},
+      create: async () => {
+        throw new Error('unused');
+      },
+      rename: async () => {},
+      trash: async () => {},
+    }),
+    createPipelineTransfer: () => ({
+      readTable: async () => ({ columns: [], rows: [] }),
+      describeRecords: async () => new Map(),
+      resolveRecords: async () => new Map(),
+      insertRows: async () => {},
+      refresh: async () => {},
+    }),
+    PipelineEntries: () => null,
     registerTaskComposerRecord: (source: () => CrmTaskRecord) => {
       taskContext.records.push(source);
       return () => {
@@ -54,6 +79,15 @@ vi.mock('@ui', async () => ({
   Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button {...props} />
   ),
+  Dropdown: Object.assign((props: ParentProps) => props.children, {
+    Trigger: (props: ParentProps) => (
+      <button type="button">{props.children}</button>
+    ),
+    Content: (props: ParentProps) => props.children,
+    Item: (props: ParentProps) => <div>{props.children}</div>,
+    Group: (props: ParentProps) => props.children,
+    GroupLabel: (props: ParentProps) => props.children,
+  }),
 }));
 vi.mock('@components/app/side-panel', () => ({
   SidePanel: {
@@ -92,6 +126,30 @@ vi.mock('./use-crm', () => ({
       : undefined,
   }),
   useIsTeamAdmin: () => () => false,
+  useContactEmailsQuery: () => ({
+    isEnabled: false,
+    isPending: false,
+    isError: false,
+    isLoading: false,
+    data: undefined,
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    isFetchNextPageError: false,
+    fetchNextPage: async () => {},
+    refetch: async () => {},
+  }),
+  useCompanyEmailsQuery: () => ({
+    isEnabled: false,
+    isPending: false,
+    isError: false,
+    isLoading: false,
+    data: undefined,
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    isFetchNextPageError: false,
+    fetchNextPage: async () => {},
+    refetch: async () => {},
+  }),
 }));
 vi.mock('@solidjs/router', () => ({ useSearchParams: () => [{}] }));
 vi.mock('./company-detail', async () => {
@@ -172,6 +230,14 @@ vi.mock('./company-emails-section', () => ({
   CompanyEmailsSection: () => null,
 }));
 vi.mock('./company-header', () => ({ CompanyHeader: () => null }));
+vi.mock('./recent-emails', () => ({
+  CompanyRecentEmails: () => null,
+  ContactRecentEmails: () => null,
+}));
+vi.mock('./record-actions', () => ({
+  CompanyRecordActions: () => null,
+  ContactRecordActions: () => null,
+}));
 vi.mock('./company-list-membership', () => ({
   CompanyListsSection: () => null,
 }));

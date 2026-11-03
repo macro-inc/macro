@@ -3,6 +3,7 @@ import commandMenu from './en/command-menu';
 import commands from './en/commands';
 import common from './en/common';
 import create from './en/create';
+import crmRecord from './en/crm-record';
 import entityActions from './en/entity-actions';
 import localRuntime from './en/local-runtime';
 import mobile from './en/mobile';
@@ -20,6 +21,7 @@ import viewMenus from './en/view-menus';
 export default {
   channelLabels,
   commandMenu,
+  crmRecord,
   commands,
   common,
   create,
