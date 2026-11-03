@@ -216,33 +216,21 @@ def g(p):
     s = p.stem
     yc_t = -40  # where the stem turns into the tail
     shape, xr = _mirror(_b_body(p, yc_t, P.XH))
-    # Tail: the lower half of a ring whose right side continues the stem,
-    # ending on the left in a vertical cut (like j and t) just where the
-    # stroke starts to turn up: at 1.2 times its thickness, and no further
-    # out than where the tail's inner edge falls 40 degrees, so the cut's
-    # upper corner never thins to a wedge (the heavy counter turns steeply).
+    # Tail, built like j's hook: the lower-right quarter of a ring whose
+    # right side continues the stem, then a flat stroke running left to a
+    # vertical cut under the left side of the tail's counter. The stroke
+    # meets the quarter edge to edge at its lowest point, so the tail's inner
+    # edge reaches the cut level and the cut's corners stay square at every
+    # weight (a cut through the turning ring left a lip at ExtraBold).
     y0_t = P.DESC - P.OS
     y1_t = 2 * yc_t - y0_t
     x0_t = xr * 0.07
     wb = p.hair * 0.92
     obox = (x0_t, y0_t, xr, y1_t)
     ibox = (x0_t + s, y0_t + wb, xr - s, y1_t - wb)
-    lo, hi = ibox[0], (x0_t + xr) / 2
-    for _ in range(40):
-        x_cut = (lo + hi) / 2
-        th = _oy(*ibox, p.sq_in, x_cut, "bottom") - _oy(*obox, p.sq, x_cut, "bottom")
-        lo, hi = (lo, x_cut) if th < 1.2 * wb else (x_cut, hi)
-    steep = math.tan(math.radians(40))
-    lo, hi = ibox[0] + 0.01, (x0_t + xr) / 2
-    for _ in range(40):
-        xa = (lo + hi) / 2
-        fall = _oy(*ibox, p.sq_in, xa - 0.5, "bottom") - _oy(
-            *ibox, p.sq_in, xa + 0.5, "bottom"
-        )
-        lo, hi = (xa, hi) if fall > steep else (lo, xa)
-    x_cut = max(x_cut, xa)
+    cx_t = (x0_t + xr) / 2
     ring = squircle(*obox, p.sq) - squircle(*ibox, p.sq_in)
-    tail = ring & below(yc_t) & right_of(x_cut)
+    tail = (ring & below(yc_t) & right_of(cx_t)) + rect(ibox[0], y0_t, cx_t, y0_t + wb)
     return G(shape + tail, l=p.sbr, r=p.sb, anchors={"top": _counter_cx(p, xr)})
 
 

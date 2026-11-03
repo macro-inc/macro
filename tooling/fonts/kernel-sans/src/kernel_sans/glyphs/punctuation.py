@@ -74,46 +74,83 @@ def _comma_tail(p):
 
 def _comma(p, x0, y0):
     """The comma: the period's dot at (x0, y0) with a wedge tail growing down
-    and to the left. The tail's right edge runs tangent off the dot's lower
-    right; its left edge meets the dot's underside in a soft waist."""
+    and to the left, drawn as one contour on the dot's own cubics. The
+    tail's right edge leaves the dot's lower right exactly along its tangent
+    (a union with a polygon left a corner there); its left edge meets the
+    dot's underside in a waist."""
     s = p.dot
     h = s / 2
     cx, cy = x0 + h, y0 + h
     tail = _comma_tail(p)
     tw = s * 0.34  # width of the flat tail end
     tl = x0 - s * 0.06  # left corner of the tail end
-    er = (tl + tw, y0 - tail)
-    # The tangent from the tail end to the dot's lower-right quadrant, found
-    # on the same cubic geom.squircle draws, then pulled 2 units into the
-    # dot so the union crosses the curve cleanly instead of grazing it.
+    el, er = (tl, y0 - tail), (tl + tw, y0 - tail)
     k = superness(DOT_N)
-    c0, c1 = (cx, cy - h), (cx + k * h, cy - h)
-    c2, c3 = (cx + h, cy - k * h), (cx + h, cy)
+    # geom.squircle's quadrants, counter-clockwise from the right extreme.
+    q = [
+        [(cx + h, cy), (cx + h, cy + k * h), (cx + k * h, cy + h), (cx, cy + h)],
+        [(cx, cy + h), (cx - k * h, cy + h), (cx - h, cy + k * h), (cx - h, cy)],
+        [(cx - h, cy), (cx - h, cy - k * h), (cx - k * h, cy - h), (cx, cy - h)],
+        [(cx, cy - h), (cx + k * h, cy - h), (cx + h, cy - k * h), (cx + h, cy)],
+    ]
 
-    def bez(t):
-        u = 1 - t
+    def at(seg, t):
+        m = 1 - t
+        w = (m**3, 3 * m * m * t, 3 * m * t * t, t**3)
         return tuple(
-            u**3 * a + 3 * u * u * t * b + 3 * u * t * t * c + t**3 * d
-            for a, b, c, d in zip(c0, c1, c2, c3, strict=True)
+            sum(wi * c[i] for wi, c in zip(w, seg, strict=True)) for i in (0, 1)
         )
 
-    tx, ty = min(
-        (bez(i / 400) for i in range(401)),
-        key=lambda q: math.atan2(q[1] - er[1], q[0] - er[0]),
-    )
-    nx, ny = cx - tx, cy - ty
-    nl = math.hypot(nx, ny)
-    tx, ty = tx + 2 * nx / nl, ty + 2 * ny / nl
-    wedge = poly(
-        [
-            (tx, ty),
-            (cx, cy),
-            (x0 + s * 0.42, y0 + s * 0.3),
-            (tl, y0 - tail),
-            er,
-        ]
-    )
-    return dot(cx, cy, s) + wedge
+    def split(seg, t):
+        def lerp(u, v):
+            return (u[0] + (v[0] - u[0]) * t, u[1] + (v[1] - u[1]) * t)
+
+        a1, b1, c1 = lerp(seg[0], seg[1]), lerp(seg[1], seg[2]), lerp(seg[2], seg[3])
+        d1, e1 = lerp(a1, b1), lerp(b1, c1)
+        f1 = lerp(d1, e1)
+        return [seg[0], a1, d1, f1], [f1, e1, c1, seg[3]]
+
+    def root(f):
+        lo, hi = 0.0, 1.0  # f changes sign once on [0, 1]
+        flo = f(lo)
+        for _ in range(60):
+            mid = (lo + hi) / 2
+            if (f(mid) > 0) == (flo > 0):
+                lo = mid
+            else:
+                hi = mid
+        return (lo + hi) / 2
+
+    def side(pt, a0, a1):
+        """Which side of the line a0 -> a1 the point lies on."""
+        return (a1[0] - a0[0]) * (pt[1] - a0[1]) - (a1[1] - a0[1]) * (pt[0] - a0[0])
+
+    # Tangent point on the lower-right quadrant: where the line from the tail
+    # end just touches the curve (the curve's tangent passes through er).
+    def touch(t):
+        e = 1e-4
+        p0, p1 = at(q[3], max(0.0, t - e)), at(q[3], min(1.0, t + e))
+        return side(er, p0, p1)
+
+    t_t = root(touch)
+    # The waist: the left edge, aimed at a point inside the dot, crosses its
+    # underside on the lower-left quadrant.
+    aim = (x0 + s * 0.42, y0 + s * 0.3)
+    t_w = root(lambda t: side(at(q[2], t), el, aim))
+    left, _ = split(q[2], t_w)
+    _, right = split(q[3], t_t)
+    path = pathops.Path()
+    pen = path.getPen()
+    pen.moveTo(q[0][0])
+    for seg in (q[0], q[1], left):
+        pen.curveTo(*seg[1:])
+    pen.lineTo(el)
+    pen.lineTo(er)
+    pen.lineTo(right[0])
+    pen.curveTo(*right[1:])
+    pen.closePath()
+    path.simplify(fix_winding=True)
+    return Shape(path)
 
 
 def _lr(shape):
