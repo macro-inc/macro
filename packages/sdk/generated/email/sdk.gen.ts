@@ -641,12 +641,14 @@ export class Sdk extends HeyApiClient {
     public getThreadReadReceipts<ThrowOnError extends boolean = false>(options: Options<GetThreadReadReceiptsData, ThrowOnError>): RequestResult<GetThreadReadReceiptsResponses, GetThreadReadReceiptsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetThreadReadReceiptsResponses, GetThreadReadReceiptsErrors, ThrowOnError>({ url: '/email/threads/{thread_id}/read-receipts', ...options });
     }
+
     /**
      * Health check
      */
     public healthHandler<ThrowOnError extends boolean = false>(options?: Options<HealthHandlerData, ThrowOnError>): RequestResult<HealthHandlerResponses, unknown, ThrowOnError> {
         return (options?.client ?? this.client).get<HealthHandlerResponses, unknown, ThrowOnError>({ url: '/health', ...options });
     }
+
     /**
      * Every request gets the same uncacheable pixel so the response reveals nothing
      * about the token, and each open reaches the server.

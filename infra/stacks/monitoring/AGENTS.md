@@ -7,6 +7,8 @@ manual and has only a prod stack, even for monitors covering both environments.
 Prod threshold and anomaly monitors are in `monitors/{macrodb,redis,queues,regressions}.ts`
 (`prodMonitor()` in `prod-monitor.ts`), each file with a dashboard graphing its
 monitors that their messages link to; every monitor notifies through `notify.ts`.
+`dashboards/web-performance.ts` holds the web app performance dashboard with the
+APM retention filter and span-based metrics it reads; it has no monitors.
 
 ## Checks
 
@@ -33,6 +35,9 @@ From `infra/`:
   at oncall.macro-internal.com.
 - A prod monitor's graph on its file's dashboard repeats its metric and
   thresholds by hand; change both. `routing.test.ts` matches them by title.
+  The long-running transaction monitor is a Database Monitoring alert so the
+  notification can include the SQL; its graph still plots
+  `postgresql.activity.xact_start_age`.
 - End every monitor message with `notify({ pages })`, which routes only to
   GoAlert, and pass `dependsOn: goalertWebhooks`. Never mention a channel
   webhook, Slack handle or email address: GoAlert posts to the channel. Only
@@ -45,6 +50,11 @@ From `infra/`:
 - Do not use native committed-offset lag for the independent notification
   consumers. Their per-instance log measurements preserve broadcast semantics.
 - `notificationRetentionDashboardUrl` is a stack output, not an app route.
+- `dashboards/web-performance.ts` reads span attributes set by
+  `apps/web/src/observability` (the span model in
+  `docs/agent-guide/observability.md`). Renaming one there silently empties
+  its widgets. Span-based metric names and computes cannot be changed after
+  creation; add a new metric instead.
 - `monitors/whatsapp-session.ts` reads log events by `telemetry_event`; its
   header is the field contract with `services/whatsapp_session_service`.
   Renaming a field there silently turns its monitor into missing data.

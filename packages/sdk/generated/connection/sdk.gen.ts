@@ -84,6 +84,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
+
     public sendMessageHandler<ThrowOnError extends boolean = false>(options: Options<SendMessageHandlerData, ThrowOnError>): RequestResult<SendMessageHandlerResponses, SendMessageHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).post<SendMessageHandlerResponses, SendMessageHandlerErrors, ThrowOnError>({
             security: [{ name: 'x-internal-auth-key', type: 'apiKey' }],

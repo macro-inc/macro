@@ -42,6 +42,7 @@ export type FormRefusal =
   | 'table-already-has-form'
   | 'already-responded'
   | 'no-response'
+  | 'anonymous-response-final'
   | 'unknown-question'
   | 'repeated-answer'
   | 'missing-answer'
@@ -182,6 +183,8 @@ export type FormMetadataPatch = {
   status?: FormStatus;
   closesAt?: string | null;
   tallyVisible?: boolean;
+  responsesVisible?: boolean;
+  anonymous?: boolean;
   /** A static file id, or `null` to remove it. */
   logoFileId?: string | null;
   /** A static file id, or `null` to remove it. */
@@ -202,10 +205,16 @@ export type SubmitOutcome =
 /** The viewer's own response: `null` before they respond. */
 export type MyResponse = {
   status: 'submitted' | 'stopped';
-  submittedAt: string;
+  /** Unknown for a response to an anonymous form. */
+  submittedAt: string | undefined;
   answers: SubmittedAnswer[];
   /** The booking step, while the saved answers still pass the form's gates. */
   booking: UnlockedBooking | null;
+  /**
+   * Responded to an anonymous form: nothing links the response to the
+   * viewer, so its answers and time aren't known and it can't change.
+   */
+  anonymous?: true;
 };
 
 export type MyResponseSource = {
@@ -218,7 +227,13 @@ export type QuestionTally = {
   questionId: string;
   responses: number;
   buckets: (
-    | { kind: 'option'; optionId: string; count: number }
+    | {
+        kind: 'option';
+        optionId: string;
+        count: number;
+        /** Who chose it, as user ids; absent when the viewer may not see voters. */
+        voters?: string[];
+      }
     | { kind: 'checkbox'; checked: boolean; count: number }
   )[];
 };
@@ -293,6 +308,8 @@ export type EditorsProps = {
 export type ResponsesGridProps = {
   databaseId: string;
   tableId: string;
+  /** Hide this column, as when the form withholds who responded. */
+  hideColumnId?: string | null;
 };
 
 /**
@@ -390,6 +407,8 @@ export type FormContext = {
     renderEntityLabel: (entity: FormEntityReference) => JSX.Element;
     /** The other editors who selected something, as the app shows people. */
     renderEditors: (props: EditorsProps) => JSX.Element;
+    /** A person's avatar and name, as the app shows people. */
+    renderPerson: (userId: string) => JSX.Element;
   };
 };
 

@@ -307,6 +307,20 @@ async fn an_owner_reaches_every_route_with_their_own_receipt() {
 }
 
 #[tokio::test]
+async fn a_form_an_agent_creates_with_its_sdk_token_is_attributed_to_the_agent() {
+    let body = json!({ "name": "Lunch?", "source": { "kind": "new" } });
+    for (token, bot) in [("agent", Some(AGENT)), ("owner", None)] {
+        let (router, service) = router(Grants::default());
+        let created = router
+            .oneshot(request(Method::POST, "/", Some(token), Some(body.clone())))
+            .await
+            .unwrap();
+        assert_eq!(created.status(), StatusCode::CREATED, "{token}");
+        assert_eq!(*service.creating_bots.lock().unwrap(), vec![bot], "{token}");
+    }
+}
+
+#[tokio::test]
 async fn creating_over_a_table_needs_owner_on_its_database() {
     let body = json!({
         "name": "RSVP",

@@ -20,7 +20,7 @@ use serde_json::Value;
 use utoipa::ToSchema;
 
 use super::event_trigger::ActionTrigger;
-use super::models::{ActionPolicyError, CreateScheduledAction, ScheduledAction};
+use super::models::{ActionConfiguration, ActionPolicyError, ScheduledAction};
 use super::ports::{RoutineTemplateRepo, RoutineTemplateService, ScheduledActionService};
 
 #[cfg(test)]
@@ -249,7 +249,7 @@ where
         &self,
         principal: &CreationPrincipal,
         template_id: Uuid,
-        input: CreateScheduledAction,
+        input: ActionConfiguration,
     ) -> Result<ScheduledAction> {
         self.require_sharing(principal.user()).await?;
         let template = self

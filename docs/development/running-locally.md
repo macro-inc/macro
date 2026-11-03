@@ -52,6 +52,16 @@ For automated Linux desktop offline tests, use `nix develop .#tauri-e2e` and the
 [native E2E guide](../../apps/web/tests/native/README.md). It runs the real Tauri
 webview/native cache with deterministic API fixtures, without the local stack.
 
+Run native app probes in their own memory-capped user scope, including inspector
+and WebDriver reproductions. Renderer regressions can allocate enough memory to
+terminate unrelated agents before a stalled probe times out:
+
+```bash
+systemd-run --user --scope -p MemoryMax=6G -p MemorySwapMax=0 \
+  nix develop .#tauri-e2e --command <native-probe-command>
+```
+
+
 ## Run the frontend against hosted services
 
 The web app talks to hosted `*-dev` services when you run `bun run dev` from the web app.

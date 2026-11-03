@@ -136,3 +136,10 @@ jobs:
     - name: Self-update end to end
       run: '& ./crates/coding_agent_worker/e2e/windows_update_test.ps1 -Releases "$env:RUNNER_TEMP/releases" -V1 v2000.1.1.1 -V2 v2000.1.1.2'
       shell: pwsh
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+    - name: Claude Code from npm
+      run: '& ./crates/coding_agent_worker/e2e/windows_claude_code_test.ps1 -Releases "$env:RUNNER_TEMP/releases" -Version v2000.1.1.2'
+      shell: pwsh

@@ -1,13 +1,14 @@
-//! The entity-mutation lifecycle capabilities for forms: rename, trash,
-//! restore and permanent delete. None of them touch the form's database.
+//! The entity-mutation capabilities for forms: rename, move between folders,
+//! trash, restore and permanent delete. None of them touch the form's
+//! database.
 
 use crate::domain::drafts::{FormDraftRepository, FormDraftStore};
 
 use databases::domain::ports::{DatabaseMetadataReads, DatabaseRowReads, DatabasesService};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel};
 use entity_mutation::{
-    DeleteEntityPermanently, EntityMutationEffect, EntityMutationErrorCode, RenameEntity,
-    RestoreEntity, TrashEntity,
+    DeleteEntityPermanently, EntityMutationEffect, EntityMutationErrorCode, MoveEntity,
+    RenameEntity, RestoreEntity, TrashEntity, capability::MoveEntityRequest, project_refs,
 };
 use macro_event_broker::MacroEventBroker;
 use model_entity::Entity;
@@ -26,6 +27,7 @@ impl From<FormError> for EntityMutationErrorCode {
             error @ (FormError::Conflict
             | FormError::TableAlreadyHasForm
             | FormError::AlreadyResponded
+            | FormError::AnonymousResponseFinal
             | FormError::Closed
             | FormError::TableGone) => Self::conflict(rootcause::report!(error)),
             error @ (FormError::SignInRequired
@@ -74,6 +76,46 @@ where
     ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
         FormsService::rename_form(self, receipt, display_name).await?;
         Ok(vec![EntityMutationEffect::updated(entity)])
+    }
+}
+
+impl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images> MoveEntity
+    for FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images>
+where
+    Repository: FormsRepo + FormDraftRepository,
+    Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
+    Access: FormAccessDirectory,
+    Events: FormEventPublisher,
+    Now: Clock,
+    Broker: MacroEventBroker,
+    Drafts: FormDraftStore,
+    Images: FormImageFiles,
+{
+    /// Filing a form in a folder shares it with the folder's members, which
+    /// only its owner may do.
+    type Receipt = OwnerAccessLevel;
+
+    async fn move_entity(
+        &self,
+        request: MoveEntityRequest<Self::Receipt>,
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
+        let (entity, receipt, project_id) = match request {
+            MoveEntityRequest::MoveToRoot { entity, receipt } => (entity, receipt, None),
+            MoveEntityRequest::MoveToProject {
+                entity,
+                receipt,
+                project_id,
+                project_receipt: _,
+            } => (entity, receipt, Some(project_id)),
+        };
+        let previous_project_id = self.move_to_folder(&receipt, project_id.as_deref()).await?;
+        Ok(std::iter::once(EntityMutationEffect::updated(entity))
+            .chain(
+                project_refs([previous_project_id, project_id])
+                    .into_iter()
+                    .map(EntityMutationEffect::updated),
+            )
+            .collect())
     }
 }
 

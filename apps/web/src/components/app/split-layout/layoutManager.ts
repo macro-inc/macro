@@ -193,6 +193,8 @@ export type SplitState = {
   content: SplitContent; // mirror of the pane's current router entry
   mount: SplitMount; // contains pinned element
   referredFrom: ReferredFrom;
+  /** Source of this arrival, cleared when the next navigation omits one. */
+  lastNavigationSource: ReferredFrom;
   lastNavigationCause: NavigationCause;
 };
 
@@ -267,6 +269,7 @@ export type SplitEventPayload = {
     newContent: SplitContent;
     previousContent: SplitContent;
     cause: NavigationCause;
+    referredFrom?: ReferredFrom;
   };
   [SplitEvent.ReturnFocus]: void;
 };
@@ -331,6 +334,8 @@ export type SplitManager = {
   /** Register live inline views; call the returned function when the host is disposed. */
   registerOpenViews: (source: () => readonly ContentInstance[]) => () => void;
   readonly splits: Accessor<ReadonlyArray<SplitState>>;
+  /** A split's state, including splits of parked panes, which `splits` omits. */
+  splitState: (id: SplitId) => SplitState | undefined;
   readonly activeSplitId: Accessor<SplitId | undefined>;
   readonly activeSplit: Accessor<SplitHandle | undefined>;
   readonly lastActiveSplitId: Accessor<SplitId | undefined>;
@@ -500,6 +505,7 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
   /** Update component metadata (only available for component splits) */
   updateMeta: ((data: Omit<TMeta, 'kind'>) => void) | undefined;
   referredFrom: () => ReferredFrom;
+  lastNavigationSource: () => ReferredFrom;
   /**
    * Cause of the most recent navigation event for this split. `'fresh'` on
    * initial mount, then updated by back/forward/replace/push.
@@ -591,6 +597,8 @@ export function createSplitLayout(
   const stacked = () => options.stacked?.() ?? false;
   const [state, setState] = createStore<{
     splits: SplitState[];
+    /** Splits whose panes the router parked: mounted elsewhere, off screen. */
+    parked: SplitState[];
     activeSplitId: SplitId | undefined;
     lastActiveSplitId: SplitId | undefined;
     spotlightId: SplitId | undefined;
@@ -607,6 +615,7 @@ export function createSplitLayout(
     >;
   }>({
     splits: [],
+    parked: [],
     activeSplitId: undefined,
     lastActiveSplitId: undefined,
     spotlightId: undefined,
@@ -718,11 +727,10 @@ export function createSplitLayout(
     if (!state) return;
 
     // Mirror onto SplitState.content so live reads see the captured state.
-    setState('splits', (s) => {
-      const i = s.findIndex((x) => x.id === split.id);
-      if (i < 0) return s;
-      return s.with(i, { ...s[i], content: { ...s[i].content, state } });
-    });
+    updateSplit(split.id, (current) => ({
+      ...current,
+      content: { ...current.content, state },
+    }));
   }
 
   const DEFAULT_SPLIT_CONTENT = defaultSplitContent ?? {
@@ -739,7 +747,21 @@ export function createSplitLayout(
     setLastEvent({ type, ...payload } as SplitEventWithType);
   }
 
-  const findSplitById = (id: SplitId) => state.splits.find((s) => s.id === id);
+  const findSplitById = (id: SplitId) =>
+    state.splits.find((s) => s.id === id) ??
+    state.parked.find((s) => s.id === id);
+
+  /** Updates a split, open or parked. */
+  function updateSplit(id: SplitId, update: (split: SplitState) => SplitState) {
+    const inList = (list: SplitState[]) => {
+      const i = list.findIndex((x) => x.id === id);
+      return i < 0 ? list : list.with(i, update(list[i]!));
+    };
+    batch(() => {
+      setState('splits', inList);
+      setState('parked', inList);
+    });
+  }
   const splitIndexById = (id: SplitId) =>
     state.splits.findIndex((s) => s.id === id);
 
@@ -786,6 +808,7 @@ export function createSplitLayout(
       content,
       mount: createPinnedMount(orchestrator, content),
       referredFrom: referredFrom ?? null,
+      lastNavigationSource: referredFrom ?? null,
       lastNavigationCause: 'fresh',
     };
   }
@@ -815,6 +838,7 @@ export function createSplitLayout(
         newContent: content,
         previousContent: split.content,
         cause,
+        referredFrom,
       };
 
       dispatchEvent(SplitEvent.ContentChange, payload);
@@ -830,44 +854,32 @@ export function createSplitLayout(
     if (keyOfSplitContent(split.content) === keyOfSplitContent(content)) {
       // Update referredFrom if provided, even if content is the same
       if (referredFrom !== undefined) {
-        return setState('splits', (s) => {
-          const i = s.findIndex((x) => x.id === split.id);
-          if (i < 0) return s;
-          const target = {
-            ...s[i],
-            content: content,
-            referredFrom,
-            lastNavigationCause: cause,
-          };
-          return s.with(i, target);
-        });
-      }
-      return setState('splits', (s) => {
-        const i = s.findIndex((x) => x.id === split.id);
-        if (i < 0) return s;
-        const target = {
-          ...s[i],
+        return updateSplit(split.id, (current) => ({
+          ...current,
           content: content,
+          referredFrom,
+          lastNavigationSource: referredFrom,
           lastNavigationCause: cause,
-        };
-        return s.with(i, target);
-      });
+        }));
+      }
+      return updateSplit(split.id, (current) => ({
+        ...current,
+        content: content,
+        lastNavigationSource: null,
+        lastNavigationCause: cause,
+      }));
     }
 
     const newMount = createPinnedMount(orchestrator, content);
 
-    setState('splits', (s) => {
-      const i = s.findIndex((x) => x.id === split.id);
-      if (i < 0) return s;
-      const target = {
-        ...s[i],
-        content,
-        mount: newMount,
-        lastNavigationCause: cause,
-        ...(referredFrom !== undefined && { referredFrom }),
-      };
-      return s.with(i, target);
-    });
+    updateSplit(split.id, (current) => ({
+      ...current,
+      content,
+      mount: newMount,
+      lastNavigationSource: referredFrom ?? null,
+      lastNavigationCause: cause,
+      ...(referredFrom !== undefined && { referredFrom }),
+    }));
   }
 
   /** How the manager reached an entry; kept on the router entry, in memory only. */
@@ -1011,20 +1023,15 @@ export function createSplitLayout(
     const current = split.content;
 
     batch(() => {
-      setState('splits', (splits) => {
-        const index = splits.findIndex((s) => s.id === split.id);
-        if (index < 0) return splits;
-        const previous = splits[index];
-        return splits.with(index, {
-          ...previous,
-          content: next,
-          mount:
-            previous.mount.kind === 'block'
-              ? { ...previous.mount, id: next.id }
-              : previous.mount,
-          lastNavigationCause: 'replace',
-        });
-      });
+      updateSplit(split.id, (previous) => ({
+        ...previous,
+        content: next,
+        mount:
+          previous.mount.kind === 'block'
+            ? { ...previous.mount, id: next.id }
+            : previous.mount,
+        lastNavigationCause: 'replace',
+      }));
       if (current.type !== 'component') {
         orchestrator.rekeyBlockInstance(
           resolveBlockAlias(current.type),
@@ -1124,6 +1131,7 @@ export function createSplitLayout(
         })
       );
       setState('splits', (splits) => splits.filter((s) => s.id !== id));
+      setState('parked', (splits) => splits.filter((s) => s.id !== id));
       const front = state.splits.at(-1);
       if (stacked() && state.activeSplitId === id && front) {
         setState('activeSplitId', front.id);
@@ -1133,16 +1141,27 @@ export function createSplitLayout(
     });
   }
 
-  /** Puts splits in the router's pane order. */
+  /**
+   * Puts the open splits in the router's pane order; splits of retained panes
+   * the router no longer shows move to `parked`, keeping their state.
+   */
   function orderSplits(ids: readonly SplitId[]) {
-    const byId = new Map(state.splits.map((split) => [split.id, split]));
+    const all = [...state.splits, ...state.parked];
+    const byId = new Map(all.map((split) => [split.id, split]));
     const ordered = ids.flatMap((id) => byId.get(id) ?? []);
     const inOrder =
       ordered.length === state.splits.length &&
       ordered.every((split, index) => split === state.splits[index]);
     if (inOrder) return;
 
-    setState('splits', ordered);
+    const open = new Set(ids);
+    batch(() => {
+      setState('splits', ordered);
+      setState(
+        'parked',
+        all.filter((split) => !open.has(split.id))
+      );
+    });
   }
 
   function activateSplit(id: SplitId) {
@@ -1291,6 +1310,7 @@ export function createSplitLayout(
         return mount?.kind === 'component' ? mount.updateMeta : undefined;
       },
       referredFrom: () => s()?.referredFrom ?? null,
+      lastNavigationSource: () => s()?.lastNavigationSource ?? null,
       lastNavigationCause: () => s()?.lastNavigationCause ?? 'fresh',
       registerEntryStateCaptor: (key: string, getter: () => unknown) => {
         let perSplit = entryStateCaptors.get(currentSplit.id);
@@ -1426,7 +1446,8 @@ export function createSplitLayout(
   }
 
   // The router owns each pane's history; splits mirror what its panes show.
-  const paneSplits = mapArray(router.panes, (pane) => {
+  // Parked panes keep their splits, so their views can stay mounted.
+  const paneSplits = mapArray(router.retainedPanes, (pane) => {
     const id = splitOf(pane);
     let entryIds = new Set<string>();
 
@@ -1473,8 +1494,9 @@ export function createSplitLayout(
   });
 
   createComputed(() => {
-    const ids = paneSplits();
-    untrack(() => orderSplits(ids));
+    paneSplits();
+    const open = router.panes().map(splitOf);
+    untrack(() => orderSplits(open));
   });
 
   trackNavigationLifecycle(router, () => entryStates.size);
@@ -1832,6 +1854,8 @@ export function createSplitLayout(
   return {
     viewState,
     splits: () => state.splits,
+    /** A split's state, whether open or parked. */
+    splitState: findSplitById,
     findOpenView,
     registerOpenViews: contentInstances.register,
     activeSplitId: () => state.activeSplitId,

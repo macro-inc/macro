@@ -1393,6 +1393,17 @@ pub async fn run() -> anyhow::Result<()> {
         config.enable_ai_usage_enforcement,
         config.ai_pricing(),
         ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement),
+        Some(Arc::new(
+            mcp_client::outbound::auth_service_github_tokens::AuthServiceGithubTokens::new(
+                authentication_service_client::AuthServiceClient::new(
+                    config
+                        .authentication_service_secret_key
+                        .as_ref()
+                        .to_string(),
+                    macro_service_urls::AuthServiceUrl::new()?.to_string(),
+                ),
+            ),
+        )),
     )
     .await
     .context("failed to build Macro agent tool context")?;
@@ -2188,19 +2199,27 @@ pub async fn run() -> anyhow::Result<()> {
                 entity_access_service.as_ref().clone(),
             ),
         ),
-        graphql_agent_session_entity_loader: graphql_soup::AgentSessionEntityLoader(
+        graphql_agent_session_entity_loader: graphql_soup::AgentSessionEntityLoader::new(
+            primary_entity_soup.clone(),
+            Arc::new(email_service.clone()),
+            entity_access_service.as_ref().clone(),
+        ),
+        graphql_database_rows_context: graphql_databases::DatabaseRowsGraphqlContext::new(
+            databases_sql::view_rows::DatabaseViewRows::new(
+                databases_service.clone(),
+                databases::outbound::pg_view_rows::PgViewRows::new(db.clone()),
+            ),
+            entity_access_service.clone(),
             graphql_soup::soup_item_loader(
                 primary_entity_soup.clone(),
                 Arc::new(email_service.clone()),
                 entity_access_service.as_ref().clone(),
             ),
         ),
-        graphql_primary_soup_item_loader: graphql_soup::PrimarySoupItemLoader(
-            graphql_soup::soup_item_loader_with_team_access(
-                primary_entity_soup,
-                Arc::new(email_service.clone()),
-                entity_access_service.as_ref().clone(),
-            ),
+        graphql_primary_soup_item_loader: graphql_soup::PrimarySoupItemLoader::new(
+            primary_entity_soup,
+            Arc::new(email_service.clone()),
+            entity_access_service.as_ref().clone(),
         ),
         // Ordinary single-entity GraphQL reads use the replica-backed Soup
         // and email readers. Subscription hydration, `soupEntity`, and

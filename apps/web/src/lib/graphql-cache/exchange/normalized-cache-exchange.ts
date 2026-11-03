@@ -80,6 +80,7 @@ import {
   type QueryRevalidationWire,
   type ReadResult,
 } from '../protocol';
+import { classifyCacheError } from '../telemetry';
 import { createDeferredQueryRereads } from './deferred-query-rereads';
 import {
   createDocumentQueryReader,
@@ -121,6 +122,14 @@ const AFFECTED_READ_CONTEXT_KEY = 'normalizedCacheAffectedRead';
 const REPLACEMENT_REGISTRATION_ONLY_CONTEXT_KEY =
   'normalizedCacheReplacementRegistrationOnly';
 /** Marks a query as network-to-cache hydration with a projected result. */
+
+declare module '@urql/core' {
+  interface OperationContext {
+    /** Publish the network result without storing it in the cache. */
+    persistResult?: false;
+  }
+}
+
 export const HYDRATE_ONLY_CONTEXT_KEY = 'normalizedCacheHydrateOnly';
 /** Retains the client-annotated document while the transport uses a stripped copy. */
 const HYDRATION_DOCUMENT_CONTEXT_KEY = 'normalizedCacheHydrationDocument';
@@ -1245,8 +1254,14 @@ export function normalizedCacheExchange(
         span?: Span
       ): Promise<boolean> {
         let applied = true;
+        span?.setAttr('cache.effect_count', effects.length);
         for (const effect of effects) {
           if (!isCurrent()) return false;
+          const effectSpan = span?.span(
+            effect.kind === 'write'
+              ? 'graphql.subscription.cache_write'
+              : 'graphql.subscription.cache_delete'
+          );
           try {
             if (effect.kind === 'write') {
               await host.writeQuery({
@@ -1261,9 +1276,14 @@ export function normalizedCacheExchange(
           } catch (error) {
             applied = false;
             span?.error('Subscription cache effect failed');
+            span?.setAttr('cache.failure', classifyCacheError(error));
+            effectSpan?.setAttr('cache.failure', classifyCacheError(error));
             // One failed cache effect must neither skip later effects nor
             // prevent delivery of the original operation result.
+            effectSpan?.error('Subscription cache effect failed');
             options.onCacheError?.(error, op);
+          } finally {
+            effectSpan?.end();
           }
         }
         return applied && isCurrent();
@@ -1511,7 +1531,10 @@ export function normalizedCacheExchange(
           // Publication, not persistence, supersedes an older cache snapshot.
           // A failed network request still permits a slower offline cache hit.
           if (result.data != null && !result.error) state.cacheReadVersion += 1;
-          const persistence = persistQueryResult(result, state, version);
+          const persistence =
+            op.context.persistResult === false
+              ? Promise.resolve(undefined)
+              : persistQueryResult(result, state, version);
           return withResultMetadata(result, {
             source: 'live-network',
             persistence,

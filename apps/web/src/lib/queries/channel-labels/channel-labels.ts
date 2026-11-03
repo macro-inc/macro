@@ -10,6 +10,8 @@ import type { ChannelLabelScopeSelection } from '@service-storage/generated/sche
 import type { ChannelLabelsList } from '@service-storage/generated/schemas/channelLabelsList';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
+import { fetchAllChannels } from '../channel/channels';
+import { channelKeys } from '../channel/keys';
 import { queryClient } from '../client';
 import { withCallbacks } from '../utils';
 import { channelLabelKeys } from './keys';
@@ -117,22 +119,37 @@ function smartTagPreviewQueryOptions(
 
 export function useSmartTagPreviewQuery(
   pattern: Accessor<string>,
-  scope?: ChannelLabelScopeSelection
+  scope?: ChannelLabelScopeSelection | Accessor<ChannelLabelScopeSelection>
 ) {
   const channelTagsFlag = useFeatureFlag(enableChannelTags);
   const userId = useUserId();
   const debouncedPattern = debouncedDependent(pattern, 150);
   return useQuery(() => {
-    const contains = pattern();
+    const contains = debouncedPattern().trim();
+    const selectedScope = typeof scope === 'function' ? scope() : scope;
     return smartTagPreviewQueryOptions(
       contains,
-      channelTagsFlag().enabled &&
-        contains.length > 0 &&
-        contains === debouncedPattern(),
-      scope,
+      channelTagsFlag().enabled && contains.length > 0,
+      selectedScope,
       userId()
     );
   });
+}
+
+function availableSectionChannelsQueryOptions(actorId: string | undefined) {
+  return queryOptions({
+    queryKey: channelKeys.listChannels._ctx.account(actorId).queryKey,
+    queryFn: ({ signal }) => fetchAllChannels(signal),
+    enabled: Boolean(actorId),
+    reconcile: 'id',
+    staleTime: 0,
+  });
+}
+
+/** Full authorized channel membership, scoped to the current account. */
+export function useAvailableSectionChannelsQuery() {
+  const userId = useUserId();
+  return useQuery(() => availableSectionChannelsQueryOptions(userId()));
 }
 
 export type CreateChannelLabelArgs = {

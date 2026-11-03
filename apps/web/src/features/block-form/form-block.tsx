@@ -201,7 +201,7 @@ function FormBlockContent(props: {
                 access: detail().access,
               }}
               permissions={getPermissions(detail().access)}
-              ops={[]}
+              ops={[{ op: 'moveToProject' }]}
               buttonClass={isTouchDevice() ? 'order-last' : 'order-first'}
             />
           </SplitTitleFileMenu>

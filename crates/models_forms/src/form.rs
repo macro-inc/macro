@@ -60,8 +60,9 @@ pub enum FormStatus {
     Closed,
 }
 
-/// The caller's level on a form: view responds, edit changes questions and
-/// reads responses, owner also sets the audience, closes and trashes it.
+/// The caller's level on a form: view responds (and reads responses when
+/// they are shared), edit changes questions and reads responses, owner
+/// also sets the audience, closes and trashes it.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(
     Debug,
@@ -78,7 +79,7 @@ pub enum FormStatus {
 )]
 #[serde(rename_all = "camelCase")]
 pub enum FormAccess {
-    /// May respond.
+    /// May respond, and read response rows when they are shared.
     View,
     /// May change the questions and read the responses.
     Edit,
@@ -114,13 +115,20 @@ pub struct Form {
     #[schema(value_type = Option<Uuid>, required = true)]
     pub submitted_column_id: Option<ColumnId>,
     /// The person column each signed-in submission names its respondent in;
-    /// `null` once deleted.
+    /// `null` once deleted, and on a form created anonymous. An anonymous
+    /// form never writes it.
     #[schema(value_type = Option<Uuid>, required = true)]
     pub respondent_column_id: Option<ColumnId>,
     /// Who may respond.
     pub audience: Audience,
     /// Whether respondents may read option tallies.
     pub tally_visible: bool,
+    /// Whether people with View may read individual response rows.
+    pub responses_visible: bool,
+    /// Whether nobody, the owner included, can see who gave which response.
+    /// Who responded is kept apart from the responses, only so nobody
+    /// responds twice. Fixed once anyone has responded.
+    pub anonymous: bool,
     /// Whether its owner closed it.
     pub status: FormStatus,
     /// When it stops taking responses, if it does.
@@ -135,6 +143,9 @@ pub struct Form {
     pub created_at: DateTime<Utc>,
     /// When its facts or layout last changed.
     pub updated_at: DateTime<Utc>,
+    /// The folder it is filed in; `null` at the root.
+    #[schema(required = true)]
+    pub project_id: Option<String>,
     /// Whether Drive leaves it, and the database behind it, out of its
     /// listings, as for a channel poll.
     pub is_hidden_in_drive: bool,
@@ -175,6 +186,10 @@ pub enum FormSource {
         /// for a channel poll.
         #[serde(default, rename = "isHiddenInDrive")]
         is_hidden_in_drive: bool,
+        /// Make the form anonymous from the start: its table gets no
+        /// Respondent column.
+        #[serde(default)]
+        anonymous: bool,
     },
     /// An existing table in a database the caller owns. The form starts with a
     /// question per column.
@@ -233,6 +248,17 @@ pub struct UpdateForm {
     #[schema(nullable = false)]
     #[specta(optional)]
     pub tally_visible: Option<bool>,
+    /// Whether people with View may read individual response rows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(nullable = false)]
+    #[specta(optional)]
+    pub responses_visible: Option<bool>,
+    /// Whether nobody can see who gave which response; refused once anyone
+    /// has responded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(nullable = false)]
+    #[specta(optional)]
+    pub anonymous: Option<bool>,
     /// A new logo, or `null` to remove it.
     #[serde(
         default,
@@ -274,6 +300,8 @@ impl UpdateForm {
             || self.status.is_some()
             || self.closes_at.is_some()
             || self.tally_visible.is_some()
+            || self.responses_visible.is_some()
+            || self.anonymous.is_some()
     }
 }
 

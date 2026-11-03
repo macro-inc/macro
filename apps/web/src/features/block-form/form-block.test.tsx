@@ -104,6 +104,8 @@ beforeEach(() => {
         status: 'open',
         closesAt: null,
         tallyVisible: false,
+        responsesVisible: false,
+        anonymous: false,
         confirmationMessage: 'Thank you',
         branding: { logoFileId: null, coverFileId: null, accentColor: null },
         submittedColumnId: null,

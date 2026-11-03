@@ -1,3 +1,4 @@
+import { TraceFlow, useFlow } from '@app/observability/flow';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { DocumentEntity } from '@entity';
 import {
@@ -39,7 +40,7 @@ import {
 } from '../context/markdown-document-state';
 import { HistoryProvider } from '../history/HistoryContext';
 import { HistoryWorkspace } from '../history/HistoryWorkspace';
-import { resumeDocumentSpan, stampLoroSnapshotState } from '../observability';
+import { stampLoroSnapshotState } from '../observability';
 import type { MarkdownDocumentKind, MarkdownDocumentSource } from '../types';
 import { MarkdownNameProvider } from './MarkdownNameProvider';
 import { Notebook } from './Notebook';
@@ -245,6 +246,7 @@ function useMarkdownSnapshotIngest(
 ) {
   const { documentId: getDocumentId } = useMarkdownDocument();
   const documentId = getDocumentId();
+  const flow = useFlow();
   const snapshotStore = new IDBSnapshotStore<RawUpdate>(
     LORO_SNAPSHOT_DB_NAME,
     documentId
@@ -258,7 +260,7 @@ function useMarkdownSnapshotIngest(
         if (!doInitialSync) return;
         options.onDataReady?.();
 
-        const span = resumeDocumentSpan(documentId);
+        const span = flow.span;
         if (options.optimisticSnapshot) {
           startSnapshotIngest(span, 'optimistic', loroManager, async () => {
             const seeded = await loroManager.ingest({
@@ -299,6 +301,7 @@ export function MarkdownDocumentContent(props: MarkdownDocumentContentProps) {
 
   const loroManager = createLoroManager(MARKDOWN_LORO_SCHEMA, {
     documentId,
+    parentSpan: useFlow().span,
   });
 
   useMarkdownSnapshotIngest(loroManager, props);
@@ -315,12 +318,14 @@ export function MarkdownDocumentContent(props: MarkdownDocumentContentProps) {
       >
         <div class="relative portal-scope touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
           <Suspense>
-            <Notebook
-              loroManager={loroManager}
-              documentId={documentId}
-              hotkeyScope={props.hotkeyScope}
-              autoFocus={props.autoFocus ?? false}
-            />
+            <TraceFlow name="doc.editor">
+              <Notebook
+                loroManager={loroManager}
+                documentId={documentId}
+                hotkeyScope={props.hotkeyScope}
+                autoFocus={props.autoFocus ?? false}
+              />
+            </TraceFlow>
           </Suspense>
         </div>
       </Scroll>

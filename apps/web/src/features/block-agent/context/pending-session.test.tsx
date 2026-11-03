@@ -78,6 +78,7 @@ function Destination(props: { id: string }) {
   const resolved = resolveSessionId(() => props.id);
   const live = createAgentSession(resolved.sessionId, {
     userId: () => 'me',
+    provisioning: resolved.pending,
     onAcquire: resolved.acquired,
   });
   return <p>{resolved.error() ?? live.session()?.name}</p>;

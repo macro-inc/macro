@@ -36,7 +36,7 @@ afterEach(() => {
 });
 
 function setup(
-  axis: 'x' | 'both' = 'x',
+  axis: 'x' | 'y' | 'both' = 'x',
   nestedScroll?: { viewportSelector: string; horizontalOutside: boolean }
 ) {
   const frames = new Map<number, FrameRequestCallback>();
@@ -108,6 +108,22 @@ describe('drag auto-scroll', () => {
     drag.pointer = { x: 1, y: 200 };
     frame(64);
     expect(viewport.scrollLeft).toBeLessThan(600);
+  });
+
+  it('scrolls vertical sidebars without changing their horizontal offset', () => {
+    const { viewport, setActive, frame, frames } = setup('y');
+    viewport.scrollLeft = 40;
+    drag.pointer = { x: 395, y: 495 };
+    setActive(true);
+    frame(0);
+    frame(16);
+
+    expect(viewport.scrollTop).toBeGreaterThan(0);
+    expect(viewport.scrollLeft).toBe(40);
+    expect(drag.detectCollisions).toHaveBeenCalledOnce();
+
+    setActive(false);
+    expect(frames.size).toBe(0);
   });
 
   it('scrolls vertically for boards and cancels its frame on unmount', () => {

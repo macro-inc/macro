@@ -6,10 +6,7 @@ use model_entity::AppearanceColor;
 async fn appearance_records_only_real_changes_without_dispatching() {
     let service = service(false);
     let created = service
-        .create_action(
-            &user_principal(),
-            CreateScheduledAction::Canonical(configuration(false)),
-        )
+        .create_action(&user_principal(), configuration(false))
         .await
         .unwrap();
     let id = created.id.unwrap();
@@ -40,10 +37,7 @@ async fn appearance_records_only_real_changes_without_dispatching() {
 async fn invalid_or_foreign_appearance_writes_do_not_mutate_the_routine() {
     let service = service(false);
     let created = service
-        .create_action(
-            &user_principal(),
-            CreateScheduledAction::Canonical(configuration(false)),
-        )
+        .create_action(&user_principal(), configuration(false))
         .await
         .unwrap();
     let id = created.id.unwrap();
@@ -86,10 +80,7 @@ async fn bot_appearance_changes_retain_actor_and_require_the_owner_scope() {
 
     let service = service(false);
     let created = service
-        .create_action(
-            &user_principal(),
-            CreateScheduledAction::Canonical(configuration(false)),
-        )
+        .create_action(&user_principal(), configuration(false))
         .await
         .unwrap();
     let id = created.id.unwrap();

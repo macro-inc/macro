@@ -59,6 +59,8 @@ lists and content save responses retain the stored appearance alongside ordinary
   gate it behind a Cargo feature in `Cargo.toml` only if it's optional (see
   `account_merge_request`, `team`).
 
+- Composed-memory tables and refresh leases are owned by `crates/memory`; migrations leave legacy memory rows intact.
+
 ## Checks
 
 - `cargo test -p macro_db_client` (`SQLX_OFFLINE` unset; requires local MacroDB
@@ -79,10 +81,6 @@ unreferenced replicas. These additive tables do not change agent-session claims.
 
 ## Gotchas
 
-- `calendar_event_notes` and `calendar_note_event_visible` are shared by calendar
-  note reads and document authorization; keep both consumers on the same policy.
-  The additive migration must precede their service rollout. See
-  [meeting-note access](../../docs/architecture/calendar-meeting-notes.md).
 - Migrations deploy before service code: never drop a column/table in the
   same PR that removes its last usage (see `docs/development/database.md`).
 - Never hand-edit `.sqlx/query-*.json` or invent a migration timestamp.

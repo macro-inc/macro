@@ -282,6 +282,24 @@ export class Database extends MacroEntity<DatabaseDetail> {
     return new Database(client, record.id);
   }
 
+  /**
+   * Copy the database into a new one the caller owns, with its tables,
+   * columns, views and rows. Its sharing, forms, webhooks and history stay
+   * with this one. Viewing it is enough.
+   */
+  async duplicate(options?: {
+    /** The copy's name; by default, "<name> copy". */
+    name?: string;
+  }): Promise<Database> {
+    const record = unwrap(
+      await this.client.storage.duplicateDatabase({
+        path: { id: this.id },
+        body: { name: options?.name },
+      }),
+    );
+    return new Database(this.client, record.id);
+  }
+
   /** The databases the caller can see, each with the caller's access level. */
   static async list(client: MacroClient): Promise<Database[]> {
     const listed = unwrap(await client.storage.listDatabases());

@@ -316,10 +316,10 @@ describe('command menu search ranking', () => {
         channel('dm', 'Jackson Kustec', NOW - 60 * DAY, 'dm'),
       ];
 
-      expect(ids(items, 'jack', cacheEnabled)).toEqual(['dm', 'jack', 'crm']);
+      expect(ids(items, 'jack', cacheEnabled)).toEqual(['jack', 'dm', 'crm']);
       expect(ids([...items].reverse(), 'jack', cacheEnabled)).toEqual([
-        'dm',
         'jack',
+        'dm',
         'crm',
       ]);
     }
@@ -331,7 +331,7 @@ describe('command menu search ranking', () => {
       contact('older-crm', 'Jack CRM', NOW - 10 * DAY),
       command('command', 'Jack command', NOW - 5 * DAY),
       channel('channel-slot', 'Jack channel', NOW - 15 * DAY),
-      person('jack', 'Jack Smith'),
+      person('jack', 'Jackie Smith'),
       channel('old-dm', 'Jack old', NOW - 60 * DAY, 'dm'),
       channel('recent-dm', 'Jack recent', NOW - DAY, 'dm'),
     ];
@@ -369,5 +369,151 @@ describe('command menu search ranking', () => {
         preservedIds: new Set(['jack']),
       }).map((item) => item.id)
     ).toEqual(['jack', 'crm']);
+  });
+
+  describe('participant names in any order', () => {
+    const pair = channel('pair', 'Avery Morgan, Blair Chen', NOW - 20 * DAY);
+    const group = channel(
+      'group',
+      'Casey Reed, Avery Morgan, Blair Chen, Drew Fox',
+      NOW
+    );
+
+    it.each([
+      'Avery, Blair',
+      'Blair, Avery',
+      'blair avery',
+      'Blair, aver',
+      'chen, morgan',
+      'Blair Chen, Avery Morgan',
+    ])('ranks the exact pair above a newer larger group for %s', (query) => {
+      expect(ids([group, pair], query, true)).toEqual(['pair', 'group']);
+      expect(ids([group, pair], query, false)).toEqual(['pair', 'group']);
+    });
+
+    it('ranks the exact pair above a note and a project that loosely match', () => {
+      const items = [
+        note('note', 'Blair and Avery kickoff'),
+        project('project', 'Avery Blair launch'),
+        pair,
+      ];
+      expect(ids(items, 'Blair, Avery')[0]).toBe('pair');
+    });
+
+    it('does not treat a query that leaves a participant unnamed as the exact pair', () => {
+      const items = [note('note', 'Blair Chen notes'), pair];
+      expect(ids(items, 'blair chen')).toEqual(['note', 'pair']);
+    });
+
+    it('does not let one term name every participant whose name starts with it', () => {
+      const items = [
+        channel('namesakes', 'Avery Morgan, Avery Chen'),
+        project('project', 'Avery', NOW - 20 * DAY),
+      ];
+      expect(ids(items, 'avery')).toEqual(['project', 'namesakes']);
+    });
+
+    it('keeps a recent group of namesakes below a DM with only one of them', () => {
+      const items = [
+        channel('namesakes', 'Avery Morgan, Avery Chen'),
+        channel('dm', 'Avery Morgan', NOW - 60 * DAY, 'dm'),
+      ];
+      expect(ids(items, 'avery morgan')).toEqual(['dm', 'namesakes']);
+    });
+
+    it('matches namesakes when each has a term of their own', () => {
+      const items = [
+        channel('namesakes', 'Avery Morgan, Avery Chen', NOW - 20 * DAY),
+        channel('group', 'Casey Reed, Avery Morgan, Avery Chen'),
+      ];
+      expect(ids(items, 'avery, morgan')).toEqual(['namesakes', 'group']);
+    });
+
+    it('reassigns a term when a later participant has no other', () => {
+      const group = channel('group', 'Avery Morgan, Avery Chen');
+      expect(ids([group], 'avery, chen', false)).toEqual(['group']);
+      expect(
+        ids([note('note', 'Avery chen plan'), group], 'avery, chen')[0]
+      ).toBe('group');
+    });
+
+    it('answers a long pasted query quickly on a large group', () => {
+      const people = Array.from({ length: 12 }, (_, index) =>
+        index === 11 ? 'Zane Young' : `Avery Person${index}`
+      );
+      const group = channel('group', people.join(', '));
+      const started = performance.now();
+      ids([group], Array.from({ length: 12 }, () => 'avery').join(' '), false);
+      expect(performance.now() - started).toBeLessThan(250);
+    });
+
+    it('finds a one-to-one DM by its name reversed', () => {
+      const dm = channel('dm', 'Avery Morgan', NOW, 'dm');
+      expect(ids([dm], 'morgan avery', false)).toEqual(['dm']);
+    });
+  });
+
+  describe('people matched by first name', () => {
+    const shortDm = channel('short-dm', 'Avery', NOW - 60 * DAY, 'dm');
+    const fullNameDm = channel('full-name-dm', 'Avery Morgan', NOW, 'dm');
+
+    it.each([false, true])(
+      'puts the recent full-name DM above an older DM and a person named only the query with GraphQL %s',
+      (cacheEnabled) => {
+        const items = [
+          shortDm,
+          person('person', 'avery'),
+          fullNameDm,
+          channel('longer-handle', 'avery+1', NOW - 40 * DAY, 'dm'),
+        ];
+        expect(ids(items, 'avery', cacheEnabled).slice(0, 3)).toEqual([
+          'full-name-dm',
+          'short-dm',
+          'person',
+        ]);
+      }
+    );
+
+    it('keeps a group DM out of the first-name group', () => {
+      const items = [
+        channel('group-dm', 'Avery Morgan, Blair Chen', NOW, 'dm'),
+        channel('one-to-one', 'Avery Morgan', NOW - 60 * DAY, 'dm'),
+      ];
+      expect(ids(items, 'avery')).toEqual(['one-to-one', 'group-dm']);
+    });
+
+    it('keeps the more recently viewed DM first when the short name is the active one', () => {
+      expect(
+        ids(
+          [
+            channel('short-dm', 'Avery', NOW, 'dm'),
+            channel('full-name-dm', 'Avery Morgan', NOW - 2 * DAY, 'dm'),
+          ],
+          'avery'
+        )
+      ).toEqual(['short-dm', 'full-name-dm']);
+    });
+
+    it('puts a first-name DM above a project named exactly the query', () => {
+      const items = [project('project', 'Avery', NOW), fullNameDm];
+      expect(ids(items, 'avery')).toEqual(['full-name-dm', 'project']);
+    });
+
+    it('keeps other rows and partial first names in the prefix group', () => {
+      const items = [
+        project('exact-project', 'Avery', NOW - 20 * DAY),
+        note('first-word-note', 'Avery Morgan'),
+        fullNameDm,
+      ];
+      expect(ids(items, 'aver')).toEqual([
+        'full-name-dm',
+        'first-word-note',
+        'exact-project',
+      ]);
+      expect(ids(items.slice(0, 2), 'avery')).toEqual([
+        'exact-project',
+        'first-word-note',
+      ]);
+    });
   });
 });

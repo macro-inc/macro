@@ -100,7 +100,8 @@ use databases::inbound::axum_router::ops::{
 };
 use databases::inbound::axum_router::views::ViewPositionsResponse as DatabaseViewPositionsResponse;
 use databases::inbound::axum_router::{
-    CreateDatabaseRequest, saved_queries::SaveQueryRequest as DatabaseSaveQueryRequest,
+    CreateDatabaseRequest, duplicate::DuplicateDatabaseRequest,
+    saved_queries::SaveQueryRequest as DatabaseSaveQueryRequest,
 };
 use databases::outbound::gateway_event_publisher::{
     AwarenessRelay as DatabaseAwarenessRelay, TableChanged as DatabaseTableChanged,
@@ -512,6 +513,7 @@ use utoipa::OpenApi;
         databases::inbound::axum_router::history::undo_change_handler,
         databases::inbound::axum_router::history::table_changes_handler,
         databases::inbound::axum_router::transfer::import_table_handler,
+        databases::inbound::axum_router::duplicate::duplicate_database_handler,
         databases::inbound::axum_router::sharing::get_permissions_handler,
         databases::inbound::axum_router::sharing::update_permissions_handler,
         databases::inbound::axum_router::saved_queries::save_query_handler,
@@ -736,6 +738,7 @@ use utoipa::OpenApi;
             DatabaseTableDetail,
             DatabaseColumnDetail,
             CreateDatabaseRequest,
+            DuplicateDatabaseRequest,
             DatabaseAwareness,
             DatabaseAwarenessRelay,
             DatabaseTableChanged,

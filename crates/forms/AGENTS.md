@@ -47,6 +47,20 @@ service.
 
 - `cargo test -p forms --all-features` (`SQLX_OFFLINE` unset).
 
+## Gotchas
+
+- An anonymous form (`forms.anonymous`) keeps who responded in
+  `form_submission_receipts` (no response, row or time) and writes ledger
+  entries with no respondent, a random v4 id and the day only. Nothing may
+  join the two: no span, log, event or row author names a voter next to a
+  response.
+- A form is filed in a folder on its own (`forms.project_id`, `MoveEntity`,
+  owner only); its database stays where it is. The folder's inherited grants
+  on the form reach the database through form access, like any form grant.
+- `POST /forms` attributes the creation to the SDK token's `agent_id` (code
+  mode), like the native tool, so channel delivery shares a poll an agent
+  posts; access checks still run as the plain user.
+
 ## Related
 
 - Skills: `collab-surface-core`, `database-core` · Rules: `.agents/rules/rust/architecture.md`

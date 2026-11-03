@@ -7,7 +7,6 @@ import type {
   PreloadIntent,
   SplitLocation,
 } from '../routes/types';
-import { UNCANCELLABLE } from '../utils';
 import { createClaims } from './claims';
 import { createLayout } from './layout';
 import { createLeaveGuards } from './leave-guards';
@@ -40,7 +39,9 @@ export function createSplitRouter(options: SplitRouterOptions) {
 
   const url = createUrl({ routes, history, panes });
 
+  const preloadLifetime = new AbortController();
   const phaseOptions = {
+    preloadSignal: preloadLifetime.signal,
     routes,
     middleware: options.middleware ?? [],
     guards,
@@ -111,7 +112,8 @@ export function createSplitRouter(options: SplitRouterOptions) {
     location: SplitLocation,
     intent: PreloadIntent = 'hover'
   ): Promise<unknown> | undefined => {
-    const context = { location, intent, signal: UNCANCELLABLE };
+    if (disposed) return;
+    const context = { location, intent, signal: preloadLifetime.signal };
 
     return untrack(() => preloadLocation(routes, context));
   };
@@ -120,6 +122,7 @@ export function createSplitRouter(options: SplitRouterOptions) {
     if (disposed) return;
 
     disposed = true;
+    preloadLifetime.abort();
     disconnect();
     runner.dispose();
     claims.dispose();
@@ -130,6 +133,8 @@ export function createSplitRouter(options: SplitRouterOptions) {
     claims: claims.registry,
     ready,
     panes: panes.ids,
+    /** Open and parked panes; see `openLayout` and `showLayout`. */
+    retainedPanes: panes.retained,
     navigate: urlNavigation.navigate,
     navigatePane: paneNavigation.navigate,
     /** Cancels pending navigation and new panes requested from this pane. */
@@ -156,6 +161,10 @@ export function createSplitRouter(options: SplitRouterOptions) {
     href: url.href,
     layoutSnapshot: layout.snapshot,
     restoreLayout: layout.restore,
+    openLayout: layout.open,
+    showLayout: layout.show,
+    discardPanes: layout.discard,
+    layoutFromHref: layout.fromHref,
     layoutHref: layout.href,
     createPaneId: panes.createPaneId,
     activatePane: panes.activate,

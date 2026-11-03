@@ -2,6 +2,7 @@ import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
 import { toQuerySchema } from '@app/features/database-query/queries/query-source';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { usePending } from '@app/observability/flow';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
@@ -91,6 +92,7 @@ const Block: Component = () => {
   );
   useDatabaseTableChangedSync(() => databaseId);
   const detailQuery = useDatabaseDetailQuery(() => databaseId);
+  usePending('database.detail', () => detailQuery.isLoading);
   let gridEntry:
     | {
         tableId: string;

@@ -52,6 +52,7 @@ fn world() -> Shared {
                 created_at: Utc::now(),
                 trashed_at: None,
                 appearance: None,
+                project_id: None,
             },
             grant: AccessLevel::Owner,
             tables: vec![TableDetail {

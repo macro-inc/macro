@@ -17,7 +17,12 @@ mod apply_ops;
 mod cell_triggers;
 #[cfg(feature = "gateway")]
 mod changes;
+#[cfg(feature = "gateway")]
+mod derived_cells;
+#[cfg(feature = "gateway")]
+mod duplicate;
 mod entity_split;
+mod folders;
 #[cfg(feature = "gateway")]
 mod journal;
 #[cfg(feature = "gateway")]
@@ -36,6 +41,8 @@ mod team_share;
 mod transfer;
 #[cfg(feature = "gateway")]
 mod undo;
+#[cfg(feature = "view_rows")]
+mod view_paging;
 #[cfg(feature = "gateway")]
 mod views;
 
@@ -151,6 +158,7 @@ async fn commit(
 ) -> HashMap<TableId, TableVersion> {
     let outcome = PgCellStore::new(pool.clone(), PropertiesPgRepo::new(pool.clone()))
         .apply_writes(&Writes {
+            derivations: Vec::new(),
             database_id,
             created_by: user(),
             writes,

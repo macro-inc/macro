@@ -991,3 +991,66 @@ async fn a_conversion_request_reaches_the_service_and_answers_the_converted_cell
 }
 
 mod appearance;
+
+#[tokio::test]
+async fn view_access_duplicates_a_database_for_the_caller() {
+    use axum::body::Body;
+    use axum::http::{Request, header};
+    use entity_access::domain::models::AccessLevel;
+    use tower::ServiceExt;
+
+    let database = Uuid::from_u128(0x0dbb);
+    let (router, service) = fakes::duplicate_router(AccessLevel::View);
+
+    let response = router
+        .oneshot(
+            Request::post(format!("/{database}/duplicate"))
+                .header(header::AUTHORIZATION, "Bearer valid")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(r#"{"name": "Plans 2027"}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(body["id"], serde_json::json!(Uuid::from_u128(0xc0b1)));
+    assert_eq!(body["name"], "Plans 2027");
+    assert_eq!(
+        *service.duplicates.lock().unwrap(),
+        vec![(
+            database.to_string(),
+            fakes::USER.to_string(),
+            Some("Plans 2027".to_string())
+        )]
+    );
+}
+
+#[tokio::test]
+async fn a_duplicate_without_a_body_name_reaches_the_service_unnamed() {
+    use axum::body::Body;
+    use axum::http::{Request, header};
+    use entity_access::domain::models::AccessLevel;
+    use tower::ServiceExt;
+
+    let database = Uuid::from_u128(0x0dbb);
+    let (router, service) = fakes::duplicate_router(AccessLevel::View);
+
+    let response = router
+        .oneshot(
+            Request::post(format!("/{database}/duplicate"))
+                .header(header::AUTHORIZATION, "Bearer valid")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from("{}"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    assert_eq!(service.duplicates.lock().unwrap()[0].2, None);
+}

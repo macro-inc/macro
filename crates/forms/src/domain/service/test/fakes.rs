@@ -56,6 +56,8 @@ pub(crate) struct World {
     /// Owner grants the repository wrote with each new form.
     pub(crate) owner_grants: Vec<(FormId, String)>,
     pub(crate) ledger: Vec<LedgerEntry>,
+    /// Who has responded to each anonymous form.
+    pub(crate) receipts: Vec<(FormId, String)>,
     pub(crate) channel_grants: HashMap<FormId, Vec<ChannelSharePermission>>,
     /// Every form a liveness ping named, oldest first.
     pub(crate) form_pings: Vec<FormId>,
@@ -115,6 +117,7 @@ impl World {
             draft_update_before_next_write: None,
             owner_grants: vec![],
             ledger: vec![],
+            receipts: vec![],
             channel_grants: HashMap::new(),
             form_grants: HashMap::new(),
             form_pings: vec![],
@@ -473,6 +476,15 @@ impl FormsRepo for FakeRepo {
         {
             return Ok(FormUpdate::WidgetInUse);
         }
+        if changes
+            .anonymous
+            .is_some_and(|anonymous| anonymous != world.forms[position].form.anonymous)
+            && world.ledger.iter().any(|entry| {
+                entry.response.form_id == id && entry.response.status == ResponseStatus::Submitted
+            })
+        {
+            return Ok(FormUpdate::AnonymityLocked);
+        }
         let form = &mut world.forms[position].form;
         if let Some(description) = &changes.description {
             form.description = description.clone();
@@ -491,6 +503,12 @@ impl FormsRepo for FakeRepo {
         }
         if let Some(tally_visible) = changes.tally_visible {
             form.tally_visible = tally_visible;
+        }
+        if let Some(responses_visible) = changes.responses_visible {
+            form.responses_visible = responses_visible;
+        }
+        if let Some(anonymous) = changes.anonymous {
+            form.anonymous = anonymous;
         }
         if let Some(logo_file_id) = changes.logo_file_id {
             form.branding.logo_file_id = logo_file_id;
@@ -561,11 +579,29 @@ impl FormsRepo for FakeRepo {
         )
     }
 
+    async fn move_form(&self, id: FormId, project_id: Option<&str>) -> Result<bool, FakeError> {
+        let mut world = self.0.lock().unwrap();
+        Ok(
+            match world
+                .forms
+                .iter_mut()
+                .find(|stored| stored.form.id == id && stored.trashed_at.is_none())
+            {
+                Some(stored) => {
+                    stored.form.project_id = project_id.map(str::to_string);
+                    true
+                }
+                None => false,
+            },
+        )
+    }
+
     async fn delete_form(&self, id: FormId) -> Result<(), FakeError> {
         let mut world = self.0.lock().unwrap();
         world.forms.retain(|stored| stored.form.id != id);
         world.layouts.remove(&id);
         world.ledger.retain(|entry| entry.response.form_id != id);
+        world.receipts.retain(|(form, _)| *form != id);
         world.owner_grants.retain(|(form, _)| *form != id);
         world.channel_grants.remove(&id);
         Ok(())
@@ -669,6 +705,47 @@ impl FormsRepo for FakeRepo {
         Ok(RecordedResponse::Recorded(response))
     }
 
+    async fn record_anonymous_submission(
+        &self,
+        form: FormId,
+        voter: Option<&MacroUserIdStr<'_>>,
+        row: RowId,
+        day: DateTime<Utc>,
+    ) -> Result<RecordedResponse, FakeError> {
+        let mut world = self.0.lock().unwrap();
+        ledger_write(&mut world)?;
+        if let Some(voter) = voter {
+            let receipt = (form, voter.to_string());
+            if world.receipts.contains(&receipt) {
+                return Ok(RecordedResponse::AlreadySubmitted);
+            }
+            world.receipts.push(receipt);
+        }
+        let response = FormResponse {
+            id: FormResponseId::from_uuid(uuid::Uuid::new_v4()),
+            form_id: form,
+            status: ResponseStatus::Submitted,
+            stopped_at_section: None,
+            row: Some(row),
+            submitted_at: day,
+            updated_at: day,
+        };
+        world.ledger.push(LedgerEntry {
+            response: response.clone(),
+            respondent: None,
+        });
+        Ok(RecordedResponse::Recorded(response))
+    }
+
+    async fn holds_receipt(
+        &self,
+        form: FormId,
+        voter: &MacroUserIdStr<'_>,
+    ) -> Result<bool, FakeError> {
+        let world = self.0.lock().unwrap();
+        Ok(world.receipts.contains(&(form, voter.to_string())))
+    }
+
     async fn repoint_response(
         &self,
         response: FormResponseId,
@@ -722,6 +799,29 @@ impl FormsRepo for FakeRepo {
         }
         counts.stopped_by_section = stopped.into_iter().collect();
         Ok(counts)
+    }
+
+    async fn respondents_by_row(
+        &self,
+        form: FormId,
+    ) -> Result<Vec<(RowId, MacroUserIdStr<'static>)>, FakeError> {
+        let world = self.0.lock().unwrap();
+        let mut entries: Vec<&LedgerEntry> = world
+            .ledger
+            .iter()
+            .filter(|entry| {
+                entry.response.form_id == form && entry.response.status == ResponseStatus::Submitted
+            })
+            .collect();
+        entries.sort_by_key(|entry| (entry.response.submitted_at, entry.response.id));
+        Ok(entries
+            .into_iter()
+            .filter_map(|entry| {
+                let row = entry.response.row?;
+                let respondent = MacroUserIdStr::try_from(entry.respondent.clone()?).ok()?;
+                Some((row, respondent))
+            })
+            .collect())
     }
 }
 

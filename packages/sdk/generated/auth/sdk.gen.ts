@@ -131,6 +131,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
+
     /**
      * Retired direct-usage opt-in. Enabling is rejected; disabling remains supported.
      */
@@ -713,6 +714,7 @@ export class Sdk extends HeyApiClient {
     public getSystemStatus<ThrowOnError extends boolean = false>(options?: Options<GetSystemStatusData, ThrowOnError>): RequestResult<GetSystemStatusResponses, GetSystemStatusErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetSystemStatusResponses, GetSystemStatusErrors, ThrowOnError>({ url: '/system-status', ...options });
     }
+
     /**
      * Sets the status every user sees and pushes it to every open app. Macro
      * staff only.
@@ -738,12 +740,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
+
     /**
      * Recent status updates, newest first, with who set each. Macro staff only.
      */
     public listSystemStatusHistory<ThrowOnError extends boolean = false>(options?: Options<ListSystemStatusHistoryData, ThrowOnError>): RequestResult<ListSystemStatusHistoryResponses, ListSystemStatusHistoryErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListSystemStatusHistoryResponses, ListSystemStatusHistoryErrors, ThrowOnError>({ url: '/system-status/history', ...options });
     }
+
     /**
      * Deletes a team.
      * This will update all team members roles and cancel your subscription for the team.
@@ -832,6 +836,7 @@ export class Sdk extends HeyApiClient {
     public sendTeamDomainNotice<ThrowOnError extends boolean = false>(options?: Options<SendTeamDomainNoticeData, ThrowOnError>): RequestResult<SendTeamDomainNoticeResponses, SendTeamDomainNoticeErrors, ThrowOnError> {
         return (options?.client ?? this.client).post<SendTeamDomainNoticeResponses, SendTeamDomainNoticeErrors, ThrowOnError>({ url: '/team/domain-notice', ...options });
     }
+
     /**
      * Invites a user to a team.
      */

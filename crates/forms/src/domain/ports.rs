@@ -24,6 +24,8 @@ pub enum CreateSource {
     NewDatabase {
         /// Keep the form, and the database made for it, out of Drive.
         is_hidden_in_drive: bool,
+        /// Make the form anonymous, with no Respondent column.
+        anonymous: bool,
     },
     /// An existing table of the database the receipt names. Attaching a
     /// form to an existing table takes the database's Owner: the form's
@@ -164,7 +166,8 @@ pub trait FormsRepo: Send + Sync + 'static {
     /// what it leaves out stays. With `forbidden_widget`, the change goes
     /// through only if no question of the form asks one of its columns with
     /// its widget when it commits; concurrent writes of the form's facts and
-    /// layout serialize, so the check holds.
+    /// layout serialize, so the check holds. A change of whether the form is
+    /// anonymous goes through only while it has no accepted response.
     fn update_form(
         &self,
         id: FormId,
@@ -200,6 +203,15 @@ pub trait FormsRepo: Send + Sync + 'static {
     /// Bring a form back from the trash; `false` when it is gone.
     fn restore_form(&self, id: FormId) -> impl Future<Output = Result<bool, Self::Error>> + Send;
 
+    /// File a live form in a folder, or at the root when `project_id` is
+    /// `None`, swapping the grants it inherits from folders to match;
+    /// `false` when it is trashed or gone.
+    fn move_form(
+        &self,
+        id: FormId,
+        project_id: Option<&str>,
+    ) -> impl Future<Output = Result<bool, Self::Error>> + Send;
+
     /// Remove a form, its layout, ledger and grants.
     fn delete_form(&self, id: FormId) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
@@ -234,6 +246,27 @@ pub trait FormsRepo: Send + Sync + 'static {
         at: DateTime<Utc>,
     ) -> impl Future<Output = Result<RecordedResponse, Self::Error>> + Send;
 
+    /// Record a response to an anonymous form whose row is written, in one
+    /// transaction: a signed-in voter's receipt, which names no response,
+    /// and a ledger entry that names nobody, with a random id and stamped
+    /// `day`. A voter who already holds a receipt answers
+    /// [`RecordedResponse::AlreadySubmitted`] and nothing is written.
+    fn record_anonymous_submission(
+        &self,
+        form: FormId,
+        voter: Option<&MacroUserIdStr<'_>>,
+        row: RowId,
+        day: DateTime<Utc>,
+    ) -> impl Future<Output = Result<RecordedResponse, Self::Error>> + Send;
+
+    /// Whether a signed-in person holds a receipt for responding to an
+    /// anonymous form.
+    fn holds_receipt(
+        &self,
+        form: FormId,
+        voter: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<bool, Self::Error>> + Send;
+
     /// Point an entry at a new row, for a response whose row was deleted
     /// and written again.
     fn repoint_response(
@@ -255,6 +288,13 @@ pub trait FormsRepo: Send + Sync + 'static {
         &self,
         form: FormId,
     ) -> impl Future<Output = Result<ResponseCounts, Self::Error>> + Send;
+
+    /// Who submitted each row: the signed-in respondents of accepted
+    /// responses that still point at a row, in submission order.
+    fn respondents_by_row(
+        &self,
+        form: FormId,
+    ) -> impl Future<Output = Result<Vec<(RowId, MacroUserIdStr<'static>)>, Self::Error>> + Send;
 }
 
 /// The forms domain service.

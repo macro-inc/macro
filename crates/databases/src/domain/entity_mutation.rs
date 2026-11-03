@@ -1,15 +1,21 @@
-//! The entity-mutation lifecycle capabilities for databases: rename, trash,
-//! restore and permanent delete; the router reports the rest unsupported.
+//! The entity-mutation capabilities for databases: rename, move between
+//! folders, duplicate, trash, restore and permanent delete; the router
+//! reports the rest unsupported.
 
-use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel};
+use entity_access::domain::models::{
+    EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
+};
 use entity_mutation::{
-    DeleteEntityPermanently, EntityMutationEffect, EntityMutationErrorCode, RenameEntity,
-    RestoreEntity, TrashEntity,
+    DeleteEntityPermanently, DuplicateEntity, EntityMutationEffect, EntityMutationErrorCode,
+    MoveEntity, RenameEntity, RestoreEntity, TrashEntity, capability::MoveEntityRequest,
+    project_refs,
 };
 use macro_event_broker::MacroEventBroker;
-use model_entity::Entity;
+use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::{Entity, EntityType};
 
 use super::{
+    duplicate::{DatabaseDuplicateRepo, DatabaseDuplicateService},
     models::DatabaseError,
     ports::{
         AccessDirectory, CellStore, ColumnDefinitionStore, DatabasesRepo, DatabasesService,
@@ -55,6 +61,72 @@ where
     ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
         DatabasesService::rename_database(self, receipt, display_name).await?;
         Ok(vec![EntityMutationEffect::updated(entity)])
+    }
+}
+
+impl<Repository, Definitions, Cells, Events, Access, Broker> MoveEntity
+    for DatabasesServiceImpl<Repository, Definitions, Cells, Events, Access, Broker>
+where
+    Repository: DatabasesRepo,
+    Definitions: ColumnDefinitionStore,
+    Cells: CellStore,
+    Events: TableEventPublisher,
+    Access: AccessDirectory,
+    Broker: MacroEventBroker,
+{
+    /// Filing a database in a folder shares it with the folder's members,
+    /// which only its owner may do.
+    type Receipt = OwnerAccessLevel;
+
+    async fn move_entity(
+        &self,
+        request: MoveEntityRequest<Self::Receipt>,
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
+        let (entity, receipt, project_id) = match request {
+            MoveEntityRequest::MoveToRoot { entity, receipt } => (entity, receipt, None),
+            MoveEntityRequest::MoveToProject {
+                entity,
+                receipt,
+                project_id,
+                project_receipt: _,
+            } => (entity, receipt, Some(project_id)),
+        };
+        let previous_project_id = self.move_database(receipt, project_id.as_deref()).await?;
+        Ok(std::iter::once(EntityMutationEffect::updated(entity))
+            .chain(
+                project_refs([previous_project_id, project_id])
+                    .into_iter()
+                    .map(EntityMutationEffect::updated),
+            )
+            .collect())
+    }
+}
+
+impl<Repository, Definitions, Cells, Events, Access, Broker> DuplicateEntity
+    for DatabasesServiceImpl<Repository, Definitions, Cells, Events, Access, Broker>
+where
+    Repository: DatabasesRepo,
+    Definitions: ColumnDefinitionStore,
+    Cells: CellStore + DatabaseDuplicateRepo,
+    Events: TableEventPublisher,
+    Access: AccessDirectory,
+    Broker: MacroEventBroker,
+{
+    type Receipt = ViewAccessLevel;
+
+    async fn duplicate_entity(
+        &self,
+        _entity: Entity<'static>,
+        receipt: EntityAccessReceipt<Self::Receipt>,
+        user_id: MacroUserIdStr<'static>,
+        display_name: Option<String>,
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
+        let copy =
+            DatabaseDuplicateService::duplicate_database(self, receipt, user_id, display_name)
+                .await?;
+        Ok(vec![EntityMutationEffect::updated(
+            EntityType::Database.with_entity_string(copy.id.to_string()),
+        )])
     }
 }
 

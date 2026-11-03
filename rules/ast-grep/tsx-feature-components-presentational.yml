@@ -19,7 +19,6 @@ files:
   - apps/web/src/features/task-composer/components/**
   - apps/web/src/features/universal-input/components/**
   - apps/web/src/features/saved-views/components/**
-  - apps/web/src/features/calendar-notes/components/**
   - apps/web/src/features/access-requests/components/**
   - apps/web/src/features/agent-activity/components/**
   - apps/web/src/features/agent-dms/components/**

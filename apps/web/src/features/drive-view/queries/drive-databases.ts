@@ -3,8 +3,9 @@ import type { ListedDatabase } from '@service-storage/generated/schemas/listedDa
 import type { DriveSelection } from '../context/drive-source';
 
 /**
- * Databases have no folder membership or view history; list them in file tabs.
- * `hidden` names databases made for a form kept out of Drive, like a poll's.
+ * Databases have no view history; list them in file tabs and in the folder
+ * they are filed in. `hidden` names databases made for a form kept out of
+ * Drive, like a poll's.
  */
 export function selectDriveDatabases(
   listed: readonly ListedDatabase[],
@@ -13,15 +14,23 @@ export function selectDriveDatabases(
   hidden: ReadonlySet<string>
 ): DatabaseEntity[] {
   const { location, scope } = selection;
-  if (!userId || location.kind !== 'tab' || location.tab === 'recent')
-    return [];
-  if (scope === 'attachments') return [];
+  if (!userId || scope === 'attachments') return [];
+  if (location.kind === 'tab' && location.tab === 'recent') return [];
+  if (location.kind === 'folder' && !location.id) return [];
 
   const search = selection.search.trim().toLocaleLowerCase();
   return listed.flatMap(({ database, grant }) => {
     if (database.trashed_at || hidden.has(database.id)) return [];
-    if (location.tab === 'shared' && database.owner_id === userId) return [];
+    if (location.kind === 'folder' && database.project_id !== location.id)
+      return [];
     if (
+      location.kind === 'tab' &&
+      location.tab === 'shared' &&
+      database.owner_id === userId
+    )
+      return [];
+    if (
+      location.kind === 'tab' &&
       location.tab === 'owned' &&
       scope === 'default' &&
       database.owner_id !== userId
@@ -38,6 +47,7 @@ export function selectDriveDatabases(
         ownerId: database.owner_id,
         createdAt: database.created_at,
         grant,
+        projectId: database.project_id ?? undefined,
       },
     ];
   });
@@ -61,6 +71,7 @@ export function selectSidebarDatabases(
               ownerId: database.owner_id,
               createdAt: database.created_at,
               grant,
+              projectId: database.project_id ?? undefined,
             },
           ]
     )

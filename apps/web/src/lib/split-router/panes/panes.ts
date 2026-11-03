@@ -99,6 +99,11 @@ export function createPanes<E extends PaneEntry, D>(
   const [ids, setIds] = createSignal<readonly PaneId[]>([], {
     equals: sameIds,
   });
+  // Every pane with a history: the open ones plus any a host parked (took
+  // out of `ids` without removing) to show again later.
+  const [retained, setRetained] = createSignal<readonly PaneId[]>([], {
+    equals: sameIds,
+  });
   const [arrivals, setArrivals] = createStore<
     Record<string, PaneArrival | undefined>
   >({});
@@ -121,11 +126,13 @@ export function createPanes<E extends PaneEntry, D>(
   const addPane = (pane: PaneId, entry: E) => {
     store.create(pane, entry);
     setArrivals(pane, 'fresh');
+    setRetained((list) => (list.includes(pane) ? list : [...list, pane]));
   };
 
   const forget = (pane: PaneId) => {
     store.remove(pane);
     setArrivals(pane, undefined);
+    setRetained((list) => list.filter((id) => id !== pane));
     options.onRemove?.(pane);
   };
 
@@ -152,6 +159,7 @@ export function createPanes<E extends PaneEntry, D>(
 
   return {
     ids,
+    retained,
     read: (pane: PaneId) => store.read(pane),
     current,
     arrival: (pane: PaneId): PaneArrival => arrivals[pane] ?? 'fresh',
@@ -183,6 +191,26 @@ export function createPanes<E extends PaneEntry, D>(
       arrange(next, () => forget(pane));
     },
 
+    /**
+     * Makes `next`, retained panes, the open ones. Open panes not in `next`
+     * stay retained (parked) with their histories until `discard`.
+     */
+    show(next: readonly PaneId[]) {
+      const known = untrack(retained);
+      const missing = next.some((pane) => !known.includes(pane));
+      if (missing) throw new Error('Only retained panes can be shown');
+
+      setIds(next);
+    },
+
+    /** Forgets a parked pane; open panes are removed through `remove`. */
+    discard(pane: PaneId) {
+      if (untrack(ids).includes(pane)) return;
+      if (!untrack(retained).includes(pane)) return;
+
+      forget(pane);
+    },
+
     /** False when `pane` isn't open or already sits at `to`. */
     move(pane: PaneId, to: number): boolean {
       const before = untrack(ids);
@@ -203,8 +231,10 @@ export function createPanes<E extends PaneEntry, D>(
       incoming: readonly IncomingPane<E>[],
       diffOptions: Omit<DiffOptions<E>, 'createPaneId'>
     ): PanesDiff<E> {
+      const open = untrack(ids);
       const live: LivePanes<E> = {
-        panes: untrack(ids),
+        panes: open,
+        parked: untrack(retained).filter((pane) => !open.includes(pane)),
         read: (pane) => untrack(() => store.read(pane)),
       };
 

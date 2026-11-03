@@ -354,7 +354,8 @@ fragment SoupEntityCoreFields on GraphqlSoupEntity {
 # the session reports a committed change: see AgentSessionRow.
 fragment SoupAgentSessionFields on GraphqlSoupAgentSession {
 	sessionName: name
-	isArchived
+	archivedBy
+	archivedAt
 	ownerId
 	botId
 	harness

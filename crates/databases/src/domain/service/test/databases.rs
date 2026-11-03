@@ -529,3 +529,84 @@ async fn appearance_validates_and_emits_only_changed_metadata() {
         "database.appearance_changed"
     );
 }
+
+#[cfg(feature = "entity_mutation")]
+#[tokio::test]
+async fn moving_a_database_files_it_and_names_both_folders() {
+    use entity_mutation::{EntityMutationEffect, MoveEntity, capability::MoveEntityRequest};
+
+    let seeded = seeded().await;
+    let (svc, database_id) = (seeded.service, seeded.database_id);
+    let entity = EntityType::Database.with_entity_string(database_id.to_string());
+    let into = |project_id: &str| MoveEntityRequest::MoveToProject {
+        entity: entity.clone(),
+        receipt: receipt::<OwnerAccessLevel>(database_id, OWNER, AccessLevel::Owner),
+        project_id: project_id.to_string(),
+        project_receipt: receipt::<EditAccessLevel>(database_id, OWNER, AccessLevel::Owner),
+    };
+
+    let effects = svc.move_entity(into("clients")).await.unwrap();
+    assert_eq!(
+        effects,
+        vec![
+            EntityMutationEffect::updated(entity.clone()),
+            EntityMutationEffect::updated(EntityType::Project.with_entity_string("clients".into())),
+        ]
+    );
+    let effects = svc.move_entity(into("archive")).await.unwrap();
+    assert_eq!(
+        effects,
+        vec![
+            EntityMutationEffect::updated(entity.clone()),
+            EntityMutationEffect::updated(EntityType::Project.with_entity_string("clients".into())),
+            EntityMutationEffect::updated(EntityType::Project.with_entity_string("archive".into())),
+        ]
+    );
+    let listed = svc.list_databases(viewer(OWNER)).await.unwrap();
+    assert_eq!(listed[0].database.project_id.as_deref(), Some("archive"));
+
+    let effects = svc
+        .move_entity(MoveEntityRequest::MoveToRoot {
+            entity: entity.clone(),
+            receipt: receipt::<OwnerAccessLevel>(database_id, OWNER, AccessLevel::Owner),
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        effects,
+        vec![
+            EntityMutationEffect::updated(entity.clone()),
+            EntityMutationEffect::updated(EntityType::Project.with_entity_string("archive".into())),
+        ]
+    );
+    let listed = svc.list_databases(viewer(OWNER)).await.unwrap();
+    assert_eq!(listed[0].database.project_id, None);
+}
+
+#[cfg(feature = "entity_mutation")]
+#[tokio::test]
+async fn a_trashed_database_cannot_be_moved() {
+    use entity_mutation::{MoveEntity, capability::MoveEntityRequest};
+
+    let seeded = seeded().await;
+    let (svc, database_id) = (seeded.service, seeded.database_id);
+    svc.trash_database(receipt::<OwnerAccessLevel>(
+        database_id,
+        OWNER,
+        AccessLevel::Owner,
+    ))
+    .await
+    .unwrap();
+
+    let error = svc
+        .move_entity(MoveEntityRequest::MoveToRoot {
+            entity: EntityType::Database.with_entity_string(database_id.to_string()),
+            receipt: receipt::<OwnerAccessLevel>(database_id, OWNER, AccessLevel::Owner),
+        })
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        entity_mutation::EntityMutationErrorCode::NotFound(_)
+    ));
+}
