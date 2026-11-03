@@ -1,8 +1,5 @@
 import { isListViewID } from '@app/constants/list-views';
-import { markAgentSessionNotificationsSeenOnOpen } from '@app/features/block-agent/mark-session-notifications-seen';
-import { markPrNotificationsSeenOnOpen } from '@app/features/block-pr/mark-pr-notifications-seen';
 import { getPreferredCalendarPeriodView } from '@app/features/calendar/calendar-preferences';
-import { markCalendarNotificationSeenOnOpen } from '@app/features/calendar/mark-event-notifications-seen';
 import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
 import {
   type CalendarEventTime,
@@ -17,7 +14,6 @@ import {
   type CalendarViewTarget,
 } from '@app/features/calendar-view/types';
 import { callsHostedContent } from '@app/features/calls-view/calls-hosted-content';
-import { markCrmNotificationsSeenOnOpen } from '@app/features/crm/mark-record-notifications-seen';
 import { driveHostedContent } from '@app/features/drive-view/drive-hosted-content';
 import { projectHostedContent } from '@app/features/projects/open-project';
 import { reviewsHostedContent } from '@app/features/reviews-view/reviews-hosted-content';
@@ -912,20 +908,6 @@ export function markChannelNotificationsSeenOnOpen(
   void notificationSource.bulkMarkAsRead(notifications).catch((error) => {
     console.error('Failed to mark channel notifications as read', error);
   });
-}
-
-/**
- * Clear loaded row notifications immediately, before the opened view's read
- * marker runs: calendar events, agent sessions, CRM records, and pull requests.
- */
-export function markRowNotificationsSeenOnOpen(
-  entity: EntityWithRawNotifications<EntityData>,
-  notificationSource: NotificationSource
-) {
-  markCalendarNotificationSeenOnOpen(entity, notificationSource);
-  markAgentSessionNotificationsSeenOnOpen(entity, notificationSource);
-  markCrmNotificationsSeenOnOpen(entity, notificationSource);
-  markPrNotificationsSeenOnOpen(entity, notificationSource);
 }
 
 /**

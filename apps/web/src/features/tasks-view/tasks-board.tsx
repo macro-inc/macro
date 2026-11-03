@@ -5,10 +5,12 @@ import {
 } from '@app/features/next-soup/actions';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { SoupEntityContextMenu } from '@app/features/soup';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { usePropertyUserDisplay } from '@property/hooks/usePropertyUserDisplay';
 import { type Accessor, type JSX, Show } from 'solid-js';
 import { type TaskBoardTask, toTaskBoardGrouping } from './core/task-board';
@@ -23,6 +25,7 @@ export function TasksBoard(props: { ref?: (element: HTMLDivElement) => void }) {
   const context = useTasksView();
   const { state, source, openTask, projectsEnabled, calendar } = context;
   const panel = useSplitPanelOrThrow();
+  const notificationSource = useGlobalNotificationSource();
   const layout = useSplitLayout();
   const createContext = useCreateContext();
   const queries = createTaskBoardQueries({
@@ -112,6 +115,7 @@ export function TasksBoard(props: { ref?: (element: HTMLDivElement) => void }) {
             return;
           }
 
+          markRowNotificationsSeenOnOpen(entity, notificationSource);
           fireAndForget(
             openEntityInSplitFromUnifiedList(entity, {
               splitHandle: panel.handle,

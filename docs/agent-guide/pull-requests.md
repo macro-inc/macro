@@ -109,4 +109,4 @@ including desktop previews, keyboard activation, j/k navigation, and phone taps.
 Keyboard browsing marks the row when its debounced preview actually opens;
 marking a row done also marks the next PR read when it opens. A failed read
 write restores the unread dot; opening the row again retries it. The detail
-view still marks the whole pull request read after its usual debounce.
+view also marks the whole pull request read on mount, without an extra delay.

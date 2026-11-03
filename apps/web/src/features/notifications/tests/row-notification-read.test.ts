@@ -1,8 +1,12 @@
-import { markPrNotificationsSeenOnOpen } from '@app/features/block-pr/mark-pr-notifications-seen';
+vi.mock('@queries/email/read-state', () => ({
+  markEmailThreadSeen: mocks.emailSeen,
+}));
+
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
-import type { GithubPullRequestEntity } from '@entity/types/entity';
+import type { EntityData, GithubPullRequestEntity } from '@entity/types/entity';
 import { unreadFilterFn } from '@entity/utils/filter';
 import { Telemetry } from '@macro-inc/observability';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import type { ConnectionGatewayWebsocket } from '@service-connection/websocket';
 import { createRoot } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -11,6 +15,7 @@ import type { UnifiedNotification } from '../types';
 
 const mocks = vi.hoisted(() => ({
   seen: vi.fn(),
+  emailSeen: vi.fn(async () => {}),
   entitySeen: vi.fn(),
   feed: vi.fn<() => UnifiedNotification[]>(() => []),
   transport: 'graphql' as 'graphql' | 'rest',
@@ -85,33 +90,6 @@ const pr: GithubPullRequestEntity = {
     labels: [],
   },
 };
-const notification: UnifiedNotification = {
-  id: 'status-changed',
-  entity_id: pr.id,
-  entity_type: 'foreign_entity',
-  state: 'unseen',
-  notification_event_type: 'github_pr_status_changed',
-  notification_metadata: {
-    tag: 'github_pr_status_changed',
-    content: {
-      action: 'opened',
-      displayName: 'example/repo#42',
-      foreignEntityId: pr.id,
-      githubKey: pr.foreignId,
-      number: 42,
-      owner: 'example',
-      repo: 'repo',
-      status: 'open',
-      title: pr.name,
-      url: pr.metadata.url,
-    },
-  },
-  created_at: '2026-10-23T17:00:00Z',
-  updated_at: '2026-10-23T17:00:00Z',
-  viewed_at: null,
-  sent: true,
-};
-
 function createSource() {
   return createRoot((dispose) => ({
     source: createNotificationSource({} as ConnectionGatewayWebsocket),
@@ -122,16 +100,67 @@ function createSource() {
 afterEach(() => {
   vi.restoreAllMocks();
   mocks.seen.mockReset();
+  mocks.emailSeen.mockReset();
   mocks.entitySeen.mockClear();
   mocks.transport = 'graphql';
   mocks.feed.mockReturnValue([]);
 });
 
-describe('opening pull request notifications', () => {
-  it('leaves rows without loaded notifications to the opened PR', () => {
+const rows = [
+  pr,
+  {
+    type: 'document',
+    id: 'markdown',
+    name: 'Note',
+    ownerId: 'owner',
+    fileType: 'md',
+  },
+  {
+    type: 'document',
+    id: 'task',
+    name: 'Task',
+    ownerId: 'owner',
+    fileType: 'md',
+    subType: { type: 'task', is_completed: false },
+  },
+  { type: 'chat', id: 'chat', name: 'Legacy chat', ownerId: 'owner' },
+  {
+    type: 'email',
+    id: 'thread',
+    name: 'Email',
+    ownerId: 'owner',
+    isRead: true,
+    isDraft: false,
+    isImportant: false,
+    done: false,
+  },
+] satisfies EntityData[];
+
+describe.each(rows)('opening $type ($id) notifications', (entity) => {
+  const notification: UnifiedNotification = {
+    id: `${entity.id}-reminder`,
+    entity_id: entity.id,
+    entity_type:
+      entity.type === 'email'
+        ? 'email_thread'
+        : entity.type === 'foreign'
+          ? 'foreign_entity'
+          : entity.type,
+    state: 'unseen',
+    notification_event_type: 'reminder',
+    notification_metadata: {
+      tag: 'reminder',
+      content: { reminderId: 'reminder', description: 'Follow up' },
+    },
+    created_at: '2026-10-23T17:00:00Z',
+    updated_at: '2026-10-23T17:00:00Z',
+    viewed_at: null,
+    sent: true,
+  };
+  it('leaves rows without loaded notifications to the opened detail', () => {
     const { source, dispose } = createSource();
     try {
-      markPrNotificationsSeenOnOpen({ ...pr, notifications: [] }, source);
+      markRowNotificationsSeenOnOpen({ ...entity, notifications: [] }, source);
       expect(mocks.seen).not.toHaveBeenCalled();
       expect(mocks.entitySeen).not.toHaveBeenCalled();
     } finally {
@@ -146,9 +175,17 @@ describe('opening pull request notifications', () => {
       const pending = Promise.withResolvers<void>();
       mocks.seen.mockReturnValueOnce(pending.promise);
       const attached = [
-        { ...notification, id: `pending-${shape}` },
-        { ...notification, id: `done-${shape}`, state: 'done' as const },
-        { ...notification, id: `seen-${shape}`, state: 'seen' as const },
+        { ...notification, id: `${entity.id}-pending-${shape}` },
+        {
+          ...notification,
+          id: `${entity.id}-done-${shape}`,
+          state: 'done' as const,
+        },
+        {
+          ...notification,
+          id: `${entity.id}-seen-${shape}`,
+          state: 'seen' as const,
+        },
       ];
       const fromRestFeed = shape === 'rest-feed';
       if (fromRestFeed) {
@@ -158,18 +195,18 @@ describe('opening pull request notifications', () => {
       const { source, dispose } = createSource();
       // REST Soup rows have no raw notification edge; Home reads the source.
       const row = fromRestFeed
-        ? pr
+        ? entity
         : {
-            ...pr,
+            ...entity,
             notifications: shape === 'array' ? attached : () => attached,
           };
       const rendered = withEntityNotifications(row, source);
       try {
         expect(unreadFilterFn(rendered)).toBe(true);
-        markPrNotificationsSeenOnOpen(row, source);
+        markRowNotificationsSeenOnOpen(row, source);
         expect(unreadFilterFn(rendered)).toBe(false);
         expect(mocks.seen).toHaveBeenLastCalledWith({
-          notificationIds: [`pending-${shape}`],
+          notificationIds: [`${entity.id}-pending-${shape}`],
         });
         if (!fromRestFeed) expect(mocks.feed).not.toHaveBeenCalled();
         pending.resolve();
@@ -194,29 +231,61 @@ describe('opening pull request notifications', () => {
         .mockImplementation(() => reported.resolve());
       mocks.seen.mockReturnValueOnce(pending.promise);
       mocks.transport = transport;
-      const attached = [{ ...notification, id: `failed-read-${transport}` }];
+      const attached = [
+        { ...notification, id: `${entity.id}-failed-read-${transport}` },
+      ];
       mocks.feed.mockReturnValue(attached);
       const { source, dispose } = createSource();
       const row = withEntityNotifications(
-        transport === 'graphql' ? { ...pr, notifications: attached } : pr,
+        transport === 'graphql'
+          ? { ...entity, notifications: attached }
+          : entity,
         source
       );
       try {
-        markPrNotificationsSeenOnOpen(row, source);
+        markRowNotificationsSeenOnOpen(row, source);
         expect(unreadFilterFn(row)).toBe(false);
         const error = new Error('offline');
         pending.reject(error);
         await reported.promise;
         expect(telemetry).toHaveBeenCalledWith(error, {
-          surface: 'pr-notification-read',
+          surface: 'row-notification-read',
         });
         expect(unreadFilterFn(row)).toBe(true);
         mocks.seen.mockResolvedValueOnce(undefined);
-        markPrNotificationsSeenOnOpen(row, source);
+        markRowNotificationsSeenOnOpen(row, source);
         expect(unreadFilterFn(row)).toBe(false);
       } finally {
         dispose();
       }
     }
   );
+});
+
+it('marks an unread email with a draft reply in its owning inbox without waiting for notifications', () => {
+  const { source, dispose } = createSource();
+  try {
+    markRowNotificationsSeenOnOpen(
+      {
+        type: 'email',
+        id: 'unread-thread',
+        ownerId: 'owner',
+        name: 'Email',
+        isRead: false,
+        isDraft: true,
+        isImportant: false,
+        done: false,
+        linkId: 'secondary-inbox',
+        notifications: [],
+      },
+      source
+    );
+    expect(mocks.emailSeen).toHaveBeenCalledExactlyOnceWith({
+      threadId: 'unread-thread',
+      linkId: 'secondary-inbox',
+    });
+    expect(mocks.seen).not.toHaveBeenCalled();
+  } finally {
+    dispose();
+  }
 });

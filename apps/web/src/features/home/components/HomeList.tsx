@@ -1,5 +1,5 @@
-import { markPrNotificationsSeenOnOpen } from '@app/features/block-pr/mark-pr-notifications-seen';
 import { usePending } from '@app/observability/flow';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import '@entity/composed/ListEntity.css';
 import {
   createListController,
@@ -63,7 +63,6 @@ import {
 import { InboxListEntity } from '../../next-soup/soup-view/views/inbox/InboxListEntity';
 import {
   markChannelNotificationsSeenOnOpen,
-  markRowNotificationsSeenOnOpen,
   openEntityInSplitFromUnifiedList,
 } from '../../next-soup/utils';
 import { useHomeView } from '../home-view-context';
@@ -178,7 +177,12 @@ export function HomeList(props: HomeListProps) {
     // instead of selecting a row that shows nothing.
     const previewable = sourceRow.entity.type !== 'initiative';
     if (!isTouchDevice() && !newSplit && previewable) {
-      markEntitySeen(sourceRow.entity);
+      if (!isNonMemberChannelEntity(sourceRow.entity)) {
+        markChannelNotificationsSeenOnOpen(
+          sourceRow.entity,
+          notificationSource
+        );
+      }
       showPreview(sourceRow.entity, { activate: true });
       props.onPreviewActivate?.();
       // Home keeps the keyboard only when the item opened in Home itself.
@@ -206,7 +210,9 @@ export function HomeList(props: HomeListProps) {
     entity: WithNotification<EntityData> | undefined,
     options?: { activate?: boolean }
   ) {
-    if (entity) markPrNotificationsSeenOnOpen(entity, notificationSource);
+    if (entity && entity.type !== 'initiative') {
+      markRowNotificationsSeenOnOpen(entity, notificationSource);
+    }
     props.onPreviewEntityChange(
       entity?.type === 'initiative' ? undefined : entity,
       options

@@ -1377,3 +1377,7 @@ On desktop, drag a tag from the sidebar onto an email row. Its existing tags
 remain; dropping onto a selected row applies the tag to every taggable selected
 row. The dragged chip shows the tag color and name, and the target gets an outline.
 Clicking the tag still filters the list. Mobile uses the existing tag menu.
+
+Opening a row clears its unread state immediately; direct details mark read when
+ready. See [reading items](notifications.md#reading-items) for failure, keyboard,
+mobile, and email inbox checks.
