@@ -105,7 +105,6 @@ github = { path = "../../crates/github", default-features = false, features = ["
 github_pull_requests = { path = "../../crates/github_pull_requests", features = ["outbound", "s3", "service"] }
 granola_sync = { path = "../../crates/granola_sync" }
 dialpad_sync = { path = "../../crates/dialpad_sync" }
-connect_client = { path = "../../connect/crates/connect_client" }
 harness_id = { path = "../../crates/harness_id" }
 harnesses = { path = "../../crates/harnesses", default-features = false, features = ["outbound", "ports"] }
 http = { workspace = true }

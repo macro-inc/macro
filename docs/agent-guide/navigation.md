@@ -1482,8 +1482,10 @@ A pending Cursor model catalog shows `Loading models…` beside a disabled model
 picker; a failed catalog shows an inline error. The rest of settings stays usable.
 Settings → Agents → Agents ends with **Coding sessions**: a **Default repository**
 select saved per user on this device (see the AI chat guide), then per-user **Create
-tasks** and **Open pull requests** switches, both off by default. Each saves on
-toggle and reverts with a toast if the save fails.
+tasks** and **Open pull requests** switches, then **Auto-archive**: **When its
+pull requests merge** and **When its machine session closes** switches. The
+switches are off by default; each saves on toggle and reverts with a toast if the
+save fails.
 
 Home does not bind Delete or Backspace to deleting list items. These keys remain
 available to the open editor (for example, clearing a selected spreadsheet range).

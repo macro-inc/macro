@@ -559,7 +559,8 @@ impl<T> SoupItem<T> {
             SoupItem::AgentSession(SoupAgentSession {
                 id,
                 name,
-                is_archived,
+                archived_by,
+                archived_at,
                 owner_id,
                 bot_id,
                 harness,
@@ -581,7 +582,8 @@ impl<T> SoupItem<T> {
             }) => SoupItem::AgentSession(SoupAgentSession {
                 id,
                 name,
-                is_archived,
+                archived_by,
+                archived_at,
                 owner_id,
                 bot_id,
                 harness,

@@ -61,6 +61,7 @@
 - [AgentMcpServer](type-aliases/AgentMcpServer.md)
 - [AgentMcpServers](type-aliases/AgentMcpServers.md)
 - [AgentPullRequestState](type-aliases/AgentPullRequestState.md)
+- [AgentSessionArchiveCause](type-aliases/AgentSessionArchiveCause.md)
 - [AgentSessionFilters](type-aliases/AgentSessionFilters.md)
 - [AgentSessionLifecycleEvent](type-aliases/AgentSessionLifecycleEvent.md)
 - [AgentSessionSource](type-aliases/AgentSessionSource.md)

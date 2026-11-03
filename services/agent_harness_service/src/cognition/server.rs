@@ -696,7 +696,7 @@ pub async fn build(
     let dialpad_sync: Option<Arc<dyn dialpad_sync::domain::service::SyncService>> =
         match config.connect_customer_key.value() {
             Some(key) => {
-                let connect = connect_client::ConnectClient::new(
+                let grants = dialpad_sync::outbound::connect::ConnectGrants::new(
                     macro_service_urls::ConnectApiUrl::new()?.as_ref(),
                     key,
                 )
@@ -706,7 +706,7 @@ pub async fn build(
                         db.clone(),
                         &webhook_secret_key,
                     ),
-                    grants: dialpad_sync::outbound::connect::ConnectGrants(Arc::new(connect)),
+                    grants,
                     dialpad: dialpad_sync::outbound::api::DialpadApi::new(
                         dialpad_sync::outbound::api::DIALPAD_API,
                     )

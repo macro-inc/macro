@@ -4,7 +4,8 @@
 
 Part of Calls: imports a user's Dialpad phone calls (details, transcript, AI
 recap; never audio) as private Macro calls. The Dialpad grant lives in Macro
-Connect (`connect_client`); this crate owns only the sync.
+Connect, a separate service (`macro-inc/macro-connect`) this crate calls over
+its customer API; this crate owns only the sync.
 
 ## How it works
 
@@ -29,13 +30,13 @@ A first-connect backfill pages `GET /call` one page per reconcile.
 
 - Owns: Dialpad webhook lifecycle, delivery verification and dedup, call
   mapping, backfill.
-- Not here: the Dialpad OAuth grant → Macro Connect (`connect/`); call
+- Not here: the Dialpad OAuth grant → Macro Connect (`macro-inc/macro-connect`); call
   storage → `crates/call`; CRM linking → `crates/crm` (consumes the
   `call.record_imported` event).
 
 ## Boundaries
 
-- Depends on: `call` import port, `connect_client`, `phone_number`,
+- Depends on: `call` import port, Macro Connect's HTTP API, `phone_number`,
   `row_cipher`, `macro_tower_layers` (stored trace context).
 - Used by: `services/agent_harness_service` (composition, routes, worker).
 
@@ -62,7 +63,8 @@ A first-connect backfill pages `GET /call` one page per reconcile.
 - Deliveries are stored only while a sync runs or is mid-setup; a stopped
   sync's subscription may keep posting.
 - Needs `CONNECT_CUSTOMER_KEY` and a live `dialpad` app in Macro Connect
-  (`connect/registry/apps/dialpad`, an `own_app` awaiting Dialpad's approval).
+  (`registry/apps/dialpad` in `macro-inc/macro-connect`, an `own_app` awaiting
+  Dialpad's approval).
 
 ## Related
 
