@@ -13,7 +13,11 @@ use crate::api::{
         append_signed_up_param_if_new_user, create_access_token_cookie, create_refresh_token_cookie,
     },
 };
+use crate::service::user::team_auto_join::join_team_by_email_domain;
 use fusionauth::error::FusionAuthClientError;
+use macro_user_id::user_id::MacroUserId;
+use referral::domain::{models::ReferralCode, ports::ReferralService};
+use tracing::Instrument;
 
 use model::response::{ErrorResponse, UserTokensResponse};
 
@@ -113,6 +117,16 @@ pub async fn handler(
         &passwordless_response.refresh_token,
     ));
 
+    // The code proved the address: run the onboarding a passwordless signup
+    // deferred until now. Fire-and-forget, like the create-user webhook.
+    tokio::spawn(
+        complete_pending_passwordless_signup(
+            ctx.clone(),
+            passwordless_response.user.email.to_lowercase(),
+        )
+        .in_current_span(),
+    );
+
     // remove the users passwordless login rate limits
     tokio::spawn({
         let macro_cache_client = ctx.macro_cache_client.clone();
@@ -176,4 +190,45 @@ pub async fn handler(
     }
 
     Ok(Redirect::to(&redirect_uri).into_response())
+}
+
+/// Runs the onboarding a passwordless signup deferred until a sign-in proved
+/// its address: domain team auto-join and referral credit. Only the first
+/// completed sign-in finds the pending marker, so this runs at most once.
+#[tracing::instrument(skip(ctx, email))]
+async fn complete_pending_passwordless_signup(ctx: ApiContext, email: String) {
+    let pending = match ctx
+        .macro_cache_client
+        .take_passwordless_signup_pending(&email)
+        .await
+    {
+        Ok(Some(pending)) => pending,
+        Ok(None) => return,
+        Err(e) => {
+            tracing::error!(error=?e, "unable to read pending passwordless signup");
+            return;
+        }
+    };
+    tracing::info!(
+        has_referral_code = pending.referral_code.is_some(),
+        "completing deferred passwordless signup onboarding"
+    );
+
+    let user_id = format!("macro|{email}");
+    join_team_by_email_domain(ctx.teams_service.as_ref(), &user_id).await;
+
+    if let Some(referral_code) = pending.referral_code {
+        let referred_user_id = match MacroUserId::parse_from_str(&user_id) {
+            Ok(user_id) => user_id.lowercase(),
+            Err(e) => {
+                tracing::error!(error=?e, "unable to parse user id for referral");
+                return;
+            }
+        };
+        let _ = ctx
+            .referral_service
+            .track_referral(&referred_user_id, &ReferralCode(referral_code))
+            .await
+            .inspect_err(|e| tracing::error!(error=?e, "unable to track referral for new user"));
+    }
 }

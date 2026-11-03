@@ -19,7 +19,9 @@ behind its own Cargo feature.
 ## Scope
 
 - Owns: rate-limit counters for auth-adjacent flows (login codes, account
-  creation, passwordless, verification emails).
+  creation, passwordless, verification emails), and short-lived auth markers
+  in `src/auth.rs` (passwordless codes, just-signed-up, pending passwordless
+  signups).
 - Not here: general-purpose Redis operations — those are `macro_redis`
   (which this crate does not depend on; it rolls its own Redis calls per
   limiter module).
@@ -38,7 +40,8 @@ behind its own Cargo feature.
 
 ## Checks
 
-- `cargo test -p macro_cache_client` (`SQLX_OFFLINE` unset).
+- `cargo test -p macro_cache_client` (`SQLX_OFFLINE` unset); `src/auth/test.rs`
+  needs Redis at `REDIS_URL` (default `redis://127.0.0.1:6379`).
 
 ## Related
 
