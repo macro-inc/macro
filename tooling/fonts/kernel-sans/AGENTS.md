@@ -39,9 +39,12 @@ its named instances equal the statics.
 ## Checks
 
 - `python3 -m unittest discover tests` (from this directory; a few seconds).
-- `python3 build.py`, then commit the regenerated `fonts/` and `specimen/`
-  with the source change. Builds are reproducible: unchanged sources give
-  byte-identical fonts.
+- `python3 build.py`, then commit the regenerated `fonts/` and
+  `specimen/index.html` with the source change. Builds are reproducible:
+  unchanged sources give byte-identical fonts.
+- `specimen/preview.png` (the image in the PR description) is not built: it
+  is a 960 × 1095 light-mode screenshot of the top of `specimen/index.html`.
+  Retake it with Playwright when the hero or the outlines change.
 - `python3 build.py --compat` (all glyphs), `ruff format .` and `ruff check .`.
 - Requires `pip install fonttools skia-pathops brotli`; proofs also need
   `freetype-py` and Pillow with raqm.
