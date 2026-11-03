@@ -5,7 +5,7 @@ import {
 } from '@core/util/fetchWithToken';
 import type { ObjectLike, ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
-import type { Result } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 import { z } from 'zod';
 import type {
   BulkGetByEventItemIdsRequest,
@@ -34,8 +34,9 @@ const notificationEntityType = z.enum(EntityType);
 
 function notificationPreferenceItems(
   items: readonly UserUnsubscribe[]
-): BulkItem[] {
-  return items.map((item) => {
+): Result<BulkItem[], ResultError<'INVALID_ITEM_TYPE'>[]> {
+  const validatedItems: BulkItem[] = [];
+  for (const item of items) {
     let itemType = item.item_type;
     if (itemType === 'email' || itemType === 'thread') {
       itemType = 'email_thread';
@@ -43,11 +44,24 @@ function notificationPreferenceItems(
       itemType = 'foreign_entity';
     }
 
-    return {
+    const parsedType = notificationEntityType.safeParse(itemType);
+    if (!parsedType.success) {
+      return err([
+        {
+          code: 'INVALID_ITEM_TYPE',
+          message: 'Unsupported notification item type.',
+          arg: 'item_type',
+        },
+      ]);
+    }
+
+    validatedItems.push({
       item_id: item.item_id,
-      item_type: notificationEntityType.parse(itemType),
-    };
-  });
+      item_type: parsedType.data,
+    });
+  }
+
+  return ok(validatedItems);
 }
 
 function notificationFetch(
@@ -264,8 +278,11 @@ export const notificationServiceClient = {
     items: readonly UserUnsubscribe[],
     snoozedUntil?: string
   ) {
+    const validatedItems = notificationPreferenceItems(items);
+    if (validatedItems.isErr()) return err(validatedItems.error);
+
     const body: BulkSetItemsRequest = {
-      items: notificationPreferenceItems(items),
+      items: validatedItems.value,
       snoozed_until: snoozedUntil,
     };
     return notificationFetch<{}>('/unsubscribe/items', {
@@ -274,8 +291,11 @@ export const notificationServiceClient = {
     });
   },
   async removeUnsubscribeItems(items: readonly UserUnsubscribe[]) {
+    const validatedItems = notificationPreferenceItems(items);
+    if (validatedItems.isErr()) return err(validatedItems.error);
+
     const body: BulkRemoveItemsRequest = {
-      items: notificationPreferenceItems(items),
+      items: validatedItems.value,
     };
     return notificationFetch<{}>('/unsubscribe/items', {
       method: 'DELETE',
