@@ -517,6 +517,14 @@ export const cognitionApiServiceClient = {
    * Catalog apps that connect through their own MCP server instead of
    * Pipedream; connect them with `startMcpAuth` against `server_url`.
    */
+  async listPipedreamOverlays() {
+    return (
+      await dcsFetch<PipedreamOverlayResponse[]>(`/pipedream/mcp/overlays`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
   /** The user's Dialpad call sync. */
   async getDialpadConnection() {
     return await dcsFetch<DialpadConnectionResponse>(
@@ -546,14 +554,6 @@ export const cognitionApiServiceClient = {
     return await dcsFetch(`/integrations/dialpad/connection`, {
       method: 'DELETE',
     });
-  },
-
-  async listPipedreamOverlays() {
-    return (
-      await dcsFetch<PipedreamOverlayResponse[]>(`/pipedream/mcp/overlays`, {
-        method: 'GET',
-      })
-    ).map((result) => result);
   },
 
   async databaseQuery(args: DatabaseQueryRequest) {

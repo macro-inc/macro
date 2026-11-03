@@ -1,5 +1,7 @@
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { assignOauthUrl, reserveOauthPopup } from '@core/pipedream/oauth-popup';
+import { Telemetry } from '@macro-inc/observability';
 import {
   useCompleteDialpadMutation,
   useConnectDialpadMutation,
@@ -35,21 +37,27 @@ export function createDialpadConnection() {
   });
 
   /** Call from the click itself, so the Macro Connect tab is not blocked. */
-  const connect = async (backfill: DialpadBackfill) => {
+  const connect = (backfill: DialpadBackfill) => {
     const popup = reserveOauthPopup();
-    try {
-      assignOauthUrl(popup, await connectMutation.mutateAsync(backfill));
-    } catch {
-      popup?.close();
-      toast.failure('Failed to connect Dialpad');
-    }
+    return Telemetry.span('dialpad.connect', async (span) => {
+      span.setAttr('dialpad.backfill', backfill);
+      try {
+        const url = await span.run(() => connectMutation.mutateAsync(backfill));
+        assignOauthUrl(popup, url);
+        span.setAttr('dialpad.outcome', 'started');
+      } catch {
+        span.setAttr('dialpad.outcome', 'failed');
+        popup?.close();
+        toast.failure(t('dialpad.connectFailed'));
+      }
+    });
   };
 
   const disconnect = async () => {
     try {
       await disconnectMutation.mutateAsync();
     } catch {
-      toast.failure('Failed to disconnect Dialpad');
+      toast.failure(t('dialpad.disconnectFailed'));
     }
   };
 

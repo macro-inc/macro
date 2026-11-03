@@ -1,5 +1,6 @@
+import { t } from '@app/lib/i18n';
 import XIcon from '@icon/system/regular/x.svg';
-import { Button, Dialog, Panel } from '@ui';
+import { Button, Dialog, Input, Panel } from '@ui';
 import { createSignal, Index, Show } from 'solid-js';
 
 /**
@@ -34,9 +35,7 @@ export function ContactPhonesDialog(props: {
       await props.onSave(phones().filter((phone) => phone.trim()));
       props.onClose();
     } catch {
-      setError(
-        'Could not save. Write each number with its country code, starting with +.'
-      );
+      setError(t('contactPhones.saveFailed'));
     } finally {
       setPending(false);
     }
@@ -52,30 +51,34 @@ export function ContactPhonesDialog(props: {
         <Panel.Body>
           <form class="flex flex-col gap-4 p-5" onSubmit={save}>
             <Dialog.Title class="text-base font-semibold">
-              Phone numbers
+              {t('contactPhones.title')}
             </Dialog.Title>
             <Dialog.Description class="text-sm text-ink-muted">
-              Calls from these numbers are linked to this contact.
+              {t('contactPhones.description')}
             </Dialog.Description>
             <div class="flex flex-col gap-2">
               <Index each={phones()}>
                 {(phone, index) => (
                   <div class="flex items-center gap-2">
-                    <input
+                    <Input
                       type="tel"
                       inputmode="tel"
                       autocomplete="tel"
-                      aria-label={`Phone number ${index + 1}`}
-                      placeholder="+ country code and number"
+                      aria-label={t('contactPhones.number', {
+                        number: index + 1,
+                      })}
+                      placeholder={t('contactPhones.placeholder')}
                       value={phone()}
                       disabled={pending()}
                       onInput={(e) => update(index, e.currentTarget.value)}
-                      class="min-w-0 flex-1 rounded-lg border border-edge-muted bg-input px-3 py-2 text-sm outline-none focus:border-accent touch:min-h-11"
+                      class="min-w-0 flex-1"
                     />
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      aria-label={`Remove phone number ${index + 1}`}
+                      aria-label={t('contactPhones.removeNumber', {
+                        number: index + 1,
+                      })}
                       disabled={pending()}
                       onClick={() => remove(index)}
                     >
@@ -92,7 +95,7 @@ export function ContactPhonesDialog(props: {
                 disabled={pending()}
                 onClick={() => setPhones((current) => [...current, ''])}
               >
-                Add number
+                {t('contactPhones.addNumber')}
               </Button>
             </div>
             <Show when={error()}>
@@ -107,10 +110,10 @@ export function ContactPhonesDialog(props: {
                 disabled={pending()}
                 onClick={props.onClose}
               >
-                Cancel
+                {t('common.cancel')}
               </Button>
-              <Button type="submit" variant="secondary" disabled={pending()}>
-                Save
+              <Button type="submit" variant="primary" disabled={pending()}>
+                {t('contactPhones.save')}
               </Button>
             </div>
           </form>

@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import type { DialpadBackfill } from '@service-cognition/generated/schemas/dialpadBackfill';
 import type { DialpadConnectionResponse } from '@service-cognition/generated/schemas/dialpadConnectionResponse';
 
@@ -10,12 +11,32 @@ export const DIALPAD_ICON_URL =
 /** How far back the first connect imports, in the order offered. */
 export const DIALPAD_BACKFILL_OPTIONS: readonly {
   value: DialpadBackfill;
-  label: string;
+  readonly label: string;
 }[] = [
-  { value: 'none', label: 'New calls only' },
-  { value: 'week', label: 'Also import the last 7 days' },
-  { value: 'month', label: 'Also import the last 30 days' },
-  { value: 'quarter', label: 'Also import the last 90 days' },
+  {
+    value: 'none',
+    get label() {
+      return t('dialpad.backfillNone');
+    },
+  },
+  {
+    value: 'week',
+    get label() {
+      return t('dialpad.backfillWeek');
+    },
+  },
+  {
+    value: 'month',
+    get label() {
+      return t('dialpad.backfillMonth');
+    },
+  },
+  {
+    value: 'quarter',
+    get label() {
+      return t('dialpad.backfillQuarter');
+    },
+  },
 ];
 
 /** Words for why sync needs attention; `undefined` when it does not. */

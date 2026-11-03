@@ -423,7 +423,7 @@ export function useDialpadItem(): IntegrationItem {
           {props.label}
           <ArrowUpRightIcon class="size-3.5 opacity-70" />
         </Dropdown.Trigger>
-        <Dropdown.Content class="w-60">
+        <Dropdown.Content class="min-w-60 max-w-80">
           <Dropdown.Group>
             <For each={DIALPAD_BACKFILL_OPTIONS}>
               {(option) => (
