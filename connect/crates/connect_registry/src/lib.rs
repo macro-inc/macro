@@ -180,7 +180,7 @@ struct EmbeddedApp {
 }
 
 // Apps without a qualifying official SVG mark.
-const NO_OFFICIAL_SVG_ICON: &[&str] = &["apollo", "klaviyo", "monday", "pipedrive"];
+const NO_OFFICIAL_SVG_ICON: &[&str] = &["apollo", "dialpad", "klaviyo", "monday", "pipedrive"];
 
 static APPS: LazyLock<Result<Vec<App>, RegistryError>> = LazyLock::new(load_apps);
 

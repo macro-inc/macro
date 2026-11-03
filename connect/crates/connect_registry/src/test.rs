@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn every_app_toml_parses() {
     let apps = all_apps().expect("embedded registry must parse");
-    assert_eq!(apps.len(), 41);
+    assert_eq!(apps.len(), 42);
     assert!(apps.iter().all(|app| !app.name.is_empty()));
 }
 

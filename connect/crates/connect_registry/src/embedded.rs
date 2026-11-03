@@ -57,6 +57,11 @@ pub(super) const EMBEDDED: &[EmbeddedApp] = &[
         icon_svg: Some(include_str!("../../../registry/apps/datadog/icon.svg")),
     },
     EmbeddedApp {
+        directory: "dialpad",
+        toml: include_str!("../../../registry/apps/dialpad/app.toml"),
+        icon_svg: None,
+    },
+    EmbeddedApp {
         directory: "dropbox",
         toml: include_str!("../../../registry/apps/dropbox/app.toml"),
         icon_svg: Some(include_str!("../../../registry/apps/dropbox/icon.svg")),
