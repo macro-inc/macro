@@ -17,7 +17,10 @@ fn import_source(
     record: &ReviewRecord,
 ) -> Result<import::domain::models::ImportSource, CodeModeError> {
     match &record.items {
-        ReviewItems::Import([item]) => Ok(item.draft.source.into()),
+        ReviewItems::Import(items) => {
+            let [item] = &**items;
+            Ok(item.draft.source.into())
+        }
         _ => Err(CodeModeError::Invalid(
             "This is not an import review.".into(),
         )),

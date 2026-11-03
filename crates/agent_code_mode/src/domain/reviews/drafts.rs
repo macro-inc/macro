@@ -151,7 +151,7 @@ pub enum ReviewItems {
     /// Calendar drafts and their created events.
     Calendar(Vec<ReviewItem<CalendarDraft, CalendarResult>>),
     /// The import plan selection and the started write's report.
-    Import([ReviewItem<ImportDraft, ImportResult>; 1]),
+    Import(Box<[ReviewItem<ImportDraft, ImportResult>; 1]>),
 }
 
 /// A confirmed action response, keyed by kind.
@@ -181,7 +181,7 @@ impl From<ReviewDrafts> for ReviewItems {
                     .map(ReviewItem::pending)
                     .collect(),
             ),
-            ReviewDrafts::Import([draft]) => Self::Import([ReviewItem::pending(draft)]),
+            ReviewDrafts::Import([draft]) => Self::Import(Box::new([ReviewItem::pending(draft)])),
         }
     }
 }
@@ -245,7 +245,9 @@ impl ReviewItems {
         match (self, draft) {
             (Self::Email(items), ReviewDraft::Email(draft)) => replace(items, item, draft),
             (Self::Calendar(items), ReviewDraft::Calendar(draft)) => replace(items, item, draft),
-            (Self::Import(items), ReviewDraft::Import(draft)) => replace(items, item, draft),
+            (Self::Import(items), ReviewDraft::Import(draft)) => {
+                replace(&mut items[..], item, draft)
+            }
             _ => Err(CodeModeError::Invalid(
                 "The draft's kind does not match the review's kind.".into(),
             )),
@@ -278,7 +280,9 @@ impl ReviewItems {
         match (self, result) {
             (Self::Email(items), ReviewResult::Email(result)) => store(items, index, result),
             (Self::Calendar(items), ReviewResult::Calendar(result)) => store(items, index, result),
-            (Self::Import(items), ReviewResult::Import(result)) => store(items, index, result),
+            (Self::Import(items), ReviewResult::Import(result)) => {
+                store(&mut items[..], index, result)
+            }
             _ => Err(CodeModeError::Invalid(
                 "The action's response does not match the review's kind.".into(),
             )),

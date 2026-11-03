@@ -479,7 +479,7 @@ async fn edit_checks_saved_revision_and_draft_bounds_and_dismiss_does_not_execut
     let edit = |revision, draft: Value| ReviewDecision::Edit {
         revision,
         item: row.items.states()[0].id,
-        draft: serde_json::from_value(json!({"kind":"email", "draft": draft})).unwrap(),
+        draft: Box::new(serde_json::from_value(json!({"kind":"email", "draft": draft})).unwrap()),
     };
     let changed = f
         .service
@@ -687,12 +687,12 @@ async fn an_edit_must_match_the_review_kind_and_a_submit_needs_a_complete_draft(
                 ReviewDecision::Edit {
                     revision: row.revision,
                     item,
-                    draft: ReviewDraft::Import(ImportDraft {
+                    draft: Box::new(ReviewDraft::Import(ImportDraft {
                         source: ImportReviewSource::Notion,
                         excluded: vec![],
                         shared: vec![],
                         personal: vec![],
-                    }),
+                    })),
                 },
             )
             .await,

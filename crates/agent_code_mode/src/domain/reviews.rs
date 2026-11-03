@@ -183,7 +183,7 @@ pub enum ReviewDecision {
         item: Uuid,
         /// Replacement action arguments, keyed by the review's kind.
         #[schema(value_type = Object)]
-        draft: ReviewDraft,
+        draft: Box<ReviewDraft>,
     },
     /// Send/create selected items, or all pending items when empty.
     Submit {
@@ -617,7 +617,7 @@ impl ReviewService {
                 if serde_json::to_vec(&draft).map_err(|_| invalid())?.len() > MAX_DRAFT_BYTES {
                     return Err(invalid());
                 }
-                record.items.edit(item, draft)?;
+                record.items.edit(item, *draft)?;
                 if serde_json::to_vec(&record.items)
                     .map_err(|_| invalid())?
                     .len()
@@ -698,11 +698,11 @@ impl ReviewService {
                         Ok(Ok(result)) => record.items.complete(index, result).is_ok(),
                         _ => false,
                     };
-                    if !completed {
-                        if let Some(item) = record.items.states_mut().get_mut(index) {
-                            item.status = ReviewItemStatus::Unknown;
-                            item.error = Some("The submission outcome could not be confirmed. Check the destination before retrying.".into());
-                        }
+                    if !completed
+                        && let Some(item) = record.items.states_mut().get_mut(index)
+                    {
+                        item.status = ReviewItemStatus::Unknown;
+                        item.error = Some("The submission outcome could not be confirmed. Check the destination before retrying.".into());
                     }
                     // A started import settles when its write ends; only one that
                     // could not start settles here.
