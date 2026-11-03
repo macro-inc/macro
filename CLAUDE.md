@@ -52,6 +52,7 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
 | Reusing database storage or separating it from an app entity | [Database core skill](.agents/skills/database-core/SKILL.md) |
 | Adding collaborative markdown to a feature | [Collab surface core skill](.agents/skills/collab-surface-core/SKILL.md) |
 | Adding a flow or hot path, or tracing one | `instrumentation` skill |
+| Adding, reading or removing a feature flag (web or backend) | `feature-flags` skill |
 | Rust code, builds, or tests | [Rust development](docs/development/rust.md) |
 | SQLx queries, migrations, DB tests, or cache errors | [Database development](docs/development/database.md) |
 | Web frontend | [Web agent guide](apps/web/AGENTS.md) |
