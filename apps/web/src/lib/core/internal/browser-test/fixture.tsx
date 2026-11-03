@@ -17,6 +17,7 @@ import {
 import { changeViewer, fetchContactDirectoryPage } from './network';
 import { RecipientDirectoryFixture } from './recipient-directory-fixture';
 import { RecipientRankingFixture } from './recipient-ranking-fixture';
+import { SoupFilterFixture } from './soup-filter-fixture';
 
 const client = new QueryClient();
 function App() {
@@ -139,6 +140,9 @@ render(
   () => (
     <QueryClientProvider client={client}>
       <Switch fallback={<App />}>
+        <Match when={new URLSearchParams(location.search).has('soup-filters')}>
+          <SoupFilterFixture />
+        </Match>
         <Match
           when={new URLSearchParams(location.search).has('recipient-directory')}
         >

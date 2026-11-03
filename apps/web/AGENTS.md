@@ -71,6 +71,13 @@ preserving the selected representation. Keep selection/outside dismissal synchro
 a delayed combobox close must not cancel a new query after refocus. Pass supplied
 names to option/chip avatars instead of filling the global name store. The internal
 recipient and email app-browser fixtures cover desktop/touch.
+Soup's general Assignee/Created by submenus, mobile accordion sections and
+consolidated chips use lazy contact sources too. Resolve closed-chip labels with
+`useContactFilterLabels`, never by constructing a browse window or a directory map.
+Keep Unassigned outside contact lookups and restore the Owned preset when clearing
+its creator refinement. A query-driven combobox takes search edits from native input
+events; Kobalte's programmatic resets on option replacement must not clear a pending
+query. `internal/browser-test/soup-filters.browser.e2e.ts` covers both surfaces.
 Universal task inference resolves only current person-valued fields through
 `useContactReferences` (`anyName`), not a people catalog or suggestion page.
 Keep incomplete/ambiguous evidence unresolved, preserve model term boundaries,

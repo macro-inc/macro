@@ -85,12 +85,16 @@ const keepComboboxFocus = (event: Event) => event.preventDefault();
 
 function PickerSearchInput(props: {
   placeholder?: string;
+  value?: string;
+  onInput?: JSX.EventHandler<HTMLInputElement, InputEvent>;
   onKeyDown?: (event: KeyboardEvent) => void;
   onReady?: (input: HTMLInputElement) => void;
 }) {
   return (
     <Combobox.Input
       ref={props.onReady}
+      value={props.value}
+      onInput={props.onInput}
       onKeyDown={props.onKeyDown}
       class="flex-1 min-w-0 text-sm bg-transparent outline-none caret-accent placeholder:text-ink-placeholder"
       placeholder={props.placeholder ?? 'Search...'}
@@ -390,6 +394,14 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
   const hasMatches = () =>
     props.source ? visibleIds().size > 0 || sourceAction() : !!props.action || localMatches();
 
+  const onSourceInput: JSX.EventHandler<HTMLInputElement, InputEvent> = (
+    event
+  ) => {
+    if (!props.source) return;
+    setSearchQuery(event.currentTarget.value);
+    props.source.setSearch(event.currentTarget.value);
+  };
+
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open);
     if (!open) {
@@ -456,8 +468,10 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
       value={activeOptions()}
       onChange={handleChange}
       onInputChange={(value) => {
-        setSearchQuery(value);
-        props.source?.setSearch(value);
+        // Kobalte also clears its input when selected option objects refresh.
+        // Only native edits change a query-driven source; metadata/page
+        // replacement must not cancel the user's in-flight search.
+        if (!props.source) setSearchQuery(value);
       }}
       onOpenChange={handleOpenChange}
       optionValue="id"
@@ -473,7 +487,12 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
     >
       <Combobox.Control class="flex items-center h-full">
         {props.children}
-        <Combobox.Input ref={selectionIntent.track} class="sr-only" />
+        <Combobox.Input
+          ref={selectionIntent.track}
+          value={props.source?.search() ?? searchQuery()}
+          onInput={onSourceInput}
+          class="sr-only"
+        />
       </Combobox.Control>
 
       <div class="hidden" ref={setPortalAnchor} />
@@ -495,7 +514,11 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
           >
             <div class="flex items-center gap-2 px-3 py-2 border-b border-edge-muted">
               <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
-              <PickerSearchInput placeholder={props.placeholder} />
+              <PickerSearchInput
+                value={props.source?.search() ?? searchQuery()}
+                onInput={onSourceInput}
+                placeholder={props.placeholder}
+              />
             </div>
             <div class="p-1">
               <Show when={props.source}>

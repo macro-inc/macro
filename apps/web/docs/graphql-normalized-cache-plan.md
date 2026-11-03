@@ -1276,7 +1276,11 @@ with existing DM peers/inboxes; full channel sources are still in memory.
 Quick Access now reads a replaceable person window rather than `useContacts()` or
 its global item index. Commands/mentions forward typed queries; CRM alias matching
 uses exact lookup for only the current 50-row CRM window. Soup facets and property
-pickers preserve selections separately. Native policy version 4 retains mention
+pickers preserve selections separately. General Soup assignee/creator menus and
+chips also use lazy windows; closed-chip labels resolve explicit IDs independently,
+without directory-sized maps. Unassigned is a local value, not membership.
+Query-driven comboboxes retain typed input across page/metadata replacement.
+Native policy version 4 retains mention
 scoring and property self/domain boosts, and excludes automated recipient mailboxes
 before the result limit unless a full address was typed. The policy floor is generated
 from Rust alongside the transport schemas; older replies use bounded server fallback.

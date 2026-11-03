@@ -26,7 +26,6 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { UserIcon } from '@core/component/UserIcon';
 import { enableMultiInbox } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
@@ -35,12 +34,11 @@ import { useSelectedFirst } from '@core/util/useSelectedFirst';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { Accordion } from '@kobalte/core/accordion';
-import { useContacts } from '@queries/contacts/contacts';
+import { useContactFilterOptions } from '@core/user/use-contact-filter-options';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { ConsolidatedFilterChip } from './consolidated-filter-chip';
 import { useInboxPicker } from './inbox-picker';
 import {
-  buildContactLabel,
   type FilterOption,
   VIEW_FILTER_CATEGORIES,
 } from './unified-filter-dropdown';
@@ -62,11 +60,10 @@ export const MobileFilterDrawer = (props: {
     setInboxFilter,
   } = useSoupView();
   const panel = useSplitPanelOrThrow();
-  const contacts = useContacts();
   const userId = useUserId();
 
   const [assigneeSearch, setAssigneeSearch] = createSignal('');
-  const [createdBySearch, setCreatedBySearch] = createSignal('');
+  const [open, setOpen] = createSignal(false);
 
   const currentView = createMemo((): ListView | undefined => {
     const content = panel.handle.content();
@@ -217,36 +214,6 @@ export const MobileFilterDrawer = (props: {
       .filter((o) => o.label.toLowerCase().includes(query));
   });
 
-  const createdByOptions = createMemo(() => {
-    const currentUserId = userId();
-    return [...contacts()]
-      .sort((a, b) => {
-        if (a.id === currentUserId) return -1;
-        if (b.id === currentUserId) return 1;
-        return 0;
-      })
-      .map((contact) => ({
-        id: contact.id,
-        label: buildContactLabel(contact, currentUserId),
-        icon: () => (
-          <UserIcon
-            id={contact.id}
-            size="sm"
-            suppressClick
-            showTooltip={false}
-          />
-        ),
-      }));
-  });
-
-  const filteredCreatedByOptions = createMemo(() => {
-    const query = createdBySearch().toLowerCase();
-    if (!query) return createdByOptions();
-    return createdByOptions().filter((option) =>
-      option.label.toLowerCase().includes(query)
-    );
-  });
-
   const toggleCreatedBy = (id: string) => {
     const current = createdByIds();
     const next = current.includes(id)
@@ -275,9 +242,11 @@ export const MobileFilterDrawer = (props: {
   return (
     <Show when={hasFiltersOrCategories()}>
       <FilterDrawer
+        open={open()}
         class={props.class}
         activeCount={activeCount()}
         onOpenChange={(open) => {
+          setOpen(open);
           assigneePicker.onOpenChange(open);
           if (!open) {
             setAssigneeSearch('');
@@ -498,38 +467,14 @@ export const MobileFilterDrawer = (props: {
               label={t('viewMenus.createdBy')}
               activeCount={createdByIds().length}
             >
-              <div class="flex min-h-11 items-center gap-2 rounded-[20px] px-3 py-2 bg-ink/5 mb-1">
-                <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
-                <input
-                  type="text"
-                  aria-label={t('viewMenus.searchCreatorsLabel')}
-                  value={createdBySearch()}
-                  onInput={(e) => setCreatedBySearch(e.currentTarget.value)}
-                  placeholder={t('viewMenus.searchCreators')}
-                  class="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-ink-placeholder"
-                />
-              </div>
-              <div class="max-h-[calc(50*var(--dvh))] overflow-y-auto scrollbar-hidden">
-                <For each={filteredCreatedByOptions()}>
-                  {(option) => {
-                    const active = () => createdByIds().includes(option.id);
-                    return (
-                      <FilterDrawer.Option
-                        checked={active()}
-                        onChange={() => toggleCreatedBy(option.id)}
-                        icon={option.icon()}
-                      >
-                        {option.label}
-                      </FilterDrawer.Option>
-                    );
-                  }}
-                </For>
-              </div>
-              <Show when={filteredCreatedByOptions().length === 0}>
-                <div class="px-4 py-2 text-sm text-ink-muted">
-                  {t('viewMenus.noResults')}
-                </div>
-              </Show>
+              <FilterDrawer.SourceOptions
+                groupId="created-by"
+                createSource={useContactFilterOptions}
+                activeIds={createdByIds}
+                enabled={() => open() && expandedSections().includes('created-by')}
+                placeholder={t('viewMenus.searchCreators')}
+                onChange={(id) => toggleCreatedBy(id)}
+              />
             </FilterDrawer.Section>
           </Show>
         </Accordion>

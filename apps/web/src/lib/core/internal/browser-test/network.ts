@@ -1,4 +1,8 @@
 import { contactRecordKey } from '@queries/contacts/contact-key';
+import { createSignal } from 'solid-js';
+
+export const [lookupIds, setLookupIds] = createSignal<readonly string[]>([]);
+
 import type {
   ContactDirectoryByUserIdsQuery,
   ContactDirectoryPageQuery,
@@ -38,17 +42,29 @@ export async function fetchContactDirectoryByIds(
   signal: AbortSignal
 ): Promise<ContactDirectoryByUserIdsQuery> {
   signal.throwIfAborted();
+  setLookupIds([...userIds]);
   return {
     user: {
       id: viewer,
-      contactsByUserIds: userIds
-        .filter((id) => id === 'macro|selected@example.com')
-        .map((userId) => ({
-          id: contactRecordKey(viewer, userId).slice('GraphqlContact:'.length),
-          userId,
-          email: userId.slice(6),
-          name: 'Selected Person',
-        })),
+      contactsByUserIds: userIds.flatMap((userId) => {
+        let name: string | undefined;
+        if (userId === 'macro|selected@example.com') name = 'Selected Person';
+        else if (userId === 'macro|viewer@example.com') name = 'Viewer';
+        else if (userId === 'macro|match@example.com') name = 'Broader match';
+        else if (/^macro\|person\d+@example\.com$/.test(userId))
+          name = `Person ${userId.slice(12).split('@')[0]}`;
+        if (!name) return [];
+        return [
+          {
+            id: contactRecordKey(viewer, userId).slice(
+              'GraphqlContact:'.length
+            ),
+            userId,
+            email: userId.slice(6),
+            name,
+          },
+        ];
+      }),
     },
   };
 }

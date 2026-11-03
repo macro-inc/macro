@@ -5,6 +5,8 @@ import { createContactFilterOptions } from '@core/user/contact-filter-options';
 import { createContactIdFilterSource } from '@queries/contacts/filter-source';
 import { createSignal } from 'solid-js';
 
+export { useContactFilterLabels } from '../../user/use-contact-filter-options';
+
 export const VIEWER = 'macro|viewer@example.com';
 export const SELECTED = 'macro|selected@example.com';
 export const [driveValue, setDriveValue] = createSignal<DriveState>({

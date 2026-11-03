@@ -26,6 +26,14 @@ check lazy loading, Me, persisted unavailable IDs, broader-than-substring matche
 page replacement and viewport reset, checkbox preservation, and Only without
 changing unrelated facets. They do not instantiate Tasks' full AI-filter catalog.
 
+`/?soup-filters=home` and `/?soup-filters=tasks` mount the real general Soup filter
+menus, mobile drawer, refinements hook and consolidated chips. Predicate/query
+stores and selected-label lookup are real; scope, transport and unrelated app
+services are stand-ins. Pure entity predicates are re-exported without the app UI
+barrel. Legacy full-directory hooks throw. Tests cover zero closed-menu browse
+reads, explicit labels, Unassigned, unknown IDs, paging, query replacement, Only,
+reopening at page one and restoring the Owned constraint when a creator is cleared.
+
 `/?recipient-ranking` mounts the real recipient selector over small supplied
 options and stand-in identity/profile services. It verifies that exact addresses
 win over recent word matches and Enter preserves selection across searches.

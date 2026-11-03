@@ -4,6 +4,40 @@ import { UserIcon } from '@core/component/UserIcon';
 import type { ContactIdFilterSource } from '@queries/contacts/filter-source';
 import { type Accessor, createMemo } from 'solid-js';
 import { macroIdToEmail, tryMacroId } from './macroId';
+import type { IUser } from './types';
+
+/** Shared presentation for suggestion rows and independently resolved chips. */
+export function contactFilterRow(
+  id: string,
+  user: IUser | undefined,
+  viewer: string | undefined
+) {
+  const macroId = tryMacroId(id.toLowerCase());
+  const email = user?.email ?? (macroId ? macroIdToEmail(macroId) : id);
+  const name = user?.name || email.split('@')[0] || email;
+  const label =
+    id.toLowerCase() === viewer
+      ? t('viewMenus.contactMe', { name })
+      : user?.name || email;
+  return {
+    email,
+    option: {
+      id,
+      label,
+      icon: macroId
+        ? () => (
+            <UserIcon
+              id={macroId}
+              name={name}
+              size="sm"
+              suppressClick
+              showTooltip={false}
+            />
+          )
+        : undefined,
+    },
+  };
+}
 
 /** UI adapter over bounded contacts. Selected IDs (including missing values)
  * and self are explicit pins, not additional directory/catalog retention. */
@@ -54,34 +88,17 @@ export function createContactFilterOptions(
     }
     return order.map((id) => {
       const canonical = id.toLowerCase();
-      const user = known.get(canonical);
-      const macroId = tryMacroId(canonical);
-      const email = user?.email ?? (macroId ? macroIdToEmail(macroId) : id);
-      const name = user?.name || email.split('@')[0] || email;
-      const label =
-        canonical === viewer
-          ? t('viewMenus.contactMe', { name })
-          : user?.name || email;
+      const { option, email } = contactFilterRow(
+        id,
+        known.get(canonical),
+        viewer
+      );
       return {
-        option: {
-          id,
-          label,
-          icon: macroId
-            ? () => (
-                <UserIcon
-                  id={macroId}
-                  name={name}
-                  size="sm"
-                  suppressClick
-                  showTooltip={false}
-                />
-              )
-            : undefined,
-        },
+        option,
         visible:
           !query ||
           matching.has(canonical) ||
-          label.toLowerCase().includes(query) ||
+          option.label.toLowerCase().includes(query) ||
           email.toLowerCase().includes(query),
       };
     });
