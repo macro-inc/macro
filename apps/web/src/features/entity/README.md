@@ -40,6 +40,8 @@ even when a sent-only email has no Unarchive action.
 `ProjectBreadCrumb.collapsed` keeps a keyboard-accessible, borderless ghost folder
 button with its link color and a circular icon-only target. Its hover card shows
 the folder heading and full path on separate rows.
+Pending folder previews keep the task list mounted and its scroll position intact;
+the label retains its small loading bar until the folder path is ready.
 The list folder glyph is 16px on desktop and 20px on phones, matching neighboring
 property icons while keeping its existing pill and touch target.
 Task grids use their existing measured overflow controller to collapse folder

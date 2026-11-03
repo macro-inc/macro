@@ -73,14 +73,12 @@ enum CodeHost {
 #[serde(deny_unknown_fields)]
 #[schemars(
     title = "ExecuteCode",
-    description = concat!(
+    description = format!(
+        "{}\n{}\n{}\nPresentView schema; execution.views.present(view) takes its view property:\n{}\n",
         include_str!("toolset/session/execute_code.md"),
-        "\n",
         include_str!("toolset/shared/program.md"),
-        "\n",
         include_str!("toolset/shared/runtime.md"),
-        "\nPresentView schema; execution.views.present(view) takes its view property:\n",
-        include_str!("../../../dynamic_ui/src/present_view.schema.generated.json")
+        dynamic_ui::present_view_schema(),
     )
 )]
 pub struct ExecuteCode {

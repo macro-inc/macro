@@ -238,6 +238,14 @@ export type InProgressExecution = {
 };
 
 /**
+ * How a routine's most recent finished run went, so lists can flag failures.
+ */
+export type LastRun = {
+    end_time: string;
+    is_success: boolean;
+};
+
+/**
  * `path` walks objects by key; `*` steps into every element of an array and
  * a number into one. Give exactly one test. `notIn` also passes when the
  * path finds nothing.
@@ -380,6 +388,7 @@ export type ScheduledAction = {
  * responses omit legacy fields rather than inventing a schedule or timezone.
  */
 export type ScheduledActionResponse = ScheduledAction & {
+    last_run?: null | LastRun;
     /**
      * Deprecated: use `trigger.schedule`. Present only for cron actions.
      *
