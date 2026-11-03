@@ -198,6 +198,14 @@ already in the trail (such as the contact's own company from `Companies >
 <company> > <contact>`) returns to it instead of adding a duplicate. Back and
 Forward restore the trail; a reloaded or shared record URL shows only `<list> >
 <record>`. The CRM sidebar stays visible throughout.
+Contact headers list the contact's phone numbers as pills after the email.
+On phones each pill is a `tel:` link to the device's dialer; on larger screens
+the number sits beside a **Call** link. **Add phone** / **Edit phones** opens a
+dialog of numbers, each needing its country code (`+…`); the server stores them
+in E.164 and refuses others. Numbers also arrive from contact CSV imports and
+from Dialpad calls whose contact matched by email. Imported Granola and
+Dialpad calls link to the contact (email first, then phone) and appear in its
+Calls section for people who can open the call.
 Company and contact headers group `Copy link` separately from the side-panel toggle.
 Desktop section tabs collapse to icons in narrow panes; each icon keeps a tooltip.
 On phones and tablets, the current section appears as a labeled header island

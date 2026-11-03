@@ -30195,6 +30195,16 @@ export const getItemsSoupResponse = zod
                           )
                       )
                       .describe('Macro-account participants in the call.'),
+                    provider: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum(['macro', 'granola', 'dialpad'])
+                          .describe(
+                            'Supported call and transcript providers. Add variants as integrations grow.'
+                          ),
+                      ])
+                      .optional(),
                     startedAt: zod.iso
                       .datetime({})
                       .describe('When the call started.'),
@@ -35145,6 +35155,16 @@ export const postItemsSoupResponse = zod
                           )
                       )
                       .describe('Macro-account participants in the call.'),
+                    provider: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum(['macro', 'granola', 'dialpad'])
+                          .describe(
+                            'Supported call and transcript providers. Add variants as integrations grow.'
+                          ),
+                      ])
+                      .optional(),
                     startedAt: zod.iso
                       .datetime({})
                       .describe('When the call started.'),
@@ -39536,6 +39556,16 @@ export const postItemsSoupAstResponse = zod
                           )
                       )
                       .describe('Macro-account participants in the call.'),
+                    provider: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum(['macro', 'granola', 'dialpad'])
+                          .describe(
+                            'Supported call and transcript providers. Add variants as integrations grow.'
+                          ),
+                      ])
+                      .optional(),
                     startedAt: zod.iso
                       .datetime({})
                       .describe('When the call started.'),
@@ -44468,6 +44498,16 @@ export const postItemsSoupAstGroupedResponse = zod
                             .describe(
                               'Macro-account participants in the call.'
                             ),
+                          provider: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum(['macro', 'granola', 'dialpad'])
+                                .describe(
+                                  'Supported call and transcript providers. Add variants as integrations grow.'
+                                ),
+                            ])
+                            .optional(),
                           startedAt: zod.iso
                             .datetime({})
                             .describe('When the call started.'),
@@ -48824,6 +48864,16 @@ export const postItemsSoupAstGroupedResponse = zod
                             .describe(
                               'Macro-account participants in the call.'
                             ),
+                          provider: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum(['macro', 'granola', 'dialpad'])
+                                .describe(
+                                  'Supported call and transcript providers. Add variants as integrations grow.'
+                                ),
+                            ])
+                            .optional(),
                           startedAt: zod.iso
                             .datetime({})
                             .describe('When the call started.'),

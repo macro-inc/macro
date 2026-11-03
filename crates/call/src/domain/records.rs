@@ -53,7 +53,7 @@ pub enum CallCreatedVia {
     strum::EnumString,
     strum::IntoStaticStr,
 )]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum CallProvider {

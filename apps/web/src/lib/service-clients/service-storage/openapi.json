@@ -40936,6 +40936,17 @@
                 },
                 "description": "Macro-account participants in the call."
               },
+              "provider": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CallProvider",
+                    "description": "The provider an imported call came from; `None` for a Macro call."
+                  }
+                ]
+              },
               "startedAt": {
                 "type": "string",
                 "format": "date-time",

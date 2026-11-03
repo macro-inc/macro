@@ -60,6 +60,22 @@ normal call detail with title, summary, attendees
 apply to imported calls yet. Webhooks require a public HTTPS cognition callback origin (`CognitionPublicUrl`);
 on a laptop stack, expose the webhook path with a tunnel such as Tailscale Funnel.
 
+### Imported Dialpad calls
+
+Connecting Dialpad in **Settings → Integrations** (through Macro Connect) is
+the setup; the user may choose to import the last 7, 30 or 90 days. Each
+answered Dialpad call the user is on becomes a private call about a minute
+after Dialpad finishes its transcript, titled `Call with <name or number>`,
+with the caller and the Dialpad user as guests (phone numbers when there is no
+name), the transcript, and Dialpad's AI recap and action items as the summary.
+Missed calls and voicemails are not imported. Webhooks need the same public
+HTTPS cognition origin as Granola (tunnel `/cognition/integrations/dialpad/webhooks`
+locally).
+
+Imported calls show their source: a **Granola** or **Dialpad** badge on Calls
+list rows, and a badge beside the call title that opens the call in the
+provider when it has a link.
+
 A channel's `Calls` tab lists that channel's recordings with the same rows, filtered
 by the channel id. Its search field matches call names and transcripts in that
 channel.

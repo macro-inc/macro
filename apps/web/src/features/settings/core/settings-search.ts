@@ -294,6 +294,12 @@ const SETTINGS: Setting[] = [
   },
   {
     tab: 'Connected',
+    title: 'Dialpad',
+    target: 'Dialpad',
+    keywords: 'phone calls transcripts crm import',
+  },
+  {
+    tab: 'Connected',
     title: 'Claude Code, Codex, and ChatGPT',
     target: 'Claude Code, Codex, and ChatGPT',
     keywords: 'ai apps mcp ide setup',

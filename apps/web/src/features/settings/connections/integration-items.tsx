@@ -13,13 +13,22 @@ import { openExternalUrl } from '@core/util/url';
 import ClaudeIcon from '@icon/claude-color.svg';
 import GmailIcon from '@icon/gmail-color.svg';
 import OutlookIcon from '@icon/outlook-color.svg';
+import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import DesktopIcon from '@icon/system/regular/desktop.svg';
 import { useOutlookAvailable } from '@queries/auth/outlook-link';
 import { useUserTeamsQuery } from '@queries/team/teams';
 import type { Team as TeamSummary } from '@service-auth/generated/schemas/team';
 import type { Link as EmailLink } from '@service-email/generated/schemas';
-import { type Accessor, Match, Show, Switch } from 'solid-js';
+import { Dropdown } from '@ui';
+import { type Accessor, For, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
+import {
+  DIALPAD_APP_SLUG,
+  DIALPAD_BACKFILL_OPTIONS,
+  DIALPAD_ICON_URL,
+  dialpadIssueLabel,
+} from '../../dialpad-connect/core/dialpad';
+import { createDialpadConnection } from '../../dialpad-connect/primitives/create-dialpad-connection';
 import {
   GRANOLA_APP_SLUG,
   GRANOLA_ICON_URL,
@@ -389,6 +398,119 @@ export function useGranolaItem(): IntegrationItem {
     },
     get statusLabel() {
       return granola.status() === 'disabled' ? 'Paused' : undefined;
+    },
+    Actions,
+  };
+}
+
+/**
+ * Dialpad call sync. Connecting asks how far back to import, then opens
+ * Macro Connect; the row reads "Connecting" until setup finishes.
+ */
+export function useDialpadItem(): IntegrationItem {
+  const dialpad = createDialpadConnection();
+
+  function ConnectMenu(props: { label: string }) {
+    return (
+      <Dropdown>
+        <Dropdown.Trigger
+          variant="ghost"
+          size="sm"
+          aria-label={`${props.label} Dialpad`}
+          class="text-ink-muted hover:text-ink touch:min-h-11"
+          disabled={dialpad.connecting()}
+        >
+          {props.label}
+          <ArrowUpRightIcon class="size-3.5 opacity-70" />
+        </Dropdown.Trigger>
+        <Dropdown.Content class="w-60">
+          <Dropdown.Group>
+            <For each={DIALPAD_BACKFILL_OPTIONS}>
+              {(option) => (
+                <Dropdown.Item
+                  onSelect={() =>
+                    fireAndForget(
+                      dialpad.connect(option.value),
+                      'dialpad-settings'
+                    )
+                  }
+                >
+                  {option.label}
+                </Dropdown.Item>
+              )}
+            </For>
+          </Dropdown.Group>
+        </Dropdown.Content>
+      </Dropdown>
+    );
+  }
+
+  function Actions() {
+    const state = () => dialpad.connection()?.state;
+    return (
+      <Switch>
+        <Match when={state() === 'connected'}>
+          <Show
+            when={dialpad.connection()?.issue === 'needs_reauth'}
+            fallback={
+              <ConnectAction
+                label="Disconnect"
+                variant="danger"
+                ariaLabel="Disconnect Dialpad. Imported calls stay, and Macro's access is not revoked in Dialpad."
+                onClick={() =>
+                  fireAndForget(dialpad.disconnect(), 'dialpad-settings')
+                }
+                disabled={dialpad.disconnecting()}
+              />
+            }
+          >
+            <ConnectMenu label="Reconnect" />
+          </Show>
+        </Match>
+        <Match when={state() === 'connecting'}>
+          <ConnectAction label="Connecting" variant="neutral" loading />
+        </Match>
+        <Match when={state() === 'failed'}>
+          <ConnectMenu label="Reconnect" />
+        </Match>
+        <Match when={state() === 'not_connected'}>
+          <ConnectMenu label="Connect" />
+        </Match>
+      </Switch>
+    );
+  }
+
+  return {
+    id: 'dialpad',
+    name: 'Dialpad',
+    kind: 'native',
+    icon: (
+      <PipedreamConnectorIcon
+        appSlug={DIALPAD_APP_SLUG}
+        iconUrl={DIALPAD_ICON_URL}
+        class="size-5"
+      />
+    ),
+    description:
+      'Import Dialpad calls into Calls, with transcripts and summaries, linked to your CRM contacts.',
+    categories: ['Meetings'],
+    get status(): IntegrationStatus {
+      const connection = dialpad.connection();
+      if (connection?.state === 'connected')
+        return connection.issue ? 'attention' : 'connected';
+      if (connection?.state === 'failed') return 'attention';
+      if (connection?.state === 'connecting') return 'disconnected';
+      return 'available';
+    },
+    get statusLabel() {
+      const connection = dialpad.connection();
+      if (!connection) return undefined;
+      if (connection.state === 'connecting') return 'Connecting';
+      return dialpadIssueLabel(connection);
+    },
+    get hidden() {
+      const state = dialpad.connection()?.state;
+      return state === undefined || state === 'unavailable';
     },
     Actions,
   };

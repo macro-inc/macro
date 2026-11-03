@@ -1,6 +1,7 @@
 import type { DateValue } from '@core/util/date';
 import type { ApiLabel } from '@service-email/generated/schemas';
 import type {
+  CallProvider,
   GithubPullRequestCheckRun,
   GithubPullRequestComment,
   SoupCountedReaction,
@@ -361,6 +362,8 @@ export type CallEntity = EntityBase & {
   participantIds: string[];
   guests?: CallGuest[];
   summary?: string;
+  /** Where an imported call came from; absent for a Macro call. */
+  provider?: CallProvider;
   properties?: SoupProperty[];
 };
 

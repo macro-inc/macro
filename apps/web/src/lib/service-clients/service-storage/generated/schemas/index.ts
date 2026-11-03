@@ -1888,6 +1888,7 @@ export * from './soupCallRecordSoupPropertiesFieldAllOfTwoChannelName';
 export * from './soupCallRecordSoupPropertiesFieldAllOfTwoCustomName';
 export * from './soupCallRecordSoupPropertiesFieldAllOfTwoDurationMs';
 export * from './soupCallRecordSoupPropertiesFieldAllOfTwoEndedAt';
+export * from './soupCallRecordSoupPropertiesFieldAllOfTwoProvider';
 export * from './soupCallRecordSoupPropertiesFieldAllOfTwoSummary';
 export * from './soupChannel';
 export * from './soupChannelAllOf';

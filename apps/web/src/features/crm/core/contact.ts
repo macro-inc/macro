@@ -1,3 +1,9 @@
+/** One of a contact's numbers: E.164, and where it came from. */
+export type CrmContactPhone = {
+  phone: string;
+  source: 'manual' | 'csv' | 'dialpad';
+};
+
 /** CRM contact values, independent of the transport schema. */
 export type CrmContact = {
   id: string;

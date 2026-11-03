@@ -13,11 +13,13 @@ inbound = [
   "dep:macro_authorization",
   "dep:model-error-response",
   "dep:rate_limit",
-  "dep:utoipa",
   "entity_access/inbound",
   "item_filters/schema",
   "ports",
+  "schema",
 ]
+# OpenAPI schemas for call types other crates embed (Soup's call items).
+schema = ["dep:utoipa"]
 outbound = [
   "dep:agent",
   "dep:ai_usage",

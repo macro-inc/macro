@@ -1978,6 +1978,7 @@ impl CallRepository for PgCallRepo {
 
         let mut conn = self.pool.acquire().await?;
         guests_by_call.extend(imported::imported_guests(&mut conn, &imported_ids).await?);
+        let mut sources = imported::imported_sources(&mut conn, &imported_ids).await?;
         drop(conn);
 
         let mut records = Vec::with_capacity(rows.len());
@@ -2013,7 +2014,7 @@ impl CallRepository for PgCallRepo {
                 participants,
                 guests,
                 transcript: Vec::new(),
-                source: None,
+                source: sources.remove(&row.call_id),
             });
         }
 

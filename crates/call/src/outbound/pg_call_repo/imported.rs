@@ -60,6 +60,42 @@ pub(super) async fn imported_guests(
     Ok(guests)
 }
 
+/// Where each imported call came from: its most recently synced source.
+pub(super) async fn imported_sources(
+    conn: &mut PgConnection,
+    call_ids: &[Uuid],
+) -> Result<HashMap<Uuid, CallRecordSource>, sqlx::Error> {
+    let mut sources = HashMap::new();
+    if call_ids.is_empty() {
+        return Ok(sources);
+    }
+    for row in sqlx::query!(
+        r#"
+        SELECT DISTINCT ON (call_id) call_id, provider, external_url
+        FROM call_entity_sources
+        WHERE call_id = ANY($1)
+        ORDER BY call_id, synced_at DESC NULLS LAST
+        "#,
+        call_ids,
+    )
+    .fetch_all(conn)
+    .await?
+    {
+        let provider = row
+            .provider
+            .parse::<CallProvider>()
+            .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+        sources.insert(
+            row.call_id,
+            CallRecordSource {
+                provider,
+                external_url: row.external_url,
+            },
+        );
+    }
+    Ok(sources)
+}
+
 /// The people on an imported call, for matching them to CRM records: its
 /// owner, and its participants' emails and phones. `None` when `call_id` is
 /// not an import.

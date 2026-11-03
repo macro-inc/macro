@@ -113,6 +113,12 @@ async fn imported_calls_are_listed_for_their_owner(pool: Pool<Postgres>) -> anyh
     assert_eq!(record.duration_ms, Some(180_000));
     assert_eq!(record.guests.len(), 1);
     assert_eq!(record.guests[0].display_name, "Ada");
+    let source = record.source.as_ref().expect("an import names its source");
+    assert_eq!(source.provider, CallProvider::Granola);
+    assert_eq!(
+        source.external_url.as_deref(),
+        Some("https://notes.granola.ai/d/abc")
+    );
 
     let unattended = repo
         .get_call_records_by_user(

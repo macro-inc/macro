@@ -13458,6 +13458,7 @@ export type SoupCallRecordSoupPropertiesField = {
      * Macro-account participants in the call.
      */
     participants: Array<SoupCallRecordParticipant>;
+    provider?: null | CallProvider;
     /**
      * When the call started.
      */

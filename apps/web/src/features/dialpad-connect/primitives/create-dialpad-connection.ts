@@ -1,0 +1,63 @@
+import { toast } from '@core/component/Toast/Toast';
+import { assignOauthUrl, reserveOauthPopup } from '@core/pipedream/oauth-popup';
+import {
+  useCompleteDialpadMutation,
+  useConnectDialpadMutation,
+  useDialpadConnectionQuery,
+  useDisconnectDialpadMutation,
+} from '@queries/dialpad';
+import type { DialpadBackfill } from '@service-cognition/generated/schemas/dialpadBackfill';
+import { createEffect, onCleanup } from 'solid-js';
+
+/** How often to finish setup while the user approves Dialpad elsewhere. */
+const COMPLETE_EVERY_MS = 4000;
+
+/**
+ * The user's Dialpad call sync. Connecting opens Macro Connect, where the
+ * user approves Dialpad; while that is pending this finishes setup on an
+ * interval, so the row flips to connected without waiting for the backend's
+ * next pass. `connection` is undefined until loaded.
+ */
+export function createDialpadConnection() {
+  const query = useDialpadConnectionQuery();
+  const connectMutation = useConnectDialpadMutation();
+  const completeMutation = useCompleteDialpadMutation();
+  const disconnectMutation = useDisconnectDialpadMutation();
+
+  const connection = () => (query.isSuccess ? query.data : undefined);
+
+  createEffect(() => {
+    if (connection()?.state !== 'connecting') return;
+    const timer = setInterval(() => {
+      if (!completeMutation.isPending) completeMutation.mutate();
+    }, COMPLETE_EVERY_MS);
+    onCleanup(() => clearInterval(timer));
+  });
+
+  /** Call from the click itself, so the Macro Connect tab is not blocked. */
+  const connect = async (backfill: DialpadBackfill) => {
+    const popup = reserveOauthPopup();
+    try {
+      assignOauthUrl(popup, await connectMutation.mutateAsync(backfill));
+    } catch {
+      popup?.close();
+      toast.failure('Failed to connect Dialpad');
+    }
+  };
+
+  const disconnect = async () => {
+    try {
+      await disconnectMutation.mutateAsync();
+    } catch {
+      toast.failure('Failed to disconnect Dialpad');
+    }
+  };
+
+  return {
+    connection,
+    connect,
+    connecting: () => connectMutation.isPending,
+    disconnect,
+    disconnecting: () => disconnectMutation.isPending,
+  };
+}
