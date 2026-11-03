@@ -612,6 +612,14 @@ also usable. An initial cache miss still shows failure; HTTP and GraphQL errors
 remain visible even with cached rows. Change filters while retaining prior rows:
 those older results must not hide a failure for the new, uncached query.
 
+For project labels, warm the Projects list or a project detail, then scroll tasks
+referencing that project out of view and back. With GraphQL caching enabled,
+row remounts must reuse complete cached identities without new
+`InitiativeIdentity` requests; missing identity fields still fetch. Explicit
+permission refreshes remain separate. Hold a cold folder-preview or identity
+request while scrolling on desktop and phone: only the row metadata may show
+loading, and the list must remain mounted at the same scroll position.
+
 ## Reviews view
 
 With `enable-tasks-reviews` enabled (on by default in development),

@@ -314,6 +314,10 @@ key, and projects sort by name with No Project last. Data a grouped list shows
 about its groups (labels, order, membership) is computed on the server and
 mirrored by the cache's local grouping projection; never add a side cache in
 feature code to cover a remount.
+Project identity chips use cache-first reads and the shared `GraphqlUser.initiative`
+entity resolver to reuse complete authorized records from project lists or details.
+Keep cold row metadata reads non-suspending so virtual scrolling never detaches
+its list; permission revalidation remains independent of row mounts.
 
 Resolve server date-group keys through the shared `DATE_GROUP_BUCKETS` metadata
 in `lib/queries/soup/grouped/api.ts` for labels and display order; cached Mail
@@ -821,9 +825,11 @@ raise `min-native-build.json` to the first build with it, or handle
 
 Keep `nix/tauri-desktop.nix` in sync with generated WASM dependencies: desktop
 releases run Vite directly and do not call `just build-tauri` or `build-wasm`.
-Build and copy the agent-fold JavaScript glue and WASM before Vite runs, and
-check that both appear in the output. Without them, Vite leaves the worker's
-relative imports unchanged and Tauri can serve HTML for the missing module.
+A new `build-*-wasm` package under `src/lib/core/` gets an entry in
+`coreWasmPackages`, which builds its JavaScript glue and WASM before Vite runs
+and checks that both appear in the output. Without them, Vite leaves the
+loader's relative imports unchanged and Tauri serves HTML for the missing
+module, so that file type fails to open on desktop.
 
 ## macOS desktop runtime: Chromium (CEF)
 `tauri/desktop-cef` builds the shipped macOS app with Chromium in its own Cargo
@@ -979,7 +985,7 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 
 - Reuse `CreateMenuItem` for explanatory New menu entries: original icons, a title, and muted wrapping descriptions, preserving the existing `ViewCreateButton` trigger and each action's feature gates.
 - Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus. Mobile toasts dismiss by swiping left or right and have no corner close button. Phone prompts stay in their own stack under the modal layer, never on `z-toast-region`, and never hide with a document-wide `:has()` (#8840).
-- Notification sounds are off by default and saved per user per device; map each new notification event in `features/notification-sounds/core/categories.ts` and keep system alerts silent when Macro plays its own sound. See the [notification sounds walkthrough](../../docs/agent-guide/notifications.md#notification-sounds).
+- Notification sounds are off by default and saved per user per device; map each new notification event in `features/notification-sounds/core/categories.ts` and keep system alerts silent when Macro plays its own sound. Quiet hours on the same page silence those sounds and skip desktop alerts on a per-device weekly schedule; incoming calls still ring. See the [notification sounds walkthrough](../../docs/agent-guide/notifications.md#notification-sounds).
 
 ### Inline property values
 

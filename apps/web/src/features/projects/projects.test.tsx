@@ -2,6 +2,7 @@ import { cleanup, render } from '@solidjs/testing-library';
 import { QueryClient } from '@tanstack/solid-query';
 import {
   type Client,
+  cacheExchange,
   createClient,
   type Exchange,
   getOperationName,
@@ -12,8 +13,9 @@ import {
   createSignal,
   type ParentProps,
   Show,
+  Suspense,
 } from 'solid-js';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, expect, it, onTestFinished, vi } from 'vitest';
 import { filter, fromPromise, mergeMap, pipe } from 'wonka';
 
 const mocks = vi.hoisted(() => ({
@@ -127,21 +129,27 @@ function setupGraphql() {
     completedTaskCount: 0,
     sharePermission: { id: 'share', owner: 'viewer', linkShare: 'DISABLED' },
   };
-  mocks.soup.mockImplementation(async (operation) => ({
-    operation,
-    stale: false,
-    hasNext: false,
-    data: {
-      user: {
-        id: 'viewer',
-        ...(['Initiative', 'InitiativeIdentity'].includes(
-          getOperationName(operation.query) ?? ''
-        )
-          ? { initiative }
-          : { soup: { nextCursor: 'next', items: [initiative] } }),
+  mocks.soup.mockImplementation(async (operation) => {
+    const requestedProject =
+      operation.variables?.initiativeId === 'other-project'
+        ? { ...initiative, id: 'other-project', displayName: 'Another project' }
+        : initiative;
+    return {
+      operation,
+      stale: false,
+      hasNext: false,
+      data: {
+        user: {
+          id: 'viewer',
+          ...(['Initiative', 'InitiativeIdentity'].includes(
+            getOperationName(operation.query) ?? ''
+          )
+            ? { initiative: requestedProject }
+            : { soup: { nextCursor: 'next', items: [initiative] } }),
+        },
       },
-    },
-  }));
+    };
+  });
   const exchange: Exchange = () => (operations) =>
     pipe(
       operations,
@@ -152,6 +160,7 @@ function setupGraphql() {
     url: 'http://test.invalid/graphql',
     exchanges: [exchange],
   });
+  return exchange;
 }
 const callsFor = (name: string) =>
   mocks.soup.mock.calls.filter(([op]) => getOperationName(op.query) === name);
@@ -297,6 +306,46 @@ it('reads chip identity without the fields that check every task', async () => {
     expect(selection).not.toContain(field);
 });
 
+it('reuses cached chip identities when virtual rows remount but still fetches misses', async () => {
+  const exchange = setupGraphql();
+  const client = createClient({
+    url: 'http://test.invalid/graphql',
+    exchanges: [cacheExchange, exchange],
+  });
+  const mount = (id: string) =>
+    createRoot((dispose) => {
+      onTestFinished(dispose);
+      return {
+        dispose,
+        query: createProjectIdentityQuery(
+          () => client,
+          () => 'viewer',
+          () => id
+        ),
+      };
+    });
+
+  const first = mount('launch');
+  await vi.waitFor(() => expect(first.query.data?.name).toBe('Launch'));
+  first.dispose();
+  expect(callsFor('InitiativeIdentity')).toHaveLength(1);
+
+  const remounted = mount('launch');
+  expect(remounted.query.data?.name).toBe('Launch');
+  remounted.dispose();
+  expect(callsFor('InitiativeIdentity')).toHaveLength(1);
+
+  const missing = mount('other-project');
+  await vi.waitFor(() =>
+    expect(missing.query.data).toMatchObject({
+      id: 'other-project',
+      name: 'Another project',
+    })
+  );
+  missing.dispose();
+  expect(callsFor('InitiativeIdentity')).toHaveLength(2);
+});
+
 function controlledClient() {
   const requests: {
     operation: Operation;
@@ -346,6 +395,41 @@ function controlledClient() {
     requests,
   };
 }
+
+it('keeps the list mounted while a cold identity read settles', async () => {
+  setupGraphql();
+  const data = (
+    await mocks.soup({
+      query: (
+        await import('@service-storage/graphql/generated/graphql')
+      ).InitiativeIdentityDocument,
+    })
+  ).data;
+  const { client, requests } = controlledClient();
+  function Row() {
+    const query = createProjectIdentityQuery(
+      () => client,
+      () => 'viewer',
+      () => 'launch'
+    );
+    return <span>{query.data?.name ?? 'Loading'}</span>;
+  }
+  const view = render(() => (
+    <Suspense fallback={<span>Suspended</span>}>
+      <div data-testid="scroller">
+        <Row />
+      </div>
+    </Suspense>
+  ));
+  const scroller = view.getByTestId('scroller');
+  scroller.scrollTop = 480;
+  expect(view.queryByText('Suspended')).toBeNull();
+  requests[0].next(data);
+  expect(scroller.textContent).toBe('Launch');
+  expect(view.getByTestId('scroller')).toBe(scroller);
+  expect(scroller.scrollTop).toBe(480);
+  expect(view.queryByText('Suspended')).toBeNull();
+});
 
 it('keeps permission denials latched across cache hits and hides disabled detail identities', async () => {
   setupGraphql();

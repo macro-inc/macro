@@ -857,6 +857,9 @@ export function getGraphqlSoupClient(): Client {
                   'input',
                   'threadId',
                 ]),
+                initiative: entityFromArgument('GraphqlSoupInitiative', [
+                  'initiativeId',
+                ]),
               },
             },
             // Session identity witness: the viewer id present on every soup
