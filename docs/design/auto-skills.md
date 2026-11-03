@@ -1,6 +1,8 @@
 # Automatic skills
 
-Status: proposal. Nothing here is built yet.
+Status: built behind the `auto-skills` flag, as the stack listed under
+Implementation; awaiting review. Where the build departed from the proposal,
+this document says so.
 
 ## Goal
 
@@ -87,8 +89,8 @@ deferred unless noted.
 
 | Skill | Use when … | Moves in from `crates/prompt` (chars) | Tools | SDK |
 | --- | --- | --- | --- | --- |
-| `finding-things` | the user asks to find, look up or list their own Macro content (documents, emails, messages, tasks, people), or asks something their workspace answers; not for the web | code-mode `guides/search.md` (1,427) becomes its body | ContentSearch, NameSearch, ListEntities, ReadContent, ReadMetadata (eager, they stay eager), ReadActivity | search, entity |
-| `documents` | creating, writing into or editing a document, canvas, spreadsheet, Word document or deck; not databases | `document_content_links` (3,339) | CreateDocument, EditDocument (eager); canvas, spreadsheet, Word, PowerPoint, design readers, RenameDocument, CommentOnText, UploadFile, GenerateImage | documents |
+| ~~`finding-things`~~ | dropped: the always-on prompt's search guidance is one cross-cutting line in `about_macro`, and code mode's search guide is SDK how-to that stays a `DescribeCodeTools` topic | | | |
+| ~~`documents`~~ | dropped: `document_content_links` turned out to be an MCP-only restatement of `mentions`, so it leaves the in-app chains outright, and editor guidance already lives in the editor tools' descriptions; the skill would have no body | | | |
 | `databases` | working with a Macro database or table: creating one, querying it, adding rows, columns or views; not CRM pipelines or spreadsheets | `databases` (2,766) | ListDatabases, DescribeDatabase, QueryDatabase, SaveDatabaseQuery, Save/DeleteDatabaseView | databases |
 | `crm` | deals, pipelines, stages, companies or contacts; not generic databases | `crm_pipelines` (749) | the 14 pipeline, company and contact tools | crm |
 | `routines` | something should happen later, on a schedule, or whenever an event occurs ("every Monday", "remind me", "when an email arrives") | new body: the general rules in CreateRoutine's description (agent target, once vs cron, never create a routine per run) | Create/List/Read/Update/Run/DeleteRoutine | routines |
@@ -186,17 +188,15 @@ One source per topic:
 - **Skill descriptions are the routing questions.** For an entity a skill
   covers, the skill's description replaces the `catalog.ts` one-liner as the
   Jev question.
-- **One router.** The router picks skills, and a loaded skill brings its
-  entities' indexes. `select_documentation`'s separate Jev pass goes away
-  once every entity is covered; until then, uncovered entities stay in the
-  catalog and `DescribeCodeTools`.
+- **One router.** On routed turns the router picks skills, and the loaded
+  built-ins' entities are expanded in the SDK section; `select_documentation`
+  runs only on unrouted turns. Entities no skill names stay in the catalog and
+  `DescribeCodeTools`.
 - **No separate "entity guide" in TSDoc for agents.** The skill is the entity
   guide. TSDoc keeps the "how to call" text #9396 added to namespace classes,
   which also serves external SDK users.
-- **Topic guides move into skills.** `DescribeCodeTools` topics that are really
-  area guides become skill bodies; `search` becomes `finding-things`.
-  `DescribeCodeTools({topics: ["search"]})` returns the skill body, so the
-  text exists once.
+- **Topic guides stay topics.** The `search` topic turned out to be SDK
+  how-to, not area guidance, so it stays a `DescribeCodeTools` topic.
 
 ## Loading
 
@@ -246,9 +246,6 @@ skills.
    them: on Anthropic, a deferred tool is only callable once a tool result
    references it, so a preload would need a fake call. The backstop (loading
    one of a skill's tools loads the skill) follows as its own change.
-   `CreateDocument` and `EditDocument` stay eager, so `documents` would have
-   no backstop anyway: if the evaluation shows its recall below 95%,
-   `document_content_links` stays always-on.
 7. **Failure.** On a timeout, a Jev error, or no cognition service, nothing
    loads and the catalog stays. The turn never waits longer than the 1 s
    deadline.
@@ -357,27 +354,35 @@ Domain tests with a fake `Cognition`:
 
 ## Implementation PRs
 
-1. **Metadata.** `SystemSkill` gains `description`, `visibility`, `tools` and
-   `sdk_entities`. User skills get a description (migration, API, SDK, tool,
-   UI).
-2. **Router.** `select_skills` in the `skills` domain, with tests and the
-   span.
-3. **Loading in agent sessions,** behind the `auto-skills` flag: sticky
-   loading, tool loading, the tool backstop, and the catalog.
-4. **Move areas into built-ins**, one area per PR, until `crates/prompt`
-   holds no area guidance (`databases.md`, `crm_pipelines.md`, `email`,
-   `user_tools`, `tasks`, `document_content_links`, `coding_agents`, the polls
-   rules). Each PR reports the prompt size before and after and the
-   evaluation hit rate.
-5. **Skill-driven entity loading.** Loaded skills bring their SDK entity
-   indexes, and `select_documentation` is removed.
-6. **Docs:** `skills.mdx`, the agent guide and the `AGENTS.md` files, in each
-   PR they affect.
+Each layer is stacked on the one before; each reports prompt sizes and the
+evaluation.
+
+| # | PR | What |
+| --- | --- | --- |
+| 1 | #9477 | Built-in skill metadata; agent-only skills stay out of the menu |
+| 2 | #9478 | Jev router, `auto-skills` flag, routed prompt, evaluation |
+| 3 | #9482 | `databases` skill; skills render as prompt sections |
+| 4 | #9483 | `crm` skill |
+| 5 | #9484 | `email` skill (host confirmation rules stay in `user_tools`) |
+| 6 | #9485 | `calendar` skill (booking links) |
+| 7 | #9486 | `document_content_links` leaves in-app prompts; no `documents` skill |
+| 8 | #9487 | `channels` skill (polls) |
+| 9 | #9488 | `tasks` skill |
+| 10 | #9489 | `coding` skill |
+| 11 | #9492 | `routines` skill (new guidance) |
+| 12 | #9495 | SDK references from loaded skills; no `finding-things` skill |
+
+Results with every layer, 21 prompts × 3 runs at the shipped thresholds: the
+exact expected skills load in 52 of 63 runs, 48 of 51 expected loads happen,
+and 2 of the 18 runs of prompts that need no skill load one. Routed prompts
+are about 8k characters shorter than unrouted ones on every host, and
+unrouted prompts about 2.4k shorter than before (chat: 44,985 → 42,544; routed: 34,860).
+
+Not built yet: user skill descriptions (migration, API, SDK, UI), the tool
+backstop, and routing for chat and the channel bot.
 
 ## Open questions
 
-- Whether `finding-things` loads so often that it belongs in the always-on
-  prompt. The traffic sample decides.
 - Whether providers other than Anthropic tolerate tools added mid-session
   without losing their cache. If they don't, those providers get the
   instructions only, and the model loads the tools with `LoadTools`.
