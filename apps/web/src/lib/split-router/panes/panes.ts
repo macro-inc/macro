@@ -26,6 +26,8 @@ import {
   type SplitPath,
   type SplitSide,
   splitPane,
+  tilesFor,
+  withoutPanes,
   withSharesFrom,
 } from './layout-tree';
 import type {
@@ -129,6 +131,16 @@ export function createPanes<E extends PaneEntry, D>(
   });
   // The open panes are this layout's panes, in order; set both together.
   const [layout, setLayout] = createSignal<PaneLayout | undefined>();
+  // Every pane with a history: the open ones plus any a host parked (took
+  // out of `ids` without removing) to show again later.
+  const [retained, setRetained] = createSignal<readonly PaneId[]>([], {
+    equals: sameIds,
+  });
+  // How parked panes tile, one layout per group parked together, so a group
+  // shows again as it was.
+  const [parkedLayouts, setParkedLayouts] = createSignal<readonly PaneLayout[]>(
+    []
+  );
   const [arrivals, setArrivals] = createStore<
     Record<string, PaneArrival | undefined>
   >({});
@@ -141,13 +153,37 @@ export function createPanes<E extends PaneEntry, D>(
     return currentEntry(snapshot);
   };
 
+  /**
+   * Makes `next` the open layout once `changes` ran. Open panes it leaves out
+   * that still have a history are parked, keeping their tiles.
+   */
   const arrange = (next: PaneLayout | undefined, changes: () => void) => {
     batch(() => {
+      const before = untrack(layout);
       changes();
+
+      const open = paneIds(next);
+      const kept = untrack(retained);
+      const parks = (pane: PaneId) =>
+        !open.includes(pane) && kept.includes(pane);
+      const parked = withoutPanes(before, (pane) => !parks(pane));
+      setParkedLayouts((list) => {
+        const rest = list.flatMap(
+          (tiles) => withoutPanes(tiles, (pane) => open.includes(pane)) ?? []
+        );
+
+        return parked ? [...rest, parked] : rest;
+      });
       setLayout(next);
-      setIds(paneIds(next));
+      setIds(open);
     });
   };
+
+  /** The layout holding `pane`: the open one, or the one it was parked in. */
+  const layoutOf = (pane: PaneId): PaneLayout | undefined =>
+    [layout(), ...parkedLayouts()].find((tiles) =>
+      paneIds(tiles).includes(pane)
+    );
 
   /** How the panes landing in a diff tile; in a row when the arrangement doesn't fit them. */
   const landedLayout = (
@@ -171,11 +207,16 @@ export function createPanes<E extends PaneEntry, D>(
   const addPane = (pane: PaneId, entry: E) => {
     store.create(pane, entry);
     setArrivals(pane, 'fresh');
+    setRetained((list) => (list.includes(pane) ? list : [...list, pane]));
   };
 
   const forget = (pane: PaneId) => {
     store.remove(pane);
     setArrivals(pane, undefined);
+    setRetained((list) => list.filter((id) => id !== pane));
+    setParkedLayouts((list) =>
+      list.flatMap((tiles) => removePane(tiles, pane) ?? [])
+    );
     options.onRemove?.(pane);
   };
 
@@ -203,6 +244,8 @@ export function createPanes<E extends PaneEntry, D>(
   return {
     ids,
     layout,
+    layoutOf,
+    retained,
     read: (pane: PaneId) => store.read(pane),
     current,
     arrival: (pane: PaneId): PaneArrival => arrivals[pane] ?? 'fresh',
@@ -248,6 +291,29 @@ export function createPanes<E extends PaneEntry, D>(
     },
 
     /**
+     * Makes `next`, retained panes, the open ones, in the tiles they last
+     * had together (side by side when they never tiled together). Open panes
+     * not in `next` stay retained (parked) with their histories and tiles
+     * until `discard`.
+     */
+    show(next: readonly PaneId[]) {
+      const known = untrack(retained);
+      const missing = next.some((pane) => !known.includes(pane));
+      if (missing) throw new Error('Only retained panes can be shown');
+
+      const together = untrack(() => tilesFor(layoutOf(next[0]!), next));
+      arrange(together ?? rowLayout(next), () => {});
+    },
+
+    /** Forgets a parked pane; open panes are removed through `remove`. */
+    discard(pane: PaneId) {
+      if (untrack(ids).includes(pane)) return;
+      if (!untrack(retained).includes(pane)) return;
+
+      forget(pane);
+    },
+
+    /**
      * Moves `pane` to `to` in the order; the tiles keep their sizes and show
      * the panes in their new order. False when `pane` isn't open or already
      * sits at `to`.
@@ -281,8 +347,10 @@ export function createPanes<E extends PaneEntry, D>(
       incoming: readonly IncomingPane<E>[],
       diffOptions: Omit<DiffOptions<E>, 'createPaneId'>
     ): PanesDiff<E> {
+      const open = untrack(ids);
       const live: LivePanes<E> = {
-        panes: untrack(ids),
+        panes: open,
+        parked: untrack(retained).filter((pane) => !open.includes(pane)),
         read: (pane) => untrack(() => store.read(pane)),
       };
 

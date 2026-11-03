@@ -175,6 +175,8 @@ export type ChannelsRailContext = {
   createSmartTag: () => Promise<void>;
   editSmartTag: (label: ChannelLabel) => Promise<void>;
   canShareSections: Accessor<boolean>;
+  /** Pick eligible channels to add to a manual section. */
+  addChannelsToLabel: (label: ChannelLabel) => Promise<void>;
   renameLabel: (label: ChannelLabel) => Promise<void>;
   /** Delete after the user confirms; applies to the whole team. */
   deleteLabel: (label: ChannelLabel) => Promise<void>;
@@ -199,6 +201,8 @@ export type ChannelsRailContext = {
     section: ChannelSectionKey,
     preferences: ChannelSectionPreferences
   ) => void;
+  sectionOrder: Accessor<readonly ChannelSectionKey[]>;
+  setSectionOrder: (sections: ChannelSectionKey[]) => void;
   registerRootRef: (element: HTMLDivElement) => void;
   activateRow: (rowId: ChannelRailRow['id'], event?: MouseEvent) => void;
   /** Warm a channel row's messages on the press that may open it. */

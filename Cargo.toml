@@ -13,6 +13,7 @@ members = [
   "crates/trigger_context",
   "crates/agent_preview",
   "crates/agent_code_mode",
+  "crates/dynamic_ui",
   "crates/agent_inmem",
   "crates/agent_runtime_protocol", "crates/agent_session", "crates/agent_session_realtime",
   "crates/agent_trigger",
@@ -332,6 +333,7 @@ lru = "0.16"
 md-5 = "0.10.6"
 miniz_oxide = { version = "0.8", features = ["with-alloc"] }
 mockall = "0.13"
+nutype = { version = "0.8.0", features = ["serde", "derive_unchecked"] }
 nom = "8"
 openssl-sys = "0.9"
 opus-pure = "0.2.1"
@@ -396,6 +398,7 @@ serde = { version = "1.0.214", features = ["derive"] }
 serde-wasm-bindgen = "0.6"
 serde_dynamo = { version = "4", features = ["aws-sdk-dynamodb+1"] }
 serde_json = { version = "1.0.132" }
+serde_path_to_error = "0.1.20"
 serde_repr = "0.1"
 serde_with = { version = "3.12.0", features = ["base64"] }
 serde_yaml = "0.9"

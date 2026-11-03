@@ -26,6 +26,7 @@ async fn create_standalone(world: &Shared) -> (FormId, DatabaseId) {
                 name: "Offsite RSVP".into(),
                 source: CreateSource::NewDatabase {
                     is_hidden_in_drive: false,
+                    anonymous: false,
                 },
             },
         )
@@ -131,7 +132,10 @@ async fn which_name_a_new_form_goes_by_is_recorded_from_where_it_was_created() {
                 branding: FormBranding::default(),
                 created_at: start_of_tests(),
                 updated_at: start_of_tests(),
+                project_id: None,
                 is_hidden_in_drive: false,
+                responses_visible: false,
+                anonymous: false,
             },
             trashed_at: None,
             name_follows_database: true,

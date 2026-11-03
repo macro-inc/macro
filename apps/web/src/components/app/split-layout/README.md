@@ -12,6 +12,10 @@ parent and remounts it. Keep it that way: don't nest a `Resize.Zone` per
 split. Gutters reuse `Resize`'s `Gutter` and `moveHandleShares`; sizes live in
 the tree but not in the URL. A split is at least `DEFAULT_SPLIT_MIN_WIDTH` wide
 and, stacked, `DEFAULT_SPLIT_MIN_HEIGHT` tall (`splitContentSizing.ts`).
+With desktop tabs, `SplitLayout` renders one `TiledSplits` per tab layer: the
+live layer tiles as `router.layout()`, and a parked one keeps the tiles its
+panes were parked in (`router.layoutOf`), so a background tab comes back
+stacked as it was. Only the live layer reports its area or resizes.
 
 Open beside a split with `beside: { split, side }` on `openWithSplit` or
 `createNewSplit`; without it a new split is a full-height column at the end.

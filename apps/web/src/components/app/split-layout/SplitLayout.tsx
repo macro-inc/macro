@@ -1,6 +1,7 @@
 import { CreateContextProvider } from '@app/features/command/context/create-context';
 import { useSplitRouter } from '@app/lib/split-router';
 import { setGlobalSplitManager } from '@app/signal/splitLayout';
+import { globalTabManager } from '@app/signal/tabLayout';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { DesktopTabsController } from '@components/app/tab-layout/DesktopTabsController';
 import { useIsAuthenticated, useUserId } from '@core/context/user';
@@ -11,6 +12,8 @@ import {
   createEffect,
   createMemo,
   createSelector,
+  createSignal,
+  For,
   onCleanup,
   type ParentProps,
   Show,
@@ -20,6 +23,7 @@ import {
 import { PopoverSplitRenderer } from './components/PopoverSplitRenderer';
 import { SplitPanel } from './components/SplitPanel';
 import { SplitLayoutContext } from './context';
+import { INITIAL_LAYER_ID, type SplitLayers, sameIds } from './layers';
 import {
   createSplitLayout,
   paneOf,
@@ -32,6 +36,7 @@ import {
   consumeSplitBelowIntent,
   installSplitBelowIntentTracker,
 } from './split-below-intent';
+import type { TileArea } from './split-geometry';
 import {
   resolveContentLocation,
   splitContentFromLocation,
@@ -85,13 +90,32 @@ export function SplitLayout() {
   const splits = createMemo(splitManager.splits);
   const useBentoLayout = () => !isTouchDevice();
 
+  // <For> on plain ids for stable referential equality
+  const ids = createMemo(() => splits().map(({ id }) => id));
+
+  // Desktop tabs render one layer per tab; without them, one live layer.
+  const layers = (): SplitLayers => {
+    const tabLayers = globalTabManager();
+    if (tabLayers) return tabLayers;
+
+    return {
+      layerIds: () => [INITIAL_LAYER_ID],
+      layerSplits: ids,
+      isLive: () => true,
+    };
+  };
+  const layerIds = createMemo(() => layers().layerIds(), undefined, {
+    equals: sameIds,
+  });
+
   // Drop refs for departed splits by reconciling against the live list:
   // batched mutations can remove several splits in one flush (e.g. closing
   // a Preview Pair), and the events signal only surfaces the last event.
+  // Parked splits stay mounted, so they keep their refs.
   createEffect(() => {
-    const alive = new Set(splits().map(({ id }) => id));
+    splits();
     for (const id of panelRefs.keys()) {
-      if (!alive.has(id)) panelRefs.delete(id);
+      if (!splitManager.splitState(id)) panelRefs.delete(id);
     }
   });
 
@@ -101,37 +125,58 @@ export function SplitLayout() {
     setTabTitle(splitManager.tabTitle());
   });
 
-  // Plain ids for stable referential equality
-  const paneIds = createMemo(() => splits().map(({ id }) => paneOf(id)));
-
   createSplitFocusTracker({ splitManager, panelRefs, splits });
 
-  return (
-    <>
-      <Show
-        when={paneStack}
-        fallback={
-          <div
-            class="size-full"
-            classList={{ 'py-1.5 pr-1.5': useBentoLayout() }}
-          >
-            <TiledSplits
-              layout={router.layout}
-              panes={paneIds}
-              gutter={useBentoLayout() ? 6 : 1}
-              showDividers={!useBentoLayout()}
-              onResize={router.resizeLayout}
-              onArea={splitManager.setTileArea}
-            >
-              {(pane, index) => {
-                const id = splitOf(pane);
+  function SplitLayer(props: { layer: string }) {
+    const live = () => layers().isLive(props.layer);
+    const layerPanes = createMemo(
+      () => layers().layerSplits(props.layer).map(paneOf),
+      [],
+      { equals: sameIds }
+    );
+    // The live layer tiles as the open panes do; a parked one as its panes
+    // did when they were parked.
+    const tiles = () => {
+      const [first] = layerPanes();
 
-                return (
-                  <Show when={splitManager.getSplit(id)}>
-                    {(handle) => (
+      return first && router.layoutOf(first);
+    };
+    const [area, setArea] = createSignal<TileArea>();
+    createEffect(() => {
+      const measured = area();
+      if (live() && measured) splitManager.setTileArea(measured);
+    });
+
+    return (
+      // A parked layer keeps its views mounted but skips their rendering,
+      // and inert keeps focus, hotkeys, and assistive tech out of it.
+      <div
+        class="absolute inset-0"
+        classList={{ 'invisible [content-visibility:hidden]': !live() }}
+        inert={!live()}
+        data-split-layer={props.layer}
+      >
+        <TiledSplits
+          layout={tiles}
+          panes={layerPanes}
+          gutter={useBentoLayout() ? 6 : 1}
+          showDividers={!useBentoLayout()}
+          onResize={(path, shares) => {
+            if (live()) router.resizeLayout(path, shares);
+          }}
+          onArea={setArea}
+        >
+          {(pane, index) => {
+            const id = splitOf(pane);
+
+            return (
+              <Show when={splitManager.getSplit(id)}>
+                {(handle) => (
+                  <Show when={splitManager.splitState(id)}>
+                    {(split) => (
                       <Suspense>
                         <SplitPanel
-                          split={splits()[index()]!}
+                          split={split()}
                           handle={handle()}
                           active={activeSplitSelector(id)}
                           setPanelRef={(panelRef) =>
@@ -142,9 +187,29 @@ export function SplitLayout() {
                       </Suspense>
                     )}
                   </Show>
-                );
-              }}
-            </TiledSplits>
+                )}
+              </Show>
+            );
+          }}
+        </TiledSplits>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <Show
+        when={paneStack}
+        fallback={
+          <div
+            class="size-full"
+            classList={{ 'py-1.5 pr-1.5': useBentoLayout() }}
+          >
+            <div class="relative size-full">
+              <For each={layerIds()}>
+                {(layer) => <SplitLayer layer={layer} />}
+              </For>
+            </div>
           </div>
         }
       >

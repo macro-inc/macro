@@ -294,24 +294,44 @@ describe('database page actions', () => {
     })) as HTMLInputElement;
     expect(name.value).toBe('Contacts 2');
   });
-  it('offers link, ID and favorite actions to every grant', async () => {
+  it('offers link, ID, favorite and duplicate actions to every grant', async () => {
     const entityActions = {
       favorited: true,
       onToggleFavorite: vi.fn(),
       onCopyLink: vi.fn(),
       onCopyId: vi.fn(),
+      duplicating: false,
+      onDuplicate: vi.fn(),
     };
     setup('view', undefined, entityActions);
     for (const [item, handler] of [
       ['Copy Link', entityActions.onCopyLink],
       ['Copy ID', entityActions.onCopyId],
       ['Unfavorite', entityActions.onToggleFavorite],
+      ['Duplicate', entityActions.onDuplicate],
     ] as const) {
       await openMenu();
       selectItem(item);
       expect(handler).toHaveBeenCalledOnce();
       await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
     }
+  });
+  it('disables Duplicate while a copy is being made', async () => {
+    const onDuplicate = vi.fn();
+    setup('view', undefined, {
+      favorited: false,
+      onToggleFavorite: vi.fn(),
+      onCopyLink: vi.fn(),
+      onCopyId: vi.fn(),
+      duplicating: true,
+      onDuplicate,
+    });
+    await openMenu();
+    const item = screen.getByRole('menuitem', { name: 'Duplicate' });
+    expect(item.getAttribute('aria-disabled')).toBe('true');
+    item.focus();
+    fireEvent.keyDown(item, { key: 'Enter' });
+    expect(onDuplicate).not.toHaveBeenCalled();
   });
   it('confirms deletion and retains a failed dialog for retry', async () => {
     const remove = vi

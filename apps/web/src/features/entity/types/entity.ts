@@ -1,4 +1,5 @@
 import type { DateValue } from '@core/util/date';
+import type { ArchiveCause } from '@service-agent-harness/generated/schemas';
 import type { ApiLabel } from '@service-email/generated/schemas';
 import type {
   GithubPullRequestCheckRun,
@@ -138,6 +139,7 @@ export type ChannelEntity = EntityBase & {
     createdAt: DateValue;
   }[];
   channelType: 'direct_message' | 'private' | 'public' | 'team';
+  teamId?: string;
   interactedAt?: DateValue | null;
   participantIds?: string[];
   /**
@@ -196,7 +198,9 @@ export type ChatEntity = EntityBase & {
 
 export type AgentSessionEntity = EntityBase & {
   type: 'agent_session';
-  isArchived?: boolean;
+  /** Who archived the session; null while it is not archived. */
+  archivedBy?: ArchiveCause | null;
+  archivedAt?: string | null;
   botId: string;
   harness?: string;
   repoUrl?: string | null;
@@ -441,6 +445,8 @@ export type DatabaseEntity = EntityBase & {
   type: 'database';
   /** What the viewer may do with the database. */
   grant: AccessLevel;
+  /** The folder it is filed in. */
+  projectId?: string;
 };
 
 /** A Macro Form. Like a database, not a Soup entity: `createdAt` is its only timestamp. */
@@ -448,6 +454,8 @@ export type FormEntity = EntityBase & {
   type: 'form';
   /** What the viewer may do: view responds, edit builds and reads responses. */
   access: 'view' | 'edit' | 'owner';
+  /** The folder it is filed in. */
+  projectId?: string;
 };
 
 /** Normalized time shape of a calendar event soup row. */

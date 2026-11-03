@@ -18,7 +18,10 @@ mod cell_triggers;
 mod changes;
 #[cfg(feature = "gateway")]
 mod derived_cells;
+#[cfg(feature = "gateway")]
+mod duplicate;
 mod entity_split;
+mod folders;
 #[cfg(feature = "gateway")]
 mod journal;
 #[cfg(feature = "gateway")]

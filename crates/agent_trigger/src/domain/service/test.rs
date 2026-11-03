@@ -112,7 +112,7 @@ fn session(id: AgentSessionId, bot_id: BotId) -> AgentSession {
         task_id: None,
         id,
         name: agent_session::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
-        is_archived: false,
+        archived: None,
         owner_id: model_owner::Owner::User(
             MacroUserIdStr::try_from_email("owner@example.com").expect("valid macro user id"),
         ),

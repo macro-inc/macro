@@ -205,3 +205,143 @@ describe('stacked panes', () => {
     expect(lastUrl(history)).toBe('/home/~/drive?layout=c2pp');
   });
 });
+
+describe('parked layouts', () => {
+  it('opens a layout in new panes and parks the open ones with their entries', async () => {
+    const { router, history } = track(setup('/home/~/drive'));
+    const home = router.entry('pane-1' as PaneId);
+
+    const result = await router.openLayout(router.layoutFromHref('/mail/t1'));
+    expect(result.status).toBe('committed');
+    expect(router.panes()).toEqual(['pane-3']);
+    expect(router.retainedPanes()).toEqual(['pane-1', 'pane-2', 'pane-3']);
+    expect(routeIds(router.entry('pane-3' as PaneId))).toEqual([
+      'mail',
+      'mail-thread',
+    ]);
+    // Parked panes keep their entries, so their views can stay mounted.
+    expect(router.entry('pane-1' as PaneId)).toBe(home);
+    expect(history.entries().at(-1)?.path).toBe('/mail/t1');
+  });
+
+  it('shows parked panes again as they were, without leave guards', async () => {
+    const { router, history } = track(setup('/home/~/drive'));
+    const home = router.entry('pane-1' as PaneId);
+    await router.openLayout(router.layoutFromHref('/mail'));
+    const stop = router.registerGuard(
+      'pane-3' as PaneId,
+      PANE_LEVEL,
+      () => false
+    );
+
+    const result = await router.showLayout(['pane-1', 'pane-2'] as PaneId[]);
+    expect(result.status).toBe('committed');
+    expect(router.panes()).toEqual(['pane-1', 'pane-2']);
+    expect(router.entry('pane-1' as PaneId)).toBe(home);
+    expect(router.retainedPanes()).toContain('pane-3');
+    expect(history.entries().at(-1)?.path).toBe('/home/~/drive');
+    stop();
+  });
+
+  it('closing the open panes while showing parked ones asks their guards', async () => {
+    const { router } = track(setup('/home'));
+    await router.openLayout(router.layoutFromHref('/mail'));
+    const stop = router.registerGuard(
+      'pane-2' as PaneId,
+      PANE_LEVEL,
+      () => false
+    );
+
+    const refused = await router.showLayout(['pane-1'] as PaneId[], {
+      closeOpen: true,
+    });
+    expect(refused.status).toBe('cancelled');
+    expect(router.panes()).toEqual(['pane-2']);
+    stop();
+
+    const closed = await router.showLayout(['pane-1'] as PaneId[], {
+      closeOpen: true,
+    });
+    expect(closed.status).toBe('committed');
+    expect(router.panes()).toEqual(['pane-1']);
+    expect(router.retainedPanes()).toEqual(['pane-1']);
+  });
+
+  it('discards parked panes but never open ones', async () => {
+    const { router } = track(setup('/home'));
+    await router.openLayout(router.layoutFromHref('/mail'));
+
+    router.discardPanes(['pane-1', 'pane-2'] as PaneId[]);
+    expect(router.panes()).toEqual(['pane-2']);
+    expect(router.retainedPanes()).toEqual(['pane-2']);
+    expect(router.entry('pane-1' as PaneId)).toBeUndefined();
+  });
+
+  it('refuses to show panes that are not retained or to reopen retained ids', async () => {
+    const { router } = track(setup('/home'));
+    const shown = await router.showLayout(['missing' as PaneId]);
+    expect(shown.status).toBe('cancelled');
+
+    const reopened = await router.openLayout(router.layoutSnapshot());
+    expect(reopened.status).toBe('cancelled');
+  });
+
+  it('a URL navigation never reuses a parked pane id', async () => {
+    const { router } = track(setup('/home'));
+    await router.openLayout(router.layoutFromHref('/mail'));
+    const home = router.entry('pane-1' as PaneId);
+
+    await router.navigate('/drive/~/calls');
+    expect(router.panes()).not.toContain('pane-1');
+    expect(router.entry('pane-1' as PaneId)).toBe(home);
+  });
+
+  it('parks stacked panes in their tiles and shows them again in them', async () => {
+    const { router, history } = track(setup('/home/~/drive?layout=c2pp'));
+    router.resizeLayout([], [0.7, 0.3]);
+
+    await router.openLayout(router.layoutFromHref('/mail'));
+    expect(router.layout()).toEqual({ type: 'pane', pane: 'pane-3' });
+    expect(router.layoutOf('pane-1' as PaneId)).toMatchObject({
+      axis: 'column',
+      shares: [0.7, 0.3],
+    });
+
+    await router.showLayout(['pane-1', 'pane-2'] as PaneId[]);
+    expect(router.layout()).toMatchObject({
+      axis: 'column',
+      shares: [0.7, 0.3],
+    });
+    expect(router.layoutOf('pane-3' as PaneId)).toEqual({
+      type: 'pane',
+      pane: 'pane-3',
+    });
+    expect(history.entries().at(-1)?.search).toBe('?layout=c2pp');
+  });
+
+  it('captures and links parked panes with their tiles', async () => {
+    const { router } = track(setup('/home/~/drive?layout=c2pp'));
+    await router.openLayout(router.layoutFromHref('/mail'));
+
+    const parked = router.layoutSnapshot(['pane-1', 'pane-2'] as PaneId[]);
+    expect(parked.layout).toMatchObject({ axis: 'column' });
+    expect(router.layoutHref(parked)).toBe('/home/~/drive?layout=c2pp');
+
+    const linked = router.layoutFromHref('/home/~/drive?layout=c2pp');
+    expect(layoutShape(linked.layout!)).toEqual({
+      axis: 'column',
+      children: ['pane', 'pane'],
+    });
+  });
+
+  it('a discarded parked pane leaves its tiles', async () => {
+    const { router } = track(setup('/home/~/drive?layout=c2pp'));
+    await router.openLayout(router.layoutFromHref('/mail'));
+
+    router.discardPanes(['pane-1'] as PaneId[]);
+    expect(router.layoutOf('pane-2' as PaneId)).toEqual({
+      type: 'pane',
+      pane: 'pane-2',
+    });
+  });
+});

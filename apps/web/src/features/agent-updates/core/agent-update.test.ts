@@ -24,7 +24,7 @@ describe('agent updates selection', () => {
       [
         mine,
         { ...mine, id: 'other', ownerId: 'someone' },
-        { ...mine, id: 'archived', isArchived: true },
+        { ...mine, id: 'archived', archivedBy: 'user' },
         { ...mine, id: 'chat', harness: 'in-memory' },
         { ...mine, id: 'running', turnState: 'running' },
       ],

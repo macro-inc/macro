@@ -1,8 +1,19 @@
 import { batch, untrack } from 'solid-js';
-import { type ChangedPane, changedPanes } from '../panes/diff';
-import { layoutShape, type PaneLayout, rowLayout } from '../panes/layout-tree';
+import { type ChangedPane, changedPanes, type PanesDiff } from '../panes/diff';
+import {
+  fillShape,
+  layoutShape,
+  type PaneLayout,
+  rowLayout,
+  tilesFor,
+} from '../panes/layout-tree';
 import type { PaneId } from '../panes/types';
-import { encodePanes, formatLocation } from '../routes/codec';
+import {
+  decodePanes,
+  encodePanes,
+  formatLocation,
+  parseLocation,
+} from '../routes/codec';
 import type { SplitRoutesManifest } from '../routes/manifest';
 import type { Entry } from '../routes/types';
 import type { MaybePromise } from '../utils';
@@ -35,6 +46,11 @@ export type RestoreLayoutOptions = {
   replace?: boolean;
 };
 
+export type ShowLayoutOptions = {
+  /** Remove the open panes, through their leave guards, instead of parking them. */
+  closeOpen?: boolean;
+};
+
 const shownEntry = (pane: LayoutPane): Entry => pane.entries[pane.index]!;
 
 function toTarget(change: ChangedPane<Entry>): PaneTarget {
@@ -49,6 +65,10 @@ function toTarget(change: ChangedPane<Entry>): PaneTarget {
  * Capturing the open panes as plain data and bringing a capture back, so a
  * host can keep several layouts (such as window tabs) and swap between them
  * without losing any pane's back/forward history.
+ *
+ * A host can also park layouts: `openLayout` and `showLayout` take the open
+ * panes out of the URL without removing them, so their views can stay mounted
+ * (hidden) and come back with `showLayout` without remounting.
  */
 export function createLayout(options: {
   routes: SplitRoutesManifest;
@@ -58,15 +78,24 @@ export function createLayout(options: {
 }) {
   const { routes, panes, url, runner } = options;
 
-  /** The open panes with their histories; entries are shared, not copied. */
-  const snapshot = (): LayoutSnapshot => {
-    const captured = untrack(panes.ids).flatMap((pane) => {
+  /**
+   * The open (or the given retained) panes with their histories and tiles;
+   * entries are shared, not copied.
+   */
+  const snapshot = (only?: readonly PaneId[]): LayoutSnapshot => {
+    const captured = (only ?? untrack(panes.ids)).flatMap((pane) => {
       const stored = untrack(() => panes.read(pane));
       if (!stored) return [];
 
       return [{ pane, entries: stored.entries, index: stored.index }];
     });
-    const layout = untrack(panes.layout);
+    const [first] = captured;
+    if (!first) return { panes: captured };
+
+    const layout = tilesFor(
+      untrack(() => panes.layoutOf(first.pane)),
+      captured.map(({ pane }) => pane)
+    );
 
     return layout ? { panes: captured, layout } : { panes: captured };
   };
@@ -92,6 +121,18 @@ export function createLayout(options: {
     }));
     const diff = panes.diff(incoming, { same: sameVisit });
 
+    return runner.startUrl(
+      applyLayout(layout, diff, restoreOptions.replace ? 'replace' : 'push'),
+      false
+    );
+  };
+
+  /** A navigation applying `diff` and putting each captured history back. */
+  const applyLayout = (
+    layout: LayoutSnapshot,
+    diff: PanesDiff<Entry>,
+    mode: 'push' | 'replace'
+  ): Navigation => {
     const apply = (entries: readonly Entry[]): NavigationResult => {
       const tiles = tilesOf(layout);
 
@@ -114,21 +155,106 @@ export function createLayout(options: {
           });
         });
       });
-      url.write(restoreOptions.replace ? 'replace' : 'push');
+      url.write(mode);
 
       const [first] = diff.panes;
 
       return { status: 'committed', pane: first!.pane };
     };
 
-    const navigation: Navigation = {
+    return {
       cause: 'navigate',
       targets: changedPanes(diff).map(toTarget),
       removed: diff.removed,
       apply,
     };
+  };
+
+  /**
+   * Shows a captured layout in new panes, with the ids it names, and parks
+   * the open panes instead of removing them: nothing leaves, so no leave
+   * guard runs (with `closeOpen`, they are removed through their guards).
+   * The layout's pane ids must not be retained already.
+   */
+  const open = (
+    layout: LayoutSnapshot,
+    openOptions: ShowLayoutOptions = {}
+  ): MaybePromise<NavigationResult> => {
+    const retained = untrack(panes.retained);
+    const reused = layout.panes.some((pane) => retained.includes(pane.pane));
+    if (layout.panes.length === 0 || reused) return CANCELLED_RESULT;
+
+    const diff: PanesDiff<Entry> = {
+      panes: layout.panes.map((pane) => ({
+        kind: 'create',
+        pane: pane.pane,
+        entry: shownEntry(pane),
+      })),
+      removed: openOptions.closeOpen ? untrack(panes.ids) : [],
+    };
+
+    return runner.startUrl(applyLayout(layout, diff, 'replace'), false);
+  };
+
+  /**
+   * Makes retained (parked) panes the open ones, as they were: nothing
+   * remounts. The open panes are parked, or removed through their leave
+   * guards with `closeOpen`.
+   */
+  const show = (
+    next: readonly PaneId[],
+    showOptions: ShowLayoutOptions = {}
+  ): MaybePromise<NavigationResult> => {
+    const retained = untrack(panes.retained);
+    const missing = next.some((pane) => !retained.includes(pane));
+    if (next.length === 0 || missing) return CANCELLED_RESULT;
+
+    const open = untrack(panes.ids);
+    const removed = showOptions.closeOpen
+      ? open.filter((pane) => !next.includes(pane))
+      : [];
+
+    const navigation: Navigation = {
+      cause: 'navigate',
+      targets: [],
+      removed,
+      apply: () => {
+        batch(() => {
+          panes.show(next);
+          for (const pane of removed) panes.discard(pane);
+        });
+        url.write('replace');
+
+        return { status: 'committed', pane: next[0]! };
+      },
+    };
 
     return runner.startUrl(navigation, false);
+  };
+
+  /** Forgets parked panes and their histories; open panes are left alone. */
+  const discard = (parked: readonly PaneId[]): void => {
+    batch(() => {
+      for (const pane of parked) panes.discard(pane);
+    });
+  };
+
+  /** The layout a mount-relative URL shows, in new panes, for `open`. */
+  const fromHref = (href: string): LayoutSnapshot => {
+    const decoded = decodePanes(routes, parseLocation(href));
+    const captured = decoded.panes.map(({ entry }) => ({
+      pane: panes.createPaneId(),
+      entries: [entry],
+      index: 0,
+    }));
+    const layout =
+      decoded.shape &&
+      fillShape(
+        decoded.shape,
+        captured.map(({ pane }) => pane)
+      );
+
+    return layout ? { panes: captured, layout } : { panes: captured };
   };
 
   /** The mount-relative URL a captured layout shows, for saving or sharing. */
@@ -146,5 +272,5 @@ export function createLayout(options: {
     return formatLocation(encoded);
   };
 
-  return { snapshot, restore, href };
+  return { snapshot, restore, open, show, discard, fromHref, href };
 }

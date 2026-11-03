@@ -21,6 +21,7 @@ pub mod email;
 pub mod math;
 pub mod mcp_item_links;
 pub mod mentions;
+pub mod privacy;
 pub mod pull_requests;
 pub mod skills;
 pub mod tasks;
@@ -238,6 +239,20 @@ mod tests {
     }
 
     #[test]
+    fn session_prompts_present_views_unasked_and_leave_what_they_show_unmentioned() {
+        for prompt in [
+            SESSION_TOOL_USE_PROMPT.to_string(),
+            CODE_MODE_SESSION_TOOL_USE_PROMPT.to_string(),
+        ] {
+            assert!(prompt.contains("the user will not ask"));
+            assert!(prompt.contains("presenting them with `execution.views.present`"));
+            // The mention rule says IMPORTANT twice; a view's items are its
+            // one exception, or the agent names them again under the view.
+            assert!(prompt.contains("view opens it, so do not mention it again in your reply"));
+        }
+    }
+
+    #[test]
     fn session_tool_use_prompt_routes_thread_prompts_to_prose_and_the_confirmed_send() {
         // A prompt read out of a channel or document thread has no review
         // card anyone is watching: the model asks in the thread, then sends
@@ -311,6 +326,29 @@ mod tests {
         assert!(in_app.contains(
             r#"<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"md","blockParams":{}}</m-document-mention>"#
         ));
+    }
+
+    #[test]
+    fn every_in_app_agent_prompt_posts_a_channel_form_as_one_live_poll_card() {
+        for prompt in [
+            &DIRECT_TOOL_USE_PROMPT,
+            &TOOL_USE_PROMPT,
+            &SESSION_TOOL_USE_PROMPT,
+            &CODE_MODE_SESSION_TOOL_USE_PROMPT,
+        ] {
+            let text = prompt.to_string();
+            for guidance in [
+                "A form for a channel is a poll:",
+                "one required single- or multi-select question",
+                "`tallyVisible: true`",
+                "`widget: \"choice\"`",
+                "`channelGrants: []`",
+                r#"<m-document-card>{"documentId":"{form_id}","documentName":"{question}","blockName":"form","previewData":{"poll":{"optionCount":2}}}</m-document-card>"#,
+                "or a second copy.",
+            ] {
+                assert!(text.contains(guidance), "missing poll guidance: {guidance}");
+            }
+        }
     }
 
     #[test]
@@ -407,4 +445,13 @@ mod tests {
         assert!(in_app.contains("non-Markdown documents"));
         assert!(in_app.contains("apply to your own conversational replies only"));
     }
+}
+
+/// Compose runtime sections in their supplied order without retaining their data.
+pub fn compose(sections: &[&dyn std::fmt::Display]) -> String {
+    sections
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("\n")
 }

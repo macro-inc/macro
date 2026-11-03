@@ -194,6 +194,36 @@ export function removePane(
   return replacePane(layout, pane, () => undefined);
 }
 
+/** `layout` without the panes `drop` picks, collapsing splits as `removePane` does. */
+export function withoutPanes(
+  layout: PaneLayout | undefined,
+  drop: (pane: PaneId) => boolean
+): PaneLayout | undefined {
+  return paneIds(layout)
+    .filter(drop)
+    .reduce<PaneLayout | undefined>(
+      (tiles, pane) => removePane(tiles, pane),
+      layout
+    );
+}
+
+/**
+ * How `panes` tile within `layout` once its other panes are gone; undefined
+ * unless `layout` holds every one of them, in this order.
+ */
+export function tilesFor(
+  layout: PaneLayout | undefined,
+  panes: readonly PaneId[]
+): PaneLayout | undefined {
+  const tiles = withoutPanes(layout, (pane) => !panes.includes(pane));
+  const order = paneIds(tiles);
+  const inOrder =
+    order.length === panes.length &&
+    order.every((pane, index) => pane === panes[index]);
+
+  return inOrder ? tiles : undefined;
+}
+
 /** The same tiles and sizes showing `panes`, in order, instead. */
 export function reorderPanes(
   layout: PaneLayout | undefined,

@@ -32,6 +32,7 @@ export type {
   LayoutPane,
   LayoutSnapshot,
   RestoreLayoutOptions,
+  ShowLayoutOptions,
 } from './router/layout';
 export { PANE_LEVEL } from './router/leave-guards';
 export type {
