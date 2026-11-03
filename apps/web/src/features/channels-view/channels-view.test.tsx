@@ -51,10 +51,10 @@ vi.mock('@channel/queries/prefetch-channel-target', () => ({
 vi.mock('@channel/ChannelAccessDenied', () => ({
   ChannelAccessDenied: (props: {
     channelId: string;
-    onAccessGranted: () => void;
+    onRefreshChannel: () => void;
   }) => (
     <div data-testid="channel-access-denied" data-channel-id={props.channelId}>
-      <button type="button" onClick={props.onAccessGranted}>
+      <button type="button" onClick={props.onRefreshChannel}>
         Complete approval
       </button>
     </div>
@@ -568,6 +568,19 @@ describe('channel selection loading and recovery', () => {
     expect(mocks.markRead).toHaveBeenCalledOnce();
   });
 
+  it('keeps an empty channel lookup on the same denied route during refresh', () => {
+    setRows([]);
+    setQuery({ error: null, data: { entities: [] } });
+    render(() => <ChannelsView />);
+    const denied = screen.getByTestId('channel-access-denied');
+
+    setQuery('isFetching', true);
+    expect(screen.getByTestId('channel-access-denied')).toBe(denied);
+    setQuery('isFetching', false);
+    expect(screen.getByTestId('channel-access-denied')).toBe(denied);
+    expect(mocks.markRead).not.toHaveBeenCalled();
+  });
+
   it('keeps an uncached channel unavailable after a transient failure', () => {
     setRows([]);
     setQuery({ error: new Error('Offline'), data: undefined });
@@ -619,7 +632,7 @@ describe('channel selection loading and recovery', () => {
 
   it('refreshes a previously listed channel after access approval', async () => {
     render(() => <ChannelsView />);
-    expect(screen.getByTestId('channel-access-denied')).toBeTruthy();
+    const denied = screen.getByTestId('channel-access-denied');
     expect(screen.queryByText('Loading conversation')).toBeNull();
     await fireEvent.click(
       screen.getByRole('button', { name: 'Complete approval' })
@@ -628,7 +641,8 @@ describe('channel selection loading and recovery', () => {
     expect(mocks.markRead).not.toHaveBeenCalled();
 
     setQuery('isFetching', true);
-    expect(screen.getByTestId('channel-detail').textContent).toBe('one');
+    expect(screen.getByTestId('channel-access-denied')).toBe(denied);
+    expect(screen.queryByTestId('channel-detail')).toBeNull();
     batch(() => {
       setQuery('data', { entities: [full('one', ['new'])] });
       setQuery('isFetching', false);

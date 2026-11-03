@@ -870,6 +870,13 @@ requester's channel list. The Chat workspace must offer **Ask to join** there
 and open the conversation after approval. A transient loading failure still
 offers **Retry** rather than an access request.
 
+Returning to a denied channel waits for that screen's fresh request read, even
+when an earlier request is cached or the read is paused offline. A missing
+channel shows **Conversation unavailable** with **Retry**, without cached request
+controls. Other request-read failures show an inline error and **Retry**. Retry
+and background metadata refreshes keep the current unavailable or denied screen
+in place until the result arrives.
+
 ## Chat navigation rail
 
 Following a channel mention or browser notification for the conversation already

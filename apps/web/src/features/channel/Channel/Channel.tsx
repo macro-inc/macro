@@ -757,7 +757,7 @@ export function Channel(props: ChannelProps) {
         unauthorized={
           <ChannelAccessDenied
             channelId={props.channelId}
-            onAccessGranted={() =>
+            onRefreshChannel={() =>
               fireAndForget(messagesQuery.refetch(), 'channel')
             }
           />
