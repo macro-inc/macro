@@ -16,3 +16,6 @@ provider ([linked devices](architecture/whatsapp-linked-devices.md)) and the
 [External view walkthrough](agent-guide/external.md).
 
 Document sync: [DSS sync router](architecture/sync-router.md).
+
+Bots: [building a bot](guides/bots.md) (set one up in the app, then search and
+post from the TypeScript SDK).
