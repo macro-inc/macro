@@ -164,6 +164,7 @@ const message = (
   stop: FoldedMessage['stop'] = { kind: 'end_turn' }
 ): FoldedMessage => ({
   agentSessionId: 'session',
+  key: '0:agent',
   requestId: null,
   pending: false,
   postedAt: null,

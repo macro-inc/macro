@@ -920,10 +920,12 @@ persisted `turnState` is `failed`; open the session to inspect its error.
 
 ### Agent transcript projection
 
-Keep folded messages ordered by turn and author in the transcript store: append
-at the new index, reconcile matching rows in place, binary-search earlier
-updates, and splice only for real insertion/removal. Never `produce` the whole
-array per append; it makes initial projection quadratic. Check with the
+Key transcript rows by the fold's `FoldedMessage.key` (`<turn>:<author kind>`);
+never rebuild it from `turn` and `author`. Apply a load or rebase as one keyed
+`reconcile(messages, { key: 'key' })`, without `merge`. A streamed message
+reconciles the tail row in place or writes the next index; only an out-of-order
+one takes the keyed path. Never `produce` the whole array per append; it makes
+initial projection quadratic. Check with the
 [session-open runner](src/features/block-agent/browser-test/README.md).
 
 ### Agent system events
