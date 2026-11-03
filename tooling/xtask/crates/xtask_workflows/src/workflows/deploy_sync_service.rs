@@ -80,6 +80,7 @@ fn deploy() -> Job {
         .add_step(check_secrets())
         .add_step(apply_d1_migrations())
         .add_step(deploy_step())
+        .add_step(wait_for_active_objects())
 }
 
 /// [`steps::setup_rust_light`] installs the channel explicitly, which skips
@@ -132,4 +133,11 @@ fn deploy_step() -> Step<Run> {
         .working_directory(xtask_paths::repo_dir!("services/sync-service"))
         .add_env(("CLOUDFLARE_API_TOKEN", vars::CLOUDFLARE_API_TOKEN))
         .add_env(("CLOUDFLARE_ACCOUNT_ID", vars::CLOUDFLARE_ACCOUNT_ID))
+}
+
+/// Active Durable Objects can defer code adoption for 300 seconds by default.
+/// Keep dependent clients behind that window without forcing sessions to reset
+/// early. Keep this delay aligned with any future `code_update_strategy` change.
+fn wait_for_active_objects() -> Step<Run> {
+    Step::new("Wait for active Durable Objects to update").run("sleep 300")
 }

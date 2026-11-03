@@ -52,7 +52,11 @@ write. `PeerCommentUpdate` requires comment-only validation even on an editor's
 connection, so a staged annotation cannot alter document text. Deploy support
 for this message before deploying clients that send it; the dev push and
 production release workflows enforce this order while building the web app in
-parallel. Manual deployments must preserve the same order. Older workers refuse
+parallel. The worker deployment job waits 300 seconds after deployment for
+[active Durable Objects to adopt the new code](https://developers.cloudflare.com/durable-objects/deployments/durable-objects-code-updates/).
+Manual deployments must preserve the same order and wait at least five minutes
+before publishing clients. Keep the workflow wait aligned with any future
+`code_update_strategy` change. Older workers refuse
 the unknown variant without acknowledging or applying it. The HTTP API schema
 is generated with `just openapi`; WebSocket messages
 continue to use the Bebop schema. Regenerate the HTTP types from

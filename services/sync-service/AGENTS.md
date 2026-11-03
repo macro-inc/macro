@@ -91,6 +91,7 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
 - Provision `LEXICAL_SERVICE_AUTH_KEY` to match lexical-service before deploying; `just check-secrets <environment>` checks binding presence without reading values.
 - Deploy `PeerCommentUpdate` support before clients send it; validate these frames as comment-only for editors as well as commenters, and reject viewers.
 - Never run `just deploy-dev` / `just deploy-prod` without explicit approval.
+- Wait at least five minutes after a manual worker deployment before publishing clients that require its new protocol; the CI worker job waits out Durable Objects' default 300-second code-update deferral.
 
 ## Related
 

@@ -73,5 +73,7 @@ jobs:
         CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       working-directory: services/sync-service
+    - name: Wait for active Durable Objects to update
+      run: sleep 300
 concurrency:
   group: deploy-sync-service-${{ inputs.environment || 'dev' }}
