@@ -121,7 +121,21 @@ export class DocumentNamespace {
     return Document.createSnippet(this.client, opts);
   }
 
-  /** Create a skill: markdown instructions that AI reads and follows. */
+  /**
+   * Create a skill: markdown instructions that AI reads and follows.
+   *
+   * A skill is a markdown document, so read one with `content()`, by the id of
+   * a skill mention or of a search result:
+   *
+   * ```js
+   * const skill = macro.documents.byId(skillId);
+   * const instructions = await skill.content();
+   * ```
+   *
+   * Read a skill the request names before doing the task, and follow it for
+   * that request only. `systemSkills()` lists the built-in skills, whose
+   * instructions have no document; read those with the ReadSkill tool.
+   */
   createSkill(opts: {
     name: string;
     markdown?: string;
@@ -132,7 +146,8 @@ export class DocumentNamespace {
 
   /**
    * The built-in system skills: static AI instructions with no document
-   * behind them. Unlike user skills they cannot be opened or edited.
+   * behind them. Unlike user skills they cannot be opened or edited, and
+   * their instructions are read with the ReadSkill tool, not `content()`.
    */
   systemSkills(): Promise<SystemSkill[]> {
     return SystemSkill.list(this.client);
