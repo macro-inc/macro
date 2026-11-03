@@ -294,7 +294,13 @@ where
                     data,
                 )
                 .await
-                .map_err(failed)?;
+                .map_err(|error| match error {
+                    // Its message is already a string, so no SQLSTATE survives.
+                    crate::util::upload_attachment::UploadAttachmentError::DatabaseError(_) => {
+                        database_failed(&error, None)
+                    }
+                    error => failed(error),
+                })?;
                 Ok::<_, MailboxError>(())
             }
             .await;
