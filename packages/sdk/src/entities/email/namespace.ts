@@ -174,7 +174,12 @@ export class EmailNamespace {
     return EmailMessage.send(this.client, opts);
   }
 
-  /** Search email threads by subject and content. */
+  /**
+   * Search email threads by subject and content. To find a person's emails,
+   * search for their quoted email address, not their name: a name only
+   * matches where that display name appears. Resolve the address first, for
+   * example with `macro.users.search(name)`.
+   */
   search(query: string, opts?: SearchOpts): AsyncGenerator<EmailThread> {
     return EmailThread.search(this.client, query, opts);
   }

@@ -53,6 +53,8 @@ Exact `blockName`s, since any other value renders a broken or deleted chip:
 - An email thread is `email`, never `thread` or `email_thread`. A calendar event is `calendar`, never `calendar_event`, with the `eventId` as `documentId`; add a recurring event's `recurrenceId` as `occurrenceKey` to target one occurrence. Channel members without the event see a read-only preview. Private and confidential events are never shared.
 - When a tool returns a channel message id, mention that message, not just its channel.
 
+Mention the relevant items your tools found. Skip items a view you presented with `execution.views.present` already shows: the view already opens them.
+
 ### Polls in channels
 
 A form for a channel is a poll: one required single- or multi-select question (`widget: "choice"`, or `"checkboxes"` for several answers), `status: "open"`, `tallyVisible: true` unless asked to hide results, and `channelGrants: []`. Post it as one message with its live card on its own line:
