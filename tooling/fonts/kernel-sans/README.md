@@ -1,10 +1,12 @@
 # Kernel Sans
 
-A neo-grotesque sans close to Inter and SF Pro, with a technical edge:
+A neo-grotesque sans close to SF Pro and Inter, subtly different:
 
-- **Squircle curves.** Round letters are superellipses, squarer than SF Pro.
-- **45° chamfers** on free stem ends; curve terminals are cut clean.
-- **Square dots** with two opposing chamfers on i, j and punctuation.
+- **Squircle curves.** Round letters are superellipses, a shade squarer than
+  SF Pro.
+- **Square-cut ends.** Stems end flat and hooks end in vertical cuts; no
+  bevels or chamfers.
+- **Rounded dots** on i, j and punctuation.
 
 Open `specimen/index.html` in a browser for a live specimen: weight slider, a
 playground to type in (size, weight, spacing, features), the full glyph set and

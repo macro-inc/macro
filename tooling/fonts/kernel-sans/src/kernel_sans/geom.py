@@ -148,34 +148,12 @@ def poly(points):
     return Shape(p)
 
 
-def rect(x0, y0, x1, y1, nw=0, ne=0, se=0, sw=0):
-    """Axis-aligned rectangle; nw/ne/se/sw chamfer that corner by a 45° cut
-    with the given leg length."""
+def rect(x0, y0, x1, y1):
+    """Axis-aligned rectangle."""
     x0, x1 = min(x0, x1), max(x0, x1)
     y0, y1 = min(y0, y1), max(y0, y1)
-    pts = []
-    # Walk counter-clockwise from the bottom-left corner.
-    pts += [(x0, y0 + sw), (x0 + sw, y0)] if sw else [(x0, y0)]
-    pts += [(x1 - se, y0), (x1, y0 + se)] if se else [(x1, y0)]
-    pts += [(x1, y1 - ne), (x1 - ne, y1)] if ne else [(x1, y1)]
-    pts += [(x0 + nw, y1), (x0, y1 - nw)] if nw else [(x0, y1)]
-    return poly(_dedupe(pts))
-
-
-def _dedupe(pts):
-    out = []
-    for pt in pts:
-        if not out or (
-            abs(out[-1][0] - pt[0]) > 1e-6 or abs(out[-1][1] - pt[1]) > 1e-6
-        ):
-            out.append(pt)
-    if (
-        len(out) > 1
-        and abs(out[0][0] - out[-1][0]) < 1e-6
-        and abs(out[0][1] - out[-1][1]) < 1e-6
-    ):
-        out.pop()
-    return out
+    # Counter-clockwise from the bottom-left corner.
+    return poly([(x0, y0), (x1, y0), (x1, y1), (x0, y1)])
 
 
 def superness(n):
@@ -225,7 +203,7 @@ def squircle_point(x0, y0, x1, y1, n, deg):
 
 
 def box(x0, y0, x1, y1):
-    """Plain rectangle without chamfers (alias for clipping regions)."""
+    """Plain rectangle (alias for clipping regions)."""
     return rect(x0, y0, x1, y1)
 
 
@@ -319,30 +297,16 @@ def hwidth(w, dx, dy):
 
 
 # ---------------------------------------------------------------------------
-# Cyber details
+# Dots
 
 
-def chamfer(x, y, leg, corner):
-    """Region to SUBTRACT to clip a convex corner at (x, y) with a 45° cut.
-
-    corner is "nw", "ne", "se" or "sw": the direction the corner points.
-    The cut removes a right isosceles triangle with legs `leg` along the x
-    and y axes from the corner. The region is local (it only reaches a little
-    past the triangle), so it is safe to use on stem ends inside a glyph."""
-    sx = -1 if corner in ("nw", "sw") else 1
-    sy = 1 if corner in ("nw", "ne") else -1
-    e = max(4.0, leg * 0.6)
-    return poly(
-        [
-            (x + sx * e, y + sy * e),
-            (x - sx * (leg + e), y + sy * e),
-            (x + sx * e, y - sy * (leg + e)),
-        ]
-    )
+# Dots are a touch squarer than a circle: the one place the squircle shows
+# at its strongest, so they read as the house dot rather than a plain round.
+DOT_N = 2.6
 
 
-def dot(cx, cy, side, cut=None):
-    """Square dot centred at (cx, cy) with the house NW + SE chamfers."""
-    c = side * 0.22 if cut is None else cut
+def dot(cx, cy, side):
+    """The house dot: a squircle of width and height `side` centred at
+    (cx, cy)."""
     h = side / 2
-    return rect(cx - h, cy - h, cx + h, cy + h, nw=c, se=c)
+    return squircle(cx - h, cy - h, cx + h, cy + h, DOT_N)

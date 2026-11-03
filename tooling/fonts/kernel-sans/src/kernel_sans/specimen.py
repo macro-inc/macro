@@ -1,7 +1,7 @@
 """Type specimen: one HTML page generated from the built fonts.
 
 The page shows the variable font live (weight slider, a playground to type
-in, glyph set with an inspector) and outline views of the three cyber details drawn from the
+in, glyph set with an inspector) and outline views of the three house details drawn from the
 ExtraBold outlines.
 """
 
@@ -15,10 +15,11 @@ from fontTools.pens.svgPathPen import SVGPathPen
 from fontTools.ttLib import TTFont
 
 from . import params as P
+from .geom import DOT_N
 
 TEMPLATE = os.path.join(os.path.dirname(__file__), "specimen_template.html")
 
-# Close-ups of the cyber details: (glyph, weight, framing, title, caption).
+# Close-ups of the house details: (glyph, weight, framing, title, caption).
 # Framing is computed from the outline and the weight's parameters in
 # _detail_view; captions take numbers from the same parameters.
 DETAILS = [
@@ -27,21 +28,21 @@ DETAILS = [
         800,
         "full",
         "Squircle curves",
-        "Every round contour is a superellipse (exponent {sq:.1f} outside, {sq_in:.1f} in the counter): the squared-off roundness of SF Pro pushed further.",
+        "Every round contour is a superellipse (exponent {sq:.2f} outside, {sq_in:.2f} in the counter): SF Pro's roundness, a shade squarer.",
     ),
     (
-        "n",
+        "r",
         800,
-        "chamfer",
-        "Chamfered stroke ends",
-        "Free stem ends are clipped at 45°; curve terminals end in a clean horizontal cut. The leg is 0.36 of the stem ({cut:.0f} units at ExtraBold), so the cut keeps its proportion at every weight.",
+        "full",
+        "Square-cut ends",
+        "Every stroke ends in a straight cut: flat on stems, vertical where a hook ends travelling sideways (f, g, j, r, t), never a bevel.",
     ),
     (
         "i",
         800,
         "dot",
-        "Square dots",
-        "Dots are squares with two opposing chamfers, shared by i, j and all punctuation.",
+        "Rounded dots",
+        "Dots are soft squares (exponent {dot_n}), shared by i, j and all punctuation; commas and quotes grow their tails from the same dot.",
     ),
 ]
 
@@ -53,9 +54,6 @@ def _detail_view(font, name, framing, p):
     bp = BoundsPen(font.getGlyphSet())
     font.getGlyphSet()[name].draw(bp)
     x0, _y0, x1, y1 = bp.bounds
-    if framing == "chamfer":
-        size = 2.6 * p.stem
-        return (x0 - 0.35 * size, P.XH + 0.3 * size, size, size)
     if framing == "dot":
         size = (y1 - (P.XH - 140)) + 80
         cx = (x0 + x1) / 2
@@ -225,7 +223,7 @@ def build_specimen(fonts_dir, out_html, embed=False):
     numbers = {
         "sq": P.params(400).sq,
         "sq_in": P.params(400).sq_in,
-        "cut": P.params(800).cut,
+        "dot_n": DOT_N,
     }
     for name, w, framing, title, caption in DETAILS:
         if name not in static[w].getGlyphOrder():

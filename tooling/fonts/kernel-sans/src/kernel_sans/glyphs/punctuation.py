@@ -1,10 +1,10 @@
 """Punctuation and symbols: dots and commas, quotes, dashes, brackets,
 slashes, guillemets, @ & § ¶ © ® ™, daggers, bullets and arrows.
 
-Everything that has a dot uses the period's square (`geom.dot`, side
-`p.dot`); commas and quotes are that square with a wedge tail. Curves are
-squircles cut flat at their terminals, free stem ends get the house 45°
-chamfer, and arrow and guillemet tips are cut flat across their point.
+Everything that has a dot uses the period's rounded dot (`geom.dot`, side
+`p.dot`); commas and quotes are that dot with a wedge tail. Curves are
+squircles cut flat at their terminals, stem ends are cut square, and arrow
+and guillemet tips are cut flat across their point.
 """
 
 import math
@@ -13,6 +13,7 @@ import pathops
 
 from .. import params as P
 from ..geom import (
+    DOT_N,
     Shape,
     above,
     band,
@@ -28,6 +29,7 @@ from ..geom import (
     ring,
     squircle,
     stroke,
+    superness,
 )
 from . import G, glyph, ref
 from .parts import flush_end, open_bowl
@@ -71,24 +73,47 @@ def _comma_tail(p):
 
 
 def _comma(p, x0, y0):
-    """The comma: the period's square at (x0, y0) with a wedge tail growing
-    down and to the left from its bottom edge."""
+    """The comma: the period's dot at (x0, y0) with a wedge tail growing down
+    and to the left. The tail's right edge runs tangent off the dot's lower
+    right; its left edge meets the dot's underside in a soft waist."""
     s = p.dot
-    c = s * 0.22  # the dot's chamfer (geom.dot)
+    h = s / 2
+    cx, cy = x0 + h, y0 + h
     tail = _comma_tail(p)
     tw = s * 0.34  # width of the flat tail end
     tl = x0 - s * 0.06  # left corner of the tail end
-    return poly(
+    er = (tl + tw, y0 - tail)
+    # The tangent from the tail end to the dot's lower-right quadrant, found
+    # on the same cubic geom.squircle draws, then pulled 2 units into the
+    # dot so the union crosses the curve cleanly instead of grazing it.
+    k = superness(DOT_N)
+    c0, c1 = (cx, cy - h), (cx + k * h, cy - h)
+    c2, c3 = (cx + h, cy - k * h), (cx + h, cy)
+
+    def bez(t):
+        u = 1 - t
+        return tuple(
+            u**3 * a + 3 * u * u * t * b + 3 * u * t * t * c + t**3 * d
+            for a, b, c, d in zip(c0, c1, c2, c3, strict=True)
+        )
+
+    tx, ty = min(
+        (bez(i / 400) for i in range(401)),
+        key=lambda q: math.atan2(q[1] - er[1], q[0] - er[0]),
+    )
+    nx, ny = cx - tx, cy - ty
+    nl = math.hypot(nx, ny)
+    tx, ty = tx + 2 * nx / nl, ty + 2 * ny / nl
+    wedge = poly(
         [
-            (x0, y0 + s - c),
-            (x0 + c, y0 + s),
-            (x0 + s, y0 + s),
-            (x0 + s, y0),
-            (tl + tw, y0 - tail),
+            (tx, ty),
+            (cx, cy),
+            (x0 + s * 0.42, y0 + s * 0.3),
             (tl, y0 - tail),
-            (x0, y0),
+            er,
         ]
     )
+    return dot(cx, cy, s) + wedge
 
 
 def _lr(shape):
@@ -140,15 +165,14 @@ def _chevron(tip_x, yc, h, dx, w, flat):
 def _arrow(p, length, heads=(True, False)):
     """A horizontal arrow along +x from x = 0 to x = length at y = 0, with an
     open chevron head at the right (heads[0]) and/or left (heads[1]) end.
-    The shaft and arms have thickness t; arm ends are square to the arm;
-    the point is cut flat (which reads as the house chamfer on diagonals)."""
+    The shaft and arms have thickness t; arm ends are square to the arm; the
+    point is a plain mitre (a square corner on the diagonal arrows)."""
     t = p.hair * 1.1
     arm = 120 + 1.4 * t  # arm length along its outer edge
-    flat = max(4.0, p.cut * 0.62)  # depth of the cut across the point
     k = 1200
 
     def head(tip):
-        # A chevron pointing to +x whose geometric point is at (tip, 0).
+        # A chevron pointing to +x whose point is at (tip, 0).
         outer = poly([(tip, 0), (tip - k, k), (tip - k, -k)])
         inner_x = tip - t * SQ2
         inner = poly([(inner_x, 0), (inner_x - k, k), (inner_x - k, -k)])
@@ -159,16 +183,16 @@ def _arrow(p, length, heads=(True, False)):
             # Everything past the arm end; half_plane keeps the left of
             # (ex, ey) -> (ex + uy, ey - ux), whose left normal is u.
             h = h - half_plane((ex, ey), (ex + uy, ey - ux))
-        return h - right_of(tip - flat)
+        return h
 
     s0, s1 = 0.0, length
     shape = Shape()
     if heads[0]:
-        shape = shape + head(length + flat)
-        s1 = length + flat - t * 1.2
+        shape = shape + head(length)
+        s1 = length - t * 1.2
     if heads[1]:
-        shape = shape + head(flat).flip_x(0)
-        s0 = -flat + t * 1.2
+        shape = shape + head(0).flip_x(0)
+        s0 = t * 1.2
     return shape + rect(s0, -t / 2, s1, t / 2)
 
 
@@ -245,7 +269,7 @@ def exclam(p):
     s = p.dot
     w = p.stem * 1.05
     cx = s / 2
-    stem = rect(cx - w / 2, s + _gap(p), cx + w / 2, P.CAP, nw=0.36 * w)
+    stem = rect(cx - w / 2, s + _gap(p), cx + w / 2, P.CAP)
     sb = p.psb
     return G(stem + dot(cx, s / 2, s), l=sb, r=sb)
 
@@ -401,14 +425,12 @@ def _tick(p, x0):
     h = p.dot + _comma_tail(p)
     wb = w * 0.78
     cx = x0 + w / 2
-    c = 0.36 * w
     sh = poly(
         [
             (cx - wb / 2, P.CAP - h),
             (cx + wb / 2, P.CAP - h),
             (cx + w / 2, P.CAP),
-            (cx - w / 2 + c, P.CAP),
-            (cx - w / 2 + c * 0.1, P.CAP - c * 0.9),
+            (cx - w / 2, P.CAP),
         ]
     )
     return sh
@@ -587,7 +609,7 @@ _pair(
 
 
 def _brace(p, dy=0):
-    """{ with chamfered corners and a sharp angular point in the middle."""
+    """{ with rounded corners and a sharp point in the middle."""
     tv = p.stem * 0.92  # vertical strokes
     th = p.hair * 0.98  # arms
     d2 = tv * 0.95  # perpendicular thickness of the point's diagonals
@@ -596,34 +618,32 @@ def _brace(p, dy=0):
     xs = 78 + 0.25 * p.grow  # stem's outer edge (the point is at x = 0)
     j = 120 + 0.2 * p.grow  # half height of the point
     xe = xs + tv + p.w(78, 0.3)  # arm end
-    co = (tv + th) * 0.62  # outer corner chamfer leg
-    dc = (tv + th) / 2  # thickness across the corner chamfer
-    ci = co + dc * SQ2 - tv - th  # inner chamfer leg
+    r = tv * 1.3 + 12  # outer corner radius
     L = math.hypot(xs, j)
     xi = d2 * L / j  # inner vertex of the point
     jj = (xs + tv - xi) * j / xs
     xin = xs + tv
-    pts = [
-        (xe, y1),
-        (xs + co, y1),
-        (xs, y1 - co),
-        (xs, ym + j),
-        (0, ym),
-        (xs, ym - j),
-        (xs, y0 + co),
-        (xs + co, y0),
-        (xe, y0),
-        (xe, y0 + th),
-        (xin + ci, y0 + th),
-        (xin, y0 + th + ci),
-        (xin, ym - jj),
-        (xi, ym),
-        (xin, ym + jj),
-        (xin, y1 - th - ci),
-        (xin + ci, y1 - th),
-        (xe, y1 - th),
-    ]
-    return poly(pts)
+    stem = poly(
+        [
+            (xs, y1 - r),
+            (xs, ym + j),
+            (0, ym),
+            (xs, ym - j),
+            (xs, y0 + r),
+            (xin, y0 + r),
+            (xin, ym - jj),
+            (xi, ym),
+            (xin, ym + jj),
+            (xin, y1 - r),
+        ]
+    )
+    # Corner quadrants of a squircle ring, meeting the stem and the arms
+    # exactly where their tangents run straight.
+    top = ring(xs, y1 - 2 * r, xs + 2 * r, y1, tv, th, p.sq, p.sq_in)
+    bot = ring(xs, y0, xs + 2 * r, y0 + 2 * r, tv, th, p.sq, p.sq_in)
+    corners = ((top & above(y1 - r)) + (bot & below(y0 + r))) & left_of(xs + r)
+    arms = rect(xs + r, y1 - th, xe, y1) + rect(xs + r, y0, xe, y0 + th)
+    return stem + corners + arms
 
 
 def _brace_sb(p):
@@ -669,17 +689,15 @@ def backslash(p):
 @glyph("bar", 0x007C)
 def bar(p):
     w = p.stem * 0.92
-    c = 0.36 * w
-    return G(rect(0, BR_LO, w, BR_HI, nw=c, sw=c), l=p.sb * 1.5, r=p.sb * 1.5)
+    return G(rect(0, BR_LO, w, BR_HI), l=p.sb * 1.5, r=p.sb * 1.5)
 
 
 @glyph("brokenbar", 0x00A6)
 def brokenbar(p):
     w = p.stem * 0.92
-    c = 0.36 * w
     gap = 90 + 0.3 * p.grow
     mid = (BR_LO + BR_HI) / 2
-    sh = rect(0, mid + gap / 2, w, BR_HI, nw=c) + rect(0, BR_LO, w, mid - gap / 2, sw=c)
+    sh = rect(0, mid + gap / 2, w, BR_HI) + rect(0, BR_LO, w, mid - gap / 2)
     return G(sh, l=p.sb * 1.5, r=p.sb * 1.5)
 
 
@@ -715,8 +733,7 @@ def _dagger(p, double=False):
     t = p.hair * 0.95
     half = p.w(165, 0.4)
     y0, y1 = -120, P.CAP
-    c = 0.36 * w
-    sh = rect(-w / 2, y0, w / 2, y1, nw=c, sw=c)
+    sh = rect(-w / 2, y0, w / 2, y1)
     yb = y1 - 220
     sh = sh + rect(-half, yb - t / 2, half, yb + t / 2)
     if double:
@@ -736,7 +753,7 @@ def daggerdbl(p):
 
 
 def _bullet(p, yc):
-    side = p.dot * 1.3 + 66  # the period's square, scaled up
+    side = p.dot * 1.3 + 66  # the period's dot, scaled up
     return dot(0, yc, side)
 
 
@@ -807,7 +824,7 @@ def at(p):
     bowl = _ring_part(
         xa0, oy0, ix1 + wsb, oy1, xi0, iy0, ix1, iy1, n, n_in, left_of(xs + 1)
     )
-    stem = rect(xs, oy0, xr, oy1, ne=p.cut)
+    stem = rect(xs, oy0, xr, oy1)
     # The bowl's crown and foot run flat into the stem's ends (no notch).
     box = (xa0, oy0, ix1 + wsb, oy1)
     cxb, rxb, ryb = (xa0 + ix1 + wsb) / 2, (ix1 + wsb - xa0) / 2, (oy1 - oy0) / 2
@@ -889,7 +906,7 @@ def ampersand(p):
     y_open = ly1 - wt / 2
     x_open = tx + hw / 2 + (ty - y_open) / abs(m)
     lower = lower - (right_of(x_open) & above(lcy))
-    tail = rect(lx1 - ws, lcy, lx1, P.CAP * a["ytail"], ne=p.ccut)
+    tail = rect(lx1 - ws, lcy, lx1, P.CAP * a["ytail"])
     lower = lower + tail
     # The bowl's bottom curves up into the leg a little above the leg's flat
     # foot, which leaves a V-notch at the baseline. Fill it: from the bowl's

@@ -69,8 +69,8 @@ def H(p):
     w = p.w(560, 1.0)
     bar_c = P.CAP * 0.51
     shape = (
-        rect(0, 0, s, P.CAP, nw=p.ccut)
-        + rect(w - s, 0, w, P.CAP, ne=p.ccut)
+        rect(0, 0, s, P.CAP)
+        + rect(w - s, 0, w, P.CAP)
         + rect(s - 1, bar_c - p.chair / 2, w - s + 1, bar_c + p.chair / 2)
     )
     return G(shape, l=p.csb, r=p.csb)

@@ -123,7 +123,7 @@ def _b_width(p):
     return p.w(496, 0.6)
 
 
-def _b_body(p, stem_y0, stem_y1, nw=0, sw=0):
+def _b_body(p, stem_y0, stem_y1):
     """Stem on the left plus an x-height bowl on the right (b, p, thorn).
     Returns (shape, xr)."""
     s = p.stem
@@ -147,7 +147,7 @@ def _b_body(p, stem_y0, stem_y1, nw=0, sw=0):
     # Where the stem ends flat at x-height or the baseline, its end runs on
     # into the bowl instead of dipping into a notch.
     fill = bowl.flush(P.XH if stem_y1 == P.XH else None, 0 if stem_y0 == 0 else None)
-    return rect(0, stem_y0, s, stem_y1, nw=nw, sw=sw) + bowl.shape + fill, xr
+    return rect(0, stem_y0, s, stem_y1) + bowl.shape + fill, xr
 
 
 def _mirror(shape_xr):
@@ -167,32 +167,32 @@ def _counter_cx(p, xr):
 
 @glyph("b", 0x0062)
 def b(p):
-    shape, _ = _b_body(p, 0, P.ASC, nw=p.cut)
+    shape, _ = _b_body(p, 0, P.ASC)
     return G(shape, l=p.sb, r=p.sbr)
 
 
 @glyph("d", 0x0064)
 def d(p):
-    # Drawn as b with a nw chamfer; the mirror turns it into ne.
-    shape, _ = _mirror(_b_body(p, 0, P.ASC, nw=p.cut))
+    # b mirrored.
+    shape, _ = _mirror(_b_body(p, 0, P.ASC))
     return G(shape, l=p.sbr, r=p.sb)
 
 
 @glyph("p", 0x0070)
 def p_(p):
-    shape, _ = _b_body(p, P.DESC, P.XH, nw=p.cut, sw=p.cut)
+    shape, _ = _b_body(p, P.DESC, P.XH)
     return G(shape, l=p.sb, r=p.sbr)
 
 
 @glyph("q", 0x0071)
 def q(p):
-    shape, _ = _mirror(_b_body(p, P.DESC, P.XH, nw=p.cut, sw=p.cut))
+    shape, _ = _mirror(_b_body(p, P.DESC, P.XH))
     return G(shape, l=p.sbr, r=p.sb)
 
 
 @glyph("thorn", 0x00FE)
 def thorn(p):
-    shape, _ = _b_body(p, P.DESC, P.ASC, nw=p.cut, sw=p.cut)
+    shape, _ = _b_body(p, P.DESC, P.ASC)
     return G(shape, l=p.sb, r=p.sbr)
 
 
@@ -202,7 +202,7 @@ def thorn(p):
 
 @glyph("a.ss01")
 def a_ss01(p):
-    shape, xr = _mirror(_b_body(p, 0, P.XH, nw=p.cut))
+    shape, xr = _mirror(_b_body(p, 0, P.XH))
     return G(
         shape,
         l=p.sbr,
@@ -215,19 +215,23 @@ def a_ss01(p):
 def g(p):
     s = p.stem
     yc_t = -40  # where the stem turns into the tail
-    shape, xr = _mirror(_b_body(p, yc_t, P.XH, nw=p.cut))
+    shape, xr = _mirror(_b_body(p, yc_t, P.XH))
     # Tail: the lower half of a ring whose right side continues the stem,
-    # ending on the left in a horizontal cut.
+    # ending on the left in a vertical cut (like j and t) just where the
+    # stroke starts to turn up, at 1.2 times its thickness.
     y0_t = P.DESC - P.OS
     y1_t = 2 * yc_t - y0_t
     x0_t = xr * 0.07
     wb = p.hair * 0.92
-    outer = squircle(x0_t, y0_t, xr, y1_t, p.sq)
-    inner = squircle(x0_t + s, y0_t + wb, xr - s, y1_t - wb, p.sq_in)
-    cx_t = (x0_t + xr) / 2
-    y_term = y0_t + wb + 0.45 * (yc_t - y0_t - wb)
-    tail = (outer - inner) & (below(yc_t) + left_of(cx_t))
-    tail = tail - (left_of(cx_t) & above(y_term))
+    obox = (x0_t, y0_t, xr, y1_t)
+    ibox = (x0_t + s, y0_t + wb, xr - s, y1_t - wb)
+    lo, hi = ibox[0], (x0_t + xr) / 2
+    for _ in range(40):
+        x_cut = (lo + hi) / 2
+        th = _oy(*ibox, p.sq_in, x_cut, "bottom") - _oy(*obox, p.sq, x_cut, "bottom")
+        lo, hi = (lo, x_cut) if th < 1.2 * wb else (x_cut, hi)
+    ring = squircle(*obox, p.sq) - squircle(*ibox, p.sq_in)
+    tail = ring & below(yc_t) & right_of(x_cut)
     return G(shape + tail, l=p.sbr, r=p.sb, anchors={"top": _counter_cx(p, xr)})
 
 

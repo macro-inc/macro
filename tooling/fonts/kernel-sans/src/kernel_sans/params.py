@@ -66,8 +66,8 @@ class Params:
     chair: float  # capital horizontal stroke
     fstem: float  # figure vertical stem
     fhair: float  # figure horizontal stroke
-    cut: float  # 45-degree chamfer leg on lowercase stem ends
-    ccut: float  # chamfer leg on capitals and figures
+    cut: float  # 0.36 stem: places r's terminal, blunts arrow and guillemet tips
+    ccut: float  # 0.36 capital stem: places J's terminal
     sq: float  # superellipse exponent of outer round contours (2 = circle)
     sq_in: float  # superellipse exponent of counters
     sb: float  # lowercase sidebearing next to a straight stem
@@ -76,7 +76,7 @@ class Params:
     csbr: float  # capital sidebearing next to a round side
     psb: float  # sidebearing of dot punctuation (. , : ; !)
     grow: float  # stem - regular stem; add a fraction of it to body widths
-    dot: float  # side of square dots (i j . : ! ?)
+    dot: float  # side of the rounded dots (i j . : ! ?)
 
     @property
     def name(self):
@@ -106,9 +106,9 @@ def params(wght):
         fhair=s * 0.92,
         cut=round(0.36 * s, 1),
         ccut=round(0.36 * cs, 1),
-        sq=3.0,
+        sq=2.55,
         # Counters squarer than outers keep round strokes even at the corners.
-        sq_in=3.4,
+        sq_in=2.85,
         sb=sb,
         sbr=53 - 0.15 * grow,
         csb=76 - 0.3 * grow,

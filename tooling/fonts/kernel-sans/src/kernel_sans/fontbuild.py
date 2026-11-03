@@ -65,7 +65,7 @@ def _names(p, variable=False):
         "psName": ps,
         "version": f"Version {P.VERSION}",
         "manufacturer": "Macro",
-        "description": "A neo-grotesque sans with squircle curves, 45-degree chamfered stem ends and square dots.",
+        "description": "A neo-grotesque sans close to SF Pro, with squircle curves, square-cut stroke ends and rounded dots.",
     }
     if not ribbi and not variable:
         names["typographicFamily"] = P.FAMILY

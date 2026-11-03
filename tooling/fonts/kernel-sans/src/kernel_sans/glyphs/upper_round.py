@@ -200,7 +200,7 @@ def Thorn(p):
     y1 = P.CAP * (0.794 + 0.0004 * p.grow)
     ws = s * (1.02 - 0.0008 * max(0.0, p.grow))
     bowl = _Bowl(p, s, y0, y1, p.w(469, 0.95), p.chair, p.chair, ws, 0.635, x_out=s - 2)
-    shape = (rect(0, 0, s, P.CAP, nw=p.ccut) + bowl.outer) - bowl.counter
+    shape = (rect(0, 0, s, P.CAP) + bowl.outer) - bowl.counter
     return G(shape, l=p.csb, r=p.csbr * 1.15)
 
 
@@ -311,7 +311,7 @@ def J(p):
     wb = p.chair * 1.04
     ob, ib = (0, y0, w, y1), (ws, y0 + wb, w - s, y1 - wb)
     shape = _path(
-        (w, P.CAP - c),
+        (w, P.CAP),
         [
             (w, yc),
             _quad(ob, n, "r", "b"),
@@ -322,7 +322,6 @@ def J(p):
             _quad(ib, ni, "l", "b"),
             _quad(ib, ni, "b", "r"),
             (w - s, P.CAP),
-            (w - c, P.CAP),
         ],
     )
     return G(shape, l=p.csbr * 0.8, r=p.csb, anchors={"top": w - s / 2})
@@ -333,25 +332,22 @@ def U(p):
     s = p.cstem
     w = p.w(562, 0.85)
     n, ni = _n(p), _ni(p)
-    c = p.ccut
     yc = P.CAP * 0.345
     y0, y1 = -P.COS, 2 * yc + P.COS
     wb = p.chair * 1.06
     ob, ib = (0, y0, w, y1), (s, y0 + wb, w - s, y1 - wb)
     shape = _path(
-        (0, P.CAP - c),
+        (0, P.CAP),
         [
             (0, yc),
             _quad(ob, n, "l", "b"),
             _quad(ob, n, "b", "r"),
-            (w, P.CAP - c),
-            (w - c, P.CAP),
+            (w, P.CAP),
             (w - s, P.CAP),
             (w - s, yc),
             _quad(ib, ni, "r", "b"),
             _quad(ib, ni, "b", "l"),
             (s, P.CAP),
-            (c, P.CAP),
         ],
     )
     return G(shape, l=p.csb, r=p.csb)

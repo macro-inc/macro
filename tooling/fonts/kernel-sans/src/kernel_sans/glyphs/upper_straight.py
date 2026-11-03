@@ -1,8 +1,8 @@
 """Straight-sided capitals: A E F I K L M N T V W X Y Z and AE.
 
 Built like `H` in core.py: capital stems `p.cstem`, arms and bars `p.chair`,
-the house 45-degree chamfer (`p.ccut`) only on free stem tops, square corners
-where a stem turns into an arm, and flat-cut diagonal ends and vertices.
+square-cut stem ends, square corners where a stem turns into an arm, and
+flat-cut diagonal ends and vertices.
 
 Open right sides (E F L T Z) take a real sidebearing, a fraction of `p.csb`,
 so they shrink with weight like the straight ones.
@@ -122,7 +122,7 @@ MID_Y = CAP * 0.51  # centre of E/F middle arms, matching the H bar
 @glyph("I", 0x0049)
 def I(p):
     s = p.cstem
-    return G(rect(0, 0, s, CAP, nw=p.ccut), l=p.csb, r=p.csb)
+    return G(rect(0, 0, s, CAP), l=p.csb, r=p.csb)
 
 
 @glyph("I.ss02")
@@ -143,7 +143,7 @@ def I_ss02(p):
 def L(p):
     s = p.cstem
     w = p.w(430, 0.55)
-    shape = rect(0, 0, s, CAP, nw=p.ccut) + rect(s * 0.5, 0, w, p.chair)
+    shape = rect(0, 0, s, CAP) + rect(s * 0.5, 0, w, p.chair)
     return G(shape, l=p.csb, r=p.csb * 0.55)
 
 
@@ -309,7 +309,6 @@ def N(p):
     sn = s * 0.92  # thin stems
     td = s * 0.97  # heavier diagonal
     e = sn * 0.3
-    c = p.ccut
     dg = _Slant(w - e, e, td, "r", "l")
     yl = dg.y_at("l", sn)
     yr = dg.y_at("r", w - sn)
@@ -320,8 +319,7 @@ def N(p):
             (sn, yl),
             (dg.lb, 0),
             (w, 0),
-            (w, CAP - c),
-            (w - c, CAP),
+            (w, CAP),
             (w - sn, CAP),
             (w - sn, yr),
             (dg.lt + dg.hw, CAP),
@@ -387,7 +385,6 @@ def K(p):
     p2 = (s, arm.y_at("l", s))  # ...and above
     j = _meet(*arm.right(), *leg.left())
     q = _meet(*arm.right(), *leg.right())
-    c = p.ccut
     shape = poly(
         [
             (0, 0),
@@ -401,8 +398,7 @@ def K(p):
             (arm.lt, CAP),
             p2,
             (s, CAP),
-            (c, CAP),
-            (0, CAP - c),
+            (0, CAP),
         ]
     )
     return G(shape, l=p.csb, r=p.csbr * 0.3)

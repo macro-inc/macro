@@ -15,7 +15,6 @@ from .. import params as P
 from ..geom import (
     above,
     below,
-    chamfer,
     dot,
     half_plane,
     left_of,
@@ -179,7 +178,7 @@ def _hw_between(x_top, x_bot_other, w, other_offset, dy):
 
 
 def _i_stem(p, height=P.XH):
-    return rect(0, 0, p.stem, height, nw=p.cut)
+    return rect(0, 0, p.stem, height)
 
 
 I_DOT_GAP = 60  # least white between the i/j dot and the stem (Inter ExtraBold)
@@ -209,7 +208,7 @@ def l_ss02(p):
     hook, yc, _ = _hook(
         p, 0, -P.OS, p.w(160, 0.2), p.w(124, 0.62), p.w(88, 0.25), p.hair * 1.04
     )
-    shape = hook + rect(0, yc, s, P.ASC, nw=p.cut)
+    shape = hook + rect(0, yc, s, P.ASC)
     return G(shape, l=p.sb, r=p.sbr * 0.3, anchors={"top": s / 2, "bottom": s / 2})
 
 
@@ -221,7 +220,7 @@ def dotlessi(p):
 @glyph("i", 0x0069)
 def i(p):
     s = p.stem
-    shape = rect(p.sb, 0, p.sb + s, P.XH, nw=p.cut) + _i_dot(p, p.sb + s / 2)
+    shape = rect(p.sb, 0, p.sb + s, P.XH) + _i_dot(p, p.sb + s / 2)
     return G(shape, width=2 * p.sb + s, anchors={"top": p.sb + s / 2})
 
 
@@ -239,7 +238,7 @@ def _j_body(p):
         p.w(96, -0.15),
         p.hair * 1.02,
     )
-    body = hook.flip_x(s / 2) + rect(0, yc, s, P.XH, nw=p.cut)
+    body = hook.flip_x(s / 2) + rect(0, yc, s, P.XH)
     return body
 
 
@@ -262,7 +261,7 @@ def h(p):
     s = p.stem
     a, xr, yc, _, _, _ = _shoulder(p, s, p.w(300, -1.0))
     # Edge to edge at the arch's vertical extreme, as in n.
-    shape = rect(0, 0, s, P.ASC, nw=p.cut) + a + rect(xr - s, 0, xr, yc)
+    shape = rect(0, 0, s, P.ASC) + a + rect(xr - s, 0, xr, yc)
     return G(shape, l=p.sb, r=p.sb * 0.92)
 
 
@@ -283,7 +282,7 @@ def m(p):
     a2, obox2 = _arch_through(p, x1, x2, yc, (xv, _sq_y(obox1, p.sq, xv)), crotch, x1)
     valley = squircle(*obox2, n=p.sq) & rect(x1 - s * 0.85, yc, x1, P.XH + 50)
     shape = (
-        rect(0, 0, s, P.XH, nw=p.cut)
+        rect(0, 0, s, P.XH)
         + a1
         + _flush(p, s, obox1)
         + rect(x1 - s, 0, x1, yc)
@@ -296,8 +295,7 @@ def m(p):
 
 @glyph("u", 0x0075)
 def u(p):
-    # n turned half round, then corrected so the free stem tops get the
-    # house chamfers (left nw, right ne) and the right stem stands flat on
+    # n turned half round, then corrected so the right stem stands flat on
     # the baseline with its own full-height edge.
     s = p.stem
     a, xr, yc, _, obox, _ = _shoulder(p, s, p.w(300, -1.0))
@@ -305,13 +303,12 @@ def u(p):
     bowl = (a + _flush(p, s, obox) + rect(xr - s, 0, xr, yc)).rotate180(
         xr / 2, P.XH / 2
     )
-    bowl = bowl - chamfer(0, P.XH, p.cut, "nw")
-    shape = bowl + rect(xr - s, 0, xr, P.XH, ne=p.cut)
+    shape = bowl + rect(xr - s, 0, xr, P.XH)
     # An ogonek hangs from the right stem.
     return G(shape, l=p.sb * 0.92, r=p.sb, anchors={"bottom": xr - s / 2})
 
 
-R_FALL = 28  # steepest fall of r's underside at the terminal, in degrees
+R_FALL = 24  # fall of r's underside at the terminal, in degrees
 
 
 @glyph("r", 0x0072)
@@ -319,24 +316,30 @@ def r(p):
     s = p.stem
     a, _xr, _yc, _, obox, ibox = _shoulder(p, s, p.w(250, -0.3))
     # Cut the flag between the arch's crown and the counter's right side:
-    # past the crown by a stem-chamfer leg (so the cut faces down the curve)
+    # past the crown by p.cut (so the cut faces down the curve)
     # and short of the counter's side (so the flag never catches the arch's
     # descending stroke), at every weight.
     cxo = (obox[0] + obox[2]) / 2
     lo, hi = cxo + p.cut, ibox[2]
     x_term = lo + (hi - lo) * 0.6
     flag = a & left_of(x_term)
-    # The terminal is cut vertically, so its lower corner is 90 degrees less
-    # the fall of the counter's curve there. The heavy counter is narrow and
-    # already falls steeply under the cut (a blade). Past the point where it
-    # falls R_FALL degrees, run the underside straight on along its tangent,
-    # which keeps that corner at 90 - R_FALL at every weight.
-    tx, ty = _sq_tangent(ibox, p.sq_in, R_FALL)
-    slope = math.tan(math.radians(R_FALL))
-    # Half a unit below the tangent, so the cut meets the curve cleanly.
-    spur = half_plane((tx + 400, ty - 0.5 - 400 * slope), (tx, ty - 0.5)) & right_of(tx)
-    flag = flag - spur
-    shape = rect(0, 0, s, P.XH, nw=p.cut) + flag + _flush(p, s, obox)
+    # The terminal is cut vertically. Under the flag, right of the counter's
+    # crown, widen the counter about its centre (same crown, same height)
+    # until its underside falls only R_FALL degrees at the cut: the arm
+    # thins a little toward its end and its lower corner stays a plain
+    # 90 - R_FALL degrees instead of a blade or a facet, at every weight.
+    cxi = (ibox[0] + ibox[2]) / 2
+    rx = (ibox[2] - ibox[0]) / 2
+    e_lo, e_hi = 0.0, 4 * rx
+    for _ in range(50):
+        e = (e_lo + e_hi) / 2
+        wide = (cxi - rx - e, ibox[1], cxi + rx + e, ibox[3])
+        if _sq_tangent(wide, p.sq_in, R_FALL)[0] < x_term + 1:
+            e_lo = e
+        else:
+            e_hi = e
+    flag = flag - (squircle(*wide, n=p.sq_in) & right_of(cxi))
+    shape = rect(0, 0, s, P.XH) + flag + _flush(p, s, obox)
     return G(
         shape, l=p.sb, r=p.sbr * 0.45, anchors={"top": x_term * 0.47, "bottom": s / 2}
     )
@@ -358,7 +361,7 @@ def _t_parts(p):
     hook, yc, x_term = _hook(
         p, x0, -P.OS, p.w(170, 0.2), p.w(132, 0.62), ext, p.hair * 1.04
     )
-    stem = rect(x0, yc, x0 + s, 650, nw=p.cut)
+    stem = rect(x0, yc, x0 + s, 650)
     bar = rect(0, P.XH - p.hair, x_term, P.XH)
     return hook + stem + bar, x0, x_term
 
@@ -442,7 +445,7 @@ def f_i(p):
     ext = (xi - lsb) - x0
     hook, stem, bar, _, _ = _f_parts(p, ext=ext)
     f_shape = (hook + stem + bar).move(lsb, 0)
-    shape = f_shape + rect(xi, 0, xi + s, P.XH, nw=p.cut)
+    shape = f_shape + rect(xi, 0, xi + s, P.XH)
     return G(shape, width=xi + s + p.sb)
 
 
@@ -455,7 +458,7 @@ def f_l(p):
     ext = (xl - lsb) - x0
     hook, stem, bar, _, _ = _f_parts(p, ext=ext)
     f_shape = (hook + stem + bar).move(lsb, 0)
-    shape = f_shape + rect(xl, 0, xl + s, F_TOP, ne=p.cut)
+    shape = f_shape + rect(xl, 0, xl + s, F_TOP)
     return G(shape, width=xl + s + p.sb)
 
 
@@ -502,7 +505,7 @@ def k(p):
     # Bury the leg's top in the arm: keep it below the arm's centreline.
     c0 = (s + nrm[0] * wa / 2, y_low + nrm[1] * wa / 2)
     leg = leg - half_plane(c0, (c0[0] + ad[0], c0[1] + ad[1]))
-    shape = rect(0, 0, s, P.ASC, nw=p.cut) + arm + leg
+    shape = rect(0, 0, s, P.ASC) + arm + leg
     return G(shape, l=p.sb, r=p.sbr * 0.3)
 
 

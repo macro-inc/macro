@@ -9,7 +9,7 @@ and a little wider.
 
 Style, following DESIGN.md: acute and grave are parallelograms with flat
 (horizontal) ends like the house diagonals; circumflex and caron are chevrons
-with flat-cut tips and apex; dots are the house square dot (p.dot, capped
+with flat-cut tips and apex; dots are the house rounded dot (p.dot, capped
 at ExtraBold and hanging from the ascender exactly like the i dot); ring,
 breve and tilde are squircle strokes whose free ends are cut horizontally;
 cedilla and ogonek are small squircle hooks below the baseline with

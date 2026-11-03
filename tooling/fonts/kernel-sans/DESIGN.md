@@ -1,9 +1,8 @@
 # Kernel Sans design rules
 
-Kernel Sans is a neo-grotesque in the Inter / SF Pro mould with a cyber edge:
-large x-height, flat horizontal terminals, near-monolinear strokes, plus three
-details that make it read as engineered rather than written. Every glyph
-follows these rules. When a rule and a glyph's legibility conflict, legibility
+Kernel Sans is a neo-grotesque close to SF Pro, a shade squarer: large
+x-height, flat horizontal terminals, near-monolinear strokes, plus three
+details that set it subtly apart. Every glyph follows these rules. When a rule and a glyph's legibility conflict, legibility
 wins; note the exception in a comment.
 
 ## Skeleton (Inter / SF Pro)
@@ -36,30 +35,29 @@ wins; note the exception in a comment.
   should gain colour, not much width (Inter grows about 6% from Light to
   ExtraBold).
 
-## The cyber details
+## The house details
 
 1. **Squircle curves.** Every round contour is a superellipse (`squircle`,
    `ring`, `parts.bowl`, `parts.open_bowl`, `parts.arch`). Outer contours use
-   `p.sq` (3.0), counters the squarer `p.sq_in` (3.4) so the stroke stays even
-   at the corners. Capitals and figures use `p.sq * 0.92` and
-   `p.sq_in * 0.95`. Never use a circle (n = 2).
-2. **45° chamfers at free stroke ends.** Leg `p.cut` (lowercase) or `p.ccut`
-   (capitals, figures).
-   - A stem's free top gets one chamfer on the glyph's outer side: a left or
-     single stem `nw`, a right stem `ne` (see `H`, `n`). Free descender
-     bottoms: left stem `sw` (p), right stem `se` (q).
-   - Corners where a stem turns into an arm or bar (E, F, L, T joins, the
-     baseline of l and i) stay square.
-   - Curve terminals are cut clean, with no chamfer: horizontally, or
-     vertically when the stroke ends travelling horizontally (the hooks of
-     f, t, j, r). A chamfer on a curve terminal reads as a beak
-     (`parts.open_bowl`; see `c`).
-   - Free ends of arms and bars (E, F, T, Z, t and f bars) stay square, and
-     so do the ends of diagonals (they are already angled).
-3. **Square dots.** Dots of i, j, and punctuation are squares of side `p.dot`
-   (0.8 × stem + 44) with `nw` + `se` chamfers of 0.22 × side (`geom.dot`).
+   `p.sq` (2.55), counters the squarer `p.sq_in` (2.85) so the stroke stays
+   even at the corners. Capitals and figures use `p.sq * 0.92` and
+   `p.sq_in * 0.95`. That is SF Pro's roundness made a shade squarer; never
+   use a circle (n = 2), and don't push back toward 3 (it reads as a
+   different, boxier face).
+2. **Square-cut stroke ends.** No 45° chamfers, bevels or diagonal facets on
+   any end.
+   - Stem ends are cut flat (horizontal), and corners where a stem turns into
+     an arm or bar stay square.
+   - Curve terminals are cut horizontally (`parts.open_bowl`; see `c`), or
+     vertically when the stroke ends travelling sideways (the hooks of f, g,
+     j, r, t). Where a curve would meet a vertical cut at a blade-sharp angle,
+     reshape the curve instead of bevelling the corner (see `r`).
+   - Free ends of arms and bars (E, F, T, Z, t and f bars) stay square;
+     diagonals end in horizontal cuts at the baseline, x-height or cap height.
+3. **Rounded dots.** Dots of i, j and punctuation are squircles of side
+   `p.dot` (0.8 × stem + 44) and exponent `geom.DOT_N` (2.6) (`geom.dot`).
    Accent dots use the same side or very nearly. The i dot's top sits at the
-   ascender (760); comma, quote and semicolon tails grow from the same square.
+   ascender (760); comma, quote and semicolon tails grow from the same dot.
 
 ## Spacing
 

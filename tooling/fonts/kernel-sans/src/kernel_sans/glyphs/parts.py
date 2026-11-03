@@ -10,7 +10,6 @@ from ..geom import (
     above,
     band,
     below,
-    chamfer,
     left_of,
     poly,
     rect,
@@ -56,7 +55,7 @@ def arch(xl, xr, top, yc, w_side, w_top, join_out, join_in, n=None, n_in=None, p
     return ((outer - inner) & above(yc)) & right_of(xl - 1)
 
 
-def n_shape(p, x0, counter, top=None, height=None, cut=True):
+def n_shape(p, x0, counter, top=None, height=None):
     """The complete lowercase n: left stem at x0 with a free top, arch, right
     stem. Returns (shape, xr) where xr is the right edge of the right stem.
     `height` is the stem height (x-height); `top` the arch top."""
@@ -77,7 +76,7 @@ def n_shape(p, x0, counter, top=None, height=None, cut=True):
         join_in=h - p.hair - h * 0.17,
         p=p,
     )
-    stem_l = rect(x0, 0, xl, h, nw=p.cut if cut else 0)
+    stem_l = rect(x0, 0, xl, h)
     # Share the edge exactly: an overlap at a curve's vertical extreme can
     # make pathops resolve the union differently per weight.
     stem_r = rect(xr - s, 0, xr, yc)
@@ -148,7 +147,7 @@ def open_bowl(
     c, C and the curves of e, s, G, 2, 3, 5, 6, 9.
 
     cut_top / cut_bottom: heights of the terminal faces (None leaves that
-    half closed). The terminals end in a clean cut, with no chamfer.
+    half closed).
     side: which side opens ("right" for c)."""
     n = n or p.sq
     n_in = n_in or p.sq_in
@@ -168,7 +167,6 @@ __all__ = [
     "band",
     "below",
     "bowl",
-    "chamfer",
     "flush_end",
     "left_of",
     "n_shape",

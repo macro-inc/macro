@@ -26,7 +26,6 @@ from ..geom import (
     Shape,
     above,
     below,
-    chamfer,
     diag,
     dot,
     left_of,
@@ -233,9 +232,8 @@ def _one(p, longer=0.0):
     i_top = (s, P.CAP + s * math.tan(a))
     i_bot = (i_top[0] + nrm[0] * t, i_top[1] + nrm[1] * t)
     flag = poly([e_top, i_top, i_bot, e_bot]) & below(P.CAP) & left_of(s * 0.5)
-    # The flag covers the stem's top-left corner, so only the free top-right
-    # corner takes the house chamfer.
-    stem = rect(0, 0, s, P.CAP, ne=p.ccut)
+    # The flag covers the stem's top-left corner; the top-right stays square.
+    stem = rect(0, 0, s, P.CAP)
     return stem + flag
 
 
@@ -344,7 +342,7 @@ def _four(p):
     yb = P.CAP * 0.235
     xs = w - p.w(84, 0.25) - s
     xr = w
-    stem = rect(xs, 0, xs + s, P.CAP, ne=p.ccut)
+    stem = rect(xs, 0, xs + s, P.CAP)
     bar = rect(0, yb, xr, yb + hb)
     # Diagonal: outer edge from the bar's top-left corner to the stem's
     # top-left corner, inner edge parallel at perpendicular thickness t.
@@ -1430,12 +1428,9 @@ def mu(p):
     from .parts import n_shape
 
     s = p.stem
-    sh, xr = n_shape(p, 0, p.w(300, -1.0), cut=False)
+    sh, xr = n_shape(p, 0, p.w(300, -1.0))
     sh = sh.rotate180(xr / 2, P.XH / 2)
-    # The turned n brings its square-topped right stem to the left, so the
-    # left stem's nw chamfer is cut after the union.
-    sh = sh + rect(0, P.DESC, s, P.XH, sw=p.cut)
-    sh = sh - chamfer(0, P.XH, p.cut, "nw") - chamfer(xr, P.XH, p.cut, "ne")
+    sh = sh + rect(0, P.DESC, s, P.XH)
     return G(sh, l=p.sb, r=p.sb * 0.92)
 
 
