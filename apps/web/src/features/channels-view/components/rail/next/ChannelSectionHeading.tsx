@@ -111,7 +111,7 @@ export function DraggableChannelSectionHeading(props: {
   return (
     <div
       ref={draggable.ref}
-      class="relative cursor-grab active:cursor-grabbing"
+      class="group/section-heading relative cursor-grab active:cursor-grabbing"
       onMouseDown={(event) => pointer.start(event, dragId)}
       onPointerDown={() => {
         didDrag = false;
@@ -123,7 +123,7 @@ export function DraggableChannelSectionHeading(props: {
         appearance="bare"
         size="icon-xs"
         data-icon-motion="none"
-        class="absolute -left-(--sidebar-gutter) top-1 z-10 cursor-grab opacity-0 group-hover/rail-section:opacity-100 focus-visible:opacity-100 active:cursor-grabbing"
+        class="absolute -left-(--sidebar-gutter) top-1 z-10 cursor-grab opacity-0 group-hover/section-heading:opacity-100 focus-visible:opacity-100 active:cursor-grabbing"
         aria-label={t('channelSections.reorderSection', { name: props.label })}
         tooltip={t('channelSections.reorderSectionHint')}
         onClick={(event: MouseEvent) => event.stopPropagation()}

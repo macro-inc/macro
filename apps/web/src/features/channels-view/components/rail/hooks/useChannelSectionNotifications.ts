@@ -82,14 +82,8 @@ export function useChannelSectionNotifications(
       section === 'team_channels' ||
       section === 'direct_messages'
     ) {
-      // Only All channels excludes custom-section assignments.
-      const excludedIds =
-        section === 'channels'
-          ? options.labels().flatMap((label) => label.channelIds)
-          : [];
-
       return Telemetry.span('channels.section.members', () =>
-        fetchChannelGroupIds(section, excludedIds, signal)
+        fetchChannelGroupIds(section, [], signal)
       );
     }
 

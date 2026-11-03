@@ -1139,7 +1139,7 @@ describe('section notification actions', () => {
 
       expect(mocks.fetchGroupIds).toHaveBeenCalledExactlyOnceWith(
         section,
-        section === 'channels' ? label.channelIds : [],
+        [],
         expect.any(AbortSignal)
       );
       expect(mocks.source.unmuteEntity.mock.calls).toEqual([

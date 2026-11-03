@@ -994,10 +994,10 @@ or Threads view tabs. The default order is Favorites, Direct messages, the
 team's channels, custom sections, then **All channels**. The team heading is
 **[Team name] channels**, with **Team channels** as the fallback while the name
 is unavailable. The team section always shows joined team channels, including
-channels assigned to manual or smart custom sections. All channels is the renamed
-remaining-public/private list: its membership is unchanged, so it excludes team
-channels and channels assigned to custom sections. Each custom section is a
-top-level heading, independent of the Team channels disclosure. Empty sections
+channels assigned to manual or smart custom sections. All channels shows joined
+public/private channels, including custom-section members; it excludes team
+channels and DMs. Each custom section is a top-level heading, independent of the
+Team channels disclosure. Empty sections
 use padded, bordered cards like saved views, with a subtle background and secondary
 actions; empty Favorites explains how to add a favorite. Private conversations
 use a lock icon in the sidebar and mobile feed, including favorited private
@@ -1005,7 +1005,8 @@ conversations.
 All section headers use the shared collapsible-section styling without leading
 icons or top padding; the section stack supplies a compact 2px flex gap.
 Custom-section drop zones and highlights cover both the header and its content, including the
-empty state.
+empty state. Rejected drops show a borderless explanation; pending section data
+keeps drops disabled without covering the section with a loading message.
 Section, DM, and search containers use the 8px outer sidebar gutter; headings
 and rows add their own item padding so headings align with the Chat title.
 Rows are indented by 8px under every section, including Favorites, custom
@@ -1039,9 +1040,10 @@ Drag a section heading, its name, or the grip in the left gutter to reorder
 sections, or focus the grip and use Up/Down. Pointer dragging starts only after
 more than 8px of movement, never from holding still. A normal heading click still
 toggles the section; releasing a drag does not. Add and menu buttons never start
-a drag. The bare grip stays fixed when pressed, without its own button background,
-and the drag highlight includes both the grip and section name. It does not shift
-the header's text or controls. An insertion line shows the destination. Section order is a personal
+a drag. The bare grip appears only on header hover or keyboard focus and stays
+fixed when pressed, without its own button background. The drag highlight includes
+both the grip and section name without shifting the header's text or controls.
+An insertion line shows the destination. Section order is a personal
 preference, including for shared sections, and survives reloads. The dragged
 section appears as a card preview while its source is subdued. Other sections
 animate into their new positions on drop or keyboard reorder, except with reduced
@@ -1135,8 +1137,8 @@ Every desktop section menu, including **Favorites**, **All channels**,
 notifications, including for shared sections. Each action uses the section's
 complete current membership, including filtered-out and unloaded channels;
 channels added later do not inherit the change. Built-in lists resolve all pages
-before applying an action and never include unjoined channels. The team section
-includes custom-section members; only All channels excludes those assignments.
+before applying an action and never include unjoined channels. Both the team
+section and All channels include their custom-section members.
 Favorites targets only channel favorites, not documents or other favorite types.
 Snooze uses the usual
 duration/date picker and resumes notifications at the chosen time. A partial
