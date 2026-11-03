@@ -78,6 +78,10 @@ const FoldersRouteView = lazyNamed(
   () => import('@app/features/next-soup/route-views'),
   'FoldersRouteView'
 );
+const ForYouRouteView = lazyNamed(
+  () => import('@app/features/for-you/route-views'),
+  'ForYouRouteView'
+);
 const RecentRouteView = lazyNamed(
   () => import('@app/features/next-soup/route-views'),
   'RecentRouteView'
@@ -318,6 +322,11 @@ registerComponent(
   () => composableLayout(true)
 );
 registerComponent(NOT_FOUND_ROUTE_ID, () => <NotFound />);
+registerComponent(
+  'for-you',
+  () => <ForYouRouteView />,
+  () => composableLayout()
+);
 registerComponent('recent', () => <RecentRouteView />);
 registerComponent('activity', () => <ActivityRouteView />);
 registerComponent(

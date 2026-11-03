@@ -3,6 +3,7 @@ import { calendarPath } from '@app/features/calendar-view/calendar-url';
 import { t } from '@app/lib/i18n';
 import type { SidebarItem } from '@components/app/app-sidebar/sidebar';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import BuildingsFillIcon from '@icon/system/fill/buildings-fill.svg';
 import CalendarBlankFillIcon from '@icon/system/fill/calendar-blank-fill.svg';
 import ChatsCircleFillIcon from '@icon/system/fill/chats-circle-fill.svg';
@@ -10,6 +11,7 @@ import EnvelopeFillIcon from '@icon/system/fill/envelope-fill.svg';
 import FolderSimpleFillIcon from '@icon/system/fill/folder-simple-fill.svg';
 import GitPullRequestFillIcon from '@icon/system/fill/git-pull-request-fill.svg';
 import HouseFillIcon from '@icon/system/fill/house-fill.svg';
+import LightbulbFillIcon from '@icon/system/fill/lightbulb-fill.svg';
 import ListChecksFillIcon from '@icon/system/fill/list-checks-fill.svg';
 import PhoneCallFillIcon from '@icon/system/fill/phone-call-fill.svg';
 import PlugFillIcon from '@icon/system/fill/plug-fill.svg';
@@ -22,6 +24,7 @@ import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import FolderSimpleIcon from '@icon/system/regular/folder-simple.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
 import HouseIcon from '@icon/system/regular/house.svg';
+import LightbulbIcon from '@icon/system/regular/lightbulb.svg';
 import ListChecksIcon from '@icon/system/regular/list-checks.svg';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
@@ -71,6 +74,15 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
     iconActive: HouseFillIcon,
     hotkey: 'h',
     hotkeyToken: TOKENS.sidebar.goTo.home,
+  },
+  {
+    id: 'for-you',
+    get label() {
+      return t('nav.forYou');
+    },
+    href: '/for-you',
+    icon: LightbulbIcon,
+    iconActive: LightbulbFillIcon,
   },
   {
     id: 'documents',
@@ -202,15 +214,21 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
   },
 ] satisfies SidebarNextNavItem[];
 
-/** Feature flag gates for sidebar destinations. */
+/** Destinations controlled by remote flags or deployment switches. */
+export const GATED_NAV_IDS = [
+  'for-you',
+  'calendar',
+  'booking-links',
+  'companies',
+  'calls',
+  'reviews',
+  'activity',
+  'external',
+] as const;
+export type GatedNavId = (typeof GATED_NAV_IDS)[number];
+
 export type NavItemGates = {
-  showCalendar: boolean;
-  showScheduling: boolean;
-  showCustomers: boolean;
-  showCalls: boolean;
-  showReviews: boolean;
-  showActivity: boolean;
-  showExternal: boolean;
+  enabled: readonly GatedNavId[];
   /** User preferences for which items are shown and in what order. */
   prefs: SidebarPrefs;
 };
@@ -220,14 +238,11 @@ export const isNavItemAvailable = (
   item: SidebarNextNavItem,
   gates: NavItemGates
 ): boolean => {
-  if (item.id === 'calendar') return gates.showCalendar;
-  if (item.id === 'booking-links') return gates.showScheduling;
-  if (item.id === 'companies') return gates.showCustomers;
-  if (item.id === 'calls') return gates.showCalls;
-  if (item.id === 'reviews') return gates.showReviews;
-  if (item.id === 'activity') return gates.showActivity;
-  if (item.id === 'external') return gates.showExternal;
-  return true;
+  if (item.id === 'for-you' && isTouchDevice()) return false;
+  return (
+    !GATED_NAV_IDS.some((id) => id === item.id) ||
+    gates.enabled.some((id) => id === item.id)
+  );
 };
 
 /**
@@ -248,6 +263,13 @@ export const orderNavItems = (
   if (home) {
     result.push(home);
     used.add('home');
+  }
+
+  // Place the newly added feed beneath Home until it has a saved position.
+  const forYou = byId.get('for-you');
+  if (forYou && !order.includes('for-you')) {
+    result.push(forYou);
+    used.add('for-you');
   }
 
   for (const id of order) {

@@ -72,6 +72,7 @@ export function CalendarEmbed(props: CalendarEmbedProps) {
         eventsById={props.eventsById}
         settings={{
           initialView: props.settings.initialView,
+          openingScrollTime: props.settings.openingScrollTime,
           dayCount: props.settings.dayCount,
           showDayHeaders: props.settings.showDayHeaders,
           showAllDaySlot:

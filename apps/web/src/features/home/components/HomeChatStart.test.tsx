@@ -7,6 +7,7 @@ type ChildrenProps = { children?: JSX.Element };
 
 const mocks = vi.hoisted(() => ({
   agentsEnabled: true,
+  forYouEnabled: false,
   asideCollapsed: false,
   asideOverlay: false,
 }));
@@ -28,9 +29,25 @@ vi.mock('@app/components/view-shell', () => ({
   },
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: mocks.agentsEnabled }),
+  useFeatureFlag: (flag: { key: string }) => () => ({
+    enabled:
+      flag.key === 'enable-for-you' ? mocks.forYouEnabled : mocks.agentsEnabled,
+  }),
 }));
-vi.mock('@core/constant/featureFlags', () => ({ enableChatV3Agents: {} }));
+vi.mock('@core/constant/featureFlags', () => ({
+  enableChatV3Agents: { key: 'enable-agents' },
+  enableForYou: { key: 'enable-for-you' },
+}));
+vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
+vi.mock('@app/signal/hotkeyRoot', () => ({ useHotkeyInterceptor: vi.fn() }));
+vi.mock('@components/app/split-layout/layoutUtils', () => ({
+  useSplitPanelOrThrow: () => ({ isPanelActive: () => true }),
+}));
+vi.mock('../views/home-focus-view', () => ({
+  HomeFocusView: (props: ChildrenProps) => (
+    <div data-testid="home-focus">{props.children}</div>
+  ),
+}));
 vi.mock('@app/features/settings/components/local-runtime-prompt', () => ({
   LocalRuntimePrompt: () => null,
 }));
@@ -53,6 +70,7 @@ vi.mock('./home-recommended-actions', () => ({
 
 beforeEach(() => {
   mocks.agentsEnabled = true;
+  mocks.forYouEnabled = false;
   mocks.asideCollapsed = false;
   mocks.asideOverlay = false;
 });
@@ -99,4 +117,12 @@ describe('Home agent composer alignment', () => {
     ).toBeNull();
     expect(screen.getByText('What should we get done in Macro?')).toBeTruthy();
   });
+});
+
+it('mounts the focus preview only for the enabled rollout', () => {
+  mocks.forYouEnabled = true;
+  renderHome();
+  expect(screen.getByTestId('home-focus')).toBeTruthy();
+  expect(screen.getByTestId('home-chat-input')).toBeTruthy();
+  expect(screen.queryByTestId('home-suggestions')).toBeNull();
 });

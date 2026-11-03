@@ -5,11 +5,12 @@ import {
   ENABLE_CALLS,
   enableCalendarScheduling,
   enableCrm,
+  enableForYou,
   enableTasksReviews,
   enableWhatsappLinked,
 } from '@core/constant/featureFlags';
 import { type Accessor, createMemo } from 'solid-js';
-import type { NavItemGates } from './nav-items';
+import type { GatedNavId, NavItemGates } from './nav-items';
 import { useSidebarPrefs } from './use-sidebar-prefs';
 
 /**
@@ -24,16 +25,24 @@ export function useNavItemGates(): Accessor<NavItemGates> {
   const reviews = useFeatureFlag(enableTasksReviews);
   const activity = useActivityFeedFlag();
   const external = useFeatureFlag(enableWhatsappLinked);
+  const forYou = useFeatureFlag(enableForYou);
   const { prefs } = useSidebarPrefs();
 
   return createMemo(() => ({
-    showCalendar: calendar(),
-    showScheduling: scheduling().enabled,
-    showCustomers: crm().enabled,
-    showCalls: ENABLE_CALLS,
-    showReviews: reviews().enabled,
-    showActivity: activity(),
-    showExternal: external().enabled,
+    enabled: (
+      [
+        { id: 'for-you', enabled: forYou().enabled },
+        { id: 'calendar', enabled: calendar() },
+        { id: 'booking-links', enabled: scheduling().enabled },
+        { id: 'companies', enabled: crm().enabled },
+        { id: 'calls', enabled: ENABLE_CALLS },
+        { id: 'reviews', enabled: reviews().enabled },
+        { id: 'activity', enabled: activity() },
+        { id: 'external', enabled: external().enabled },
+      ] satisfies { id: GatedNavId; enabled: boolean }[]
+    )
+      .filter((item) => item.enabled)
+      .map((item) => item.id),
     prefs: prefs(),
   }));
 }

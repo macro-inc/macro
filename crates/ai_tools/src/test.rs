@@ -784,3 +784,36 @@ fn conversation_tools_only_advertise_new_sessions() {
     }
     assert!(!subagent_toolset().tools.contains_key("ReadChat"));
 }
+
+#[test]
+fn projections_only_expose_read_only_workspace_research() {
+    let tools = projection_tools();
+    assert!(tools.toolset.user_tools.is_empty());
+    assert!(tools.deferred.is_empty());
+    for tool in tools.toolset.tools.values() {
+        assert!(tool.annotations.kind.read_only_hint(), "{}", tool.name);
+    }
+    for name in [
+        "ListEntities",
+        "ListNotifications",
+        "ReadContent",
+        "GetThread",
+        "SelfKnowledge",
+        "ListDatabases",
+        "DescribeDatabase",
+    ] {
+        assert!(tools.toolset.tools.contains_key(name), "missing {name}");
+    }
+    for name in [
+        "Subagent",
+        "SearchTools",
+        "LoadTools",
+        "ExecuteCode",
+        "SendEmail",
+        "CreateCalendarEvent",
+        "CreateDocument",
+        "QueryDatabase",
+    ] {
+        assert!(!tools.toolset.tools.contains_key(name), "unsafe {name}");
+    }
+}

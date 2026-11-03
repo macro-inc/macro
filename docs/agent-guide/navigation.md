@@ -12,6 +12,81 @@ workspace. The top-right split icon opens another Home split, even
 when Home is already open, and is disabled when there is no room for a new split.
 Its tooltip is “New Split” and displays the registered new-split shortcut (`\`).
 
+## Desktop Home focus preview
+
+With `enable-for-you` on, Home shows a composer above five two-line sample priority rows. With it off, Home keeps its existing composer and recommendations. Each preview row shows a
+hardcoded importance score with the same five-bar meter and color bands as
+email Focus, immediately before its timestamp. Rows use the shared Home list item, with an
+icon and title on the first line and context on the second, plus score, timestamp, and dismiss; click a row to
+open its preview. Enter opens the focused row; the real composer stays centered
+above the list, which shares its width. The navigation panel
+starts closed when no preference has been saved; its toggle still opens the
+existing notifications and recent-activity list. Mobile Home is unchanged.
+
+A 200px Today calendar embed below the composer reuses the shared day time-grid
+with sample events from `features/home/core/calendar-events.json`. It opens
+centered on the current time and scrolls vertically through the day. Hide recurring
+filters repeating meetings locally; select an event to inspect its sample details.
+No calendar requests or changes are made.
+
+The homepage keeps its real chat composer, including mentions, attachments,
+model/mode controls, draft persistence, and sending. Only the suggested rows
+use `apps/web/src/features/home/core/focus-actions.json`. Their review actions
+do not send messages, schedule routines, or fetch documents; row changes reset
+on reload.
+
+- Open an email or message row to edit its sample draft. Close and reopen it
+  to keep editing; **Done** clears it from the local list. A row without a
+  prepared draft starts with an empty editor.
+- **Set up routine** opens local instructions and a schedule field.
+- **Open proposal** opens a sample document in Home.
+- Use `j` / `k` in the active Home pane to move between rows and `e` to set
+  one aside. Shortcuts do not run inside text fields or open dialogs. When navigation is open, focus its list to use the existing list shortcuts.
+- **Undo last** restores the latest cleared row; clearing all rows shows the
+  completed state.
+
+For a signed-out, backend-free test fixture of the priorities and calendar, run
+`bun --bun vite --config src/features/home/browser-test/vite.config.ts` from
+`apps/web` and open `http://127.0.0.1:3006/`. Add `?theme=light` for light mode.
+The matching Playwright config exercises local edits, keyboard navigation,
+completion, undo, and absence of external requests.
+
+## Desktop For you
+
+With `enable-for-you` on, open **For you** using the light bulb directly below Home in the outer sidebar. The flag hides it from every navigation menu when off; direct links wait for flag loading, then return to Home without starting feed generation. Local HMR enables the preview; deployed environments follow the PostHog rollout.
+`/app/for-you` combines Important items, agent ideas, updates, and work to Revisit.
+The feed is generated from the signed-in user's actual workspace through the AI
+projection service. Ideas can propose a dedicated agent, a business database, or
+a routine based on the user's work. Titles name the concrete work in plain
+language; summaries keep to essential context and the next step, with detailed
+instructions in the agent action. Proactive ideas look beyond inbox cleanup to
+researched databases with ongoing upkeep, opportunity discovery, and focused
+agents for recurring channel workflows. They must follow observed user goals,
+avoid existing systems and duplicate suggestions, and keep routine updates quiet
+unless something meaningful changes or needs a decision.
+All, Important, Ideas, Revisit, Save money, and Make money filter the
+same recommendations; All interleaves proactive ideas with work items, and updates appear in All.
+Save money contains ideas tied to evidenced cost reductions or purchasing
+improvements; Make money contains ideas tied to revenue, commercial opportunities,
+or funding for an observed need. These are generated from workspace context.
+An idea can match both financial tabs while appearing once in All and Ideas.
+Empty financial tabs do not contain placeholder tips; cached untagged ideas gain
+financial categories on regeneration.
+
+Create agent, Build database, Create routine, and Ask agent open a real agent
+conversation with contextual instructions filled in. Review and send them there
+to start the work. The source mention pill beside importance opens the referenced item in a split. Dismiss
+suggestion hides a recommendation without changing the source entity; Undo last
+dismissal restores it. Preferences and dismissals persist separately per account.
+Tune your feed saves the instructions and generates a feed for those preferences;
+Refresh feed regenerates the current feed. Loading, failure, and empty states are
+shown explicitly, with no sample-data fallback.
+
+The sidebar entry is desktop-only. Existing custom order is preserved, with the
+entry inserted below Home until explicitly reordered. The backend-free browser
+suite injects a test source through `features/for-you/context/feed-source.ts`;
+live generation and real agent handoff require the authenticated app.
+
 ## Desktop tabs (macOS, `enable-desktop-tabs` flag)
 
 The title bar's center holds browser-style tabs; each tab is a whole split
@@ -184,7 +259,8 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/invite?token=<token>` | GTM invite welcome page ("Welcome, <first name>", Continue → signup). Links come from the staff portal, last 48h, and grant the first month of Premium free once the account is created |
 | `/app/internal/invite-links` | Macro staff only (`@macro.com`): create GTM invite links and track opens, signups, and subscriptions |
 | `/app/internal/status` | Macro staff only (`@macro.com`): set the system status (Operational, Degraded, Major outage + message), see its history and the `POST /auth/system-status` API. A non-operational status shows a banner across the top of the app for every user; open apps update over the connection gateway |
-| `/app/home` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
+| `/app/for-you` | Personalized Important items, agent ideas, and work to Revisit |
+| `/app/home` | Desktop: existing Home, or focus preview when `enable-for-you` is on; mobile: Notifications soup |
 | `/app/home/<block-type>/<uuid>` | Home with an item opened inline; `<block-type>` may be an alias such as `task`; a targeted channel message uses `sN.channels.messageId` (and optionally `sN.channels.threadId`) and a document comment `sN.drive.commentId`; a calendar row renders the Calendar view inline at `/app/home/calendar/<month-or-week-or-day>` with the event, occurrence, and locator range in `sN.calendar.*` |
 | `/app/mail` | Email client |
 | `/app/mail/<uuid>` | Email with a thread opened inline; a targeted message uses `sN.email-detail.messageId` |

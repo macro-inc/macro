@@ -138,6 +138,8 @@ export type ViewShellRootProps = Omit<
    * Only the first split uses it; other splits start collapsed.
    */
   asidePreferenceKey?: string;
+  /** Initial wide-layout choice when no navigation preference is saved. */
+  defaultAsideCollapsed?: boolean;
   /**
    * Keep navigation open while true, e.g. while Main has nothing selected and
    * only the aside offers a next step. Wide layouts dock it and withhold the
@@ -175,6 +177,7 @@ function Root(props: ViewShellRootProps) {
     'resizable',
     'aside',
     'asidePreferenceKey',
+    'defaultAsideCollapsed',
     'asideRequired',
     'asidePinned',
     'main',
@@ -197,7 +200,7 @@ function Root(props: ViewShellRootProps) {
     : local.asidePreferenceKey
       ? usePreference(
           `macro:pref:view-sidebar:collapsed:${local.asidePreferenceKey}`,
-          { default: false }
+          { default: local.defaultAsideCollapsed ?? false }
         )
       : createSignal(false);
   const id = createUniqueId();

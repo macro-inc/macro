@@ -143,3 +143,8 @@ export const LIKELY_NEXT_VIEWS = [
   AgentsRouteView,
   CalendarRouteView,
 ];
+
+export const ForYouRouteView = lazyNamed(
+  () => import('@app/features/for-you/route-views'),
+  'ForYouRouteView'
+);

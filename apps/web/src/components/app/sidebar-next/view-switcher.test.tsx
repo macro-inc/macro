@@ -42,12 +42,7 @@ vi.mock('@app/signal/splitLayout', () => ({
 // Flags are PostHog-backed; the rail's own gates decide what is listed.
 vi.mock('./use-nav-item-gates', () => ({
   useNavItemGates: () => () => ({
-    showCalendar: true,
-    showScheduling: false,
-    showCustomers: false,
-    showCalls: true,
-    showReviews: false,
-    showActivity: false,
+    enabled: ['for-you', 'calendar', 'calls'],
     prefs: { hidden: new Set(DEFAULT_HIDDEN_IDS), order: [] },
   }),
 }));
@@ -119,6 +114,7 @@ describe('ViewSwitcher', () => {
     const items = await screen.findAllByRole('menuitem');
     expect(items.map((item) => item.textContent)).toEqual([
       'Home',
+      'For you',
       'Drive',
       'Email',
       'Chat',

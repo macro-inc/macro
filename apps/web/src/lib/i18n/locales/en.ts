@@ -6,6 +6,7 @@ import commands from './en/commands';
 import common from './en/common';
 import create from './en/create';
 import entityActions from './en/entity-actions';
+import forYou from './en/for-you';
 import localRuntime from './en/local-runtime';
 import mobile from './en/mobile';
 import nav from './en/nav';
@@ -28,6 +29,7 @@ export default {
   common,
   create,
   entityActions,
+  forYou,
   localRuntime,
   mobile,
   nav,

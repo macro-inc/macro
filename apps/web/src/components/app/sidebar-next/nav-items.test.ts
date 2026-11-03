@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   customizableNavItems,
+  GATED_NAV_IDS,
   moreMenuItems,
   type NavItemGates,
   orderNavItems,
@@ -16,13 +17,7 @@ const defaultPrefs = (overrides: Partial<SidebarPrefs> = {}): SidebarPrefs => ({
 });
 
 const defaultGates = (overrides: Partial<NavItemGates> = {}): NavItemGates => ({
-  showCalendar: true,
-  showScheduling: true,
-  showCustomers: true,
-  showCalls: true,
-  showReviews: true,
-  showActivity: true,
-  showExternal: true,
+  enabled: GATED_NAV_IDS,
   prefs: defaultPrefs(),
   ...overrides,
 });
@@ -34,6 +29,23 @@ it('keeps reminders inside Email instead of offering a separate app', () => {
 });
 
 describe('sidebar visibility preferences', () => {
+  it('hides For you from every navigation surface when its rollout is off', () => {
+    const gates = defaultGates({
+      enabled: GATED_NAV_IDS.filter((id) => id !== 'for-you'),
+    });
+    for (const items of [
+      customizableNavItems(gates),
+      visibleNavItems(gates),
+      moreMenuItems(gates),
+    ]) {
+      expect(items.some((item) => item.id === 'for-you')).toBe(false);
+    }
+    expect(
+      visibleNavItems(defaultGates())
+        .map((item) => item.id)
+        .slice(0, 2)
+    ).toEqual(['home', 'for-you']);
+  });
   it('hides calls and reviews from the rail by default', () => {
     const items = visibleNavItems(defaultGates());
 
@@ -63,7 +75,7 @@ describe('sidebar visibility preferences', () => {
     );
 
     const gates = defaultGates({
-      showActivity: false,
+      enabled: GATED_NAV_IDS.filter((id) => id !== 'activity'),
       prefs: defaultPrefs({ hidden: new Set() }),
     });
     for (const items of [
@@ -131,8 +143,8 @@ describe('sidebar visibility preferences', () => {
     expect(
       visibleNavItems(gates)
         .map((item) => item.id)
-        .slice(0, 3)
-    ).toEqual(['home', 'booking-links', 'tasks']);
+        .slice(0, 4)
+    ).toEqual(['home', 'for-you', 'booking-links', 'tasks']);
     expect(
       moreMenuItems(gates).some((item) => item.id === 'booking-links')
     ).toBe(false);
@@ -141,7 +153,7 @@ describe('sidebar visibility preferences', () => {
   it('keeps Scheduling absent everywhere when its feature flag is off', () => {
     for (const hidden of [new Set<string>(), new Set(DEFAULT_HIDDEN_IDS)]) {
       const gates = defaultGates({
-        showScheduling: false,
+        enabled: GATED_NAV_IDS.filter((id) => id !== 'booking-links'),
         prefs: defaultPrefs({ hidden }),
       });
       for (const items of [
@@ -165,7 +177,7 @@ describe('External', () => {
   it('keeps External absent everywhere when its feature flag is off', () => {
     for (const hidden of [new Set<string>(), new Set(['external'])]) {
       const gates = defaultGates({
-        showExternal: false,
+        enabled: GATED_NAV_IDS.filter((id) => id !== 'external'),
         prefs: defaultPrefs({ hidden }),
       });
       for (const items of [
@@ -188,8 +200,9 @@ describe('orderNavItems', () => {
       'documents',
     ]);
 
-    expect(ordered.map((item) => item.id).slice(0, 4)).toEqual([
+    expect(ordered.map((item) => item.id).slice(0, 5)).toEqual([
       'home',
+      'for-you',
       'tasks',
       'mail',
       'documents',

@@ -70,6 +70,9 @@ Canvas tools come from the Documents subtoolset and inherit its worker client,
 admission and usage recorder in every host. ApplyCanvasEdits uses the same
 edit capability but calls no nested model and emits no additional model charge; no new context or env vars are needed.
 
+Projection research uses `projection_tools`: read-only native workspace tools,
+no user tools, external connector execution, delegation, or deferred loading.
+
 ## Tool contracts
 
 - Session user-tool finishers authorize the final edited arguments after review; preserve the selected account through confirmation and never approve an earlier draft then execute a changed one.

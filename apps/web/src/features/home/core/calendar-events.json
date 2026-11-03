@@ -1,0 +1,104 @@
+{
+  "date": "2026-11-02",
+  "events": [
+    {
+      "id": "team-check-in",
+      "date": "2026-11-02",
+      "title": "Team check-in",
+      "time": "9:30 – 10:00 AM",
+      "location": "Video call",
+      "description": "Share priorities for the week and flag anything that needs a decision.",
+      "startsAt": "09:30",
+      "recurring": true,
+      "durationMinutes": 30
+    },
+    {
+      "id": "design-review",
+      "date": "2026-11-02",
+      "title": "Design review",
+      "time": "11:00 – 11:45 AM",
+      "location": "Design room",
+      "description": "Review the next iteration and agree on the changes to take forward.",
+      "startsAt": "11:00",
+      "recurring": false,
+      "durationMinutes": 45
+    },
+    {
+      "id": "planning",
+      "date": "2026-11-02",
+      "title": "Project planning",
+      "time": "2:00 – 2:30 PM",
+      "location": "Video call",
+      "description": "Confirm milestone owners, dependencies, and next steps.",
+      "startsAt": "14:00",
+      "recurring": true,
+      "durationMinutes": 30
+    },
+    {
+      "id": "weekly-review",
+      "date": "2026-11-03",
+      "title": "Weekly review",
+      "time": "10:00 – 10:30 AM",
+      "location": "Video call",
+      "description": "Check progress and make room for the most important work.",
+      "startsAt": "10:00",
+      "recurring": true,
+      "durationMinutes": 30
+    },
+    {
+      "id": "launch-readiness",
+      "date": "2026-11-05",
+      "title": "Launch readiness",
+      "time": "1:00 – 2:00 PM",
+      "location": "Project room",
+      "description": "Walk through the launch checklist and resolve the remaining questions.",
+      "startsAt": "13:00",
+      "recurring": false,
+      "durationMinutes": 30
+    },
+    {
+      "id": "morning-sync",
+      "date": "2026-11-02",
+      "title": "Morning sync",
+      "time": "8:00 – 8:30 AM",
+      "startsAt": "08:00",
+      "recurring": true,
+      "location": "Video call",
+      "description": "Review progress and share updates.",
+      "durationMinutes": 30
+    },
+    {
+      "id": "prototype-walkthrough",
+      "date": "2026-11-02",
+      "title": "Prototype walkthrough",
+      "time": "3:30 – 4:00 PM",
+      "startsAt": "15:30",
+      "recurring": false,
+      "location": "Design room",
+      "description": "Walk through the prototype and gather feedback.",
+      "durationMinutes": 30
+    },
+    {
+      "id": "launch-checklist",
+      "date": "2026-11-02",
+      "title": "Launch checklist",
+      "time": "4:30 – 5:00 PM",
+      "startsAt": "16:30",
+      "recurring": false,
+      "location": "Video call",
+      "description": "Confirm the final checklist and next steps.",
+      "durationMinutes": 30
+    },
+    {
+      "id": "end-of-day-review",
+      "date": "2026-11-02",
+      "title": "End-of-day review",
+      "time": "6:30 – 7:00 PM",
+      "startsAt": "18:30",
+      "durationMinutes": 30,
+      "recurring": false,
+      "location": "Video call",
+      "description": "Review today’s progress and confirm the next steps."
+    }
+  ]
+}

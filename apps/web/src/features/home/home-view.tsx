@@ -2,6 +2,7 @@ import { useViewShell, ViewShell } from '@app/components/view-shell';
 import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
 import { calendarSearch } from '@app/features/calendar-view/calendar-url';
 import { ViewTour } from '@app/features/tours/ViewTour';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { createSearchParams, SplitRouter } from '@app/lib/split-router';
 import { homeCalendarRoute } from '@app/routes/routes';
 import { DebugSuspense } from '@channel/DebugSuspense';
@@ -11,6 +12,7 @@ import type { PreviewSelection } from '@components/app/previewTarget';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { enableForYou } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { ListEntityMetadataQueryProvider } from '@entity';
@@ -87,6 +89,7 @@ function HomeListPane(props: {
 }
 
 function HomeViewRoot() {
+  const forYou = useFeatureFlag(enableForYou);
   const panel = useSplitPanelOrThrow();
   const { previewTarget, calendarOpen, openPreview, closePreview } =
     useHomeView();
@@ -116,6 +119,7 @@ function HomeViewRoot() {
                 <div class="size-full min-h-0 bg-panel">
                   <ViewShell.Root
                     asidePreferenceKey="home"
+                    defaultAsideCollapsed={forYou().enabled}
                     aside={{ preserveDuringResize: false }}
                     main={{ preferredWidth: 640 }}
                     resizable
@@ -175,6 +179,7 @@ function HomeViewRoot() {
  * itself waits for identity; the frame keeps the screen from going blank.
  */
 export function HomePendingView() {
+  const forYou = useFeatureFlag(enableForYou);
   const listSkeleton = (
     <div class="mt-3 min-h-0 min-w-0 flex-1 overflow-hidden touch:mt-0 touch:pt-(--mobile-content-inset-top)">
       <HomeListSkeleton grouped />
@@ -190,6 +195,7 @@ export function HomePendingView() {
             <div class="size-full min-h-0 bg-panel">
               <ViewShell.Root
                 asidePreferenceKey="home"
+                defaultAsideCollapsed={forYou().enabled}
                 aside={{ preserveDuringResize: false }}
                 main={{ preferredWidth: 640 }}
                 resizable
