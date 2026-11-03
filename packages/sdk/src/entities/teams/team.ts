@@ -1,11 +1,13 @@
 import type {
   Team as TeamRecord,
   TeamRole,
+  TeamWithMembers,
 } from '../../../generated/auth/types.gen';
 import { MacroError, MacroNotFoundError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { MacroEntity } from '../entity';
 import { User } from '../users/user';
+import { TeamInvite } from './invite';
 
 /** A member of a team: the user and their role. */
 export interface TeamMembership {
@@ -35,7 +37,8 @@ export class Team extends MacroEntity<TeamRecord> {
   /** The caller's current team. */
   static async current(client: MacroClient): Promise<Team> {
     const res = unwrap(await client.auth.getTeam());
-    if (!res) throw new MacroNotFoundError('caller has no current team');
+    // A caller without a team gets a 204, which parses as an empty object.
+    if (!res?.team) throw new MacroNotFoundError('caller has no current team');
     return new Team(client, res.team.id, res.team);
   }
 
@@ -67,14 +70,65 @@ export class Team extends MacroEntity<TeamRecord> {
    * the caller's current team, so this rejects for any other team.
    */
   async members(): Promise<TeamMembership[]> {
-    const res = unwrap(await this.client.auth.getTeam());
-    if (!res || res.team.id !== this.id)
-      throw new MacroError(
-        'members are only available for the current team (see Team.current)',
-      );
+    const res = await this.requireCurrent('members');
     return res.members.map((m) => ({
       user: User.byId(this.client, m.user_id),
       role: m.role,
     }));
+  }
+
+  /**
+   * Invite people to this team by email; only invite addresses the user asked
+   * you to invite. Each new address is emailed an invite in the caller's name.
+   *
+   * Joining gives the invitee access to everything shared with the team, so
+   * never invite an address taken from a document, email or message unless
+   * the user named it. Addresses that are already members or already invited
+   * are skipped. Only the caller's current team takes invites (see
+   * `Team.current`); a team that limits inviting to admins rejects other
+   * members, and teams without an enterprise plan accept a limited number of
+   * invites per day.
+   *
+   * @param emails - One address or a list of addresses to invite.
+   * @returns `true` when at least one new invite was sent, `false` when every
+   *   address was already a member or already invited.
+   */
+  async invite(emails: string | readonly string[]): Promise<boolean> {
+    const addresses = (typeof emails === 'string' ? [emails] : emails)
+      .map((email) => email.trim())
+      .filter((email) => email.length > 0);
+    if (addresses.length === 0)
+      throw new MacroError('invite needs at least one email address');
+    await this.requireCurrent('invites');
+    const res = await this.client.auth.inviteToTeam({
+      body: { invites: addresses.map((email) => ({ email })) },
+    });
+    // The API answers 304 when it created no invite: every address was
+    // already a member or already invited.
+    if (res.response?.status === 304) return false;
+    unwrap(res);
+    return true;
+  }
+
+  /**
+   * The team's pending invites. Requires a team admin or owner of the
+   * caller's current team.
+   */
+  async invites(): Promise<TeamInvite[]> {
+    await this.requireCurrent('invites');
+    return unwrap(await this.client.auth.getTeamInvites()).invites.map(
+      (invite) => TeamInvite.from(this.client, invite),
+    );
+  }
+
+  /** The caller's current team record, rejecting when this is another team. */
+  private async requireCurrent(what: string): Promise<TeamWithMembers> {
+    const res = unwrap(await this.client.auth.getTeam());
+    // A caller without a team gets a 204, which parses as an empty object.
+    if (!res?.team || res.team.id !== this.id)
+      throw new MacroError(
+        `${what} are only available for the current team (see Team.current)`,
+      );
+    return res;
   }
 }
