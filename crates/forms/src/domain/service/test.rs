@@ -299,6 +299,7 @@ fn seed_rsvp(world: &Shared, audience: Audience) {
             branding: FormBranding::default(),
             created_at: now,
             updated_at: now,
+            project_id: None,
             is_hidden_in_drive: false,
             responses_visible: false,
             anonymous: false,

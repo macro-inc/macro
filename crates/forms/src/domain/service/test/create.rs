@@ -99,6 +99,7 @@ async fn a_form_over_a_table_asks_every_column_and_adds_the_managed_ones() {
                 branding: FormBranding::default(),
                 created_at: start_of_tests(),
                 updated_at: start_of_tests(),
+                project_id: None,
                 is_hidden_in_drive: false,
                 responses_visible: false,
                 anonymous: false,

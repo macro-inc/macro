@@ -563,6 +563,23 @@ impl FormsRepo for FakeRepo {
         )
     }
 
+    async fn move_form(&self, id: FormId, project_id: Option<&str>) -> Result<bool, FakeError> {
+        let mut world = self.0.lock().unwrap();
+        Ok(
+            match world
+                .forms
+                .iter_mut()
+                .find(|stored| stored.form.id == id && stored.trashed_at.is_none())
+            {
+                Some(stored) => {
+                    stored.form.project_id = project_id.map(str::to_string);
+                    true
+                }
+                None => false,
+            },
+        )
+    }
+
     async fn delete_form(&self, id: FormId) -> Result<(), FakeError> {
         let mut world = self.0.lock().unwrap();
         world.forms.retain(|stored| stored.form.id != id);

@@ -124,7 +124,7 @@ export function createAttachmentLinkOffer(options: {
         span.setAttr('email.attachment_links.linked', valid);
         if (!valid) return;
         for (const document of documents) {
-          options.editorFiles.makePublic(document.documentId);
+          span.run(() => options.editorFiles.makePublic(document.documentId));
         }
         if (editor) appendAttachmentLinks(editor, documents, current);
       } finally {

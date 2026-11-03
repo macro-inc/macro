@@ -10,6 +10,9 @@ test-support = []
 [dependencies]
 import_linear = { path = "../import_linear" }
 import_jira = { path = "../import_jira" }
+
+macro_entrypoint = { path = "../macro_entrypoint" }
+memory = { path = "../memory" }
 clap = { workspace = true, features = ["derive"] }
 favorites = { path = "../favorites", features = ["ai_tools", "postgres"] }
 forms = { path = "../forms", features = ["ai_tools", "gateway", "postgres", "scheduling", "static_files"] }
@@ -51,7 +54,7 @@ contacts = { path = "../contacts", default-features = false, features = [
   "outbound",
 ] }
 crm = { path = "../crm" }
-databases = { path = "../databases", default-features = false, features = ["ai_tools", "gateway", "postgres"] }
+databases = { path = "../databases", default-features = false, features = ["ai_tools", "entity_mutation", "gateway", "postgres"] }
 databases_sql = { path = "../databases_sql", features = ["ai_tools"] }
 documents = { path = "../documents", features = ["ai_tools", "attachment", "purge"] }
 email = { path = "../email", features = ["ai_schema", "ai_tools", "axum", "outbound", "s3"] }

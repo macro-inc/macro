@@ -1222,6 +1222,11 @@ export type Awareness = {
  */
 export type AwarenessRelay = {
     /**
+     * Whether the viewer's grant lets them edit; a viewer who cannot is
+     * shown as viewing.
+     */
+    canEdit: boolean;
+    /**
      * The database the viewer is in.
      */
     databaseId: string;
@@ -5075,6 +5080,10 @@ export type Database = {
      */
     owner_id: string;
     /**
+     * The folder it is filed in; `null` at the root.
+     */
+    project_id: string | null;
+    /**
      * Set when trashed.
      */
     trashed_at: string | null;
@@ -6031,6 +6040,16 @@ export type DocumentUpdatedMetadata = {
      * Whether share permissions were updated.
      */
     share_permission_updated: boolean;
+};
+
+/**
+ * Request body for duplicating a database.
+ */
+export type DuplicateDatabaseRequest = {
+    /**
+     * The copy's name; left out, "<name> copy".
+     */
+    name?: string | null;
 };
 
 export type EditAnchorRequest = EditPdfAnchorRequest & {
@@ -7799,6 +7818,10 @@ export type Form = {
      * Its owner.
      */
     ownerId: string;
+    /**
+     * The folder it is filed in; `null` at the root.
+     */
+    projectId: string | null;
     /**
      * The person column each signed-in submission names its respondent in;
      * `null` once deleted, and on a form created anonymous. An anonymous
@@ -20189,6 +20212,31 @@ export type UndoDatabaseChangeResponses = {
 };
 
 export type UndoDatabaseChangeResponse = UndoDatabaseChangeResponses[keyof UndoDatabaseChangeResponses];
+
+export type DuplicateDatabaseData = {
+    body: DuplicateDatabaseRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/duplicate';
+};
+
+export type DuplicateDatabaseErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DuplicateDatabaseError = DuplicateDatabaseErrors[keyof DuplicateDatabaseErrors];
+
+export type DuplicateDatabaseResponses = {
+    201: Database;
+};
+
+export type DuplicateDatabaseResponse = DuplicateDatabaseResponses[keyof DuplicateDatabaseResponses];
 
 export type ImportDatabaseTableData = {
     body: ImportTable;

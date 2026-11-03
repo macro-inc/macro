@@ -10305,6 +10305,10 @@ export const listDatabasesResponseItem = zod
         id: zod.uuid().describe('Identifier.'),
         name: zod.string().describe('Display name.'),
         owner_id: zod.string().describe('Owning user.'),
+        project_id: zod
+          .string()
+          .nullable()
+          .describe('The folder it is filed in; `null` at the root.'),
         trashed_at: zod.iso
           .datetime({})
           .nullable()
@@ -10825,6 +10829,10 @@ export const getDatabaseResponse = zod
         id: zod.uuid().describe('Identifier.'),
         name: zod.string().describe('Display name.'),
         owner_id: zod.string().describe('Owning user.'),
+        project_id: zod
+          .string()
+          .nullable()
+          .describe('The folder it is filed in; `null` at the root.'),
         trashed_at: zod.iso
           .datetime({})
           .nullable()
@@ -11734,6 +11742,23 @@ export const undoDatabaseChangeResponse = zod
       .describe('What undoing a change did.'),
   })
   .describe('What undoing a change did.');
+
+/**
+ * @summary Copy a database, with its tables, columns, views and rows, into a new one
+the caller owns. Its sharing, forms, webhooks and history stay behind.
+ */
+export const duplicateDatabaseParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const duplicateDatabaseBody = zod
+  .object({
+    name: zod
+      .string()
+      .nullish()
+      .describe('The copy\'s name; left out, \"<name> copy\".'),
+  })
+  .describe('Request body for duplicating a database.');
 
 /**
  * @summary Import a new table and every row atomically; retries carry the same request ID.
@@ -22671,6 +22696,10 @@ export const listFormsResponseItem = zod
         'Its display name. A standalone form follows the database it created;\na form attached to an existing table has its own name.'
       ),
     ownerId: zod.string().describe('Its owner.'),
+    projectId: zod
+      .string()
+      .nullable()
+      .describe('The folder it is filed in; `null` at the root.'),
     respondentColumnId: zod
       .uuid()
       .nullable()
@@ -22822,6 +22851,10 @@ export const listAccessibleFormsResponseItem = zod
             'Its display name. A standalone form follows the database it created;\na form attached to an existing table has its own name.'
           ),
         ownerId: zod.string().describe('Its owner.'),
+        projectId: zod
+          .string()
+          .nullable()
+          .describe('The folder it is filed in; `null` at the root.'),
         respondentColumnId: zod
           .uuid()
           .nullable()
@@ -22941,6 +22974,10 @@ export const getFormResponse = zod
             'Its display name. A standalone form follows the database it created;\na form attached to an existing table has its own name.'
           ),
         ownerId: zod.string().describe('Its owner.'),
+        projectId: zod
+          .string()
+          .nullable()
+          .describe('The folder it is filed in; `null` at the root.'),
         respondentColumnId: zod
           .uuid()
           .nullable()
@@ -23512,6 +23549,10 @@ export const updateFormResponse = zod
         'Its display name. A standalone form follows the database it created;\na form attached to an existing table has its own name.'
       ),
     ownerId: zod.string().describe('Its owner.'),
+    projectId: zod
+      .string()
+      .nullable()
+      .describe('The folder it is filed in; `null` at the root.'),
     respondentColumnId: zod
       .uuid()
       .nullable()
@@ -23628,6 +23669,10 @@ export const collaborateFormResponse = zod
                 'Its display name. A standalone form follows the database it created;\na form attached to an existing table has its own name.'
               ),
             ownerId: zod.string().describe('Its owner.'),
+            projectId: zod
+              .string()
+              .nullable()
+              .describe('The folder it is filed in; `null` at the root.'),
             respondentColumnId: zod
               .uuid()
               .nullable()
@@ -24584,6 +24629,10 @@ export const putFormLayoutResponse = zod
                 'Its display name. A standalone form follows the database it created;\na form attached to an existing table has its own name.'
               ),
             ownerId: zod.string().describe('Its owner.'),
+            projectId: zod
+              .string()
+              .nullable()
+              .describe('The folder it is filed in; `null` at the root.'),
             respondentColumnId: zod
               .uuid()
               .nullable()

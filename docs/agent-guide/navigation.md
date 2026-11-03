@@ -437,6 +437,10 @@ Split focus mode (`Shift+Esc`) floats the active split in a rounded, bordered
 panel over the same glass scrim as dialogs. Click the scrim or use the shortcut
 again to restore the split layout.
 
+On desktop, when navigation replaces a pane's content, keyboard focus moves into the active
+pane. If the destination editor or input focuses itself, it keeps focus. A
+focused search or other input outside the panes remains focused while it is open.
+
 Image lightboxes, channel media viewers, sharing, and onboarding dialogs use
 the standard glass scrim. Scroll-edge indicators fade smoothly toward content
 and disappear at the corresponding scroll boundary. Image and video error
@@ -651,9 +655,11 @@ movement must not keep resizing the removed split. Arrow keys still resize
 immediately, with Shift selecting the larger step.
 
 A view's narrow/wide layout reads its width when it mounts, then applies later
-split or window resizes on the next animation frame. Open a channel beside Home,
-drag the split gutter back and forth across the narrow breakpoint, and resize
-the window: the console should show no `ResizeObserver loop completed with
+split or window resizes on the next animation frame. Opening Home in either a
+wide or narrow split must settle immediately, without sliding or growing its
+content from zero width. Later split resizes still animate sidebar closure.
+Open a channel beside Home, drag the split gutter across the narrow breakpoint,
+and resize the window: the console should show no `ResizeObserver loop completed with
 undelivered notifications` errors, and the sidebar should switch between docked
 and overlay as the split crosses the breakpoint. Drive and other `virtua` lists
 can still report it from the virtualizer's own observer.
@@ -746,9 +752,10 @@ edited, so a provider failure cannot silently broaden the search.
 
 Click a result or message snippet to open its actual location, or use **Up/Down**
 and then **Enter**. Keyboard selection scrolls into view while the editor keeps
-focus. **Shift+Enter** always inserts a newline in the Command K main input,
-including before Universal Input activates and when Shift is released before
-Enter; neither key release opens the selected result. Multiline input hides the
+focus. **Shift+Enter** inserts a newline in the composer's main input, including
+when Shift is released before Enter; neither key release opens the selected
+result. Before Universal Input activates, Shift+Enter in the Command K search
+input opens the selected result in a new split. Multiline input hides the
 Macro logo and removes its reserved spacing so text uses the full width. **Escape** exits
 result navigation; a second Escape closes the menu. The content type selector
 uses the shared styled dropdown with a selection checkmark and platform-specific
@@ -792,7 +799,9 @@ shows the absolute date, time, timezone, calendar, and invitees. For example,
 “Call John at 3pm tomorrow” becomes a one-hour event at 3 PM tomorrow with no
 invitation; inviting John requires an explicit invitation request or guest edit.
 Bare hours use a reasonable default (1–7 PM, 8–11 AM, 12 noon). For example,
-“call with Julia tomorrow at 7” becomes 7 PM tomorrow for one hour. An assumption
+“call with Julia tomorrow at 7” becomes 7 PM tomorrow for one hour. A time with
+no day is its next occurrence: “sync at 3pm” is 3 PM today, or tomorrow once 3 PM
+has passed, and a task deadline “by 3pm” resolves the same way. An assumption
 cue beneath the date/time range draws attention to the inferred AM/PM; editing the start
 time removes that cue. The temporal model identifies clock facts, explicit AM/PM and day parts;
 Rust resolves them, marks assumed AM/PM, validates timestamps and supplies
@@ -1257,19 +1266,21 @@ Opens a dialog with a focused `Search...` textbox and bubble-style category radi
 the top hit. Also exposes commands: `Create`, `Change theme`, `MCP setup`. Keys: Tab cycles
 category, Esc closes. The category strip and footer have transparent backgrounds.
 
-With PostHog **enable-universal-input** enabled, typing at least **3 words or 24
-characters** turns the menu into the shared Universal Input composer. The current
+With PostHog **enable-universal-input** enabled, typing at least **34 characters**
+(word count does not matter) turns the menu into the shared Universal Input composer. The current
 text and insertion point transfer to its rich input in the same header row, with
 the same type size and padding. There is no additional title. The Macro logo hides
 when the rich input wraps or contains multiple lines, then returns on one line;
 its reserved space is removed so text uses the full input width. Classification and field
 extraction run while typing continues. For example, “dinner with julia tomorrow
-at 9pm” reveals an event; users can change the type and edit fields before acting.
+at 9:30pm” reveals an event; users can change the type and edit fields before acting.
 Shorter edits keep the composer open; clearing the input returns to ordinary
 Command K search. IME composition finishes before the transition. This applies to
 ordinary search, including a selected category; nested command scopes, entity
 actions, and the onboarding sandbox retain their existing behavior.
-In composer mode, Enter inserts a newline and Cmd/Ctrl+Enter performs the displayed
+Before the composer opens, Shift+Enter opens the selected result in a new split
+(the footer shows the hint when a split fits). In composer mode, Enter and
+Shift+Enter insert a newline and Cmd/Ctrl+Enter performs the displayed
 action; Tab moves through form controls. Escape closes the menu (or first leaves
 active inline search navigation). Successful actions close the menu and open their
 result when available; errors keep the form available for correction. Command K
@@ -1323,15 +1334,17 @@ its requested cache buckets, so a document-only category must not read the email
 catalog. Switching categories still discovers previously unopened buckets;
 renames, subtype moves, DM priority, and stable tie ordering remain unchanged.
 
-With CRM enabled, normal `@` menus include CRM contacts under **People** in
-documents, channels, discussions, and composers. Contact search loads paged
+With CRM enabled, normal `@` menus include companies and contacts under
+**Contacts & Companies** in documents, channels, discussions, and composers.
+**People** contains only Macro users and groups. Contact search loads paged
 GraphQL results from all accessible CRM-enabled teams, excludes hidden contacts
-and companies, and collapses duplicate full email addresses case-insensitively.
-The most recently active visible team record represents each email. An eligible
-Macro user with the same email takes precedence and keeps normal user-mention
-notifications. External contacts insert a link to their original CRM record;
-they do not invite or notify that email address. Assignee and other user-only
-pickers continue to list Macro users only.
+and companies, and
+collapses duplicate full email addresses case-insensitively. The most recently
+active visible team record represents each email. Picking a CRM contact inserts
+a link to that original CRM record, even if a Macro user shares its email; it
+does not invite or notify that email address. Assignee and other user-only
+pickers continue to list Macro users only. Mobile keeps a single list, with
+only Macro users and groups pinned ahead of ranked entity results.
 
 Typed Cmd+K **People** and **All** queries find known Macro users, including
 teammates supplied by the contacts service, before their first DM and without a
@@ -1373,7 +1386,7 @@ still order results within each group; other result types keep their positions.
 Verify this in both People and All with a recent CRM contact and a matching DM last
 viewed more than 30 days ago, including when server contacts arrive after the DM.
 Other contacts show their email and open the contact page; Enter and
-click open in place; Shift+Enter inserts a newline in the query. A server match that arrives after
+click open in place, Shift+Enter in a new split. A server match that arrives after
 typing takes the default selection from the Search for… row. Global Search does not
 list CRM contacts; Search for… from People still opens the Channels search. Verify
 a contact outside the cached rows, an email-only query, rapid query changes (rows
@@ -1433,6 +1446,8 @@ restart rules still apply.
 ## Keyboard model (from the in-app guide; verified partially)
 
 - `Ctrl/Cmd+K` — jump to anything by name.
+  Selecting a destination focuses its split or editor after the menu closes.
+  Clicking through lists and moving Back/Forward leaves editor focus alone.
 - `?` — the focused view's shortcuts, read from its registered keys (hidden
   navigation keys and `g` sequences included); `?` again closes it. Only the
   key opens it: the command menu does not list it, since run from there it

@@ -46,12 +46,20 @@ const customTransformer = (
   };
 };
 
+const orderedListTransformer = customTransformer(ORDERED_LIST);
+
+/** Enter on `6.` (no trailing space) still starts an ordered list at 6. */
+export const ORDERED_LIST_ENTER: ElementTransformer = {
+  ...orderedListTransformer,
+  regExp: /^(\s*)(\d{1,})\.$/,
+};
+
 export const CUSTOM_TRANSFORMERS: Transformer[] = [
   ...HTML_TEXT_FORMAT_TRANSFORMERS,
   ...TRANSFORMERS.filter((t) => {
     return t !== CHECK_LIST && t !== ORDERED_LIST && t !== UNORDERED_LIST;
   }),
-  customTransformer(ORDERED_LIST),
+  orderedListTransformer,
   customTransformer(CHECK_LIST),
   customTransformer(UNORDERED_LIST),
 ];

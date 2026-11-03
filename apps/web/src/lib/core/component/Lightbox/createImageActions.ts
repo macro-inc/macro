@@ -2,6 +2,7 @@ import {
   copyImageToClipboard,
   downloadImage as downloadImageAction,
 } from '@core/util/imageActions';
+import { isImageProxyUrl } from '@core/util/imageProxy';
 import { platformFetch } from '@core/util/platformFetch';
 import { isIOS } from '@solid-primitives/platform';
 import {
@@ -31,7 +32,10 @@ export function createImageActions(input: ImageActionsInput) {
     if (input.getBlob) return input.getBlob();
     const url = input.src();
     if (!url) return undefined;
-    return (await platformFetch(url)).blob();
+    const init: RequestInit | undefined = isImageProxyUrl(url)
+      ? { credentials: 'include' }
+      : undefined;
+    return (await platformFetch(url, init)).blob();
   };
 
   // Pre-fetch the blob on iOS so it is already in memory when the user taps

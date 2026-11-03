@@ -211,6 +211,7 @@ describe('openFormShareModal', () => {
         respondentColumnId: null,
         createdAt: '2026-10-05T12:00:00Z',
         updatedAt: '2026-10-05T12:00:00Z',
+        projectId: null,
         isHiddenInDrive: false,
       },
       sections: [],

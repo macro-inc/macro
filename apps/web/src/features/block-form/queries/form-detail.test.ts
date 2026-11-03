@@ -121,6 +121,7 @@ describe('the booking step', () => {
     respondentColumnId: null,
     createdAt: '2026-10-01T12:00:00Z',
     updatedAt: '2026-10-01T12:00:00Z',
+    projectId: null,
     isHiddenInDrive: false,
   } as const;
 

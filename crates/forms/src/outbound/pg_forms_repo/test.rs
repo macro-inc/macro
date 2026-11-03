@@ -14,6 +14,7 @@ use super::*;
 mod anonymous;
 mod booking;
 mod drafts;
+mod folders;
 mod names;
 mod protections;
 mod races;
@@ -174,6 +175,7 @@ fn form_over(table: &Table) -> Form {
         branding: FormBranding::default(),
         created_at: at(9),
         updated_at: at(9),
+        project_id: None,
         is_hidden_in_drive: false,
         responses_visible: false,
         anonymous: false,

@@ -1,5 +1,6 @@
 import type { ChannelEntity } from '@entity';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
+import type { ChannelSectionKey } from '../types';
 
 /** Personal sections accept named conversations; shared sections stay team-only. */
 export function canLabelChannel(
@@ -14,14 +15,70 @@ export function canLabelChannel(
   );
 }
 
+/** Writes require a known matching team, unlike server-authorized membership display. */
+export function canAssignChannel(
+  channel: Pick<ChannelEntity, 'channelType' | 'teamId'> | undefined,
+  label?: Pick<ChannelLabel, 'teamId'>
+): boolean {
+  return (
+    canLabelChannel(channel, label) &&
+    (!label?.teamId || channel?.teamId === label.teamId)
+  );
+}
+
 /** Preserve authorized server memberships until the channel metadata arrives. */
 export function filterChannelLabelMembers(
   channelIds: readonly string[],
-  channelsById: ReadonlyMap<string, Pick<ChannelEntity, 'channelType'>>,
+  channelsById: ReadonlyMap<
+    string,
+    Pick<ChannelEntity, 'channelType' | 'teamId'>
+  >,
   label?: Pick<ChannelLabel, 'teamId'>
 ): string[] {
   return channelIds.filter((id) => {
     const channel = channelsById.get(id);
     return channel === undefined || canLabelChannel(channel, label);
   });
+}
+
+/** Explain blocked section drops with the same membership rules as the picker. */
+export function channelSectionDropError(options: {
+  section: ChannelSectionKey;
+  label?: Pick<ChannelLabel, 'id' | 'teamId' | 'rule' | 'channelIds'>;
+  channel?: Pick<ChannelEntity, 'id' | 'channelType' | 'teamId'>;
+  sourceLabelId?: string;
+}): 'unsupported' | 'smart' | 'team-only' | 'already-present' | undefined {
+  const { section, label, channel, sourceLabelId } = options;
+
+  if (label?.rule) {
+    return 'smart';
+  }
+
+  if (!channel || !canAssignChannel(channel, label)) {
+    return label?.teamId ? 'team-only' : 'unsupported';
+  }
+
+  if (label) {
+    if (label.id === sourceLabelId || label.channelIds.includes(channel.id)) {
+      return 'already-present';
+    }
+
+    return;
+  }
+
+  if (section === 'team_channels' && channel?.channelType !== 'team') {
+    return 'team-only';
+  }
+
+  if (section === 'channels' && channel?.channelType === 'team') {
+    return 'unsupported';
+  }
+
+  if (section !== 'team_channels' && section !== 'channels') {
+    return 'unsupported';
+  }
+
+  if (!sourceLabelId) {
+    return 'already-present';
+  }
 }

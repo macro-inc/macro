@@ -1,3 +1,4 @@
+import { usePending } from '@app/observability/flow';
 import { Show } from 'solid-js';
 import { StatTiles } from '../components/responses/stat-tiles';
 import { useFormContext } from '../context/form-context';
@@ -21,6 +22,10 @@ export function ResponsesView(props: { detail: FormDetail }) {
     () => props.detail.form.id,
     () => props.detail.form.ownerId,
     () => props.detail.access === 'owner'
+  );
+  usePending(
+    'form.responses.summary',
+    () => summary.value() === undefined && !summary.failure()
   );
   // Sharing is owner-only, so only the owner learns the channels' reach.
   const reach = (): ChannelReach => {

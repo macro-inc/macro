@@ -170,7 +170,14 @@ pub fn build_cognition_tool_context() -> anyhow::Result<crate::ToolCognitionTool
 /// `import_jobs` runs the context's Notion workspace imports; the host calls
 /// [`crate::ImportJobs::hand_over`] on shutdown so they move to another
 /// process instead of waiting for their leases to lapse.
-#[tracing::instrument(skip(pool, event_task_tracker, import_jobs, recorder), err)]
+///
+/// `linked_github` reads GitHub account-link tokens so GitHub's MCP server
+/// reads as connected for a linked user; `None` where the host cannot reach
+/// the authentication service.
+#[tracing::instrument(
+    skip(pool, event_task_tracker, import_jobs, recorder, linked_github),
+    err
+)]
 pub async fn build_tool_service_context_from_env(
     pool: sqlx::PgPool,
     event_task_tracker: TaskTracker,
@@ -178,6 +185,7 @@ pub async fn build_tool_service_context_from_env(
     enforcement: ai_usage::AiUsageEnforcement,
     pricing: ai_billing::AiPricing,
     recorder: Arc<dyn ai_usage::UsageRecorder>,
+    linked_github: Option<Arc<dyn mcp_client::domain::ports::LinkedGithubTokens>>,
 ) -> anyhow::Result<ToolServiceContext> {
     let env = ToolContextEnvVars::new()?;
     let maybe_env = ToolContextMaybeEnvVars::new();
@@ -494,14 +502,6 @@ pub async fn build_tool_service_context_from_env(
         (*entity_access_service).clone(),
     );
 
-    let project_tool_context = crate::tool_context::build_project_tool_context(
-        pool.clone(),
-        macro_event_broker.clone(),
-        entity_access_service.clone(),
-        document_tool_context.service.clone(),
-        user_email_service.clone(),
-    );
-
     let anthropic_tool_context = build_anthropic_tool_context();
 
     let skill_tool_context = crate::tool_context::build_skill_tool_context(
@@ -527,6 +527,14 @@ pub async fn build_tool_service_context_from_env(
             ),
         ),
         crate::tool_context::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+    );
+    let project_tool_context = crate::tool_context::build_project_tool_context(
+        pool.clone(),
+        macro_event_broker.clone(),
+        entity_access_service.clone(),
+        document_tool_context.service.clone(),
+        user_email_service.clone(),
+        databases_tool_context.service.clone(),
     );
     let databases_sql_tool_context = crate::tool_context::build_databases_sql_tool_context(
         &databases_tool_context,
@@ -578,12 +586,13 @@ pub async fn build_tool_service_context_from_env(
             let mcp_encryption_key =
                 mcp_client::domain::models::AesKey::try_from(mcp_credentials_key.as_ref())
                     .context("invalid MCP credentials encryption key")?;
-            Some(Arc::new(
+            Some(Arc::new(mcp_client::outbound::NativeServerStore::new(
                 mcp_client::outbound::pg_server_repo::PgServerRepo::new(
                     pool.clone(),
                     mcp_encryption_key,
                 ),
-            ))
+                linked_github,
+            )))
         }
         None => None,
     };
@@ -661,6 +670,10 @@ pub async fn build_tool_service_context_from_env(
     };
 
     Ok(ToolServiceContext {
+        memory_tool_context: crate::memory::build_memory_tool_context(
+            pool.clone(),
+            recorder.clone(),
+        ),
         connector_tool_context: crate::tool_context::build_connector_tool_context(
             pool.clone(),
             pipedream_client.clone(),

@@ -48,7 +48,9 @@ function createChannelLabelDnd(props: {
     {
       dragType: 'channel-label',
       dndScope: rail.railId,
-      channelId: props.channel.id,
+      get channelId() {
+        return props.channel.id;
+      },
       get labelId() {
         const labelId = props.labelId();
 
@@ -63,7 +65,9 @@ function createChannelLabelDnd(props: {
               !label.rule && label.channelIds.includes(props.channel.id)
           )?.id;
       },
-      name: props.channel.name,
+      get name() {
+        return props.channel.name;
+      },
       iconType: 'channel',
     } satisfies ChannelLabelDragData
   );
@@ -94,7 +98,7 @@ export function ChannelOption(props: {
   rowId?: ChannelRailRow['id'];
   /** Containing section for drag-and-drop targets. */
   labelId?: string;
-  /** Make a team-channel row draggable between labels (Team channels section only). */
+  /** Make an eligible named channel draggable between sections. */
   draggable?: boolean;
 }) {
   const rail = useChannelsRail();
@@ -105,7 +109,9 @@ export function ChannelOption(props: {
   // Whether a row participates in drag and drop is fixed per mount.
   const dnd = props.draggable
     ? createChannelLabelDnd({
-        channel: props.channel,
+        get channel() {
+          return props.channel;
+        },
         rowId: rowId(),
         labelId: () => props.labelId,
         disabled: () =>

@@ -91,10 +91,9 @@ impl RigTurnEngine {
     #[must_use]
     pub fn new(db: PgPool, tool_context: ToolServiceContext) -> Self {
         Self {
-            memory: Arc::new(MemoryServiceImpl::new(
-                PgMemoryRepo::new(db),
+            memory: Arc::new(ai_tools::memory::build_memory_service(
+                db,
                 tool_context.clone(),
-                tools_for(AiHost::Chat),
             )),
             native_tools: Arc::new(NativeTools::new()),
             code_mode_tools: Arc::new(NativeTools::from_factory(
@@ -914,7 +913,7 @@ async fn fetch_user_memory(
     memory_service: &MemoryServiceImpl<PgMemoryRepo>,
     owner: &MacroUserIdStr<'static>,
 ) -> Option<String> {
-    match memory_service.get_or_generate_memory(owner.clone()).await {
+    match memory_service.get_memory(owner.clone()).await {
         Ok(memory) => memory.map(|memory| memory.to_string()),
         Err(error) => {
             tracing::warn!(error=?error, %owner, "failed to fetch user memory; running without it");

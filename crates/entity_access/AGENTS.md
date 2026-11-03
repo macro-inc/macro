@@ -58,9 +58,6 @@ the entity-access domain service.
 
 ## Gotchas
 
-- Document checks fall back to live calendar-note or optional team grants only
-  when ordinary document access is absent; these grants are authenticated and
-  view-only. Keep the shared SQL visibility policy aligned with calendar note reads.
 - `#![deny(missing_docs)]`.
 - `EntityAccessReceipt<R: RequiredPermission>` is the only proof a caller
   checked access at the right level; domain code downstream (e.g.

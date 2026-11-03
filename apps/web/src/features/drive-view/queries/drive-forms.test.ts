@@ -31,6 +31,7 @@ const listed: ListedForm[] = [
       branding: { logoFileId: null, coverFileId: null, accentColor: null },
       createdAt: '2026-10-01T00:00:00Z',
       updatedAt: '2026-10-01T00:00:00Z',
+      projectId: null,
       isHiddenInDrive: false,
     },
     access: 'owner',
@@ -55,6 +56,7 @@ const listed: ListedForm[] = [
       branding: { logoFileId: null, coverFileId: null, accentColor: null },
       createdAt: '2026-10-02T00:00:00Z',
       updatedAt: '2026-10-02T00:00:00Z',
+      projectId: null,
       isHiddenInDrive: true,
     },
     access: 'owner',
@@ -67,5 +69,33 @@ describe('Drive form listing', () => {
       selectDriveForms(listed, selection, 'me').map((entity) => entity.id)
     ).toEqual(['rsvp']);
     expect(hiddenFormDatabases(listed)).toEqual(new Set(['poll-database']));
+  });
+});
+
+describe('Drive forms in folders', () => {
+  it("lists a folder's forms inside that folder, and keeps tabs flat", () => {
+    const [rsvp, poll] = listed;
+    if (!rsvp || !poll) throw new Error('fixture');
+    const filed: ListedForm[] = [
+      { ...rsvp, form: { ...rsvp.form, projectId: 'clients' } },
+      { ...poll, form: { ...poll.form, projectId: 'clients' } },
+    ];
+    const folder = {
+      ...selection,
+      location: { kind: 'folder', id: 'clients' },
+    } satisfies DriveSelection;
+    const inFolder = selectDriveForms(filed, folder, 'me');
+    expect(inFolder.map((entity) => entity.id)).toEqual(['rsvp']);
+    expect(inFolder[0]?.projectId).toBe('clients');
+    expect(
+      selectDriveForms(
+        filed,
+        { ...folder, location: { kind: 'folder', id: 'other' } },
+        'me'
+      )
+    ).toEqual([]);
+    expect(
+      selectDriveForms(filed, selection, 'me').map((entity) => entity.id)
+    ).toEqual(['rsvp']);
   });
 });

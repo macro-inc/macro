@@ -27,13 +27,25 @@ export const MOBILE_SIGNUP_SENT_PATH = '/mobile-signup-sent';
  */
 export const MOBILE_WEB_SIGNUP_LEAD_VALUE = 5;
 
+export type MobileStorePlatform = 'ios' | 'android';
+
 /**
- * True on iPhone, iPod, and iPad — the only phones with a Macro app. iPadOS
- * Safari reports itself as a Mac, so a touch-capable "Macintosh" counts too.
+ * The app store a visitor's device installs Macro from, or undefined on a
+ * computer. iPadOS Safari reports itself as a Mac, so a touch-capable
+ * "Macintosh" counts as iOS.
  */
-export const isIOS = (userAgent: string, maxTouchPoints: number): boolean =>
-  /iPhone|iPad|iPod/.test(userAgent) ||
-  (/Macintosh/.test(userAgent) && maxTouchPoints > 1);
+export const mobileStorePlatform = (
+  userAgent: string,
+  maxTouchPoints: number
+): MobileStorePlatform | undefined => {
+  if (
+    /iPhone|iPad|iPod/.test(userAgent) ||
+    (/Macintosh/.test(userAgent) && maxTouchPoints > 1)
+  )
+    return 'ios';
+  if (/Android/.test(userAgent)) return 'android';
+  return undefined;
+};
 
 // Survives the navigation from the capture step to the confirmation step (and a
 // refresh of it), which is where the conversions fire.

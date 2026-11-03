@@ -191,6 +191,7 @@ fn detail(database: &FakeDatabase, grant: AccessLevel) -> DatabaseDetail {
             owner_id: database.owner.clone(),
             created_at: the_epoch(),
             trashed_at: None,
+            project_id: None,
         },
         grant,
         tables: database
@@ -541,6 +542,7 @@ impl DatabasesService for FakeDatabases {
             owner_id: command.owner_id.to_string(),
             created_at: the_epoch(),
             trashed_at: None,
+            project_id: None,
         })
     }
 
@@ -608,6 +610,7 @@ impl DatabasesService for FakeDatabases {
             owner_id: database.owner.clone(),
             created_at: the_epoch(),
             trashed_at: None,
+            project_id: None,
         })
     }
 
@@ -827,6 +830,7 @@ impl DatabaseMetadataReads for FakeDatabases {
                 owner_id: database.owner.clone(),
                 created_at: the_epoch(),
                 trashed_at: database.trashed.then(the_epoch),
+                project_id: None,
             })
             .ok_or(DatabaseError::NotFound)
     }

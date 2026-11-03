@@ -111,3 +111,16 @@ INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, acces
     VALUES ('d2222222-2222-2222-2222-222222222222', 'document', 'team-1', 'team', 'edit', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
 INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id)
     VALUES ('d2222222-2222-2222-2222-222222222222', 'document', 'macro|user_c@test.com', 'user', 'owner', 'cccccccc-cccc-cccc-cccc-cccccccccccc');
+
+-- A database and a form filed in PROJECT_C, nested under the moved project.
+INSERT INTO public."macro_user" ("id", "username", "email", "stripe_customer_id")
+    VALUES ('a5555555-5555-5555-5555-555555555555', 'filer', 'filer@example.com', 'stripe_e');
+INSERT INTO public."User" ("id", "email", "stripeCustomerId", "organizationId", "macro_user_id")
+    VALUES ('macro|filer@example.com', 'filer@example.com', 'stripe_e', 1, 'a5555555-5555-5555-5555-555555555555');
+INSERT INTO databases (id) VALUES ('e1111111-1111-1111-1111-111111111111');
+INSERT INTO database_tables (id, database_id, name, position)
+    VALUES ('e2222222-2222-2222-2222-222222222222', 'e1111111-1111-1111-1111-111111111111', 'Responses', '80');
+INSERT INTO database_entities (database_id, name, user_id, project_id)
+    VALUES ('e1111111-1111-1111-1111-111111111111', 'database-in-c', 'macro|filer@example.com', 'cccccccc-cccc-cccc-cccc-cccccccccccc');
+INSERT INTO forms (id, name, owner_id, database_id, table_id, project_id)
+    VALUES ('e3333333-3333-3333-3333-333333333333', 'form-in-c', 'macro|filer@example.com', 'e1111111-1111-1111-1111-111111111111', 'e2222222-2222-2222-2222-222222222222', 'cccccccc-cccc-cccc-cccc-cccccccccccc');
