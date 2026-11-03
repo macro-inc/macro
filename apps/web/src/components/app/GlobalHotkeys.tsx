@@ -13,6 +13,7 @@ import { openMacroMcpSetupModal } from '@app/features/integrations/mcp-setup/Mac
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { inEnglish, t } from '@app/lib/i18n';
+import { beginInteraction } from '@app/observability/flow';
 import { useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
@@ -220,14 +221,21 @@ export default function GlobalShortcuts() {
   const handleFileUpload = useHandleFileUpload();
   const snippetsFlag = useFeatureFlag(enableSnippets);
 
-  const handleCommandMenu = () => {
+  const handleCommandMenu = (event?: KeyboardEvent) => {
     const willOpen = !CommandState.isOpen();
 
     if (willOpen) {
       analytics.track('command_menu_open', { from: 'global_hotkey' });
     }
 
-    CommandState.toggle();
+    const interaction = willOpen
+      ? beginInteraction('quick_access.open', { event })
+      : undefined;
+    try {
+      CommandState.toggle();
+    } finally {
+      interaction?.end();
+    }
   };
 
   registerHotkey({
@@ -315,9 +323,9 @@ export default function GlobalShortcuts() {
       CommandState.isOpen()
         ? t('commands.closeCommandMenu')
         : t('commands.openCommandMenu'),
-    keyDownHandler: () => {
+    keyDownHandler: (event) => {
       console.log('## CMD K - global');
-      handleCommandMenu();
+      handleCommandMenu(event);
       return true;
     },
     displayPriority: 10,

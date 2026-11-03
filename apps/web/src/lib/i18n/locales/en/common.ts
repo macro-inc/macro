@@ -25,5 +25,6 @@ export default {
   more: 'More',
   search: 'Search',
   selectItem: 'Select item',
+  contactsAndCompanies: 'Contacts & Companies',
   settings: 'Settings',
 };

@@ -252,6 +252,7 @@ impl DatabasesService for FakeDatabases {
             owner_id: input.owner_id.to_string(),
             created_at: Utc::now(),
             trashed_at: None,
+            project_id: None,
         };
         self.0.lock().unwrap().created.push(input);
         Ok(database)

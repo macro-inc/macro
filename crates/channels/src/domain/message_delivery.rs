@@ -63,6 +63,7 @@ fn persisted(channel_id: Uuid, message: &Message) -> MutatedMessage {
         thread_id: message.thread_id,
         sender_id: message.sender_id.clone(),
         triggered_by: message.triggered_by.clone(),
+        triggered_via: message.triggered_via.clone(),
         content: message.content.clone(),
         created_at: message.created_at,
         updated_at: message.updated_at,

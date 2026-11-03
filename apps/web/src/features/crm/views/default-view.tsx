@@ -1,3 +1,4 @@
+import { usePending } from '@app/observability/flow';
 import type { CrmViewConfig } from '../core/saved-view';
 import { createDefaultCrmView } from '../primitives/default-view';
 import { useApplyCrmView } from './apply-view';
@@ -16,6 +17,8 @@ export function CrmDefaultViewLoader(props: {
   const personal = usePersonalCrmViews();
   const team = useTeamCrmViews();
   const applyView = useApplyCrmView();
+  usePending('crm.personal-views', personal.isLoading);
+  usePending('crm.team-views', team.isLoading);
 
   createDefaultCrmView({
     personalLoading: personal.isLoading,

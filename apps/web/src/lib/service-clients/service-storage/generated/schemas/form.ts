@@ -7,6 +7,7 @@
 import type { Audience } from './audience';
 import type { FormBranding } from './formBranding';
 import type { FormClosesAt } from './formClosesAt';
+import type { FormProjectId } from './formProjectId';
 import type { FormRespondentColumnId } from './formRespondentColumnId';
 import type { FormStatus } from './formStatus';
 import type { FormSubmittedColumnId } from './formSubmittedColumnId';
@@ -15,6 +16,10 @@ import type { FormSubmittedColumnId } from './formSubmittedColumnId';
  * A form: a view of one database table whose rows are its responses.
  */
 export interface Form {
+  /** Whether nobody, the owner included, can see who gave which response.
+Who responded is kept apart from the responses, only so nobody
+responds twice. Fixed once anyone has responded. */
+  anonymous: boolean;
   /** Who may respond. */
   audience: Audience;
   /** Its logo, cover image and accent color. */
@@ -40,9 +45,14 @@ a form attached to an existing table has its own name. */
   name: string;
   /** Its owner. */
   ownerId: string;
+  /** The folder it is filed in; `null` at the root. */
+  projectId: FormProjectId;
   /** The person column each signed-in submission names its respondent in;
-`null` once deleted. */
+`null` once deleted, and on a form created anonymous. An anonymous
+form never writes it. */
   respondentColumnId: FormRespondentColumnId;
+  /** Whether people with View may read individual response rows. */
+  responsesVisible: boolean;
   /** Whether its owner closed it. */
   status: FormStatus;
   /** The date column each submission stamps; `null` once deleted. */

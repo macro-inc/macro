@@ -758,6 +758,11 @@ type BulkUpdateEntityPropertyOptionsContext = {
   soupTxn?: SoupTransaction;
 };
 
+type BulkUpdateEntityPropertyOptionsResult = {
+  selections: EntityPropertyOptionSelection[];
+  transport: 'graphql' | 'rest';
+};
+
 /**
  * Persists a complete multi-select selection across one or more properties in a
  * single transactional request, then reconciles the soup cache from the final
@@ -770,7 +775,7 @@ type BulkUpdateEntityPropertyOptionsContext = {
 export function useBulkUpdateEntityPropertyOptionsMutation(
   entityId: string,
   callbacks?: MutationCallbacks<
-    EntityPropertyOptionSelection[],
+    BulkUpdateEntityPropertyOptionsResult,
     Error,
     BulkUpdateEntityPropertyOptionsParams,
     BulkUpdateEntityPropertyOptionsContext
@@ -781,7 +786,7 @@ export function useBulkUpdateEntityPropertyOptionsMutation(
     scope: { id: `entity-property-options:${entityId}` },
     mutationFn: async (
       variables: BulkUpdateEntityPropertyOptionsParams
-    ): Promise<EntityPropertyOptionSelection[]> => {
+    ): Promise<BulkUpdateEntityPropertyOptionsResult> => {
       // The transport swaps, the mutation shell does not: the per-entity scope
       // that serializes commits and the in-flight overlay both read this
       // mutation's state, whichever cache the selection lands in.
@@ -789,7 +794,10 @@ export function useBulkUpdateEntityPropertyOptionsMutation(
         variables.entityType === 'INITIATIVE' ||
         isFeatureEnabled(enableGraphqlSoup)
       ) {
-        return updateGraphqlEntityPropertyOptions(variables);
+        return {
+          selections: await updateGraphqlEntityPropertyOptions(variables),
+          transport: 'graphql',
+        };
       }
       try {
         const response = await throwOnErr(async () =>
@@ -811,17 +819,20 @@ export function useBulkUpdateEntityPropertyOptionsMutation(
             },
           })
         );
-        return response.properties.map((property) => ({
-          propertyDefinitionId: property.property_id,
-          optionIds: property.option_ids,
-        }));
+        return {
+          selections: response.properties.map((property) => ({
+            propertyDefinitionId: property.property_id,
+            optionIds: property.option_ids,
+          })),
+          transport: 'rest',
+        };
       } finally {
-        // GraphQL handles its own optimism; only REST writes need this read.
+        // Keep the session-bound REST reader refresh even when the write fails.
         await refetchEntityPropertyReaders(queryClient, variables.entityId);
       }
     },
     ...withCallbacks<
-      EntityPropertyOptionSelection[],
+      BulkUpdateEntityPropertyOptionsResult,
       Error,
       BulkUpdateEntityPropertyOptionsParams,
       BulkUpdateEntityPropertyOptionsContext
@@ -840,7 +851,7 @@ export function useBulkUpdateEntityPropertyOptionsMutation(
           );
           return { soupTxn };
         },
-        onSuccess: (selections, variables) => {
+        onSuccess: ({ selections, transport }, variables) => {
           const propertyByDefinitionId = new Map(
             variables.properties.map((update) => [
               getPropertyDefinitionId(update.property),
@@ -871,7 +882,10 @@ export function useBulkUpdateEntityPropertyOptionsMutation(
           invalidateSoupEntity(variables.entityId);
           for (const selection of selections) {
             fireAndForget(
-              refreshPropertyQueries(selection.propertyDefinitionId),
+              refreshPropertyQueries(selection.propertyDefinitionId, {
+                includeOptionFilters: true,
+                unmaintainedOnly: transport === 'graphql',
+              }),
               'entity-properties'
             );
           }

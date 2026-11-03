@@ -27,6 +27,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Render phone task rows with the narrow layout, an 8px unread-only rail, no checkbox column, 4px outer list padding, and 44px row height; preserve row selection handlers and 36px property-editor touch targets.
 - Keep leading task status icons at 18px and priority icons at 16px desktop/20px phone without flex shrinking; use 16px Status/Priority selector icons, the shared 12px property default elsewhere unless a surface overrides it, and preserve 16px group-header carets and existing hit targets.
 - Give list Due date glyphs the shared 12px base size and the existing 16px compact-column override; never leave calendar SVG dimensions implicit.
+- Mix light-theme due-date warnings with 40% foreground in list and board values for contrast; keep dark-theme warnings, global warning tokens, and status colors unchanged.
 - Use the matching `task-status-*` theme token for each status icon and group-header tint; default Completed to accent while preserving explicit theme overrides and independent global colors.
 - Edit priority then status through leading `TaskPropertyControl` icons on desktop and mobile; place status directly beside the title, and keep separate Status/Priority columns and duplicate trailing mobile pills removed.
 - Order trailing task properties as Due date, Project, then Assignees in wide and narrow rows and title pills; show both avatars for exactly two compact assignees, otherwise one avatar plus the remaining count, anchored left in a fixed-width slot so overflow grows right.
@@ -39,7 +40,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Reuse `PropertyEmptyIcon` for absent values in list rows, board cards, and group or board-column headers: 30%-opacity wide priority bars, a dashed user circle, a corner-dashed project cube, and a slashed calendar for no due date; use the regular cube for set projects.
 - Use shared ghost-button interaction styling for editable list properties; dim empty icons and labels without applying opacity twice to No priority.
 - Register task-row collapse items with the shared `src/components/priority-collapse/` controller and sensor, not split-layout wrappers.
-- Show at most three individual tag chips; keep a sole tag as its named chip even in collapsed layouts, otherwise collapse the folder path first, then more tags on measured overflow, and truncate the title last while preserving open tag editors.
+- Show at most three individual tag chips; keep a sole tag as its named chip even in collapsed layouts, otherwise collapse the folder path first, then more tags on measured overflow, and truncate the title last while preserving open tag editors; re-evaluate new tags when editing ends without requiring a resize.
 - Keep the tag chip or collapsed multi-tag overflow after the title on phone rows instead of dropping tags with the desktop columns.
 - Tab and Shift+Tab cycle sidebar tabs only over a list. Keep `TasksSidebar`'s key-time check for an open project or task: the sidebar remounts whenever the view crosses its layout breakpoint, so it registers after an open pane and eclipses any override the pane holds.
 

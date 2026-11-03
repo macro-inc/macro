@@ -26,7 +26,7 @@ use crate::domain::events::{
 };
 use crate::domain::models::{
     Audience, ForbiddenWidget, Form, FormAccess, FormError, FormId, FormUpdate, ListedForm,
-    UpdateForm, Widget,
+    SharingRefusal, UpdateForm, Widget,
 };
 use crate::domain::ports::{
     Clock, FormAccessDirectory, FormEventPublisher, FormImageFiles, FormsRepo,
@@ -129,6 +129,7 @@ where
             }
             FormUpdate::FormGone => Err(FormError::NotFound),
             FormUpdate::WidgetInUse => Err(FormError::FileUploadNeedsSignIn),
+            FormUpdate::AnonymityLocked => Err(SharingRefusal::AnonymityLocked.into()),
         }
     }
 
@@ -221,6 +222,28 @@ where
             attribution: receipt_attribution(receipt),
         }));
         Ok(())
+    }
+
+    /// File a live form in a folder, or at the root, answering the folder
+    /// it left. Its database stays where it is.
+    #[cfg(feature = "entity_mutation")]
+    pub(crate) async fn move_to_folder(
+        &self,
+        receipt: &EntityAccessReceipt<OwnerAccessLevel>,
+        project_id: Option<&str>,
+    ) -> Result<Option<String>, FormError> {
+        let stored = self.stored_form(receipt_form_id(receipt)?).await?;
+        if stored.trashed_at.is_some()
+            || !self
+                .repository
+                .move_form(stored.form.id, project_id)
+                .await
+                .map_err(repository_error)?
+        {
+            return Err(FormError::NotFound);
+        }
+        self.announce(stored.form.id).await;
+        Ok(stored.form.project_id)
     }
 
     pub(super) async fn restore(

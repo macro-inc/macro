@@ -220,6 +220,11 @@ test-signup-browser *ARGS:
 test-i18n-browser *ARGS:
     env -u LD_LIBRARY_PATH bunx playwright test --config src/lib/i18n/browser-test/playwright.config.ts {{ARGS}}
 
+# Database grid layout under remote presence, in Chromium. Same
+# LD_LIBRARY_PATH caveat as the sign-up browser tests above.
+test-database-browser *ARGS:
+    env -u LD_LIBRARY_PATH bunx playwright test --config src/features/database/browser-test/playwright.config.ts {{ARGS}}
+
 # Optimistic mutations through the real worker/WASM cache in Chromium. Same
 # LD_LIBRARY_PATH caveat as the sign-up browser tests above.
 test-functional *ARGS:

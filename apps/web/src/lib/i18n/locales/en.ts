@@ -1,3 +1,4 @@
+import agentAutoArchive from './en/agent-auto-archive';
 import calls from './en/calls';
 import channelLabels from './en/channel-labels';
 import channelSections from './en/channel-sections';
@@ -21,6 +22,7 @@ import viewMenus from './en/view-menus';
  * `./en`; translations in `./<language>.ts` mirror these keys.
  */
 export default {
+  agentAutoArchive,
   calls,
   channelLabels,
   channelSections,
