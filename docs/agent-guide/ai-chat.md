@@ -228,13 +228,12 @@ sessions. Existing legacy chat rows still open their original chats. Contextual
 chat actions use agent sessions regardless of the flag; without the flag, the
 legacy list and flag-gated composer flows remain available.
 
-While an agent works, a draft can be sent to its queue. Above the queue,
-**Send next** explicitly interrupts the current turn and sends the oldest queued
-message. The empty composer offers the same action as **Flush queued messages**
-with a ringed send arrow; with a draft it offers **Send**. Each queued row offers
-**Steer** while a turn is running, to interrupt it and send that row next. With no
-draft or queue, the busy composer offers **Stop**. Send next and Steer stay
-available while a previous one is starting; read-only sessions get neither.
+While an agent works, a draft can be sent to its queue; queued messages send in
+order as each turn ends. The busy composer offers **Send** with a draft and
+**Stop** without one; Enter on an empty draft does nothing. Each queued row
+offers **Steer** while a turn is running, to interrupt it and send that row next.
+Steer stays available while a previous one is starting; read-only sessions don't
+get it.
 
 Phone verification: check portrait and landscape with touch emulation. In the
 Agents composer, enter multiple lines and tap Send, attach, or the model control;
@@ -1993,14 +1992,11 @@ must stay hidden; subsequent live messages must still appear.
   user message in the transcript.
 - Keyboard: Up at the very start of the composer input moves focus into the
   bottom (next-to-send) queue row; further Up presses walk toward newer entries, Down
-  walks back and past the bottom row returns to the input. When the composer is empty
-  and a prompt is queued, its action becomes `Flush queued messages` (the send arrow,
-  with a ring so it reads as flushing the queue rather than sending a new message);
-  pressing Enter or clicking that button cancels the current turn so the queue drains
-  in order, oldest first. Steer on a queued row is the interrupt for that one message;
-  flush sends whatever is already next. Each advance or Steer shows its message as a
-  pending bubble at once and drops its row; consecutive ones never wait on each other in
-  the UI. Their steer requests go out one at a time in press order, each after the
+  walks back and past the bottom row returns to the input. With an empty composer the
+  busy action is Stop, and Enter does nothing; the queue drains in order, oldest first,
+  as each turn ends. Steer on a queued row is the interrupt for that one message. Each
+  Steer shows its message as a pending bubble at once and drops its row; consecutive
+  ones never wait on each other in the UI. Their steer requests go out one at a time in press order, each after the
   previous message leaves the server queue, so three rapid presses send three messages,
   each once, in that order. A refused steer brings its row back labelled `Not sent`; it
   stays queued and can be steered again. Typed composer text still takes priority and Enter

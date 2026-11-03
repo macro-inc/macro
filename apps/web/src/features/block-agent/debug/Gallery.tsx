@@ -255,13 +255,9 @@ function QueuedInFlightDemo() {
       />
       <AgentInput
         busy
-        hasQueuedMessages={items().length > 0}
         onSend={() => setNote('Typed text still sends as a new queued prompt.')}
         onStop={() =>
-          setNote('Flush stops the turn so the queue drains, oldest first.')
-        }
-        onSendNext={() =>
-          setNote('Flush stops the turn so the queue drains, oldest first.')
+          setNote('Stop ends the turn so the queue drains, oldest first.')
         }
       />
     </div>

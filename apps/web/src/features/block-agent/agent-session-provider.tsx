@@ -188,7 +188,6 @@ export function AgentSessionProvider(
           turn,
           issue: live.issue,
           selectModel: live.selectModel,
-          sendNext: steering.sendNext,
           steer: steering.steer,
           steerFailed: steering.failed,
           interactions,
