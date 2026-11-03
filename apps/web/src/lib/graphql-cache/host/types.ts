@@ -10,6 +10,7 @@ import type { IdentityBindingWire, MutationInspection } from '../protocol';
 import type { EntityResolverWire } from '../exchange/entity-resolvers';
 import type {
   AffectedOperationsResult,
+  CacheChangeHints,
   CachedQueryInstanceWire,
   CachedQueryVariantWire,
   CacheReadPriority,
@@ -25,7 +26,6 @@ import type {
   EntityFilterCacheArgs,
   EntityFilterCacheResult,
   HydrationResult,
-  HydrationSearchChanges,
   MutationClaim,
   MutationSettlement,
   OptimisticLinkPatchWire,
@@ -108,8 +108,8 @@ export interface InitialMutationClaimArgs {
 
 export type CacheChangeListener = (
   revision: CacheRevision,
-  /** Undefined for ordinary writes/resets and older runtimes: refresh conservatively. */
-  searchChanges?: HydrationSearchChanges
+  /** Missing metadata/proof IDs mean unknown; resets always refresh. */
+  changes?: CacheChangeHints
 ) => void;
 
 export type CacheChangeOptions = {

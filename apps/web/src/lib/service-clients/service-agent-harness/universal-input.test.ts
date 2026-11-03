@@ -4,7 +4,8 @@ import { err, ok } from 'neverthrow';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { universalInputClient } from './universal-input';
 
-vi.mock('@core/constant/servers', () => ({
+vi.mock('@core/constant/servers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/servers')>()),
   SERVER_HOSTS: { 'agent-harness': 'https://harness.example.com' },
   SYNC_SERVICE_HOSTS: { worker: 'https://sync.example.com' },
 }));

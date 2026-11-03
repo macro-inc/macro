@@ -1,3 +1,4 @@
+import { usePending } from '@app/observability/flow';
 import '@entity/composed/ListEntity.css';
 import {
   createListController,
@@ -112,6 +113,8 @@ export function HomeList(props: HomeListProps) {
   const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
     useHomeDataSource(state)
   );
+
+  usePending('home.items', source.isLoading);
 
   const list = withSplitPanelOwner(listOwnedSlotName('controller'), () =>
     createListController<HomeDataSourceItem, HomeListActivationMetadata>({

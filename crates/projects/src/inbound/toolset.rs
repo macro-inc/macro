@@ -58,15 +58,16 @@ impl<T> DocumentCapabilities for T where
 
 /// Service context for project AI tools.
 ///
-/// The document and email services are the per-domain entity-mutation
-/// capability impls the move, trash, duplicate, rename, and sharing tools
-/// dispatch to, mirroring the DSS entity-mutation router.
-pub struct ProjectToolContext<PSvc, ESvc, DSvc, EmSvc>
+/// The document, email and database services are the per-domain
+/// entity-mutation capability impls the move, trash, duplicate, rename, and
+/// sharing tools dispatch to, mirroring the DSS entity-mutation router.
+pub struct ProjectToolContext<PSvc, ESvc, DSvc, EmSvc, DbSvc>
 where
     PSvc: ProjectCapabilities,
     ESvc: EntityAccessService,
     DSvc: DocumentCapabilities,
     EmSvc: MoveEntity + Send + Sync + 'static,
+    DbSvc: DuplicateEntity + Send + Sync + 'static,
 {
     /// The project service instance.
     pub service: Arc<PSvc>,
@@ -76,17 +77,20 @@ where
     pub document_move_service: Arc<DSvc>,
     /// Move capability for email threads.
     pub email_move_service: Arc<EmSvc>,
+    /// Duplicate capability for databases.
+    pub database_duplicate_service: Arc<DbSvc>,
     /// The bot these tools act as, on behalf of the requesting user. Defaults
     /// to Macro AI; hosts running a specific agent set it with [`Self::with_actor`].
     pub actor: BotId,
 }
 
-impl<PSvc, ESvc, DSvc, EmSvc> Clone for ProjectToolContext<PSvc, ESvc, DSvc, EmSvc>
+impl<PSvc, ESvc, DSvc, EmSvc, DbSvc> Clone for ProjectToolContext<PSvc, ESvc, DSvc, EmSvc, DbSvc>
 where
     PSvc: ProjectCapabilities,
     ESvc: EntityAccessService,
     DSvc: DocumentCapabilities,
     EmSvc: MoveEntity + Send + Sync + 'static,
+    DbSvc: DuplicateEntity + Send + Sync + 'static,
 {
     fn clone(&self) -> Self {
         Self {
@@ -94,17 +98,19 @@ where
             entity_access_service: self.entity_access_service.clone(),
             document_move_service: self.document_move_service.clone(),
             email_move_service: self.email_move_service.clone(),
+            database_duplicate_service: self.database_duplicate_service.clone(),
             actor: self.actor,
         }
     }
 }
 
-impl<PSvc, ESvc, DSvc, EmSvc> ProjectToolContext<PSvc, ESvc, DSvc, EmSvc>
+impl<PSvc, ESvc, DSvc, EmSvc, DbSvc> ProjectToolContext<PSvc, ESvc, DSvc, EmSvc, DbSvc>
 where
     PSvc: ProjectCapabilities,
     ESvc: EntityAccessService,
     DSvc: DocumentCapabilities,
     EmSvc: MoveEntity + Send + Sync + 'static,
+    DbSvc: DuplicateEntity + Send + Sync + 'static,
 {
     /// Create a new project tool context.
     pub fn new(
@@ -112,12 +118,14 @@ where
         entity_access_service: Arc<ESvc>,
         document_move_service: Arc<DSvc>,
         email_move_service: Arc<EmSvc>,
+        database_duplicate_service: Arc<DbSvc>,
     ) -> Self {
         Self {
             service,
             entity_access_service,
             document_move_service,
             email_move_service,
+            database_duplicate_service,
             actor: bot_id::MACRO_AI_BOT_ID,
         }
     }
@@ -130,20 +138,21 @@ where
 }
 
 /// Create a project toolset.
-pub fn project_toolset<PSvc, ESvc, DSvc, EmSvc>()
--> AsyncToolCollection<ProjectToolContext<PSvc, ESvc, DSvc, EmSvc>>
+pub fn project_toolset<PSvc, ESvc, DSvc, EmSvc, DbSvc>()
+-> AsyncToolCollection<ProjectToolContext<PSvc, ESvc, DSvc, EmSvc, DbSvc>>
 where
     PSvc: ProjectCapabilities,
     ESvc: EntityAccessService,
     DSvc: DocumentCapabilities,
     EmSvc: MoveEntity + Send + Sync + 'static,
+    DbSvc: DuplicateEntity + Send + Sync + 'static,
 {
     AsyncToolCollection::new()
-        .add_tool::<CreateProject, ProjectToolContext<PSvc, ESvc, DSvc, EmSvc>>()
-        .add_tool::<ReadProject, ProjectToolContext<PSvc, ESvc, DSvc, EmSvc>>()
-        .add_tool::<MoveToProject, ProjectToolContext<PSvc, ESvc, DSvc, EmSvc>>()
-        .add_tool::<MoveToTrash, ProjectToolContext<PSvc, ESvc, DSvc, EmSvc>>()
-        .add_tool::<DuplicateItem, ProjectToolContext<PSvc, ESvc, DSvc, EmSvc>>()
-        .add_tool::<RenameItem, ProjectToolContext<PSvc, ESvc, DSvc, EmSvc>>()
-        .add_tool::<UpdateSharing, ProjectToolContext<PSvc, ESvc, DSvc, EmSvc>>()
+        .add_tool::<CreateProject, ProjectToolContext<PSvc, ESvc, DSvc, EmSvc, DbSvc>>()
+        .add_tool::<ReadProject, ProjectToolContext<PSvc, ESvc, DSvc, EmSvc, DbSvc>>()
+        .add_tool::<MoveToProject, ProjectToolContext<PSvc, ESvc, DSvc, EmSvc, DbSvc>>()
+        .add_tool::<MoveToTrash, ProjectToolContext<PSvc, ESvc, DSvc, EmSvc, DbSvc>>()
+        .add_tool::<DuplicateItem, ProjectToolContext<PSvc, ESvc, DSvc, EmSvc, DbSvc>>()
+        .add_tool::<RenameItem, ProjectToolContext<PSvc, ESvc, DSvc, EmSvc, DbSvc>>()
+        .add_tool::<UpdateSharing, ProjectToolContext<PSvc, ESvc, DSvc, EmSvc, DbSvc>>()
 }
