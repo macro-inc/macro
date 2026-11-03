@@ -111,6 +111,26 @@ tools — hexagonal, heavily feature-gated.
   delivery on a tracking failure, and count opens only for sent messages.
   Tokens are stored per message, so a retried send or Outlook draft revision
   rebuilds the same URL; keep it that way or the draft fingerprints drift.
+- Outlook sync telemetry (`domain/mailbox/telemetry.rs`, `progress.rs`) is a
+  contract the Outlook sync monitors in `infra/stacks/monitoring` read: each
+  claimed unit of `MailboxSyncService` and `MailboxProjectionService` opens
+  one root `outlook.sync.*` span (idle polls open none) and records
+  `outlook.outcome`, `outlook.defer_reason` and `outlook.defer_seconds`
+  through `record_done`/`record_deferred`/`record_failed`. The mailbox loops
+  log their own deferrals with `link_id` (gate refusals at DEBUG), so the
+  worker must not log them again. Add a new defer reason in `defer_reason`.
+- Map database errors in `mailbox_pg` with `db_error` (or `wrapped_db_error`
+  for `email_db_client` calls) so the SQLSTATE reaches the log; keep
+  `MailboxError::Persistence` for stored data that cannot be decoded.
+- "outlook import completed" fires from `settle_import` (`mailbox_pg.rs`)
+  under the link lock, once per import run: the folder-catalog stream's
+  `import_completed_at` is stamped when every folder is enumerated and no
+  import row is left. A resync must reset `import_started_at` and
+  `import_completed_at` and log "outlook import started", as
+  `outbound/mailbox_pg/lifecycle.rs` does.
+- Import counts for the health snapshot stay in memory (`ImportTally`) and are
+  flushed once a minute to `email_mailbox_import_minutes`; never write per
+  imported message for telemetry.
 - Outlook organization commands only run in their link's current
   `sync_generation`. Anything that bumps it must rebind unfinished commands as
   `pending`, since claims skip `confirming` ones while those still block later
