@@ -139,8 +139,10 @@ const QUERIES = {
     'sum:macro.outlook.token.acquire{env:prod,outlook.outcome:unavailable}.as_count() / (sum:macro.outlook.token.acquire{env:prod}.as_count() + 100)',
   // Mailboxes needing reauthorization; each snapshot lands in its 5-minute bucket.
   reauth: `count_not_null(max:${MAILBOX('queued', 'env:prod,needs_reauth:true')}.rollup(max, 300))`,
+  // Projection reports every failed effect (Kafka, SQS, HTTP) as persistence
+  // too; the other steps report only database failures.
   persistence:
-    'sum:macro.outlook.sync{env:prod,outlook.defer_reason:persistence}.as_count()',
+    'sum:macro.outlook.sync{env:prod,outlook.defer_reason:persistence,!resource_name:outlook.sync.project}.as_count()',
 };
 
 const RUNBOOK = 'docs/runbooks/outlook-sync.md';
