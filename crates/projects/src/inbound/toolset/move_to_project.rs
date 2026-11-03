@@ -8,7 +8,9 @@ use entity_access::domain::models::{
     AccessError, BotAccessScope, EditAccessLevel, EntityAccessReceipt, RequiredPermission,
 };
 use entity_access::domain::ports::EntityAccessService;
-use entity_mutation::{EntityMutationErrorCode, MoveEntity, capability::MoveEntityRequest};
+use entity_mutation::{
+    DuplicateEntity, EntityMutationErrorCode, MoveEntity, capability::MoveEntityRequest,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 use schemars::JsonSchema;
@@ -217,20 +219,21 @@ impl ToolAnnotated for MoveToProject {
 }
 
 #[async_trait]
-impl<PSvc, ESvc, DSvc, EmSvc> AsyncTool<ProjectToolContext<PSvc, ESvc, DSvc, EmSvc>>
+impl<PSvc, ESvc, DSvc, EmSvc, DbSvc> AsyncTool<ProjectToolContext<PSvc, ESvc, DSvc, EmSvc, DbSvc>>
     for MoveToProject
 where
     PSvc: ProjectCapabilities,
     ESvc: EntityAccessService,
     DSvc: DocumentCapabilities,
     EmSvc: MoveEntity + Send + Sync + 'static,
+    DbSvc: DuplicateEntity + Send + Sync + 'static,
 {
     type Output = MoveToProjectResponse;
 
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id, entity_type=?self.entity_type, entity_id=?self.entity_id), err)]
     async fn call(
         &self,
-        service_context: ServiceContext<ProjectToolContext<PSvc, ESvc, DSvc, EmSvc>>,
+        service_context: ServiceContext<ProjectToolContext<PSvc, ESvc, DSvc, EmSvc, DbSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(params=?self, "Move to project");

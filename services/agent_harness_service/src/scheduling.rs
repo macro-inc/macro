@@ -264,10 +264,7 @@ pub async fn build(
         )
         .with_event_management_enabled(config.event_routines_enabled)
         .with_conditions_enabled(conditions_enabled)
-        .with_target_validation(TargetValidation::new(
-            sessions,
-            config.routine_agents_enabled,
-        ))
+        .with_target_validation(TargetValidation::new(sessions))
         .with_github_links(PgGithubInstallationClaims::new(db.clone())),
     );
     let template_flags = config

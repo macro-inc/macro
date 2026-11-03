@@ -4876,7 +4876,11 @@ export const DiscoverConnectorsResponse = z.object({
 
 export const DuplicateItem = z.object({
   entityType: z.any().superRefine((x, ctx) => {
-    const schemas = [z.literal('document'), z.literal('chat')];
+    const schemas = [
+      z.literal('document'),
+      z.literal('database'),
+      z.literal('chat'),
+    ];
     const errors = schemas.reduce<z.ZodError[]>(
       (errors, schema) =>
         ((result) => (result.error ? [...errors, result.error] : errors))(
@@ -4899,7 +4903,11 @@ export const DuplicateItem = z.object({
 
 export const DuplicateItemResponse = z.object({
   entityType: z.any().superRefine((x, ctx) => {
-    const schemas = [z.literal('document'), z.literal('chat')];
+    const schemas = [
+      z.literal('document'),
+      z.literal('database'),
+      z.literal('chat'),
+    ];
     const errors = schemas.reduce<z.ZodError[]>(
       (errors, schema) =>
         ((result) => (result.error ? [...errors, result.error] : errors))(
