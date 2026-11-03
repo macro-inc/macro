@@ -71,3 +71,32 @@ fn infra_tier_selects_infra_and_its_storage() {
         .collect();
     assert_eq!(names, ["postgres", "postgres-data"]);
 }
+
+#[test]
+fn sync_config_carries_the_compose_bindings_and_keys() {
+    let c = sync_wrangler_config("internal", "jwt", "dss");
+    assert_eq!(c["main"], "build/worker/shim.mjs");
+    assert!(c.get("no_bundle").is_none(), "celld must bundle the shim");
+    assert_eq!(c["vars"]["INTERNAL_API_SECRET_KEY"], "LOCAL_API_KEY");
+    assert_eq!(c["vars"]["LOCAL_API_KEY"], "internal");
+    assert_eq!(c["vars"]["DOCUMENT_PERMISSIONS_SECRET"], "jwt");
+    assert_eq!(c["vars"]["DSS_INTERNAL_AUTH_KEY"], "dss");
+    // Service names, not compose names, resolve in the cluster.
+    assert_eq!(c["vars"]["DSS_URL"], "http://document-storage-service:8080");
+    let kv: Vec<_> = c["kv_namespaces"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|k| k["binding"].clone())
+        .collect();
+    assert_eq!(kv, ["DOCUMENT_VERSIONING_KV", "SNAPSHOT_STORE_KV"]);
+}
+
+#[test]
+fn generated_aws_keys_have_the_shape_extenddb_requires() {
+    let (id, secret) = generate_aws_key().unwrap();
+    assert_eq!(id.len(), 20);
+    assert!(id.starts_with("AKIA"));
+    assert_eq!(secret.len(), 40);
+    assert_ne!(generate_aws_key().unwrap().0, id);
+}

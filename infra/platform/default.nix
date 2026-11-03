@@ -42,6 +42,8 @@ in
       envRevision ? "",
       binaries,
       frontend,
+      # Host-built Node service bundles: name -> store path.
+      node ? { },
       caddyfile ? ./generated/Caddyfile,
       # The host port operator tooling port-forwards Kafka's HOST listener to;
       # the broker must advertise the same address.
@@ -54,7 +56,15 @@ in
       };
       components = import ./components.nix {
         inherit pkgs lib platformLib platformPkgs;
-        macro = { inherit binaries frontend caddyfile kafkaHostPort; };
+        macro = {
+          inherit
+            binaries
+            frontend
+            node
+            caddyfile
+            kafkaHostPort
+            ;
+        };
       };
       workloads = lib.mapAttrsToList (
         n: w:

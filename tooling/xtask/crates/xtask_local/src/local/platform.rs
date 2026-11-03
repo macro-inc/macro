@@ -26,7 +26,7 @@ use super::proxy::{self, Flavor};
 use super::stage::Stage;
 use super::{
     Mode, db, env_layer, frontend, fusionauth, gen_compose, inventory, kafka, kickstart,
-    localstack, opensearch, repo_root, tls,
+    localstack, opensearch, repo_root,
 };
 
 #[cfg(test)]
@@ -38,6 +38,9 @@ const KUBECONFIG: &str = "/etc/rancher/k3s/k3s.yaml";
 const INGRESS_PORT: u16 = 9443;
 /// The edge config generated from the service inventory, checked in.
 pub const CADDYFILE: &str = "infra/platform/generated/Caddyfile";
+/// RustFS's webhook target for doc-storage uploads (the `s3-events` bridge,
+/// see infra/platform/components.nix).
+const UPLOAD_NOTIFICATION_TARGET: &str = "arn:rustfs:sqs:us-east-1:finalizer:webhook";
 /// Features the platform builds of Rust services enable (same as `run_local`).
 const AUTH_FEATURES: &str =
     "authentication_service/return_passwordless_code,authentication_service/no_rate_limit";
@@ -156,7 +159,13 @@ struct State {
     binaries: BTreeMap<String, String>,
     /// The frontend bundle's store path.
     frontend: Option<String>,
+    /// Node service bundles: workload -> store path.
+    #[serde(default)]
+    node: BTreeMap<String, String>,
     env_revision: String,
+    /// The instance's AWS-API key (generated once; every backend verifies it).
+    #[serde(default)]
+    aws_key: Option<(String, String)>,
 }
 
 fn state_path(instance: &Instance) -> PathBuf {
@@ -227,9 +236,26 @@ fn up(args: &UpArgs) -> Result<()> {
     )?;
     let kickstart_json =
         std::fs::read_to_string(gen_compose::kickstart_dir(&instance).join("kickstart.json"))?;
-    tls::issue(&instance)?;
+    // TLS clients reject `*.localhost` (a wildcard directly under a one-label
+    // TLD), so each instance gets a certificate naming its own host.
+    let certs = issue_host_certificate(&instance, &name.host())?;
 
     let mut state = read_state(&instance);
+    let (key_id, key_secret) = match &state.aws_key {
+        Some(k) => k.clone(),
+        None => generate_aws_key()?,
+    };
+    state.aws_key = Some((key_id.clone(), key_secret.clone()));
+    let aws_key = localstack::AwsKey {
+        access_key_id: key_id,
+        secret_access_key: key_secret,
+    };
+    let mut shared_env = shared_env;
+    shared_env.insert("AWS_ACCESS_KEY_ID".into(), aws_key.access_key_id.clone());
+    shared_env.insert(
+        "AWS_SECRET_ACCESS_KEY".into(),
+        aws_key.secret_access_key.clone(),
+    );
     if !args.no_build || state.binaries.is_empty() {
         let bins: Vec<&str> = rust_workloads().into_values().collect();
         cargo_build(&stage, &bins)?;
@@ -240,6 +266,7 @@ fn up(args: &UpArgs) -> Result<()> {
             "macro-frontend",
             &frontend::static_dir(&instance),
         )?);
+        state.node = build_node_services(&stage, &instance)?;
     }
     state.env_revision = digest(&serde_json::to_string(&shared_env)?);
     write_state(&instance, &state)?;
@@ -268,11 +295,11 @@ fn up(args: &UpArgs) -> Result<()> {
                 &BTreeMap::from([
                     (
                         "tls.crt".to_owned(),
-                        std::fs::read_to_string(tls::certs_dir(&instance).join("server.pem"))?,
+                        std::fs::read_to_string(certs.join("server.pem"))?,
                     ),
                     (
                         "tls.key".to_owned(),
-                        std::fs::read_to_string(tls::certs_dir(&instance).join("server-key.pem"))?,
+                        std::fs::read_to_string(certs.join("server-key.pem"))?,
                     ),
                 ]),
             ),
@@ -284,7 +311,7 @@ fn up(args: &UpArgs) -> Result<()> {
     let infra = items_with_tier(&manifests, "infra");
     apply_items(&stage, "infra", &infra)?;
     wait_ready(&stage, &namespace, Some("infra"))?;
-    provision(&stage, &name, &instance, &env.merged)?;
+    provision(&stage, &name, &instance, &env.merged, &manifests, &aws_key)?;
     let all = items(&manifests);
     apply_items(&stage, "services", &all)?;
     prune(&stage, &name, &all)?;
@@ -370,6 +397,23 @@ fn down(args: &NameArg) -> Result<()> {
         &format!("Deleting {} and its volumes", name.namespace()),
         &mut cmd,
     )
+}
+
+/// A leaf for `host`, signed by the development CA (`infra/local/certs`).
+fn issue_host_certificate(instance: &Instance, host: &str) -> Result<PathBuf> {
+    let dir = instance.ensure_artifact_dir()?.join("ingress-certs");
+    let out = Command::new("bash")
+        .arg(repo_root().join("infra/local/certs/issue-host.sh"))
+        .arg(&dir)
+        .arg(host)
+        .output()
+        .context("issuing the instance certificate")?;
+    ensure!(
+        out.status.success(),
+        "issuing the instance certificate: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    Ok(dir)
 }
 
 fn kubectl() -> Command {
@@ -499,6 +543,54 @@ fn store_dir(stage: &Stage, name: &str, dir: &Path) -> Result<String> {
     Ok(path)
 }
 
+/// Build the Node services the way their compose Dockerfiles do, and add each
+/// result to the store: lexical as one bundle beside its native-module
+/// dependency, websocket as its own installed package.
+fn build_node_services(stage: &Stage, instance: &Instance) -> Result<BTreeMap<String, String>> {
+    let root = repo_root();
+    let out = instance.ensure_artifact_dir()?.join("lexical-service");
+    if out.exists() {
+        std::fs::remove_dir_all(&out)?;
+    }
+    std::fs::create_dir_all(out.join("node_modules"))?;
+    let mut bundle = Command::new("bun");
+    bundle
+        .current_dir(root.join("services/lexical-service"))
+        .args([
+            "build",
+            "src/server.ts",
+            "--target=bun",
+            "--external",
+            "loro-crdt",
+            "--outfile",
+        ])
+        .arg(out.join("server.bundle.js"));
+    stage.run("Bundling lexical-service", &mut bundle)?;
+    let mut copy = Command::new("cp");
+    copy.arg("-rL")
+        .arg(root.join("node_modules/loro-crdt"))
+        .arg(out.join("node_modules/"));
+    stage.run("Staging loro-crdt", &mut copy)?;
+
+    let websocket = root.join("services/websocket-service");
+    let mut install = Command::new("bun");
+    install
+        .current_dir(&websocket)
+        .args(["install", "--frozen-lockfile"]);
+    stage.run("Installing websocket-service", &mut install)?;
+
+    Ok(BTreeMap::from([
+        (
+            "lexical".to_owned(),
+            store_dir(stage, "lexical-service", &out)?,
+        ),
+        (
+            "websocket".to_owned(),
+            store_dir(stage, "websocket-service", &websocket)?,
+        ),
+    ]))
+}
+
 /// Build the instance's images and manifests (one derivation) and read them.
 fn build_manifests(stage: &Stage, name: &InstanceName, state: &State) -> Result<Value> {
     let binaries = state
@@ -511,11 +603,18 @@ fn build_manifests(stage: &Stage, name: &InstanceName, state: &State) -> Result<
         .frontend
         .as_deref()
         .context("no frontend bundle recorded")?;
+    let node = state
+        .node
+        .iter()
+        .map(|(n, path)| format!("\"{n}\" = builtins.storePath \"{path}\";"))
+        .collect::<Vec<_>>()
+        .join(" ");
     let kafka_port = name.local_instance()?.port(Port::Kafka);
     let expr = format!(
         "let i = p.instance {{ name = \"{}\"; host = \"{}\"; envRevision = \"{}\"; \
          kafkaHostPort = {kafka_port}; \
-         binaries = {{ {binaries} }}; frontend = builtins.storePath \"{frontend}\"; }}; \
+         binaries = {{ {binaries} }}; node = {{ {node} }}; \
+         frontend = builtins.storePath \"{frontend}\"; }}; \
          in (import f.inputs.nixpkgs {{ system = \"x86_64-linux\"; }}).writeText \
          \"{}-manifests.json\" (builtins.toJSON i.manifests)",
         name.as_str(),
@@ -690,6 +789,8 @@ fn provision(
     name: &InstanceName,
     instance: &Instance,
     env: &BTreeMap<String, String>,
+    manifests: &Value,
+    aws_key: &localstack::AwsKey,
 ) -> Result<()> {
     let forwards = [
         ("postgres", Port::Postgres, 5432),
@@ -719,13 +820,219 @@ fn provision(
         wait_port(instance.port(port))?;
     }
     stage.run_step("Provisioning buckets, queues, tables, keys", || {
-        localstack::provision(instance)
+        localstack::provision_with(
+            instance,
+            &localstack::UploadNotificationTarget::Target(UPLOAD_NOTIFICATION_TARGET.into()),
+            aws_key,
+        )
     })?;
     db::migrate(stage, instance)?;
     stage.run_step("Creating Kafka topics", || kafka::provision(instance))?;
     fusionauth::wait_ready(stage, instance)?;
     opensearch::provision_indices(stage, instance, env)?;
+    deploy_sync(stage, name, instance, env, manifests, aws_key)?;
     Ok(())
+}
+
+/// The sync fleet's bucket (`syncFleetBucket` in infra/platform/components.nix).
+const SYNC_FLEET_BUCKET: &str = "cells-sync";
+/// Buckets the sync worker's R2 binding uses.
+const SYNC_R2_BUCKET: &str = "document-snapshot-bucket-dev";
+
+/// Deploy the sync worker into its celld fleet: the workers-rs build from
+/// `services/sync-service/build`, a `wrangler.jsonc` carrying the compose
+/// stack's bindings and this instance's keys, then its D1 migrations.
+fn deploy_sync(
+    stage: &Stage,
+    name: &InstanceName,
+    instance: &Instance,
+    env: &BTreeMap<String, String>,
+    manifests: &Value,
+    aws_key: &localstack::AwsKey,
+) -> Result<()> {
+    let service = repo_root().join("services/sync-service");
+    let shim = service.join("build/worker/shim.mjs");
+    if !shim.is_file() {
+        stage.note(
+            "sync-service: no workers-rs build (run `worker-build --profile \
+             sync-service-release` in services/sync-service); skipping deploy",
+        );
+        return Ok(());
+    }
+    let dir = instance.ensure_artifact_dir()?.join("sync-service");
+    if dir.exists() {
+        std::fs::remove_dir_all(&dir)?;
+    }
+    std::fs::create_dir_all(&dir)?;
+    for sub in ["build", "database"] {
+        let mut cp = Command::new("cp");
+        cp.arg("-r").arg(service.join(sub)).arg(&dir);
+        stage.run(&format!("Staging sync-service {sub}"), &mut cp)?;
+    }
+    let get = |k: &str| env.get(k).cloned().unwrap_or_default();
+    let config = sync_wrangler_config(
+        &get("INTERNAL_API_SECRET_KEY"),
+        &get("DOCUMENT_PERMISSION_JWT"),
+        &get("DOCUMENT_STORAGE_SERVICE_AUTH_KEY"),
+    );
+    std::fs::write(
+        dir.join("wrangler.jsonc"),
+        serde_json::to_string_pretty(&config)?,
+    )?;
+
+    let endpoint = format!("http://localhost:{}", instance.port(Port::LocalStack));
+    stage.run_step("Creating sync fleet buckets", || {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+        rt.block_on(async {
+            let cfg = macro_aws_config::local_aws_config_with_credentials(
+                &endpoint,
+                &aws_key.access_key_id,
+                &aws_key.secret_access_key,
+            )
+            .await;
+            let s3 = aws_sdk_s3::Client::from_conf(
+                aws_sdk_s3::config::Builder::from(&cfg)
+                    .force_path_style(true)
+                    .build(),
+            );
+            for bucket in [SYNC_FLEET_BUCKET, SYNC_R2_BUCKET] {
+                let created = s3.create_bucket().bucket(bucket).send().await;
+                if let Err(e) = created {
+                    let text = format!("{e:?}");
+                    ensure!(
+                        text.contains("BucketAlready"),
+                        "creating bucket {bucket}: {text}"
+                    );
+                }
+            }
+            Ok(())
+        })
+    })?;
+
+    let celld = nix_build(stage, "Building celld", "p.platformPkgs.celld")?
+        .into_iter()
+        .next()
+        .context("nix build printed no path")?;
+    let celld = format!("{celld}/bin/celld");
+    let esbuild = nix_build(
+        stage,
+        "Building esbuild",
+        "(import f.inputs.nixpkgs { system = \"x86_64-linux\"; }).esbuild",
+    )?
+    .into_iter()
+    .next()
+    .context("nix build printed no path")?;
+    let bucket = format!("s3://{SYNC_FLEET_BUCKET}");
+    let creds = [
+        ("AWS_ACCESS_KEY_ID", aws_key.access_key_id.as_str()),
+        ("AWS_SECRET_ACCESS_KEY", aws_key.secret_access_key.as_str()),
+        ("AWS_REGION", "us-east-1"),
+    ];
+    let mut deploy = Command::new(&celld);
+    deploy
+        .current_dir(&dir)
+        .args([
+            "deploy",
+            ".",
+            "--bucket",
+            &bucket,
+            "--endpoint",
+            &endpoint,
+            "--region",
+            "us-east-1",
+        ])
+        .env("CELLD_ESBUILD", format!("{esbuild}/bin/esbuild"))
+        .envs(creds);
+    stage.run("Deploying sync-service to its celld fleet", &mut deploy)?;
+
+    // D1 runs inside the fleet, so a node must be up before migrations; it
+    // could not start before its bucket existed.
+    let node: Vec<Value> = items(manifests)
+        .into_iter()
+        .filter(|i| i["kind"] == "Deployment" && i["metadata"]["name"] == "sync-service")
+        .collect();
+    apply_items(stage, "sync-service node", &node)?;
+    let mut restart = kubectl();
+    restart.args([
+        "-n",
+        &name.namespace(),
+        "rollout",
+        "restart",
+        "deploy/sync-service",
+    ]);
+    stage.run("Restarting the sync node", &mut restart)?;
+    let mut wait = kubectl();
+    wait.args([
+        "-n",
+        &name.namespace(),
+        "rollout",
+        "status",
+        "deploy/sync-service",
+        "--timeout=5m",
+    ]);
+    stage.run("Waiting for the sync node", &mut wait)?;
+
+    let mut migrate = Command::new(&celld);
+    migrate
+        .current_dir(&dir)
+        .args([
+            "d1",
+            "migrations",
+            "apply",
+            "user-peer-mapping",
+            "--bucket",
+            &bucket,
+            "--endpoint",
+            &endpoint,
+            "--region",
+            "us-east-1",
+        ])
+        .envs(creds);
+    stage.run("Applying sync-service D1 migrations", &mut migrate)
+}
+
+/// The sync worker's Wrangler config for celld: compose's
+/// `wrangler.docker.toml` bindings, with the keys its Dockerfile writes to
+/// `.dev.vars` as vars (celld has no separate secrets; the config lives only
+/// in this instance's fleet bucket).
+pub fn sync_wrangler_config(internal_key: &str, permissions_jwt: &str, dss_key: &str) -> Value {
+    json!({
+        "name": "sync-service",
+        // celld bundles the workers-rs shim with esbuild: the shim imports
+        // `../index.js`, which an unbundled deploy cannot resolve.
+        "main": "build/worker/shim.mjs",
+        "compatibility_date": "2025-03-05",
+        "durable_objects": {
+            "bindings": [{ "name": "DOCUMENT_SYNC_SESSION", "class_name": "DocumentSyncSession" }],
+        },
+        "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DocumentSyncSession"] }],
+        "d1_databases": [{
+            "binding": "USER_PEER_MAPPING",
+            "database_name": "user-peer-mapping",
+            "database_id": "85b0ffef-e625-4b67-8b3b-77f33fd38fd3",
+            "migrations_dir": "./database/user-peer-mapping/migrations/",
+        }],
+        "r2_buckets": [{ "binding": "DOCUMENT_SNAPSHOT_BUCKET", "bucket_name": SYNC_R2_BUCKET }],
+        "kv_namespaces": [
+            { "binding": "DOCUMENT_VERSIONING_KV", "id": "3548ca6265c745e38cd504194aa6e887" },
+            { "binding": "SNAPSHOT_STORE_KV", "id": "9beead2b7891492f82153d2354e64e92" },
+        ],
+        "vars": {
+            // The worker reads the secret's binding name from this var.
+            "INTERNAL_API_SECRET_KEY": "LOCAL_API_KEY",
+            "LOCAL_API_KEY": internal_key,
+            "DOCUMENT_PERMISSIONS_SECRET": permissions_jwt,
+            "SPS_API_SECRET_KEY": internal_key,
+            "DSS_INTERNAL_AUTH_KEY": dss_key,
+            "LEXICAL_SERVICE_AUTH_KEY": internal_key,
+            "SPS_URL": "http://search-processing-service:8080",
+            "DSS_URL": "http://document-storage-service:8080",
+            "LEXICAL_SERVICE_URL": "http://lexical-service:8096",
+            "ENVIRONMENT": "local",
+        },
+    })
 }
 
 #[derive(Default)]
@@ -773,6 +1080,25 @@ pub fn rewrite(value: &str, rewrites: &[(String, String)]) -> String {
     rewrites
         .iter()
         .fold(value.to_owned(), |v, (from, to)| v.replace(from, to))
+}
+
+/// An instance AWS-API key: ExtendDB accepts only AWS-shaped keys (`AKIA` +
+/// 16 characters, and a 40-character secret). Generated, never committed.
+fn generate_aws_key() -> Result<(String, String)> {
+    use std::io::Read;
+    const ID_CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+    const SECRET_CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    let mut bytes = [0u8; 56];
+    std::fs::File::open("/dev/urandom")?.read_exact(&mut bytes)?;
+    let id: String = bytes[..16]
+        .iter()
+        .map(|b| char::from(ID_CHARS[usize::from(*b) % ID_CHARS.len()]))
+        .collect();
+    let secret: String = bytes[16..]
+        .iter()
+        .map(|b| char::from(SECRET_CHARS[usize::from(*b) % SECRET_CHARS.len()]))
+        .collect();
+    Ok((format!("AKIA{id}"), secret))
 }
 
 fn digest(input: &str) -> String {

@@ -156,10 +156,29 @@ rec {
               containers.${name} = {
                 image = w.image.ref;
                 args = w.args or [ ];
-                env = lib.mapAttrsToList (k: v: {
-                  name = k;
-                  value = toString v;
-                }) (w.env or { });
+                # A value is a string, `{ fieldRef = "status.podIP"; }`, or
+                # `{ secret = "KEY"; }` (a key of the instance's macro-env).
+                env = lib.mapAttrsToList (
+                  k: v:
+                  if builtins.isAttrs v && v ? secret then
+                    {
+                      name = k;
+                      valueFrom.secretKeyRef = {
+                        name = "macro-env";
+                        key = v.secret;
+                      };
+                    }
+                  else if builtins.isAttrs v then
+                    {
+                      name = k;
+                      valueFrom.fieldRef.fieldPath = v.fieldRef;
+                    }
+                  else
+                    {
+                      name = k;
+                      value = toString v;
+                    }
+                ) (w.env or { });
                 envFrom = lib.optional (w.sharedEnv or false) { secretRef.name = "macro-env"; };
                 ports = map (p: {
                   containerPort = p;
