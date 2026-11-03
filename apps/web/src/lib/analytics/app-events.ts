@@ -372,7 +372,7 @@ export type AppEvents = {
 
   // --- CRM -----------------------------------------------------------------
   crm_company_created: { companyId: string };
-  crm_contact_created: { companyId: string; contactId: string };
+  crm_contact_created: { companyId?: string; contactId: string };
   /**
    * A committed pipeline write: inserted rows are entries added, updated
    * rows include stage moves and other cell edits.

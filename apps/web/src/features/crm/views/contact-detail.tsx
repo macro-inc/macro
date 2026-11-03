@@ -106,7 +106,7 @@ function ContactContent(props: ContactProps) {
                     <RecordVisibilityAction
                       recordId={current().id}
                       kind="contact"
-                      name={current().name ?? current().email}
+                      name={current().name ?? current().email ?? 'Contact'}
                       hidden={current().hidden}
                       canManage={isTeamAdmin()}
                       pending={hiddenMutation.isPending}
