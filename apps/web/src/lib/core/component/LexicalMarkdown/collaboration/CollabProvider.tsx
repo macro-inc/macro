@@ -8,7 +8,7 @@ import {
 } from '@core/component/LexicalMarkdown/collaboration/LexicalAwareness';
 import { $reconcileLexicalState } from '@core/component/LexicalMarkdown/collaboration/reconcile';
 import { useRemoteCursors } from '@core/component/LexicalMarkdown/collaboration/remote-cursor';
-import type { MarkdownEditorErrors } from '@core/component/LexicalMarkdown/constants';
+import { MarkdownEditorErrors } from '@core/component/LexicalMarkdown/constants';
 import type { PluginManager } from '@core/component/LexicalMarkdown/plugins';
 import {
   initializeEditorEmpty,
@@ -500,16 +500,16 @@ export function CollabProvider(props: CollabProviderProps) {
             message: 'CollabProvider: manager initialized, initializing editor',
           });
 
-          //TODO: some more descriptive user facing error should be displayed here
           if (!state) {
             logSyncService({
               documentId: syncSource()!.documentId,
               level: 'error',
               context: {},
               message:
-                'editor init: no state from loroManager — editor will NOT become ready (skeleton stays)',
+                'editor init: no state from loroManager — showing the empty-source error',
             });
             endSpan(syncSource()!.documentId);
+            props.setEditorError(MarkdownEditorErrors.EMPTY_SOURCE);
             return;
           }
 
