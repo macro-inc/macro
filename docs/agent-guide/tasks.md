@@ -615,6 +615,10 @@ row remounts must reuse complete cached identities without new
 permission refreshes remain separate. Hold a cold folder-preview or identity
 request while scrolling on desktop and phone: only the row metadata may show
 loading, and the list must remain mounted at the same scroll position.
+After a project read is denied, scroll its row out of view and back: the cached
+label must remain hidden until a new authorized response succeeds. Switch viewers
+while retaining cached rows: mismatched identities must reauthorize immediately,
+without exposing the previous viewer's data or repeatedly retrying a failed read.
 
 ## Reviews view
 
