@@ -76,6 +76,8 @@ tools/HTTP/GraphQL surfaces over them.
 - Keep CRM write locks ordered: domain advisory locks, parent team `KEY SHARE`,
   settings `SHARE`, then company/contact rows. Hold them through commit so
   disable/purge and team deletion cannot race creation.
+- When depopulating an email, prefer its domain-linked contact over a manual
+  unfiled record so mailbox-source teardown reaches the synced contact.
 - Keep ambiguous CSV contact lookups unresolved without creating records for
   them; continue valid rows, but propagate lookup storage and authorization failures.
 

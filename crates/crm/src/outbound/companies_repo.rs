@@ -123,6 +123,7 @@ impl CompaniesRepositoryImpl {
                       WHERE d.company_id = ct.company_id AND LOWER(d.domain) = $3
                   )
               )
+            ORDER BY ct.company_id IS NULL, ct.id
             LIMIT 1
             "#,
             team_id,

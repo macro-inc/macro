@@ -254,3 +254,30 @@ async fn a_shared_personal_provider_is_not_the_users_company(pool: PgPool) -> an
     );
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn manual_unfiled_contact_does_not_mask_synced_company_contact(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    seed_team(&pool, team_id, OWNER).await?;
+    enable_crm_for_team(&pool, team_id).await?;
+    let link_id = insert_email_link(&pool, OWNER, "owner@example.com").await?;
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    let manual = repo
+        .create_contact_for_team(&team_id, Some("contact@acme.test"), "Contact", Utc::now())
+        .await?;
+    let company_id = insert_company(&pool, team_id, true, &["acme.test"]).await?;
+    insert_contact_with_source(&pool, company_id, "contact@acme.test", link_id).await?;
+
+    let outcome = repo
+        .depopulate_contact(&team_id, &link_id, "acme.test", "contact@acme.test")
+        .await?;
+    assert!(outcome.source_deleted && outcome.contact_deleted && outcome.company_deleted);
+    assert!(
+        repo.get_contact_for_team(&team_id, &manual.id, false)
+            .await?
+            .is_some()
+    );
+    Ok(())
+}
