@@ -314,18 +314,26 @@ dependencies = [
  "async-trait",
  "axum",
  "bot_id",
+ "calendar_events",
  "chrono",
  "code_execution",
  "cognition",
+ "email",
  "entity_access",
+ "import",
  "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
+ "nutype",
  "rootcause",
  "schemars 1.2.1",
  "serde",
  "serde_json",
+ "serde_path_to_error",
+ "specta",
+ "specta-serde",
+ "specta-typescript",
  "sqlx",
  "tempfile",
  "thiserror 2.0.18",
@@ -3809,6 +3817,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "email_utils",
+ "email_validator",
  "entity_access",
  "futures",
  "macro_authorization",
@@ -3825,6 +3834,7 @@ dependencies = [
  "schemars 1.2.1",
  "serde",
  "serde_json",
+ "specta",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
@@ -6453,7 +6463,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7213,6 +7223,7 @@ dependencies = [
  "email_api_client",
  "email_db_client",
  "email_utils",
+ "email_validator",
  "entity_access",
  "entity_access_management",
  "entity_mutation",
@@ -7247,6 +7258,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "sha2 0.10.9",
+ "specta",
  "sqlx",
  "strum 0.27.2",
  "subtle",
@@ -7619,7 +7631,12 @@ name = "email_validator"
 version = "0.1.0"
 dependencies = [
  "lazy_static",
+ "nutype",
  "regex",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "specta",
  "workspace-hack",
 ]
 
@@ -10647,6 +10664,7 @@ dependencies = [
  "schemars 1.2.1",
  "serde",
  "serde_json",
+ "specta",
  "sqlx",
  "strum 0.27.2",
  "thiserror 2.0.18",
@@ -11399,6 +11417,27 @@ checksum = "01737161ba802849cfd486b5bd209d38ba4943494c249a8126005170c7621edd"
 dependencies = [
  "crypto-common 0.2.2",
  "rand_core 0.10.1",
+]
+
+[[package]]
+name = "kinded"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21677048d7aa2c4c73e7edac4a9d5aee810a3987ccef2762c8449ffd0b92f8d2"
+dependencies = [
+ "kinded_macros",
+]
+
+[[package]]
+name = "kinded_macros"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6eaa04e7e45e39b21765756cc9544a4eb4a7f41abefbe77e6256a1649789551d"
+dependencies = [
+ "convert_case 0.11.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -14112,6 +14151,30 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "nutype"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae5a3dbe7b39891991de649985f7930fea69131fc7492d1cf2621d279ad56f77"
+dependencies = [
+ "nutype_macros",
+]
+
+[[package]]
+name = "nutype_macros"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea8ebf0265a233787dc277bd299f7facf14954a4e8a40c7c3435d8a58c9cd522"
+dependencies = [
+ "cfg-if",
+ "kinded",
+ "proc-macro2",
+ "quote",
+ "rustc_version",
+ "syn 2.0.117",
+ "urlencoding",
 ]
 
 [[package]]
@@ -23009,6 +23072,8 @@ dependencies = [
  "simd-adler32",
  "slab",
  "smallvec",
+ "specta",
+ "specta-macros",
  "spin 0.9.9",
  "sqlx-core",
  "sqlx-postgres",

@@ -145,6 +145,7 @@ sha2 = { version = "0.10", features = ["oid"] }
 simd-adler32 = { version = "0.3" }
 slab = { version = "0.4" }
 smallvec = { version = "1", default-features = false, features = ["const_new", "serde"] }
+specta = { version = "2.0.0-rc.25", features = ["chrono", "derive", "uuid"] }
 spin = { version = "0.9", default-features = false, features = ["once", "spin_mutex"] }
 sqlx-core = { version = "0.8", features = ["_rt-tokio", "_tls-rustls-ring-webpki", "any", "chrono", "json", "migrate", "offline", "uuid"] }
 sqlx-postgres = { version = "0.8", default-features = false, features = ["any", "chrono", "json", "migrate", "offline", "uuid"] }
@@ -311,6 +312,8 @@ sha2 = { version = "0.10", features = ["oid"] }
 simd-adler32 = { version = "0.3" }
 slab = { version = "0.4" }
 smallvec = { version = "1", default-features = false, features = ["const_new", "serde"] }
+specta = { version = "2.0.0-rc.25", features = ["chrono", "derive", "uuid"] }
+specta-macros = { version = "2.0.0-rc.25", features = ["serde"] }
 spin = { version = "0.9", default-features = false, features = ["once", "spin_mutex"] }
 sqlx-core = { version = "0.8", features = ["_rt-tokio", "_tls-rustls-ring-webpki", "any", "chrono", "json", "migrate", "offline", "uuid"] }
 sqlx-postgres = { version = "0.8", default-features = false, features = ["any", "chrono", "json", "migrate", "offline", "uuid"] }

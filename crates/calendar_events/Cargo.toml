@@ -9,7 +9,14 @@ default = []
 notes = ["dep:entity_access"]
 outlook = ["dep:tokio"]
 # The AI toolset adapter exposing calendar CRUD to agents.
-ai_tools = ["dep:ai_toolset", "dep:anyhow", "dep:async-trait", "dep:schemars"]
+ai_tools = [
+  "dep:ai_toolset",
+  "dep:anyhow",
+  "dep:async-trait",
+  "dep:email_validator",
+  "dep:schemars",
+  "dep:specta",
+]
 # The meeting-link adapter that mints Macro calls through the call domain
 # service, for hosts that compose both calendars and calls.
 call-meetings = ["dep:call", "dep:macro_user_id"]
@@ -40,6 +47,7 @@ anyhow = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 aws-sdk-sqs = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
+email_validator = { path = "../email_validator", optional = true }
 call = { path = "../call", default-features = false, features = [
   "ports",
 ], optional = true }
@@ -61,6 +69,7 @@ macro_event_broker = { path = "../macro_event_broker", default-features = false 
 macro_event_topics = { path = "../macro_event_topics" }
 rootcause = { workspace = true }
 schemars = { workspace = true, optional = true }
+specta = { workspace = true, optional = true, features = ["chrono", "uuid"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }
