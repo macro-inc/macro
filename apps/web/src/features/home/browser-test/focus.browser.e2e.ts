@@ -1,165 +1,116 @@
 import { expect, test } from '@playwright/test';
 
 for (const theme of ['dark', 'light']) {
-  test(`review, edit, finish and undo a draft in ${theme}`, async ({
+  test(`live suggestions dismiss, undo, and open in the full feed in ${theme}`, async ({
     page,
   }, testInfo) => {
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.goto(`/?theme=${theme}`);
-    await expect(
-      page.getByRole('heading', { name: 'Home priority list' })
-    ).toBeVisible();
+    await expect(page.locator('[data-focus-row]')).toHaveCount(5);
     await page.screenshot({ path: testInfo.outputPath(`home-${theme}.png`) });
     await page
       .getByRole('button', {
-        name: 'Review reply: Give the launch plan a green light',
+        name: 'Dismiss: Review the pending request',
         exact: true,
       })
       .click();
-    const dialog = page.getByRole('dialog');
-    await expect(dialog).toBeVisible();
-    await page
-      .getByLabel('Your draft', { exact: true })
-      .fill('Looks good — let’s review on Thursday.');
-    await page.getByRole('button', { name: 'Close preview' }).click();
+    await expect(page.locator('[data-focus-row]')).toHaveCount(4);
+    await page.getByRole('button', { name: 'Undo last', exact: true }).click();
+    await expect(page.locator('[data-focus-row]')).toHaveCount(5);
     await page
       .getByRole('button', {
-        name: 'Review reply: Give the launch plan a green light',
+        name: 'Dismiss: Create an account research agent',
         exact: true,
       })
       .click();
-    await expect(page.getByLabel('Your draft', { exact: true })).toHaveValue(
-      'Looks good — let’s review on Thursday.'
+    await page
+      .getByRole('button', {
+        name: 'Open suggestion: Prepare a weekly review',
+        exact: true,
+      })
+      .click();
+    await expect(
+      page.locator('[data-feed-item="weekly-routine"]')
+    ).toBeInViewport();
+    await expect(page.locator('[data-feed-item="account-agent"]')).toHaveCount(
+      0
     );
-    await page.screenshot({ path: testInfo.outputPath(`draft-${theme}.png`) });
-    await dialog.getByRole('button', { name: 'Done', exact: true }).click();
-    await expect(
-      page.getByRole('button', {
-        name: 'Review reply: Give the launch plan a green light',
-        exact: true,
-      })
-    ).toHaveCount(0);
-    await page.keyboard.press('e');
-    await expect(page.locator('[data-focus-row]')).toHaveCount(3);
-    await page.getByRole('button', { name: 'Undo last' }).click();
-    await page.getByRole('button', { name: 'Undo last' }).click();
-    await expect(
-      page.getByRole('button', {
-        name: 'Review reply: Give the launch plan a green light',
-        exact: true,
-      })
-    ).toBeVisible();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
     expect(errors).toEqual([]);
   });
 }
 
-test('keyboard navigation, editing guard and empty state', async ({ page }) => {
+test('opens the full feed from the priorities heading', async ({ page }) => {
   await page.goto('/');
-  await page.keyboard.press('j');
+  await page.getByRole('button', { name: 'Open For you', exact: true }).click();
   await expect(
-    page.getByRole('button', {
-      name: 'Review message: Unblock the next design pass',
-      exact: true,
-    })
-  ).toBeFocused();
-  await page.keyboard.press('Enter');
-  await expect(page.getByRole('dialog')).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  await page
-    .getByRole('button', {
-      name: 'Review reply: Give the launch plan a green light',
-      exact: true,
-    })
-    .focus();
-  await page.keyboard.press('j');
-  await expect(
-    page.getByRole('button', {
-      name: 'Review message: Unblock the next design pass',
-      exact: true,
-    })
-  ).toBeFocused();
-  await page.keyboard.press('k');
-  await expect(
-    page.getByRole('button', {
-      name: 'Review reply: Give the launch plan a green light',
-      exact: true,
-    })
-  ).toBeFocused();
-  await page
-    .getByRole('button', {
-      name: 'Review reply: Give the launch plan a green light',
-      exact: true,
-    })
-    .click();
-  await page.getByLabel('Your draft', { exact: true }).fill('jke');
-  await page.keyboard.press('e');
-  await expect(page.locator('[data-focus-row]')).toHaveCount(5);
-  await page.getByRole('button', { name: 'Close preview' }).click();
-  await page
-    .getByRole('button', {
-      name: 'Review reply: Give the launch plan a green light',
-      exact: true,
-    })
-    .focus();
-  for (let i = 0; i < 5; i++) await page.keyboard.press('e');
-  await expect(page.getByText('A little more breathing room.')).toBeVisible();
-  await page.getByRole('button', { name: 'Undo last' }).click();
-  await expect(page.locator('[data-focus-row]')).toHaveCount(1);
+    page.getByRole('heading', { name: 'For you', exact: true })
+  ).toBeVisible();
+  await expect(page.locator('[data-feed-item]')).toHaveCount(5);
 });
 
-test('routine, document and empty draft use local previews', async ({
+test('late data, keyboard selection, and full-page handoff', async ({
   page,
 }) => {
-  const externalRequests: string[] = [];
-  page.on('request', (request) => {
-    if (
-      !request.url().startsWith('http://127.0.0.1:3006') &&
-      !request.url().startsWith('data:')
-    )
-      externalRequests.push(request.url());
-  });
-  await page.goto('/');
+  await page.goto('/?scenario=loading');
+  await expect(page.locator('[data-focus-row]')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Finish loading' }).click();
   await page
     .getByRole('button', {
-      name: 'Set up routine: Start the week with the full picture',
+      name: 'Open suggestion: Review the pending request',
       exact: true,
     })
-    .click();
-  await expect(page.getByLabel('Routine schedule')).toHaveValue(
-    'Every Monday at 9:00 AM'
-  );
-  await page.getByLabel('Routine schedule').fill('Every Friday at 10:00 AM');
-  await page.getByRole('button', { name: 'Done', exact: true }).click();
-  await page
-    .getByRole('button', {
-      name: 'Open proposal: Take a look at the project proposal',
-      exact: true,
-    })
-    .click();
+    .focus();
+  await page.keyboard.press('j');
   await expect(
-    page.getByRole('heading', { name: 'Scope', exact: true })
-  ).toBeVisible();
-  await page.getByRole('button', { name: 'Mark reviewed' }).click();
-  await page
-    .getByRole('button', {
-      name: 'Write reply: Close the loop on next steps',
+    page.getByRole('button', {
+      name: 'Open suggestion: Create an account research agent',
       exact: true,
     })
-    .click();
-  await expect(page.getByLabel('Your draft', { exact: true })).toBeEmpty();
+  ).toBeFocused();
+  await page.keyboard.press('e');
+  await expect(page.locator('[data-focus-row]')).toHaveCount(4);
+  await page.keyboard.press('j');
+  await page.keyboard.press('Enter');
   await expect(
-    page.getByRole('button', { name: 'Done', exact: true })
-  ).toBeDisabled();
-  await page
-    .getByLabel('Your draft', { exact: true })
-    .fill('Here are the priorities for this week.');
-  await page.getByRole('button', { name: 'Done', exact: true }).click();
-  expect(externalRequests).toEqual([]);
+    page.locator('[data-feed-item="pipeline-database"]')
+  ).toBeInViewport();
 });
 
-test('today calendar centers current time, scrolls, and filters recurring events', async ({
+test('failed suggestions retry without showing sample rows', async ({
+  page,
+}) => {
+  await page.goto('/?scenario=error');
+  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(page.locator('[data-focus-row]')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect(page.locator('[data-focus-row]')).toHaveCount(5);
+});
+
+test('keyboard navigation accepts generated IDs with selector punctuation', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/?scenario=escaped-id');
+  await page
+    .getByRole('button', {
+      name: 'Open suggestion: Review the pending request',
+      exact: true,
+    })
+    .focus();
+  await page.keyboard.press('j');
+  await expect(
+    page.getByRole('button', {
+      name: 'Open suggestion: Create an account research agent',
+      exact: true,
+    })
+  ).toBeFocused();
+  expect(errors).toEqual([]);
+});
+
+test('today overview shows the whole day without internal scrolling', async ({
   page,
 }) => {
   await page.clock.setFixedTime(new Date('2026-11-02T11:15:00'));
@@ -174,75 +125,34 @@ test('today calendar centers current time, scrolls, and filters recurring events
   await expect(calendar.locator('.fc-timegrid-now-indicator-line')).toHaveCount(
     1
   );
+  await expect(
+    calendar.getByText('Morning sync', { exact: true })
+  ).toBeVisible();
+  await expect(
+    calendar.getByText('End-of-day review', { exact: true })
+  ).toBeVisible();
   await expect
-    .poll(async () =>
-      calendar.evaluate((root) => {
-        const marker = root.querySelector('.fc-timegrid-now-indicator-line');
-        const scroll = root.querySelector(
-          '.fc-timegrid .fc-scroller-harness-liquid > .fc-scroller'
-        );
-        if (!marker || !scroll) return Infinity;
-        return Math.abs(
-          marker.getBoundingClientRect().top -
-            scroll.getBoundingClientRect().top -
-            scroll.clientHeight / 2
-        );
-      })
-    )
-    .toBeLessThan(4);
+    .poll(() => scroller.evaluate((el) => el.scrollHeight - el.clientHeight))
+    .toBeLessThanOrEqual(1);
   expect(
     await calendar.evaluate((el) =>
       Math.round(el.getBoundingClientRect().height)
     )
-  ).toBe(200);
-  await calendar.evaluate((el) => {
-    const parent = el.parentElement;
-    const next = el.nextSibling;
-    const scroll = el.querySelector(
-      '.fc-timegrid .fc-scroller-harness-liquid > .fc-scroller'
-    );
-    el.remove();
-    if (scroll) scroll.scrollTop = 0;
-    requestAnimationFrame(() => parent?.insertBefore(el, next));
+  ).toBe(360);
+  const bounds = await calendar.evaluate((root) => {
+    const viewport = root.getBoundingClientRect();
+    return [...root.querySelectorAll('.fc-event')].every((event) => {
+      const box = event.getBoundingClientRect();
+      return box.top >= viewport.top && box.bottom <= viewport.bottom;
+    });
   });
-  await expect
-    .poll(async () =>
-      calendar.evaluate((root) => {
-        const marker = root.querySelector('.fc-timegrid-now-indicator-line');
-        const scroll = root.querySelector(
-          '.fc-timegrid .fc-scroller-harness-liquid > .fc-scroller'
-        );
-        if (!marker || !scroll) return Infinity;
-        return Math.abs(
-          marker.getBoundingClientRect().top -
-            scroll.getBoundingClientRect().top -
-            scroll.clientHeight / 2
-        );
-      })
-    )
-    .toBeLessThan(4);
+  expect(bounds).toBe(true);
   await calendar.getByText('Design review', { exact: true }).click();
   await expect(page.getByRole('dialog')).toContainText('11:00 – 11:45 AM');
   await page.getByRole('button', { name: 'Close event' }).click();
-  await expect(
-    calendar.locator('.fc-event').filter({ hasText: 'Team check-in' })
-  ).toHaveCount(1);
-  await calendar.getByText('Hide recurring', { exact: true }).click();
-  await expect(
-    calendar.locator('.fc-event').filter({ hasText: 'Team check-in' })
-  ).toHaveCount(0);
-  await expect(
-    calendar.locator('.fc-event').filter({ hasText: 'Design review' })
-  ).toHaveCount(1);
-  const initialScroll = await scroller.evaluate((el) => el.scrollTop);
   await scroller.hover();
   await page.mouse.wheel(0, 300);
-  await expect
-    .poll(() => scroller.evaluate((el) => el.scrollTop))
-    .toBeGreaterThan(initialScroll + 100);
-  await calendar.getByText('Hide recurring', { exact: true }).click();
-  await expect(
-    calendar.locator('.fc-event').filter({ hasText: 'Team check-in' })
-  ).toHaveCount(1);
+  expect(await scroller.evaluate((el) => el.scrollTop)).toBe(0);
+  await expect(calendar.locator('.fc-event')).toHaveCount(7);
   await expect(page.locator('[data-focus-row]')).toHaveCount(5);
 });

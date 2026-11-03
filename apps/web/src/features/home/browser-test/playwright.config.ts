@@ -9,8 +9,7 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
-    command:
-      'bun --bun vite --config src/features/home/browser-test/vite.config.ts',
+    command: 'bun --bun vite --config vite.config.ts',
     url: 'http://127.0.0.1:3006',
     reuseExistingServer: !process.env.CI,
   },

@@ -5,7 +5,6 @@ const calendarEventSchema = z.object({
   id: z.string(),
   date: z.iso.date(),
   startsAt: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
-  recurring: z.boolean(),
   durationMinutes: z.number().int().positive(),
   title: z.string(),
   time: z.string(),

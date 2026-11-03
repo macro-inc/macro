@@ -5,57 +5,46 @@ import {
   DEFAULT_GUEST_POLICY,
   NO_VIEWER_CAPABILITIES,
 } from '@app/features/calendar/types';
-import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
-import { Button, Dialog, ToggleSwitch } from '@ui';
-import { addMinutes, format, max, parseISO, startOfDay } from 'date-fns';
-import { createMemo, createSignal, Show } from 'solid-js';
+import { Button, Dialog } from '@ui';
+import { addMinutes, format, parseISO } from 'date-fns';
+import { createSignal, Show } from 'solid-js';
 import { HOME_CALENDAR, type HomeCalendarEvent } from '../core/calendar-events';
-import { HomeCalendarPosition } from './home-calendar-position';
 
 /** Today's sample events in the shared calendar embed; no calendar requests. */
 export function HomeCalendar() {
   const today = new Date();
   const date = format(today, 'yyyy-MM-dd');
-  const [hideRecurring, setHideRecurring] = createSignal(false);
   const [event, setEvent] = createSignal<HomeCalendarEvent>();
-  const events = createMemo<CalendarEvent[]>(() =>
-    HOME_CALENDAR.events
-      .filter(
-        (item) =>
-          item.date === HOME_CALENDAR.date &&
-          (!hideRecurring() || !item.recurring)
-      )
-      .map((item) => {
-        const start = parseISO(`${date}T${item.startsAt}`);
-        return {
-          id: item.id,
-          eventId: item.id,
-          occurrenceKey: item.id,
-          isCancelled: false,
-          isReadOnly: true,
-          attendees: [],
-          guestPolicy: DEFAULT_GUEST_POLICY,
-          viewerCan: NO_VIEWER_CAPABILITIES,
-          sourceCalendarIds: [DEFAULT_CALENDAR_SOURCE.id],
-          recurrenceLines: [],
-          title: item.title,
-          start: start.toISOString(),
-          end: addMinutes(start, item.durationMinutes).toISOString(),
-          allDay: false,
-          calendar: DEFAULT_CALENDAR_SOURCE,
-          visibleCalendars: [DEFAULT_CALENDAR_SOURCE],
-          location: item.location,
-        };
-      })
-  );
-  const eventsById = createMemo(
-    () => new Map(events().map((item) => [item.id, item]))
-  );
+  const events: CalendarEvent[] = HOME_CALENDAR.events
+    .filter((item) => item.date === HOME_CALENDAR.date)
+    .map((item) => {
+      const start = parseISO(`${date}T${item.startsAt}`);
+      return {
+        id: item.id,
+        eventId: item.id,
+        occurrenceKey: item.id,
+        isCancelled: false,
+        isReadOnly: true,
+        attendees: [],
+        guestPolicy: DEFAULT_GUEST_POLICY,
+        viewerCan: NO_VIEWER_CAPABILITIES,
+        sourceCalendarIds: [DEFAULT_CALENDAR_SOURCE.id],
+        recurrenceLines: [],
+        title: item.title,
+        start: start.toISOString(),
+        end: addMinutes(start, item.durationMinutes).toISOString(),
+        allDay: false,
+        calendar: DEFAULT_CALENDAR_SOURCE,
+        visibleCalendars: [DEFAULT_CALENDAR_SOURCE],
+        location: item.location,
+      };
+    });
+  const eventsById = new Map(events.map((item) => [item.id, item]));
 
   return (
     <section
-      class="mt-8 flex h-[200px] min-w-0 flex-col"
+      class="mt-8 flex h-[360px] min-w-0 flex-col"
       aria-label="Today's calendar"
       data-home-calendar
       onFocusIn={(event) => {
@@ -64,33 +53,23 @@ export function HomeCalendar() {
           event.target.setAttribute('data-keyboard-input', '');
       }}
     >
-      <div class="flex h-9 shrink-0 items-center justify-between px-1">
+      <div class="flex h-9 shrink-0 items-center px-1">
         <h2 class="flex items-center gap-2 text-sm font-medium">
-          <CalendarIcon class="size-4" />
           Today
           <span class="text-xs font-normal text-ink-extra-muted">
             {format(today, 'EEE, MMM d')}
           </span>
         </h2>
-        <ToggleSwitch
-          size="sm"
-          label="Hide recurring"
-          labelClass="text-xs text-ink-muted"
-          checked={hideRecurring()}
-          onChange={setHideRecurring}
-        />
       </div>
       <div class="min-h-0 flex-1">
         <CalendarEmbed
           initialDate={today}
-          events={events()}
-          eventsById={eventsById()}
+          events={events}
+          eventsById={eventsById}
           settings={{
             initialView: 'timeGridDay',
-            openingScrollTime: format(
-              max([startOfDay(today), addMinutes(today, -75)]),
-              'HH:mm:ss'
-            ),
+            timeGridLayout: 'overview',
+            openingScrollTime: '00:00:00',
             showDayHeaders: false,
             collapseEmptyAllDaySlot: true,
             showWeekends: true,
@@ -104,9 +83,7 @@ export function HomeCalendar() {
                 HOME_CALENDAR.events.find((item) => item.id === selected.id)
               ),
           }}
-        >
-          {(handle) => <HomeCalendarPosition handle={handle} />}
-        </CalendarEmbed>
+        />
       </div>
       <Show when={event()} keyed>
         {(item) => (

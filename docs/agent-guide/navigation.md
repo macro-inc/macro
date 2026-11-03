@@ -14,42 +14,38 @@ Its tooltip is “New Split” and displays the registered new-split shortcut (`
 
 ## Desktop Home focus preview
 
-With `enable-for-you` on, Home shows a composer above five two-line sample priority rows. With it off, Home keeps its existing composer and recommendations. Each preview row shows a
-hardcoded importance score with the same five-bar meter and color bands as
-email Focus, immediately before its timestamp. Rows use the shared Home list item, with an
-icon and title on the first line and context on the second, plus score, timestamp, and dismiss; click a row to
-open its preview. Enter opens the focused row; the real composer stays centered
-above the list, which shares its width. The navigation panel
-starts closed when no preference has been saved; its toggle still opens the
-existing notifications and recent-activity list. Mobile Home is unchanged.
+With `enable-for-you` on, Home shows its real composer above up to five live
+recommendations from For you. The desktop content column starts 144px below the content area's top, moving the
+greeting, composer, calendar, and recommendations together. The two-line rows share the composer's width,
+interleave important work with ideas, and show importance as bars without numeric
+scores. Both Home and For you use red for high importance, yellow in the middle,
+and green for low importance; more bars mean higher importance. Click a row, or press Enter on it, to open the full For you page
+with that recommendation centered and highlighted. No draft preview opens in
+Home. The open icon beside **Your top priorities** opens the full For you feed.
+Loading and errors appear explicitly; there are no sample suggestions.
+With the flag off, Home keeps its existing composer and recommendations.
 
-A 200px Today calendar embed below the composer reuses the shared day time-grid
-with sample events from `features/home/core/calendar-events.json`. It opens
-centered on the current time and scrolls vertically through the day. Hide recurring
-filters repeating meetings locally; select an event to inspect its sample details.
+The navigation panel starts closed when no preference has been saved; its
+toggle still opens the existing notifications and recent-activity list. Mobile
+Home is unchanged. The composer preserves mentions, attachments, model/mode
+controls, draft persistence, and sending.
+
+A 360px Today calendar embed below the composer reuses the shared day time-grid
+with sample events from `features/home/core/calendar-events.json`. Its overview
+fits all 24 hours without internal scrolling, with two-hour time labels and a
+current-time marker. Select an event to inspect its sample details.
 No calendar requests or changes are made.
 
-The homepage keeps its real chat composer, including mentions, attachments,
-model/mode controls, draft persistence, and sending. Only the suggested rows
-use `apps/web/src/features/home/core/focus-actions.json`. Their review actions
-do not send messages, schedule routines, or fetch documents; row changes reset
-on reload.
+Use `j` / `k` in the active Home pane to move between recommendations and `e`
+to set one aside. Shortcuts do not run inside text fields or open dialogs.
+Dismissals are shared with For you and persist per account; **Undo last**
+restores the latest dismissed row without changing its source entity.
 
-- Open an email or message row to edit its sample draft. Close and reopen it
-  to keep editing; **Done** clears it from the local list. A row without a
-  prepared draft starts with an empty editor.
-- **Set up routine** opens local instructions and a schedule field.
-- **Open proposal** opens a sample document in Home.
-- Use `j` / `k` in the active Home pane to move between rows and `e` to set
-  one aside. Shortcuts do not run inside text fields or open dialogs. When navigation is open, focus its list to use the existing list shortcuts.
-- **Undo last** restores the latest cleared row; clearing all rows shows the
-  completed state.
-
-For a signed-out, backend-free test fixture of the priorities and calendar, run
+For a signed-out, backend-free fixture, run
 `bun --bun vite --config src/features/home/browser-test/vite.config.ts` from
 `apps/web` and open `http://127.0.0.1:3006/`. Add `?theme=light` for light mode.
-The matching Playwright config exercises local edits, keyboard navigation,
-completion, undo, and absence of external requests.
+The matching Playwright config exercises arriving recommendations, keyboard
+navigation, full-feed handoff, shared dismissals, retries, and the calendar.
 
 ## Desktop For you
 

@@ -3,7 +3,12 @@ import '../../../index.css';
 import HomeIcon from '@icon/system/regular/house.svg';
 import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
 import { Button } from '@ui';
+import { createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
+import type { FeedItem } from '../../for-you/core/feed';
+import { createFeedPreferences } from '../../for-you/queries/preferences';
+import { TEST_ITEMS } from '../../for-you/tests/fixtures';
+import { ForYouView } from '../../for-you/views/for-you-view';
 import { macroDarkTheme } from '../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../theme/themes/macro-light';
 import { HomeFocusView } from '../views/home-focus-view';
@@ -17,6 +22,37 @@ for (const [token, value] of Object.entries(
 }
 
 function Fixture() {
+  const scenario = new URLSearchParams(location.search).get('scenario');
+  const [items, setItems] = createSignal<FeedItem[] | undefined>(
+    scenario === 'loading' || scenario === 'error'
+      ? undefined
+      : TEST_ITEMS.map((item) => ({
+          ...item,
+          id: scenario === 'escaped-id' ? `${item.id}\"[]\\` : item.id,
+        }))
+  );
+  const [loading, setLoading] = createSignal(scenario === 'loading');
+  const [error, setError] = createSignal<string | undefined>(
+    scenario === 'error' ? 'unavailable' : undefined
+  );
+  const source = {
+    items,
+    loading,
+    error,
+    refreshing: () => false,
+    canRetry: () => true,
+    refresh: async () => {
+      setItems(TEST_ITEMS);
+      setLoading(false);
+      setError(undefined);
+    },
+  };
+  const preferences = createFeedPreferences(
+    'home-fixture',
+    'Useful next steps'
+  );
+  const [opened, setOpened] = createSignal<string>();
+
   return (
     <main class="flex h-dvh bg-page p-1.5 font-sans text-ink">
       <aside
@@ -39,9 +75,37 @@ function Fixture() {
             {IS_LIGHT ? 'Dark appearance' : 'Light appearance'}
           </Button>
         </header>
-        <HomeFocusView active>
-          <h1 class="text-lg font-medium">Home priority list</h1>
-        </HomeFocusView>
+        <Show
+          when={opened()}
+          fallback={
+            <HomeFocusView
+              active
+              source={source}
+              preferences={preferences}
+              onOpen={(item) => setOpened(item.id)}
+              onOpenFeed={() => setOpened('all')}
+            >
+              <h1 class="text-lg font-medium">Home priority list</h1>
+              <Show when={loading()}>
+                <Button
+                  onClick={() => {
+                    setItems(TEST_ITEMS);
+                    setLoading(false);
+                  }}
+                >
+                  Finish loading
+                </Button>
+              </Show>
+            </HomeFocusView>
+          }
+        >
+          <ForYouView
+            source={source}
+            preferences={preferences}
+            focusedId={opened()}
+            actions={{ start: async () => {}, openSource: () => {} }}
+          />
+        </Show>
       </div>
     </main>
   );

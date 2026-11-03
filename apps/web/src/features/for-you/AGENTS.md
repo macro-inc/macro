@@ -15,6 +15,7 @@ It lives at `/app/for-you`, below Home in the outer sidebar.
 - `queries/preferences.ts` scopes preferences and dismissals to the account. The route remounts the feed on account changes.
 - Persist only customized prompts; saving dismissals must not pin a translated default. Keep the flagged Home calendar lazily loaded and wait for the flag before initializing its sidebar preference.
 - `actions.ts` opens the real agent composer with the suggested instructions unsent, or navigates to the actual source entity. Dismiss only hides a recommendation; it never completes or changes a source task.
+- Home uses the same projection and preferences for its first five recommendations. Row navigation supplies the `forYou.item` search parameter; the full page centers and highlights that item in All.
 - `context/feed-source.ts` is the injected contract used by state and views. Test data lives only in `tests/`.
 
 ## Checks

@@ -125,12 +125,15 @@ describe('live feed projection adapter', () => {
     }
   });
   it('recovers completed materializations when realtime delivery is unavailable', async () => {
-    vi.useFakeTimers();
     projection.generating = true;
     projection.refetch.mockImplementation(async () => {
       projection.data = { items: TEST_ITEMS };
     });
     const mounted = mount('disconnected-user', 'Find useful work.');
+    await vi.waitFor(() => expect(mounted.source.canRetry()).toBe(true));
+    vi.useFakeTimers();
+    // Start a fresh generation interval after the async projection key resolves.
+    await mounted.source.refresh();
     try {
       await vi.advanceTimersByTimeAsync(10_000);
       expect(projection.refetch).toHaveBeenCalledTimes(1);

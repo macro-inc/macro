@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => mocks.flag(),
 }));
+vi.mock('@app/lib/split-router', () => ({ createSearchParams: () => [{}] }));
 vi.mock('@app/lib/i18n', () => ({ t: (key: string) => key }));
 vi.mock('@core/constant/featureFlags', () => ({ enableForYou: {} }));
 vi.mock('@core/context/user', () => ({

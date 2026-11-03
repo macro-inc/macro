@@ -43,8 +43,8 @@ vi.mock('@app/signal/hotkeyRoot', () => ({ useHotkeyInterceptor: vi.fn() }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({ isPanelActive: () => true }),
 }));
-vi.mock('../views/home-focus-view', () => ({
-  HomeFocusView: (props: ChildrenProps) => (
+vi.mock('../home-focus', () => ({
+  HomeFocus: (props: ChildrenProps) => (
     <div data-testid="home-focus">{props.children}</div>
   ),
 }));

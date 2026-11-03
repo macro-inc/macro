@@ -1,5 +1,5 @@
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
-import { createSignal } from 'solid-js';
+import { createSignal, onCleanup } from 'solid-js';
 import { z } from 'zod';
 import type { FeedPreferences } from '../context/feed-source';
 
@@ -25,9 +25,41 @@ export function createFeedPreferences(
     }
   }
   const [preferences, setPreferences] = createSignal(initial);
+  const onChange = (event: Event) => {
+    if (event instanceof CustomEvent) {
+      const parsed = z
+        .object({ userId: z.string(), preferences: preferencesSchema })
+        .safeParse(event.detail);
+      if (parsed.success && parsed.data.userId === userId)
+        setPreferences(parsed.data.preferences);
+    } else if (
+      event instanceof StorageEvent &&
+      event.key === `for-you-preferences-v1:${encodeURIComponent(userId)}`
+    ) {
+      try {
+        const parsed = preferencesSchema.safeParse(
+          JSON.parse(event.newValue ?? '{"hiddenIds":[]}')
+        );
+        if (parsed.success) setPreferences(parsed.data);
+      } catch {
+        // Ignore malformed data from another tab.
+      }
+    }
+  };
+  window.addEventListener('for-you-preferences-changed', onChange);
+  window.addEventListener('storage', onChange);
+  onCleanup(() => {
+    window.removeEventListener('for-you-preferences-changed', onChange);
+    window.removeEventListener('storage', onChange);
+  });
   const update = (next: typeof initial) => {
     setPreferences(next);
     storage.write(userId, JSON.stringify(next));
+    window.dispatchEvent(
+      new CustomEvent('for-you-preferences-changed', {
+        detail: { userId, preferences: next },
+      })
+    );
   };
   return {
     prompt: () => preferences().prompt ?? defaultPrompt,

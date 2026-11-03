@@ -82,6 +82,8 @@ export interface CalendarGridHandle extends FullCalendarContextValue {
 
 export interface CalendarGridSettings {
   initialView: CalendarPeriodView;
+  /** Fit a complete time-grid day in the host, without internal scrolling. */
+  timeGridLayout?: 'scroll' | 'overview';
   /** Opening hour for time-grid embeds; defaults to the shared workday start. */
   openingScrollTime?: string;
   /** Consecutive visible days for time-grid embeds. */
@@ -257,6 +259,15 @@ export function CalendarGrid(props: CalendarGridProps) {
         props.settings.openingScrollTime ?? TIME_GRID_OPENING_SCROLL_TIME
       }
       scrollTimeReset={false}
+      slotDuration={
+        props.settings.timeGridLayout === 'overview' ? '01:00:00' : undefined
+      }
+      slotLabelInterval={
+        props.settings.timeGridLayout === 'overview' ? '02:00:00' : undefined
+      }
+      eventMinHeight={
+        props.settings.timeGridLayout === 'overview' ? 18 : undefined
+      }
       weekends={props.settings.showWeekends}
       firstDay={props.settings.weekStartsOn}
       slotLabelFormat={CALENDAR_TIME_FORMAT_OPTIONS[props.settings.timeFormat]}

@@ -1,5 +1,10 @@
 export default {
-  importance: 'Importance {{score}} of 100',
+  importanceVeryHigh: 'Very high importance',
+  importanceHigh: 'High importance',
+  importanceMedium: 'Medium importance',
+  importanceLow: 'Low importance',
+  importanceVeryLow: 'Very low importance',
+  importanceNone: 'Unranked',
   subtitle: 'Ideas to explore. Things to move forward.',
   all: 'All',
   tasks: 'Important',

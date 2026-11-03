@@ -26,3 +26,18 @@ it('persists preferences and dismissals only for their account', () =>
     expect(other.hiddenIds()).toEqual([]);
     dispose();
   }));
+
+it('shares changes between mounted Home and feed adapters without overwriting prompts', () =>
+  createRoot((dispose) => {
+    const home = createFeedPreferences('one', 'default');
+    const full = createFeedPreferences('one', 'default');
+    const other = createFeedPreferences('two', 'default');
+    full.setPrompt('Keep track of open decisions.');
+    home.setHiddenIds(['hidden']);
+    expect(full.hiddenIds()).toEqual(['hidden']);
+    expect(home.prompt()).toBe('Keep track of open decisions.');
+    expect(other.hiddenIds()).toEqual([]);
+    const restored = createFeedPreferences('one', 'default');
+    expect(restored.prompt()).toBe('Keep track of open decisions.');
+    dispose();
+  }));

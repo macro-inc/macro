@@ -11,7 +11,7 @@ const workspaceDirectory = fileURLToPath(
   new URL('../../../../../../', import.meta.url)
 );
 
-/** The real desktop Home focus UI over hardcoded data. */
+/** The real desktop Home focus UI over an injected test source. */
 export default defineConfig({
   root: directory,
   cacheDir: `${directory}/.vite`,

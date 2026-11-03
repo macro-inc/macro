@@ -1,60 +1,48 @@
 import { createMemo, createSignal } from 'solid-js';
-import type { FocusAction } from '../core/focus-actions';
+import type {
+  FeedPreferences,
+  FeedSource,
+} from '../../for-you/context/feed-source';
+import { createFeedItems } from '../../for-you/primitives/feed';
 
-export function createFocusActions(initial: FocusAction[]) {
-  const [dismissed, setDismissed] = createSignal<string[]>([]);
-  const [selectedId, setSelectedId] = createSignal(initial[0]?.id);
-  const [openedId, setOpenedId] = createSignal<string>();
-  const [drafts, setDrafts] = createSignal<Record<string, string>>({});
-  const [notice, setNotice] = createSignal('');
-  const actions = createMemo(() =>
-    initial.filter((action) => !dismissed().includes(action.id))
+/** A compact view of the same recommendations and dismissals as For you. */
+export function createFocusActions(
+  source: FeedSource,
+  preferences: FeedPreferences
+) {
+  const feed = createFeedItems(source, preferences);
+  const actions = createMemo(() => feed.visible().slice(0, 5));
+  const [selection, setSelectedId] = createSignal<string>();
+  const selectedId = createMemo(
+    () =>
+      actions().find((item) => item.id === selection())?.id ?? actions()[0]?.id
   );
-  const opened = () => initial.find((action) => action.id === openedId());
-  const draft = (action: FocusAction) =>
-    drafts()[action.id] ?? action.draft ?? '';
-
-  function move(direction: number) {
-    const list = actions();
-    if (!list.length) return;
-    const index = list.findIndex((action) => action.id === selectedId());
-    const next = Math.max(0, Math.min(list.length - 1, index + direction));
-    setSelectedId(list[next].id);
-    return list[next].id;
-  }
-
-  function dismiss(id: string, message = 'Set aside for now') {
-    const list = actions();
-    const index = list.findIndex((action) => action.id === id);
-    if (index < 0) return;
-    setDismissed((previous) => [...previous, id]);
-    setSelectedId(list[index + 1]?.id ?? list[index - 1]?.id);
-    setOpenedId(undefined);
-    setNotice(message);
-  }
-
-  function undo() {
-    const last = dismissed().at(-1);
-    if (!last) return;
-    setDismissed((previous) => previous.slice(0, -1));
-    setSelectedId(last);
-    setNotice('Brought back to your list');
-  }
-
+  const [notice, setNotice] = createSignal('');
   return {
     actions,
     selectedId,
     setSelectedId,
-    opened,
-    setOpenedId,
-    draft,
     notice,
-    setNotice,
-    updateDraft: (id: string, value: string) =>
-      setDrafts((previous) => ({ ...previous, [id]: value })),
-    dismissedCount: () => dismissed().length,
-    move,
-    dismiss,
-    undo,
+    canUndo: feed.canUndo,
+    move: (direction: number) => {
+      const list = actions();
+      const index = list.findIndex((item) => item.id === selectedId());
+      const next =
+        list[Math.max(0, Math.min(list.length - 1, index + direction))];
+      setSelectedId(next?.id);
+      return next?.id;
+    },
+    dismiss: (id: string) => {
+      const list = actions();
+      const index = list.findIndex((item) => item.id === id);
+      if (index < 0) return;
+      feed.dismiss(id);
+      setSelectedId(list[index + 1]?.id ?? list[index - 1]?.id);
+      setNotice('Set aside for now');
+    },
+    undo: () => {
+      setSelectedId(feed.undo());
+      setNotice('Brought back to your list');
+    },
   };
 }

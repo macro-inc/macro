@@ -913,3 +913,40 @@
 		padding-bottom: calc(var(--mobile-content-inset-bottom, 0px) + 0.5rem);
 	}
 }
+
+/* A bounded full-day overview keeps the entire time grid in view. */
+.calendar-embed.calendar-day-overview .calendar-view .fc .fc-timegrid-slot {
+	height: 0;
+	font-size: 0;
+	line-height: 0;
+}
+
+.calendar-embed.calendar-day-overview .calendar-view .fc .fc-timegrid-slot-label-cushion {
+	padding-top: 0;
+	font-size: 0.625rem;
+	line-height: 1;
+}
+
+.calendar-embed.calendar-day-overview .calendar-view .fc .fc-scroller {
+	overflow: hidden !important;
+}
+
+.calendar-embed.calendar-day-overview .calendar-view .fc .calendar-event-content-layout {
+	flex-direction: row;
+	align-items: center;
+	gap: 0.375rem;
+	padding: 0 0.375rem;
+}
+
+.calendar-embed.calendar-day-overview .calendar-view .fc .calendar-event-title {
+	font-size: 0.6875rem;
+}
+
+.calendar-embed.calendar-day-overview .calendar-view .fc .calendar-event-time {
+	margin-top: 0;
+	font-size: 0.625rem;
+}
+
+.calendar-embed.calendar-day-overview .calendar-view .fc .calendar-event-location {
+	display: none;
+}

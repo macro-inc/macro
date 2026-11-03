@@ -65,13 +65,19 @@ export function CalendarEmbed(props: CalendarEmbedProps) {
   const [isNarrow, setIsNarrow] = createSignal(false);
 
   return (
-    <div class="calendar-embed size-full min-h-0 min-w-0 overflow-hidden">
+    <div
+      class="calendar-embed size-full min-h-0 min-w-0 overflow-hidden"
+      classList={{
+        'calendar-day-overview': props.settings.timeGridLayout === 'overview',
+      }}
+    >
       <CalendarGrid
         initialDate={props.initialDate}
         events={props.events}
         eventsById={props.eventsById}
         settings={{
           initialView: props.settings.initialView,
+          timeGridLayout: props.settings.timeGridLayout,
           openingScrollTime: props.settings.openingScrollTime,
           dayCount: props.settings.dayCount,
           showDayHeaders: props.settings.showDayHeaders,

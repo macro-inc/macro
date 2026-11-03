@@ -18,12 +18,9 @@ import { Show, Suspense } from 'solid-js';
 import { HomeChatInput } from '../home-chat-input';
 import { HomeRecommendedActions } from './home-recommended-actions';
 
-const HomeFocusView = lazyNamed(
-  () => import('../views/home-focus-view'),
-  'HomeFocusView'
-);
+const HomeFocus = lazyNamed(() => import('../home-focus'), 'HomeFocus');
 
-/** The real Home composer above a local sample-action feed. */
+/** The real Home composer above a live recommendation feed. */
 function FocusHomeChatStart() {
   const shell = useViewShell();
   const panel = useSplitPanelOrThrow();
@@ -53,7 +50,7 @@ function FocusHomeChatStart() {
         </ViewShell.TopBar>
       </Show>
       <DragDropWrapper class="relative flex min-h-0 min-w-0 flex-1 flex-col">
-        <HomeFocusView
+        <HomeFocus
           active={panel.isPanelActive()}
           registerShortcuts={(handler) => {
             handleShortcut = handler;
@@ -69,7 +66,7 @@ function FocusHomeChatStart() {
             placeholder="Type @ to reference / for skills"
             autoFocusOnMount={false}
           />
-        </HomeFocusView>
+        </HomeFocus>
       </DragDropWrapper>
     </ChatInputProvider>
   );

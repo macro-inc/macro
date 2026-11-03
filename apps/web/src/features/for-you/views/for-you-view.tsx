@@ -14,6 +14,7 @@ import type {
 import { createFeed } from '../primitives/feed';
 
 export function ForYouView(props: {
+  focusedId?: string;
   source: FeedSource;
   preferences: FeedPreferences;
   actions: FeedActions;
@@ -159,6 +160,7 @@ export function ForYouView(props: {
               {(item) => (
                 <FeedItemRow
                   item={item}
+                  focused={props.focusedId === item.id}
                   opening={feed.openingId() === item.id}
                   disabled={Boolean(feed.openingId())}
                   onStart={() => fireAndForget(feed.start(item), 'for-you')}

@@ -1,36 +1,47 @@
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it } from 'vitest';
-import { FOCUS_ACTIONS } from '../core/focus-actions';
+import type { FeedItem } from '../../for-you/core/feed';
+import { createFeedItems } from '../../for-you/primitives/feed';
+import { TEST_ITEMS } from '../../for-you/tests/fixtures';
 import { createFocusActions } from './focus-actions';
 
-describe('local Home actions', () => {
-  it('keeps edited drafts through dismissal and undo without mutating fixtures', () =>
+describe('live Home recommendations', () => {
+  it('selects arriving suggestions and shares dismissals with the full feed', () =>
     createRoot((dispose) => {
-      const state = createFocusActions(FOCUS_ACTIONS);
-      const first = FOCUS_ACTIONS[0];
-      const original = first.draft;
-      state.updateDraft(first.id, 'Revised reply');
-      state.dismiss(first.id);
-      expect(state.actions()).toHaveLength(4);
-      expect(state.selectedId()).toBe(FOCUS_ACTIONS[1].id);
-      state.undo();
-      expect(state.actions()).toHaveLength(5);
-      expect(state.draft(first)).toBe('Revised reply');
-      expect(first.draft).toBe(original);
-      dispose();
-    }));
-
-  it('moves within the remaining items and can recover after clearing all of them', () =>
-    createRoot((dispose) => {
-      const state = createFocusActions(FOCUS_ACTIONS);
-      state.move(-1);
-      expect(state.selectedId()).toBe(FOCUS_ACTIONS[0].id);
-      for (const action of FOCUS_ACTIONS) state.dismiss(action.id);
-      expect(state.actions()).toHaveLength(0);
-      expect(state.move(1)).toBeUndefined();
-      state.undo();
-      expect(state.actions()).toHaveLength(1);
-      expect(state.selectedId()).toBe(FOCUS_ACTIONS.at(-1)?.id);
+      const [items, setItems] = createSignal<FeedItem[]>();
+      const [hiddenIds, setHiddenIds] = createSignal<string[]>([]);
+      const source = {
+        items,
+        loading: () => !items(),
+        error: () => undefined,
+        refreshing: () => false,
+        canRetry: () => true,
+        refresh: async () => {},
+      };
+      const preferences = {
+        prompt: () => '',
+        setPrompt: () => {},
+        hiddenIds,
+        setHiddenIds,
+      };
+      const home = createFocusActions(source, preferences);
+      const full = createFeedItems(source, preferences);
+      expect(home.selectedId()).toBeUndefined();
+      setItems(TEST_ITEMS);
+      expect(home.selectedId()).toBe('reply-needed');
+      expect(home.move(1)).toBe('account-agent');
+      home.dismiss('account-agent');
+      expect(home.selectedId()).toBe('unfinished-review');
+      expect(full.visible().some((item) => item.id === 'account-agent')).toBe(
+        false
+      );
+      home.undo();
+      expect(home.selectedId()).toBe('account-agent');
+      expect(full.visible()).toHaveLength(5);
+      for (const item of [...home.actions()]) home.dismiss(item.id);
+      expect(home.move(1)).toBeUndefined();
+      home.undo();
+      expect(home.actions()).toHaveLength(1);
       dispose();
     }));
 });

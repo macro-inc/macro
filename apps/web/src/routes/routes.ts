@@ -31,6 +31,7 @@ import {
   driveDocumentBlockType,
 } from '@app/features/drive-view/primitives/drive-route-schema';
 import { URL_PARAMS as EMAIL_URL_PARAMS } from '@app/features/email-thread/core/location';
+import { feedSearch } from '@app/features/for-you/feed-search';
 import {
   HOME_PREVIEW_SEARCH_NAMESPACES,
   homeBaseBlockType,
@@ -465,6 +466,7 @@ export const homeSplitRoute = defineRoute({
 export const forYouRoute = defineRoute({
   id: 'view-for-you',
   path: 'for-you',
+  search: [feedSearch.namespace],
   claim: () => ({ namespace: 'component', id: 'for-you' }),
 });
 

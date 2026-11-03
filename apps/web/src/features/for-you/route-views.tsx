@@ -1,6 +1,7 @@
 import { ViewShell, ViewSidebar } from '@app/components/view-shell';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
+import { createSearchParams } from '@app/lib/split-router';
 import {
   RedirectSplit,
   usePageViewTracking,
@@ -12,12 +13,14 @@ import { useUserContext } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Match, Show, Switch } from 'solid-js';
 import { feedActions } from './actions';
+import { feedSearch } from './feed-search';
 import { createFeedSource } from './queries/feed-source';
 import { createFeedPreferences } from './queries/preferences';
 import { ForYouView } from './views/for-you-view';
 
 function LiveFeed(props: { userId: string }) {
   usePageViewTracking('for-you');
+  const [search] = createSearchParams(feedSearch);
   const preferences = createFeedPreferences(
     props.userId,
     t('forYou.defaultPrompt')
@@ -30,6 +33,7 @@ function LiveFeed(props: { userId: string }) {
           <ViewSidebar.Title caret={false}>{t('nav.forYou')}</ViewSidebar.Title>
         </ViewShell.TopBar>
         <ForYouView
+          focusedId={search.item}
           source={source}
           preferences={preferences}
           actions={feedActions}
