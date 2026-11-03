@@ -57,11 +57,13 @@ pub trait SyncRepository: Send + Sync {
     ) -> Result<()>;
     /// Persist a verified delivery once; repeats are ignored.
     async fn enqueue(&self, id: Uuid, event: CallEvent, traceparent: Option<String>) -> Result<()>;
-    /// Lease the next due delivery, if any.
+    /// Lease the pending deliveries of the next due call, if any. Deliveries
+    /// leased elsewhere are left to that claim.
     async fn claim(&self) -> Result<Option<Job>>;
     /// Every stored event for one call, oldest first.
     async fn events(&self, id: Uuid, call: DialpadId) -> Result<Vec<CallEvent>>;
-    /// Complete a leased delivery, or schedule its retry with backoff.
+    /// Complete the job's leased deliveries, or schedule their retry with
+    /// backoff.
     async fn finish(&self, job: &Job, success: bool) -> Result<()>;
 }
 
@@ -85,8 +87,8 @@ pub trait Grants: Send + Sync {
 /// Dialpad's REST API, called with the user's token.
 #[async_trait]
 pub trait Dialpad: Send + Sync {
-    /// The connected Dialpad user.
-    async fn me(&self, token: &AccessToken) -> Result<DialpadUser>;
+    /// The connected Dialpad user's id, from `GET /users/me`.
+    async fn me(&self, token: &AccessToken) -> Result<DialpadId>;
     /// Register a webhook signed with `secret`; returns its id.
     async fn create_webhook(
         &self,

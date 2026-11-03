@@ -177,10 +177,14 @@ const IMPORTED_CALL_PROVIDERS: Partial<Record<CallProvider, string>> = {
   dialpad: 'Dialpad',
 };
 
+/** The name of the app an imported call came from; none for a Macro call. */
+export function importedCallProviderName(provider?: CallProvider) {
+  return provider ? IMPORTED_CALL_PROVIDERS[provider] : undefined;
+}
+
 /** Where an imported call came from; nothing for a Macro call. */
 export function CallProviderBadge(props: { provider?: CallProvider }) {
-  const name = () =>
-    props.provider ? IMPORTED_CALL_PROVIDERS[props.provider] : undefined;
+  const name = () => importedCallProviderName(props.provider);
   return (
     <Show when={name()}>
       {(name) => (

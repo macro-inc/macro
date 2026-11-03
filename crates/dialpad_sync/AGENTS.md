@@ -14,8 +14,9 @@ enrolls them and returns a Macro Connect URL; Connect returns them to
 reconcile) reads `users/me`, registers a webhook with a secret Macro chose,
 and subscribes to that user's call states. Dialpad posts HS256 JWTs to
 `/integrations/dialpad/webhooks/{id}`; each verified event is stored with
-its `traceparent`, then a leased worker rebuilds the call from all of its
-events, fetches the transcript, and ingests through `call::domain::imports`.
+its `traceparent`. The worker leases a call's pending events together, so
+one import covers them: it rebuilds the call from all of its events, fetches
+the transcript, and ingests through `call::domain::imports`.
 A first-connect backfill pages `GET /call` one page per reconcile.
 
 ## Start here

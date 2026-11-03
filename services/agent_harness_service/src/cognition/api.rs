@@ -143,7 +143,7 @@ fn api_router(api_context: ApiContext) -> Router {
         .merge(ai_projections::inbound::axum_router::ai_projections_router(
             ai_projections::inbound::axum_router::AiProjectionRouterState {
                 service: ai_projections_service,
-                authorization_state,
+                authorization_state: authorization_state.clone(),
             },
         ))
         .merge(
@@ -154,7 +154,10 @@ fn api_router(api_context: ApiContext) -> Router {
             api_context.pipedream_state.clone(),
         ))
         .merge(dialpad_sync::inbound::dialpad_router(
-            api_context.dialpad_state.clone(),
+            dialpad_sync::inbound::DialpadRouterState {
+                service: api_context.dialpad_sync.clone(),
+                authorization_state,
+            },
         ))
         .with_state(api_context.clone());
 

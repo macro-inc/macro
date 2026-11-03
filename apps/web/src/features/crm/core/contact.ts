@@ -1,7 +1,7 @@
 /** One of a contact's numbers: E.164, and where it came from. */
 export type CrmContactPhone = {
   phone: string;
-  source: 'manual' | 'csv' | 'dialpad';
+  source: 'manual' | 'csv' | 'call';
 };
 
 /** CRM contact values, independent of the transport schema. */

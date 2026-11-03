@@ -181,7 +181,6 @@ pub struct ApiContext {
     pub pipedream_state: DcsPipedreamRouterState,
     pub granola_sync: Option<Arc<dyn granola_sync::domain::service::SyncService>>,
     pub dialpad_sync: Option<Arc<dyn dialpad_sync::domain::service::SyncService>>,
-    pub dialpad_state: dialpad_sync::inbound::DialpadRouterState<DcsAuthorizationService>,
     /// Selects which MCP stack (Pipedream vs native) serves a user's tools.
     pub mcp_selector: Arc<ai_tools::ToolMcpSelector>,
     pub import_service: Arc<DcsImportService>,

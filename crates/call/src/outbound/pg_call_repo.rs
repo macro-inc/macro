@@ -893,7 +893,6 @@ impl CallRepository for PgCallRepo {
                     phone: None,
                 })
                 .collect(),
-            provider: None,
         })
     }
 

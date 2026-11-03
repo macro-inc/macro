@@ -6,8 +6,8 @@ CREATE TABLE crm_contact_phones (
     contact_id UUID NOT NULL REFERENCES crm_contacts(id) ON DELETE CASCADE,
     phone TEXT NOT NULL CHECK (phone ~ '^[+][1-9][0-9]{6,14}$'),
     -- Where the number came from: typed on the contact, a CSV import, or a
-    -- Dialpad call with a contact matched by email.
-    source TEXT NOT NULL CHECK (source IN ('manual', 'csv', 'dialpad')),
+    -- call whose guest matched the contact by email.
+    source TEXT NOT NULL CHECK (source IN ('manual', 'csv', 'call')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (contact_id, phone)
 );

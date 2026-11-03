@@ -64,8 +64,6 @@ pub struct CallPeople {
     /// event carrying a native call's meeting link (email only), or an
     /// imported call's participants (email, phone, or both).
     pub guests: Vec<CallGuest>,
-    /// The provider of an imported call; `None` for a native call.
-    pub provider: Option<crate::domain::records::CallProvider>,
 }
 
 /// One person on a call who may have no Macro account.
@@ -73,7 +71,9 @@ pub struct CallPeople {
 pub struct CallGuest {
     /// Lowercased email address, when known.
     pub email: Option<String>,
-    /// E.164 phone number, when known.
+    /// E.164 number the person was on the call from, when the source knows
+    /// it. Matched against CRM contacts, and remembered on a contact matched
+    /// by email, so importers set it only for the person's own line.
     pub phone: Option<String>,
 }
 

@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH candidate AS (\n                SELECT e.connection_id, e.call_id FROM dialpad_sync_events e\n                JOIN dialpad_sync_connections c ON c.id = e.connection_id\n                WHERE e.completed_at IS NULL AND e.available_at <= now() AND c.enabled\n                ORDER BY e.available_at LIMIT 1 FOR UPDATE OF e SKIP LOCKED\n            ),\n            pending AS (\n                SELECT e.connection_id, e.call_id, e.state, e.occurred_at FROM dialpad_sync_events e\n                JOIN candidate c ON c.connection_id = e.connection_id AND c.call_id = e.call_id\n                WHERE e.completed_at IS NULL AND (e.lease_id IS NULL OR e.available_at <= now())\n                FOR UPDATE OF e SKIP LOCKED\n            ),\n            leased AS (\n                UPDATE dialpad_sync_events e SET lease_id = $1, attempts = e.attempts + 1,\n                    available_at = now() + interval '10 minutes'\n                FROM pending p\n                WHERE e.connection_id = p.connection_id AND e.call_id = p.call_id\n                    AND e.state = p.state AND e.occurred_at = p.occurred_at\n                RETURNING e.connection_id, e.call_id, e.attempts, e.traceparent, e.received_at\n            )\n            SELECT connection_id AS \"connection_id!\", call_id AS \"call_id!\",\n                max(attempts) AS \"attempts!\",\n                (array_agg(traceparent ORDER BY received_at)\n                    FILTER (WHERE traceparent IS NOT NULL))[1] AS traceparent\n            FROM leased GROUP BY connection_id, call_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "connection_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "call_id!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "attempts!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "traceparent",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "310f1087f281b2b0bdc0a58871de5a3e62cb72870130dec047db7253211cd6a5"
+}

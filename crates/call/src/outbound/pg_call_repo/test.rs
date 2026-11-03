@@ -2938,7 +2938,6 @@ async fn get_call_record_people_returns_participants_only_without_a_meeting(
         vec!["macro|user-a@test.com", "macro|user-b@test.com"]
     );
     assert!(people.guests.is_empty());
-    assert_eq!(people.provider, None);
     Ok(())
 }
 

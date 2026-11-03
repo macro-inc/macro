@@ -37718,7 +37718,7 @@
       "PhoneSource": {
         "type": "string",
         "description": "Where a contact's number came from.",
-        "enum": ["manual", "csv", "dialpad"]
+        "enum": ["manual", "csv", "call"]
       },
       "PinRequest": {
         "type": "object",

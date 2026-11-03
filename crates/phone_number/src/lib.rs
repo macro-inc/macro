@@ -8,7 +8,7 @@
 //! is rejected rather than guessed: the same national digits are different
 //! people in different countries.
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::fmt;
 
 #[cfg(test)]
@@ -18,8 +18,8 @@ mod test;
 const DIGITS: std::ops::RangeInclusive<usize> = 7..=15;
 
 /// A telephone number in E.164 form.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(try_from = "String", into = "String")]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
+#[serde(transparent)]
 pub struct PhoneNumber(String);
 
 impl PhoneNumber {
@@ -66,23 +66,3 @@ impl From<PhoneNumber> for String {
         number.0
     }
 }
-
-impl TryFrom<String> for PhoneNumber {
-    type Error = InvalidPhoneNumber;
-
-    fn try_from(text: String) -> Result<Self, Self::Error> {
-        Self::parse(&text).ok_or(InvalidPhoneNumber)
-    }
-}
-
-/// Text that is not a telephone number with its country code.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct InvalidPhoneNumber;
-
-impl fmt::Display for InvalidPhoneNumber {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("not a phone number with its country code, starting with +")
-    }
-}
-
-impl std::error::Error for InvalidPhoneNumber {}

@@ -68,8 +68,9 @@ tools/HTTP/GraphQL surfaces over them.
 
 - Call linking matches each guest by email first (company by domain, contact
   by address) and by phone only when no contact matched. A number nobody has
-  creates nothing. Only Dialpad calls teach a contact matched by email its
-  number. Links are insert-if-absent: the first set written for a call stays.
+  creates nothing. A guest matched by email teaches the contact the guest's
+  number, so importers set a guest's phone only for that person's own line.
+  Links are insert-if-absent: the first set written for a call stays.
 
 - `src/domain/generic_email_domains.rs` filters both manual company creation
   and email-driven contact population. Cover legitimate company-domain

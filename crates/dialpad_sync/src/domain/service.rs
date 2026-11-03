@@ -96,8 +96,7 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> Service<R, G
             Grant::Active(token) => token,
             Grant::NotConnected => {
                 if connection.enrolled_at < chrono::Utc::now() - ENROLLMENT_TTL {
-                    let unregistered = connection.registration.is_none();
-                    self.repo.disconnect(connection.id, unregistered).await?;
+                    self.repo.disconnect(connection.id, false).await?;
                     span.record("outcome", "abandoned");
                 } else {
                     span.record("outcome", "waiting");
@@ -135,43 +134,21 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> Service<R, G
     ) -> Result<()> {
         // Left behind when a sync stopped without a usable token.
         if let Some(old) = connection.registration
-            && let Err(error) = self
-                .dialpad
-                .unregister(token, old)
-                .instrument(tracing::info_span!("dialpad.unregister"))
-                .await
+            && let Err(error) = self.dialpad.unregister(token, old).await
         {
             tracing::warn!(error = ?error, "could not remove old Dialpad subscription");
         }
-        let me = self
-            .dialpad
-            .me(token)
-            .instrument(tracing::info_span!("dialpad.users_me"))
-            .await?;
+        let me = self.dialpad.me(token).await?;
         let url = format!(
             "{}/integrations/dialpad/webhooks/{}",
             self.public_url.trim_end_matches('/'),
             connection.id
         );
-        let webhook = self
-            .dialpad
-            .create_webhook(token, &url, secret)
-            .instrument(tracing::info_span!("dialpad.create_webhook"))
-            .await?;
-        let subscribed = self
-            .dialpad
-            .subscribe(token, webhook, me.id)
-            .instrument(tracing::info_span!("dialpad.subscribe"))
-            .await;
-        let subscription_id = match subscribed {
+        let webhook = self.dialpad.create_webhook(token, &url, secret).await?;
+        let subscription_id = match self.dialpad.subscribe(token, webhook, me).await {
             Ok(id) => id,
             Err(error) => {
-                if let Err(cleanup) = self
-                    .dialpad
-                    .delete_webhook(token, webhook)
-                    .instrument(tracing::info_span!("dialpad.delete_webhook"))
-                    .await
-                {
+                if let Err(cleanup) = self.dialpad.delete_webhook(token, webhook).await {
                     tracing::warn!(error = ?cleanup, "could not remove unused Dialpad webhook");
                 }
                 return Err(error);
@@ -182,15 +159,8 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> Service<R, G
             subscription_id,
         };
         // A disconnect or restart raced setup: retire what was just created.
-        if !self
-            .repo
-            .activate(connection.id, me.id, registration)
-            .await?
-        {
-            self.dialpad
-                .unregister(token, registration)
-                .instrument(tracing::info_span!("dialpad.unregister"))
-                .await?;
+        if !self.repo.activate(connection.id, me, registration).await? {
+            self.dialpad.unregister(token, registration).await?;
         }
         Ok(())
     }
@@ -215,7 +185,6 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> Service<R, G
         let page = self
             .dialpad
             .calls(&token, dialpad_user, *since, cursor.as_deref())
-            .instrument(tracing::info_span!("dialpad.list_calls"))
             .await?;
         let calls: Vec<CallEvent> = page
             .calls
@@ -255,22 +224,22 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> Service<R, G
                 return Err(rootcause::report!("Dialpad needs reauthorization"));
             }
         };
-        let transcript = if needs.transcript {
-            self.dialpad
-                .transcript(&token, job.call_id)
-                .instrument(tracing::info_span!("dialpad.fetch_transcript"))
-                .await?
-        } else {
-            None
-        };
-        let recap = if needs.recap {
-            self.dialpad
-                .recap(&token, job.call_id)
-                .instrument(tracing::info_span!("dialpad.fetch_recap"))
-                .await?
-        } else {
-            None
-        };
+        let (transcript, recap) = tokio::try_join!(
+            async {
+                if needs.transcript {
+                    self.dialpad.transcript(&token, job.call_id).await
+                } else {
+                    Ok(None)
+                }
+            },
+            async {
+                if needs.recap {
+                    self.dialpad.recap(&token, job.call_id).await
+                } else {
+                    Ok(None)
+                }
+            },
+        )?;
         drop(token);
         let Some(call) = mapping::imported_call(&job.connection, &events, transcript, recap) else {
             return Ok(());
@@ -312,35 +281,33 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> SyncService
     #[tracing::instrument(name = "dialpad.complete_connect", skip_all, err(Display))]
     async fn complete(&self, user: &MacroUserIdStr<'static>) -> Result<SyncStatus> {
         let connection = self.repo.by_user(user).await?;
-        if let Some(connection) = connection
-            && self.delivers()
-            && !connection.enabled
-            && connection.last_error.is_none()
-        {
-            self.setup(connection).await?;
+        match connection {
+            Some(connection)
+                if self.delivers() && !connection.enabled && connection.last_error.is_none() =>
+            {
+                self.setup(connection).await?;
+                self.status(user).await
+            }
+            connection => Ok(status_of(connection)),
         }
-        self.status(user).await
     }
 
     #[tracing::instrument(name = "dialpad.disconnect", skip_all, err(Display))]
     async fn disconnect(&self, user: &MacroUserIdStr<'static>) -> Result<()> {
         let connection = self.repo.by_user(user).await?;
-        let mut unregistered = true;
-        if let Some(registration) = connection.as_ref().and_then(|c| c.registration) {
-            unregistered = false;
-            if let Grant::Active(token) = self.grants.grant(user).await? {
-                match self
-                    .dialpad
-                    .unregister(&token, registration)
-                    .instrument(tracing::info_span!("dialpad.unregister"))
-                    .await
-                {
-                    Ok(()) => unregistered = true,
-                    Err(error) => {
-                        tracing::warn!(error = ?error, "could not remove Dialpad subscription")
-                    }
-                }
-            }
+        // Kept registrations are removed by the next setup.
+        let mut unregistered = false;
+        if let Some(registration) = connection.as_ref().and_then(|c| c.registration)
+            && let Grant::Active(token) = self.grants.grant(user).await?
+        {
+            unregistered = self
+                .dialpad
+                .unregister(&token, registration)
+                .await
+                .inspect_err(
+                    |error| tracing::warn!(error = ?error, "could not remove Dialpad subscription"),
+                )
+                .is_ok();
         }
         self.grants.disconnect(user).await?;
         if let Some(connection) = connection {
@@ -392,7 +359,6 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> SyncService
             provider = "dialpad",
             connection_id = %job.connection.id,
             call_id = %job.call_id,
-            state = job.state.as_ref(),
             attempts = job.attempts,
             imported = tracing::field::Empty,
             outcome = tracing::field::Empty,

@@ -60,8 +60,10 @@ async fn webhook(
 /// State for the user's Dialpad connection routes. `service` is `None` when
 /// the deployment has no Macro Connect key.
 pub struct DialpadRouterState<Auth> {
-    service: Option<Arc<dyn SyncService>>,
-    authorization_state: MacroAuthorizationState<Auth>,
+    /// The user's call sync.
+    pub service: Option<Arc<dyn SyncService>>,
+    /// Authorizes the user.
+    pub authorization_state: MacroAuthorizationState<Auth>,
 }
 
 impl<Auth> Clone for DialpadRouterState<Auth> {
@@ -76,19 +78,6 @@ impl<Auth> Clone for DialpadRouterState<Auth> {
 impl<Auth> FromRef<DialpadRouterState<Auth>> for MacroAuthorizationState<Auth> {
     fn from_ref(state: &DialpadRouterState<Auth>) -> Self {
         state.authorization_state.clone()
-    }
-}
-
-impl<Auth> DialpadRouterState<Auth> {
-    /// Routes over `service`, authorized by `authorization_state`.
-    pub fn new(
-        service: Option<Arc<dyn SyncService>>,
-        authorization_state: MacroAuthorizationState<Auth>,
-    ) -> Self {
-        Self {
-            service,
-            authorization_state,
-        }
     }
 }
 

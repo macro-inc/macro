@@ -22,7 +22,6 @@ fn people() -> CallPeople {
             email: Some("buyer@acme.example".to_string()),
             phone: None,
         }],
-        provider: None,
     }
 }
 

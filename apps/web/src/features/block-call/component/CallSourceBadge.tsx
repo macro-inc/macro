@@ -1,18 +1,12 @@
+import { importedCallProviderName } from '@entity/components/Badges';
 import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import type { CallRecordSource } from '@service-storage/generated/schemas/callRecordSource';
 import { Badge, badgeTriggerClasses } from '@ui';
 import { Show } from 'solid-js';
 
-const PROVIDER_NAMES: Record<CallRecordSource['provider'], string | undefined> =
-  {
-    macro: undefined,
-    granola: 'Granola',
-    dialpad: 'Dialpad',
-  };
-
 /** Where an imported call came from, linking back to it when it can. */
 export function CallSourceBadge(props: { source: CallRecordSource }) {
-  const name = () => PROVIDER_NAMES[props.source.provider];
+  const name = () => importedCallProviderName(props.source.provider);
   return (
     <Show when={name()}>
       {(name) => (

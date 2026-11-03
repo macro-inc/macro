@@ -83,8 +83,8 @@ impl FakeDialpad {
 
 #[async_trait]
 impl Dialpad for FakeDialpad {
-    async fn me(&self, _: &AccessToken) -> Result<DialpadUser> {
-        Ok(DialpadUser { id: DialpadId(22) })
+    async fn me(&self, _: &AccessToken) -> Result<DialpadId> {
+        Ok(DialpadId(22))
     }
     async fn create_webhook(
         &self,
@@ -285,7 +285,11 @@ async fn a_connected_user_s_calls_import_from_signed_deliveries_until_disconnect
     ));
     drain(&service).await;
     let imports = calls.0.lock().unwrap().clone();
-    assert_eq!(imports.len(), 3, "one import per distinct event");
+    assert_eq!(
+        imports.len(),
+        1,
+        "one import covers the call's pending events"
+    );
     assert_eq!(
         imports.last().unwrap(),
         &("9".to_owned(), Some("Jane wants a quote.".to_owned()), 1)

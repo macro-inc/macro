@@ -11390,7 +11390,7 @@ export type PendingClaimResponse = {
 /**
  * Where a contact's number came from.
  */
-export type PhoneSource = 'manual' | 'csv' | 'dialpad';
+export type PhoneSource = 'manual' | 'csv' | 'call';
 
 export type PinRequest = {
     /**

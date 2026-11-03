@@ -193,7 +193,6 @@ async fn an_imported_call_s_people_are_its_owner_and_participants(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let mut call = granola_meeting("import-a");
-    call.source.provider = CallProvider::Dialpad;
     call.participants.push(CallParticipant {
         id: macro_uuid::generate_uuid_v7(),
         user_id: None,
@@ -211,7 +210,6 @@ async fn an_imported_call_s_people_are_its_owner_and_participants(
         .get_call_record_people(&call_id)
         .await?;
     assert_eq!(people.user_ids, vec![user("import-a")]);
-    assert_eq!(people.provider, Some(CallProvider::Dialpad));
     let mut guests: Vec<(Option<String>, Option<String>)> = people
         .guests
         .into_iter()

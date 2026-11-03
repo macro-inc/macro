@@ -1,16 +1,20 @@
 //! Postgres implementation of [`CallRecordLinkStore`]: matches the people on a
 //! call against the CRMs of the teams on it.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
-use call::domain::{models::CallPeople, records::CallProvider};
+use call::domain::models::CallPeople;
 use models_properties::EntityType;
 use phone_number::PhoneNumber;
 use sqlx::PgPool;
 use system_properties::{CrmRecordLink, SystemPropertiesService};
 use uuid::Uuid;
 
-use crate::domain::{call_links::CallRecordLinkStore, contact_phones::PhoneSource};
+use super::companies_repo::CompaniesRepositoryImpl;
+use crate::domain::{
+    call_links::CallRecordLinkStore,
+    contact_phones::{ContactPhonesRepository, PhoneSource},
+};
 
 #[cfg(test)]
 mod test;
@@ -20,6 +24,7 @@ mod test;
 #[derive(Clone)]
 pub struct PgCallCrmLinker<S> {
     pool: PgPool,
+    phones: CompaniesRepositoryImpl,
     system_properties: S,
 }
 
@@ -27,14 +32,16 @@ pub struct PgCallCrmLinker<S> {
 struct Matches {
     company_ids: Vec<Uuid>,
     contact_ids: Vec<Uuid>,
-    /// Numbers of guests whose contact was found by email, to remember.
-    learned_phones: Vec<(Uuid, PhoneNumber)>,
+    /// Per team, numbers of guests whose contact was found by email, to
+    /// remember.
+    learned_phones: BTreeMap<Uuid, BTreeSet<(Uuid, PhoneNumber)>>,
 }
 
 impl<S: SystemPropertiesService> PgCallCrmLinker<S> {
     /// Create a linker over the shared MacroDB pool.
     pub fn new(pool: PgPool, system_properties: S) -> Self {
         Self {
+            phones: CompaniesRepositoryImpl::new(pool.clone()),
             pool,
             system_properties,
         }
@@ -100,7 +107,7 @@ impl<S: SystemPropertiesService> PgCallCrmLinker<S> {
                     ON ct.company_id = co.id AND LOWER(ct.email) = o.email AND NOT ct.hidden
             ),
             by_phone AS (
-                SELECT co.id AS company_id, ct.id AS contact_id
+                SELECT o.team_id, co.id AS company_id, ct.id AS contact_id
                 FROM outsiders o
                 JOIN crm_contact_phones p ON p.phone = o.phone
                 JOIN crm_contacts ct ON ct.id = p.contact_id AND NOT ct.hidden
@@ -111,11 +118,11 @@ impl<S: SystemPropertiesService> PgCallCrmLinker<S> {
                     WHERE e.team_id = o.team_id AND e.ord = o.ord AND e.contact_id IS NOT NULL
                 )
             )
-            SELECT company_id AS "company_id!", contact_id AS "contact_id?",
-                   phone AS "learned_phone?"
+            SELECT team_id AS "team_id!", company_id AS "company_id!",
+                   contact_id AS "contact_id?", phone AS "learned_phone?"
             FROM by_email
             UNION ALL
-            SELECT company_id, contact_id, NULL FROM by_phone
+            SELECT team_id, company_id, contact_id, NULL FROM by_phone
             "#,
             &user_ids,
             &emails as &[Option<String>],
@@ -126,50 +133,23 @@ impl<S: SystemPropertiesService> PgCallCrmLinker<S> {
 
         let company_ids: BTreeSet<Uuid> = rows.iter().map(|row| row.company_id).collect();
         let contact_ids: BTreeSet<Uuid> = rows.iter().filter_map(|row| row.contact_id).collect();
-        // Only Dialpad's numbers are known to be the caller's own line.
-        let learned_phones = if people.provider == Some(CallProvider::Dialpad) {
-            rows.iter()
-                .filter_map(|row| {
-                    let phone = PhoneNumber::parse(row.learned_phone.as_deref()?)?;
-                    Some((row.contact_id?, phone))
-                })
-                .collect::<BTreeSet<_>>()
-                .into_iter()
-                .collect()
-        } else {
-            Vec::new()
-        };
+        let mut learned_phones: BTreeMap<Uuid, BTreeSet<(Uuid, PhoneNumber)>> = BTreeMap::new();
+        for row in &rows {
+            if let (Some(contact_id), Some(phone)) = (
+                row.contact_id,
+                row.learned_phone.as_deref().and_then(PhoneNumber::parse),
+            ) {
+                learned_phones
+                    .entry(row.team_id)
+                    .or_default()
+                    .insert((contact_id, phone));
+            }
+        }
         Ok(Matches {
             company_ids: company_ids.into_iter().collect(),
             contact_ids: contact_ids.into_iter().collect(),
             learned_phones,
         })
-    }
-
-    /// Remember numbers Dialpad gave for contacts matched by email, keeping
-    /// any the contact already has.
-    async fn learn_phones(&self, phones: &[(Uuid, PhoneNumber)]) -> Result<(), sqlx::Error> {
-        if phones.is_empty() {
-            return Ok(());
-        }
-        let (contact_ids, numbers): (Vec<Uuid>, Vec<String>) = phones
-            .iter()
-            .map(|(contact_id, phone)| (*contact_id, phone.to_string()))
-            .unzip();
-        sqlx::query!(
-            r#"
-            INSERT INTO crm_contact_phones (contact_id, phone, source)
-            SELECT l.contact_id, l.phone, $3
-            FROM UNNEST($1::uuid[], $2::text[]) AS l(contact_id, phone)
-            ON CONFLICT (contact_id, phone) DO NOTHING
-            "#,
-            &contact_ids,
-            &numbers,
-            PhoneSource::Dialpad.as_str(),
-        )
-        .execute(&self.pool)
-        .await?;
-        Ok(())
     }
 }
 
@@ -180,7 +160,12 @@ impl<S: SystemPropertiesService> CallRecordLinkStore for PgCallCrmLinker<S> {
         people: &CallPeople,
     ) -> Result<(), rootcause::Report> {
         let matches = self.matching_records(people).await?;
-        self.learn_phones(&matches.learned_phones).await?;
+        for (team_id, phones) in &matches.learned_phones {
+            let phones: Vec<_> = phones.iter().cloned().collect();
+            self.phones
+                .add_contact_phones(team_id, &phones, PhoneSource::Call)
+                .await?;
+        }
         self.system_properties
             .link_crm_records(CrmRecordLink {
                 entity_id: call_record_id.to_string(),

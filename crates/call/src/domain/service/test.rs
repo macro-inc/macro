@@ -4362,7 +4362,6 @@ async fn call_record_query_service_reads_the_people_on_a_call() {
             email: Some("buyer@acme.example".to_string()),
             phone: None,
         }],
-        provider: None,
     };
     let mut repo = MockCallRepository::new();
     let stored = people.clone();

@@ -18,6 +18,12 @@ pub struct DialpadApi {
     base_url: String,
 }
 
+/// The id of a resource Dialpad returned.
+#[derive(Deserialize)]
+struct Id {
+    id: DialpadId,
+}
+
 /// Dialpad's answer, whatever its status. Never log the body: it carries call
 /// details and, for webhook registration, the signing secret.
 struct Reply {
@@ -86,15 +92,11 @@ impl DialpadApi {
     }
 
     async fn created_id(&self, token: &AccessToken, path: &str, body: Value) -> Result<DialpadId> {
-        #[derive(Deserialize)]
-        struct Created {
-            id: DialpadId,
-        }
         let body = self
             .request(token, Method::POST, path, &[], Some(body))
             .await?
             .ok_or_else(|| rootcause::report!("Dialpad has no {path} endpoint for this account"))?;
-        Ok(serde_json::from_value::<Created>(body)?.id)
+        Ok(serde_json::from_value::<Id>(body)?.id)
     }
 
     async fn delete(&self, token: &AccessToken, path: &str) -> Result<()> {
@@ -105,19 +107,16 @@ impl DialpadApi {
 
 #[async_trait]
 impl Dialpad for DialpadApi {
-    async fn me(&self, token: &AccessToken) -> Result<DialpadUser> {
-        #[derive(Deserialize)]
-        struct Me {
-            id: DialpadId,
-        }
+    #[tracing::instrument(name = "dialpad.users_me", skip_all, err(Display))]
+    async fn me(&self, token: &AccessToken) -> Result<DialpadId> {
         let body = self
             .request(token, Method::GET, "/users/me", &[], None)
             .await?
             .ok_or_else(|| rootcause::report!("Dialpad did not return the connected user"))?;
-        let me: Me = serde_json::from_value(body)?;
-        Ok(DialpadUser { id: me.id })
+        Ok(serde_json::from_value::<Id>(body)?.id)
     }
 
+    #[tracing::instrument(name = "dialpad.create_webhook", skip_all, err(Display))]
     async fn create_webhook(
         &self,
         token: &AccessToken,
@@ -132,6 +131,7 @@ impl Dialpad for DialpadApi {
         .await
     }
 
+    #[tracing::instrument(name = "dialpad.subscribe", skip_all, err(Display))]
     async fn subscribe(
         &self,
         token: &AccessToken,
@@ -153,6 +153,7 @@ impl Dialpad for DialpadApi {
         .await
     }
 
+    #[tracing::instrument(name = "dialpad.unregister", skip_all, err(Display))]
     async fn unregister(&self, token: &AccessToken, registration: Registration) -> Result<()> {
         self.delete(
             token,
@@ -162,10 +163,12 @@ impl Dialpad for DialpadApi {
         self.delete_webhook(token, registration.webhook_id).await
     }
 
+    #[tracing::instrument(name = "dialpad.delete_webhook", skip_all, err(Display))]
     async fn delete_webhook(&self, token: &AccessToken, webhook: DialpadId) -> Result<()> {
         self.delete(token, &format!("/webhooks/{webhook}")).await
     }
 
+    #[tracing::instrument(name = "dialpad.fetch_transcript", skip_all, err(Display))]
     async fn transcript(
         &self,
         token: &AccessToken,
@@ -191,6 +194,7 @@ impl Dialpad for DialpadApi {
         Ok(Some(serde_json::from_value::<Transcript>(body)?.lines))
     }
 
+    #[tracing::instrument(name = "dialpad.fetch_recap", skip_all, err(Display))]
     async fn recap(&self, token: &AccessToken, call: DialpadId) -> Result<Option<Recap>> {
         #[derive(Deserialize)]
         struct Item {
@@ -241,6 +245,7 @@ impl Dialpad for DialpadApi {
         }))
     }
 
+    #[tracing::instrument(name = "dialpad.list_calls", skip_all, err(Display))]
     async fn calls(
         &self,
         token: &AccessToken,

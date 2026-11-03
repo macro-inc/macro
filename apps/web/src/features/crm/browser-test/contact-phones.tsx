@@ -21,7 +21,7 @@ const contact: CrmContact = {
   updatedAt: '2026-11-01T00:00:00Z',
 };
 const [phones, setPhones] = createSignal<CrmContactPhone[]>([
-  { phone: '+1555010', source: 'dialpad' },
+  { phone: '+1555010', source: 'call' },
 ]);
 
 function query<T>(data: () => T) {

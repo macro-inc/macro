@@ -5052,7 +5052,7 @@ export const getCrmContactPhonesResponse = zod
               .string()
               .describe('E.164: `+`, the country code and the number.'),
             source: zod
-              .enum(['manual', 'csv', 'dialpad'])
+              .enum(['manual', 'csv', 'call'])
               .describe("Where a contact's number came from."),
           })
           .describe("One of a contact's numbers.")
@@ -5089,7 +5089,7 @@ export const setCrmContactPhonesResponse = zod
               .string()
               .describe('E.164: `+`, the country code and the number.'),
             source: zod
-              .enum(['manual', 'csv', 'dialpad'])
+              .enum(['manual', 'csv', 'call'])
               .describe("Where a contact's number came from."),
           })
           .describe("One of a contact's numbers.")

@@ -1122,10 +1122,6 @@ pub async fn build(
                 Box::pin(async {})
             },
         );
-    let dialpad_state = dialpad_sync::inbound::DialpadRouterState::new(
-        dialpad_sync.clone(),
-        authorization_state.clone(),
-    );
     let pipedream_state = pipedream_mcp::inbound::PipedreamRouterState::new(
         pipedream_repo,
         pipedream_client,
@@ -1186,7 +1182,6 @@ pub async fn build(
         ),
         mcp_state,
         pipedream_state,
-        dialpad_state,
         granola_sync,
         dialpad_sync,
         mcp_selector,

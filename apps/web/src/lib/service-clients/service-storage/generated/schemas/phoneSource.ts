@@ -14,5 +14,5 @@ export type PhoneSource = (typeof PhoneSource)[keyof typeof PhoneSource];
 export const PhoneSource = {
   manual: 'manual',
   csv: 'csv',
-  dialpad: 'dialpad',
+  call: 'call',
 } as const;

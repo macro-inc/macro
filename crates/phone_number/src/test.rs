@@ -27,10 +27,3 @@ fn numbers_without_a_country_code_are_rejected() {
         assert_eq!(PhoneNumber::parse(text), None, "{text}");
     }
 }
-
-#[test]
-fn deserializing_validates() {
-    let number: PhoneNumber = serde_json::from_str("\"+44 20 123\"").unwrap();
-    assert_eq!(number.as_str(), "+4420123");
-    assert!(serde_json::from_str::<PhoneNumber>("\"020 123\"").is_err());
-}

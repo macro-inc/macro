@@ -32,7 +32,7 @@ async fn editing_a_contact_s_numbers_keeps_the_source_of_numbers_it_keeps(
         .add_contact_phones(
             &team_id,
             &[(contact_id, phone("+1555010"))],
-            PhoneSource::Dialpad,
+            PhoneSource::Call,
         )
         .await?;
     assert_eq!(added, 1);
@@ -49,7 +49,7 @@ async fn editing_a_contact_s_numbers_keeps_the_source_of_numbers_it_keeps(
     assert_eq!(
         numbers(&phones),
         [
-            ("+1555010", PhoneSource::Dialpad),
+            ("+1555010", PhoneSource::Call),
             ("+4420123", PhoneSource::Manual)
         ]
     );

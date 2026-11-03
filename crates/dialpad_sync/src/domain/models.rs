@@ -153,7 +153,6 @@ pub enum SyncStatus {
         issue: Option<SyncIssue>,
     },
     /// Sync is not running; `issue` says why.
-    /// Sync is not running; `issue` says why.
     Failed {
         /// What stopped it.
         issue: SyncIssue,
@@ -323,29 +322,19 @@ pub struct Recap {
     pub action_items: Vec<String>,
 }
 
-/// A stored delivery waiting to be imported. Completion is fenced by lease_id.
+/// A call with stored deliveries waiting to be imported: one import covers
+/// all of them. Completion is fenced by lease_id.
 pub struct Job {
-    /// The sync the delivery belongs to.
+    /// The sync the call belongs to.
     pub connection: Connection,
     /// Dialpad's call id.
     pub call_id: DialpadId,
-    /// The delivered state.
-    pub state: CallState,
-    /// When the event happened; part of the delivery's identity.
-    pub occurred_at: DateTime<Utc>,
-    /// Trace context of the webhook request that stored it.
+    /// Trace context of the earliest leased delivery's webhook request.
     pub traceparent: Option<String>,
     /// Fences completion to this claim.
     pub lease_id: Uuid,
-    /// Claims so far, including this one.
+    /// Most claims of any leased delivery, including this one.
     pub attempts: i32,
-}
-
-/// The connected Dialpad user, from `GET /users/me`.
-#[derive(Debug, Clone)]
-pub struct DialpadUser {
-    /// Dialpad's user id.
-    pub id: DialpadId,
 }
 
 /// One page of past calls.

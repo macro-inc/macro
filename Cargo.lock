@@ -15357,7 +15357,6 @@ name = "phone_number"
 version = "0.1.0"
 dependencies = [
  "serde",
- "serde_json",
  "workspace-hack",
 ]
 

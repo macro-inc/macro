@@ -20,8 +20,8 @@ pub enum PhoneSource {
     Manual,
     /// A CSV import.
     Csv,
-    /// A Dialpad call whose contact matched by email.
-    Dialpad,
+    /// A call whose guest matched the contact by email.
+    Call,
 }
 
 impl PhoneSource {
@@ -30,7 +30,7 @@ impl PhoneSource {
         match self {
             Self::Manual => "manual",
             Self::Csv => "csv",
-            Self::Dialpad => "dialpad",
+            Self::Call => "call",
         }
     }
 }
@@ -42,7 +42,7 @@ impl std::str::FromStr for PhoneSource {
         match stored {
             "manual" => Ok(Self::Manual),
             "csv" => Ok(Self::Csv),
-            "dialpad" => Ok(Self::Dialpad),
+            "call" => Ok(Self::Call),
             other => Err(CrmError::StorageLayerError(anyhow::anyhow!(
                 "unknown phone source {other}"
             ))),

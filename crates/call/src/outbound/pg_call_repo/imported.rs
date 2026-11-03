@@ -103,15 +103,8 @@ pub(super) async fn imported_call_people(
     conn: &mut PgConnection,
     call_id: &Uuid,
 ) -> Result<Option<CallPeople>, sqlx::Error> {
-    let Some(call) = sqlx::query!(
-        r#"
-        SELECT ce.user_id,
-               (SELECT s.provider FROM call_entity_sources s
-                WHERE s.call_id = ce.id
-                ORDER BY s.synced_at DESC NULLS LAST LIMIT 1) AS provider
-        FROM call_entities ce
-        WHERE ce.id = $1 AND ce.created_via = 'import'
-        "#,
+    let Some(owner) = sqlx::query_scalar!(
+        "SELECT user_id FROM call_entities WHERE id = $1 AND created_via = 'import'",
         call_id,
     )
     .fetch_optional(&mut *conn)
@@ -136,25 +129,15 @@ pub(super) async fn imported_call_people(
         phone: row.phone,
     })
     .collect();
-    let provider = call
-        .provider
-        .as_deref()
-        .map(str::parse::<CallProvider>)
-        .transpose()
-        .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
     // An unparsable owner names nobody to match; the guests still link.
-    let user_ids = MacroUserIdStr::try_from(call.user_id)
+    let user_ids = MacroUserIdStr::try_from(owner)
         .inspect_err(
             |error| tracing::warn!(%call_id, error = ?error, "skipping unparsable import owner"),
         )
         .ok()
         .into_iter()
         .collect();
-    Ok(Some(CallPeople {
-        user_ids,
-        guests,
-        provider,
-    }))
+    Ok(Some(CallPeople { user_ids, guests }))
 }
 
 /// Full record for an imported call, or `None` when `call_id` is not one.

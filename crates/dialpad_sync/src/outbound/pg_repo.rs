@@ -328,19 +328,34 @@ impl SyncRepository for PgSyncRepository {
 
     async fn claim(&self) -> Result<Option<Job>> {
         let lease = macro_uuid::generate_uuid_v7();
+        // The due delivery picks the call; every pending delivery of that call
+        // not leased elsewhere joins the claim, so one import covers them all.
         let row = sqlx::query!(
             r#"WITH candidate AS (
-                SELECT e.connection_id, e.call_id, e.state, e.occurred_at FROM dialpad_sync_events e
+                SELECT e.connection_id, e.call_id FROM dialpad_sync_events e
                 JOIN dialpad_sync_connections c ON c.id = e.connection_id
                 WHERE e.completed_at IS NULL AND e.available_at <= now() AND c.enabled
                 ORDER BY e.available_at LIMIT 1 FOR UPDATE OF e SKIP LOCKED
+            ),
+            pending AS (
+                SELECT e.connection_id, e.call_id, e.state, e.occurred_at FROM dialpad_sync_events e
+                JOIN candidate c ON c.connection_id = e.connection_id AND c.call_id = e.call_id
+                WHERE e.completed_at IS NULL AND (e.lease_id IS NULL OR e.available_at <= now())
+                FOR UPDATE OF e SKIP LOCKED
+            ),
+            leased AS (
+                UPDATE dialpad_sync_events e SET lease_id = $1, attempts = e.attempts + 1,
+                    available_at = now() + interval '10 minutes'
+                FROM pending p
+                WHERE e.connection_id = p.connection_id AND e.call_id = p.call_id
+                    AND e.state = p.state AND e.occurred_at = p.occurred_at
+                RETURNING e.connection_id, e.call_id, e.attempts, e.traceparent, e.received_at
             )
-            UPDATE dialpad_sync_events e SET lease_id = $1, attempts = e.attempts + 1,
-                available_at = now() + interval '10 minutes'
-            FROM candidate c
-            WHERE e.connection_id = c.connection_id AND e.call_id = c.call_id
-                AND e.state = c.state AND e.occurred_at = c.occurred_at
-            RETURNING e.connection_id, e.call_id, e.state, e.occurred_at, e.traceparent, e.attempts"#,
+            SELECT connection_id AS "connection_id!", call_id AS "call_id!",
+                max(attempts) AS "attempts!",
+                (array_agg(traceparent ORDER BY received_at)
+                    FILTER (WHERE traceparent IS NOT NULL))[1] AS traceparent
+            FROM leased GROUP BY connection_id, call_id"#,
             lease
         )
         .fetch_optional(&self.pool)
@@ -354,8 +369,6 @@ impl SyncRepository for PgSyncRepository {
         Ok(Some(Job {
             connection,
             call_id: DialpadId(row.call_id),
-            state: row.state.parse()?,
-            occurred_at: row.occurred_at,
             traceparent: row.traceparent,
             lease_id: lease,
             attempts: row.attempts,
@@ -383,14 +396,11 @@ impl SyncRepository for PgSyncRepository {
             .saturating_mul(2_i32.saturating_pow(job.attempts.min(10) as u32))
             .min(3600);
         let changed = sqlx::query!(
-            r#"UPDATE dialpad_sync_events SET completed_at = CASE WHEN $6 THEN now() ELSE NULL END,
-                available_at = now() + make_interval(secs => $7::double precision), lease_id = NULL
-            WHERE connection_id = $1 AND call_id = $2 AND state = $3 AND occurred_at = $4
-                AND lease_id = $5"#,
+            r#"UPDATE dialpad_sync_events SET completed_at = CASE WHEN $4 THEN now() ELSE NULL END,
+                available_at = now() + make_interval(secs => $5::double precision), lease_id = NULL
+            WHERE connection_id = $1 AND call_id = $2 AND lease_id = $3"#,
             job.connection.id,
             job.call_id.0,
-            job.state.as_ref(),
-            job.occurred_at,
             job.lease_id,
             success,
             f64::from(retry_seconds)
@@ -398,7 +408,7 @@ impl SyncRepository for PgSyncRepository {
         .execute(tx.as_mut())
         .await?
         .rows_affected();
-        if changed == 1 {
+        if changed > 0 {
             sqlx::query!(
                 r#"UPDATE dialpad_sync_connections
                 SET last_synced_at = CASE WHEN $2 THEN now() ELSE last_synced_at END,

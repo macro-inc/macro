@@ -119,12 +119,11 @@ fn people(user_ids: &[&str], invitee_emails: &[&str]) -> CallPeople {
                 phone: None,
             })
             .collect(),
-        provider: None,
     }
 }
 
 /// An imported call's people: the member, then `(email, phone)` guests.
-fn imported(provider: CallProvider, guests: &[(Option<&str>, Option<&str>)]) -> CallPeople {
+fn imported(guests: &[(Option<&str>, Option<&str>)]) -> CallPeople {
     CallPeople {
         user_ids: vec![MacroUserIdStr::parse_from_str(MEMBER).unwrap().into_owned()],
         guests: guests
@@ -134,7 +133,6 @@ fn imported(provider: CallProvider, guests: &[(Option<&str>, Option<&str>)]) -> 
                 phone: phone.map(ToString::to_string),
             })
             .collect(),
-        provider: Some(provider),
     }
 }
 
@@ -332,10 +330,7 @@ async fn a_caller_known_by_number_links_their_contact_and_company(pool: PgPool) 
     let call_record_id = Uuid::now_v7();
 
     linker(&pool)
-        .link_call_record(
-            call_record_id,
-            &imported(CallProvider::Dialpad, &[(None, Some("+1555010"))]),
-        )
+        .link_call_record(call_record_id, &imported(&[(None, Some("+1555010"))]))
         .await
         .unwrap();
 
@@ -362,10 +357,7 @@ async fn an_email_match_wins_over_the_guest_s_number(pool: PgPool) {
     linker(&pool)
         .link_call_record(
             call_record_id,
-            &imported(
-                CallProvider::Granola,
-                &[(Some("ada@acme.example"), Some("+1555010"))],
-            ),
+            &imported(&[(Some("ada@acme.example"), Some("+1555010"))]),
         )
         .await
         .unwrap();
@@ -373,10 +365,6 @@ async fn an_email_match_wins_over_the_guest_s_number(pool: PgPool) {
     assert_eq!(
         linked_ids(&pool, call_record_id, SystemPropertyKey::Contacts).await,
         vec![ada.to_string()]
-    );
-    assert!(
-        phones(&pool, ada).await.is_empty(),
-        "only Dialpad's numbers are remembered"
     );
 }
 
@@ -400,10 +388,7 @@ async fn an_unknown_or_hidden_number_links_nothing(pool: PgPool) {
     linker(&pool)
         .link_call_record(
             call_record_id,
-            &imported(
-                CallProvider::Dialpad,
-                &[(None, Some("+1555012")), (None, Some("+1555011"))],
-            ),
+            &imported(&[(None, Some("+1555012")), (None, Some("+1555011"))]),
         )
         .await
         .unwrap();
@@ -426,20 +411,17 @@ async fn an_unknown_or_hidden_number_links_nothing(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn dialpad_numbers_are_remembered_for_contacts_matched_by_email(pool: PgPool) {
+async fn numbers_are_remembered_for_contacts_matched_by_email(pool: PgPool) {
     let team_id = seed_team(&pool, true).await;
     let acme = insert_company(&pool, team_id, "acme.example", false).await;
     let ada = insert_contact(&pool, acme, "ada@acme.example").await;
     insert_phone(&pool, ada, "+1555010").await;
     let call_record_id = Uuid::now_v7();
 
-    let call = imported(
-        CallProvider::Dialpad,
-        &[
-            (Some("Ada@Acme.example"), Some("+1555013")),
-            (Some("new@acme.example"), Some("+1555014")),
-        ],
-    );
+    let call = imported(&[
+        (Some("Ada@Acme.example"), Some("+1555013")),
+        (Some("new@acme.example"), Some("+1555014")),
+    ]);
     linker(&pool)
         .link_call_record(call_record_id, &call)
         .await
@@ -453,7 +435,7 @@ async fn dialpad_numbers_are_remembered_for_contacts_matched_by_email(pool: PgPo
         phones(&pool, ada).await,
         vec![
             ("+1555010".to_owned(), "manual".to_owned()),
-            ("+1555013".to_owned(), "dialpad".to_owned()),
+            ("+1555013".to_owned(), "call".to_owned()),
         ]
     );
     let learned: i64 = sqlx::query_scalar("SELECT count(*) FROM crm_contact_phones")

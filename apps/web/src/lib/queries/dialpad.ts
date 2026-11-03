@@ -15,19 +15,11 @@ function fetchDialpadConnection() {
   );
 }
 
-/** Poll while the user approves Dialpad elsewhere. */
-function pollWhileConnecting(query: {
-  state: { data?: DialpadConnectionResponse };
-}) {
-  return query.state.data?.state === 'connecting' ? 4000 : false;
-}
-
 function dialpadConnectionQueryOptions() {
   return {
     queryKey: KEYS.connection,
     queryFn: fetchDialpadConnection,
     refetchOnWindowFocus: 'always' as const,
-    refetchInterval: pollWhileConnecting,
   };
 }
 

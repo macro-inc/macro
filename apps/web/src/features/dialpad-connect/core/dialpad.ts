@@ -3,7 +3,6 @@ import type { DialpadBackfill } from '@service-cognition/generated/schemas/dialp
 import type { DialpadConnectionResponse } from '@service-cognition/generated/schemas/dialpadConnectionResponse';
 
 export const DIALPAD_APP_SLUG = 'dialpad';
-export const DIALPAD_DISPLAY_NAME = 'Dialpad';
 /** Pipedream's directory logo for Dialpad (proxied by `PipedreamConnectorIcon`). */
 export const DIALPAD_ICON_URL =
   'https://assets.pipedream.net/s.v0/app_X7LhyA/logo/orig';
