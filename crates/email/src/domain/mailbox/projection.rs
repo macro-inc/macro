@@ -1,6 +1,8 @@
 //! Durable downstream projection and live-mail notification policy.
 
-use super::telemetry::{claim_failed, elapsed_ms, record_deferred, record_done, record_failed};
+use super::telemetry::{
+    claim_failed, elapsed_ms, record_deferred, record_done, record_failed, span_int,
+};
 use super::{MailboxError, MailboxKey};
 use crate::domain::events::*;
 use crate::domain::models::calendar_invitation::CalendarInvitation;
@@ -238,9 +240,9 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
             self.repo.renew_projection(lease)
         })
         .await;
-        span.record("outlook.crm_jobs", effects.crm_jobs);
-        span.record("outlook.refreshes", effects.refreshes);
-        span.record("outlook.reindex_events", effects.reindex_events);
+        span.record("outlook.crm_jobs", span_int(effects.crm_jobs));
+        span.record("outlook.refreshes", i64::from(effects.refreshes));
+        span.record("outlook.reindex_events", i64::from(effects.reindex_events));
         span.record("outlook.attachment_upload_ms", effects.attachment_upload_ms);
         let retry_after = result
             .is_err()
@@ -462,7 +464,7 @@ struct EffectCounts {
     crm_jobs: usize,
     refreshes: u32,
     reindex_events: u32,
-    attachment_upload_ms: u64,
+    attachment_upload_ms: i64,
 }
 
 /// A failed projection backs off 30 s per attempt, up to ten minutes.

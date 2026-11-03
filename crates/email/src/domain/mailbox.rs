@@ -7,7 +7,7 @@ use email_api_client::domain::models::{
 use progress::{ImportCompleted, ImportTally};
 use std::future::Future;
 use std::time::Instant;
-use telemetry::{claim_failed, elapsed_ms, record_deferred, record_done, record_failed};
+use telemetry::{claim_failed, elapsed_ms, record_deferred, record_done, record_failed, span_int};
 use tracing::{Instrument, Span};
 use uuid::Uuid;
 
@@ -279,7 +279,7 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
         .await;
         let result = match outcome {
             Ok(folders) => {
-                span.record("outlook.folders", folders.len());
+                span.record("outlook.folders", span_int(folders.len()));
                 self.repo.commit_catalog(lease, &folders).await
             }
             Err(MailboxError::Provider(error)) => {
@@ -356,11 +356,11 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             Ok(page) => {
                 span.record(
                     "outlook.page_items",
-                    page.changed.len() + page.removed.len(),
+                    span_int(page.changed.len() + page.removed.len()),
                 );
                 let checkpoint = matches!(page.position, StreamPosition::Checkpoint(_));
                 self.repo.commit_page(lease, &page).await.map(|committed| {
-                    span.record("outlook.rows_queued", committed.queued);
+                    span.record("outlook.rows_queued", span_int(committed.queued));
                     span.record("outlook.delta_advanced", true);
                     span.record(
                         "outlook.folder_initial_complete",
@@ -437,13 +437,13 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
                     .message(lease.mailbox, &lease.provider_id, &folders),
             )
             .await;
-            span.record("outlook.graph_calls", graph_calls);
+            span.record("outlook.graph_calls", i64::from(graph_calls));
             let started = Instant::now();
             let outcome = match snapshot? {
                 Some(snapshot) => {
                     span.record(
                         "outlook.attachments",
-                        snapshot.content.message.attachments.len(),
+                        span_int(snapshot.content.message.attachments.len()),
                     );
                     self.ingest.ingest(lease, snapshot).await?;
                     "imported"

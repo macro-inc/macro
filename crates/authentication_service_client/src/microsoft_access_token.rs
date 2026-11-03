@@ -135,7 +135,10 @@ impl AuthServiceClient {
             .await
             .map_err(|_| unavailable())?;
         // Lands on the caller's token span when it declares the field.
-        tracing::Span::current().record("http.response.status_code", response.status().as_u16());
+        tracing::Span::current().record(
+            "http.response.status_code",
+            i64::from(response.status().as_u16()),
+        );
         match response.status() {
             reqwest::StatusCode::OK => {
                 let token: MicrosoftAccessToken =

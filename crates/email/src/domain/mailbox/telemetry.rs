@@ -54,11 +54,11 @@ pub(super) fn record_deferred(
     let reason = defer_reason(error);
     span.record("outlook.outcome", "deferred");
     span.record("outlook.defer_reason", reason);
-    span.record("outlook.defer_seconds", delay_seconds);
+    span.record("outlook.defer_seconds", i64::from(delay_seconds));
     if is_gate_refusal(error) {
-        tracing::debug!(parent: span, %link_id, defer_reason = reason, defer_seconds = delay_seconds, %error, "mailbox sync work deferred");
+        tracing::debug!(parent: span, %link_id, defer_reason = reason, defer_seconds = i64::from(delay_seconds), %error, "mailbox sync work deferred");
     } else {
-        tracing::warn!(parent: span, %link_id, defer_reason = reason, defer_seconds = delay_seconds, %error, "mailbox sync work deferred");
+        tracing::warn!(parent: span, %link_id, defer_reason = reason, defer_seconds = i64::from(delay_seconds), %error, "mailbox sync work deferred");
     }
 }
 
@@ -93,6 +93,12 @@ pub(super) fn claim_failed(unit: &'static str, error: MailboxError) -> MailboxEr
     error
 }
 
-pub(super) fn elapsed_ms(started: std::time::Instant) -> u64 {
-    u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX)
+pub(super) fn elapsed_ms(started: std::time::Instant) -> i64 {
+    span_int(started.elapsed().as_millis())
+}
+
+/// OpenTelemetry receives a span field as an integer only when it is
+/// recorded as `i64`; unsigned values arrive as strings.
+pub(super) fn span_int(value: impl TryInto<i64>) -> i64 {
+    value.try_into().unwrap_or(i64::MAX)
 }

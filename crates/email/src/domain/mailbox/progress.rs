@@ -171,7 +171,7 @@ pub(super) fn log_import_completed(completed: &ImportCompleted, graph_calls: Opt
         duration_seconds,
         messages = completed.messages,
         folders = completed.folders,
-        graph_calls,
+        graph_calls = graph_calls.and_then(|calls| i64::try_from(calls).ok()),
         "outlook import completed"
     );
 }

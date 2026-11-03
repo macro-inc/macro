@@ -218,7 +218,7 @@ impl OutlookApiClientRepository {
                 .await;
             tracing::Span::current().record(
                 "outlook.gate_wait_ms",
-                u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+                i64::try_from(started.elapsed().as_millis()).unwrap_or(i64::MAX),
             );
             Some((mailbox, permit?))
         } else {
@@ -254,7 +254,7 @@ impl OutlookApiClientRepository {
             .and_then(|v| v.to_str().ok())
             .map(str::to_owned);
         let span = tracing::Span::current();
-        span.record("http.response.status_code", status.as_u16());
+        span.record("http.response.status_code", i64::from(status.as_u16()));
         span.record("graph.request_id", request_id.as_deref());
         if status.is_success() {
             return Ok(response);
@@ -337,6 +337,9 @@ impl OutlookApiClientRepository {
     }
 }
 
+/// Numbers are recorded as `i64`: OpenTelemetry receives unsigned span fields
+/// as strings.
+///
 /// Record where a failed attempt was throttled and mark real failures as span
 /// errors. A gate refusal sent nothing, so it is neither an error nor a WARN;
 /// the sync unit that owns the request reports the deferral.
@@ -357,7 +360,7 @@ fn record_attempt(span: &tracing::Span, result: &Result<Response, GraphFailure>)
     if let Some(delay) = retry_after {
         span.record(
             "outlook.retry_after_seconds",
-            delay.as_secs_f64().ceil() as u64,
+            i64::try_from(delay.as_millis().div_ceil(1000)).unwrap_or(i64::MAX),
         );
     }
     if origin == "gate" {
