@@ -1349,9 +1349,10 @@ is an accessible disclosure that starts closed and stays open across unchanged
 permission refreshes and window refocus on desktop and mobile; attachments remain below it.
 ICS attachments show a calendar icon in the attachment pill and file headers on
 desktop and mobile, including when the email uses `application/ics` or a
-parameterized `text/calendar` MIME type. Opening the attachment of a message that shows a
+parameterized `text/calendar` MIME type. The pill's download button saves the
+file without opening it and without adding it to Drive. Opening the attachment of a message that shows a
 card opens a dialog (a drawer on phones) with the same card, so its RSVP or `Add to calendar`
-works there, and `Download .ics`, which saves the file without adding it to Drive. When an
+works there, and `Download .ics`, which saves the file the same way. When an
 invitation's card falls back to the saved invitation (the event matches nothing on your
 calendars), its status line reads `Saved invitation.` in the dialog; the card in the email
 adds that the original email or invitation attachment has more options. A shared event shown
