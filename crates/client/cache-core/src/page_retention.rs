@@ -19,7 +19,14 @@ const ORDER_OVERHEAD_BYTES: usize = PAGE_ORDER_FIELD.len() + 32;
 fn is_page_field(key: &str) -> bool {
     matches!(
         key.split('(').next(),
-        Some("soup" | "groupSoup" | "databaseViewRows" | "contacts" | "contactsByUserIds" | "contactsByEmails")
+        Some(
+            "soup"
+                | "groupSoup"
+                | "databaseViewRows"
+                | "contacts"
+                | "contactsByUserIds"
+                | "contactsByEmails"
+        )
     )
 }
 

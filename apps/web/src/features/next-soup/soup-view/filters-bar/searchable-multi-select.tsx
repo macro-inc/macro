@@ -5,6 +5,7 @@ import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Combobox, useComboboxContext } from '@kobalte/core/combobox';
 import { makeEventListener } from '@solid-primitives/event-listener';
+import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { cn, Layer } from '@ui';
 import { MultiSelectItemContent } from '@ui/components/MultiSelectItemContent';
 import {
@@ -85,12 +86,16 @@ const keepComboboxFocus = (event: Event) => event.preventDefault();
 
 function PickerSearchInput(props: {
   placeholder?: string;
+  value?: string;
+  onInput?: JSX.EventHandler<HTMLInputElement, InputEvent>;
   onKeyDown?: (event: KeyboardEvent) => void;
   onReady?: (input: HTMLInputElement) => void;
 }) {
   return (
     <Combobox.Input
       ref={props.onReady}
+      value={props.value}
+      onInput={props.onInput}
       onKeyDown={props.onKeyDown}
       class="flex-1 min-w-0 text-sm bg-transparent outline-none caret-accent placeholder:text-ink-placeholder"
       placeholder={props.placeholder ?? 'Search...'}
@@ -239,26 +244,48 @@ const VirtualizedListbox = (props: {
   selectionIntent: ReturnType<typeof createMultiSelectIntent>;
 }) => {
   let handle: VirtualizerHandle | undefined;
+  let pendingFocus = false;
+  let active = true;
   const combobox = useComboboxContext();
   props.resetScrollRef?.(() => {
     combobox.listState().selectionManager().setFocusedKey(undefined);
     handle?.scrollToIndex(0, { align: 'start' });
   });
-  onCleanup(() => props.resetScrollRef?.(undefined));
+  onCleanup(() => {
+    active = false;
+    props.resetScrollRef?.(undefined);
+  });
   // Kobalte supplies the collection after applying the combobox search
   // filter. Use it for focus scrolling too — indexing the original options
   // array targets the wrong virtual row whenever the list is filtered.
   let visibleItems:
     | Accessor<Iterable<CollectionNode<SearchableOption>>>
     | undefined;
+  const scrollToItem = (key: string) => {
+    // Before initial measurement, "nearest" starts a corrective scroll against
+    // a zero-height viewport and can keep undoing subsequent user scrolling.
+    if (!handle?.viewportSize) {
+      pendingFocus = true;
+      return;
+    }
+    pendingFocus = false;
+    const idx = Array.from(visibleItems?.() ?? []).findIndex(
+      (item) => item.rawValue.id === key
+    );
+    if (idx !== -1) handle.scrollToIndex(idx, { align: 'nearest' });
+  };
+  const { observe } = makeResizeObserver(() => {
+    // Let the virtualizer's own observer publish its viewport measurement.
+    queueMicrotask(() => {
+      if (!active || !pendingFocus) return;
+      const key = combobox.listState().selectionManager().focusedKey();
+      if (key) scrollToItem(key);
+    });
+  });
   return (
     <Combobox.Listbox<SearchableOption>
-      scrollToItem={(key) => {
-        const idx = Array.from(visibleItems?.() ?? []).findIndex(
-          (item) => item.rawValue.id === key
-        );
-        if (idx !== -1) handle?.scrollToIndex(idx, { align: 'nearest' });
-      }}
+      ref={observe}
+      scrollToItem={scrollToItem}
       class={cn(LISTBOX_CLASS, props.class)}
     >
       {(items) => {
@@ -388,7 +415,17 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
   });
   const localMatches = useHasMatches(displayOptions, searchQuery);
   const hasMatches = () =>
-    props.source ? visibleIds().size > 0 || sourceAction() : !!props.action || localMatches();
+    props.source
+      ? visibleIds().size > 0 || sourceAction()
+      : !!props.action || localMatches();
+
+  const onSourceInput: JSX.EventHandler<HTMLInputElement, InputEvent> = (
+    event
+  ) => {
+    if (!props.source) return;
+    setSearchQuery(event.currentTarget.value);
+    props.source.setSearch(event.currentTarget.value);
+  };
 
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open);
@@ -451,19 +488,22 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
       defaultFilter={
         props.source
           ? (option) => option.id === ACTION_ID || visibleIds().has(option.id)
-          : undefined
+          : props.action
+            ? filterWithAction
+            : undefined
       }
       value={activeOptions()}
       onChange={handleChange}
       onInputChange={(value) => {
-        setSearchQuery(value);
-        props.source?.setSearch(value);
+        // Kobalte also clears its input when selected option objects refresh.
+        // Only native edits change a query-driven source; metadata/page
+        // replacement must not cancel the user's in-flight search.
+        if (!props.source) setSearchQuery(value);
       }}
       onOpenChange={handleOpenChange}
       optionValue="id"
       optionTextValue="label"
       optionLabel="label"
-      defaultFilter={props.action ? filterWithAction : undefined}
       optionDisabled="disabled"
       allowsEmptyCollection
       virtualized
@@ -473,7 +513,12 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
     >
       <Combobox.Control class="flex items-center h-full">
         {props.children}
-        <Combobox.Input ref={selectionIntent.track} class="sr-only" />
+        <Combobox.Input
+          ref={selectionIntent.track}
+          value={props.source?.search() ?? searchQuery()}
+          onInput={onSourceInput}
+          class="sr-only"
+        />
       </Combobox.Control>
 
       <div class="hidden" ref={setPortalAnchor} />
@@ -495,7 +540,11 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
           >
             <div class="flex items-center gap-2 px-3 py-2 border-b border-edge-muted">
               <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
-              <PickerSearchInput placeholder={props.placeholder} />
+              <PickerSearchInput
+                value={props.source?.search() ?? searchQuery()}
+                onInput={onSourceInput}
+                placeholder={props.placeholder}
+              />
             </div>
             <div class="p-1">
               <Show when={props.source}>

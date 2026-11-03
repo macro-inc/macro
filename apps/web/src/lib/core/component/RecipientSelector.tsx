@@ -602,7 +602,9 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 
     // Typed recipients already chosen stay out of the suggestions, where Enter
     // on text matching nothing would toggle one off and clear the text.
-    return uniqueRecipientMatches<CombinedRecipientItem | WithCustomUserInput<K>>(
+    return uniqueRecipientMatches<
+      CombinedRecipientItem | WithCustomUserInput<K>
+    >(
       rankRecipientMatches([...searched, ...typed], searchTerm),
       props.selectedOptions
     ) as CombinedRecipientItem<K>[];

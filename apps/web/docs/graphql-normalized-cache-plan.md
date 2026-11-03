@@ -1247,6 +1247,11 @@ without binding one itself, and publication is required only for inbox exclusion
 Missing reference support is independently unsupported on older hosts; scope/storage
 failures remain fatal. The app-wrapper/worker/OPFS fixture exercises this complete
 boundary, including retirement and stale/foreign scope rejection.
+The frontend reference query owns one current label set and a serialized reader
+(one active physical scan, one replaceable pending input). It captures backfill
+completeness before the scan, keeps incomplete evidence unknown, and uses fetch-only
+exact server stages when necessary; literal identities have separate point lookup.
+Cache hints wake readiness transitions, not an HTTP rescan on every hydrated page.
 The app's retiring-host wrapper forwards this capability through the current host,
 including methods captured before disposal. Retired reads report unsupported;
 retired context writes reject instead of acknowledging a discarded publication.

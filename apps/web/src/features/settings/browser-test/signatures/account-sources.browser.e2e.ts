@@ -25,6 +25,7 @@ test('account-scoped lists ignore old in-flight channel and inbox responses', as
     'Second channel'
   );
   await page.getByRole('button', { name: 'Release old responses' }).click();
+  await page.evaluate(() => window.signatureFixture.waitForReleasedSources());
   expect(
     await page.evaluate(
       () => window.signatureFixture.readState().pendingSourceReads

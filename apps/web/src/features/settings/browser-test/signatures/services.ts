@@ -45,6 +45,7 @@ queryClient.setQueryData(emailKeys.links(link.macro_id).queryKey, {
 const [activeViewer, setActiveViewer] = createSignal(link.macro_id);
 export const useUserId = () => activeViewer;
 let holdSources = false;
+let sourceRefresh: Promise<void> | undefined;
 const sourceWaiters: Array<() => void> = [];
 let heldSources = Promise.withResolvers<void>();
 async function holdSourceResponse() {
@@ -59,10 +60,8 @@ function waitForHeldSources() {
 export function refreshHeldAccountSources() {
   holdSources = true;
   heldSources = Promise.withResolvers<void>();
-  fireAndForget(
-    queryClient.refetchQueries({ type: 'active' }),
-    'account-fixture'
-  );
+  sourceRefresh = queryClient.refetchQueries({ type: 'active' });
+  fireAndForget(sourceRefresh, 'account-fixture');
 }
 export function switchFixtureAccount() {
   holdSources = false;
@@ -76,6 +75,9 @@ export function switchFixtureAccount() {
 }
 export function releaseAccountSources() {
   for (const resolve of sourceWaiters.splice(0)) resolve();
+}
+export function waitForReleasedSources() {
+  return sourceRefresh ?? Promise.resolve();
 }
 export const storageServiceClient = {
   async getActivity() {
@@ -189,6 +191,7 @@ declare global {
     signatureFixture: {
       readState: typeof readState;
       waitForHeldSources: typeof waitForHeldSources;
+      waitForReleasedSources: typeof waitForReleasedSources;
       holdAccountRefresh: typeof holdAccountRefresh;
       releaseAccountRefresh: typeof releaseAccountRefresh;
     };
@@ -197,6 +200,7 @@ declare global {
 window.signatureFixture = {
   readState,
   waitForHeldSources,
+  waitForReleasedSources,
   holdAccountRefresh,
   releaseAccountRefresh,
 };
