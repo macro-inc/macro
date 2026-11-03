@@ -1,16 +1,24 @@
+import { DRAFT_THREAD_ID } from '@core/comments/commentType';
 import {
   LexicalWrapperContext,
   type LexicalWrapperWithMapping,
 } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import type { PluginManager } from '@core/component/LexicalMarkdown/plugins';
+import { CREATE_DRAFT_COMMENT_COMMAND } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
-import { $createCommentNode, CommentNode } from '@macro-inc/lexical-core';
+import {
+  $createCommentNode,
+  CommentNode,
+  peerIdPlugin,
+} from '@macro-inc/lexical-core';
 import type { MessageListItem } from '@service-storage/messages';
 import { cleanup, render } from '@solidjs/testing-library';
 import {
   $createParagraphNode,
+  $createRangeSelection,
   $createTextNode,
   $getRoot,
+  $setSelection,
   createEditor,
   type LexicalEditor,
 } from 'lexical';
@@ -63,9 +71,6 @@ vi.mock('@queries/messages/mutations', () => ({
 vi.mock('@queries/messages/sync', () => ({
   onThreadStateUpdated: () => () => {},
 }));
-vi.mock('./commentOperations', () => ({
-  useDeleteNewComments: () => () => {},
-}));
 
 const thread: MessageListItem = {
   id: 'root',
@@ -94,7 +99,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function setup() {
+function setup(lateEditor = false) {
   const state = createMarkdownDocumentState();
   mocks.state = state;
   const [threads, setThreads] = createSignal<MessageListItem[]>([]);
@@ -128,10 +133,14 @@ function setup() {
         onCleanup(plugin(editor)),
     } as unknown as PluginManager,
   };
+  if (!lateEditor) state.editor.setMd('editor', editor);
   render(() => (
     <LexicalWrapperContext.Provider value={wrapper}>
       <div
         ref={(el) => {
+          onCleanup(
+            peerIdPlugin({ peerId: () => '1', nodes: [CommentNode] })(editor)
+          );
           onMount(() => editor.setRootElement(el));
           onCleanup(() => editor.setRootElement(null));
         }}
@@ -142,7 +151,9 @@ function setup() {
       />
     </LexicalWrapperContext.Provider>
   ));
+  if (lateEditor) state.editor.setMd('editor', editor);
   return {
+    editor,
     state,
     scroll,
     loadComments: () =>
@@ -175,6 +186,87 @@ function setup() {
 }
 
 describe('inline comment link navigation', () => {
+  it('opens a new draft inside an existing comment and preserves that comment on cancellation', async () => {
+    const f = setup();
+    f.loadMarks();
+    f.loadComments();
+    f.finishLoading();
+    f.editor.update(
+      () => {
+        const text = $getRoot().getAllTextNodes()[0];
+        text.select(2, 7);
+        expect(
+          f.editor.dispatchCommand(CREATE_DRAFT_COMMENT_COMMAND, undefined)
+        ).toBe(true);
+      },
+      { discrete: true }
+    );
+    expect(f.state.comments.activeCommentThread).toBe(DRAFT_THREAD_ID);
+    expect(f.state.comments.threads[DRAFT_THREAD_ID]?.isNew).toBe(true);
+    f.state.setCommentState('activeCommentThread', null);
+    await Promise.resolve();
+    expect(f.state.comments.threads.root?.anchorId).toBe('mark');
+    expect(f.editor.getRootElement()?.textContent).toBe('Commented text');
+  });
+  it('retains every anchor fragment for a draft spanning paragraphs', () => {
+    const f = setup();
+    f.editor.update(
+      () => {
+        const first = $createTextNode('First paragraph');
+        const last = $createTextNode('Last paragraph');
+        $getRoot().append(
+          $createParagraphNode().append(first),
+          $createParagraphNode().append(last)
+        );
+        const selection = $createRangeSelection();
+        selection.anchor.set(first.getKey(), 0, 'text');
+        selection.focus.set(last.getKey(), 4, 'text');
+        $setSelection(selection);
+        f.editor.dispatchCommand(CREATE_DRAFT_COMMENT_COMMAND, undefined);
+      },
+      { discrete: true }
+    );
+    const draft = f.state.comments.threads[DRAFT_THREAD_ID];
+    expect(draft?.isNew).toBe(true);
+    expect(
+      Object.values(f.state.comments.marks[draft!.anchorId]!.markNodes).filter(
+        Boolean
+      )
+    ).toHaveLength(2);
+  });
+
+  it.each([false, true])(
+    'opens and cancels a draft (editor published after mounting: %s)',
+    async (lateEditor) => {
+      const f = setup(lateEditor);
+      f.editor.update(
+        () => {
+          const text = $createTextNode('Text to comment on');
+          $getRoot().append($createParagraphNode().append(text));
+          text.select(0, 4);
+        },
+        { discrete: true }
+      );
+      f.editor.update(
+        () => {
+          expect(
+            f.editor.dispatchCommand(CREATE_DRAFT_COMMENT_COMMAND, undefined)
+          ).toBe(true);
+        },
+        { discrete: true }
+      );
+      expect(f.state.comments.activeCommentThread).toBe(DRAFT_THREAD_ID);
+      expect(f.state.comments.threads[DRAFT_THREAD_ID]?.isNew).toBe(true);
+      expect(f.editor.getRootElement()?.querySelectorAll('mark')).toHaveLength(
+        1
+      );
+      f.state.setCommentState('activeCommentThread', null);
+      await Promise.resolve();
+      expect(f.editor.getRootElement()?.querySelectorAll('mark')).toHaveLength(
+        0
+      );
+    }
+  );
   it('waits for editor initialization even when comments and marks arrive first', () => {
     const f = setup();
     f.loadComments();

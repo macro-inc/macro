@@ -1040,6 +1040,16 @@ and bot personas share one renderer; keep surface sizing in the caller.
 - Advertise Mail v5 capsules only for the current browser engine or a verified supported installed native build; OTA bundle version alone cannot establish native capability.
 - Bound native Mail capability discovery to 1.5 seconds and cache the legacy profile on failure or timeout so stalled IPC cannot block GraphQL transport; record the selected profile and bounded outcome in HTTP and WebSocket setup spans without error text.
 
+### Inline comment drafts
+
+Keep draft marks separate from saved marks until posting; overlapping comments
+must retain each saved range through cancel, save, and collaboration updates.
+Comment controls preserve editor focus on both pointerdown and mousedown.
+The backend-free browser regression is
+`bunx playwright test --config src/features/block-md/comments/browser-test/playwright.config.ts`.
+It exercises selection, press, cancel, and retry; the comment provider and sync
+unit suites cover composer state, multi-paragraph anchors, and saved ranges.
+
 ## Performance
 
 ### Tracing

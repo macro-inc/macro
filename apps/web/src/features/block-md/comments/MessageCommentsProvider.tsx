@@ -23,6 +23,7 @@ import { useUserId } from '@core/context/user';
 import { onElementConnect } from '@core/util/onElementConnect';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import type { CommentNode } from '@macro-inc/lexical-core';
+import { Telemetry } from '@macro-inc/observability';
 import {
   useMessageLink,
   useMessageRootsQuery,
@@ -264,7 +265,7 @@ export const MessageCommentsProvider: VoidComponent<{
     setMountedMarks(markId, markNodeKey, markElement);
     const existing = marks[markId];
 
-    if (existing && (!isDraft || existing.existsOnServer)) {
+    if (existing) {
       if (existing.existsOnServer) markElement.classList.remove('draft');
       setMarks(markId, 'markNodes', markNodeKey, markElement);
       return;
@@ -272,6 +273,13 @@ export const MessageCommentsProvider: VoidComponent<{
 
     if (isDraft && !isLocal) {
       return;
+    }
+
+    if (isDraft) {
+      Telemetry.info('comment.draft.mounted', {
+        'document.id': documentId,
+        'comment.mark_id': markId,
+      });
     }
 
     setMarks(markId, {
@@ -593,6 +601,7 @@ export const MessageCommentsProvider: VoidComponent<{
         init: initComments,
       },
       peerId: currentPeerId,
+      documentId,
     })
   );
 

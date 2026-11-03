@@ -4,7 +4,7 @@ import {
   $unwrapMarkNode,
   $wrapSelectionInMarkNode,
 } from '@lexical/mark';
-import { mergeRegister, registerNestedElementResolver } from '@lexical/utils';
+import { mergeRegister } from '@lexical/utils';
 import {
   $addSharedPeer,
   $createCommentNode,
@@ -13,7 +13,9 @@ import {
   $removePeerId,
   CommentNode,
 } from '@macro-inc/lexical-core';
+import { Telemetry } from '@macro-inc/observability';
 import {
+  $copyNode,
   $getNodeByKey,
   $getSelection,
   $isRangeSelection,
@@ -109,6 +111,7 @@ export const markNodeKeysToIDs: Map<NodeKey, Array<string>> = new Map();
 type CommentPluginProps = {
   ops: CommentOperations;
   peerId: () => string | undefined;
+  documentId?: string;
 };
 
 function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
@@ -186,39 +189,32 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
   };
 
   return mergeRegister(
-    registerNestedElementResolver<CommentNode>(
-      editor,
-      CommentNode,
-      (from: CommentNode) => {
-        const newNode = $createCommentNode({
-          ids: from.getIDs(),
-          threadId: from.getThreadId(),
-          isDraft: from.getIsDraft(),
-        });
-        for (const id of newNode.getIDs()) {
-          markNodeMap.get(id)?.delete(from.getKey());
-          markNodeMap.get(id)?.add(newNode.getKey());
-        }
-        return newNode;
-      },
-      (from: CommentNode, to: CommentNode) => {
-        to.setIsDraft(from.getIsDraft());
+    // Drafts remain separate wrappers until posted. Merging a draft with a
+    // saved range gives both IDs one isDraft bit: either the composer vanishes
+    // or saving strips part of the existing comment from the shared document.
+    editor.registerNodeTransform(CommentNode, (node) => {
+      const parent = node.getParent();
+      if (
+        node.getIsDraft() ||
+        !$isCommentNode(parent) ||
+        parent.getIsDraft() ||
+        node.getChildren().some($isCommentNode)
+      )
+        return;
 
-        // Merge the IDs
-        const ids = from.getIDs();
-        ids.forEach((id) => {
-          to.addID(id);
-          markNodeMap.get(id)?.delete(from.getKey());
-          markNodeMap.get(id)?.add(to.getKey());
-        });
+      for (const id of parent.getIDs()) node.addID(id);
+      const parentPeerId = $getPeerId(parent);
+      if (parentPeerId) $addSharedPeer(node, parentPeerId);
 
-        // Add shared peers.
-        const fromPeerId = $getPeerId(from);
-        if (fromPeerId) {
-          $addSharedPeer(to, fromPeerId);
-        }
+      const nextSiblings = node.getNextSiblings();
+      parent.insertAfter(node);
+      if (nextSiblings.length > 0) {
+        const remaining = $copyNode(parent);
+        node.insertAfter(remaining);
+        remaining.append(...nextSiblings);
       }
-    ),
+      if (parent.getChildrenSize() === 0) parent.remove();
+    }),
 
     editor.registerUpdateListener(({ editorState }) => {
       if (editorState.isEmpty()) return;
@@ -243,11 +239,28 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
     editor.registerCommand(
       CREATE_DRAFT_COMMENT_COMMAND,
       () => {
-        const selection = $getSelection();
-        if (
-          $isRangeSelection(selection) &&
-          selection.getTextContent().trim() !== ''
-        ) {
+        const span = Telemetry.span('comment.draft.create');
+        if (props.documentId) span.setAttr('document.id', props.documentId);
+        try {
+          const selection = $getSelection();
+          if (
+            !$isRangeSelection(selection) ||
+            selection.getTextContent().trim() === ''
+          ) {
+            span.setAttr('comment.outcome', 'no_selection');
+            Telemetry.warn('comment.draft.rejected', {
+              'document.id': props.documentId,
+              'comment.reason': 'no_selection',
+            });
+            return false;
+          }
+          // Retrying Comment while a composer is open must not create a second
+          // draft with the same UI thread ID.
+          if (draftMarkId && markNodeMap.has(draftMarkId)) {
+            markSelected([draftMarkId]);
+            span.setAttr('comment.outcome', 'existing_draft');
+            return true;
+          }
           const markId = generateMarkId();
           draftMarkId = markId;
           $wrapSelectionInMarkNode(
@@ -255,16 +268,21 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
             selection.isBackward(),
             markId,
             (ids) => {
-              const comment = new CommentNode(ids, undefined, -1, true);
-              for (const id of ids) {
-                setMarkNodeMapEntry(id, comment.getKey());
-              }
+              const comment = $createCommentNode({
+                ids,
+                threadId: -1,
+                isDraft: true,
+              });
+              for (const id of ids) setMarkNodeMapEntry(id, comment.getKey());
               return comment;
             }
           );
+          span.setAttr('comment.mark_id', markId);
+          span.setAttr('comment.outcome', 'created');
           return true;
+        } finally {
+          span.end();
         }
-        return false;
       },
       COMMAND_PRIORITY_EDITOR
     ),
@@ -386,7 +404,9 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
                 const isDraft = node.getIsDraft();
                 const hasServerThread = !isDraft;
                 const nodePeerId = $getPeerId(node);
-                const isLocal = Boolean(nodePeerId && nodePeerId === peerId());
+                const isLocal =
+                  id === draftMarkId ||
+                  Boolean(nodePeerId && nodePeerId === peerId());
                 ops.add(
                   id,
                   node,
