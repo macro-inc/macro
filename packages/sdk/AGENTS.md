@@ -100,6 +100,13 @@ the existing gateway prefixes.
   assigned, Not started), so `Task.create` spells them out when it sends any.
 - Meeting list lookup only covers the owner's newest 100 standalone meetings;
   handles seeded from invitations retain their token for refetching after writes.
+- Team routes act on the caller's current team, which the auth service
+  resolves from the principal. `Team.invite` and `Team.invites` send the
+  handle's `team_id`, which the route checks in the same request (409 on a
+  mismatch); `members` checks the team in the `GET /team` response it reads.
+  `/team/invite` answers 304 when it created no invite; `Team.invite` reports
+  that as `false`. A 204 from `GET /team` (no team) parses as an empty
+  object, not `undefined`.
 - Keep access-request resolution snapshots: resolved requests leave pending lists.
 - `CrmPipeline.stageRequirements()` and `setStageRequirements()` use pipeline
   column and option handles; `PipelineColumn.options()` supplies stable options.

@@ -1,7 +1,7 @@
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { aiChatTheme } from '@core/component/LexicalMarkdown/theme';
 import { ErrorBoundary, For, Suspense } from 'solid-js';
-import type { View, Widget } from './schema';
+import type { View, Widget } from './view';
 import { Widget as WidgetNS } from './widget';
 
 /**
