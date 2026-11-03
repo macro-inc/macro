@@ -1039,8 +1039,9 @@ Drag a section heading, its name, or the grip in the left gutter to reorder
 sections, or focus the grip and use Up/Down. Pointer dragging starts only after
 more than 8px of movement, never from holding still. A normal heading click still
 toggles the section; releasing a drag does not. Add and menu buttons never start
-a drag. The grip does not shift the header's text or controls. An insertion line
-shows the destination. Section order is a personal
+a drag. The bare grip stays fixed when pressed, without its own button background,
+and the drag highlight includes both the grip and section name. It does not shift
+the header's text or controls. An insertion line shows the destination. Section order is a personal
 preference, including for shared sections, and survives reloads. The dragged
 section appears as a card preview while its source is subdued. Other sections
 animate into their new positions on drop or keyboard reorder, except with reduced

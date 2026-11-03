@@ -120,7 +120,9 @@ export function DraggableChannelSectionHeading(props: {
     >
       <Button
         variant="ghost"
+        appearance="bare"
         size="icon-xs"
+        data-icon-motion="none"
         class="absolute -left-(--sidebar-gutter) top-1 z-10 cursor-grab opacity-0 group-hover/rail-section:opacity-100 focus-visible:opacity-100 active:cursor-grabbing"
         aria-label={t('channelSections.reorderSection', { name: props.label })}
         tooltip={t('channelSections.reorderSectionHint')}
@@ -136,7 +138,7 @@ export function DraggableChannelSectionHeading(props: {
           props.reorder.move(props.section, event.key === 'ArrowUp' ? -1 : 1);
         }}
       >
-        <DotsSixVerticalIcon class="size-3 -translate-x-1" />
+        <DotsSixVerticalIcon class="-ml-2 size-3" />
       </Button>
       {props.children}
     </div>

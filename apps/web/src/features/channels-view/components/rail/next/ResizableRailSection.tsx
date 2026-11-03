@@ -120,12 +120,17 @@ export function ResizableRailSection(props: {
     <div
       ref={props.rootRef}
       class={cn(
-        '@container/rail-section group/rail-section relative min-w-0 shrink-0',
-        props.dragging &&
-          'rounded-lg bg-surface opacity-40 ring-1 ring-edge-muted'
+        '@container/rail-section group/rail-section relative isolate min-w-0 shrink-0',
+        props.dragging && 'opacity-40'
       )}
       data-resizing={preview() !== undefined ? '' : undefined}
     >
+      <Show when={props.dragging}>
+        <div
+          aria-hidden="true"
+          class="pointer-events-none absolute inset-y-0 -left-(--sidebar-gutter) right-0 -z-10 rounded-lg bg-surface ring-1 ring-edge-muted"
+        />
+      </Show>
       <Show when={props.dropEdge}>
         {(edge) => (
           <div

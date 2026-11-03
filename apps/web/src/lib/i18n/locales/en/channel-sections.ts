@@ -49,7 +49,7 @@ export default {
   resizeSection: 'Resize {{name}}',
   resizeSectionHint: 'Drag to resize. Double-click to reset.',
   reorderSection: 'Reorder {{name}}',
-  reorderSectionHint: 'Drag to reorder. Use arrow keys to move up or down.',
+  reorderSectionHint: 'Drag to reorder.',
   expandAllSections: 'Expand all sections',
   collapseAllSections: 'Collapse all sections',
   loading: 'Loading sections…',
