@@ -31,7 +31,11 @@ import {
   SchemaErrorNotice,
 } from '../components/database-table-notices';
 import { filterConditionCount } from '../components/database-view-filters';
-import { GridCell, type GridCellProps } from '../components/grid-cell';
+import {
+  GridCell,
+  GridCellPreview,
+  type GridCellProps,
+} from '../components/grid-cell';
 import { RecordPanel } from '../components/record-panel';
 import type { DatabaseRowsSource } from '../context/table-source';
 import { toCellTimeRange } from '../core/cell-date-range';
@@ -125,6 +129,8 @@ export type DatabaseRecordsViewProps = {
   renderTextValue?: GridCellProps['renderTextValue'];
   renderMentionPicker?: GridCellProps['renderMentionPicker'];
   renderMentionValue?: GridCellProps['renderMentionValue'];
+  /** Opens document/file references in any column, including record panel fields. */
+  onOpenDocumentMention?: (id: string) => void;
   /** Opens what a record's title mentions, such as a pipeline row's company, in place of editing it. */
   onOpenTitleMention?: (id: string, type: DatabaseEntityType) => void;
   renderRelationCell?: (props: RelationCellProps) => JSX.Element;
@@ -347,7 +353,14 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
             renderTextValue={props.renderTextValue}
             renderMentionPicker={props.renderMentionPicker}
             renderMentionValue={props.renderMentionValue}
-            onOpenMention={isTitle() ? props.onOpenTitleMention : undefined}
+            onOpenMention={
+              column().specificEntityType === 'DOCUMENT' &&
+              props.onOpenDocumentMention
+                ? props.onOpenDocumentMention
+                : isTitle()
+                  ? props.onOpenTitleMention
+                  : undefined
+            }
             onMention={(mention) =>
               writeValue(row(), column(), mention.id, undefined, {
                 dataType: 'ENTITY',
@@ -457,15 +470,20 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
             <HiddenRecordNotice
               title={
                 records.hiddenSavedRecord()?.created
-                  ? records.hiddenSavedRecord()?.noEditableColumns
+                  ? records.hiddenSavedRecord()?.noEditableColumns ||
+                    records.hiddenSavedRecord()?.unloaded
                     ? 'Record created'
                     : 'Record created outside this view'
-                  : 'Record saved outside this view'
+                  : records.hiddenSavedRecord()?.unloaded
+                    ? 'Record saved'
+                    : 'Record saved outside this view'
               }
               message={
                 records.hiddenSavedRecord()?.noEditableColumns
                   ? 'This view has no editable columns. Open the record to see its details.'
-                  : `“${rowTitle(row(), columns())}” doesn’t match your filters.`
+                  : records.hiddenSavedRecord()?.unloaded
+                    ? 'Open the record to view or edit it.'
+                    : `“${rowTitle(row(), columns())}” doesn’t match your filters.`
               }
               onOpen={() => records.open(row().rowId)}
               onDismiss={records.dismissHiddenRecord}
@@ -562,6 +580,11 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
           </Match>
           <Match when={layoutKind() === 'table'}>
             <DatabaseTableView
+              hasMoreRows={props.source.pagination?.hasMore()}
+              onLoadMore={() => {
+                if (props.source.pagination?.hasMore())
+                  void props.source.pagination.loadMore();
+              }}
               onClearCells={
                 props.canEdit
                   ? async (rowIds, columnIds) => {
@@ -622,6 +645,13 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
                 focusColumn
               )}
               renderCell={renderCell}
+              renderCellPreview={(row, column) => (
+                <GridCellPreview
+                  column={column()}
+                  value={rowValue(row(), column().id)}
+                  canEdit={props.canEdit}
+                />
+              )}
               controlsRef={tableReady}
               titleColumnId={titleColumn(columns())?.id}
               getRowTitle={(row) => rowTitle(row, columns())}
@@ -684,7 +714,9 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
               canEdit={props.canEdit}
               pending={controller.pending()}
               outsideViewReason={
-                records.selectedPosition() < 0 && filtered()
+                records.selectedPosition() < 0 &&
+                filtered() &&
+                !props.source.pagination?.hasMore()
                   ? `This record doesn’t match your filters. You can ${props.canEdit ? 'keep editing' : 'view'} it here.`
                   : undefined
               }

@@ -15,21 +15,15 @@ no service URL. Egress is 443 (WhatsApp, AWS APIs, Datadog) and 5432 (MacroDB).
 
 ## Config (Doppler project `whatsapp-session-service`, `dev` and `prd`)
 
-| Key | Value |
-| --- | --- |
-| `DATABASE_URL` | Pooled MacroDB URL, as other services. |
-| `WHATSAPP_SESSION_LOCK_DATABASE_URL` | MacroDB **instance** endpoint (`macro-db-<stack>`, the `macrodb` stack's `endpoint` output), never the RDS Proxy (`macrodb-proxy-<stack>`). |
-| `WHATSAPP_SESSION_KMS_KEY_ID` | `alias/whatsapp-session-service-<stack>` (`sessionKmsKeyAlias` output). |
-| `WHATSAPP_SESSION_MAX_ACCOUNTS` | `500` |
-| `WHATSAPP_SESSION_DRAIN_BATCH` | `20` |
+The only key is `DATABASE_URL` = `${global_databases.<config>.DATABASE_URL}`,
+set with the Doppler CLI. That URL is the MacroDB **instance** endpoint
+(`macro-db-<stack>`), which the advisory-lock connection needs; never the RDS
+Proxy (`macrodb-proxy-<stack>`).
 
-The stack writes `WHATSAPP_SESSION_KMS_KEY_ID` into Doppler itself
-(`doppler.Secret` in `index.ts`), since `MacroConfig` reads only
-`APP_SECRETS_JSON` in ECS; the others are set by hand. The Doppler provider
-needs a token that can write the project: before the first `pulumi up` of a
-stack, `pulumi config set --secret doppler:dopplerToken <token>` (as
-`agent-harness-service` has). Local values come
-from `xtask_local` (`local_env.rs`).
+The service computes the KMS alias from `ENVIRONMENT`
+(`SessionKmsKey` in its `src/config.rs`): `alias/whatsapp-session-service-<stack>`,
+the name `service.ts` creates. A test there checks the two agree. This stack
+writes nothing to Doppler.
 
 ## Checks
 
@@ -47,15 +41,23 @@ From `infra/`: `bun run check`, `bunx biome check stacks/whatsapp-session-servic
 - `stopTimeout` is Fargate's 120 s maximum and the sidecars match it; the app
   container depends on them so they stop last and the drain's logs and spans
   ship. Drain must finish inside 120 s.
+- Egress allows only 443, so the FireLens Datadog output sets `TLS on` and
+  `Port 443`; Fluent Bit's default is plain HTTP on 80, which times out and
+  drops every application log.
 - No ECS container health check: the runtime image has no HTTP client. A
   replica that loses its lock connection must exit non-zero so ECS replaces it.
-- No autoscaling: replicas own accounts, so scaling in forces takeovers. Change
-  `desired_count` in `Pulumi.<stack>.yaml`.
+- No autoscaling: replicas own accounts, so scaling in forces takeovers. The
+  task count is `desiredCount` in `service.ts`: 2 in prod, so a deploy hands
+  leases to a running replica instead of dropping them, and 1 in dev. Prod
+  deploys with each published release (`release-production.yml` →
+  `deploy_all_services.yml`, after the MacroDB migrations); dev on merge.
 - The KMS key only answers calls whose encryption context has
   `macro:purpose = whatsapp-session` (`crates/whatsapp_store_pg/src/kms.rs`).
   Changing that string strands every stored session.
-- `bootstrap_pending` in `.github/services-config.json` keeps it out of
-  deploys until the Doppler project exists and someone enables it.
+- Deploys need the `doppler-projects` stack applied first: `DopplerEcsEnvironment`
+  reads `/doppler-sync/whatsapp-session-service/<stack>`, which its sync writes.
+- To stop all WhatsApp traffic, scale the ECS service to 0 like any service;
+  the next deploy restores the count in `service.ts`. See the service runbook.
 
 ## Related
 

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM mcp_oauth_refresh_token_bindings WHERE refresh_token_digest = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "45eca6ecc7b5142bb8f798017fa37dda822dfd655caecd38f1f164c3f61b7079"
+}

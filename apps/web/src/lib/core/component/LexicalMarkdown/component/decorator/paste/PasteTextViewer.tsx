@@ -32,7 +32,7 @@ export function PasteTextViewer(props: {
           tooltip="Copy"
           on:click={() => props.onCopy()}
         >
-          <Copy />
+          <Copy class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
     </>

@@ -38,8 +38,17 @@ export function packageEntityDocs(
 ): SdkDocs {
   // The public SDK retains deployed legacy APIs. Native discovery tools cover
   // current sessions; omit the legacy chat and workspace namespaces here.
+  // Only the `Macro` class loses these members; other classes keep methods
+  // with the same names, such as `WhatsAppNamespace.chats()`.
   const hiddenNamespace = (path: string) =>
     /^src\/entities\/(chats|workspace)\//.test(path);
+  const withoutLegacyMembers = (markdown: string) =>
+    markdown
+      .replace(
+        /^### (?:chats|workspace)\b[^\n]*\n[\s\S]*?(?=^### |^## |(?![\s\S]))/gm,
+        ''
+      )
+      .replace(/^\| <a id="property-(?:chats|workspace)"[^\n]*\n/gm, '');
   const pages = new Map(
     [...sourcePages]
       .filter(
@@ -47,12 +56,9 @@ export function packageEntityDocs(
       )
       .map(([path, markdown]) => [
         path,
-        markdown
-          .replace(
-            /^### (?:chats|workspace)\b[^\n]*\n[\s\S]*?(?=^### |^## |(?![\s\S]))/gm,
-            ''
-          )
-          .replace(/^\| <a id="property-(?:chats|workspace)"[^\n]*\n/gm, ''),
+        path.startsWith('src/macro/')
+          ? withoutLegacyMembers(markdown)
+          : markdown,
       ])
   );
   const core = [
@@ -76,13 +82,16 @@ export function packageEntityDocs(
               letter.toUpperCase()
             ),
       description,
-      // Agent and host setup share one discovery topic, keeping the classifier
-      // request within its 32-question contract as the public API grows.
+      // Agent and host setup share one discovery topic, as do AI calls and
+      // image generation, keeping the classifier request within its
+      // 32-question contract as the public API grows.
       prefixes: (directory === 'agents'
         ? ['agents', 'harnesses']
         : directory === 'channels'
-          ? ['channels', 'whatsapp']
-          : [directory]
+          ? ['channels', 'external-chat', 'whatsapp']
+          : directory === 'ai'
+            ? ['ai', 'images']
+            : [directory]
       ).map((value) => `src/entities/${value}/`),
     })),
     {

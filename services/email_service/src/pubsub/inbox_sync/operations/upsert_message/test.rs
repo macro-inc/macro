@@ -391,7 +391,7 @@ async fn inserting_into_a_concurrently_deleted_thread_is_retryable(pool: PgPool)
         .unwrap();
 
     let mut message = received_message(link_id, thread_db_id);
-    let result = process_and_insert_message(&pool, link_id, thread_db_id, &mut message).await;
+    let result = process_and_insert_message(&pool, link_id, thread_db_id, &mut message, None).await;
 
     match result {
         Err(ProcessingError::Retryable(e)) => assert!(

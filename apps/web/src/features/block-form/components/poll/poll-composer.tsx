@@ -91,10 +91,11 @@ export function PollComposer(props: {
                   />
                   <Show when={options().length > 2}>
                     <Button
+                      aria-label={`Remove option ${index + 1}`}
+                      tooltip={`Remove option ${index + 1}`}
                       type="button"
                       variant="ghost"
                       size="icon-sm"
-                      label={`Remove option ${index + 1}`}
                       onClick={() => {
                         setOptions((current) =>
                           current.filter((_, at) => at !== index)
@@ -102,7 +103,7 @@ export function PollComposer(props: {
                         focusOption(Math.min(index, options().length - 1));
                       }}
                     >
-                      <X />
+                      <X class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                     </Button>
                   </Show>
                 </li>
@@ -120,7 +121,7 @@ export function PollComposer(props: {
           </Show>
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             class="h-10 w-full justify-start border-dashed text-ink-muted"
             disabled={options().length >= 20}
             onClick={() => {
@@ -168,7 +169,7 @@ export function PollComposer(props: {
         </Button>
         <Button
           type="submit"
-          variant="cta"
+          variant="primary"
           size="sm"
           disabled={!ready() || props.pending}
           aria-busy={props.pending}

@@ -355,8 +355,8 @@ fn soup_entity_type_from_channel_reference(entity_type: &str) -> Option<EntityTy
         ReferencedShareItemType::CalendarEvent => None,
         // Forms are not soup entities; a posted form renders as its card.
         ReferencedShareItemType::Form => None,
-        // WhatsApp groups are not soup entities; External lists them.
-        ReferencedShareItemType::WhatsAppGroup => None,
+        // External chats are not soup entities; External lists them.
+        ReferencedShareItemType::ExternalChat => None,
     }
 }
 

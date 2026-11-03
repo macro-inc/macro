@@ -5,7 +5,7 @@ import type { CardPosition } from '@service-storage/generated/schemas/cardPositi
 import type { DatabaseView } from '@service-storage/generated/schemas/databaseView';
 import type { OpResult } from '@service-storage/generated/schemas/opResult';
 import type { TableDetail } from '@service-storage/generated/schemas/tableDetail';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -71,17 +71,24 @@ export function usePipelinePositionsQuery(
   );
 }
 
+function pipelineTableQueryOptions(
+  deps: CrmRecordDependencies,
+  pipelineId: string
+) {
+  return queryOptions({
+    queryKey: crmKeys.pipelineTable(pipelineId).queryKey,
+    queryFn: () =>
+      throwOnErr(() => deps.storage.getCrmPipelineTable(pipelineId)),
+  });
+}
+
 /** The pipeline's single table, whose stored views the toolbar lists. */
 export function usePipelineTableQuery(
   deps: CrmRecordDependencies,
   pipeline: Pipeline
 ) {
   return useQuery(
-    () => ({
-      queryKey: crmKeys.pipelineTable(pipeline.id).queryKey,
-      queryFn: () =>
-        throwOnErr(() => deps.storage.getCrmPipelineTable(pipeline.id)),
-    }),
+    () => pipelineTableQueryOptions(deps, pipeline.id),
     () => deps.client
   );
 }

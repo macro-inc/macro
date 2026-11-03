@@ -366,7 +366,7 @@ export function CalendarInviteCard(props: {
                   }
                 >
                   <Button
-                    variant="strong"
+                    variant="secondary"
                     onClick={() => props.actions?.connectCalendar?.()}
                   >
                     Connect calendar
@@ -374,7 +374,7 @@ export function CalendarInviteCard(props: {
                 </Show>
                 <Show when={conference() && props.actions?.openExternal}>
                   <Button
-                    variant="cta"
+                    variant="primary"
                     aria-label="Join meeting"
                     onClick={() => props.actions?.openExternal?.(conference()!)}
                   >
@@ -384,9 +384,10 @@ export function CalendarInviteCard(props: {
                 </Show>
                 <Show when={props.actions?.openCalendar}>
                   <Button
-                    variant="outline"
+                    aria-label="Open in calendar"
+                    tooltip="Open in calendar"
+                    variant="secondary"
                     size="icon-md"
-                    label="Open in calendar"
                     onClick={(event) =>
                       props.actions?.openCalendar?.({
                         openInNewSplit: event.shiftKey,

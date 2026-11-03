@@ -14,7 +14,6 @@ field and mutate.
 - [`UserApiKey`](../../api-keys/api-key/classes/UserApiKey.md)
 - [`Calendar`](../../calendar/calendar/classes/Calendar.md)
 - [`CalendarEvent`](../../calendar/event/classes/CalendarEvent.md)
-- [`CalendarNote`](../../calendar/note/classes/CalendarNote.md)
 - [`CallMessage`](../../calls/message/classes/CallMessage.md)
 - [`ChatMessage`](../../chats/generation/classes/ChatMessage.md)
 - [`CrmComment`](../../crm/comment/classes/CrmComment.md)
@@ -31,6 +30,8 @@ field and mutate.
 - [`Link`](../../email/link/classes/Link.md)
 - [`EmailMessage`](../../email/message/classes/EmailMessage.md)
 - [`FavoritableEntity`](FavoritableEntity.md)
+- [`ExternalChatMessage`](../../external-chat/message/classes/ExternalChatMessage.md)
+- [`ExternalChatSend`](../../external-chat/send/classes/ExternalChatSend.md)
 - [`Form`](../../forms/form/classes/Form.md)
 - [`GithubPullRequest`](../../github-pull-requests/pull-request/classes/GithubPullRequest.md)
 - [`Harness`](../../harnesses/harness/classes/Harness.md)
@@ -45,8 +46,6 @@ field and mutate.
 - [`Webhook`](../../webhooks/webhook/classes/Webhook.md)
 - [`WhatsAppAccount`](../../whatsapp/account/classes/WhatsAppAccount.md)
 - [`WhatsAppChat`](../../whatsapp/chat/classes/WhatsAppChat.md)
-- [`WhatsAppMessage`](../../whatsapp/message/classes/WhatsAppMessage.md)
-- [`WhatsAppSend`](../../whatsapp/send/classes/WhatsAppSend.md)
 
 ## Type Parameters
 

@@ -10,6 +10,7 @@ import type {
   SplitRouter,
   SplitSearchUpdate,
 } from '@app/lib/split-router';
+import { claimOf } from '@app/lib/split-router';
 import { trackNavigationLifecycle } from '@app/observability/navigation-lifecycle';
 import type {
   BlockAlias,
@@ -192,6 +193,8 @@ export type SplitState = {
   content: SplitContent; // mirror of the pane's current router entry
   mount: SplitMount; // contains pinned element
   referredFrom: ReferredFrom;
+  /** Source of this arrival, cleared when the next navigation omits one. */
+  lastNavigationSource: ReferredFrom;
   lastNavigationCause: NavigationCause;
 };
 
@@ -266,6 +269,7 @@ export type SplitEventPayload = {
     newContent: SplitContent;
     previousContent: SplitContent;
     cause: NavigationCause;
+    referredFrom?: ReferredFrom;
   };
   [SplitEvent.ReturnFocus]: void;
 };
@@ -499,6 +503,7 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
   /** Update component metadata (only available for component splits) */
   updateMeta: ((data: Omit<TMeta, 'kind'>) => void) | undefined;
   referredFrom: () => ReferredFrom;
+  lastNavigationSource: () => ReferredFrom;
   /**
    * Cause of the most recent navigation event for this split. `'fresh'` on
    * initial mount, then updated by back/forward/replace/push.
@@ -785,6 +790,7 @@ export function createSplitLayout(
       content,
       mount: createPinnedMount(orchestrator, content),
       referredFrom: referredFrom ?? null,
+      lastNavigationSource: referredFrom ?? null,
       lastNavigationCause: 'fresh',
     };
   }
@@ -814,6 +820,7 @@ export function createSplitLayout(
         newContent: content,
         previousContent: split.content,
         cause,
+        referredFrom,
       };
 
       dispatchEvent(SplitEvent.ContentChange, payload);
@@ -836,6 +843,7 @@ export function createSplitLayout(
             ...s[i],
             content: content,
             referredFrom,
+            lastNavigationSource: referredFrom,
             lastNavigationCause: cause,
           };
           return s.with(i, target);
@@ -847,6 +855,7 @@ export function createSplitLayout(
         const target = {
           ...s[i],
           content: content,
+          lastNavigationSource: null,
           lastNavigationCause: cause,
         };
         return s.with(i, target);
@@ -862,6 +871,7 @@ export function createSplitLayout(
         ...s[i],
         content,
         mount: newMount,
+        lastNavigationSource: referredFrom ?? null,
         lastNavigationCause: cause,
         ...(referredFrom !== undefined && { referredFrom }),
       };
@@ -1290,6 +1300,7 @@ export function createSplitLayout(
         return mount?.kind === 'component' ? mount.updateMeta : undefined;
       },
       referredFrom: () => s()?.referredFrom ?? null,
+      lastNavigationSource: () => s()?.lastNavigationSource ?? null,
       lastNavigationCause: () => s()?.lastNavigationCause ?? 'fresh',
       registerEntryStateCaptor: (key: string, getter: () => unknown) => {
         let perSplit = entryStateCaptors.get(currentSplit.id);
@@ -1618,17 +1629,26 @@ export function createSplitLayout(
 
   /** Resolve a retained entry before the destination mounts, never by redirecting after mount. */
   function resumeView(
-    content: SplitContent
+    content: SplitContent,
+    targetPane?: PaneId
   ): { content: SplitContent; routeState: unknown } | undefined {
     const span = Telemetry.span('navigation.view.resume');
     span.setAttr('view.id', content.id);
     try {
       const snapshot =
         content.type === 'component' ? viewState.get(content.id) : undefined;
-      span.setAttr('view.restored', snapshot !== undefined);
+      span.setAttr('view.restored', false);
       if (!snapshot) return;
       const restored = toContent(snapshot.location);
       if (restored.type !== 'component') return;
+      // Restoring a detail must not redirect a desktop app switch to another
+      // pane. Keep the requested list when that detail is already open there.
+      const claim = claimOf(router.routes, snapshot.location.route);
+      if (targetPane && claim && router.claims.holderOf(claim, targetPane)) {
+        span.setAttr('view.restore_skipped', 'open_elsewhere');
+        return;
+      }
+      span.setAttr('view.restored', true);
       return {
         content: {
           ...restored,
@@ -1650,7 +1670,11 @@ export function createSplitLayout(
   ): OpenSplitResult {
     const sourceOwner = options.handle?.id;
     if (options.resume && !options.preferNewSplit) {
-      const restored = resumeView(content);
+      const source = options.handle ?? activeSplit();
+      const restored = resumeView(
+        content,
+        !stacked() && source ? paneOf(source.id) : undefined
+      );
       if (restored) {
         content = restored.content;
         options = {
@@ -1730,15 +1754,18 @@ export function createSplitLayout(
       : !options.preferNewSplit || shouldReplaceWhenFull;
 
     if (splitHandle && shouldReplace) {
+      // Activate before replacing: a visit the router yields to another pane
+      // that already claims the content brings that pane up, and activating
+      // afterwards would take it back.
+      if (options.activate !== false) {
+        splitHandle.activate();
+      }
+
       splitHandle.replace({
         next: content,
         referredFrom: options.referredFrom ?? null,
         mergeHistory: options.mergeHistory,
       });
-
-      if (options.activate !== false) {
-        splitHandle.activate();
-      }
 
       return { status: 'opened', split: splitHandle, sourceOwner };
     } else {

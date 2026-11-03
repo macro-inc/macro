@@ -42,12 +42,12 @@ export function RoutineCreatorView(props: {
         <ClockIcon class="ml-2 size-4 text-ink-muted" />
         <span class="flex-1 px-1 text-sm text-ink-muted">New routine</span>
         <Button
-          size="icon-composer"
+          size="icon-md"
           variant="ghost"
           aria-label="Close routine composer"
           onClick={() => props.onClose()}
         >
-          <XIcon />
+          <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </EntityComposer.Header>
       <div class="min-h-0 overflow-y-auto px-2">

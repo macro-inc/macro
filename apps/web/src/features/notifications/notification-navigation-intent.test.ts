@@ -35,7 +35,7 @@ it('decodes nested APNs routing metadata and retains known top-level identity', 
   ).toEqual(navigation);
   receiveNotificationTap({ type: 'BACKGROUND_TAP', payload }, vi.fn());
   expect(notificationLaunchPath(payload.recipientId)).toBe(
-    '/channel/11111111-1111-4111-8111-111111111111?channel_message_id=22222222-2222-4222-8222-222222222222&channel_thread_id=22222222-2222-4222-8222-222222222222'
+    '/home/~/channel/11111111-1111-4111-8111-111111111111?channel_message_id=22222222-2222-4222-8222-222222222222&channel_thread_id=22222222-2222-4222-8222-222222222222'
   );
   expect(notificationLaunchPath('macro|another@example.com')).toBeUndefined();
 });

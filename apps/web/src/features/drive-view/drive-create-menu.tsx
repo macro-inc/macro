@@ -47,7 +47,7 @@ function SidebarTrigger(props: { label: string }) {
 
 function ToolbarTrigger(props: { label: string }) {
   return (
-    <Dropdown.Trigger variant="outline" size="md" aria-label={props.label}>
+    <Dropdown.Trigger variant="secondary" size="md" aria-label={props.label}>
       <PlusIcon class="size-4" />
       <span>{t('create.new')}</span>
       <CaretDownIcon class="size-3" />
@@ -86,7 +86,7 @@ export function DriveCreateMenu(props: {
           'form',
         ].includes(block.blockName) &&
         isEnabled(block.blockName) &&
-        // Databases and forms have no folder membership.
+        // New databases and forms start at the root; they are moved in after.
         ((block.blockName !== 'database' && block.blockName !== 'form') ||
           !state.projectId())
     );

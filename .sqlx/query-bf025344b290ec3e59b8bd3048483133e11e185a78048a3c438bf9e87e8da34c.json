@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT s.id, s.user_id FROM whatsapp_send s JOIN whatsapp_linked_account a ON a.id = s.account_id\n        WHERE s.chat_id = $1 AND s.allocated_source_id = $2 AND a.identity_jid = ANY($3) AND s.dispatch_started_at IS NOT NULL\n          AND ($4::uuid IS NULL OR s.id = $4)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "TextArray",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "bf025344b290ec3e59b8bd3048483133e11e185a78048a3c438bf9e87e8da34c"
+}

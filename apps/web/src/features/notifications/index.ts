@@ -34,6 +34,7 @@ export {
   notificationIsOfEntity,
   notificationIsOfEntityType,
   notificationIsRead,
+  shownUnseenNotificationIds,
   useEntityHasUnreadNotifications,
   useEntityTypeNotifications,
   useNotificationsForEntity,

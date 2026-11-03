@@ -145,11 +145,11 @@ export function BookingDetailsDialog(props: {
             Booking details
           </Dialog.Title>
           <Button
+            aria-label="Close booking details"
+            tooltip={{ content: 'Close booking details', disabled: true }}
             type="button"
             variant="ghost"
             size="icon-sm"
-            label="Close booking details"
-            tooltipDisabled
             onClick={close}
           >
             <X aria-hidden="true" class="size-4" />
@@ -344,7 +344,7 @@ export function BookingDetailsDialog(props: {
               </Button>
               <Show when={!past()}>
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="md"
                   class="@max-[22rem]/booking-details:px-1.5 @max-[22rem]/booking-details:text-xs"
                   disabled={!!props.busyId}
@@ -361,7 +361,7 @@ export function BookingDetailsDialog(props: {
                   target="_blank"
                   rel="noopener noreferrer"
                   class={buttonClasses({
-                    variant: 'outline',
+                    variant: 'secondary',
                     size: 'md',
                     class:
                       '@max-[22rem]/booking-details:gap-1 @max-[22rem]/booking-details:px-1.5 @max-[22rem]/booking-details:text-xs',
@@ -378,7 +378,7 @@ export function BookingDetailsDialog(props: {
               }
             >
               <Button
-                variant="strong"
+                variant="secondary"
                 size="md"
                 class="@max-[22rem]/booking-details:px-1.5 @max-[22rem]/booking-details:text-xs"
                 disabled={!!props.busyId}

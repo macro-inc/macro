@@ -1,8 +1,9 @@
 //! Native [herdr](https://herdr.dev) integration.
 //!
-//! Started from inside a herdr pane (herdr sets `HERDR_ENV=1`), macrod drives
-//! the herdr session it lives in: every ACP session it serves opens its own
-//! tab in macrod's workspace, rooted at the directory macrod was started
+//! Started from inside herdr, macrod drives the herdr it lives in: either a
+//! herdr 0.9 pane (`HERDR_ENV=1`) or a herdr-core terminal shown by the herdr
+//! app (`HC_TERMINAL_ID`; see [`cli`]). Every ACP session it serves opens its
+//! own tab in macrod's workspace or space, rooted at the directory macrod was started
 //! from. The tab runs `macrod herdr-pane`, a live terminal view of the session
 //! fed from the harness's ACP wire, from which the session can be prompted,
 //! interrupted, and have its permission requests answered. herdr's sidebar
@@ -34,6 +35,9 @@ use std::path::PathBuf;
 pub(crate) use hub::Hub;
 
 use crate::config::Harness;
+
+/// herdr-core's CLI, which its installer puts on PATH.
+const CORE_COMMAND: &str = "hc";
 
 /// Whether the harness is `macrod herdr-acp`, which opens its own herdr
 /// windows for real agent TUIs, so no session needs a viewer window.
@@ -73,6 +77,9 @@ mod environment {
     macro_env_var::maybe_env_var! {
         pub struct HerdrWorkspaceId;
     }
+    macro_env_var::maybe_env_var! {
+        pub struct HcTerminalId;
+    }
 }
 
 /// Private state for one paired daemon; shared by its dispatcher and ACP process.
@@ -83,18 +90,34 @@ pub(crate) fn instance_directory(id: impl std::fmt::Display) -> rootcause::Resul
     Ok(home.join(".macrod/herdr").join(id.to_string()))
 }
 
-/// The herdr session macrod was started in.
+/// The herdr macrod was started in.
 #[derive(Debug, Clone)]
-pub(crate) struct HerdrSession {
-    /// The `herdr` binary attached to that session.
-    pub bin: PathBuf,
-    /// The workspace macrod's pane belongs to; new windows open there.
-    pub workspace_id: Option<String>,
+pub(crate) enum HerdrSession {
+    /// A pane of herdr 0.9 or earlier.
+    Legacy {
+        /// The `herdr` binary attached to that session.
+        bin: PathBuf,
+        /// The workspace macrod's pane belongs to; new windows open there.
+        workspace_id: Option<String>,
+    },
+    /// A herdr-core terminal, usually shown by the herdr app.
+    Core {
+        /// macrod's own terminal address, e.g. `t3`.
+        terminal: String,
+    },
 }
 
 impl HerdrSession {
-    /// The session macrod is running inside, if any.
+    /// The herdr macrod is running inside, if any. herdr-core comes first:
+    /// a core started from an old herdr pane passes `HERDR_ENV` on to its
+    /// terminals.
     pub(crate) fn detect() -> Option<Self> {
+        if let Some(terminal) = environment::HcTerminalId::new()
+            .and_then(|id| id.value().map(str::to_owned))
+            .filter(|id| !id.is_empty())
+        {
+            return Some(Self::Core { terminal });
+        }
         let inside = environment::HerdrEnv::new().is_some_and(|value| value.value() == Some("1"));
         if !inside {
             return None;
@@ -105,7 +128,29 @@ impl HerdrSession {
         let workspace_id = environment::HerdrWorkspaceId::new()
             .and_then(|id| id.value().map(str::to_owned))
             .filter(|id| !id.is_empty());
-        Some(Self { bin, workspace_id })
+        Some(Self::Legacy { bin, workspace_id })
+    }
+
+    /// The command this herdr is driven through.
+    pub(crate) fn command(&self) -> &'static str {
+        match self {
+            Self::Legacy { .. } => "herdr",
+            Self::Core { .. } => CORE_COMMAND,
+        }
+    }
+
+    /// A client for this herdr.
+    pub(crate) fn cli(&self) -> cli::HerdrCli {
+        match self {
+            Self::Legacy { bin, workspace_id } => cli::HerdrCli::new(bin, workspace_id.clone()),
+            Self::Core { terminal } => cli::HerdrCli::core(CORE_COMMAND, terminal.clone()),
+        }
+    }
+
+    /// Whether panes report their own status (OSC 7501) instead of macrod
+    /// reporting it for them.
+    pub(crate) fn panes_report_status(&self) -> bool {
+        matches!(self, Self::Core { .. })
     }
 }
 

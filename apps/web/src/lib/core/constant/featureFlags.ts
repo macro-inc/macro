@@ -150,6 +150,13 @@ export const PROD_MODE_ENV = import.meta.env.MODE === 'production';
 
 const onInDev = DEV_MODE_ENV || undefined;
 
+/** Browser-style tabs in the macOS desktop title bar; each tab holds a split layout. */
+export const enableDesktopTabs = defineFlag({
+  key: 'enable-desktop-tabs',
+  env: 'ENABLE_DESKTOP_TABS',
+  default: onInDev,
+});
+
 // Leave the production PostHog flag disabled until archive-import rollout.
 export const enableSlackArchiveImport = defineFlag({
   key: 'enable-slack-archive-import',
@@ -179,6 +186,18 @@ export const enableTasksReviews = defineFlag({
   key: 'enable-tasks-reviews',
   env: 'ENABLE_TASKS_REVIEWS',
   default: onInDev,
+});
+
+/**
+ * Sends a new session's first prompt on its create. A harness that predates
+ * `promptActionId` and `promptAttachments` ignores them, duplicating the
+ * prompt bubble and dropping its files, so deployed environments stay off
+ * until that harness is live; local stacks build both together.
+ */
+export const enableFirstPromptOnCreate = defineFlag({
+  key: 'enable-first-prompt-on-create',
+  env: 'ENABLE_FIRST_PROMPT_ON_CREATE',
+  default: LOCAL_ONLY || undefined,
 });
 
 /** Gantt is visible in local previews; deployed apps retain the remote rollout. */
@@ -464,6 +483,15 @@ export const enableEmailSignatures = defineFlag({
   default: onInDev,
 });
 
+// Email read receipts: the per-inbox switch in Settings › Email and the
+// opened status on sent messages. Which copies load Macro's pixels, and so
+// count as opens, does not depend on this flag.
+export const enableEmailReadReceipts = defineFlag({
+  key: 'enable-email-read-receipts',
+  env: 'ENABLE_EMAIL_READ_RECEIPTS',
+  default: onInDev,
+});
+
 // CRM companies & contacts frontend: the Companies view + sidebar entry, the
 // company/contact detail blocks, CRM mentions / quick-access, and CRM rows in
 // global search. PostHog-gated (currently targeted at the Macro team in prod)
@@ -510,6 +538,15 @@ export const enableProjects = defineFlag({
 export const enableReminders = defineFlag({
   key: 'enable-reminders',
   env: 'ENABLE_REMINDERS',
+  default: onInDev,
+});
+
+// The Focus tab in Mail: signal threads the email focus worker classified as
+// worth the owner's attention. Only allowlisted inboxes are classified, so the
+// tab is empty for everyone else.
+export const enableEmailFocus = defineFlag({
+  key: 'enable-email-focus',
+  env: 'ENABLE_EMAIL_FOCUS',
   default: onInDev,
 });
 
@@ -627,15 +664,6 @@ export const enableCalendarUi = defineFlag({
   default: onInDev,
 });
 
-// Calendar meeting notes and document-side meeting-link management. On in dev;
-// production uses PostHog's internal-user rollout. This is a UI rollout, not
-// an authorization check: saved meeting grants remain enforced by the service.
-export const enableCalendarMeetingNotes = defineFlag({
-  key: 'enable-calendar-meeting-notes',
-  env: 'ENABLE_CALENDAR_MEETING_NOTES',
-  default: onInDev,
-});
-
 // Calendar event search UI: the Search view's Calendar type (and calendar
 // rows) plus the in-calendar keyword search. A sub-feature of the calendar UI
 // — opening a hit needs the calendar block — so it only takes effect where
@@ -714,6 +742,17 @@ export const enableCalendarGuestInvites = defineFlag({
   default: onInDev,
 });
 
+// Forwarding an invitation: event details' and the editor's "Forward
+// invitation", offered where a guest cannot add guests, which emails the
+// event's .ics from the inbox holding the viewer's copy. On in dev only until
+// a real send has passed on dev; there is no PostHog flag yet, so it stays off
+// in production. Override with VITE_ENABLE_CALENDAR_INVITATION_FORWARD.
+export const enableCalendarInvitationForward = defineFlag({
+  key: 'enable-calendar-invitation-forward',
+  env: 'ENABLE_CALENDAR_INVITATION_FORWARD',
+  default: onInDev,
+});
+
 // Adding a channel-shared event to your own calendar: the "Add to calendar"
 // action on a shared event's mention card. On in dev only until a real Google
 // import has passed on dev; there is no PostHog flag yet, so it stays off in
@@ -734,6 +773,14 @@ export const enableCalendarAddSharedEvent = defineFlag({
 export const enableTagTeamSharing = defineFlag({
   key: 'enable-tag-team-sharing',
   env: 'ENABLE_TAG_TEAM_SHARING',
+  default: onInDev,
+});
+
+// Redesigned Chat sidebar sections. On in development;
+// deployed environments defer to PostHog. Override with VITE_ENABLE_CHAT_SIDEBAR_SECTIONS.
+export const enableChatSidebarSections = defineFlag({
+  key: 'enable-chat-sidebar-sections',
+  env: 'ENABLE_CHAT_SIDEBAR_SECTIONS',
   default: onInDev,
 });
 
@@ -772,6 +819,15 @@ export const enableEntityActivitySection = defineFlag({
 export const enableActivityFeed = defineFlag({
   key: 'enable-activity-feed',
   env: 'ENABLE_ACTIVITY_FEED',
+  default: onInDev,
+});
+
+// Agents home: pending updates from coding agents shown as a stack under the
+// new-chat composer, and the Open PRs section in the Agents sidebar.
+// Override with VITE_ENABLE_AGENT_UPDATES.
+export const enableAgentUpdates = defineFlag({
+  key: 'enable-agent-updates',
+  env: 'ENABLE_AGENT_UPDATES',
   default: onInDev,
 });
 
@@ -822,6 +878,13 @@ export const enableRoutineConditions = defineFlag({
   key: 'enable-routine-conditions',
   env: 'ENABLE_ROUTINE_CONDITIONS',
   default: onInDev,
+});
+
+// Templates are not ready for general use. Follow PostHog even in development
+// so the UI and the server's per-user rollout agree.
+export const enableRoutineSharing = defineFlag({
+  key: 'enable-routine-sharing',
+  env: 'ENABLE_ROUTINE_SHARING',
 });
 
 // The Recent view: the touched-by-me feed (everything the viewer mutated,
@@ -923,10 +986,9 @@ export const enableInAppTours = defineFlag({
 
 /**
  * Personal WhatsApp linked devices: the External tab, pairing, adding chats
- * to Macro and sharing them by mention in channels. Off in dev too: dev has no WhatsApp session
- * service, so the tab would only show errors. Override locally with
- * VITE_ENABLE_WHATSAPP_LINKED=true. Backend switches gate each operation
- * independently.
+ * to Macro and sharing them by mention in channels. The only rollout gate;
+ * the backend always serves the routes. Follows PostHog everywhere; override
+ * locally with VITE_ENABLE_WHATSAPP_LINKED=true.
  */
 export const enableWhatsappLinked = defineFlag({
   key: 'enable-whatsapp-linked',

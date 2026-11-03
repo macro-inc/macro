@@ -52,6 +52,7 @@ import {
   DatabaseTextEditor,
   DatabaseTextValue,
 } from '../database-mentions';
+import { createDatabaseDocumentNavigation } from '../navigation-adapter';
 import {
   type DatabaseGridHost,
   trackQueryRuns,
@@ -162,7 +163,10 @@ function RelatedDatabaseSync(props: {
 }
 
 function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
+  const canEdit = createMemo(() => props.canEdit);
+
   const queryClient = useQueryClient();
+  const openDocumentMention = createDatabaseDocumentNavigation();
   // Keep the final schema for this table available to already-queued writes
   // after its tab is closed; a new selected table must never redirect them.
   let ownedTable = props.table;
@@ -329,15 +333,15 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
       <StaticMarkdownContext>
         <ColumnUsageContext.Provider value={formsAsking}>
           <OptionEditingContext.Provider
-            value={props.canEdit ? optionEditing : undefined}
+            value={canEdit() ? optionEditing : undefined}
           >
             <DatabaseProvider
               api={createMacroDatabaseApi(databaseId, queryClient)}
               tableId={props.tableId}
               view={props.view}
               capabilities={{
-                editRows: props.canEdit,
-                editColumns: props.canEdit,
+                editRows: canEdit(),
+                editColumns: canEdit(),
               }}
               data={{ table: () => editorTable(table()), rows: source }}
               inferNewColumns
@@ -359,6 +363,7 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
                 renderTextValue={renderTextValue}
                 renderMentionPicker={renderMentionPicker}
                 renderMentionValue={renderMentionValue}
+                onOpenDocumentMention={openDocumentMention}
                 renderRelationCell={(cell) => (
                   <DatabaseRelationCell
                     {...cell}

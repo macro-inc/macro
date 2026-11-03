@@ -176,9 +176,10 @@ function CalendarPageDataStatus(props: {
               We couldn’t load your calendar events. Try again.
             </p>
             <Button
-              variant="accent"
+              aria-label="Retry loading calendar"
+              tooltip="Retry loading calendar"
+              variant="primary"
               size="sm"
-              label="Retry loading calendar"
               onClick={() =>
                 fireAndForget(
                   props.data.occurrencesQuery.refetch(),
@@ -359,6 +360,9 @@ export function Page(props: {
           onDateSelect: isMobile() ? undefined : handleSelect,
           onEventSelect: (event, element) => {
             if (isActive()) calendarView.selectEvent(event, element);
+          },
+          onSelectedEventMount: (event, element) => {
+            if (isActive()) calendarView.reanchorSelectedEvent(event, element);
           },
         }}
         eventTimeChangePending={updateEventTime.isPending}

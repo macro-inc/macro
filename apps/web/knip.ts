@@ -14,6 +14,7 @@ const config: KnipConfig = {
     'src/lib/i18n/browser-test/*.{ts,tsx}',
     'src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/*.tsx',
     'src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/browser-test/*.{ts,tsx}',
+    'src/lib/core/component/LexicalMarkdown/fuzz/{fixture.tsx,*.browser.e2e.ts}',
     'src/features/billing-lab/entry.tsx',
     // Native test runners are invoked by scripts, not the application graph.
     'tests/native/{runner,links-runner,notifications-runner}.ts',

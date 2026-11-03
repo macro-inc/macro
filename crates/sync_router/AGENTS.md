@@ -34,6 +34,8 @@ service, Redis subscriber, or Pulumi stack.
 - Inbound messages are capped at one MiB; downstream queues share an eight MiB
   budget per session, retained through the write. Never increase count limits
   without checking the byte bound.
+- Select the Rustls provider explicitly in the downstream connector; workspace
+  features enable both providers, so automatic selection panics on `wss://`.
 - Dropping a downstream route cancels its task, including pending dials/writes.
 - Every DSS replica handles only its own sockets. No distributed route
   ownership or singleton deployment is required.

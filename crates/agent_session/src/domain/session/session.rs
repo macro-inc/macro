@@ -23,7 +23,9 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::PROTOCOL_VERSION;
 use crate::domain::error::AgentSessionError;
-use crate::domain::model::{AgentSessionId, MACRO_AGENT_SESSION_META_KEY};
+use crate::domain::model::{
+    AgentSessionId, MACRO_AGENT_SESSION_META_KEY, MACRO_PERMISSION_POLICY_META_KEY,
+};
 
 use super::types::{
     CloseReason, Effect, Input, OutstandingPermission, PendingAction, PendingElicitation,
@@ -782,6 +784,11 @@ impl<Token> SessionMachine<Token> {
         meta.insert(
             MACRO_AGENT_SESSION_META_KEY.to_owned(),
             serde_json::Value::String(self.id.to_string()),
+        );
+        let permission_policy: &'static str = self.permission_policy.into();
+        meta.insert(
+            MACRO_PERMISSION_POLICY_META_KEY.to_owned(),
+            serde_json::Value::String(permission_policy.to_owned()),
         );
         meta
     }

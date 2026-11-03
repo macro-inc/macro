@@ -19,8 +19,14 @@ export function MobileReplyToolbar(props: {
   return (
     <div class="sticky top-0 z-10 flex shrink-0 flex-wrap items-center justify-between gap-2 bg-surface px-(--mobile-chrome-gutter) pb-3 pt-[calc(var(--safe-top,0px)+12px)]">
       <HeaderIsland class="size-(--mobile-chrome-button-size) justify-center p-0">
-        <Button label="Go Back" size="icon-sm" onClick={props.onBack}>
-          <CaretLeft />
+        <Button
+          aria-label="Go Back"
+          tooltip="Go Back"
+          variant="ghost"
+          size="icon-sm"
+          onClick={props.onBack}
+        >
+          <CaretLeft class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </HeaderIsland>
       <div class="ml-auto">

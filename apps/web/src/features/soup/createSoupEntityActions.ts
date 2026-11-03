@@ -3,6 +3,8 @@ import {
   type EntityActionListState,
   type EntityActionNavigationHandler,
   type EntityActionViewContext,
+  emailSenderBucket,
+  makeArchiveSessionAction,
   makeBlockSenderAction,
   makeChannelPictureAction,
   makeCopyAction,
@@ -11,7 +13,9 @@ import {
   makeCopyLinkAction,
   makeCreateReminderAction,
   makeDeleteAction,
+  makeDownloadAction,
   makeFavoriteAction,
+  makeGithubLinkAction,
   makeMarkDoneAction,
   makeMarkNotDoneAction,
   makeMarkNotificationsReadAction,
@@ -27,9 +31,12 @@ import {
 } from '@app/features/next-soup/actions';
 import type { MarkDoneDelegate } from '@app/features/next-soup/actions/mark-done-delegate';
 import {
-  markCalendarNotificationSeenOnOpen,
+  markRowNotificationsSeenOnOpen,
   openEntityInSplitFromUnifiedList,
+  restoreSoupFocus,
 } from '@app/features/next-soup/utils';
+import { useAllProperties } from '@app/features/property/editor/hooks/useAllProperties';
+import { openPropertyEditor } from '@app/features/property/editor/state/propertyEditor';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
@@ -41,8 +48,10 @@ import { enableProjects, isFeatureEnabled } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
-import { isEmailEntity, isTaskEntity } from '@entity';
+import { isEmailEntity, isGithubPrEntity, isTaskEntity } from '@entity';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Component, JSX } from 'solid-js';
 
 type SoupEntityActionItem = {
@@ -138,7 +147,9 @@ export function createSoupEntityActions(
   const muteAction = makeMuteAction({
     notificationSource: () => notificationSource,
   });
-  const moveToProjectAction = makeMoveToProjectAction();
+  const moveToProjectAction = makeMoveToProjectAction({
+    userId: () => userId(),
+  });
   const removeFromProjectAction = makeRemoveFromProjectAction();
   const copyLinkAction = makeCopyLinkAction();
   const copyBranchNameAction = makeCopyBranchNameAction();
@@ -146,6 +157,14 @@ export function createSoupEntityActions(
   const createReminderAction = makeCreateReminderAction();
   const shareAction = makeShareAction();
   const blockSenderAction = makeBlockSenderAction();
+  const archiveSessionAction = makeArchiveSessionAction({
+    userId: () => userId(),
+  });
+  const githubLinkAction = makeGithubLinkAction();
+  const downloadAction = makeDownloadAction();
+  const allProperties = useAllProperties();
+  const taskProperty = (propertyId: string) =>
+    allProperties().find(({ id }) => id === propertyId);
   const markSenderSignalAction = makeMarkSenderSignalAction();
   const markSenderNoiseAction = makeMarkSenderNoiseAction();
 
@@ -246,8 +265,10 @@ export function createSoupEntityActions(
       if (isMobile()) return undefined;
       if (entities.length !== 1) return undefined;
       const entity = entities[0];
-      // TODO(dev-rb/github): Allow GitHub PRs once they map to /pr.
-      if (!entity || entity.type === 'foreign') return undefined;
+      if (!entity) return undefined;
+      // Pull requests open their Reviews detail; other foreign rows don't open.
+      if (entity.type === 'foreign' && !isGithubPrEntity(entity))
+        return undefined;
       const splitManager = globalSplitManager();
       if (!splitManager) return undefined;
       // Reminder route claims perform identity reuse when the action runs.
@@ -271,7 +292,7 @@ export function createSoupEntityActions(
         });
       }
 
-      markCalendarNotificationSeenOnOpen(entity, notificationSource);
+      markRowNotificationsSeenOnOpen(entity, notificationSource);
 
       // Match row navigation, including a thread row's driving message.
       await openEntityInSplitFromUnifiedList(entity, {
@@ -294,7 +315,8 @@ export function createSoupEntityActions(
       });
     }
 
-    // Middle group: Rename, Move to folder, Duplicate, Copy Link, Copy Branch Name, Share
+    // Middle group: Rename, Archive, Set status/priority/assignee, Move to
+    // folder, Duplicate, Copy Link, Copy Branch Name, Copy ID, GitHub, Share
     const middleItems: SoupEntityActionItem[] = [];
 
     if (canExecuteAll(renameAction.canExecute)) {
@@ -303,6 +325,16 @@ export function createSoupEntityActions(
         label: t('entityActions.rename'),
         hotkeyToken: TOKENS.entity.action.rename,
         onClick: handle(renameAction.executeWithSoup),
+      });
+    }
+
+    if (entities.length === 1 && archiveSessionAction.canExecute(entities[0])) {
+      middleItems.push({
+        id: 'archive-session',
+        label: archiveSessionAction.isArchived(entities[0])
+          ? t('entityActions.unarchive')
+          : t('entityActions.archive'),
+        onClick: () => archiveSessionAction.execute(entities),
       });
     }
 
@@ -394,6 +426,44 @@ export function createSoupEntityActions(
       });
     }
 
+    // The task properties the hotkeys and command menu set, as the CRM group
+    // below sets a company's.
+    if (canExecuteAll(isTaskEntity)) {
+      for (const [propertyId, label, hotkeyToken] of [
+        [
+          SYSTEM_PROPERTY_IDS.STATUS,
+          t('entityActions.setStatus'),
+          TOKENS.entity.action.status,
+        ],
+        [
+          SYSTEM_PROPERTY_IDS.PRIORITY,
+          t('entityActions.setPriority'),
+          TOKENS.entity.action.priority,
+        ],
+        [
+          SYSTEM_PROPERTY_IDS.ASSIGNEES,
+          t('entityActions.setAssignee'),
+          TOKENS.entity.action.assignee,
+        ],
+      ] as const) {
+        const property = taskProperty(propertyId);
+        if (!property) continue;
+        middleItems.push({
+          id: `set-${propertyId}`,
+          label,
+          hotkeyToken,
+          onClick: () =>
+            openPropertyEditor(entities, 'direct', property, {
+              restoreFocus: () =>
+                fireAndForget(
+                  restoreSoupFocus(entities[0]?.id),
+                  'entity-actions'
+                ),
+            }),
+        });
+      }
+    }
+
     if (canExecuteAll(moveToProjectAction.canExecute)) {
       middleItems.push({
         id: 'move-to-folder',
@@ -439,11 +509,37 @@ export function createSoupEntityActions(
         });
       }
 
-      middleItems.push({
-        id: 'copy-entity-id',
-        label: t('entityActions.copyId'),
-        onClick: handle(copyEntityIdAction.executeWithSoup),
-      });
+      if (downloadAction.canExecute(entities[0])) {
+        middleItems.push({
+          id: 'download',
+          label: t('entityActions.download'),
+          onClick: handle(downloadAction.executeWithSoup),
+        });
+      }
+
+      if (copyEntityIdAction.canExecute(entities[0])) {
+        middleItems.push({
+          id: 'copy-entity-id',
+          label: t('entityActions.copyId'),
+          onClick: handle(copyEntityIdAction.executeWithSoup),
+        });
+      }
+
+      const entity = entities[0];
+      if (githubLinkAction.canExecute(entity)) {
+        middleItems.push(
+          {
+            id: 'copy-github-link',
+            label: t('entityActions.copyGithubLink'),
+            onClick: () => githubLinkAction.copy(entity),
+          },
+          {
+            id: 'open-on-github',
+            label: t('entityActions.openOnGitHub'),
+            onClick: () => githubLinkAction.open(entity),
+          }
+        );
+      }
 
       if (shareAction.canExecute(entities[0])) {
         middleItems.push({
@@ -457,9 +553,14 @@ export function createSoupEntityActions(
     // Sender group: Sender → Signal, Sender → Noise, Block Sender
     const senderItems: SoupEntityActionItem[] = [];
 
+    // Each email's own bucket decides, falling back to the view's tab; with
+    // neither known (some Search rows), both moves are offered.
+    const senderBucketOf = (entity: EntityData) =>
+      emailSenderBucket(entity) ?? viewContext.senderBucket;
+
     if (
-      viewContext.senderBucket === 'noise' &&
-      canExecuteAll(markSenderSignalAction.canExecute)
+      canExecuteAll(markSenderSignalAction.canExecute) &&
+      entities.some((entity) => senderBucketOf(entity) !== 'signal')
     ) {
       senderItems.push({
         id: 'sender-signal',
@@ -469,8 +570,8 @@ export function createSoupEntityActions(
     }
 
     if (
-      viewContext.senderBucket === 'signal' &&
-      canExecuteAll(markSenderNoiseAction.canExecute)
+      canExecuteAll(markSenderNoiseAction.canExecute) &&
+      entities.some((entity) => senderBucketOf(entity) !== 'noise')
     ) {
       senderItems.push({
         id: 'sender-noise',

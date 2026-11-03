@@ -57,6 +57,10 @@ vi.mock('@queries/team/teams', () => ({
   useCurrentTeamQuery: () => ({ isSuccess: false, data: undefined }),
 }));
 
+vi.mock('@app/features/settings/bot-settings-user-action', () => ({
+  createBotSettingsUserCardAction: () => () => undefined,
+}));
+
 vi.mock('./UserIcon', () => ({
   UserIcon: () => <div data-testid="user-icon" />,
 }));

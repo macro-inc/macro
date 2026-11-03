@@ -28,6 +28,7 @@ use macro_event_broker::MacroEventBroker;
 use models_properties::service::property_option::PropertyOptionValue;
 use models_properties::service::property_value::PropertyValue;
 use models_properties::shared::DataType;
+use tracing::Level;
 use uuid::Uuid;
 
 use crate::domain::catalog::{self, TableEntry, takes_options};
@@ -41,7 +42,7 @@ use crate::domain::models::{
     Database, DatabaseDetail, DatabaseError, DatabaseId, FirstTable, InferColumnType,
     InferColumnTypeOutcome, ListedDatabase, OpBatch, OptionId, PropertyDefinitionId,
     QueryDefinition, QueryId, RowId, RowRef, SavedQuery, SavedQueryError, SchemaError,
-    SharingError, Table, TableDetail, TableId, TableVersion, ViewId, Viewer,
+    SharingError, Table, TableDetail, TableId, TableVersion, ViewId, Viewer, grant_writes,
 };
 use crate::domain::ports::{
     AccessDirectory, CellStore, ColumnDefinitionStore, DatabasesRepo, DatabasesService,
@@ -436,6 +437,32 @@ where
         Ok((database, tables))
     }
 
+    /// File a live database in a folder, or at the root, answering the
+    /// folder it left.
+    #[cfg(feature = "entity_mutation")]
+    pub(super) async fn move_database(
+        &self,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        project_id: Option<&str>,
+    ) -> Result<Option<String>, DatabaseError> {
+        let database = self.database_by_receipt(&receipt).await?;
+        if database.trashed_at.is_some()
+            || !self
+                .repository
+                .move_database(database.id, project_id)
+                .await
+                .map_err(repository_error)?
+        {
+            return Err(DatabaseError::NotFound);
+        }
+        // The move has committed; a missed liveness ping must not turn it
+        // into a failed write.
+        let _ = self.events.database_changed(database.id).await.inspect_err(|error| {
+            tracing::warn!(error = ?error, database_id = %database.id, "failed to publish database change");
+        });
+        Ok(database.project_id)
+    }
+
     /// One column as the client sees it.
     async fn column_detail(
         &self,
@@ -703,7 +730,7 @@ where
             .collect())
     }
 
-    #[tracing::instrument(skip(self, receipt), err)]
+    #[tracing::instrument(skip(self, receipt), err(level = Level::INFO))]
     async fn get_database(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
@@ -851,8 +878,13 @@ where
         state: Awareness,
     ) -> Result<(), DatabaseError> {
         let database_id = receipt_database_id(&receipt)?;
+        let can_edit = grant_writes(receipt_grant(&receipt, AccessLevel::View));
+        let state = Awareness {
+            editing: state.editing && can_edit,
+            ..state
+        };
         self.events
-            .awareness(database_id, &viewer.user_id, &state)
+            .awareness(database_id, &viewer.user_id, can_edit, &state)
             .await
             .map_err(repository_error)
     }
@@ -867,7 +899,7 @@ where
         self.store_query(viewer, database_id, definition).await
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self), err(level = Level::DEBUG))]
     async fn get_query(&self, viewer: Viewer, id: QueryId) -> Result<SavedQuery, SavedQueryError> {
         self.readable_query(&viewer, id).await
     }

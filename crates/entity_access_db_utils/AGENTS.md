@@ -16,6 +16,9 @@ top of it.
 - `src/channel_share.rs`, `src/team_share.rs`: grant helpers scoped to a
   channel or team source.
 - `src/direct_share.rs`: live ownership facts and direct user grants for access requests.
+- `src/project_grants.rs`: the grants an entity inherits from the folders it
+  is filed in, written when it enters or leaves one; databases and forms call
+  it in the same transaction as their `project_id` write.
 
 ## Scope
 
@@ -31,7 +34,7 @@ top of it.
 - Used by: `crates/entity_access_management`, `crates/entity_registry/entity_registry_db_utils`,
   and most domain crates that grant access as part of a write
   (`channels`, `projects`, `teams`, `crm`, `call`, `chat`, `documents`,
-  `macro_db_client`, `crates/scheduled_action`).
+  `databases`, `forms`, `macro_db_client`, `crates/scheduled_action`).
 
 ## Recipes
 
@@ -52,7 +55,7 @@ top of it.
   locks, matching project topology propagation. Legacy non-UUID children inherit
   through their parent dynamically and do not get UUID grant rows.
 
-- Standalone `whatsapp_group` entities use the generic direct-sharing facts and grant helpers; remote membership never creates a grant.
+- `external_chat` entities use the generic direct-sharing facts and grant helpers; provider membership never creates a grant.
 
 ## Related
 

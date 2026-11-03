@@ -241,7 +241,8 @@ export class AgentSession {
   private readonly unsubscribeSocket: () => void;
   private readonly unsubscribeUpdated: () => void;
   private readonly unsubscribeReconnected: () => void;
-  private syncing = false;
+  /** The refetch in flight; it loops while another is requested. */
+  private syncRun?: Promise<void>;
   private resyncRequested = false;
   private resyncRetry = 0;
   private resyncTimer?: ReturnType<typeof setTimeout>;
@@ -538,6 +539,26 @@ export class AgentSession {
     );
   }
 
+  /**
+   * Show a prompt another request already delivered - the create that opened
+   * this session can carry its first one - and trace it to its first output.
+   * Nothing is sent: the delivery named `actionId`, so the confirmed row
+   * promotes this speculation in place, or, having landed first, makes it a
+   * no-op.
+   */
+  adoptPrompt(
+    actionId: string,
+    action: AgentAction,
+    options: { userId?: string; trace: PromptTrace }
+  ): void {
+    this.expect(actionId, action, { userId: options.userId });
+    if (this.closed) {
+      options.trace.end('released');
+      return;
+    }
+    this.prompts.add(options.trace);
+  }
+
   /** Take back a speculation the log will not confirm. Unknown ids are a no-op. */
   retract(actionId: string): void {
     fireAndForget(
@@ -806,19 +827,45 @@ export class AgentSession {
   }
 
   /**
+   * Refetch the log and fold it, resolving once a fetch that started after
+   * this call has been folded. For a caller that has waited on a row the
+   * live feed should have delivered: the log itself settles the question.
+   * A failed fetch resolves too, leaving the fold as it was.
+   */
+  refresh(): Promise<void> {
+    return this.resync();
+  }
+
+  /**
    * A reopened socket is a new socket session: rows may have been missed
    * while it was down. Refetch, and let the machine reconcile the overlap
    * and settle any speculation the log confirmed meanwhile.
    */
-  private async resync(retrying = false): Promise<void> {
-    if (this.closed) return;
+  private resync(retrying = false): Promise<void> {
+    if (this.closed) return Promise.resolve();
     if (!retrying) {
       clearTimeout(this.resyncTimer);
       this.resyncRetry = 0;
     }
     this.resyncRequested = true;
-    if (!this.ready || this.syncing) return;
-    this.syncing = true;
+    // The run in flight fetches again before it ends.
+    if (this.syncRun) return this.syncRun;
+    if (!this.ready) return this.afterLoad();
+    this.syncRun = this.runResync();
+    return this.syncRun;
+  }
+
+  /** The load in flight starts a run after its snapshot; a failed one never does. */
+  private async afterLoad(): Promise<void> {
+    try {
+      await this.loading;
+    } catch {
+      return;
+    }
+    await this.syncRun;
+  }
+
+  private async runResync(): Promise<void> {
     this.ready = false;
     let failed = false;
     try {
@@ -843,9 +890,9 @@ export class AgentSession {
       // A snapshot may predate frames received during its fetch. Replay those
       // frames after it, retaining speculation and the fold's overlap deduping.
       await this.drainBuffered();
-      this.syncing = false;
+      this.syncRun = undefined;
       if (!this.closed && this.resyncRequested) {
-        fireAndForget(this.resync(true), 'agent-session');
+        await this.resync(true);
       } else if (!this.closed && failed) {
         const delay = RESYNC_RETRY_DELAYS_MS[this.resyncRetry++];
         if (delay !== undefined)

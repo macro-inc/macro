@@ -30,6 +30,18 @@ export function createTaskComposerSharing(recoveredShare?: boolean) {
   });
 }
 
+/** Whether tasks link back into the document they were composed from. */
+export function createTaskComposerLinkInSource() {
+  return makePersistedState(createSignal(false), {
+    storages: {
+      restore: () =>
+        localStorage.getItem('task-composer-link-in-source') === 'true',
+      write: (value) =>
+        localStorage.setItem('task-composer-link-in-source', String(value)),
+    },
+  });
+}
+
 /** Context drafts use their own key; the global composer retains its original key. */
 export function taskComposerContextStorage(
   key: string

@@ -6,9 +6,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
+use macro_env::Environment;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use tokio_util::sync::CancellationToken;
-use whatsapp_session_service::config::Config;
+use whatsapp_session_service::config::{Config, SessionKmsKey};
 use whatsapp_session_service::inbound::health;
 use whatsapp_session_service::replica::{self, ReplicaDeps, Timings};
 use whatsapp_store_pg::kms::AwsWhatsAppKms;
@@ -19,6 +20,10 @@ const WEBSOCKET_URL_OVERRIDE: &str = "OVERRIDE_WHATSAPP_WEBSOCKET_URL";
 /// Test-only: the fake server's media host, as `scheme://host[:port]`.
 const MEDIA_HOST_OVERRIDE: &str = "OVERRIDE_WHATSAPP_MEDIA_HOST";
 const PORT: u16 = 8080;
+/// Most accounts one replica runs.
+const MAX_ACCOUNTS: u32 = 500;
+/// Accounts released per drain step on shutdown.
+const DRAIN_BATCH: u32 = 20;
 
 #[tokio::main]
 async fn main() -> Result<(), rootcause::Report> {
@@ -32,13 +37,13 @@ async fn run() -> Result<(), rootcause::Report> {
     // whatsmeow dials wss:// with rustls directly.
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
     let config = macro_config::ConfigLoader::load::<Config>()?;
+    let environment = Environment::new_from_env()?;
     let pool = PgPoolOptions::new()
         .max_connections(20)
         .acquire_timeout(Duration::from_secs(10))
         .connect(config.database_url.as_ref())
         .await?;
-    let lock_options: PgConnectOptions =
-        config.whatsapp_session_lock_database_url.as_ref().parse()?;
+    let lock_options: PgConnectOptions = config.database_url.as_ref().parse()?;
     let dialer: Arc<dyn Dialer> =
         match macro_service_urls::read_override_env(WEBSOCKET_URL_OVERRIDE)? {
             Some(url) => Arc::new(WebSocketDialer { url }),
@@ -46,7 +51,7 @@ async fn run() -> Result<(), rootcause::Report> {
         };
     let kms = AwsWhatsAppKms::new(
         aws_sdk_kms::Client::new(&macro_aws_config::get_macro_aws_config().await),
-        config.whatsapp_session_kms_key_id.clone(),
+        SessionKmsKey::for_environment(environment).to_owned(),
     );
 
     let shutdown = CancellationToken::new();
@@ -77,8 +82,8 @@ async fn run() -> Result<(), rootcause::Report> {
             signal: whatsmeow_signal::libsignal(),
             dialer,
             media_base_url: macro_service_urls::read_override_env(MEDIA_HOST_OVERRIDE)?,
-            max_accounts: config.whatsapp_session_max_accounts,
-            drain_batch: config.whatsapp_session_drain_batch,
+            max_accounts: MAX_ACCOUNTS,
+            drain_batch: DRAIN_BATCH,
             timings: Timings::production(),
         },
         shutdown,

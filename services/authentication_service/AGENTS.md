@@ -22,7 +22,8 @@ key issuance, and account merge/link flows.
 ## Scope
 
 - Owns: FusionAuth-backed login/session issuance, JWT minting, signup
-  allowlisting, OAuth/OAuth2 account linking, GTM invite links, shared-mailbox
+  allowlisting, OAuth/OAuth2 account linking, GTM invite links, the platform
+  status banner API (`crates/system_status`), shared-mailbox
   relocation signup, Cursor/Codex API key endpoints, introductory trial
   eligibility and subscription checkout.
 - Not here: authorization/permission decisions on other entities →
@@ -83,11 +84,21 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 
 ## Gotchas
 
-- Fail closed if team cleanup encounters a WhatsApp group: linked groups require human ownership.
+- `/mobile-welcome-email` copies allowlisted ad parameters from the capture
+  request onto the desktop signup link and always sets
+  `signup_flow=mobile_email`. The web app keeps that set on the PostHog person
+  when the account is identified. Do not take `signup_flow` from the request.
+- Answer third-party failures as 502/503, not 500: match
+  `GithubError::Upstream(error)` before a route's 500 catch-all, and answer a
+  `FusionAuthClientError` whose `upstream()` is set with that error's
+  `into_response()`. Document 502/503 with `UpstreamErrorResponse` in the
+  route's `utoipa::path`.
+- Fail closed if team cleanup encounters an external chat: external chats require human ownership.
 
 - GitHub reconnect preserves the current link until OAuth completes. A different
   account returns 409; disconnect first to switch accounts. Missing grants report
-  reauthentication, while infrastructure failures remain server errors.
+  reauthentication; GitHub or FusionAuth outages answer 502/503, and other
+  failures remain server errors.
   Deploy grant-refresh support before releasing clients that omit the pre-OAuth
   disconnect; older callbacks leave an existing grant unchanged.
 - FusionAuth reports a link owner that was deleted as `UserDoesNotExist`. That
@@ -98,12 +109,43 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   when present; see `README.md` before changing signup behavior.
 - Denial responses and policy errors must never disclose configured allowlist
   addresses; never paste operational addresses into code, logs, or docs.
+- New Outlook connections need the deployment switch
+  `OUTLOOK_CONNECTIONS_ENABLED` and the user's PostHog flag `enable-outlook`
+  (`src/domain/microsoft.rs`), read with `crates/feature_flags` for the Macro
+  user id the web app identifies with. `/link/email/providers` answers
+  `outlook: false` and `/link/outlook` answers 404 for a new connection when
+  either is off; reconnecting an inbox reads neither. A failed flag load
+  closes new connections and logs one warning. Without `POSTHOG_API_KEY`
+  (local, tests) the switch alone decides. Each decision is the
+  `outlook.flag` span field (`on`, `off`, `error`, `unconfigured`).
 - `/oauth2/{provider}/callback` verifies two signed `state` kinds
   (`src/account_link_state.rs`): account links, which expire, and Microsoft
   admin-consent returns, which do not. A consent screen that ends without a
   code redirects a link flow to its `original_url` with `email_link_error`
   (`admin_consent_required`, `cancelled`, `failed`); only the `AADSTS` code
   from `error_description` is logged, never the description.
+- A Google consent that asked for the mailbox but came back without
+  `gmail.modify` (the user left the Gmail boxes unchecked) is refused in the
+  Google callback before any identity-provider link is written or replaced:
+  the pending row is deleted, the partial grant is revoked at Google so the
+  next consent screen lists every scope again, and the flow returns with
+  `email_link_error=gmail_not_granted`. Google's revocation drops the account's
+  whole grant to Macro, so it is skipped when an inbox for that address still
+  works (`needs_reauth` false); the refusal stands either way. Mirrors
+  Outlook's required-scope check in `src/domain/microsoft.rs`; Macro has no
+  mailbox-less link for either provider.
+- `/oauth/redirect` without a code answers "Sign-in failed" and logs
+  `auth_handoff_failure=missing_code` with FusionAuth's error. `invalid_origin`
+  ("Invalid origin uri <origin>") means the page that sent the browser to
+  FusionAuth is missing from `infra/stacks/fusionauth-instance/origins.ts`;
+  these failures carry no user id.
+- When the FusionAuth JWT populate lambda fails (its `fetch` to
+  `/webhooks/user/jwt` times out after 2 s or gets a non-200), FusionAuth still
+  issues the access token, just without the Macro claims. `/jwt/refresh`
+  refreshes such tokens instead of rejecting them, and warns when FusionAuth
+  returns one. It answers 429 for one issued under 30 s ago, so client retries
+  (websocket reconnects refresh on every attempt) can't turn a lambda outage
+  into a FusionAuth refresh per retry.
 
 ## Related
 

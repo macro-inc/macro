@@ -56,7 +56,8 @@ function SheetActions(props: SpreadsheetSheetTabsProps) {
   return (
     <Dropdown placement="top-end">
       <Dropdown.Trigger
-        label={`Sheet actions for ${active()?.name ?? 'current sheet'}`}
+        aria-label={`Sheet actions for ${active()?.name ?? 'current sheet'}`}
+        tooltip={`Sheet actions for ${active()?.name ?? 'current sheet'}`}
         variant="ghost"
         size="icon-sm"
         class="h-7 w-7 shrink-0 touch:h-[44px] touch:w-[44px] touch:min-h-[44px] touch:min-w-[44px]"
@@ -273,7 +274,9 @@ export function SpreadsheetSheetTabs(props: SpreadsheetSheetTabsProps) {
   return (
     <div class="flex h-9 min-w-0 max-w-[40%] shrink-0 items-center gap-1 bg-panel px-1 max-sm:max-w-none max-sm:flex-1 touch:h-[48px] lg:max-w-[min(50%,42rem)]">
       <Button
-        label="Add sheet"
+        variant="ghost"
+        aria-label="Add sheet"
+        tooltip="Add sheet"
         size="icon-sm"
         class="h-7 w-7 shrink-0 touch:h-[44px] touch:w-[44px] touch:min-h-[44px] touch:min-w-[44px]"
         disabled={props.readonly || !props.canAdd}

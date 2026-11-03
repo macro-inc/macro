@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT b.mime, b.filename, b.sha256, b.bytes FROM whatsapp_send s\n            JOIN external_chat_media_blob b ON b.id = (s.payload->'message'->>'uploadId')::uuid\n              AND b.user_id = s.user_id AND b.chat_id = s.chat_id\n            WHERE s.id = $1 AND s.account_id = $2 AND s.claimed_epoch = $3 AND s.state = 'sending'\n              AND s.payload->'message'->>'type' = 'media'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "mime",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "filename",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "sha256",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 3,
+        "name": "bytes",
+        "type_info": "Bytea"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "0acb5343b3db1d87deda4c55546d4dc7ba26fc1897eb91a5e4ce478260372efc"
+}

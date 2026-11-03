@@ -360,8 +360,8 @@ services:
   # ============================================================================
   # whatsapp_session_service
   # Personal WhatsApp linked devices: one outbound websocket per account,
-  # leased through Postgres advisory locks on WHATSAPP_SESSION_LOCK_DATABASE_URL
-  # (the same local Postgres; nothing pools it). Nothing calls it, so no host
+  # leased through Postgres advisory locks on a DATABASE_URL connection
+  # (the local Postgres; nothing pools it). Nothing calls it, so no host
   # port and no proxy route. OVERRIDE_WHATSAPP_* stay unset: those are for
   # tests against the fake server.
   # ============================================================================

@@ -9,7 +9,6 @@ export const whatsappErrorCodes = [
   'cannot_add_community',
   'cannot_add_own_chat',
   'cannot_add_not_in_chat_list',
-  'configuration_required',
   'not_found',
   'forbidden',
   'conflict',

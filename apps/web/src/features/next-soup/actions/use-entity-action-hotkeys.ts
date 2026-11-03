@@ -29,6 +29,7 @@ import {
   makeCopyLinkAction,
   makeCreateReminderAction,
   makeDeleteAction,
+  makeDiscardDraftAction,
   makeFavoriteAction,
   makeMarkDoneAction,
   makeMarkNotDoneAction,
@@ -103,13 +104,17 @@ export const useEntityActionHotkeys = (
     userId: () => userId(),
   });
 
+  const discardDraftAction = makeDiscardDraftAction();
+
   const renameAction = makeRenameAction({
     userId: () => userId(),
   });
 
   const copyAction = makeCopyAction();
 
-  const moveToProjectAction = makeMoveToProjectAction();
+  const moveToProjectAction = makeMoveToProjectAction({
+    userId: () => userId(),
+  });
 
   const copyLinkAction = makeCopyLinkAction();
 
@@ -291,6 +296,39 @@ export const useEntityActionHotkeys = (
         entities.length > 0 &&
         entities.every((e) => e.type === 'email') &&
         entities.some(markRead.canExecute)
+      );
+    },
+    displayPriority: 9,
+    tags: [HotkeyTags.SelectionModification],
+  }).withGroup(group);
+
+  // Discard draft - the composer's discard keys, on rows with a draft. The
+  // thread keeps its row and place; only the draft goes.
+  registerHotkey({
+    hotkey: ['shift+cmd+.', 'shift+cmd+,', 'shift+cmd+d'],
+    hotkeyToken: TOKENS.email.discardDraft,
+    scopeId,
+    description: () =>
+      t('entityActions.discardDraftCommand', {
+        count: getEntitiesForAction().length,
+      }),
+    keyDownHandler: (event) => {
+      if (event?.repeat) return true;
+      const entities = getEntitiesForAction();
+      if (entities.length === 0) return false;
+      if (!entities.every(discardDraftAction.canExecute)) return false;
+
+      fireAndForget(
+        discardDraftAction.executeWithSoup(entities, list),
+        'entity-actions'
+      );
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+      const entities = getEntitiesForAction();
+      return (
+        entities.length > 0 && entities.every(discardDraftAction.canExecute)
       );
     },
     displayPriority: 9,

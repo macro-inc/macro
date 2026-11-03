@@ -1,10 +1,12 @@
 import { TimeRangeEditor } from '@app/components/date-time-range/time-range-editor';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import MinusIcon from '@icon/system/regular/minus.svg';
 import { Popover } from '@kobalte/core/popover';
 import { Tooltip } from '@kobalte/core/tooltip';
 import { PropertyDateSelector } from '@property/editors/selectors/PropertyDateSelector';
-import { Checkbox } from '@ui/components/Checkbox';
+import { Checkbox, InlineCheckbox } from '@ui/components/Checkbox';
 import { Dropdown } from '@ui/components/Dropdown';
 import {
   createMemo,
@@ -200,7 +202,7 @@ export function GridCell(props: GridCellProps) {
     setSelectedMention(undefined);
     if (isEntity()) {
       setMentionSearch(seed?.replace(/^@/, '') ?? '');
-      setDraft(seed?.replace(/^@/, '') ?? '');
+      setDraft(`@${seed?.replace(/^@/, '') ?? ''}`);
       setSelectAll(false);
       setEditing(true);
       setMentionOpen(true);
@@ -418,9 +420,7 @@ export function GridCell(props: GridCellProps) {
             <div
               class="grid"
               inert={isEntity() && editing()}
-              classList={{
-                invisible: isEntity() && editing() && draft() !== '',
-              }}
+              classList={{ invisible: isEntity() && editing() }}
             >
               <TextCell
                 column={props.column}
@@ -547,7 +547,11 @@ function BooleanCell(props: {
         if (!isComposingKey(event)) navigateOnTab(event, props.onNavigate);
       }}
     >
-      <Checkbox.Control />
+      {/* CSS marks avoid a computed-style read per row while scrolling. */}
+      <Checkbox.Control class="group">
+        <CheckIcon class="hidden size-3 group-data-checked:block" />
+        <MinusIcon class="hidden size-3 group-data-indeterminate:block" />
+      </Checkbox.Control>
       <Checkbox.Label classList={{ 'sr-only': !showEmpty() }}>
         <Show when={showEmpty()} fallback={props.column.name}>
           <span class="sr-only">{props.column.name}: </span>
@@ -557,6 +561,95 @@ function BooleanCell(props: {
         </Show>
       </Checkbox.Label>
     </Checkbox>
+  );
+}
+
+/**
+ * What a cell shows, without its editors, focus handling or popups: rows
+ * mounted mid-scroll render this until scrolling settles, because a full
+ * `GridCell` costs more than a fast scroll leaves time for. Matches the
+ * display each `GridCell` kind renders.
+ */
+export function GridCellPreview(props: {
+  column: DatabaseViewColumn;
+  value: DatabaseCellValue;
+  canEdit: boolean;
+}) {
+  const muted = () => !(props.canEdit && canEditCell(props.column));
+  const kind = () =>
+    match({
+      boolean:
+        props.column.dataType === 'BOOLEAN' && !props.column.isMultiSelect,
+      option: isOptionColumn(props.column),
+      // A mention's label is read per record, which is the cost being saved.
+      mention:
+        props.column.dataType === 'ENTITY' &&
+        !props.column.isMultiSelect &&
+        !props.column.relation,
+      date:
+        (props.column.dataType === 'DATE' ||
+          props.column.dataType === 'DATE_RANGE') &&
+        !props.column.isMultiSelect,
+    })
+      .with({ boolean: true }, () => 'boolean' as const)
+      .with({ option: true }, () => 'option' as const)
+      .with({ mention: true }, () => 'mention' as const)
+      .with({ date: true }, () => 'date' as const)
+      .with(
+        { boolean: false, option: false, mention: false, date: false },
+        () => 'text' as const
+      )
+      .exhaustive();
+  return (
+    <div class="relative grid min-w-0" aria-hidden="true">
+      <Switch>
+        <Match when={kind() === 'boolean'}>
+          <span class="flex min-h-9 items-center px-3">
+            <InlineCheckbox checked={Boolean(props.value)} size="md" />
+          </span>
+        </Match>
+        <Match when={kind() === 'option'}>
+          <span class="flex min-h-9 min-w-0 items-center px-2.5 py-1">
+            <span class="flex min-w-0 flex-wrap gap-1">
+              <For
+                each={databaseCellValues(props.value, props.column)
+                  .filter((value) => value !== null)
+                  .map(String)}
+              >
+                {(value) => <SelectPill label={value} column={props.column} />}
+              </For>
+            </span>
+          </span>
+        </Match>
+        <Match when={kind() === 'mention'}>
+          <span class="flex min-h-9 items-center px-2.5">
+            <Show when={props.value !== null}>
+              <span class="h-2 w-1/2 rounded-full bg-hover" />
+            </Show>
+          </span>
+        </Match>
+        <Match when={kind() === 'date'}>
+          <span class="flex min-h-9 min-w-0 items-center px-2.5 py-1.5 text-[13px] leading-5 whitespace-nowrap text-ink-muted">
+            <span class="truncate">
+              {formatCellValue(props.column, props.value)}
+            </span>
+          </span>
+        </Match>
+        <Match when={kind() === 'text'}>
+          <span
+            class="flex min-h-9 min-w-0 items-center px-2.5 py-1.5 text-[13px] leading-5"
+            classList={{
+              'text-ink-muted': muted(),
+              'font-medium': props.column.dataType === 'STRING',
+            }}
+          >
+            <span class="truncate">
+              {formatCellValue(props.column, props.value)}
+            </span>
+          </span>
+        </Match>
+      </Switch>
+    </div>
   );
 }
 
@@ -613,6 +706,12 @@ function TextCell(props: {
         (!props.isEntity && formatted()) ||
         undefined
       }
+      onContextMenu={(event) => {
+        if (!props.onOpen || !props.editable) return;
+        event.preventDefault();
+        event.stopPropagation();
+        props.onBeginEdit(undefined, event);
+      }}
       onClick={(event) => {
         if (props.onOpen) props.onOpen();
         else if (props.editable) props.onBeginEdit(undefined, event);
@@ -726,10 +825,6 @@ function InlineEditor(props: {
   const [focused, setFocused] = createSignal(false);
   const errorId = createUniqueId();
   let finishing = false;
-  const showingReference = () =>
-    props.column.dataType === 'ENTITY' &&
-    props.originalValue !== null &&
-    props.draft === '';
   // An earlier row's save can settle this column's type while this editor is
   // focused. Keep its DOM for this edit; use the latest type when committing.
   const renderTextEditor =
@@ -828,7 +923,7 @@ function InlineEditor(props: {
               }}
               type="text"
               data-cell-text-editor
-              placeholder={showingReference() ? undefined : props.emptyLabel}
+              placeholder={props.emptyLabel}
               inputmode={
                 props.column.dataType === 'NUMBER' ? 'decimal' : undefined
               }
@@ -850,11 +945,7 @@ function InlineEditor(props: {
                 if (!props.mentionOpen) commit(false);
               }}
               onKeyDown={onKeyDown}
-              class="min-h-9 w-full min-w-0 px-2.5 py-1.5 text-[13px] text-ink outline-none"
-              classList={{
-                'bg-transparent': !showingReference(),
-                'bg-transparent caret-transparent': showingReference(),
-              }}
+              class="min-h-9 w-full min-w-0 bg-transparent px-2.5 py-1.5 text-[13px] text-ink outline-none"
             />
           }
         >

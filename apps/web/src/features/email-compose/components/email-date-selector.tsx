@@ -111,7 +111,10 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
             </Show>
           }
           triggerClass={cn(
-            buttonClasses({ size: props.mobile ? 'icon-sm' : 'icon-composer' }),
+            buttonClasses({
+              variant: 'ghost',
+              size: props.mobile ? 'icon-sm' : 'icon-md',
+            }),
             props.selectedTime &&
               !isCompact() &&
               'min-w-0 max-w-full shrink gap-1 aspect-auto! bg-accent/20 text-accent hover:bg-accent/15! hover:text-accent! not-touch:min-w-[33.75px] not-touch:w-auto! not-touch:px-2'
@@ -134,7 +137,7 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
               <div class="flex min-w-0 items-center gap-1">
                 <ClockIcon
                   class={cn(
-                    'touch:size-6',
+                    'size-4 shrink-0 touch:size-6',
                     props.selectedTime && 'text-accent'
                   )}
                 />

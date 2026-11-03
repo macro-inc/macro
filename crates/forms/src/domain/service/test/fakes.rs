@@ -19,9 +19,11 @@ use models_permissions::share_permission::channel_share_permission::{
 use crate::domain::models::{
     Audience, ColumnId, DatabaseId, ForbiddenWidget, Form, FormId, FormLayout, FormResponse,
     FormResponseId, FormSection, FormSectionId, FormUpdate, LayoutReplacement, RecordedResponse,
-    ResponseCounts, ResponseStatus, RowId, StoredForm, UpdateForm, Widget,
+    ResponseCounts, ResponseStatus, RowId, StoredForm, StoredImageFile, UpdateForm, Widget,
 };
-use crate::domain::ports::{Clock, FormAccessDirectory, FormEventPublisher, FormsRepo};
+use crate::domain::ports::{
+    Clock, FormAccessDirectory, FormEventPublisher, FormImageFiles, FormsRepo,
+};
 use crate::domain::sharing::FormSharingRepo;
 
 pub(crate) use self::databases::{
@@ -96,6 +98,8 @@ pub(crate) struct World {
     pub(crate) database_metadata_reads: usize,
     /// Every `macro.forms` envelope the service handed the broker.
     pub(crate) events: Vec<serde_json::Value>,
+    /// Uploaded files, by id, as static-file storage records them.
+    pub(crate) image_files: HashMap<uuid::Uuid, StoredImageFile>,
 }
 
 impl World {
@@ -132,6 +136,7 @@ impl World {
             fail_database_metadata_reads: false,
             database_metadata_reads: 0,
             events: vec![],
+            image_files: HashMap::new(),
         }
     }
 
@@ -184,6 +189,18 @@ impl FormAccessDirectory for FakeAccess {
             .get(user.as_ref())
             .cloned()
             .unwrap_or_default())
+    }
+}
+
+/// The uploaded files the world holds.
+#[derive(Clone)]
+pub(crate) struct FakeImageFiles(pub(crate) Shared);
+
+impl FormImageFiles for FakeImageFiles {
+    type Error = FakeError;
+
+    async fn image_file(&self, file: uuid::Uuid) -> Result<Option<StoredImageFile>, FakeError> {
+        Ok(self.0.lock().unwrap().image_files.get(&file).cloned())
     }
 }
 
@@ -459,6 +476,15 @@ impl FormsRepo for FakeRepo {
         if let Some(tally_visible) = changes.tally_visible {
             form.tally_visible = tally_visible;
         }
+        if let Some(logo_file_id) = changes.logo_file_id {
+            form.branding.logo_file_id = logo_file_id;
+        }
+        if let Some(cover_file_id) = changes.cover_file_id {
+            form.branding.cover_file_id = cover_file_id;
+        }
+        if let Some(accent_color) = &changes.accent_color {
+            form.branding.accent_color = accent_color.clone();
+        }
         form.updated_at = updated_at;
         Ok(FormUpdate::Updated(Box::new(form.clone())))
     }
@@ -512,6 +538,23 @@ impl FormsRepo for FakeRepo {
             match world.forms.iter_mut().find(|stored| stored.form.id == id) {
                 Some(stored) => {
                     stored.trashed_at = None;
+                    true
+                }
+                None => false,
+            },
+        )
+    }
+
+    async fn move_form(&self, id: FormId, project_id: Option<&str>) -> Result<bool, FakeError> {
+        let mut world = self.0.lock().unwrap();
+        Ok(
+            match world
+                .forms
+                .iter_mut()
+                .find(|stored| stored.form.id == id && stored.trashed_at.is_none())
+            {
+                Some(stored) => {
+                    stored.form.project_id = project_id.map(str::to_string);
                     true
                 }
                 None => false,

@@ -11,12 +11,14 @@ import {
   aiUsageErrorResponseHandler,
 } from '../ai-usage-limit';
 import type {
+  ActionConfiguration,
+  ActionConfigurationUpdate,
   ActionExecutionRecord,
-  CreateScheduledAction,
   InProgressExecution,
+  RoutineTemplate,
   ScheduledAction,
   SetScheduledActionEnabled,
-  UpdateScheduledAction,
+  ShareRoutineTemplate,
 } from './generated/schemas';
 
 const scheduledActionHost: string = SERVER_HOSTS['scheduled-action'];
@@ -52,7 +54,7 @@ export const scheduledActionClient = {
       }
     ),
 
-  createSchedule: async (body: CreateScheduledAction) =>
+  createSchedule: async (body: ActionConfiguration) =>
     scheduledActionFetch<ScheduledAction>('/scheduled-actions', {
       method: 'POST',
       body: JSON.stringify(body),
@@ -60,7 +62,7 @@ export const scheduledActionClient = {
 
   updateSchedule: async (args: {
     scheduleId: string;
-    body: UpdateScheduledAction;
+    body: ActionConfigurationUpdate;
   }) =>
     scheduledActionFetch<ScheduledAction>(
       `/scheduled-actions/${args.scheduleId}`,
@@ -99,5 +101,28 @@ export const scheduledActionClient = {
     scheduledActionFetch<ActionExecutionRecord[]>(
       `/scheduled-actions/${args.scheduleId}/history`,
       { method: 'GET' }
+    ),
+
+  getTemplate: (scheduleId: string) =>
+    scheduledActionFetch<RoutineTemplate>(
+      `/scheduled-actions/${scheduleId}/template`,
+      { method: 'GET' }
+    ),
+
+  shareTemplate: (args: { scheduleId: string; body: ShareRoutineTemplate }) =>
+    scheduledActionFetch<RoutineTemplate>(
+      `/scheduled-actions/${args.scheduleId}/template`,
+      { method: 'PUT', body: JSON.stringify(args.body) }
+    ),
+
+  unshareTemplate: (args: { scheduleId: string }) =>
+    scheduledActionFetch(`/scheduled-actions/${args.scheduleId}/template`, {
+      method: 'DELETE',
+    }),
+
+  activateTemplate: (args: { templateId: string; body: ActionConfiguration }) =>
+    scheduledActionFetch<ScheduledAction>(
+      `/scheduled-actions/${args.templateId}/template/activate`,
+      { method: 'POST', body: JSON.stringify(args.body) }
     ),
 };

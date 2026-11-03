@@ -258,15 +258,17 @@ pub async fn insert_label(
     Ok(populated_service_label)
 }
 
-/// inserts the labels of an email into the database in a batch
+/// inserts the labels of an email into the database in a batch. Labels in
+/// `pending_provider_label_ids` keep their current state on the message.
 pub async fn insert_message_labels(
     tx: &mut sqlx::PgConnection,
     link_id: Uuid,
     message_id: Uuid,
     provider_label_ids: &[String],
     delete_old: bool,
+    pending_provider_label_ids: &[String],
 ) -> anyhow::Result<()> {
-    if provider_label_ids.is_empty() {
+    if provider_label_ids.is_empty() && !delete_old {
         return Ok(());
     }
 
@@ -308,7 +310,11 @@ pub async fn insert_message_labels(
         );
     }
 
-    let label_db_ids: Vec<Uuid> = label_mappings.iter().map(|m| m.id).collect();
+    let label_db_ids: Vec<Uuid> = label_mappings
+        .iter()
+        .filter(|m| !pending_provider_label_ids.contains(&m.provider_label_id))
+        .map(|m| m.id)
+        .collect();
 
     // with delete_old, records that don't match the ones to insert are removed in case we are
     // doing an upsert and some of the old ones got removed. An unchanged set deletes and inserts
@@ -320,6 +326,10 @@ pub async fn insert_message_labels(
             WHERE $3::bool
               AND message_id = $1::uuid
               AND label_id NOT IN (SELECT UNNEST($2::uuid[]))
+              AND label_id NOT IN (
+                  SELECT id FROM email_labels
+                  WHERE link_id = $4 AND provider_label_id = ANY($5::text[])
+              )
         )
         INSERT INTO email_message_labels (message_id, label_id)
         SELECT $1, label_id FROM UNNEST($2::uuid[]) AS t(label_id)
@@ -327,7 +337,9 @@ pub async fn insert_message_labels(
         "#,
         message_id,
         &label_db_ids,
-        delete_old
+        delete_old,
+        link_id,
+        pending_provider_label_ids
     )
     .execute(&mut *tx)
     .await?;

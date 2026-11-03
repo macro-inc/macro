@@ -23,6 +23,8 @@ vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: vi.fn() },
 }));
 
+import { SERVER_HOSTS } from '@core/constant/servers';
+import { displayImageUrl } from '@core/util/imageProxy';
 import { MarkdownImage } from './MarkdownImage';
 import { MarkdownVideo } from './MarkdownVideo';
 
@@ -35,6 +37,52 @@ const unsetMedia = {
 } as const;
 
 describe('markdown media loading', () => {
+  it('loads a GitHub blob screenshot through the image proxy', () => {
+    const src =
+      'https://github.com/macro-inc/macro/blob/pr-assets/time-range-timeline/typed-1-all-day.png?raw=true';
+    const view = render(() => (
+      <MarkdownImage {...unsetMedia} key="github-shot" url={src} alt="Picker" />
+    ));
+    const image = view.container.querySelector('img')!;
+    expect(image.getAttribute('src')).toBe(displayImageUrl(src));
+    expect(image.getAttribute('src')).toContain(
+      `${SERVER_HOSTS['image-proxy-service']}/proxy?url=`
+    );
+    expect(image.getAttribute('src')).toContain(
+      encodeURIComponent(
+        'https://raw.githubusercontent.com/macro-inc/macro/pr-assets/time-range-timeline/typed-1-all-day.png'
+      )
+    );
+  });
+
+  it('sends the session cookie to the image proxy', () => {
+    const view = render(() => (
+      <MarkdownImage
+        {...unsetMedia}
+        key="proxied"
+        url="https://example.com/shot.gif"
+        alt="Shot"
+      />
+    ));
+    expect(
+      view.container.querySelector('img')!.getAttribute('crossorigin')
+    ).toBe('use-credentials');
+  });
+
+  it('loads a static file anonymously', () => {
+    const view = render(() => (
+      <MarkdownImage
+        {...unsetMedia}
+        key="static"
+        url={`${SERVER_HOSTS['static-file']}/file/299c189c-df42-4a9a-b42b-7220264b607b`}
+        alt="Static"
+      />
+    ));
+    expect(
+      view.container.querySelector('img')!.getAttribute('crossorigin')
+    ).toBe('anonymous');
+  });
+
   it('shows a reserved image card while the file has no size yet', () => {
     render(() => (
       <MarkdownImage

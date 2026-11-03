@@ -7,6 +7,7 @@ import {
   useAnalytics,
 } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
+import { rememberMobileEmailAttribution } from '@app/lib/analytics/signupAttribution';
 import { trackSignupCompletion } from '@app/lib/analytics/signupCompletion';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
 import { IncomingCallEvents } from '@block-call/sidebar/incoming-calls';
@@ -33,7 +34,7 @@ import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
 import { EntityProvider } from '@entity';
 import { MaybeTauriProvider } from '@macro/tauri';
-import { releaseNotificationCover } from '@macro/tauri/push-api';
+import { useNotificationCoverTimeout } from '@macro/tauri/notification-launch';
 import { TauriRouteListener } from '@macro/tauri/TauriProvider';
 import { Telemetry } from '@macro-inc/observability';
 import { BrowserNotificationModal } from '@notifications';
@@ -61,6 +62,10 @@ import { AppRouterView } from './app-router-view';
 import { useSyncLoginCookie } from './use-sync-login-cookie';
 
 const rootPreload: RoutePreloadFunc = async (args) => {
+  // Before any await: the desktop link's ad parameters have to be stored
+  // before signup navigates away to the identity provider.
+  rememberMobileEmailAttribution();
+
   await prefetchUserInfo();
 
   // even though we are using the transformUrl prop, we may still need to replace the url in the history
@@ -148,6 +153,10 @@ function useUserInfoSideEffects() {
           email: user.email,
           os,
         });
+      } else {
+        // Already identified, including as the mobile-capture email on this
+        // browser. identify() will not switch that browser to the account id.
+        analytics.linkMobileCapturePerson(user.id, user.email);
       }
 
       const planKey = `${user.id}:${user.licenseStatus}`;
@@ -180,10 +189,10 @@ const BOOT_SHELL_MAX_WAIT_MS = 8000;
 function AppRouteFrame(props: RouteSectionProps) {
   useUserInfoSideEffects();
   useSessionWebsockets();
+  useNotificationCoverTimeout();
   onMount(() => {
     const cap = setTimeout(() => {
       dismissBootShell();
-      fireAndForget(releaseNotificationCover(), 'notification-launch');
     }, BOOT_SHELL_MAX_WAIT_MS);
     onCleanup(() => clearTimeout(cap));
   });

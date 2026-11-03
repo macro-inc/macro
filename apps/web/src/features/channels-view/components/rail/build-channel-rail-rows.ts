@@ -28,7 +28,7 @@ const compareChannelName = (left: ChannelEntity, right: ChannelEntity) =>
   left.id.localeCompare(right.id);
 
 /**
- * Lay out the Channels section: each label in saved order with the
+ * Lay out the Team channels section: each label in saved order with the
  * channels the user can see in it (A→Z, the same for everyone), then the
  * channels in no label in the section's own sort. Empty labels stay visible as drop targets; a collapsed label hides its channels.
  *
@@ -50,7 +50,9 @@ export function buildChannelSectionRows(options: {
       .map((id) => options.channelsById.get(id))
       .filter(
         (channel): channel is ChannelEntity =>
-          channel !== undefined && canLabelChannel(channel)
+          channel !== undefined &&
+          channel.channelType === 'team' &&
+          canLabelChannel(channel, label)
       )
       .sort(compareChannelName);
 
@@ -63,7 +65,7 @@ export function buildChannelSectionRows(options: {
   }
 
   for (const channel of options.channels) {
-    if (labelled.has(channel.id)) continue;
+    if (channel.channelType !== 'team' || labelled.has(channel.id)) continue;
     rows.push({ kind: 'conversation', channel });
   }
 
@@ -128,10 +130,10 @@ export function buildChannelRailRows(
 
   rows.push({
     kind: 'section',
-    id: 'section:channels',
-    group: 'channels',
+    id: 'section:team_channels',
+    group: 'team_channels',
   });
-  if (expandedGroups.channels) {
+  if (expandedGroups.team_channels) {
     rows.push(
       ...channelSectionRows.map(
         (row, localIndex): ChannelRailRow =>
@@ -139,15 +141,15 @@ export function buildChannelRailRows(
             ? {
                 kind: 'label',
                 id: rowKeyForLabel(row.label.id),
-                group: 'channels',
+                group: 'team_channels',
                 localIndex,
                 label: row.label,
               }
             : {
                 kind: 'conversation',
                 id: rowKeyForChannel(row.channel.id, row.labelId),
-                group: 'channels',
-                scope: 'channels',
+                group: 'team_channels',
+                scope: 'team_channels',
                 localIndex,
                 channel: row.channel,
                 labelId: row.labelId,
@@ -156,19 +158,16 @@ export function buildChannelRailRows(
     );
   }
 
-  rows.push({
-    kind: 'section',
-    id: 'section:direct_messages',
-    group: 'direct_messages',
-  });
-  if (expandedGroups.direct_messages) {
+  for (const group of ['channels', 'direct_messages'] as const) {
+    rows.push({ kind: 'section', id: `section:${group}`, group });
+    if (!expandedGroups[group]) continue;
     rows.push(
-      ...items.direct_messages.map(
+      ...items[group].map(
         (channel, localIndex): ChannelRailRow => ({
           kind: 'conversation',
-          id: `channel:${channel.id}`,
-          group: 'direct_messages',
-          scope: 'direct_messages',
+          id: rowKeyForChannel(channel.id),
+          group,
+          scope: group,
           localIndex,
           channel,
         })

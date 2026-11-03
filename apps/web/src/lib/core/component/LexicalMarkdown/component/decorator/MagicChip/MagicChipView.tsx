@@ -200,7 +200,6 @@ export const MagicChipView: Component<{
             <Button
               variant="ghost"
               size="icon-sm"
-              noTouchResize
               aria-label="Collapse to mention"
               on:click={(event) => {
                 event.preventDefault();
@@ -208,13 +207,12 @@ export const MagicChipView: Component<{
                 props.onCollapse?.();
               }}
             >
-              <ArrowsIn />
+              <ArrowsIn class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </Show>
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
-            noTouchResize
             class="aspect-square bg-transparent p-0 font-normal @[600px]:aspect-auto @[600px]:px-2"
             aria-label="Open session"
             disabled={props.loading || !props.onOpen}

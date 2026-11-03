@@ -30,7 +30,7 @@ export function FormLinkSharing(props: {
       <Show when={props.detail.access !== 'view'}>
         <div class="flex justify-end border-t border-edge-muted pt-3">
           <CopyButton
-            variant="outline"
+            variant="secondary"
             onClick={() => copy(props.editorLink, { silent: true })}
           >
             <Copy class="size-4" />

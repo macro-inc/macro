@@ -4,10 +4,13 @@ import {
   useViewControlHotkeys,
 } from '@app/components/view-shell';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import type { ButtonSize } from '@ui';
 import { createSignal } from 'solid-js';
 import { useDriveFilters } from '../filters/use-drive-filters';
 
-export function DriveFilterMenu() {
+export function DriveFilterMenu(
+  props: { grouped?: boolean; size?: ButtonSize } = {}
+) {
   const filters = useDriveFilters();
 
   const panel = useSplitPanelOrThrow();
@@ -31,6 +34,8 @@ export function DriveFilterMenu() {
   return (
     <div class="relative shrink-0">
       <ListFilterDropdown
+        grouped={props.grouped}
+        size={props.size}
         label="Filter files"
         open={open()}
         onOpenChange={setOpen}

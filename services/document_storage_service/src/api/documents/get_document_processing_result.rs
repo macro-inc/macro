@@ -49,22 +49,19 @@ pub async fn handler(
     .await
     {
         Ok(content) => content,
+        Err(sqlx::Error::RowNotFound) => {
+            tracing::info!("document has no processing result");
+            return GenericResponse::builder()
+                .message("processing result not found")
+                .is_error(true)
+                .send(StatusCode::NOT_FOUND);
+        }
         Err(err) => {
             tracing::error!(error=?err, "unable to get processing result");
-            match err {
-                sqlx::Error::RowNotFound => {
-                    return GenericResponse::builder()
-                        .message("processing result not found")
-                        .is_error(true)
-                        .send(StatusCode::NOT_FOUND);
-                }
-                _ => {
-                    return GenericResponse::builder()
-                        .message("unable to get processing result")
-                        .is_error(true)
-                        .send(StatusCode::INTERNAL_SERVER_ERROR);
-                }
-            }
+            return GenericResponse::builder()
+                .message("unable to get processing result")
+                .is_error(true)
+                .send(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
 

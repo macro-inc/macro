@@ -46,8 +46,8 @@ pub enum RegisteredEntityType {
     AgentSession,
     /// `scheduled_action`
     ScheduledAction,
-    /// `whatsapp_group`
-    WhatsAppGroup,
+    /// `external_chat`
+    ExternalChat,
 }
 
 impl RegisteredEntityType {
@@ -58,7 +58,7 @@ impl RegisteredEntityType {
         Self::Chat,
         Self::AgentSession,
         Self::ScheduledAction,
-        Self::WhatsAppGroup,
+        Self::ExternalChat,
     ];
 
     /// The stored spelling.
@@ -76,7 +76,7 @@ impl From<RegisteredEntityType> for EntityType {
             RegisteredEntityType::Chat => Self::Chat,
             RegisteredEntityType::AgentSession => Self::AgentSession,
             RegisteredEntityType::ScheduledAction => Self::ScheduledAction,
-            RegisteredEntityType::WhatsAppGroup => Self::WhatsAppGroup,
+            RegisteredEntityType::ExternalChat => Self::ExternalChat,
         }
     }
 }
@@ -96,7 +96,7 @@ impl TryFrom<EntityType> for RegisteredEntityType {
             EntityType::Chat => Ok(Self::Chat),
             EntityType::AgentSession => Ok(Self::AgentSession),
             EntityType::ScheduledAction => Ok(Self::ScheduledAction),
-            EntityType::WhatsAppGroup => Ok(Self::WhatsAppGroup),
+            EntityType::ExternalChat => Ok(Self::ExternalChat),
             other => Err(UnregisteredEntityType(other)),
         }
     }

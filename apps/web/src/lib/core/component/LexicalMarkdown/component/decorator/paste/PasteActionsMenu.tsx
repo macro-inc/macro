@@ -21,7 +21,7 @@ export function PasteActionsMenu(props: {
     <div class={props.class} on:click={(e) => e.stopPropagation()}>
       <Dropdown open={open()} onOpenChange={setOpen}>
         <Dropdown.Trigger size="icon-sm" variant="ghost">
-          <DotsThree />
+          <DotsThree class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Dropdown.Trigger>
         <Dropdown.Content mount={portalMount()}>
           <Dropdown.Group>

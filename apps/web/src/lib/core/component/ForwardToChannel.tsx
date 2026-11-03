@@ -1,5 +1,4 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { createConfiguredChannelMarkdownEditor } from '@channel/Input';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { useIsAuthenticated } from '@core/auth';
 import {
@@ -9,8 +8,6 @@ import {
   useMaybeBlockId,
   useMaybeBlockName,
 } from '@core/block';
-import { CustomScrollbar } from '@core/component/CustomScrollbar';
-import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { ShareOptions } from '@core/component/TopBar/ShareButton';
 import { resolveBlockAlias } from '@core/constant/allBlocks';
@@ -21,8 +18,10 @@ import type { WithCustomUserInput } from '@core/user';
 import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from '@core/util/destination';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { chatRuleset, uploadFile } from '@core/util/upload';
 import CheckIcon from '@icon/system/regular/check.svg?component-solid';
 import PaperPlaneTilt from '@icon/system/regular/paper-plane-tilt.svg';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   blockNameToItemType,
   itemTypeToReferenceEntityType,
@@ -30,6 +29,7 @@ import {
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { NewAttachment } from '@service-storage/generated/schemas/newAttachment';
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
+import type { SimpleMention } from '@service-storage/generated/schemas/simpleMention';
 import { Button, cn, Hotkey } from '@ui';
 import {
   type Accessor,
@@ -40,9 +40,12 @@ import {
   Show,
 } from 'solid-js';
 import { match } from 'ts-pattern';
+import {
+  createForwardMessageComposer,
+  ForwardMessageComposer,
+} from './ForwardMessageComposer';
 import { Permissions } from './SharePermissions';
 import { toast } from './Toast/Toast';
-import { ScrollIndicators } from './VerticalScrollIndicators';
 
 type Recipient = WithCustomUserInput<'user' | 'contact' | 'channel'>;
 
@@ -61,9 +64,7 @@ interface MobileForwardToChannelLayoutProps
   destinationOptions: ReturnType<typeof useCombinedRecipients>['all'];
   submitAccessLevel: Accessor<AccessLevel | null>;
   setSubmitAccessLevel: (level: AccessLevel | null) => void;
-  mdScrollRef: Accessor<HTMLElement | undefined>;
-  setMdScrollRef: (el: HTMLElement) => void;
-  markdownEditor: ReturnType<typeof createConfiguredChannelMarkdownEditor>;
+  composer: ReturnType<typeof createForwardMessageComposer>;
   handleSubmit: () => void;
   canSendAsGroup: Accessor<boolean>;
   sendAsGroupMessage: Accessor<boolean>;
@@ -154,20 +155,7 @@ function MobileForwardToChannelLayout(
       </Show>
 
       <div class="flex-1 min-h-20 flex flex-col w-full mt-3 border-t border-edge-muted relative">
-        <ScrollIndicators scrollRef={props.mdScrollRef} noBorderStart />
-        <CustomScrollbar scrollContainer={props.mdScrollRef} />
-        <div
-          class="grow shrink min-h-20 overflow-y-auto scrollbar-hidden px-3 py-1.5 w-full text-sm"
-          onClick={() => props.markdownEditor.controls.focus()}
-          ref={props.setMdScrollRef}
-        >
-          <MarkdownShell
-            config={props.markdownEditor}
-            placeholder="Optional message"
-            portalScope="local"
-            class="text-sm"
-          />
-        </div>
+        <ForwardMessageComposer composer={props.composer} />
       </div>
     </Show>
   );
@@ -195,6 +183,7 @@ interface ForwardToChannelProps {
     setSubmitAccessLevel: (level: AccessLevel | null) => void;
     getSubmitAccessLevel: () => AccessLevel | null;
     handleSubmit: () => void;
+    canSubmit: () => boolean;
   }) => void;
   hideAccessLevelSelector?: boolean;
   initialAccessLevel?: AccessLevel | null;
@@ -202,6 +191,11 @@ interface ForwardToChannelProps {
   allowedAccessLevels?: readonly AccessLevel[];
   /** Attach an entity that has no block, instead of `blockId`/`blockName`. */
   entity?: NewAttachment;
+  /**
+   * Reference `entity` in the message text instead of attaching it, for
+   * entities messages show only as mentions (routines).
+   */
+  inlineReference?: { markdown: string; mention: SimpleMention };
   /**
    * Grant the destination before the message is sent, for entities that
    * sending does not grant. Rejecting cancels that delivery.
@@ -222,21 +216,18 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     WithCustomUserInput<'user' | 'contact' | 'channel'>[]
   >([]);
 
-  const [mdScrollRef, setMdScrollRef] = createSignal<HTMLElement>();
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
 
-  const [markdown, setMarkdown] = createSignal('');
-  // No onEnter: the optional message is a multi-line composer, so a bare Enter
-  // falls through to Lexical and inserts a newline. Sharing is bound to
-  // cmd+enter through the hotkey system below.
-  const markdownEditor = createConfiguredChannelMarkdownEditor({
-    namespace: 'forward-to-channel-markdown',
-    resolveAppLink: useMacroMentionLinkResolver(),
-    enableMentions: true,
-    onChange: setMarkdown,
-  });
   const [triedToSubmit, setTriedToSubmit] = createSignal(false);
   const [isSubmitting, setIsSubmitting] = createSignal(false);
+  const composer = createForwardMessageComposer({
+    resolveAppLink: useMacroMentionLinkResolver(),
+    isSending: isSubmitting,
+    uploadFile: (file) =>
+      uploadFile(file, chatRuleset, { hideProgressIndicator: true }),
+  });
+  const canSubmit = () =>
+    selectedOptions().length > 0 && !isSubmitting() && !composer.isUploading();
   const { all: destinationOptions } = useCombinedRecipients();
 
   const destination = createMemo(() => {
@@ -374,14 +365,37 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
 
   async function sendForward(
     target: NonNullable<ReturnType<typeof destination>>,
-    accessLevel: AccessLevel | null
+    accessLevel: AccessLevel | null,
+    deliverySpan: Span
   ) {
     const prepare = props.prepareChannel;
+    const composed = composer.message();
+    const inline = props.inlineReference;
     const message = {
-      attachments: [asAttachment()],
-      content: markdown(),
-      mentions: [],
-      beforeSend: prepare && ((id: string) => prepare(id, accessLevel)),
+      ...composed,
+      ...(inline
+        ? {
+            content: [composed.content.trim(), inline.markdown]
+              .filter(Boolean)
+              .join('\n\n'),
+            mentions: [...composed.mentions, inline.mention],
+            attachments: composed.attachments ?? [],
+          }
+        : {
+            attachments: [asAttachment(), ...(composed.attachments ?? [])],
+          }),
+      beforeSend:
+        prepare &&
+        ((id: string) =>
+          deliverySpan.span('share.update_permissions', async (span) => {
+            span.setAttr('channel.id', id);
+            try {
+              await prepare(id, accessLevel);
+            } catch (error) {
+              span.error('Share permission update failed');
+              throw error;
+            }
+          })),
     };
     const deliveryKey = JSON.stringify([
       message,
@@ -390,15 +404,23 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
         : { type: target.type, users: [...target.users].sort() },
     ]);
     let delivery = deliveries.get(deliveryKey);
+    deliverySpan.setAttr('delivery.reused', delivery !== undefined);
     if (!delivery) {
+      const sendSpan = deliverySpan.span('share.send_message');
       let result;
       try {
-        result =
+        result = await sendSpan.run(() =>
           target.type === 'channel'
-            ? await sendToChannel({ ...message, channelId: target.id })
-            : await sendToUsers({ ...message, users: target.users });
+            ? sendToChannel({ ...message, channelId: target.id })
+            : sendToUsers({ ...message, users: target.users })
+        );
+        if (result) sendSpan.setAttr('channel.id', result.channelId);
+        else sendSpan.error('Share message send failed');
       } catch (error) {
+        sendSpan.error('Share message send failed');
         console.error('Failed to forward message', error);
+      } finally {
+        sendSpan.end();
       }
       if (!result) {
         toast.failure('Message failed to send');
@@ -411,18 +433,22 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
         trackForwardShare(target.type === 'channel' ? 'channel' : 'user');
       }
     }
+    deliverySpan.setAttr('channel.id', delivery.result.channelId);
 
     // Sending an attachment can automatically grant access. Apply the selected
     // level afterward so that auto-grant cannot overwrite the user's choice.
     if (delivery.accessLevel !== accessLevel) {
-      if (
-        !(await submitChannelPermissions(
-          delivery.result.channelId,
-          accessLevel
-        ))
-      ) {
-        return;
-      }
+      const channelId = delivery.result.channelId;
+      const granted = await deliverySpan.span(
+        'share.update_permissions',
+        async (span) => {
+          span.setAttr('channel.id', channelId);
+          const result = await submitChannelPermissions(channelId, accessLevel);
+          if (!result) span.error('Share permission update failed');
+          return result;
+        }
+      );
+      if (!granted) return;
       if (delivery.accessLevel === undefined) {
         trackForwardShare(target.type === 'channel' ? 'channel' : 'user');
       }
@@ -432,7 +458,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
   }
 
   async function handleSubmit() {
-    if (isSubmitting()) return;
+    if (isSubmitting() || composer.isUploading()) return;
     const options = selectedOptions();
     const destination_ = destination();
     if (options.length === 0 || !destination_) {
@@ -450,9 +476,44 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     const accessLevel = submitAccessLevel();
     setIsSubmitting(true);
     try {
-      const results = await Promise.all(
-        targets.map((target) => sendForward(target, accessLevel))
-      );
+      const results = await Telemetry.span('share.forward', async (span) => {
+        span.setAttr('entity.id', asAttachment().entity_id);
+        span.setAttr('recipient.count', targets.length);
+        span.setAttr(
+          'attachment.count',
+          (composer.message().attachments?.length ?? 0) + 1
+        );
+        const deliveries = await Promise.all(
+          targets.map((target, index) =>
+            span.span('share.deliver', async (deliverySpan) => {
+              deliverySpan.setAttr('target.index', index);
+              deliverySpan.setAttr('target.type', target.type);
+              if (target.type === 'channel') {
+                deliverySpan.setAttr('channel.id', target.id);
+              } else {
+                // User IDs can contain email addresses; only record the count.
+                deliverySpan.setAttr('recipient.count', target.users.length);
+              }
+              const delivery = await sendForward(
+                target,
+                accessLevel,
+                deliverySpan
+              );
+              deliverySpan.setAttr(
+                'delivery.outcome',
+                delivery ? 'success' : 'failure'
+              );
+              if (!delivery) {
+                deliverySpan.error('Share delivery failed');
+              }
+              return delivery;
+            })
+          )
+        );
+        if (deliveries.some((delivery) => !delivery))
+          span.error('Share failed');
+        return deliveries;
+      });
       props.refetch?.();
       if (results.some((result) => !result)) {
         if (targets.length > 1) {
@@ -477,6 +538,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
         }
       }
       deliveries.clear();
+      composer.clear();
       props.onSubmit?.();
     } finally {
       setIsSubmitting(false);
@@ -514,6 +576,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
         getSelectedOptions: selectedOptions,
         setSubmitAccessLevel,
         handleSubmit,
+        canSubmit,
       });
     }
   });
@@ -537,9 +600,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             allowedAccessLevels={props.allowedAccessLevels}
             submitAccessLevel={submitAccessLevel}
             setSubmitAccessLevel={setSubmitAccessLevel}
-            mdScrollRef={mdScrollRef}
-            setMdScrollRef={setMdScrollRef}
-            markdownEditor={markdownEditor}
+            composer={composer}
             handleSubmit={handleSubmit}
             canSendAsGroup={canSendAsGroup}
             sendAsGroupMessage={sendAsGroupMessage}
@@ -587,22 +648,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
 
           {/* Row 2: Optional message */}
           <div class="grow shrink min-h-0 flex flex-col w-full border-t border-edge-muted">
-            <div class="relative grow shrink min-h-0 flex flex-col">
-              <ScrollIndicators scrollRef={mdScrollRef} noBorderStart />
-              <CustomScrollbar scrollContainer={mdScrollRef} />
-              <div
-                class="grow shrink min-h-20 max-h-40 overflow-y-auto scrollbar-hidden px-4 py-1.5 w-full text-sm"
-                onClick={() => markdownEditor.controls.focus()}
-                ref={setMdScrollRef}
-              >
-                <MarkdownShell
-                  config={markdownEditor}
-                  placeholder="Optional message"
-                  portalScope="local"
-                  class="text-sm"
-                />
-              </div>
-            </div>
+            <ForwardMessageComposer composer={composer} />
 
             {/* Row 3: Send As Group (optional) + Cancel + Send */}
             <div class="shrink-0 flex w-full items-center px-4 py-4 gap-3 flex-wrap">
@@ -669,9 +715,8 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                   Cancel
                 </Button>
                 <Button
-                  variant="strong"
-                  depth={3}
-                  disabled={selectedOptions().length === 0 || isSubmitting()}
+                  variant="primary"
+                  disabled={!canSubmit()}
                   onClick={() => {
                     const options = selectedOptions();
                     if (options && options.length > 0) {

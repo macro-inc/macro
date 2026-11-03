@@ -1,54 +1,30 @@
-import {
-  type FileOperation,
-  SplitFileMenu,
-} from '@components/app/split-layout/components/SplitFileMenu';
+import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import {
   SplitTitleFileMenu,
   StaticSplitLabel,
 } from '@components/app/split-layout/components/SplitLabel';
 import { Permissions } from '@core/component/SharePermissions';
-import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { openExternalUrl } from '@core/util/url';
-import GithubIcon from '@icon/mcp-github.svg';
-import Link from '@icon/system/regular/link.svg';
-import type { GithubPullRequest } from '@service-storage/generated/schemas';
-
-import type { PrRef } from '../util/prKey';
-import { prDisplayName, prHtmlUrl } from '../util/prKey';
+import type { PrForeignEntityData } from '../data/queries';
+import type { PrActions } from '../primitives/create-pr-actions';
+import { usePrFileOperations } from '../primitives/pr-file-operations';
+import { prDisplayName } from '../util/prKey';
 import { PrStatusIcon } from './PrStatus';
 
 /**
  * PR identity in the split header chrome and file menu, independent of the
  * legacy block context. Foreign PRs have the same read-only permission that
- * the legacy BlockLoader supplied by default.
+ * the legacy BlockLoader supplied by default; GitHub decides whether the
+ * menu's changes go through.
  */
 export function PrSplitHeader(props: {
-  foreignEntityId: string;
-  prRef: PrRef;
-  enrichment: GithubPullRequest | undefined;
+  detail: PrForeignEntityData;
+  actions: PrActions;
 }) {
-  const title = () => props.enrichment?.name ?? prDisplayName(props.prRef);
-  const githubUrl = () => props.enrichment?.url ?? prHtmlUrl(props.prRef);
-
-  const copyLink = async () => {
-    await navigator.clipboard.writeText(githubUrl());
-    toast.success('Link copied to clipboard');
-  };
-
-  const ops: FileOperation[] = [
-    {
-      label: 'Copy link',
-      icon: Link,
-      action: copyLink,
-    },
-    {
-      label: 'Open on GitHub',
-      icon: GithubIcon,
-      action: () => openExternalUrl(githubUrl()),
-    },
-  ];
+  const title = () =>
+    props.detail.pullRequest.name ?? prDisplayName(props.detail.prRef);
+  const operations = usePrFileOperations(() => props.detail, props.actions);
 
   return (
     <>
@@ -57,7 +33,7 @@ export function PrSplitHeader(props: {
           label={title()}
           icon={
             <PrStatusIcon
-              status={props.enrichment?.status ?? 'open'}
+              status={props.detail.pullRequest.status ?? 'open'}
               class="size-3.5"
             />
           }
@@ -66,12 +42,12 @@ export function PrSplitHeader(props: {
 
       <SplitTitleFileMenu>
         <SplitFileMenu
-          id={props.foreignEntityId}
+          id={props.detail.id}
           itemType="foreign"
           entityKind="pr"
           permissions={Permissions.CAN_VIEW}
           name={title()}
-          ops={ops}
+          ops={operations()}
           buttonClass={isTouchDevice() ? 'order-last' : 'order-first'}
         />
       </SplitTitleFileMenu>

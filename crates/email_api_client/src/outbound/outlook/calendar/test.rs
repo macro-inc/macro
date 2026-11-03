@@ -5,6 +5,8 @@ use wiremock::{
     matchers::{body_partial_json, header, method, path, query_param},
 };
 
+mod mutations;
+
 pub(super) fn target() -> ProviderCalendarTarget {
     let link_id = Uuid::now_v7();
     ProviderCalendarTarget {

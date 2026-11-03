@@ -229,15 +229,15 @@ async fn form_references_grant_the_channel_view_and_keep_an_existing_grant(pool:
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn whatsapp_group_mentions_let_the_channel_read_the_group(pool: PgPool) {
+async fn external_chat_mentions_let_the_channel_read_the_chat(pool: PgPool) {
     let channel_id = Uuid::now_v7();
-    let group_id = Uuid::now_v7();
-    let item = ReferencedShareItem::from_raw(group_id.to_string(), "whatsapp_group").unwrap();
-    assert_eq!(item.entity_type(), ReferencedShareItemType::WhatsAppGroup);
+    let chat_id = Uuid::now_v7();
+    let item = ReferencedShareItem::from_raw(chat_id.to_string(), "external_chat").unwrap();
+    assert_eq!(item.entity_type(), ReferencedShareItemType::ExternalChat);
     assert_eq!(
         grant_level(item.entity_type(), None, None),
         None,
-        "someone who cannot see the group shares nothing"
+        "someone who cannot see the chat shares nothing"
     );
     let level = grant_level(item.entity_type(), None, Some(AccessLevel::Owner)).unwrap();
     for _ in 0..2 {
@@ -247,9 +247,9 @@ async fn whatsapp_group_mentions_let_the_channel_read_the_group(pool: PgPool) {
     }
     let levels = sqlx::query_scalar!(
         r#"SELECT access_level AS "access_level: AccessLevel" FROM entity_access
-        WHERE entity_id = $1 AND entity_type = 'whatsapp_group' AND source_id = $2
+        WHERE entity_id = $1 AND entity_type = 'external_chat' AND source_id = $2
             AND source_type = 'channel' AND granted_from_project_id IS NULL"#,
-        group_id,
+        chat_id,
         channel_id.to_string(),
     )
     .fetch_all(&pool)
@@ -326,10 +326,10 @@ async fn direct_conversation_session_references_grant_nothing(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_whatsapp_group_mention_by_someone_it_was_shared_with_shares_nothing(pool: PgPool) {
+async fn a_external_chat_mention_by_someone_it_was_shared_with_shares_nothing(pool: PgPool) {
     let channel_id = Uuid::now_v7();
-    let group_id = Uuid::now_v7();
-    let item = ReferencedShareItem::from_raw(group_id.to_string(), "whatsapp_group").unwrap();
+    let chat_id = Uuid::now_v7();
+    let item = ReferencedShareItem::from_raw(chat_id.to_string(), "external_chat").unwrap();
     for sharer_access in [AccessLevel::View, AccessLevel::Comment, AccessLevel::Edit] {
         let outcome =
             share_referenced_item_with_channel(&pool, channel_id, &item, Some(sharer_access))
@@ -339,8 +339,8 @@ async fn a_whatsapp_group_mention_by_someone_it_was_shared_with_shares_nothing(p
     }
     let grants = sqlx::query_scalar!(
         r#"SELECT count(*) AS "count!" FROM entity_access
-        WHERE entity_id = $1 AND entity_type = 'whatsapp_group' AND source_type = 'channel'"#,
-        group_id,
+        WHERE entity_id = $1 AND entity_type = 'external_chat' AND source_type = 'channel'"#,
+        chat_id,
     )
     .fetch_one(&pool)
     .await

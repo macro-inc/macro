@@ -9,7 +9,7 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
-import { createSignal, type JSX } from 'solid-js';
+import { createRoot, createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ComposerMode } from '../core/mode';
 import {
@@ -18,6 +18,7 @@ import {
   type RuntimeLike,
 } from '../core/roster';
 import { NEW_CONVERSATION_ATTACHMENTS_KEY } from '../primitives/composer-draft';
+import { createPreferredRepository } from '../primitives/preferred-repository';
 import { AgentPicker } from './AgentPicker';
 import { NewChatPage } from './NewChatPage';
 
@@ -234,10 +235,12 @@ vi.mock('../components/ChatComposer', () => ({
   ),
 }));
 
+/** Most cases exercise an explicit Chat or Code choice; Auto has its own. */
+let startInChat = true;
+
 beforeEach(() => {
   localStorage.clear();
-  // Most cases exercise an explicit Chat or Code choice; Auto has its own.
-  localStorage.setItem('agents-view-mode-v1:user', 'chat');
+  startInChat = true;
   mocks.userId = () => 'user';
   mocks.chooseAgentMode.mockClear();
   mocks.autoEnabled = true;
@@ -269,6 +272,8 @@ function page(
       onOpenRoster={vi.fn()}
     />
   ));
+  const chat = screen.queryByRole('radio', { name: 'Chat' });
+  if (mode === undefined && startInChat && chat) fireEvent.click(chat);
   return onStart;
 }
 function openAgents() {
@@ -317,6 +322,7 @@ describe('agent-led new conversation', () => {
     mocks.tier = 'max';
     mocks.currentEffort = 'low';
     mocks.touch = false;
+    localStorage.clear();
     mocks.attachments = [];
     mocks.recentIds = [MACRO_CODER_BOT_ID];
     mocks.recentUrls = [];
@@ -434,8 +440,8 @@ describe('agent-led new conversation', () => {
       await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
     }
   });
-  it('starts a new person in Auto without an agent, model, or effort to pick', () => {
-    localStorage.clear();
+  it('starts in Auto without an agent, model, or effort to pick', () => {
+    startInChat = false;
     page();
     expect(
       (screen.getByRole('radio', { name: 'Auto' }) as HTMLInputElement).checked
@@ -447,7 +453,6 @@ describe('agent-led new conversation', () => {
     expect(screen.queryByRole('button', { name: 'Repository' })).toBeNull();
   });
   it('offers only Chat and Code without the Auto flag', () => {
-    localStorage.clear();
     mocks.autoEnabled = false;
     const send = page();
     expect(screen.queryByRole('radio', { name: 'Auto' })).toBeNull();
@@ -645,13 +650,13 @@ describe('agent-led new conversation', () => {
       (screen.getByRole('textbox', { name: 'Draft' }) as HTMLInputElement).value
     ).toBe('Keep this prompt');
   });
-  it('starts a new conversation on Choose automatically, not the last used one', async () => {
+  it('starts a new conversation on Auto-detect, not the last used one', async () => {
     mocks.recentIds = [CURSOR_BOT_ID];
     mocks.recentUrls = ['https://github.com/macro-inc/macro'];
     const send = page(true, [], false, [], 'code');
     expect(
       screen.getByRole('button', { name: 'Repository' }).textContent
-    ).toContain('Choose automatically');
+    ).toContain('Auto-detect');
     expect(
       screen.getByRole('button', { name: 'Repository' }).textContent
     ).not.toContain('macro-inc/macro');
@@ -663,6 +668,100 @@ describe('agent-led new conversation', () => {
       repoUrl: undefined,
     });
   });
+  it('preselects the saved default and sends its default branch', () => {
+    createRoot((dispose) => {
+      createPreferredRepository('user').select(
+        'https://github.com/macro-inc/macro'
+      );
+      dispose();
+    });
+    mocks.recentIds = [CURSOR_BOT_ID];
+    const send = page(true, [], false, [], 'code');
+    expect(
+      screen.getByRole('button', { name: 'Repository' }).textContent
+    ).toContain('macro-inc/macro');
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith({
+      botId: CURSOR_BOT_ID,
+      onFailure: expect.any(Function),
+      prompt: 'Prompt',
+      repoUrl: 'https://github.com/macro-inc/macro',
+      repoBranch: 'develop',
+    });
+  });
+
+  it('lets a conversation override the default with Auto-detect without changing settings', () => {
+    createRoot((dispose) => {
+      createPreferredRepository('user').select(
+        'https://github.com/macro-inc/macro'
+      );
+      dispose();
+    });
+    mocks.recentIds = [CURSOR_BOT_ID];
+    const send = page(true, [], false, [], 'code');
+    fireEvent.click(screen.getByRole('button', { name: 'Repository' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Auto-detect' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith({
+      botId: CURSOR_BOT_ID,
+      onFailure: expect.any(Function),
+      prompt: 'Prompt',
+      repoUrl: undefined,
+    });
+    createRoot((dispose) => {
+      expect(createPreferredRepository('user').repository()).toBe(
+        'https://github.com/macro-inc/macro'
+      );
+      dispose();
+    });
+  });
+
+  it('uses Auto-detect when the saved repository is no longer accessible', () => {
+    createRoot((dispose) => {
+      createPreferredRepository('user').select(
+        'https://github.com/org/removed'
+      );
+      dispose();
+    });
+    mocks.recentIds = [CURSOR_BOT_ID];
+    const send = page(true, [], false, [], 'code');
+    expect(
+      screen.getByRole('button', { name: 'Repository' }).textContent
+    ).toContain('Auto-detect');
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith({
+      botId: CURSOR_BOT_ID,
+      onFailure: expect.any(Function),
+      prompt: 'Prompt',
+      repoUrl: undefined,
+    });
+  });
+
+  it('updates the mounted composer when settings change until the caller overrides it', () => {
+    mocks.recentIds = [CURSOR_BOT_ID];
+    const send = page(true, [], false, [], 'code');
+    const settings = createRoot((dispose) => ({
+      ...createPreferredRepository('user'),
+      dispose,
+    }));
+    settings.select('https://github.com/macro-inc/macro');
+    expect(
+      screen.getByRole('button', { name: 'Repository' }).textContent
+    ).toContain('macro-inc/macro');
+    fireEvent.click(screen.getByRole('button', { name: 'Repository' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Auto-detect' }));
+    settings.select(undefined);
+    settings.select('https://github.com/macro-inc/macro');
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith({
+      botId: CURSOR_BOT_ID,
+      onFailure: expect.any(Function),
+      prompt: 'Prompt',
+      repoUrl: undefined,
+    });
+    settings.dispose();
+  });
+
   it('refuses an unlisted repository and starts a listed one on its default branch', async () => {
     const send = page(true, [], false, [], 'code');
     await selectAgent(/Cursor/);

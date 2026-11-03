@@ -34,6 +34,8 @@ function createSidebarFavorites() {
       .filter(
         (favorite) =>
           favorite.entityType === 'project' ||
+          favorite.entityType === 'database' ||
+          favorite.entityType === 'form' ||
           (favorite.entityType === 'document' &&
             favorite.documentSubType !== 'task')
       )

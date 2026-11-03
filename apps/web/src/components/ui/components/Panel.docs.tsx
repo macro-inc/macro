@@ -28,7 +28,7 @@ function SlotsDemo() {
         <Button variant="ghost" size="sm">
           Cancel
         </Button>
-        <Button variant="accent" size="sm">
+        <Button variant="primary" size="sm">
           Confirm
         </Button>
       </Panel.Footer>

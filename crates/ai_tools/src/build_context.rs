@@ -170,7 +170,14 @@ pub fn build_cognition_tool_context() -> anyhow::Result<crate::ToolCognitionTool
 /// `import_jobs` runs the context's Notion workspace imports; the host calls
 /// [`crate::ImportJobs::hand_over`] on shutdown so they move to another
 /// process instead of waiting for their leases to lapse.
-#[tracing::instrument(skip(pool, event_task_tracker, import_jobs, recorder), err)]
+///
+/// `linked_github` reads GitHub account-link tokens so GitHub's MCP server
+/// reads as connected for a linked user; `None` where the host cannot reach
+/// the authentication service.
+#[tracing::instrument(
+    skip(pool, event_task_tracker, import_jobs, recorder, linked_github),
+    err
+)]
 pub async fn build_tool_service_context_from_env(
     pool: sqlx::PgPool,
     event_task_tracker: TaskTracker,
@@ -178,6 +185,7 @@ pub async fn build_tool_service_context_from_env(
     enforcement: ai_usage::AiUsageEnforcement,
     pricing: ai_billing::AiPricing,
     recorder: Arc<dyn ai_usage::UsageRecorder>,
+    linked_github: Option<Arc<dyn mcp_client::domain::ports::LinkedGithubTokens>>,
 ) -> anyhow::Result<ToolServiceContext> {
     let env = ToolContextEnvVars::new()?;
     let maybe_env = ToolContextMaybeEnvVars::new();
@@ -555,32 +563,45 @@ pub async fn build_tool_service_context_from_env(
         crate::tool_context::FormsToolConfig {
             app_origin: macro_service_urls::AppServiceUrl::new()?.to_string(),
             editing_worker_url: ai_editing_worker_url,
+            static_files: static_file_service_client::StaticFileServiceClient::new(
+                macro_auth::InternalApiKey::new()?.to_string(),
+                macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
+            ),
         },
     );
 
     let admission =
         ai_billing::composition::pg_admission_service(pool.clone(), enforcement, pricing);
     let pipedream_client = crate::mcp_app_catalog::pipedream_client_from_env()?;
-    let import_tool_context = if let Some(secret_name) = maybe_env
+    let native_servers = match maybe_env
         .mcp_credentials_key_secret_name
         .as_ref()
         .and_then(|key| key.value())
     {
-        let mcp_credentials_key = secretsmanager_client
-            .get_maybe_secret_value(environment, secret_name)
-            .await
-            .context("failed to load MCP credentials encryption key")?;
-        let mcp_encryption_key =
-            mcp_client::domain::models::AesKey::try_from(mcp_credentials_key.as_ref())
-                .context("invalid MCP credentials encryption key")?;
+        Some(secret_name) => {
+            let mcp_credentials_key = secretsmanager_client
+                .get_maybe_secret_value(environment, secret_name)
+                .await
+                .context("failed to load MCP credentials encryption key")?;
+            let mcp_encryption_key =
+                mcp_client::domain::models::AesKey::try_from(mcp_credentials_key.as_ref())
+                    .context("invalid MCP credentials encryption key")?;
+            Some(Arc::new(mcp_client::outbound::NativeServerStore::new(
+                mcp_client::outbound::pg_server_repo::PgServerRepo::new(
+                    pool.clone(),
+                    mcp_encryption_key,
+                ),
+                linked_github,
+            )))
+        }
+        None => None,
+    };
+    let import_tool_context = if let Some(native_servers) = &native_servers {
         let pipedream_connections = Arc::new(
             pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool.clone()),
         );
         let mcp_selector = Arc::new(mcp_select::McpToolSelector::new(
-            Arc::new(mcp_client::outbound::pg_server_repo::PgServerRepo::new(
-                pool.clone(),
-                mcp_encryption_key,
-            )),
+            native_servers.clone(),
             pipedream_connections.clone(),
             Arc::new(pipedream_client.clone()),
         ));
@@ -641,11 +662,22 @@ pub async fn build_tool_service_context_from_env(
     } else {
         ToolImportToolContext::unwired()
     };
+    let mcp_server_tool_context = match &native_servers {
+        Some(native_servers) => crate::tool_context::ToolMcpServerToolContext::wired(
+            mcp_client::domain::service::ServerDirectory::new(native_servers.clone()),
+        ),
+        None => crate::tool_context::ToolMcpServerToolContext::unwired(),
+    };
 
     Ok(ToolServiceContext {
+        memory_tool_context: crate::memory::build_memory_tool_context(
+            pool.clone(),
+            recorder.clone(),
+        ),
         connector_tool_context: crate::tool_context::build_connector_tool_context(
             pool.clone(),
             pipedream_client.clone(),
+            native_servers,
         ),
         search_service_client: search_client.clone(),
         email_service_client: email_ext_client,
@@ -692,6 +724,7 @@ pub async fn build_tool_service_context_from_env(
         forms_tool_context,
         databases_sql_tool_context,
         import_tool_context,
+        mcp_server_tool_context,
         chat_tool_context,
         channel_tool_context,
         channel_media_upload_tool_context: crate::build_channel_media_upload_tool_context()?,

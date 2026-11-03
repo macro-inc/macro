@@ -1,4 +1,5 @@
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
+import { toastMovedToFolder } from '@app/features/entity/bulk-edit/moved-to-folder-toast';
 import {
   makeAddTagAction,
   makeCopyEntityIdAction,
@@ -18,6 +19,7 @@ import {
   type BlockName,
   useBlockAliasedName,
 } from '@core/block';
+import { canDuplicateItemType } from '@core/component/FileList/itemOperations';
 import { useItemOperations } from '@core/component/FileList/useItemOperations';
 import { Permissions } from '@core/component/SharePermissions';
 import { toast } from '@core/component/Toast/Toast';
@@ -37,11 +39,12 @@ import BellSlash from '@icon/system/regular/bell-slash.svg';
 import CaretDown from '@icon/system/regular/caret-down.svg';
 import CaretRight from '@icon/system/regular/caret-right.svg';
 import Check from '@icon/system/regular/check.svg';
+import Clock from '@icon/system/regular/clock.svg';
 import Copy from '@icon/system/regular/copy.svg';
+import ProjectIcon from '@icon/system/regular/cube.svg';
 import DotsThree from '@icon/system/regular/dots-three.svg';
 import Link from '@icon/system/regular/link.svg';
 import Rename from '@icon/system/regular/pencil-line.svg';
-import Stack from '@icon/system/regular/stack.svg';
 import Star from '@icon/system/regular/star.svg';
 import Tag from '@icon/system/regular/tag.svg';
 import Trash from '@icon/system/regular/trash-simple.svg';
@@ -182,7 +185,7 @@ function DesktopRender(props: SplitFileMenuRenderProps) {
         size="icon-sm"
         variant="ghost"
       >
-        <DotsThree />
+        <DotsThree class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
       </Dropdown.Trigger>
       <Dropdown.Content class="min-w-64 max-w-[min(22rem,calc(100vw-1rem))]">
         <For each={sections()}>
@@ -429,6 +432,20 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
     };
   };
 
+  const snoozeOp = (): SplitFileMenuAction | undefined => {
+    const entity = menuEntity();
+    if (!entity || !muteAction.canExecute(entity)) return undefined;
+    return {
+      label: t('entityActions.snoozeNotifications'),
+      icon: Clock,
+      action: () => {
+        setOpen(false);
+        muteAction.snooze([entity]);
+      },
+      group: 'macro' as const,
+    };
+  };
+
   // Read reactively as well as through the action's imperative gate: `ops` below
   // is a memo, so without a reactive dependency the item would stay missing for
   // the life of this menu if PostHog answered after it was first computed. The
@@ -477,10 +494,6 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
     // Some entities have no shareable link (a reminder resolves to no block, so
     // its URL is dead); skip the item rather than copy one that won't open.
     if (entity && !copyLinkAction.canExecute(entity)) return undefined;
-    // Foreign PRs link out via their entity URL (GitHub); the block-derived
-    // fallback would mint an internal /pr URL that doesn't resolve, so omit
-    // the item when the entity is unavailable.
-    if (!entity && blockName === 'pr') return undefined;
     return {
       label: t('entityActions.copyLink'),
       icon: Link,
@@ -579,15 +592,10 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
               };
             })
             .with('copy', () => {
+              if (!canDuplicateItemType(props.itemType)) return null;
               return {
                 label: t('entityActions.duplicate'),
                 action: async () => {
-                  if (props.itemType === 'project') {
-                    console.warn(
-                      'Attempting to copy project!. This should not happen'
-                    );
-                    return;
-                  }
                   const res = await itemOperations.copyItem({
                     itemType: props.itemType,
                     id: props.id,
@@ -615,18 +623,13 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
               return {
                 label: t('entityActions.moveToFolder'),
                 action: () => {
-                  const entity = buildEntityData({
-                    id: props.id,
-                    name: props.name,
-                    blockName: props.entityKind,
-                  });
+                  const entity = menuEntity();
                   if (!entity) return;
                   setOpen(false);
                   openBulkEditModal({
                     view: 'moveToProject',
                     entities: [entity],
-                    onFinish: () =>
-                      toast.success(t('entityActions.toastMovedToFolder')),
+                    onMoved: (folder) => toastMovedToFolder(1, folder.id),
                     onError: () =>
                       toast.failure(t('entityActions.toastMoveToFolderFailed')),
                   });
@@ -646,6 +649,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       .filter((op) => !!op);
     return [
       favoriteOp(),
+      snoozeOp(),
       muteOp(),
       reminderOp(),
       addTagOp(),
@@ -656,7 +660,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
         ? [
             {
               label: t('entityActions.addToProject'),
-              icon: Stack,
+              icon: ProjectIcon,
               group: 'file' as const,
               action: () => {
                 setOpen(false);

@@ -2,6 +2,26 @@
 
 ## Notifications
 
+Browser notifications must arrive while Macro is in a background tab, not just
+when it is visible. With browser permission and in-app delivery enabled, switch
+to an unrelated tab and trigger a notification from another session. Check that
+the alert arrives before returning to Macro and does not repeat on return. Try
+with one Macro tab and with several all hidden; only the elected notification
+leader should show the alert. This does not promise delivery after every Macro
+tab is closed or the browser suspends the page.
+
+GraphQL notification callbacks run on network receipt, independently of the local
+cache, which parks while all Macro tabs are hidden. Cache updates and channel
+reconciliation catch up afterward. The backend-free `parking.browser.e2e.ts`
+regression exercises that boundary with real storage and simulated visibility;
+OS banner presentation still needs the manual check above.
+
+For delayed cache catch-up, find `notification.receive` by `notification.id`.
+Its linked `graphql.subscription.cache_queue` and
+`graphql.subscription.cache_apply` phases distinguish waiting behind an earlier
+event from applying the event to storage. Receipt completes without waiting for
+these phases; listener errors mark receipt, while cache errors mark application.
+
 In the desktop app, **Settings → Notifications → Delivery → Desktop notifications**
 controls system notification delivery for this installation. The Notifications
 page is always present, in the same place on web, desktop, and mobile; Account
@@ -30,7 +50,8 @@ response delegate or repair destinations in previously delivered alerts.
 In a signed macOS release, an alert from a person shows their avatar in place of
 the app icon, their name as the title, and the channel or document name beneath
 for group conversations; direct messages show only the sender. Alerts from one
-conversation stack together in Notification Center and play the default sound.
+conversation stack together in Notification Center and play the default sound,
+unless Macro plays its own notification sound for that alert (see below).
 Verify a channel message, a direct message, a document comment, and a reminder
 (no sender: app icon and the combined title). Local and ad-hoc builds lack the
 communication entitlement and show the app icon with the sender and subtitle.
@@ -48,13 +69,27 @@ Linux WebKit/D-Bus regression is `bun run native:e2e:notifications`; compositor
 focus behavior still needs a real Wayland/X11 desktop check.
 
 On iOS builds with durable push navigation, a tapped channel push chooses the
-first route after verifying its recipient account. A failed or stalled native
-bridge must release startup within 1.5 seconds; the app can show its auth or
-retry UI while retaining the tap. If the bridge recovers later, the tap uses
+first route after verifying its recipient account. Cold launches open the
+channel in front of Home, retaining the header Back chevron and swipe-back
+destination. Verify both return to Home without reopening the channel first.
+A failed or stalled native bridge must release startup within 1.5 seconds;
+the app can show its auth or retry UI while retaining the tap. If the bridge
+recovers later, the tap uses
 normal navigation without resetting the current page to the app root. Check
 both listener attachment and pending-intent reads, including a tap delivered
 before the pending read stalls. Receiving a push without tapping it must not
 navigate.
+
+For an iOS warm resume, leave the app running past its startup timeout before
+backgrounding it. Tap an uncached notification without a direct channel target
+and fail its notification lookup: the app must reveal the existing page and
+show **Failed to open notification.** A later tap must still open normally.
+Also stall navigation or its native acknowledgment: after eight seconds the
+frontend releases the cover without discarding the pending destination. Duplicate
+delivery must not restart that deadline; a newer tap must get its own deadline.
+`notification.cover_timeout` is recorded on the notification-open trace. This
+frontend recovery requires responsive JavaScript and native IPC; verify actual
+iOS presentation separately from browser bridge simulations.
 
 On iOS, Macro requests provisional authorization at launch, so
 **Settings → Apps → Macro → Notifications** exists before any prompt, and a
@@ -143,3 +178,35 @@ default root size. Supporting `text-sm` text is 14px and `text-xs` is 12px.
 Desktop and mobile share this scale, with accessibility text scaling preserved.
 
 Desktop channel and AI composers use an `Attach files` paperclip that opens the file picker directly, without a plus menu. Comment composers open the image picker directly. Channels and DMs always open in message mode; create tasks through the task creation dialog. Shift+Enter, including an empty new line, expands channel and AI inputs so text starts above the toolbar at the left inset. Sent AI message bubbles use the ink fill with a contrasting foreground in each theme.
+
+## Notification sounds
+
+**Settings → Notifications → Sounds** turns on an in-app sound for incoming
+notifications. It is off by default and saved per person on each device
+(user-scoped localStorage), so a laptop and a phone choose separately. With
+sounds on, it shows a volume slider and one row per type (Messages, Mentions,
+Thread replies, Email, Meetings & reminders, Tasks, AI & agents, Everything
+else), each with its own on/off switch, sound picker, and play button. Picking
+a sound previews it. Email, AI & agents, and Everything else start off.
+
+Sounds are synthesized with Web Audio (`features/notification-sounds`); there
+are no audio files. Event types map to rows in `core/categories.ts`; a new
+backend event type stays quiet until it is mapped there. Incoming calls keep
+their own ring and never use these sounds. Only unseen notifications play,
+notifications within 1.5 s of a sound share it, and only the Macro tab the
+person last focused or touched plays, so several tabs ding once. Closing that
+tab hands sound back to the others until one is focused. Browsers keep
+audio suspended until the page has had a gesture; a notification before that
+stays silent rather than playing late.
+
+When Macro plays a sound for a notification, its browser or macOS alert is
+sent silent so the person hears one sound. macOS builds older than the
+`silent` argument on `send_macos_notification` ignore it and still play the
+system sound.
+
+The backend-free desktop/phone regression drives the real settings section,
+persistence, previews, and delivery through a stand-in notification feed:
+`bunx playwright test --config src/features/notification-sounds/browser-test/playwright.config.ts`
+(from `apps/web`). To check real delivery, turn sounds on, click anywhere in
+Macro, and trigger a mention from another session; then turn Mentions off and
+check that the next mention is quiet.

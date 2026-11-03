@@ -24,8 +24,9 @@ Pulumi stacks; they do not host extra agent processes.
 - `src/internal_mcp.rs`: the internal MCP server exposed to running sessions.
 - `src/public_mcp.rs` + `src/public_mcp/`: public workspace MCP and OAuth;
   reuses the harness tool context and retains bearer authentication. Users with
-  `ai-code-mode` get `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` in place of SDK-covered
-  tools (`tool_service.rs`); the flag is cached per user (`tool_mode_cache.rs`).
+  `ai-code-mode` get only `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` on
+  `tools/list` (`tool_service.rs`); hidden native tools stay callable. The flag
+  is cached per user (`tool_mode_cache.rs`).
   `src/public_mcp/analytics.rs` sends PostHog `$mcp_initialize` /
   `$mcp_tool_call` events (PostHog MCP analytics schema) in the background,
   with the user's team as the `team` group. At most 64 sends run at once
@@ -117,7 +118,9 @@ hostnames and internally rewrites cognition paths. `PREVIEW_DOMAIN` and
 `PREVIEW_CONTROL_HOSTS` values are retained only for old-image rollback; new
 code does not read them. `POSTHOG_API_KEY` and `POSTHOG_HOST` drive
 feature flags and the MCP and integration analytics; when the key is unset,
-analytics are off.
+analytics are off and routine template publishing, reads, and activation are
+disabled. Scheduling wires the per-user `enable-routine-sharing` PostHog gate;
+owner unsharing and already activated routines remain available.
 In deployed configs, `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY`
 is cognition's Secrets Manager reference; AI tools resolve the separate
 `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME` reference.
@@ -140,6 +143,13 @@ listener failure shuts down the process so ECS can replace the task.
 
 - Analytics record the tool name, outcome, duration, and client headers only;
   never add tool arguments or results to them.
+- Public MCP tool calls run for the `ToolCaller` the bearer middleware
+  (`mcp_auth_proxy`) attached, and a call without one is refused: `Agent` (a
+  Macro API token's signed `agent_id`, which egress mints from the session's
+  `agent_session.bot_id`) writes as that agent; `McpClient` (OAuth) writes as
+  the Macro bot labelled "via <client name>"; `ApiKey` writes as the Macro bot.
+  Public `ExecuteCode` builds its context per call from the caller and signs an
+  agent caller into its SDK token. Never read a bot id from the request itself.
 - The public MCP server is stateless, so tool calls carry no `clientInfo`; the
   client is identified per call by its `User-Agent` / `x-anthropic-client`
   headers and per session by `$mcp_initialize`.

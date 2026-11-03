@@ -27,7 +27,6 @@ export function CopySubjectButton(props: {
       <CopyButton
         variant="ghost"
         size="icon-sm"
-        noTouchResize
         aria-label="Copy subject"
         class={cn('align-middle text-inherit', props.class)}
         onClick={handleCopy}

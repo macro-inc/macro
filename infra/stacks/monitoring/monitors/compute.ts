@@ -3,19 +3,23 @@
 // Adopted from monitors created by hand in the Datadog UI. Do not edit a
 // monitor here and in the UI at the same time — this file wins on deploy.
 import { adopted } from '../adopted';
+import { notify } from '../notify';
 
 // https://us5.datadoghq.com/monitors/1062688
+// Average per task, not the sum over a family's tasks: the sum crossed the old
+// 400/500 thresholds whenever a service scaled out. Per-task averages peaked
+// around 50% over the 3 days to 2026-10-29.
 adopted('ecs-high-cpu', {
   name: '[PROD] High cpu usage across ECS Clusters',
   type: 'query alert',
   query:
-    'avg(last_5m):sum:ecs.fargate.cpu.percent{(ecs_cluster:macro-cluster-prod OR ecs_cluster:cloud-storage-cluster-prod OR ecs_cluster:macroai-cluster-prod-4cbe721)} by {task_name} > 500',
+    'avg(last_5m):avg:ecs.fargate.cpu.percent{(ecs_cluster:macro-cluster-prod OR ecs_cluster:cloud-storage-cluster-prod OR ecs_cluster:macroai-cluster-prod-4cbe721)} by {task_name} > 90',
   message: `{{task_name.name}} is experiencing high cpu usage in ECS
 
-@slack-monitoring`,
+${notify({ pages: false })}`,
   monitorThresholds: {
-    critical: '500',
-    warning: '400',
+    critical: '90',
+    warning: '80',
   },
   onMissingData: 'show_no_data',
   notifyAudit: false,
@@ -29,10 +33,9 @@ adopted('lambda-error-count', {
   type: 'query alert',
   query:
     'sum(last_1h):sum:aws.lambda.errors{(level:prod OR environment:prod ) AND NOT functionname:ws-api-gateway-authorizer-lambda-prod} by {functionname}.as_rate() > 500',
-  message: `{{#is_alert}}@slack-holy-shit-alarms {{/is_alert}}
-{{#is_alert_recovery}}@slack-holy-shit-alarms{{/is_alert_recovery}}
+  message: `Lambda {{functionname.name}} is failing at {{value}} errors per second.
 
-@slack-monitoring`,
+${notify({ pages: true })}`,
   monitorThresholds: {
     critical: '500',
     warning: '100',
@@ -50,9 +53,9 @@ adopted('document-text-extractor-prod', {
   type: 'query alert',
   query:
     'sum(last_4h):(sum:aws.lambda.errors{resource:document-text-extractor-prod}.as_count() / sum:aws.lambda.invocations{resource:document-text-extractor-prod}.as_count()) * 100 > 80',
-  message: `@eric.hayes@macro.com 
-@slack-monitoring 
-Document text extractor failing`,
+  message: `Document text extractor failing: {{value}}% of invocations errored over 4 hours.
+
+${notify({ pages: false })}`,
   monitorThresholds: {
     critical: '80',
     warning: '50',
@@ -62,7 +65,6 @@ Document text extractor failing`,
   includeTags: false,
   newHostDelay: 300,
   evaluationDelay: 900,
-  renotifyInterval: 0,
 });
 
 // https://us5.datadoghq.com/monitors/1291772
@@ -71,9 +73,9 @@ adopted('document-text-extractor-dev', {
   type: 'query alert',
   query:
     'sum(last_4h):(sum:aws.lambda.errors{resource:document-text-extractor-dev}.as_count() / sum:aws.lambda.invocations{resource:document-text-extractor-dev}.as_count()) * 100 > 80',
-  message: `@eric.hayes@macro.com 
-@slack-monitoring 
-Document text extractor failing`,
+  message: `Document text extractor failing: {{value}}% of invocations errored over 4 hours.
+
+${notify({ pages: false, environment: 'dev' })}`,
   monitorThresholds: {
     critical: '80',
     warning: '50',
@@ -83,5 +85,4 @@ Document text extractor failing`,
   includeTags: false,
   newHostDelay: 300,
   evaluationDelay: 900,
-  renotifyInterval: 0,
 });

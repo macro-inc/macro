@@ -14,19 +14,22 @@ use sqlx::postgres::{PgConnectOptions, PgListener, PgPoolOptions};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
+use external_chat::signals::trace_context;
 use whatsapp_linked::signals::{
-    ACCOUNT_CHANGED, ACCOUNT_RELEASED, GROUPS_REQUESTED, PAIRING_REQUESTED, SEND_REQUESTED,
-    trace_context,
+    ACCOUNT_CHANGED, ACCOUNT_RELEASED, GROUPS_REQUESTED, HISTORY_REQUESTED, LOOKUP_REQUESTED,
+    PAIRING_REQUESTED, SEND_REQUESTED,
 };
 
 use crate::domain::ports::Traced;
 use crate::domain::supervisor::Signal;
 
-const CHANNELS: [&str; 5] = [
+const CHANNELS: [&str; 7] = [
     ACCOUNT_RELEASED,
     PAIRING_REQUESTED,
     SEND_REQUESTED,
     GROUPS_REQUESTED,
+    LOOKUP_REQUESTED,
+    HISTORY_REQUESTED,
     ACCOUNT_CHANGED,
 ];
 
@@ -105,13 +108,15 @@ impl SignalListener {
 /// Maps one notification to a signal and the sender's trace context; `None`
 /// for unknown channels or payloads.
 pub fn parse(channel: &str, payload: &str) -> Option<(Signal, Option<String>)> {
-    let payload = whatsapp_linked::signals::Signal::parse(payload)?;
+    let payload = external_chat::signals::Signal::parse(payload)?;
     let id = payload.id;
     let signal = match channel {
         ACCOUNT_RELEASED => Some(Signal::AccountReleased(id)),
         PAIRING_REQUESTED => Some(Signal::PairingRequested(id)),
         SEND_REQUESTED => Some(Signal::SendRequested(id)),
         GROUPS_REQUESTED => Some(Signal::GroupsRequested(id)),
+        LOOKUP_REQUESTED => Some(Signal::LookupRequested(id)),
+        HISTORY_REQUESTED => Some(Signal::HistoryRequested(id)),
         ACCOUNT_CHANGED => Some(Signal::AccountChanged(id)),
         _ => None,
     }?;

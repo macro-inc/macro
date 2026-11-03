@@ -35,5 +35,5 @@ export const EntityType = {
   database: 'database',
   database_row: 'database_row',
   form: 'form',
-  whatsapp_group: 'whatsapp_group',
+  external_chat: 'external_chat',
 } as const;

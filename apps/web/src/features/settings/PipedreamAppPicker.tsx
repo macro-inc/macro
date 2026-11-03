@@ -73,9 +73,8 @@ export function PipedreamAppPicker(props: {
             <div class="px-4 py-4 text-center text-sm text-ink-muted">
               Couldn't load the connector catalog.
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
-                depth={3}
                 onClick={() => catalog.query.refetch()}
                 class="ml-2"
               >
@@ -114,9 +113,8 @@ export function PipedreamAppPicker(props: {
             <Show when={catalog.query.hasNextPage}>
               <div class="px-3 py-2 text-center">
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
-                  depth={3}
                   disabled={catalog.query.isFetchingNextPage}
                   onClick={() =>
                     fireAndForget(
@@ -255,7 +253,7 @@ function SelectedAppRow(props: {
         aria-label={`Remove ${props.server.server_name}`}
         onClick={() => props.onRemove()}
       >
-        <XIcon />
+        <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
       </Button>
     </IntegrationRow>
   );

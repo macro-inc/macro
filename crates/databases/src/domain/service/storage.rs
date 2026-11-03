@@ -202,7 +202,10 @@ where
             .take(PAGE_SIZE as usize)
             .copied()
             .collect();
-        let next = (start + page.len() < ordered.len()).then(|| *page.last().unwrap());
+        let next = page
+            .last()
+            .copied()
+            .filter(|_| start + page.len() < ordered.len());
         let rows = page
             .into_iter()
             .map(|row_id| {

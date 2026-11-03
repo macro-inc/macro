@@ -1,14 +1,18 @@
+import calls from './en/calls';
 import channelLabels from './en/channel-labels';
+import channelSections from './en/channel-sections';
 import commandMenu from './en/command-menu';
 import commands from './en/commands';
 import common from './en/common';
 import create from './en/create';
 import entityActions from './en/entity-actions';
+import localRuntime from './en/local-runtime';
 import mobile from './en/mobile';
 import nav from './en/nav';
 import settingsLanguage from './en/settings-language';
 import settingsNav from './en/settings-nav';
 import splitMenu from './en/split-menu';
+import tabs from './en/tabs';
 import viewMenus from './en/view-menus';
 
 /**
@@ -16,16 +20,20 @@ import viewMenus from './en/view-menus';
  * `./en`; translations in `./<language>.ts` mirror these keys.
  */
 export default {
+  calls,
   channelLabels,
+  channelSections,
   commandMenu,
   commands,
   common,
   create,
   entityActions,
+  localRuntime,
   mobile,
   nav,
   settingsLanguage,
   settingsNav,
   splitMenu,
+  tabs,
   viewMenus,
 };

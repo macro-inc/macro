@@ -2,3 +2,4 @@
 //! HTTP features composed by the agent harness service.
 
 pub mod cognition;
+pub mod product_analytics;

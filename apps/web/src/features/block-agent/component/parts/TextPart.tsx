@@ -8,12 +8,22 @@ import { hideIncompleteMacroXml } from './hideIncompleteMacroXml';
 export function TextPart(props: {
   text: string;
   inFlight?: boolean;
+  /** Agent prose stays truncated after a stop, interruption, or reload. */
+  hideIncompleteXml?: boolean;
+  /**
+   * Set what the prose mentions (documents, sessions, pull requests,
+   * contacts) in the accent color, as people mentions already are, so an
+   * agent's references stand out from its text.
+   */
+  accentMentions?: boolean;
   observeRender?: (element: HTMLElement) => (() => void) | undefined;
 }) {
   // Memoized so an `inFlight` flip that leaves the text unchanged does not
   // rebuild the markdown DOM and reload its images.
   const markdown = createMemo(() =>
-    props.inFlight ? hideIncompleteMacroXml(props.text) : props.text
+    props.inFlight || props.hideIncompleteXml
+      ? hideIncompleteMacroXml(props.text)
+      : props.text
   );
   let content!: HTMLDivElement;
   onMount(() => {
@@ -27,6 +37,7 @@ export function TextPart(props: {
     <div
       ref={content}
       class="chat-markdown-container whitespace-pre-wrap wrap-break-word max-w-full text-base"
+      classList={{ '[&_[data-mention]]:text-accent': props.accentMentions }}
     >
       <StaticMarkdown
         markdown={markdown()}

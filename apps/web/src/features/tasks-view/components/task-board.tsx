@@ -144,7 +144,7 @@ function HiddenColumns(props: {
         {props.count}
         {props.partial ? '+' : ''} hidden
       </h2>
-      <Button size="sm" variant="outline" onClick={props.onReveal}>
+      <Button size="sm" variant="secondary" onClick={props.onReveal}>
         Reveal hidden columns
       </Button>
     </KanbanBoard.ColumnPlaceholder>

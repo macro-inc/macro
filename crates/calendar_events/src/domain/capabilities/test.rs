@@ -385,7 +385,7 @@ fn an_outlook_guest_copy_of_a_google_meeting_may_only_answer() {
 }
 
 #[test]
-fn an_outlook_organizer_copy_may_do_everything_but_set_a_guest_policy() {
+fn an_outlook_organizer_copy_may_do_everything_but_set_a_guest_policy_or_answer() {
     let mut copy = event(
         vec![attendee(OUTLOOK, true), attendee(GUEST, false)],
         GuestPolicy::default(),
@@ -398,9 +398,10 @@ fn an_outlook_organizer_copy_may_do_everything_but_set_a_guest_policy() {
         copy.viewer_can,
         ViewerCapabilities {
             set_guest_policy: false,
+            rsvp: false,
             ..EVERYTHING
         },
-        "Outlook has no guest policy, but its organizer still organizes"
+        "Outlook has no guest policy and refuses an answer from the organizer, who still organizes"
     );
 }
 

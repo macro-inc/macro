@@ -75,6 +75,10 @@ fn path_check() -> Job {
             "${{ steps.filter.outputs.codegen_changed }}",
         )
         .add_output("i18n_changed", "${{ steps.filter.outputs.i18n_changed }}")
+        .add_output(
+            "database_grid_changed",
+            "${{ steps.filter.outputs.database_grid_changed }}",
+        )
         .add_step(checkout("Checkout Repo", false))
         .add_step(paths_filter())
 }
@@ -182,6 +186,7 @@ fn biome_check() -> Job {
         .add_step(steps::setup_dev_shell())
         .add_step(run_biome())
         .add_step(run_collaboration_biome())
+        .add_step(check_platform_rules())
         .add_step(steps::teardown_nix())
 }
 
@@ -196,6 +201,7 @@ fn test() -> Job {
         .add_step(run_tests())
         .add_step(run_signup_browser_tests())
         .add_step(run_i18n_browser_tests())
+        .add_step(run_database_browser_tests())
         .add_step(steps::teardown_nix())
 }
 
@@ -282,7 +288,8 @@ fn paths_filter() -> Step<Use> {
     // stays off for a shell-only tweak. Workflow YAML drift is `check
     // generated workflows`. `i18n_changed` covers what the interface language
     // browser tests render: translations, the menu primitives, and settings
-    // navigation.
+    // navigation. `database_grid_changed` covers the database grid's browser
+    // tests.
     Step::new("Filter changed paths")
         .uses(
             "dorny",
@@ -293,7 +300,7 @@ fn paths_filter() -> Step<Use> {
         .add_with((
             "filters",
             format!(
-                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'crates/code_execution/src/outbound/deno/*.mjs'\n  - 'crates/agent_code_mode/src/domain/documentation.json'\n  - 'crates/agent_code_mode/SKILL.md'\n  - 'crates/ai_tools/src/display_results/schema.generated.json'\n  - '.github/actions/setup-reqs-web/**'\ncodegen_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\n"
+                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'crates/code_execution/src/outbound/deno/*.mjs'\n  - 'crates/agent_code_mode/src/domain/documentation.json'\n  - 'crates/agent_code_mode/SKILL.md'\n  - 'crates/ai_tools/src/display_results/schema.generated.json'\n  - '.github/actions/setup-reqs-web/**'\ncodegen_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\n"
             ),
         ))
 }
@@ -416,6 +423,14 @@ fn run_biome() -> Step<Run> {
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
+/// Runs the browser-floor and native media permission ast-grep rules here
+/// because Conventions, which runs every ast-grep rule, is not a required check.
+fn check_platform_rules() -> Step<Run> {
+    Step::new("Check Browser Floor and Native Permissions").run(
+        "bunx --yes @ast-grep/cli@0.44.1 scan --filter '^(tsx?-browser-floor-apis|plist-media-.+)$'",
+    )
+}
+
 fn run_collaboration_biome() -> Step<Run> {
     Step::new("Run Collaboration Package Biome")
         .run("biome ci --changed --no-errors-on-unmatched --error-on-warnings")
@@ -465,6 +480,17 @@ fn run_i18n_browser_tests() -> Step<Run> {
         .run("bunx playwright install-deps chromium\njust test-i18n-browser")
         .if_condition(Expression::new(
             "needs.path-check.outputs.i18n_changed == 'true'",
+        ))
+        .working_directory(xtask_paths::repo_dir!("apps/web"))
+}
+
+/// Rows and cells measured under remote presence in Chromium. Only when the
+/// database grid changes.
+fn run_database_browser_tests() -> Step<Run> {
+    Step::new("Database Grid Browser Tests")
+        .run("bunx playwright install-deps chromium\njust test-database-browser")
+        .if_condition(Expression::new(
+            "needs.path-check.outputs.database_grid_changed == 'true'",
         ))
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }

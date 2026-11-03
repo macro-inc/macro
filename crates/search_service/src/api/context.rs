@@ -1,5 +1,6 @@
 use agent_session::domain::search::AgentSessionSearchMetadataService;
 use axum::extract::FromRef;
+use calendar_events::domain::ports::CalendarEventLabelReader;
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;
 use macro_authorization::{
@@ -36,6 +37,9 @@ pub struct SearchHandlerState {
     /// gating here covers every caller of the search API at once, the AI
     /// search tools included.
     pub calendar_search_enabled: bool,
+    /// Says whose calendar each event hit is on and what the caller is there,
+    /// by the rule every calendar reader shares.
+    pub calendar_event_labels: Arc<dyn CalendarEventLabelReader>,
 }
 
 impl SearchHandlerState {

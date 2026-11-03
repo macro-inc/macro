@@ -17,10 +17,10 @@ export function SchedulingDrawerHeader(props: {
         {props.title}
       </MobileDrawer.Title>
       <Button
+        aria-label={props.closeLabel}
+        tooltip={{ content: props.closeLabel, disabled: true }}
         variant="ghost"
         size="icon-sm"
-        label={props.closeLabel}
-        tooltipDisabled
         class="shrink-0 rounded-full bg-ink/6"
         onClick={props.onClose}
       >
