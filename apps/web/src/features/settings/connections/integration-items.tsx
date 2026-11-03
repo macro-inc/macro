@@ -6,6 +6,7 @@ import {
   enableSlackArchiveImport,
 } from '@core/constant/featureFlags';
 import { useEmailLinks } from '@core/email-link';
+import { OutlookBetaBadge } from '@core/email-link/OutlookBetaBadge';
 import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { openExternalUrl } from '@core/util/url';
@@ -74,6 +75,7 @@ function emailItem(
   return {
     id: outlook ? 'outlook' : 'gmail',
     name: outlook ? 'Outlook' : 'Gmail',
+    badge: outlook ? <OutlookBetaBadge /> : undefined,
     kind: 'native',
     icon: outlook ? <OutlookIcon /> : <GmailIcon />,
     get description() {

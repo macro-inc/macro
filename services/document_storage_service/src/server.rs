@@ -1393,6 +1393,17 @@ pub async fn run() -> anyhow::Result<()> {
         config.enable_ai_usage_enforcement,
         config.ai_pricing(),
         ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement),
+        Some(Arc::new(
+            mcp_client::outbound::auth_service_github_tokens::AuthServiceGithubTokens::new(
+                authentication_service_client::AuthServiceClient::new(
+                    config
+                        .authentication_service_secret_key
+                        .as_ref()
+                        .to_string(),
+                    macro_service_urls::AuthServiceUrl::new()?.to_string(),
+                ),
+            ),
+        )),
     )
     .await
     .context("failed to build Macro agent tool context")?;
@@ -1610,6 +1621,10 @@ pub async fn run() -> anyhow::Result<()> {
         ),
         macro_event_broker.clone(),
         collab_surface_service.clone(),
+        static_file_service_client::StaticFileServiceClient::new(
+            config.internal_api_key.to_string(),
+            StaticFileServiceUrl::new()?.to_string(),
+        ),
     ));
 
     // Individual initiative and agent-session reads preserve read-after-write
@@ -2192,6 +2207,18 @@ pub async fn run() -> anyhow::Result<()> {
             ),
         ),
         graphql_agent_session_entity_loader: graphql_soup::AgentSessionEntityLoader(
+            graphql_soup::soup_item_loader(
+                primary_entity_soup.clone(),
+                Arc::new(email_service.clone()),
+                entity_access_service.as_ref().clone(),
+            ),
+        ),
+        graphql_database_rows_context: graphql_databases::DatabaseRowsGraphqlContext::new(
+            databases_sql::view_rows::DatabaseViewRows::new(
+                databases_service.clone(),
+                databases::outbound::pg_view_rows::PgViewRows::new(db.clone()),
+            ),
+            entity_access_service.clone(),
             graphql_soup::soup_item_loader(
                 primary_entity_soup.clone(),
                 Arc::new(email_service.clone()),
