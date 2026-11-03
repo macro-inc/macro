@@ -47,7 +47,7 @@ impl PgMailboxSync {
 }
 
 fn db_error(error: sqlx::Error) -> MailboxError {
-    MailboxError::Database(database_failure(&error))
+    MailboxError::Database(DatabaseFailure::from(&error))
 }
 
 /// For `email_db_client` calls, which wrap their `sqlx` errors in `anyhow`.
@@ -56,26 +56,29 @@ fn wrapped_db_error(error: anyhow::Error) -> MailboxError {
         .chain()
         .find_map(|cause| cause.downcast_ref::<sqlx::Error>())
         .map_or(MailboxError::Persistence, |error| {
-            MailboxError::Database(database_failure(error))
+            MailboxError::Database(DatabaseFailure::from(error))
         })
 }
 
-fn database_failure(error: &sqlx::Error) -> DatabaseFailure {
-    match error {
-        sqlx::Error::Database(error) => error.code().map_or(DatabaseFailure::Other, |code| {
-            DatabaseFailure::Sqlstate(code.into_owned())
-        }),
-        sqlx::Error::PoolTimedOut => DatabaseFailure::PoolTimedOut,
-        sqlx::Error::Io(_)
-        | sqlx::Error::Tls(_)
-        | sqlx::Error::Protocol(_)
-        | sqlx::Error::PoolClosed
-        | sqlx::Error::WorkerCrashed => DatabaseFailure::Connection,
-        sqlx::Error::ColumnDecode { .. }
-        | sqlx::Error::Decode(_)
-        | sqlx::Error::ColumnNotFound(_)
-        | sqlx::Error::TypeNotFound { .. } => DatabaseFailure::Decode,
-        _ => DatabaseFailure::Other,
+/// Lets any adapter keep a database error's SQLSTATE without its message.
+impl From<&sqlx::Error> for DatabaseFailure {
+    fn from(error: &sqlx::Error) -> Self {
+        match error {
+            sqlx::Error::Database(error) => error.code().map_or(DatabaseFailure::Other, |code| {
+                DatabaseFailure::Sqlstate(code.into_owned())
+            }),
+            sqlx::Error::PoolTimedOut => DatabaseFailure::PoolTimedOut,
+            sqlx::Error::Io(_)
+            | sqlx::Error::Tls(_)
+            | sqlx::Error::Protocol(_)
+            | sqlx::Error::PoolClosed
+            | sqlx::Error::WorkerCrashed => DatabaseFailure::Connection,
+            sqlx::Error::ColumnDecode { .. }
+            | sqlx::Error::Decode(_)
+            | sqlx::Error::ColumnNotFound(_)
+            | sqlx::Error::TypeNotFound { .. } => DatabaseFailure::Decode,
+            _ => DatabaseFailure::Other,
+        }
     }
 }
 

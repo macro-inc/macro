@@ -122,6 +122,9 @@ tools — hexagonal, heavily feature-gated.
 - Map database errors in `mailbox_pg` with `db_error` (or `wrapped_db_error`
   for `email_db_client` calls) so the SQLSTATE reaches the log; keep
   `MailboxError::Persistence` for stored data that cannot be decoded.
+  `MailboxError::Effect` (`defer_reason=effect`) is for a projection effect
+  that fails outside the database; email-service's `MailboxEffects` maps its
+  database steps with `database_failed` and everything else with `failed`.
 - "outlook import completed" fires from `settle_import` (`mailbox_pg.rs`)
   under the link lock, once per import run: the folder-catalog stream's
   `import_completed_at` is stamped when every folder is enumerated and no

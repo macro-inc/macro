@@ -14,7 +14,7 @@ impl MailboxCredentialHealthRepository for PgMailboxSync {
         let failed = |error: sqlx::Error| TokenError::Transient {
             message: format!(
                 "could not persist mailbox health: {}",
-                database_failure(&error)
+                DatabaseFailure::from(&error)
             ),
         };
         let mut tx = self.db.begin().await.map_err(failed)?;
