@@ -178,3 +178,46 @@ async fn imported_call_record_reads_source_and_transcript(
     );
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("import_users"))
+)]
+async fn an_imported_call_s_people_are_its_owner_and_participants(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let mut call = granola_meeting("import-a");
+    call.source.provider = CallProvider::Dialpad;
+    call.participants.push(CallParticipant {
+        id: macro_uuid::generate_uuid_v7(),
+        user_id: None,
+        display_name: Some("Caller".into()),
+        email: None,
+        phone: Some("+1555010".into()),
+        external_id: None,
+        attendance: vec![],
+    });
+    let call_id = PgImportedCallRepository::new(pool.clone())
+        .upsert(call)
+        .await?;
+
+    let people = PgCallRepo::new(pool)
+        .get_call_record_people(&call_id)
+        .await?;
+    assert_eq!(people.user_ids, vec![user("import-a")]);
+    assert_eq!(people.provider, Some(CallProvider::Dialpad));
+    let mut guests: Vec<(Option<String>, Option<String>)> = people
+        .guests
+        .into_iter()
+        .map(|guest| (guest.email, guest.phone))
+        .collect();
+    guests.sort();
+    assert_eq!(
+        guests,
+        vec![
+            (None, Some("+1555010".into())),
+            (Some("ada@example.com".into()), None),
+        ]
+    );
+    Ok(())
+}

@@ -29,6 +29,36 @@ struct ContactListCall {
     limit: u16,
 }
 
+impl crate::domain::contact_phones::ContactPhonesRepository for StubRepo {
+    async fn contact_phones(
+        &self,
+        _team_id: &uuid::Uuid,
+        _contact_id: &uuid::Uuid,
+        _include_hidden: bool,
+    ) -> Result<Option<Vec<crate::domain::contact_phones::ContactPhone>>, CrmError> {
+        unimplemented!("StubRepo.contact_phones")
+    }
+
+    async fn set_contact_phones(
+        &self,
+        _team_id: &uuid::Uuid,
+        _contact_id: &uuid::Uuid,
+        _phones: &[phone_number::PhoneNumber],
+        _include_hidden: bool,
+    ) -> Result<Option<Vec<crate::domain::contact_phones::ContactPhone>>, CrmError> {
+        unimplemented!("StubRepo.set_contact_phones")
+    }
+
+    async fn add_contact_phones(
+        &self,
+        _team_id: &uuid::Uuid,
+        _phones: &[(uuid::Uuid, phone_number::PhoneNumber)],
+        _source: crate::domain::contact_phones::PhoneSource,
+    ) -> Result<u64, CrmError> {
+        unimplemented!("StubRepo.add_contact_phones")
+    }
+}
+
 impl CompaniesRepository for StubRepo {
     async fn list_contacts_for_soup(
         &self,

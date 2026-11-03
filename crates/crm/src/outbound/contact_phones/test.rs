@@ -1,0 +1,97 @@
+use super::*;
+use crate::outbound::companies_repo::test::helpers::{insert_company, insert_contact, seed_team};
+use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use sqlx::PgPool;
+
+fn numbers(phones: &[ContactPhone]) -> Vec<(&str, PhoneSource)> {
+    phones
+        .iter()
+        .map(|phone| (phone.phone.as_str(), phone.source))
+        .collect()
+}
+
+fn phone(text: &str) -> PhoneNumber {
+    PhoneNumber::parse(text).unwrap()
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn editing_a_contact_s_numbers_keeps_the_source_of_numbers_it_keeps(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    seed_team(&pool, team_id, "macro|owner@example.com").await?;
+    let company_id = insert_company(&pool, team_id, true, &["acme.example"]).await?;
+    let contact_id = insert_contact(&pool, company_id, "jane@acme.example").await?;
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+
+    assert_eq!(
+        repo.contact_phones(&team_id, &contact_id, false).await?,
+        Some(vec![])
+    );
+    let added = repo
+        .add_contact_phones(
+            &team_id,
+            &[(contact_id, phone("+1555010"))],
+            PhoneSource::Dialpad,
+        )
+        .await?;
+    assert_eq!(added, 1);
+
+    let phones = repo
+        .set_contact_phones(
+            &team_id,
+            &contact_id,
+            &[phone("+1555010"), phone("+4420123")],
+            false,
+        )
+        .await?
+        .unwrap();
+    assert_eq!(
+        numbers(&phones),
+        [
+            ("+1555010", PhoneSource::Dialpad),
+            ("+4420123", PhoneSource::Manual)
+        ]
+    );
+
+    let phones = repo
+        .set_contact_phones(&team_id, &contact_id, &[phone("+4420123")], false)
+        .await?
+        .unwrap();
+    assert_eq!(numbers(&phones), [("+4420123", PhoneSource::Manual)]);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn another_team_cannot_read_or_write_a_contact_s_numbers(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let other_team = Uuid::now_v7();
+    seed_team(&pool, team_id, "macro|owner@example.com").await?;
+    seed_team(&pool, other_team, "macro|other@example.com").await?;
+    let company_id = insert_company(&pool, team_id, true, &["acme.example"]).await?;
+    let contact_id = insert_contact(&pool, company_id, "jane@acme.example").await?;
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+
+    assert_eq!(
+        repo.contact_phones(&other_team, &contact_id, true).await?,
+        None
+    );
+    assert_eq!(
+        repo.set_contact_phones(&other_team, &contact_id, &[phone("+1555010")], true)
+            .await?,
+        None
+    );
+    let added = repo
+        .add_contact_phones(
+            &other_team,
+            &[(contact_id, phone("+1555010"))],
+            PhoneSource::Csv,
+        )
+        .await?;
+    assert_eq!(added, 0);
+    assert_eq!(
+        repo.contact_phones(&team_id, &contact_id, false).await?,
+        Some(vec![])
+    );
+    Ok(())
+}

@@ -18,6 +18,11 @@ tools/HTTP/GraphQL surfaces over them.
 - `src/inbound/axum_router.rs` (+ `axum_router/*.rs`): HTTP handlers.
 - `src/inbound/toolset.rs` (+ `toolset/*.rs`): AI tool definitions.
 - `src/outbound/companies_repo.rs`: the Postgres adapter for companies/contacts.
+- `src/domain/contact_phones.rs` + `src/outbound/contact_phones.rs`: a
+  contact's E.164 numbers (`crm_contact_phones`) and where each came from.
+- `src/outbound/call_link.rs`: links archived and imported calls to the CRM
+  records of the people on them (`src/inbound/call_events.rs` consumes the
+  call topic).
 - `SALES_BACKFILL.md`: how the legacy-CRM-to-Sales migration behaves.
 
 ## Scope
@@ -60,6 +65,11 @@ tools/HTTP/GraphQL surfaces over them.
   CI checks both outputs.
 
 ## Gotchas
+
+- Call linking matches each guest by email first (company by domain, contact
+  by address) and by phone only when no contact matched. A number nobody has
+  creates nothing. Only Dialpad calls teach a contact matched by email its
+  number. Links are insert-if-absent: the first set written for a call stays.
 
 - `src/domain/generic_email_domains.rs` filters both manual company creation
   and email-driven contact population. Cover legitimate company-domain

@@ -23,6 +23,15 @@ const COMPANY_KEY_HEADERS: &[&str] = &["domain", "domains", "website"];
 const CONTACT_NAME_HEADERS: &[&str] = &["contact", "name", "contact name"];
 /// Headers holding a contact's email.
 const CONTACT_KEY_HEADERS: &[&str] = &["email", "email address"];
+/// Headers holding a contact's phone number in a contact-pipeline CSV.
+const CONTACT_PHONE_HEADERS: &[&str] = &[
+    "phone",
+    "phone number",
+    "mobile",
+    "mobile phone",
+    "work phone",
+    "telephone",
+];
 /// Company columns that pipeline entries hold now, rather than companies.
 pub const COMPANY_PIPELINE_FIELDS: &[&str] = &["stage", "owner", "revenue"];
 
@@ -224,6 +233,11 @@ pub fn record_rows(
         skipped,
         other_headers: other.iter().map(|&i| table.headers[i].clone()).collect(),
     })
+}
+
+/// Whether `header` holds a contact's phone number.
+pub fn is_phone_header(header: &str) -> bool {
+    CONTACT_PHONE_HEADERS.contains(&header.trim().to_ascii_lowercase().as_str())
 }
 
 /// The companies a companies CSV adds, one per domain, first row first.

@@ -7,6 +7,7 @@ use crate::domain::{
     auth::{CrmCompanyReceipt, CrmContactReceipt, CrmTeamReceipt},
     companies_repo::{CompaniesRepository, CrmCompanyListSort, CrmCompanySoupCursor},
     company_metadata_resolver::{CompanyMetadataResolver, DomainResolution},
+    contact_phones::{ContactPhone, ContactPhonesRepository, PhoneSource, parse_contact_phones},
     generic_email_domains::is_generic_email_domain,
     model::{
         CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError, CrmScopePrecheck,
@@ -15,6 +16,7 @@ use crate::domain::{
 };
 use chrono::{DateTime, TimeDelta, Utc};
 use entity_access::domain::models::{EditAccessLevel, MemberTeamRole, ViewAccessLevel};
+use phone_number::PhoneNumber;
 
 /// The CrmService exposes operations over CRM records (companies, their
 /// domains and contacts).
@@ -277,6 +279,30 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         access: &CrmContactReceipt<ViewAccessLevel>,
         name: &str,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
+    /// The contact's phone numbers, oldest first. Any team member who can
+    /// see the contact can read them.
+    fn contact_phones(
+        &self,
+        access: &CrmContactReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<Vec<ContactPhone>, CrmError>> + Send;
+
+    /// Replace the contact's phone numbers with `phones`, as typed. Each
+    /// must carry its country code ([`CrmError::InvalidRequest`] otherwise);
+    /// they are stored in E.164. Same access as [`CrmService::set_contact_name`].
+    fn set_contact_phones(
+        &self,
+        access: &CrmContactReceipt<ViewAccessLevel>,
+        phones: &[String],
+    ) -> impl Future<Output = Result<Vec<ContactPhone>, CrmError>> + Send;
+
+    /// Add numbers a CSV import found to the team's contacts, keeping the
+    /// ones they have. Returns how many were new.
+    fn import_contact_phones(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+        phones: &[(uuid::Uuid, PhoneNumber)],
+    ) -> impl Future<Output = Result<u64, CrmError>> + Send;
 
     /// Batched authorization probe for a CRM-scoped email query. See
     /// [`CompaniesRepository::crm_scope_precheck`].
@@ -649,7 +675,7 @@ const ENRICHMENT_RETRY_AFTER: TimeDelta = TimeDelta::hours(6);
 
 impl<CR, R> CrmService for CrmServiceImpl<CR, R>
 where
-    CR: CompaniesRepository,
+    CR: CompaniesRepository + ContactPhonesRepository,
     R: CompanyMetadataResolver,
 {
     #[tracing::instrument(skip(self), err)]
@@ -915,6 +941,48 @@ where
         let contact_id = access.contact_id()?;
         self.companies_repository
             .set_contact_name(&team_id, &contact_id, name, access.include_hidden())
+            .await
+    }
+
+    #[tracing::instrument(skip(self, access), err)]
+    async fn contact_phones(
+        &self,
+        access: &CrmContactReceipt<ViewAccessLevel>,
+    ) -> Result<Vec<ContactPhone>, CrmError> {
+        let contact_id = access.contact_id()?;
+        self.companies_repository
+            .contact_phones(&access.team_id(), &contact_id, access.include_hidden())
+            .await?
+            .ok_or(CrmError::ContactNotFoundForTeam)
+    }
+
+    #[tracing::instrument(skip(self, access, phones), fields(count = phones.len()), err)]
+    async fn set_contact_phones(
+        &self,
+        access: &CrmContactReceipt<ViewAccessLevel>,
+        phones: &[String],
+    ) -> Result<Vec<ContactPhone>, CrmError> {
+        let phones = parse_contact_phones(phones)?;
+        let contact_id = access.contact_id()?;
+        self.companies_repository
+            .set_contact_phones(
+                &access.team_id(),
+                &contact_id,
+                &phones,
+                access.include_hidden(),
+            )
+            .await?
+            .ok_or(CrmError::ContactNotFoundForTeam)
+    }
+
+    #[tracing::instrument(skip(self, access, phones), fields(count = phones.len()), err)]
+    async fn import_contact_phones(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+        phones: &[(uuid::Uuid, PhoneNumber)],
+    ) -> Result<u64, CrmError> {
+        self.companies_repository
+            .add_contact_phones(&access.team_id(), phones, PhoneSource::Csv)
             .await
     }
 
@@ -1262,6 +1330,29 @@ impl CrmService for NoOpCrmService {
         _name: &str,
     ) -> Result<(), CrmError> {
         unimplemented!("NoOpCrmService.set_contact_name")
+    }
+
+    async fn contact_phones(
+        &self,
+        _access: &CrmContactReceipt<ViewAccessLevel>,
+    ) -> Result<Vec<ContactPhone>, CrmError> {
+        unimplemented!("NoOpCrmService.contact_phones")
+    }
+
+    async fn set_contact_phones(
+        &self,
+        _access: &CrmContactReceipt<ViewAccessLevel>,
+        _phones: &[String],
+    ) -> Result<Vec<ContactPhone>, CrmError> {
+        unimplemented!("NoOpCrmService.set_contact_phones")
+    }
+
+    async fn import_contact_phones(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _phones: &[(uuid::Uuid, PhoneNumber)],
+    ) -> Result<u64, CrmError> {
+        unimplemented!("NoOpCrmService.import_contact_phones")
     }
 
     async fn crm_scope_precheck(

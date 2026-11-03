@@ -12,9 +12,11 @@ use uuid::Uuid;
 
 use crate::domain::meetings::GuestId;
 use crate::domain::models::{
-    CallRecord, CallRecordGuest, CallRecordSource, CallRecordTranscriptSegment,
+    CallGuest, CallPeople, CallRecord, CallRecordGuest, CallRecordSource,
+    CallRecordTranscriptSegment,
 };
 use crate::domain::records::CallProvider;
+use macro_user_id::user_id::MacroUserIdStr;
 
 /// Imported attendees, shown as guests: they carry provider identity hints
 /// (name, email, phone) but never a Macro account.
@@ -56,6 +58,67 @@ pub(super) async fn imported_guests(
             });
     }
     Ok(guests)
+}
+
+/// The people on an imported call, for matching them to CRM records: its
+/// owner, and its participants' emails and phones. `None` when `call_id` is
+/// not an import.
+pub(super) async fn imported_call_people(
+    conn: &mut PgConnection,
+    call_id: &Uuid,
+) -> Result<Option<CallPeople>, sqlx::Error> {
+    let Some(call) = sqlx::query!(
+        r#"
+        SELECT ce.user_id,
+               (SELECT s.provider FROM call_entity_sources s
+                WHERE s.call_id = ce.id
+                ORDER BY s.synced_at DESC NULLS LAST LIMIT 1) AS provider
+        FROM call_entities ce
+        WHERE ce.id = $1 AND ce.created_via = 'import'
+        "#,
+        call_id,
+    )
+    .fetch_optional(&mut *conn)
+    .await?
+    else {
+        return Ok(None);
+    };
+    let guests = sqlx::query!(
+        r#"
+        SELECT LOWER(email) AS email, phone
+        FROM call_entity_participants
+        WHERE call_id = $1 AND (email IS NOT NULL OR phone IS NOT NULL)
+        ORDER BY id
+        "#,
+        call_id,
+    )
+    .fetch_all(&mut *conn)
+    .await?
+    .into_iter()
+    .map(|row| CallGuest {
+        email: row.email,
+        phone: row.phone,
+    })
+    .collect();
+    let provider = call
+        .provider
+        .as_deref()
+        .map(str::parse::<CallProvider>)
+        .transpose()
+        .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+    // An unparsable owner names nobody to match; the guests still link.
+    let user_ids = MacroUserIdStr::try_from(call.user_id)
+        .inspect_err(
+            |error| tracing::warn!(%call_id, error = ?error, "skipping unparsable import owner"),
+        )
+        .ok()
+        .into_iter()
+        .collect();
+    Ok(Some(CallPeople {
+        user_ids,
+        guests,
+        provider,
+    }))
 }
 
 /// Full record for an imported call, or `None` when `call_id` is not one.

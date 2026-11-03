@@ -16,7 +16,7 @@ section below is one place, in order; past misses are called out inline.
 | --- | --- | --- |
 | A topic | The `macro.messages` registration: `crates/macro_event_topics/src/lib.rs`, its `test.rs`, `.github/kafka-cluster-topics.json` | Three files, shipped as its own PR ahead of the producer |
 | Events on a topic | `crates/github_pull_requests/src/broker.rs` (one variant), `crates/messages/src/outbound/broker.rs` (several) | Topic enum, keyed envelope, broker-backed adapter for a domain port |
-| A durable consumer | `crates/crm/src/inbound/call_archived.rs` | Smallest grouped consumer: poison commit, bounded retry, commit after work, cancel-safe |
+| A durable consumer | `crates/crm/src/inbound/call_events.rs` | Smallest grouped consumer: poison commit, bounded retry, commit after work, cancel-safe |
 | An at-least-once consumer that must not skip | `crates/webhook/src/inbound/kafka_consumer.rs` | Transient vs permanent errors; exits uncommitted so a restart redelivers |
 | A per-process fan-out (GraphQL subscription, SSE) | `crates/agent_session_realtime/src/outbound/log_topic_consumer.rs` | Ungrouped, starts at `Latest`, commits nothing |
 

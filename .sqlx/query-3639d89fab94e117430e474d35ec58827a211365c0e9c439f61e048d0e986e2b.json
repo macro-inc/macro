@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH teams AS (\n                SELECT DISTINCT tu.team_id\n                FROM team_user tu\n                JOIN team_crm_settings s ON s.team_id = tu.team_id AND s.crm_enabled\n                WHERE LOWER(tu.user_id) = ANY($1)\n            ),\n            guests AS (\n                SELECT g.ord,\n                       CASE WHEN STRPOS(g.email, '@') > 0 THEN LOWER(g.email) END AS email,\n                       NULLIF(g.phone, '') AS phone\n                FROM UNNEST($2::text[], $3::text[]) WITH ORDINALITY AS g(email, phone, ord)\n            ),\n            outsiders AS (\n                SELECT t.team_id, g.ord, g.email, g.phone, SPLIT_PART(g.email, '@', 2) AS domain\n                FROM teams t\n                CROSS JOIN guests g\n                WHERE g.email IS NULL OR NOT EXISTS (\n                    SELECT 1 FROM team_user tu\n                    WHERE tu.team_id = t.team_id AND LOWER(tu.user_id) = 'macro|' || g.email\n                )\n            ),\n            by_email AS (\n                SELECT o.team_id, o.ord, o.phone, co.id AS company_id, ct.id AS contact_id\n                FROM outsiders o\n                JOIN crm_domains d ON d.team_id = o.team_id AND LOWER(d.domain) = o.domain\n                JOIN crm_companies co ON co.id = d.company_id AND NOT co.hidden\n                LEFT JOIN crm_contacts ct\n                    ON ct.company_id = co.id AND LOWER(ct.email) = o.email AND NOT ct.hidden\n            ),\n            by_phone AS (\n                SELECT co.id AS company_id, ct.id AS contact_id\n                FROM outsiders o\n                JOIN crm_contact_phones p ON p.phone = o.phone\n                JOIN crm_contacts ct ON ct.id = p.contact_id AND NOT ct.hidden\n                JOIN crm_companies co\n                    ON co.id = ct.company_id AND co.team_id = o.team_id AND NOT co.hidden\n                WHERE NOT EXISTS (\n                    SELECT 1 FROM by_email e\n                    WHERE e.team_id = o.team_id AND e.ord = o.ord AND e.contact_id IS NOT NULL\n                )\n            )\n            SELECT company_id AS \"company_id!\", contact_id AS \"contact_id?\",\n                   phone AS \"learned_phone?\"\n            FROM by_email\n            UNION ALL\n            SELECT company_id, contact_id, NULL FROM by_phone\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "company_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "contact_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "learned_phone?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "3639d89fab94e117430e474d35ec58827a211365c0e9c439f61e048d0e986e2b"
+}

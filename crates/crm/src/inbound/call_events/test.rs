@@ -1,8 +1,11 @@
 use std::sync::{Arc, Mutex};
 
 use call::domain::{
-    events::{CallArchiveReason, CallRecordArchivedMetadata, CallRecordDeletedMetadata},
-    models::{CallError, CallPeople, CallRecord, GetCallRecordsRequest},
+    events::{
+        CallArchiveReason, CallRecordArchivedMetadata, CallRecordDeletedMetadata,
+        CallRecordImportedMetadata,
+    },
+    models::{CallError, CallGuest, CallPeople, CallRecord, GetCallRecordsRequest},
 };
 use chrono::Utc;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -15,7 +18,11 @@ const CALL_RECORD_ID: Uuid = Uuid::from_u128(0x0198a1b2_c3d4_7e5f_8061_728394a5b
 fn people() -> CallPeople {
     CallPeople {
         user_ids: vec![MacroUserIdStr::try_from_email("rep@ours.com").unwrap()],
-        invitee_emails: vec!["buyer@acme.com".to_string()],
+        guests: vec![CallGuest {
+            email: Some("buyer@acme.example".to_string()),
+            phone: None,
+        }],
+        provider: None,
     }
 }
 
@@ -72,13 +79,13 @@ fn consumer_failing(
     people: Option<CallPeople>,
     failures: u32,
 ) -> (
-    CallArchivedConsumer<FakeCalls, Arc<RecordingLinks>>,
+    CallLinkConsumer<FakeCalls, Arc<RecordingLinks>>,
     Arc<RecordingLinks>,
     Arc<Mutex<u32>>,
 ) {
     let links = Arc::new(RecordingLinks::default());
     let lookups = Arc::new(Mutex::new(0));
-    let mut consumer = CallArchivedConsumer::new(CallRecordLinker::new(
+    let mut consumer = CallLinkConsumer::new(CallRecordLinker::new(
         FakeCalls {
             people,
             failures: Mutex::new(failures),
@@ -93,7 +100,7 @@ fn consumer_failing(
 fn consumer(
     people: Option<CallPeople>,
 ) -> (
-    CallArchivedConsumer<FakeCalls, Arc<RecordingLinks>>,
+    CallLinkConsumer<FakeCalls, Arc<RecordingLinks>>,
     Arc<RecordingLinks>,
 ) {
     let (consumer, links, _) = consumer_failing(people, 0);
@@ -120,6 +127,26 @@ async fn archived_calls_are_linked_with_the_people_on_them() {
     let (consumer, links) = consumer(Some(people()));
 
     consumer.apply(&archived()).await.unwrap();
+
+    assert_eq!(
+        *links.links.lock().unwrap(),
+        vec![(CALL_RECORD_ID, people())]
+    );
+}
+
+#[tokio::test]
+async fn imported_calls_are_linked_too() {
+    let (consumer, links) = consumer(Some(people()));
+
+    consumer
+        .apply(&CallTopicEvent::RecordImported(
+            CallRecordImportedMetadata {
+                call_id: CALL_RECORD_ID,
+                owner: MacroUserIdStr::try_from_email("rep@ours.example").unwrap(),
+            },
+        ))
+        .await
+        .unwrap();
 
     assert_eq!(
         *links.links.lock().unwrap(),

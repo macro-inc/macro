@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT LOWER(email) AS email, phone\n        FROM call_entity_participants\n        WHERE call_id = $1 AND (email IS NOT NULL OR phone IS NOT NULL)\n        ORDER BY id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "phone",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      true
+    ]
+  },
+  "hash": "c7b1852a0132a9ee11eec0215e1c412a7ae7fe081e328fb494d6f0d7da25f02f"
+}

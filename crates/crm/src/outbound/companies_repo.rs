@@ -34,7 +34,7 @@ struct DepopulateTarget {
 #[derive(Clone)]
 pub struct CompaniesRepositoryImpl {
     /// The underlying sqlx::PgPool connected to macrodb.
-    pool: PgPool,
+    pub(super) pool: PgPool,
 }
 
 impl CompaniesRepositoryImpl {
