@@ -48,7 +48,8 @@ README is written for them, not for Macro engineers.
 - Never depend on `workspace-hack` or any `macro_*`/workspace crate: the
   crate must build outside this repo. It is excluded from hakari in
   `.config/hakari.toml`.
-- Config comes from plain env vars (`MACRO_API_KEY`, `MACRO_ENV`) read with
+- Config comes from plain env vars (`MACRO_API_KEY`, then `MACRO_GATEWAY` or
+  `MACRO_ENV`) read with
   `std::env::var_os`; `macro_config`/`macro_service_urls` don't apply off
   Macro's infrastructure. Host URLs mirror `packages/sdk/src/config.ts`;
   update both when a gateway path changes.

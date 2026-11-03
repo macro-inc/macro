@@ -50,8 +50,11 @@ account and mailbox.
   placeholder address and the email routes answer 503.
 - The bootstrap prompt carries the agent's API key into its first session's
   log; that session is private to the agent account.
-- The brain gets public service URLs (`default_for_environment`), never the
-  auth container's in-network overrides.
+- The brain reaches Macro through `ApiGatewayUrl` (a local stack overrides it
+  to its proxy), never the auth container's in-network service URLs.
+- macrod rereads its bound agents every 10 s and session requests are not
+  replayed, so the launcher waits that long before asking for the brain's
+  session and asks again on 409.
 
 ## Related
 
