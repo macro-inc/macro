@@ -503,6 +503,8 @@ again once none of the company's domains remain blocked. Contacts without a
 company reappear when their own domain is unblocked. A contact attached to a
 company follows that company's domains, so
 blocking `gmail.com` does not hide a Gmail address filed under another company.
+A new contact added by hand without a company at an already blocked domain
+stays visible; a later block operation for that domain hides it.
 After blocking or unblocking, verify that already-cached company lists and
 contact suggestions refresh to the new visibility without reloading the app,
 including a previously hidden company returning after unblocking.

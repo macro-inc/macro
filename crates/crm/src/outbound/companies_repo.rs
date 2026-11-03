@@ -864,8 +864,8 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-        // Serialize with a concurrent block of the same domain, which would
-        // otherwise miss this row and leave it visible.
+        // Order manual creation against blocks: a later block sees and hides
+        // this row; a contact added after a committed block stays visible.
         if let Some((_, domain)) = normalized_email.as_deref().and_then(|e| e.split_once('@')) {
             Self::lock_team_domain(&mut tx, team_id, domain).await?;
         }
