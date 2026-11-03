@@ -314,7 +314,9 @@ feature code to cover a remount.
 Project identity chips use cache-first reads and the shared `GraphqlUser.initiative`
 entity resolver to reuse complete authorized records from project lists or details.
 Keep cold row metadata reads non-suspending so virtual scrolling never detaches
-its list; permission revalidation remains independent of row mounts.
+its list; permission revalidation remains independent of row mounts. Project
+reads retain client-scoped denial state across remounts and immediately reauthorize
+previous-viewer cache hits; older requests never clear newer denial decisions.
 
 Resolve server date-group keys through the shared `DATE_GROUP_BUCKETS` metadata
 in `lib/queries/soup/grouped/api.ts` for labels and display order; cached Mail

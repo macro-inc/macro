@@ -454,6 +454,10 @@ it('keeps permission denials latched across cache hits and hides disabled detail
   expect(query.data).toBeUndefined();
   expect(query.error).toBe(denial);
   requests[0].next(data);
+  expect(query.data).toBeUndefined();
+  const recovery = query.refetch({ requestPolicy: 'network-only' });
+  requests[1].next(data);
+  await recovery;
   expect(query.data?.project.name).toBe('Launch');
   setViewer(undefined);
   expect(query.data).toBeUndefined();
@@ -462,4 +466,86 @@ it('keeps permission denials latched across cache hits and hides disabled detail
   setId('');
   expect(query.data).toBeUndefined();
   expect(query.isSuccess).toBe(false);
+});
+
+it('reauthorizes a denied identity after remount without exposing cached data', async () => {
+  setupGraphql();
+  const data = (
+    await mocks.soup({
+      query: (
+        await import('@service-storage/graphql/generated/graphql')
+      ).InitiativeIdentityDocument,
+    })
+  ).data;
+  const { client, requests } = controlledClient();
+  const mount = () =>
+    createRoot((dispose) => {
+      onTestFinished(dispose);
+      return {
+        dispose,
+        query: createProjectIdentityQuery(
+          () => client,
+          () => 'viewer',
+          () => 'launch'
+        ),
+      };
+    });
+  const first = mount();
+  requests[0].next(data);
+  expect(first.query.data?.name).toBe('Launch');
+  const denial = new CombinedError({
+    graphQLErrors: [{ message: 'Denied', extensions: { code: 'FORBIDDEN' } }],
+  });
+  requests[0].next(undefined, denial);
+  expect(first.query.data).toBeUndefined();
+  first.dispose();
+
+  const second = mount();
+  expect(requests[1].operation.context.requestPolicy).toBe('network-only');
+  requests[1].next(data, undefined, true);
+  expect(second.query.data).toBeUndefined();
+  expect(second.query.error).toBe(denial);
+  requests[1].next(data);
+  expect(second.query.data?.name).toBe('Launch');
+});
+
+it('immediately reauthorizes another viewer cache hit once per activation', async () => {
+  setupGraphql();
+  const data = (
+    await mocks.soup({
+      query: (
+        await import('@service-storage/graphql/generated/graphql')
+      ).InitiativeIdentityDocument,
+    })
+  ).data;
+  const { client, requests } = controlledClient();
+  const [viewer, setViewer] = createSignal('next-viewer');
+  const query = createRoot((dispose) => {
+    onTestFinished(dispose);
+    return createProjectIdentityQuery(
+      () => client,
+      viewer,
+      () => 'launch'
+    );
+  });
+  requests[0].next(data, undefined, true);
+  expect(query.data).toBeUndefined();
+  await vi.waitFor(() => expect(requests).toHaveLength(2));
+  expect(requests[1].operation.context.requestPolicy).toBe('network-only');
+  requests[1].next(data, undefined, true);
+  expect(query.data).toBeUndefined();
+  expect(requests).toHaveLength(2);
+  requests[1].next({ user: { ...data.user, id: 'next-viewer' } });
+  expect(query.data?.name).toBe('Launch');
+
+  setViewer('last-viewer');
+  expect(query.data).toBeUndefined();
+  const recovery = requests.at(-1)!;
+  expect(recovery.operation.context.requestPolicy).toBe('network-only');
+  recovery.next(
+    undefined,
+    new CombinedError({ networkError: new Error('Offline') })
+  );
+  expect(query.data).toBeUndefined();
+  expect(requests.at(-1)).toBe(recovery);
 });
