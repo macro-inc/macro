@@ -183,6 +183,8 @@ const names: Record<string, string> = {
   'macro|member@example.com': 'Morgan Member',
   'alex@example.com': 'Alex Morgan',
   'sam@example.com': 'Sam Lee',
+  'quarterly.planning.review.coordinator.northeast@facilities-and-operations.example.com':
+    'Rowan Field',
   'you@example.com': 'You',
 };
 export const useContacts = () => contacts;
