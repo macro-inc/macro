@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Macro blocks v2</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+/* Block ads v2, the premium cut: Macro replacing the tools a company runs on. Twelve modules lock around the Macro core
+   in a 4×4 grid, and its LEDs light up. Every block is the Macro app's email composer card, in light or dark mode;
+   every change is a spring that lands on the 100 BPM beat grid; every contact has its own close sound (audio/bmix.py,
+   style "premium"). Three routes:
+     replace: "Replace 27+ apps": 27 real tool logos sort into the twelve module cells and merge into the modules.
+     price:   "$84 a seat": Notion, Slack, Linear and Superhuman stack up with their prices; a Macro card presses them
+              flat ($40), becomes the core, and the modules unfold out of it.
+     swap:    "Your tools weren't built to fit together": mismatched tool tiles morph, one a beat, into aligned modules.
+   ?v=replace|price|swap  &fmt=916|45|11  &mode=light|dark */
+@font-face { font-family: "Inter"; src: url("fonts/inter-variable.woff2") format("woff2"); font-weight: 100 900; font-display: block; }
+@font-face { font-family: "display"; src: url("fonts/roboto-slab-variable.woff2") format("woff2"); font-weight: 100 900; font-display: block; }
+/* the Macro app's light and dark surfaces: a warm off-white or its dark page, and the text on each */
+:root { --page: #f1f0eb; --st0: #f7f6f2; --st2: #e8e7e1; --ink: #1a1917; --body: #4a4844; --lab: #77756f; }
+html.dark { --page: #0e0e0e; --st0: #141414; --st2: #0a0a0a; --ink: #f2f1ec; --body: #a9a7a1; --lab: #85837e; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--page); }
+body { display: flex; align-items: center; justify-content: center; min-height: 100vh; overflow: hidden; }
+html.render body { display: block; min-height: 0; }
+#stage { position: relative; overflow: hidden; flex: none; color: var(--ink);
+  background: radial-gradient(ellipse 85% 62% at 50% 46%, var(--st0) 0%, var(--page) 58%, var(--st2) 100%);
+  font-family: "Inter", system-ui, sans-serif; -webkit-font-smoothing: antialiased; text-rendering: geometricPrecision; font-feature-settings: "cv11", "ss01"; }
+#world, #screen, .layer { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
+.a { position: absolute; }
+.flex { display: flex; align-items: center; }
+.t1 { line-height: 1; white-space: nowrap; }
+.slab { font-family: display; font-weight: 320; letter-spacing: -0.035em; line-height: 1; color: var(--ink); white-space: nowrap; }
+.w { display: inline-block; }
+/* a module: 300×300 design units, scaled to the grid. Its shape (.fc, the composer card) sits over its shadow (.sh), and
+   its content (.mc) above both, so the shape can morph while the content swaps with a short blur. */
+.mod { position: absolute; left: 0; top: 0; width: 300px; height: 300px; transform-origin: 150px 150px; }
+.sh, .fc { position: absolute; left: 0; top: 0; width: 300px; height: 300px; border-radius: 22px; }
+.mc, .lg { position: absolute; left: 0; top: 0; width: 300px; height: 300px; }
+.lg { display: flex; align-items: center; justify-content: center; }
+.ico { position: absolute; left: 30px; top: 30px; }
+.lbl { position: absolute; left: 30px; top: 240px; font-size: 24px; font-weight: 600; letter-spacing: .11em; text-transform: uppercase; line-height: 28px; white-space: nowrap; }
+.led, .ledon { position: absolute; right: 32px; top: 36px; width: 14px; height: 14px; border-radius: 50%; }
+.ledon { background: #45e08c; opacity: 0; }
+/* a tool tile: 120 px, scaled */
+.lt { position: absolute; left: 0; top: 0; width: 120px; height: 120px; transform-origin: 60px 60px; }
+.lt .sh, .lt .fc { width: 120px; height: 120px; border-radius: 28px; }
+.lt .fc { display: flex; align-items: center; justify-content: center; }
+/* price cards: 800 wide, scaled */
+.sl { position: absolute; left: 0; top: 0; width: 800px; height: 118px; transform-origin: 400px 59px; }
+.sl .sh, .sl .fc { width: 800px; height: 118px; border-radius: 22px; }
+.sl .fc { overflow: hidden; }
+.sock { background: #e9e8e2; box-shadow: inset 0 0 0 1px rgba(11,11,11,.04), inset 0 1px 3px rgba(11,11,11,.05); opacity: 0; }
+html.dark .sock { background: #090909; box-shadow: inset 0 0 0 1px rgba(255,255,255,.035), inset 0 1px 3px rgba(0,0,0,.5); }
+.key { position: absolute; left: 50%; top: 0; transform: translateX(-50%); }
+.keyf { display: inline-flex; align-items: center; justify-content: center; font-weight: 600; white-space: nowrap; }
+.prow { display: inline-flex; align-items: center; gap: 9px; white-space: nowrap; color: var(--body); }
+.cap { font-size: 14px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--lab); }
+</style>
+<script src="icons.js"></script>
+<script src="phx.js"></script>
+<script src="phx2.js"></script>
+<script src="logos27.js"></script>
+</head>
+<body>
+<div id="stage"><div id="world"></div><div id="screen"></div></div>
+<script>
+"use strict";
+// ---------- format, variant and mode ----------
+const Q = new URLSearchParams(location.search);
+const FMT = Q.get("fmt") || "45", V = Q.get("v") || "replace", DARK = Q.get("mode") === "dark";
+const [W, H] = { "916": [1080, 1920], "45": [1080, 1350], "11": [1440, 1440] }[FMT];
+const K = W / 1080, AH = H / K;
+const REPLACE = V === "replace", PRICE = V === "price", SWAP = V === "swap";
+document.documentElement.classList.toggle("dark", DARK);
+
+// ---------- tempo ----------
+// The bed is 100 BPM (audio/bmix.py, style "premium"), and every change lands on a beat or a half beat. Each variant
+// locks the core on the downbeat of bar 5 (beat 16); the end card follows. 24 beats = 14.4 s.
+const BPM = 100, SPB = 60 / BPM, BEATS = 24, T = BEATS * SPB;
+const B = (b) => b * SPB;
+const LOCK = 16, ENDB = 17.5;
+
+// ---------- math ----------
+const clamp = (x, a = 0, b = 1) => (x < a ? a : x > b ? b : x);
+const lerp = (a, b, p) => a + (b - a) * p;
+const sm = (x) => { x = clamp(x); return x * x * (3 - 2 * x); };
+const TAU = Math.PI * 2;
+function spr(t, resp = 0.42, damp = 0.86) {
+  if (t <= 0) return 0;
+  const w = TAU / resp;
+  if (damp >= 1) { const e = Math.exp(-w * t); return 1 - e * (1 + w * t); }
+  const wd = w * Math.sqrt(1 - damp * damp), e = Math.exp(-damp * w * t);
+  return 1 - e * (Math.cos(wd * t) + (damp * w / wd) * Math.sin(wd * t));
+}
+const mj = (x) => { x = clamp(x); return x * x * x * (10 + x * (-15 + 6 * x)); };
+const ei2 = (x) => { x = clamp(x); return x * x; };
+const bell = (x) => (x <= 0 || x >= 1 ? 0 : 16 * x * x * (1 - x) * (1 - x));
+function Tr(evs) {
+  const E = evs.map(([b, v, r, d]) => ({ t: B(b), v, r: r ?? 0.8, d: d ?? 0.9 }));
+  return (t) => { let v = E[0].v; for (let i = 1; i < E.length; i++) v += (E[i].v - E[i - 1].v) * spr(t - E[i].t, E[i].r, E[i].d); return v; };
+}
+function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const px = (v) => v.toFixed(3) + "px";
+// a kick that rises to 1 at u = tau and settles back without swinging past rest
+const imp = (u, tau) => (u <= 0 ? 0 : (u / tau) * Math.exp(1 - u / tau));
+// a spring step that starts at t0 and is 97% of the way there at t1 (the contact, on the beat), then settles
+const C97 = {};
+const c97 = (damp) => { if (!(damp in C97)) { let t = 0; while (spr(t, 1, damp) < 0.97) t += 0.0005; C97[damp] = t; } return C97[damp]; };
+const step = (t, t0, t1, damp = 0.86) => spr(t - t0, (t1 - t0) / c97(damp), damp);
+const hexRGB = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+const mixHex = (a, b, p) => {
+  if (p <= 0 || a === b) return a;
+  if (p >= 1) return b;
+  const x = hexRGB(a), y = hexRGB(b);
+  return "#" + x.map((v, i) => Math.round(v + (y[i] - v) * p).toString(16).padStart(2, "0")).join("");
+};
+
+// ---------- light and dark ----------
+// The Macro app's surfaces in each mode (apps/web themes macro-light and macro-dark). The graphite core, the Macro card
+// and the CTA invert in dark mode, as the app's primary button does.
+const TH = DARK ? {
+  card: "#171717", text: "#f2f1ec", core: "#f2f1ec", coreInk: "#1a1917", coreLed: "#1a19171f", band: "#0e0e0e",
+  well: "#222221", wellRing: "#ffffff0f", shades: ["#171717", "#1f1f1e", "#262625", "#131313", "#1b1b1a"],
+  touch: "rgba(242,241,236,.4)", touchRing: "rgba(242,241,236,.92)", rule: "#ffffff26", sub: "#1a19178c",
+} : {
+  card: "#ffffff", text: "#1a1917", core: "#1d1d1c", coreInk: "#f2f1ec", coreLed: "#ffffff1f", band: "#f3f2ed",
+  well: "#f3f2ed", wellRing: "#1a19170f", shades: ["#ffffff", "#f2f1ec", "#e8e7e1", "#fdfdfd", "#ecebe7"],
+  touch: "rgba(28,28,27,.55)", touchRing: "#ffffff", rule: "#1a191726", sub: "#ffffff8c",
+};
+// The blocks wear the Macro app's email composer card (apps/web ComposerSurface). Light mode is its `composer-shadow`: a
+// 1px ring, a 0 2 8 contact shadow and a 0 4 80 halo in --color-drop-shadow, oklch(0.15 0 0 / 0.04). Dark mode is its
+// desktop glass: a 0.6px outline in 24% black, a faint white top edge and inner hairline, and a close shadow, with no
+// halo. Sizes are canvas px; k is the scale of the element that draws them; a scales the alphas. A lifted block's
+// shadow grows and softens.
+const DS = "11,11,11";
+const ring = (k, a = 1) => DARK
+  ? `0 0 0 ${px(0.6 / k)} rgba(0,0,0,${(0.24 * a).toFixed(3)}), inset 0 ${px(0.6 / k)} 0 rgba(255,255,255,${(0.072 * a).toFixed(3)}), inset 0 0 0 ${px(0.6 / k)} rgba(255,255,255,${(0.048 * a).toFixed(3)})`
+  : `0 0 0 ${px(1 / k)} rgba(${DS},${(0.04 * a).toFixed(3)})`;
+const shadow = (lift, k, a = 1) => {
+  const u = (v) => px(v / k), c = (v) => (v * a).toFixed(4);
+  return DARK
+    ? `0 ${u(2 + 10 * lift)} ${u(6 + 24 * lift)} ${u(-3 + 2 * lift)} rgba(0,0,0,${c(0.12 + 0.2 * lift)}), 0 ${u(1)} ${u(2)} ${u(-1)} rgba(0,0,0,${c(0.08)}), `
+      + `0 ${u(26 * lift)} ${u(52 * lift)} ${u(-14 * lift)} rgba(0,0,0,${c(0.42 * lift)})`
+    : `0 ${u(2 + 10 * lift)} ${u(8 + 22 * lift)} 0 rgba(${DS},${c(0.04 + 0.03 * lift)}), 0 ${u(4 + 18 * lift)} ${u(80 + 40 * lift)} ${u(8 - 4 * lift)} rgba(${DS},${c(0.024 + 0.016 * lift)}), `
+      + `0 ${u(26 * lift)} ${u(52 * lift)} ${u(-14 * lift)} rgba(${DS},${c(0.14 * lift)})`;
+};
+// the end card's button: resting a little above the card, flat on it while it's pressed
+const keySh = (press) => `${ring(1)}, ${shadow(0.35 * (1 - press), 1)}`;
+
+// ---------- icons, logos ----------
+const pxb = (n, size, color = "currentColor") => `<svg width="${size}" height="${size}" viewBox="0 0 256 256" fill="${color}" style="display:block">${window.PHX[n]}</svg>`;
+// the real logo (img/macro-logo.svg): the mark's three pieces and the MACRO letterforms, 126.4 units tall
+const LOGO_MARK = ["M0 47.151L16.199 40.81C22.551 47.236 34.299 57.491 39.832 63.809L39.88 99.564C39.876 105.615 40.12 114.034 39.774 119.931C34.433 121.982 29.103 124.064 23.786 126.177C19.631 122.268 1.946 106.135 0 102.379L0 47.151Z", "M47.632 0L48.504 0C50.116 1.598 52.174 3.051 53.824 4.712C73.817 24.845 95.62 43.76 115.445 63.991C115.552 66.818 115.592 69.696 115.513 72.523C115.075 88.301 115.701 104.194 115.444 119.951C111.602 121.871 103.313 124.848 99.214 126.339C94.102 120.866 86.899 114.298 81.323 109.052C71.856 100.234 62.526 91.27 53.337 82.163C50.385 79.209 45.332 75.304 43.124 72.361C43.132 68.995 43.082 65.629 42.976 62.264C40.676 59.71 35.402 55.12 32.496 52.172C32.501 37.889 32.044 20.249 32.654 6.207C36.92 4.311 43.939 2.079 47.632 0Z", "M123.569 0L124.699 0C128.214 3.816 134.12 9.106 138.047 12.948L177.874 51.237C181.701 54.971 188.687 60.396 191.23 64.633L191.308 120.003C187.261 121.904 179.556 124.694 175.227 126.234C171.746 123.787 160.568 112.286 156.725 108.629C144.592 97.087 130.339 84.409 118.9 72.353C118.953 69.16 118.982 65.966 118.986 62.772C117.614 60.894 110.311 54.369 108.016 51.991C107.405 39.273 107.793 19.202 108.018 6.291C111.901 4.493 120.969 1.705 123.569 0Z"];
+const LOGO_TYPE = ["M300.92 74.009C303.615 65.501 314.262 28.568 318.438 24.27C319.069 23.621 320.033 23.468 320.898 23.383C325.453 22.938 330.369 23.327 334.959 23.34C344.903 23.418 354.847 23.409 364.79 23.313C365.435 28.476 365.159 47.453 365.049 53.72C364.76 70.195 365.603 88.708 364.891 104.92C359.092 104.67 351.994 104.855 346.096 104.868C345.405 87.158 345.97 65.92 345.975 47.942L345.975 42.119C342.414 41.927 334.922 41.484 331.931 42.955C329.991 45.279 313.144 97.492 310.719 104.744C304.754 105.034 297.264 104.878 291.222 104.896C288.559 98.001 272.305 45.132 269.992 43.053C267.621 40.923 258.972 42.055 255.716 42.198C256.161 48.995 255.924 58.249 255.925 65.211L255.935 104.789C249.665 104.935 243.166 104.872 236.878 104.882C236.574 94.772 236.811 83.325 236.808 73.094L236.883 23.444C243.865 23.268 278.739 22.963 283.378 24.014C285.689 24.538 298.601 67.413 300.92 74.009Z", "M395.967 23.803C398.277 23.364 414.299 23.575 417.612 23.582C433.177 23.668 448.746 23.647 464.311 23.52C472.343 23.502 477.848 23.959 484.031 29.966C492.494 38.188 490.209 52.684 490.192 63.875L490.197 104.955L471.479 104.952C470.916 96.84 471.623 88.213 470.997 79.669C463.765 79.265 453.206 79.593 445.779 79.594L396.684 79.632C397.07 86.718 396.698 97.491 396.691 104.932L377.688 104.949C376.997 94.08 377.811 80.689 377.521 69.546C377.662 60.66 377.214 51.725 377.742 42.859C378.359 32.511 386.5 25.768 395.967 23.803ZM396.525 60.895C420.379 60.944 446.825 61.49 470.481 60.867C471.86 59.149 471.627 45.245 470.358 43.104C467.556 41.2 405.961 41.902 397.844 42.391C395.636 44.958 396.866 56.326 396.525 60.895Z", "M522.79 23.419C530.395 23.053 539.793 23.502 547.572 23.38C569.962 23.031 593.076 23.871 615.412 23.271C615.78 28.658 615.585 36.536 615.598 42.116C587.143 41.263 557.796 42.418 529.26 42.034C527.259 42.007 524.432 42.404 522.595 43.18C522.35 43.559 522.164 43.976 522.054 44.415C521.047 48.287 522.375 75.786 521.774 81.689C521.69 82.522 522.126 84.198 522.6 85.003C525.249 86.762 554.977 86.034 560.504 86.019L615.56 85.992C615.606 92.272 615.602 98.552 615.547 104.832L553.729 104.862C542.096 104.861 522.286 106.802 512.392 101.015C500.895 93.871 502.35 80.027 502.761 68.524C503.463 48.961 497.044 28.443 522.79 23.419Z", "M628.023 23.423L687.86 23.349C698.415 23.346 709.045 23.201 719.557 23.509C732.988 23.902 740.546 34.132 740.72 46.907C740.927 62.171 741.52 71.402 725.794 78.315C729.671 87.236 734.935 96.141 738.536 104.878L726.814 104.839L718.021 104.824C713.247 97.434 708.766 87.719 705.08 79.668C686.032 79.254 665.821 79.606 646.685 79.619L646.702 104.947C640.54 104.716 634.082 104.833 627.913 104.9C627.35 85.968 628.179 66.507 627.828 47.527C627.688 39.873 627.578 31.009 628.023 23.423ZM646.664 60.92L694.437 60.958C699.456 60.961 718.131 61.618 721.579 59.898C722.324 56.863 722.193 46.423 721.11 43.41C718.778 41.117 699.087 41.949 694.809 41.951L651.996 42.012C650.307 42.034 648.619 42.078 646.926 42.142C646.414 44.538 646.642 57.699 646.664 60.92Z", "M773.622 23.423C792.145 23.184 810.799 23.439 829.33 23.344C835.53 23.761 843.447 22.578 849.478 24.136C867.501 28.796 866.367 45.886 865.766 60.547C865.419 69.063 866.756 79.557 865.355 87.263C864.767 90.557 863.405 93.663 861.378 96.322C857.285 101.702 852.11 103.801 845.635 104.68C842.406 104.992 836.566 104.83 833.075 104.831L810.418 104.85L787.359 104.857C778.899 104.852 768.629 105.79 761.651 100.217C756.805 96.65 752.548 88.79 753.115 82.502C754.203 70.468 751.507 52.227 753.72 40.77C754.359 37.381 755.802 34.196 757.927 31.481C762.07 26.201 767.198 24.208 773.622 23.423ZM844.027 86.04C848.128 83.916 847.248 78.015 846.799 73.885C846.13 67.731 848.28 47.736 846.075 43.201C843.6 41.958 837.946 41.865 835.064 41.967C815.382 42.661 794.384 41.048 774.816 42.108C773.724 42.46 773 42.546 772.425 43.642C771.354 45.694 771.507 81.49 772.332 83.863C772.569 84.54 772.759 85.098 773.432 85.431C776.398 86.889 835.593 85.87 844.027 86.04Z"];
+const markSvg = (w, c) => `<svg width="${w}" height="${(w * 126.4) / 191.3}" viewBox="0 0 191.3 126.4" fill="${c}" style="display:block">${LOGO_MARK.map((d) => `<path d="${d}"/>`).join("")}</svg>`;
+const lockup = (h, c) => { const k = h / 126.4; return `<div class="flex" style="gap:${(44.7 * k).toFixed(2)}px">${markSvg(191.3 * k, c)}<svg width="${(630.7 * k).toFixed(2)}" height="${h}" viewBox="236 0 630.7 126.4" fill="${c}" style="display:block">${LOGO_TYPE.map((d) => `<path d="${d}"/>`).join("")}</svg></div>`; };
+// a tool's full-color mark (SVG Logos / Simple Icons, both CC0; see logos27.js); ids are made unique per use. In dark
+// mode the two dark marks (Linear, Superhuman) take their light versions, as the brands do on dark backgrounds.
+function logoSvg(key, size, uid) {
+  const s = window.LOGOS27[key].svg;
+  if (s.startsWith("ICONS:")) { const [, n, c] = s.split(":"); return `<span style="display:block;width:${size}px;height:${size}px;color:${c || TH.text}">${window.ICONS[n]}</span>`; }
+  return (DARK ? s.replace(/#222326/g, "#ececea") : s).replace(/id="([^"]+)"/g, `id="$1${uid}"`).replace(/url\(#([^)]+)\)/g, `url(#$1${uid})`).replace(/href="#([^"]+)"/g, `href="#$1${uid}"`)
+    .replace("<svg ", `<svg width="${size}" height="${size}" style="display:block" preserveAspectRatio="xMidYMid meet" `);
+}
+
+// ---------- palette: the composer's card, graphite, and a few deep primaries; flat fills ----------
+const PAL = {
+  red:    { face: "#d2432e", fg: "#fff7f2", off: "#00000038" },
+  yellow: { face: "#e8b13a", fg: "#1a1917", off: "#0000002e" },
+  blue:   { face: "#2a4abd", fg: "#f4f6ff", off: "#00000040" },
+  white:  { face: TH.card, fg: TH.text, off: DARK ? "#ffffff1f" : "#1a19171f" },
+  ink:    { face: TH.core, fg: TH.coreInk, off: TH.coreLed },
+};
+// twelve modules around the core, clockwise from the top left of the 4×4 grid, with the tools each one replaces
+const MODS = {
+  email:    { name: "Email",         icon: "envelope",         col: "blue",   cell: [0, 0], tools: ["gmail", "outlook", "superhuman"] },
+  chat:     { name: "Chat",          icon: "chats",            col: "white",  cell: [1, 0], tools: ["slack", "teams", "discord"] },
+  calls:    { name: "Calls",         icon: "phone-call",       col: "red",    cell: [2, 0], tools: ["zoom", "meet"] },
+  calendar: { name: "Calendar",      icon: "calendar-blank",   col: "white",  cell: [3, 0], tools: ["gcal"] },
+  booking:  { name: "Booking links", icon: "link",             col: "yellow", cell: [3, 1], tools: ["calendly"] },
+  crm:      { name: "CRM",           icon: "building-office",  col: "white",  cell: [3, 2], tools: ["hubspot", "salesforce"] },
+  agents:   { name: "Agents",        icon: "sparkle",          col: "white",  cell: [3, 3], tools: [] },
+  search:   { name: "Search",        icon: "magnifying-glass", col: "blue",   cell: [2, 3], tools: [] },
+  drive:    { name: "Drive",         icon: "folder",           col: "white",  cell: [1, 3], tools: ["gdrive", "dropbox", "box"] },
+  sheets:   { name: "Sheets",        icon: "table",            col: "yellow", cell: [0, 3], tools: ["airtable", "gsheets"] },
+  docs:     { name: "Docs",          icon: "file-text",        col: "white",  cell: [0, 2], tools: ["notion", "gdocs", "confluence", "coda"] },
+  tasks:    { name: "Tasks",         icon: "check-square",     col: "red",    cell: [0, 1], tools: ["linear", "jira", "asana", "clickup", "trello", "monday"] },
+};
+const RING = Object.keys(MODS);
+
+// ---------- layout (canvas px) ----------
+const LY = {
+  "45":  { lockY: 84, ms: 30, hx: 64, hfs: 68, hb: [204, 280], band: 324, cs: 226, g: 8, gy: 834, stack: 790, sk: 1 },
+  "916": { lockY: 318, ms: 34, hx: 64, hfs: 74, hb: [446, 528], band: 572, cs: 226, g: 8, gy: 1064, stack: 840, sk: 0.94 },
+  "11":  { lockY: 58, ms: 26, hx: 60, hfs: 54, hb: [156, 216], band: 248, cs: 186, g: 7, gy: 662, stack: 556, sk: 0.82 },
+}[FMT];
+const EL = {
+  "45":  { em: 362, es: 330, hfs: 72, hb: [660, 738], sfs: 25, sub: 780, slh: 38, cta: 896, ch: 92, cfs: 28, demo: 1026, dfs: 21, proof: 1132, pfs: 19 },
+  "916": { em: 512, es: 310, hfs: 78, hb: [758, 842], sfs: 27, sub: 886, slh: 41, cta: 1004, ch: 96, cfs: 30, demo: 1136, dfs: 23, proof: 1208, pfs: 20 },
+  "11":  { em: 258, es: 240, hfs: 60, hb: [494, 560], sfs: 22, sub: 598, slh: 34, cta: 694, ch: 80, cfs: 25, demo: 806, dfs: 19, proof: 892, pfs: 17 },
+}[FMT];
+const CS = LY.cs, G0 = LY.g, GL = G0, GX = 540, GY = LY.gy, SC = CS / 300, CORE = 2 * CS + GL;
+const cellXY = ([c, r], gap) => [GX + (c - 1.5) * (CS + gap), GY + (r - 1.5) * (CS + gap)];
+
+// =====================================================================
+// the story, per variant (beats)
+// =====================================================================
+const LINES = [], NUDGE = [];
+const CORE_IN = { t0: 14.5, th: 15, t1: LOCK };       // replace: the core rises in from below, hovers, presses
+const S = {};
+if (REPLACE) {
+  // The 27 tools sit in an app grid. On beat 1 they glide into the module cells, a row per sixteenth, and land from
+  // beat 2. Then, clockwise from Email, one module a beat (3–14): each cell's tools slide together and merge into one
+  // shape that becomes the module. The core locks on 16.
+  S.mod = (i) => 3 + i;
+  LINES.push({ l: 0, w: "Replace 27+ apps", tin: -1, tout: ENDB }, { l: 1, w: "with a single system.", tin: LOCK, tout: ENDB });
+}
+if (PRICE) {
+  // four cards land with their prices, one a beat; the Macro card lowers (from 3.25), hovers (4.5) and presses them flat (6–8); it
+  // becomes the core (8.5–9.5), and the modules unfold out of it, one a half beat (10–15.5)
+  S.prices = [["notion", "Business", 20], ["slack", "Business+", 15], ["linear", "Business", 16], ["superhuman", "Business", 33]];
+  S.land = [-1, 1, 2, 3];
+  S.mIn = 3.25; S.mHov = 4.5; S.press = [6, 8]; S.morph = [8.5, 9.5]; S.out = (i) => 10 + 0.5 * i; S.coreLift = 15.5;
+  LINES.push({ l: 0, w: "Four apps,", tin: -1, tout: 5 }, { l: 1, w: "$84 a seat.", tin: -1, tout: 5 },
+    { l: 0, w: "Macro replaces all four", tin: 5.5, tout: 9 }, { l: 1, w: "for $40 a seat.", tin: 5.5, tout: 9 },
+    { l: 0, w: "Every module", tin: 9.5, tout: ENDB }, { l: 1, w: "included.", tin: 9.5, tout: ENDB });
+  CORE_IN.t0 = null;
+}
+if (SWAP) {
+  // a grid of mismatched tools; two pairs bump and don't fit (1, 2); then, clockwise, one a beat (4–15), each tile
+  // straightens and morphs into its Macro module; the middle four straighten together (15.5) and merge into the core
+  S.face = { email: "gmail", chat: "slack", calls: "zoom", calendar: "gcal", booking: "calendly", crm: "hubspot", agents: null, search: null,
+    drive: "dropbox", sheets: "airtable", docs: "notion", tasks: "linear" };
+  S.center = ["teams", "jira", "salesforce", "gdrive"];
+  S.morph = (i) => 4 + i;                           // the beat the i-th ring tile lands as its module
+  S.bumps = [[1, "chat", "calls", 1], [2, "docs", "tasks", -1]];
+  LINES.push({ l: 0, w: "Your tools weren't built", tin: -1, tout: 2.25 }, { l: 1, w: "to fit together.", tin: -1, tout: 2.25 },
+    { l: 0, w: "Macro was.", tin: 2.75, tout: 15.5 }, { l: 0, w: "One system.", tin: LOCK, tout: ENDB });
+  CORE_IN.t0 = null;
+}
+
+// camera: a slow push-in through the story, a punch on the lock, then the move onto the end card's emblem
+const CAMK = [[0, GX, GY, 1, GY], [0.02, GX, GY, 1.035, GY, 11, 1], [ENDB, GX, GY, EL.es / (4 * CS + 3 * GL), EL.em, 0.85, 0.88]];
+const CXT = Tr(CAMK.map((k) => [k[0], k[1], k[5], k[6]])), CYT = Tr(CAMK.map((k) => [k[0], k[2], k[5], k[6]]));
+const LZT = Tr(CAMK.map((k) => [k[0], Math.log(k[3]), k[5], k[6]])), SYT = Tr(CAMK.map((k) => [k[0], k[4], k[5], k[6]]));
+
+// =====================================================================
+// DOM
+// =====================================================================
+const $ = (id) => document.getElementById(id);
+const stage = $("stage"), world = $("world"), scr = $("screen");
+stage.style.width = W + "px"; stage.style.height = H + "px";
+scr.style.transform = `scale(${K})`;
+const add = (parent, html) => { const d = document.createElement("div"); d.innerHTML = html.trim(); const n = d.firstElementChild; parent.appendChild(n); return n; };
+// sockets, then modules and cards, then the tools (above the modules they merge into), then the price total
+const LT = add(world, `<div class="layer" id="LT"></div>`), LB = add(world, `<div class="layer" id="LB"></div>`);
+const LM = add(world, `<div class="layer" id="LM"></div>`), LF = add(world, `<div class="layer" id="LF"></div>`);
+const LH = add(scr, `<div class="layer" id="LH"></div>`), LX = add(scr, `<div class="layer" id="LX"></div>`), LL = add(scr, `<div class="layer" id="LL"></div>`);
+const E = {};
+
+// a module: the card shape, its shadow, anything that sits on it before it becomes the module (extra), and its content
+function modEl(k, extra = "") {
+  const m = MODS[k], p = PAL[m.col];
+  return `<div class="mod" id="m_${k}"><div class="sh" id="m_${k}_sh"></div><div class="fc" id="m_${k}_fc" style="background:${p.face};box-shadow:${ring(SC)}"></div>${extra}
+    <div class="mc" id="m_${k}_mc"><div class="ico">${pxb(m.icon, 46, p.fg)}</div>
+    <div class="led" style="background:${p.off}"></div><div class="ledon" id="m_${k}_led"></div>
+    <div class="lbl" style="color:${p.fg}">${m.name}</div></div></div>`;
+}
+// the core's mark, and a row of twelve LEDs (one per module) that light as the system locks, on a face s units wide
+function coreMarks(id, s) {
+  const u = s / 300;
+  return `<div class="a" style="left:${s / 2 - 62 * u}px;top:${s / 2 - 62 * u}px">${markSvg(124 * u, TH.coreInk)}</div>
+    ${RING.map((_, i) => `<div class="a" style="left:${s / 2 + (i - 5.5) * 11 * u - 3 * u}px;top:${s / 2 + 58 * u}px;width:${6 * u}px;height:${6 * u}px;border-radius:50%;background:${TH.coreLed}"></div>
+      <div class="a"${id ? ` id="${id}${i}"` : ""} style="left:${s / 2 + (i - 5.5) * 11 * u - 3 * u}px;top:${s / 2 + 58 * u}px;width:${6 * u}px;height:${6 * u}px;border-radius:50%;background:#45e08c;opacity:0"></div>`).join("")}`;
+}
+const coreEl = (id) => `<div class="mod" id="m_core"><div class="sh" id="m_core_sh"></div><div class="fc" id="m_core_fc" style="background:${TH.core};box-shadow:${ring(CORE / 300)}"></div><div class="mc" id="m_core_mc">${coreMarks(id, 300)}</div></div>`;
+const toolTile = (id, key) => `<div class="lt" id="${id}"><div class="sh" id="${id}_sh"></div><div class="fc" style="background:${TH.card};box-shadow:${ring(CS / 226)}">${logoSvg(key, 56, id)}</div></div>`;
+
+function init() {
+  // ----- the tray: a shallow socket for each module and one for the core -----
+  RING.forEach((k) => { const [x, y] = cellXY(MODS[k].cell, G0); add(LT, `<div class="a sock" style="left:${x - CS / 2 - 1}px;top:${y - CS / 2 - 1}px;width:${CS + 2}px;height:${CS + 2}px;border-radius:${22 * SC + 1}px"></div>`); });
+  add(LT, `<div class="a sock" style="left:${GX - CORE / 2 - 1}px;top:${GY - CORE / 2 - 1}px;width:${CORE + 2}px;height:${CORE + 2}px;border-radius:${22 * SC * 1.4 + 1}px"></div>`);
+  // ----- modules and core -----
+  if (!SWAP) {
+    RING.forEach((k) => add(LB, modEl(k)));
+    add(LB, coreEl("cl"));
+  }
+  if (REPLACE) {
+    const R = rng(271), keys = Object.keys(window.LOGOS27);
+    for (let i = keys.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [keys[i], keys[j]] = [keys[j], keys[i]]; }
+    const kk = CS / 226, ts = 124 * kk, pitch = ts + 16 * kk;
+    const MINI = { 1: [[0, 0]], 2: [[-0.5, 0], [0.5, 0]], 3: [[-0.5, -0.5], [0.5, -0.5], [0, 0.5]], 4: [[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5]], 6: [[-1, -0.5], [0, -0.5], [1, -0.5], [-1, 0.5], [0, 0.5], [1, 0.5]] };
+    const MS = { 1: 118, 2: 96, 3: 86, 4: 92, 6: 64 };
+    // each cell's tools sit loosely (C), slide into a tight cluster (D), and the module's shape starts as that cluster
+    S.cluster = {};
+    S.tiles = keys.map((key, i) => {
+      const k = window.LOGOS27[key].mod === "files" ? "drive" : window.LOGOS27[key].mod;
+      const m = MODS[k], n = m.tools.length, j = m.tools.indexOf(key), [cx, cy] = cellXY(m.cell, G0), sz = MS[n] * kk, [ux, uy] = MINI[n][j];
+      const col = i % 7, row = Math.floor(i / 7), g = sz + 3 * kk, pad = 6 * kk;
+      const A = { x: GX + (col - 3) * pitch, y: GY + (row - 1.5) * pitch, s: ts / 120 };
+      const C = { x: cx + ux * (sz + 10 * kk), y: cy + uy * (sz + 10 * kk), s: sz / 120 };
+      const D = { x: cx + ux * g, y: cy + uy * g };
+      if (!S.cluster[k]) {
+        const xs = MINI[n].map((v) => v[0]), ys = MINI[n].map((v) => v[1]);
+        S.cluster[k] = { w: ((Math.max(...xs) - Math.min(...xs)) * g + sz + 2 * pad) / SC, h: ((Math.max(...ys) - Math.min(...ys)) * g + sz + 2 * pad) / SC, r: ((28 * sz) / 120 + pad) / SC };
+      }
+      const s0 = B(1 + 0.25 * row) + 0.012 * col, s1 = B(2 + 0.25 * row) + 0.012 * col;
+      return { key, k, i, A, C, D, s0, s1, el: add(LM, toolTile("t" + i, key)) };
+    });
+  }
+  if (PRICE) {
+    const sk = LY.sk;
+    S.slabs = S.prices.map(([key, plan, usd], i) => add(LB, `<div class="sl" id="sl${i}"><div class="sh" id="sl${i}_sh"></div>
+      <div class="fc" id="sl${i}_fc" style="background:${TH.card};box-shadow:${ring(sk)}">
+        <div class="a flex" style="left:22px;top:21px;width:76px;height:76px;justify-content:center;border-radius:20px;background:${TH.well};box-shadow:inset 0 0 0 1px ${TH.wellRing}">${logoSvg(key, 42, "s" + i)}</div>
+        <div class="a t1" style="left:120px;top:30px;font-size:30px;font-weight:600;letter-spacing:-.01em">${window.LOGOS27[key].name}</div>
+        <div class="a t1" style="left:120px;top:70px;font-size:20px;color:var(--lab)">${plan}</div>
+        <div class="a t1 slab" style="right:34px;top:32px;font-size:54px;font-variant-numeric:tabular-nums">$${usd}</div></div></div>`));
+    // the Macro card's shadow is drawn at its size on screen, so it doesn't stretch as the card morphs into the core
+    add(LB, `<div class="a" id="slM_sh" style="left:0;top:0;z-index:39"></div>`);
+    S.mslab = add(LB, `<div class="sl" id="slM">
+      <div class="fc" id="slM_fc" style="background:${TH.core};color:${TH.coreInk};box-shadow:${ring(sk)}">
+        <div class="a flex" id="slM_in" style="left:0;top:0;width:800px;height:118px">
+          <div class="a flex" style="left:22px;top:21px;width:76px;height:76px;justify-content:center;border-radius:20px;background:${DARK ? "#1a19170f" : "#ffffff12"}">${markSvg(48, TH.coreInk)}</div>
+          <div class="a t1" style="left:120px;top:30px;font-size:30px;font-weight:600">Macro</div>
+          <div class="a t1" style="left:120px;top:70px;font-size:20px;color:${TH.sub}">Every module</div>
+          <div class="a t1 slab" style="right:34px;top:32px;font-size:54px;color:${TH.coreInk}">$40</div></div>
+        <div class="a" id="slM_core" style="left:0;top:0;width:${CORE / sk}px;height:${CORE / sk}px;opacity:0">${coreMarks(null, CORE / sk)}</div></div></div>`);
+    S.total = add(LF, `<div class="a flex" id="tot" style="left:${GX - 400 * sk}px;width:${800 * sk}px;top:0;height:60px;justify-content:space-between">
+      <span class="cap" style="font-size:${15 * sk}px">Per seat, per month</span><span class="slab" id="totv" style="font-size:${52 * sk}px;font-variant-numeric:tabular-nums">$0</span></div>`);
+    S.note = add(LF, `<div class="a t1" id="note" style="left:${GX - 400 * sk}px;top:0;font-size:${15 * sk}px;color:var(--lab)">Business plans, billed annually. List prices checked September 2026.</div>`);
+  }
+  if (SWAP) {
+    const R = rng(77);
+    // each tool is off in its own way: size, angle, offset, corner radius, shade, and how high it sits
+    const mess = () => ({ s: 0.8 + 0.26 * R(), r: (R() - 0.5) * 12, dx: (R() - 0.5) * 30, dy: (R() - 0.5) * 30, rad: [10, 16, 28, 44, 64, 80][Math.floor(R() * 6)],
+      bg: TH.shades[Math.floor(R() * 5)], h: [0, 0.1, 0.2, 0.3, 0.45][Math.floor(R() * 5)] });
+    S.ring = RING.map((k, i) => {
+      const key = S.face[k], o = mess();
+      const el = add(LB, modEl(k, key ? `<div class="lg" id="m_${k}_lg">${logoSvg(key, 132, "f" + i)}</div>` : ""));
+      return { k, key, o, el, land: B(S.morph(i)) };
+    });
+    // the middle four: they become the four quarters of the core
+    S.quads = S.center.map((key, i) => {
+      const o = mess(), qx = i % 2, qy = Math.floor(i / 2);
+      const el = add(LB, `<div class="mod" id="q${i}"><div class="sh" id="q${i}_sh"></div><div class="fc" id="q${i}_fc"></div><div class="lg" id="q${i}_lg">${logoSvg(key, 132, "q" + i)}</div></div>`);
+      return { key, o, el, qx, qy };
+    });
+    add(LB, coreEl("cl"));
+    // a bump: the two tiles meet on the beat, tilt a little and spring back
+    S.bumps.forEach(([b, a, c, dir]) => {
+      const [ca, ra] = MODS[a].cell, [cc, rc] = MODS[c].cell, dx = Math.sign(cc - ca), dy = Math.sign(rc - ra);
+      NUDGE.push({ k: a, t: B(b), dx: dx * 9, dy: dy * 9, dr: dir * 2.5 }, { k: c, t: B(b), dx: -dx * 9, dy: -dy * 9, dr: -dir * 2.5 });
+    });
+  }
+
+  // ----- header -----
+  add(LH, `<div class="a" id="band" style="left:-20px;top:-20px;width:1120px;height:${LY.band + 60}px;background:linear-gradient(to bottom, ${TH.band} 0, ${TH.band} ${LY.band - 10}px, ${TH.band}00 ${LY.band + 40}px)"></div>`);
+  add(LH, `<div class="a" id="lock" style="left:${LY.hx}px;top:${LY.lockY - LY.ms / 2}px">${lockup(LY.ms, TH.text)}</div>`);
+  LINES.forEach((ln, i) => {
+    const ws = ln.w.split(" ").map((w, j) => `<span class="w" id="hl${i}w${j}">${w}</span>`).join(" ");
+    ln.el = add(LH, `<div class="a slab" id="hl${i}" style="left:${LY.hx}px;top:${(LY.hb[ln.l] - 0.89 * LY.hfs).toFixed(2)}px;font-size:${LY.hfs}px">${ws}</div>`);
+    ln.words = [...ln.el.querySelectorAll(".w")];
+  });
+  // ----- end card -----
+  const slabC = (id, words, base, fs) => `<div class="a slab" id="${id}" style="left:-160px;width:1400px;text-align:center;top:${(base - 0.89 * fs).toFixed(2)}px;font-size:${fs}px">${words.map((w, j) => `<span class="w" id="${id}w${j}">${w}</span>`).join(" ")}</div>`;
+  add(LX, slabC("xh0", ["Replace", "27+", "apps"], EL.hb[0], EL.hfs));
+  add(LX, slabC("xh1", ["with", "a", "single", "system."], EL.hb[1], EL.hfs));
+  add(LX, `<div class="a" id="xsub" style="left:40px;width:1000px;top:${EL.sub}px;text-align:center;font-size:${EL.sfs}px;line-height:${EL.slh}px;color:var(--body)">Email, chat, docs, tasks, CRM and agents<br>in one workspace, for <span style="color:var(--ink);font-weight:600">$40 a seat</span>.</div>`);
+  const kh = EL.ch - 8;
+  add(LX, `<div class="a" id="xcta" style="left:0;width:1080px;top:${EL.cta}px;height:${EL.ch}px"><div class="key" id="xkey"><div class="keyf" id="xkf" style="height:${kh}px;padding:0 ${Math.round(kh * 0.52)}px;gap:14px;border-radius:${Math.round(kh * 0.24)}px;font-size:${EL.cfs}px;background:${TH.core};color:${TH.coreInk};box-shadow:${keySh(0)}">Get started at macro.com<span id="xarr" style="display:inline-flex">${pxb("arrow-right", Math.round(EL.cfs * 1.05), TH.coreInk)}</span></div></div></div>`);
+  add(LX, `<div class="a t1" id="xdemo" style="left:0;width:1080px;top:${EL.demo}px;text-align:center;font-size:${EL.dfs}px;color:var(--lab)">or <span style="color:var(--body);text-decoration:underline;text-underline-offset:4px;text-decoration-color:${TH.rule}">book a demo</span></div>`);
+  const PROOF = [`${pxb("trend-up", 20, "var(--body)")}Backed by a16z`, `${pxb("shield-check", 20, "var(--body)")}SOC 2 Type II · ISO 27001`, `${pxb("git-branch", 20, "var(--body)")}Fully open source`];
+  add(LX, `<div class="a flex" id="xproof" style="left:0;width:1080px;top:${EL.proof - 14}px;height:28px;justify-content:center;gap:24px;font-size:${EL.pfs}px">${PROOF.map((p, i) => `${i ? `<span id="xs${i}" style="width:1px;height:20px;background:${TH.rule}"></span>` : ""}<span class="prow" id="xp${i}">${p}</span>`).join("")}</div>`);
+  add(LL, `<div class="a" id="tring" style="left:-32px;top:-32px;width:64px;height:64px;border-radius:50%;box-shadow:inset 0 0 0 2.5px ${TH.touchRing}"></div>`);
+  add(LL, `<div class="a" id="touch" style="left:-32px;top:-32px;width:64px;height:64px;border-radius:50%;background:${TH.touch};box-shadow:inset 0 0 0 3px ${TH.touchRing}, ${shadow(0.3, 1)}"></div>`);
+  document.querySelectorAll("#stage [id]").forEach((n) => { E[n.id] = n; });
+  buildCues();
+}
+
+// =====================================================================
+// motion: springs and kicks, no swings; 2D transforms only, so text under the camera stays sharp
+// =====================================================================
+function show(n, o) { if (o <= 0.002) { n.style.display = "none"; return false; } n.style.display = ""; n.style.opacity = Math.min(1, o).toFixed(4); return true; }
+function fx(n, o, blur, tr) { if (!show(n, o)) return false; n.style.filter = blur > 0.04 ? `blur(${blur.toFixed(3)}px)` : "none"; n.style.transform = tr || "none"; return true; }
+// content swaps with a short blur: in over d seconds from t0
+function blurIn(n, t, t0, d = 0.18) { const p = sm((t - t0) / d); fx(n, p, 6 * (1 - p)); }
+function rise(n, t, tin, tout, dy = 26, blur = 7, resp = 0.42, damp = 0.86) {
+  if (t < tin) { show(n, 0); return; }
+  const p = spr(t - tin, resp, damp), q = tout == null ? 0 : sm((t - tout) / 0.22);
+  fx(n, clamp(spr(t - tin, 0.26, 1) * 1.3) * (1 - q), (1 - clamp(p)) * blur + q * blur, `translate(0,${px((1 - p) * dy - q * dy * 0.6)})`);
+}
+function place(el, sh, x, y, r, s, lift, scale = SC, a = 1) {
+  const sc = scale * s * (1 + 0.06 * lift);
+  el.style.transform = `translate(${px(x - 150)},${px(y - 150)}) rotate(${r.toFixed(3)}deg) scale(${sc.toFixed(5)})`;
+  el.style.zIndex = lift > 0.02 ? String(10 + Math.round(lift * 50)) : "1";
+  if (sh) sh.style.boxShadow = shadow(lift, scale * s, a);
+}
+// a module's card at w×h units, centered in its 300-unit frame, with radius r (units, or a CSS list)
+function shape(fc, sh, w, h, r) {
+  const st = { left: px(150 - w / 2), top: px(150 - h / 2), width: px(w), height: px(h), borderRadius: typeof r === "string" ? r : px(r) };
+  Object.assign(fc.style, st);
+  if (sh) Object.assign(sh.style, st);
+}
+// once the core is in, each module seats itself a hair deeper toward it, a few ms after the last: a ripple of clicks
+const seatT = (i) => B(LOCK) + 0.03 + i * 0.022;
+function gridPos(k, t) {
+  const i = RING.indexOf(k), [x, y] = cellXY(MODS[k].cell, G0), d = 2.2 * imp(t - seatT(i), 0.035), [c, r] = MODS[k].cell;
+  return [x - Math.sign(c - 1.5) * d, y - Math.sign(r - 1.5) * d];
+}
+// LEDs: the ring's come on around the circle over half a beat after the lock, then the core's
+const ledT = (i) => B(LOCK + 0.5) + (i * B(0.5)) / 12;
+function nudge(k, t) {
+  let x = 0, y = 0, r = 0;
+  for (const n of NUDGE) { if (n.k !== k) continue; const a = imp(t - n.t + 0.1, 0.1); x += n.dx * a; y += n.dy * a; r += n.dr * a; }
+  return [x, y, r];
+}
+// a drop: in from (fx, fy) held up, a hover over the spot, then pressed down (contact at t1)
+function drop(t, t0, th, t1, from, to, rot0 = 0) {
+  const a = step(t, t0, th, 0.88), h = 1 - step(t, t1 - 0.1, t1, 0.95);
+  return { x: lerp(from[0], to[0], a), y: lerp(from[1], to[1], a), r: rot0 * (1 - a), lift: h, s: 1 - 0.012 * imp(t - t1, 0.05) };
+}
+const CORE_FROM = [GX, GY + AH * 0.85];
+
+// ----- the modules and the core, every frame -----
+function socksFx(t) {
+  // the tray shows once the tools start sorting (replace), the card starts to become the core (price), or Macro arrives (swap)
+  const a = REPLACE ? B(1) : PRICE ? B(S.morph[0]) : B(3), o = 0.85 * sm((t - a) / 0.6) * (1 - sm((t - B(ENDB)) / 0.3));
+  document.querySelectorAll(".sock").forEach((n) => { n.style.opacity = o.toFixed(3); });
+}
+const ledFx = (k, i, t) => { E[`m_${k}_led`].style.opacity = t >= ledT(i) ? clamp((t - ledT(i)) / 0.05).toFixed(3) : "0"; };
+function modsFx(t) {
+  socksFx(t);
+  if (SWAP) { swapFx(t); return; }
+  RING.forEach((k, i) => {
+    const el = E["m_" + k], sh = E[`m_${k}_sh`], fc = E[`m_${k}_fc`], mc = E[`m_${k}_mc`], [gx, gy] = gridPos(k, t), face = PAL[MODS[k].col].face;
+    let x = gx, y = gy, s = 1, lift = 0, r = 0;
+    if (REPLACE) {
+      const tk = B(S.mod(i)), tb = tk - 0.32, cl = S.cluster[k];
+      if (!cl) {
+        // no tools to merge: the module drops into its empty cell
+        if (t < tk - 0.5) { show(el, 0); return; }
+        const d = drop(t, tk - 0.5, tk - 0.24, tk, [gx, gy - 40], [gx, gy]);
+        x = d.x; y = d.y; s = d.s; lift = d.lift; r = d.r;
+      } else {
+        // the cell's tools are a tight cluster on a card; the card grows into the module and takes its color, and the
+        // module's icon and label blur in as the tools blur out
+        if (t < tb) { show(el, 0); return; }
+        const p = step(t, tb, tk - 0.04, 0.86);
+        shape(fc, sh, lerp(cl.w, 300, p), lerp(cl.h, 300, p), lerp(cl.r, 22, p));
+        fc.style.background = mixHex(TH.card, face, sm((t - tk + 0.22) / 0.14));
+        blurIn(mc, t, tk - 0.17, 0.17);
+      }
+    } else {
+      // price: the modules unfold out of the core
+      const t1 = B(S.out(i)), t0 = t1 - 0.34;
+      if (t < t0) { show(el, 0); return; }
+      const p = step(t, t0, t1, 0.86), cx = GX + (gx - GX) * 0.25, cy = GY + (gy - GY) * 0.25, kick = 2.4 * imp(t - t1, 0.03);
+      x = lerp(cx, gx, p) + Math.sign(gx - GX) * kick; y = lerp(cy, gy, p) + Math.sign(gy - GY) * kick;
+      s = lerp(0.9, 1, p); lift = 0.2 * (1 - clamp(p));
+    }
+    show(el, 1);
+    place(el, sh, x, y, r, s, lift);
+    ledFx(k, i, t);
+  });
+  coreFx(t);
+}
+function coreFx(t) {
+  const el = E.m_core, cs = CORE / CS;
+  let P, on;
+  if (REPLACE) { P = drop(t, B(CORE_IN.t0), B(CORE_IN.th), B(CORE_IN.t1), CORE_FROM, [GX, GY], -8); on = t >= B(CORE_IN.t0); }
+  else {
+    // price: it lifts a little and presses home on the lock; swap: it is the four quarters, merged
+    const lt = B(S.coreLift || LOCK), up = PRICE && t < B(LOCK) ? 0.5 * step(t, lt, B(LOCK) - 0.1, 0.95) * (1 - step(t, B(LOCK) - 0.1, B(LOCK), 1)) : 0;
+    P = { x: GX, y: GY, r: 0, lift: up, s: 1 - 0.012 * imp(t - B(LOCK), 0.05) };
+    on = PRICE ? t >= B(S.morph[1]) : t >= B(LOCK);
+  }
+  if (!show(el, on ? 1 : 0)) return;
+  place(el, E.m_core_sh, P.x, P.y, P.r, P.s * cs, P.lift);
+  if (PRICE) el.style.zIndex = "60";
+  if (SWAP) blurIn(E.m_core_mc, t, B(LOCK) + 0.02);
+  for (let i = 0; i < 12; i++) E["cl" + i].style.opacity = t >= ledT(i) + 0.03 ? clamp((t - ledT(i) - 0.03) / 0.05).toFixed(3) : "0";
+}
+
+// ----- replace: the tools -----
+function toolsFx(t) {
+  for (const T of S.tiles) {
+    const el = T.el, sh = E["t" + T.i + "_sh"], tk = B(S.mod(RING.indexOf(T.k))), tb = tk - 0.32;
+    if (t >= tb + 0.16) { show(el, 0); continue; }
+    // glide into the cell, slide into the cluster, then blur out into the card under them
+    const p = step(t, T.s0, T.s1, 0.86), q = step(t, tk - 0.6, tb, 0.9), g = sm((t - tb) / 0.14);
+    const x = T.A.x + (T.C.x - T.A.x) * p + (T.D.x - T.C.x) * q, y = T.A.y + (T.C.y - T.A.y) * p + (T.D.y - T.C.y) * q;
+    const s = lerp(T.A.s, T.C.s, p), lift = 0.25 * bell(clamp((t - T.s0) / (T.s1 - T.s0)));
+    if (!fx(el, 1 - g, 6 * g, `translate(${px(x - 60)},${px(y - 60)}) scale(${(s * (1 + 0.05 * lift)).toFixed(5)})`)) continue;
+    el.style.zIndex = lift > 0.02 ? "20" : "1";
+    sh.style.boxShadow = shadow(lift, CS / 226, 1 - sm((t - tb) / 0.08));
+  }
+}
+
+// ----- price: the cards, the press, the morph into the core -----
+const SLW = 800, SLH = 118, SLL = 12, SLS = (SLH + SLL) * LY.sk;      // card, the gap above it; one card's pitch in the stack
+function priceFx(t) {
+  const sk = LY.sk, base = LY.stack + 2 * SLS;                        // the table under the stack
+  const p0 = B(S.press[0]), p1 = B(S.press[1]), pp = t < p0 ? 0 : t > p1 ? 1 : mj((t - p0) / (p1 - p0));
+  const hgt = 4 * SLS * (1 - pp);                                     // the stack's height as it's pressed
+  S.slabs.forEach((el, i) => {
+    const land = B(S.land[i]), t0 = land - 0.46, restY = base - (i + 0.5) * SLS * (1 - pp) - (SLL * sk) / 2 * (1 - pp);
+    if ((t < t0 && S.land[i] >= 0) || pp >= 0.995) { show(el, 0); return; }
+    let y, lift = 0;
+    if (t < land && S.land[i] >= 0) { const u = (t - t0) / 0.46; y = lerp(restY - 760, restY, ei2(u)); lift = 0.8 * (1 - u * 0.6); }
+    else {
+      // a landing presses the card and the ones under it a hair, and they settle back
+      y = restY;
+      for (let j = i; j < 4; j++) if (S.land[j] >= 0) y += (j === i ? 4 : 2.2) * imp(t - B(S.land[j]), 0.035);
+    }
+    show(el, 1);
+    el.style.transform = `translate(${px(GX - 400)},${px(y - 59)}) scale(${(sk * (1 + 0.04 * lift)).toFixed(5)},${(sk * Math.max(0.02, 1 - pp) * (1 + 0.04 * lift)).toFixed(5)})`;
+    el.style.zIndex = String(2 + i + (lift > 0 ? 20 : 0));
+    const fo = String(1 - sm((pp - 0.6) / 0.35));
+    E[`sl${i}_sh`].style.boxShadow = shadow(lift * 0.9, sk);
+    E[`sl${i}_sh`].style.opacity = fo; E[`sl${i}_fc`].style.opacity = fo;
+  });
+  // the total counts up as they land, then down to Macro's price as the press goes
+  const prevSum = (i) => S.prices.slice(0, i).reduce((a, p) => a + p[2], 0);
+  let shown = 0;
+  S.land.forEach((b, i) => { const u = b < 0 ? 1 : clamp((t - B(b)) / 0.32); if (t >= B(b)) shown = prevSum(i) + Math.round(S.prices[i][2] * u); });
+  if (pp > 0) shown = Math.round(lerp(84, 40, pp));
+  E.totv.textContent = "$" + shown;
+  const tb = base + 34 * sk + (FMT === "11" ? 4 : 10);
+  fx(E.tot, 1 - sm((t - B(S.morph[0])) / 0.3), 0, `translate(0,${px(tb)})`);
+  fx(E.note, 0.9 * (1 - sm((t - B(S.press[0])) / 0.3)), 0, `translate(0,${px(tb + 66 * sk)})`);
+  // the Macro card: lowers into view, hovers, presses, rests; then becomes the core at the grid's center
+  const el = E.slM, mIn = B(S.mIn), mH = B(S.mHov), m0 = B(S.morph[0]), m1 = B(S.morph[1]);
+  if (t < mIn || t >= m1) { show(el, 0); show(E.slM_sh, 0); return; }
+  const restTop = base - hgt, yRest = restTop - (SLH * sk) / 2 - SLL * sk;
+  const a = step(t, mIn, mH, 0.9), v = step(t, p0 - 0.04, p0 + 0.2, 0.95);
+  const y = lerp(lerp(yRest - 700, yRest - 70, a), yRest, v), lift = 1 - clamp(v);
+  // morph: card → square core at (GX, GY). The card keeps an even scale while its face changes size, so the ring,
+  // the shadow and the text keep their proportions; the core's mark fades in on it, and it ends exactly as the core.
+  const q = t < m0 ? 0 : mj((t - m0) / (m1 - m0));
+  const w = lerp(SLW * sk, CORE, q), h = lerp(SLH * sk, CORE, q), cy = lerp(y, GY, q), R = lerp(22, (22 * CORE) / 300, q);
+  const sl = 1 + 0.04 * lift, fw = w / sk, fh = h / sk, cs = CORE / sk;
+  show(el, 1);
+  el.style.transform = `translate(${px(GX - 400)},${px(cy - 59)}) scale(${(sk * sl).toFixed(5)})`;
+  el.style.zIndex = "40";
+  Object.assign(E.slM_fc.style, { left: px(400 - fw / 2), top: px(59 - fh / 2), width: px(fw), height: px(fh), borderRadius: px(R / sk) });
+  fx(E.slM_in, 1 - sm(q * 2.5), 0, `translate(${px(fw / 2 - 400)},${px(fh / 2 - 59)})`);
+  fx(E.slM_core, sm((q - 0.6) / 0.4), 0, `translate(${px(fw / 2 - cs / 2)},${px(fh / 2 - cs / 2)})`);
+  const sw = w * sl, shh = h * sl;
+  show(E.slM_sh, 1);
+  Object.assign(E.slM_sh.style, { width: px(sw), height: px(shh), borderRadius: px(R * sl), transform: `translate(${px(GX - sw / 2)},${px(cy - shh / 2)})`, boxShadow: shadow(lift * 0.9, 1) });
+}
+
+// ----- swap: each tool morphs into its module -----
+function swapFx(t) {
+  S.ring.forEach((F, i) => {
+    const k = F.k, el = F.el, sh = E[`m_${k}_sh`], fc = E[`m_${k}_fc`], mc = E[`m_${k}_mc`], face = PAL[MODS[k].col].face;
+    const [gx, gy] = gridPos(k, t), [c0x, c0y] = cellXY(MODS[k].cell, G0), [nx, ny, nr] = nudge(k, t);
+    let x, y, r, s, lift, rad, bg;
+    if (F.key) {
+      // it straightens, squares up and takes the module's color while its logo blurs out and the module's content in
+      const t0 = F.land - 0.42, p = step(t, t0, F.land, 0.86);
+      x = lerp(c0x + F.o.dx + nx, gx, p); y = lerp(c0y + F.o.dy + ny, gy, p); r = lerp(F.o.r + nr, 0, p); s = lerp(F.o.s, 1, p);
+      lift = lerp(F.o.h, 0, clamp(p)) + 0.3 * bell(clamp((t - t0) / 0.42)); rad = lerp(F.o.rad, 22, p);
+      bg = mixHex(F.o.bg, face, sm((t - t0 - 0.1) / 0.16));
+      const g = sm((t - t0) / 0.2); fx(E[`m_${k}_lg`], 1 - g, 6 * g);
+      blurIn(mc, t, F.land - 0.2, 0.2);
+    } else {
+      // an empty slot: its module drops in
+      if (t < F.land - 0.5) { show(el, 0); return; }
+      const d = drop(t, F.land - 0.5, F.land - 0.24, F.land, [gx, gy - 40], [gx, gy]);
+      x = d.x; y = d.y; r = d.r; s = d.s; lift = d.lift; rad = 22; bg = face;
+    }
+    show(el, 1);
+    place(el, sh, x, y, r, s, lift);
+    shape(fc, sh, 300, 300, rad); fc.style.background = bg;
+    ledFx(k, i, t);
+  });
+  // the middle four straighten together and merge into the core on the lock: they take its color and its outer
+  // corners, their inner corners square up, and the seams between them fade out
+  const q0 = B(15.5), land = B(LOCK), q2 = CORE / 2, R0 = (22 * CORE) / q2;
+  S.quads.forEach((Qd, i) => {
+    const el = Qd.el, sh = E[`q${i}_sh`], fc = E[`q${i}_fc`];
+    if (t >= land) { show(el, 0); return; }
+    const c0x = GX + (Qd.qx - 0.5) * (CS + G0), c0y = GY + (Qd.qy - 0.5) * (CS + G0), p = mj((t - q0) / (land - q0));
+    const s = lerp(Qd.o.s, q2 / CS, p), lift = lerp(Qd.o.h, 0, p) + 0.3 * bell(clamp((t - q0) / (land - q0)));
+    show(el, 1);
+    place(el, sh, lerp(c0x + Qd.o.dx, GX + (Qd.qx - 0.5) * q2, p), lerp(c0y + Qd.o.dy, GY + (Qd.qy - 0.5) * q2, p), lerp(Qd.o.r, 0, p), s, lift, SC, lerp(1, 0.55, p));
+    const ro = lerp(Qd.o.rad, R0, p), ri = lerp(Qd.o.rad, 0, p), outer = [!Qd.qx && !Qd.qy, Qd.qx && !Qd.qy, Qd.qx && Qd.qy, !Qd.qx && Qd.qy];
+    shape(fc, sh, 300, 300, outer.map((o) => px(o ? ro : ri)).join(" "));
+    fc.style.background = mixHex(Qd.o.bg, TH.core, sm((t - q0 - 0.05) / 0.25));
+    fc.style.boxShadow = ring(SC * s, 1 - sm((t - land + 0.15) / 0.15));
+    const g = sm((t - q0) / 0.16); fx(E[`q${i}_lg`], 1 - g, 6 * g);
+  });
+  coreFx(t);
+}
+
+// ----- header and end card -----
+function wordsFx(ln, t) {
+  ln.words.forEach((w, j) => {
+    const a = B(ln.tin) + j * 0.05, b = B(ln.tout) + j * 0.022;
+    if (ln.tin < 0) { const q = sm((t - b) / 0.22); fx(w, 1 - q, q * 7, `translate(0,${px(-q * 16)})`); return; }
+    rise(w, t, a, b, 0.36 * LY.hfs, 7, 0.42, 0.86);
+  });
+}
+function headerFx(t) {
+  LINES.forEach((ln) => { if (show(ln.el, t >= B(ln.tin) - 0.01 && t < B(ln.tout) + 0.6 ? 1 : 0)) wordsFx(ln, t); });
+  const e = B(ENDB), lw = (LY.ms * (191.3 + 44.7 + 630.7)) / 126.4;
+  show(E.band, 1 - sm((t - e) / 0.3));
+  E.lock.style.transform = `translate(${px((540 - lw / 2 - LY.hx) * spr(t - e - 0.1, 0.75, 0.9))},0)`;
+}
+// the end card, a line or a piece a beat: headline (18, 18.5), sub (19), button (19.5), press (20), demo (21), proof (21.5)
+function endFx(t) {
+  if (!show(LX, t >= B(18) - 0.05 ? 1 : 0)) return;
+  ["Replace 27+ apps", "with a single system."].forEach((l, r) => l.split(" ").forEach((_, j) => rise(E[`xh${r}w${j}`], t, B(18 + 0.5 * r) + j * 0.05, null, 28, 9, 0.42, 0.86)));
+  rise(E.xsub, t, B(19), null, 14, 6);
+  const ka = B(19.5), pd = B(20), pu = pd + 0.16;
+  if (t < ka) show(E.xkey, 0);
+  else {
+    const p = spr(t - ka, 0.34, 0.86), press = t < pd - 0.03 ? 0 : t < pu ? sm((t - pd + 0.03) / 0.05) : 1 - spr(t - pu, 0.2, 0.9);
+    fx(E.xkey, clamp((t - ka) / 0.1), 0, `translateX(-50%) translate(0,${px((1 - p) * -22)}) scale(${((1.04 - 0.04 * clamp(p)) * (1 - 0.035 * press)).toFixed(4)})`);
+    E.xkf.style.boxShadow = keySh(clamp(press));
+  }
+  E.xarr.style.transform = `translateX(${px(5 * imp(t - B(20.5), 0.12))})`;
+  rise(E.xdemo, t, B(21), null, 10, 5);
+  [0, 1, 2].forEach((i) => { rise(E["xp" + i], t, B(21.5) + i * 0.08, null, 8, 5); if (i) show(E["xs" + i], clamp((t - B(21.5) - i * 0.08) / 0.2)); });
+}
+function thumb(t, td, x, y) {
+  const tu = td + 0.16;
+  if (t < td - 0.12 || t > tu + 0.36) return false;
+  const appear = clamp((t - (td - 0.12)) / 0.1), lift = sm((t - tu) / 0.16), held = t >= td && t <= tu ? 1 : 0;
+  fx(E.touch, appear * (1 - lift), 0, `translate(${px(x)},${px(y)}) scale(${((1.25 - 0.25 * sm(appear)) * (1 - 0.1 * held) * (1 + 0.15 * lift)).toFixed(4)})`);
+  if (t > tu) { const u = (t - tu) / 0.36; fx(E.tring, (1 - sm(u)) * 0.9, 0, `translate(${px(x)},${px(y)}) scale(${(1 + 1.3 * mj(u)).toFixed(4)})`); } else show(E.tring, 0);
+  return true;
+}
+function handsFx(t) { if (!thumb(t, B(20), 540 + 150, EL.cta + EL.ch / 2)) { show(E.touch, 0); show(E.tring, 0); } }
+
+// =====================================================================
+// sound
+// =====================================================================
+const CUES = [];
+const MUSIC = { bpm: BPM, beats: BEATS, lock: LOCK, end: ENDB, style: "premium" };
+function buildCues() {
+  const cueT = (t, type, gain = 1, extra = {}) => CUES.push({ t, type, gain, ...extra });
+  const pan = (x) => clamp((x - 540) / 540, -1, 1) * 0.55;
+  if (REPLACE) {
+    S.tiles.forEach((T) => { cueT(T.s0 + 0.01, "slide", 0.1, { pan: pan(T.A.x), dur: T.s1 - T.s0 }); cueT(T.s1, "tak", 0.22, { pan: pan(T.C.x), seed: T.i }); });
+    RING.forEach((k, i) => {
+      const [x] = cellXY(MODS[k].cell, G0), tk = B(S.mod(i));
+      if (!MODS[k].tools.length) { cueT(tk - 0.5, "lift", 0.3, { pan: pan(x) }); cueT(tk, "msnap", 0.95, { pan: pan(x), seed: i }); return; }
+      MODS[k].tools.forEach((_, j) => cueT(tk - 0.32 + j * 0.02, "absorb", 0.42, { pan: pan(x), seed: i * 6 + j }));
+      cueT(tk, "msnap", 0.95, { pan: pan(x), seed: i });
+    });
+    cueT(B(CORE_IN.t0) + 0.02, "lift", 0.5);
+    cueT(B(CORE_IN.th) - 0.1, "riser", 0.5, { dur: B(LOCK) - B(CORE_IN.th) + 0.1 });
+  }
+  if (PRICE) {
+    S.land.forEach((b, i) => {
+      if (b < 0) return;
+      cueT(B(b) - 0.46, "whoosh", 0.18, { pan: 0 });
+      cueT(B(b), "slab", 1.0, { pan: 0, seed: i });
+      for (let n = 0; n < 6; n++) cueT(B(b) + 0.05 + n * 0.05, "count", 0.2, { pan: 0.3, seed: n });
+    });
+    cueT(B(S.mIn), "lift", 0.4, { pan: 0 });
+    cueT(B(S.press[0]) - 0.05, "hydraulic", 0.9, { dur: B(S.press[1]) - B(S.press[0]) + 0.1 });
+    for (let n = 0; n < 10; n++) cueT(B(S.press[0]) + 0.1 + n * ((B(S.press[1]) - B(S.press[0]) - 0.1) / 10), "count", 0.14, { pan: 0.3, seed: 10 + n });
+    cueT(B(S.press[1]), "slab", 1.1, { pan: 0, seed: 9, heavy: 1 }); cueT(B(S.press[1]) + 0.03, "hiss", 0.6, { pan: 0 });
+    cueT(B(S.morph[0]), "whoosh", 0.3, { pan: 0 });
+    RING.forEach((k, i) => { const [x] = cellXY(MODS[k].cell, G0); cueT(B(S.out(i)), "msnap", 0.7, { pan: pan(x), seed: i }); });
+    cueT(B(S.coreLift) + 0.02, "lift", 0.35, { pan: 0 });
+  }
+  if (SWAP) {
+    S.bumps.forEach(([b]) => cueT(B(b), "clunk", 0.8, { pan: 0, seed: Math.round(b * 10) }));
+    S.ring.forEach((F, i) => {
+      const [x] = cellXY(MODS[F.k].cell, G0);
+      if (F.key) cueT(F.land - 0.42, "absorb", 0.36, { pan: pan(x), seed: i }); else cueT(F.land - 0.5, "lift", 0.3, { pan: pan(x) });
+      cueT(F.land, "msnap", 0.9, { pan: pan(x), seed: i });
+    });
+    cueT(B(15.5), "absorb", 0.5, { pan: -0.1, seed: 40 }); cueT(B(15.5) + 0.03, "absorb", 0.5, { pan: 0.1, seed: 41 });
+    cueT(B(14.5), "riser", 0.45, { dur: B(LOCK) - B(14.5) });
+  }
+  // the lock: the core's thock, the ring pulling tight, the LEDs coming on, and the system's chime
+  cueT(B(LOCK), "thock", 1.0, { pan: 0 });
+  RING.forEach((k, i) => { const [x] = cellXY(MODS[k].cell, G0); cueT(seatT(i) + 0.035, "click", 0.36, { pan: pan(x), seed: i }); cueT(ledT(i), "led", 0.2, { pan: pan(x), seed: i }); });
+  cueT(B(LOCK) + 0.32, "online", 0.4, { pan: 0 });
+  // end card
+  cueT(B(ENDB) - 0.02, "whoosh", 0.3, { pan: 0 });
+  cueT(B(19.5) + 0.12, "msnap", 0.55, { pan: 0, seed: 30 });
+  cueT(B(20), "press", 0.95, { pan: 0.15 }); cueT(B(20) + 0.16, "release", 0.65, { pan: 0.15 });
+}
+
+// =====================================================================
+// seek(t)
+// =====================================================================
+let CAM = { cx: GX, cy: GY, z: 1, sy: GY };
+function seek(tIn) {
+  const t = clamp(tIn, 0, T);
+  let z = Math.exp(LZT(t));
+  const u = t - B(LOCK); if (u >= 0) z *= 1 + 0.012 * clamp(u / 0.02) * Math.exp(-u / 0.16);
+  CAM = { cx: CXT(t), cy: CYT(t), z, sy: SYT(t) };
+  world.style.transform = `translate(${(540 * K).toFixed(3)}px,${(CAM.sy * K).toFixed(3)}px) scale(${(K * z).toFixed(5)}) translate(${(-CAM.cx).toFixed(3)}px,${(-CAM.cy).toFixed(3)}px)`;
+  if (REPLACE) toolsFx(t);
+  if (PRICE) priceFx(t);
+  modsFx(t);
+  headerFx(t);
+  endFx(t);
+  handsFx(t);
+}
+
+// ---------- boot ----------
+window.seek = seek; window.DURATION = T; window.CUES = CUES; window.B = B; window.MUSIC = MUSIC; window.FMT = [W, H];
+window.ready = Promise.all(['400 20px "Inter"', '500 20px "Inter"', '600 20px "Inter"', '700 20px "Inter"', '320 40px "display"'].map((f) => document.fonts.load(f)))
+  .then(() => document.fonts.ready)
+  .then(() => { init(); seek(0); return true; });
+const params = new URLSearchParams(location.search);
+if (params.has("render")) document.documentElement.classList.add("render");
+else {
+  const fit = () => { const k = Math.min(innerWidth / W, innerHeight / H); Object.assign(stage.style, { position: "fixed", left: "50%", top: "50%", transformOrigin: "50% 50%", transform: `translate(-50%,-50%) scale(${k})` }); };
+  addEventListener("resize", fit); fit();
+  const at = params.has("t") ? parseFloat(params.get("t")) : null;
+  window.ready.then(() => { if (at != null) { seek(at); return; } const t0 = performance.now(); const loop = () => { seek(((performance.now() - t0) / 1000) % T); requestAnimationFrame(loop); }; requestAnimationFrame(loop); });
+}
+</script>
+</body>
+</html>
