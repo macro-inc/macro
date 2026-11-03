@@ -122,6 +122,9 @@ async fn rank_entities<'a>(
     )
 }
 
+/// Budget for the SDK section of a system prompt; a byte cap, not a token count.
+const PROMPT_DOCUMENTATION_BYTES: usize = 48 * 1024;
+
 /// Load relevant entity indexes in one Jev call; failures retain the compact catalog.
 /// The byte cap bounds prompt growth; it is not an exact tokenizer count.
 #[tracing::instrument(skip_all, fields(selected = tracing::field::Empty, bytes = tracing::field::Empty, selection_status = tracing::field::Empty, selected_entities = tracing::field::Empty))]
@@ -132,12 +135,6 @@ pub async fn select_documentation(
     cancel: &CancellationToken,
 ) -> String {
     let docs = sdk_documentation();
-    let mut output = String::from(
-        "\n<macro_sdk>\nUse the real Macro SDK in ExecuteCode. Entity indexes below list each class, method and type by symbol, with method signatures. Read the symbols a program needs with ReadCodeDocs for their parameters, options and return types, all together in one call, unless their reference is already in context. Use DescribeCodeTools for the index of an entity not loaded here.\nAvailable entities:\n",
-    );
-    for doc in docs {
-        output.push_str(&format!("{}: {}\n", doc.name, doc.description));
-    }
     let started = tokio::time::Instant::now();
     let (ranked, status) = rank_entities(
         user,
@@ -148,15 +145,7 @@ pub async fn select_documentation(
         cancel,
     )
     .await;
-    let mut selected_entities = Vec::new();
-    for doc in ranked.into_iter().take(4) {
-        let remaining = (48 * 1024_usize).saturating_sub(output.len() + 1);
-        if let Some(index) = doc.index.as_ref().filter(|index| index.len() <= remaining) {
-            output.push('\n');
-            output.push_str(index);
-            selected_entities.push(doc.name.as_str());
-        }
-    }
+    let (output, selected_entities) = render_documentation(ranked.into_iter().take(4));
     let span = tracing::Span::current();
     span.record("selected", selected_entities.len());
     span.record("selected_entities", selected_entities.join(","));
@@ -168,8 +157,47 @@ pub async fn select_documentation(
         bytes = output.len(),
         "selected SDK documentation"
     );
-    output.push_str("</macro_sdk>\n");
     output
+}
+
+/// The SDK catalog with the indexes of `names`, for a turn whose loaded skills
+/// say which entities it works with. Unknown names are ignored.
+#[tracing::instrument(skip_all, fields(selected = tracing::field::Empty, bytes = tracing::field::Empty))]
+pub fn documentation_for_entities(names: &[&str]) -> String {
+    let (output, selected) = render_documentation(
+        sdk_documentation()
+            .iter()
+            .filter(|doc| names.contains(&doc.name.as_str())),
+    );
+    let span = tracing::Span::current();
+    span.record("selected", selected.len());
+    span.record("bytes", output.len());
+    output
+}
+
+/// The `<macro_sdk>` section: every entity's summary, then `expanded`
+/// entities' indexes while they fit the prompt budget. Returns the section
+/// and the entities expanded.
+fn render_documentation<'a>(
+    expanded: impl Iterator<Item = &'a SdkDocumentation>,
+) -> (String, Vec<&'a str>) {
+    let mut output = String::from(
+        "\n<macro_sdk>\nUse the real Macro SDK in ExecuteCode. Entity indexes below list each class, method and type by symbol, with method signatures. Read the symbols a program needs with ReadCodeDocs for their parameters, options and return types, all together in one call, unless their reference is already in context. Use DescribeCodeTools for the index of an entity not loaded here.\nAvailable entities:\n",
+    );
+    for doc in sdk_documentation() {
+        output.push_str(&format!("{}: {}\n", doc.name, doc.description));
+    }
+    let mut selected = Vec::new();
+    for doc in expanded {
+        let remaining = PROMPT_DOCUMENTATION_BYTES.saturating_sub(output.len() + 1);
+        if let Some(index) = doc.index.as_ref().filter(|index| index.len() <= remaining) {
+            output.push('\n');
+            output.push_str(index);
+            selected.push(doc.name.as_str());
+        }
+    }
+    output.push_str("</macro_sdk>\n");
+    (output, selected)
 }
 
 /// Budget for one documentation tool result. Claude Code moved an 87K

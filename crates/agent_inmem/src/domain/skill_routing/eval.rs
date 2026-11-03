@@ -1,7 +1,5 @@
-//! Routes the design's evaluation prompts through the real Jev and reports how
-//! often the expected skills load. Area skills not built yet are routed by
-//! the description the design gives them; each moves to `system_skills` as it
-//! is built.
+//! Routes the design's evaluation prompts through the real Jev over every
+//! built-in skill, and reports how often the expected skills load.
 //!
 //! ```text
 //! doppler run --project agent-harness-service --config dev -- \
@@ -24,22 +22,10 @@ use skills::domain::selection::{SkillRequest, select_skills};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-/// Area skills the design plans and `system_skills` does not have yet.
-const PLANNED: &[(&str, &str)] = &[(
-    "Finding Things",
-    "Use when the user asks to find, look up or list their own Macro content (documents, emails, messages, tasks, people), or asks something their workspace answers; not for the web.",
-)];
-
 /// Each prompt and the skills it should load, by name.
 const PROMPTS: &[(&str, &[&str])] = &[
-    (
-        "What did the design team decide about the Q3 launch?",
-        &["Finding Things"],
-    ),
-    (
-        "Find the contract we sent Acme last month",
-        &["Finding Things"],
-    ),
+    ("What did the design team decide about the Q3 launch?", &[]),
+    ("Find the contract we sent Acme last month", &[]),
     (
         "Every Monday at 9, send me a summary of my open tasks",
         &["Routines", "Tasks"],
@@ -96,10 +82,6 @@ const THRESHOLDS: [f32; 3] = [0.5, 0.7, 0.8];
 /// The most skills one request loads in the sweep, as for built-ins.
 const LOAD_LIMIT: usize = 3;
 
-fn planned_id(name: &str) -> Uuid {
-    Uuid::new_v5(&Uuid::NAMESPACE_OID, name.as_bytes())
-}
-
 fn candidates() -> Vec<SkillSummary> {
     system_skills::SYSTEM_SKILLS
         .iter()
@@ -109,12 +91,6 @@ fn candidates() -> Vec<SkillSummary> {
             description: Some(skill.description.to_string()),
             updated_at: None,
         })
-        .chain(PLANNED.iter().map(|(name, description)| SkillSummary {
-            document_id: planned_id(name),
-            name: (*name).to_string(),
-            description: Some((*description).to_string()),
-            updated_at: None,
-        }))
         .collect()
 }
 
@@ -292,9 +268,7 @@ async fn route_evaluation() {
         .count()
         * RUNS;
     println!("\n{} prompts x {RUNS} runs", PROMPTS.len());
-    println!(
-        "router as shipped (planned skills routed as user skills): exact set {routed_exact}/{runs}"
-    );
+    println!("router as shipped: exact set {routed_exact}/{runs}");
     for (index, threshold) in THRESHOLDS.iter().enumerate() {
         println!(
             "all as built-ins at {threshold}: exact set {}/{runs}, recall {}/{expected_total}, loads on irrelevant prompts {}/{none_runs}",

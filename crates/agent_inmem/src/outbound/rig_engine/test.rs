@@ -504,3 +504,21 @@ async fn native_dispatch_uses_the_resolved_account_and_strips_routing_arguments(
             .contains(&serde_json::json!("acting_as"))
     );
 }
+
+#[test]
+fn loaded_built_in_skills_name_their_sdk_entities_once() {
+    let loaded = |id: uuid::Uuid| skills::domain::selection::LoadedSkill {
+        id,
+        name: String::new(),
+        builtin: true,
+        score: 0.9,
+        content: String::new(),
+    };
+    let entities = skill_entities(&[
+        loaded(system_skills::databases::SKILL.id()),
+        loaded(uuid::Uuid::from_u128(7)),
+        loaded(system_skills::crm::SKILL.id()),
+        loaded(system_skills::databases::SKILL.id()),
+    ]);
+    assert_eq!(entities, ["databases", "crm"]);
+}

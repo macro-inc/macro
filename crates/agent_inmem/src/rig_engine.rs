@@ -469,6 +469,22 @@ fn select_skills<'a>(
     ))
 }
 
+/// The SDK entities the built-in skills among `loaded` work with, in load order.
+fn skill_entities(loaded: &[skills::domain::selection::LoadedSkill]) -> Vec<&'static str> {
+    let mut entities = Vec::new();
+    for skill in loaded
+        .iter()
+        .filter_map(|skill| system_skills::system_skill(skill.id))
+    {
+        for entity in skill.sdk_entities {
+            if !entities.contains(entity) {
+                entities.push(*entity);
+            }
+        }
+    }
+    entities
+}
+
 /// Whether a turn loads skills on its own, and what its session has loaded.
 struct TurnSkills<'a> {
     routes: bool,
@@ -619,8 +635,10 @@ async fn drive_turn(
             .filter_map(|message| message.content.user_message_text());
         let requested = user_messages.next().unwrap_or_default();
         let previous = user_messages.next();
+        // Routed turns learn which SDK entities they need from the skills
+        // they load; only unrouted code-mode turns ask Jev about entities.
         let docs = async {
-            if native_tools.code_mode {
+            if native_tools.code_mode && !skills.routes {
                 agent_code_mode::domain::select_documentation(
                     &owner,
                     &requested,
@@ -634,7 +652,7 @@ async fn drive_turn(
         };
         let loaded_skills = async {
             if !skills.routes {
-                return String::new();
+                return Vec::new();
             }
             let selection = select_skills(
                 &base_context,
@@ -647,12 +665,16 @@ async fn drive_turn(
                 &cancel,
             )
             .await;
-            skills::domain::selection::render_loaded(
-                &skills.sessions.add(session_id, selection.loaded),
-            )
+            skills.sessions.add(session_id, selection.loaded)
         };
         let (user_memory, sdk_docs, loaded_skills) =
             tokio::join!(fetch_user_memory(memory, &owner), docs, loaded_skills);
+        let sdk_docs = if native_tools.code_mode && skills.routes {
+            agent_code_mode::domain::documentation_for_entities(&skill_entities(&loaded_skills))
+        } else {
+            sdk_docs
+        };
+        let loaded_skills = skills::domain::selection::render_loaded(&loaded_skills);
         let tools_prompt = if skills.routes {
             &native_tools.routed_prompt
         } else {

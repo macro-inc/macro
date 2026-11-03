@@ -266,3 +266,22 @@ fn system_skill_entities_are_sdk_entities() {
         }
     }
 }
+
+#[test]
+fn named_entities_expand_without_a_classifier_and_the_catalog_stays() {
+    let result = documentation_for_entities(&["databases", "crm", "not-an-entity"]);
+    assert!(result.contains("\n## databases\n"));
+    assert!(result.contains("\n## crm\n"));
+    assert!(!result.contains("\n## email\n"));
+    assert!(result.contains("email:"));
+    assert!(result.len() <= 48 * 1024);
+}
+
+#[test]
+fn naming_no_entities_renders_the_catalog_alone() {
+    let result = documentation_for_entities(&[]);
+    for doc in sdk_documentation() {
+        assert!(result.contains(&format!("{}: {}\n", doc.name, doc.description)));
+    }
+    assert!(!result.contains("\n## "));
+}

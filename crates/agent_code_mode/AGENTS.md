@@ -37,9 +37,11 @@ stacks. Process isolation belongs to
   `ReviewActions::present_view`. There is no `PresentView` tool: ExecuteCode's
   description carries the view schema and when to present one.
 - `src/domain/documentation.rs`: the generated SDK catalog (an index per
-  entity, a reference per symbol). Jev selects entity indexes for the per-turn
-  prompt (top four, 48 KiB) or a `DescribeCodeTools` `task` (every relevant
-  entity, 32 KiB); `ReadCodeDocs` reads symbol references (32 KiB).
+  entity, a reference per symbol). Turns that route skills expand the entities
+  their loaded built-in skills name (`documentation_for_entities`); other turns
+  have Jev select indexes (top four), both within 48 KiB. A
+  `DescribeCodeTools` `task` gets every relevant entity (32 KiB);
+  `ReadCodeDocs` reads symbol references (32 KiB).
 - `src/inbound/toolset.rs`: `toolset()` for sessions, `user_toolset()` for the
   public MCP. Tool texts are composed: host-specific parts in `toolset/session/`
   and `toolset/user/`, guidance both share in `toolset/shared/`. Edit shared
