@@ -100,8 +100,8 @@ needs a few more failures to alert.
 More Outlook mailboxes need reauthorization than an hour ago. Their sync stops
 until each user reconnects, so a spike is user-visible.
 
-- List them: `"outlook mailbox health" @needs_reauth:true`, grouped by
-  `@link_id`.
+- List them: `env:prod "outlook mailbox health" @needs_reauth:true`,
+  grouped by `@link_id`.
 - Several at once point at a shared credential problem rather than users:
   the Microsoft app registration (an expired client secret, revoked consent),
   the encrypted grant store, or a refresh regression in a recent
