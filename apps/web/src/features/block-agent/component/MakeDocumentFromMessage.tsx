@@ -20,6 +20,7 @@ export function MakeDocumentFromMessage(props: {
 }) {
   const { openWithSplit } = useSplitLayout();
   const [saving, setSaving] = createSignal(false);
+  const [openedDocument, setOpenedDocument] = createSignal<string>();
   let alive = true;
   onCleanup(() => {
     alive = false;
@@ -42,6 +43,7 @@ export function MakeDocumentFromMessage(props: {
         { type: 'md', id: documentId },
         { preferNewSplit: true, activate: true }
       );
+      setOpenedDocument(documentId);
     } catch (error) {
       if (!alive) return;
       toast.failure("Couldn't make a doc");
@@ -57,6 +59,7 @@ export function MakeDocumentFromMessage(props: {
       variant="ghost"
       size="xs"
       class="self-start"
+      data-opened-document={openedDocument()}
       disabled={saving()}
       onClick={() => {
         fireAndForget(make(), 'agent-message-document');

@@ -53,6 +53,11 @@ describe('MakeDocumentFromMessage', () => {
       markdown: 'Draft the role.',
     });
     expect(failure).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(view.getByRole('button').dataset.openedDocument).toBe(
+        'document-1'
+      );
+    });
   });
 
   it('tells the reader when the document was not created', async () => {
