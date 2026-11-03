@@ -77,6 +77,8 @@ the existing gateway prefixes.
   in step.
 - Regenerate Rust OpenAPI and web service clients before `bun run sync-specs &&
   bun run generate`; do not copy deployed schemas over a local API change.
+- Run `bun run generate` to regenerate SDK clients and normalize whitespace-only
+  lines; do not hand-edit generated output to satisfy whitespace checks.
 - Regenerate `../sdk-docs/reference` after SDK source or generated type changes;
   run that package's checks because web CI verifies the reference is current.
   Also run `bun packages/code-mode-sdk/scripts/generate.ts` from the root and
