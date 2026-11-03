@@ -33,6 +33,10 @@ right without shifting other properties. Keep the single tag or collapsed
 multi-tag chip after the title, including phones, with the existing picker and
 hover actions.
 
+Trailing row actions replace the date on hover and keyboard focus. The hidden
+date must not reserve width, so the star stays beside the available actions
+even when a sent-only email has no Unarchive action.
+
 `ProjectBreadCrumb.collapsed` keeps a keyboard-accessible, borderless ghost folder
 button with its link color and a circular icon-only target. Its hover card shows
 the folder heading and full path on separate rows.
