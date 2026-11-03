@@ -57,8 +57,14 @@ Quick Access person lists are per-observer windows, never global item-cache rows
 Forward live queries from commands, mentions and property selectors; resolve CRM
 aliases only for their current window. Reset virtual focus/scroll on window
 replacement, not label updates. Keep explicit participant/team pools scoped and
-selected IDs/self independent of suggestion pages. Universal task inference still
-uses the existing shared-recipient pool until its planner resolver migrates.
+selected IDs/self independent of suggestion pages. `RecipientSelector.createSource`
+constructs a per-picker source from live query/open/self/domain inputs; use
+`useContactRecipientSource` or `useCombinedRecipientSource` for personal suggestions
+and keep `options` for explicit scoped extras. Closing releases the page and reopening
+starts at the first window. Selected chips remain caller-owned; Next options/PageDown
+can advance empty windows. The internal recipient browser fixture covers desktop/touch.
+Universal task inference still uses the existing shared-recipient pool until its
+planner resolver migrates; never substitute a suggestion page for that catalog.
 
 ## Verifying a change in a real browser
 

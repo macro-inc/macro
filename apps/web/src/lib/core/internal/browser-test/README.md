@@ -29,7 +29,15 @@ changing unrelated facets. They do not instantiate Tasks' full AI-filter catalog
 `/?recipient-ranking` mounts the real recipient selector over small supplied
 options and stand-in identity/profile services. It verifies that exact addresses
 win over recent word matches and Enter preserves selection across searches.
-It checks the new deterministic scorer, not the pending bounded recipient-source cutover.
+It checks deterministic scoring for explicit scoped options.
+
+`/?recipient-directory` mounts the real recipient selector and its per-picker
+contact window over a virtual 100k source. Desktop/phone tests cover lazy opening,
+replacement pages by keyboard or touch, empty continuations, a late match, custom
+selection preservation and input focus. The source unit regression additionally
+checks twenty replacements, close/reopen reset and query-history collection.
+New message/channel, call, routine-template and sharing pickers use this source;
+email and AI-planner pools still require their separate migration.
 
 This is UI/adapter coverage, not a WASM memory measurement or live-backend trace.
 Real Turso/OPFS hydration/search coverage lives in `crates/client/cache-turso`.

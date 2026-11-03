@@ -100,12 +100,19 @@ export function createContactDirectoryWindow(
             senderDomain: value.senderDomain,
           }
         : undefined;
-      return { query: search(), policy, policyKey: hashKey([policy]) };
+      return {
+        query: search(),
+        policy,
+        policyKey: hashKey([policy]),
+        active: enabled(),
+      };
     },
     undefined,
     {
       equals: (previous, next) =>
-        previous.query === next.query && previous.policyKey === next.policyKey,
+        previous.query === next.query &&
+        previous.policyKey === next.policyKey &&
+        previous.active === next.active,
     }
   );
   const [cursor, setCursor] = createSignal<{
