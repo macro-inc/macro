@@ -81,6 +81,12 @@ on the create (`prompt` + `promptActionId`) and no `/control` request follows;
 a persona, effort, or speed keeps the control request. Either way the prompt
 shows as one bubble that the logged row confirms in place.
 
+Switching a disconnected session's model wakes its runtime first; the
+selector re-enables with the new model's options once the runtime answers. If
+the live feed misses that answer, the client reads the log after 10 seconds,
+and after a minute it takes back an unconfirmed change, so the selector shows
+the runtime's model again and stays usable.
+
 Macro's in-process agent opens each reply with a line from a fast model
 (`gpt-5.4-mini`), usually within half a second of Enter. Small talk
 ("hi there", "thanks") gets that line as the whole reply, and the chosen model,
@@ -770,7 +776,12 @@ the shimmer.
   and quoting remain available.
   Archived sessions are read-only: Rename and all message controls are unavailable,
   and an **Unarchive** action replaces the composer at the bottom. Archive /
-  Unarchive is also available from the title dropdown.
+  Unarchive is also available from the title dropdown. The footer says when the
+  session was archived and, if it archived itself, why (its pull requests
+  merged, or its machine session closed). For the owner of an unarchived session that has never
+  archived itself, the title dropdown also has **Archive when PRs merge** and
+  **Archive when session closes** submenus, each with **Use default (On/Off)**,
+  **On**, and **Off**; the defaults live in Settings → Agents → **Auto-archive**.
 - Users without `enable-chat-v3-agents` retain the Owned / Running / Shared /
   Automations / Skills list. With the flag enabled, touch devices use the new
   conversation list described above. Touch conversation links open standalone
@@ -786,6 +797,23 @@ Loading metadata affects only its row. Deleted, inaccessible, or missing resourc
 show **Run unavailable** without a link, including failed preparation that created
 no resource. Live pending rows remain neutral; persisted unsuccessful runs keep
 the failure-colored timestamp even when their transcript is still available.
+
+## Routine run notifications and failures
+
+Every routine run creates one `routine_run_finished` notification for the
+owner, "<routine> finished" or "<routine> failed", including runs that fail
+before an agent session starts. Routine notifications go to the inbox only:
+they never show a toast, browser or desktop alert, or phone push. Opening one
+opens the routine. The routine's own agent turn sends no "agent finished"
+notification; its questions still notify.
+
+The routines list shows **Failed** in failure color in the Status column while a
+routine's latest finished run failed, whether it is active, paused, or done; a
+run in progress still shows **Running**. The legacy Agents list shows **Last run
+failed** for the same routine. Verify by running a routine whose required app is
+disconnected: the row turns **Failed** and a "failed" notification appears in the
+inbox without an alert; reconnect and run again: a "finished" notification
+appears and the row returns to its normal status.
 
 ## Start a standalone chat
 
@@ -1064,7 +1092,7 @@ For Macro's in-process agent, the backend evaluates the session owner's
 `ai-code-mode` flag once per conversational turn. Enabled users get a smaller
 direct toolset: SDK-supported searches, reads, listing, and data operations run
 through the SDK. Document editing keeps the direct `EditDocument` tool, and
-`DisplayResults` remains available for rendering results. Workspace feeds and
+results are presented with `execution.views.present`. Workspace feeds and
 mixed-entity name searches keep the direct `ListEntities` and `NameSearch` tools,
 including agent sessions. `ContentSearch` supports session history. The legacy
 chat and workspace SDK namespaces are excluded from agent documentation. Methods
@@ -1082,6 +1110,14 @@ not authorization; SDK requests retain normal user permissions, and issuing the 
 External coding harnesses keep their own tool selection. A runner that fails
 after its tools were advertised still produces an execution failure, not an
 automatic retry through a direct tool.
+
+Team and referral invites exist only in the SDK: `team.invite(emails)` on
+`macro.teams.current()` (resolves `false` when every address was already a
+member or invited), `team.invites()` and `invite.revoke()` for team admins, and
+`macro.referrals.link()` / `macro.referrals.invite(email)`. Invites send email
+immediately, with no review card, so test them on a team and addresses you
+control. The standard toolset and the standard MCP have no direct tool for
+either.
 
 Ask the agent to discover SDK entities and write a JavaScript module exporting
 `async function main({macro, session, execution})`. These are actual public SDK
@@ -1613,23 +1649,31 @@ row opens; syntax highlighting may appear after the diff text. Opening a session
 or expanding a group should leave the app responsive, even when the session
 contains many file edits.
 
-`DisplayResults` renders its dynamic view directly in the reply and stays visible
-without opening a tool row. It breaks tool groups before and after itself,
-including while pending; later calls start a separate group.
-Its dashboard supports markdown, timelines, entity lists, and channel messages,
-using the same full-width view as AI chat. Incomplete arguments stay hidden while
-streaming; a valid view updates as arguments arrive. Malformed completed views
-show **Couldn't render dashboard**; failed calls show a **Failed** summary row
-without a disclosure. Macro's built-in agents receive the complete view schema
-with the tool definition. External coding agents connected through Macro's MCP
-server do not currently receive this tool.
+Agent sessions present views from code with `execution.views.present(view)`,
+a review with nothing saved; there is no direct view tool.
+The agent decides when to present one without being asked, usually at the end
+of a turn that made, changed or sent something, or to answer a question about
+workspace data, and it does not mention again in its reply what the view shows.
+The server decodes the view before it is drawn: a view that does not decode
+is never presented, and the agent is told what to fix.
+The call the harness presents (`view_<id>`) draws the view directly in the
+reply and stays visible without opening a tool row. Every agent chain with
+`ExecuteCode`, including external coding agents connected through Macro's MCP
+server, can present one. AI chat's `DisplayResults` calls render the same
+way, from the view the call returns; nothing draws while the call streams.
+
+A presented view breaks tool groups before and after itself; later calls start
+a separate group. Its dashboard supports markdown, timelines, entity lists, and
+channel messages, using the same full-width view as AI chat. A finished call
+with no view shows **Couldn't render dashboard**; failed calls show a
+**Failed** summary row without a disclosure.
 
 The development gallery at `/app/component/agent-ui` includes **Replay tool
 calls** and **Replay fast batch**, both using the message renderer. Check that
 ongoing rows accumulate in the five-row window, completed calls stop shimmering,
 fast batches stay compact, and the group collapses smoothly after completion.
 Its carets should still expand the results, and reduced motion disables animation.
-Check that rich result controls still work and `DisplayResults` stays visible
+Check that rich result controls still work and a presented view stays visible
 between surrounding groups. In **AgentMessage (end-to-end)**, expand the group
 and confirm unknown tools have no individual disclosure or JSON payload. Repeat
 at a narrow viewport width. `/app/debug/agent-progress` renders the same replies
@@ -1889,7 +1933,9 @@ at the latest message, including when history arrives after the empty view. Shor
 transcripts start with 16px of top padding, with the user prompt followed by the
 agent response; streaming output grows downward into the available space. Only
 the visible rows and an overscan buffer are mounted: scroll to older turns before
-searching their DOM text.
+searching their DOM text. On iPhone and Safari the buffer above extends twelve
+viewports, so a long fling up a transcript of tall replies keeps its momentum
+instead of stopping at a false top.
 
 Search links add `agent_message_turn=<zero-based turn>&agent_message_author=user|agent`.
 They wait for history to load, then scroll to and highlight the matching folded

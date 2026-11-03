@@ -65,7 +65,7 @@ export function EmailSettings() {
       <Show when={readReceipts().enabled}>
         <SettingsSection
           title="Read receipts"
-          description="See when recipients open messages you send. Macro adds an invisible image to each message, so opens are approximate: some mail apps load images automatically and others block them. Only people with access to the inbox see its opens."
+          description="See when recipients open messages you send."
         >
           <Suspense
             fallback={
@@ -226,7 +226,7 @@ function ReadReceiptsRow(props: { link: EmailLink }) {
         size="md"
         label={`Read receipts for ${props.link.email_address}`}
         labelClass="sr-only"
-        checked={props.link.settings.read_receipts_enabled ?? false}
+        checked={props.link.settings.read_receipts_enabled ?? true}
         disabled={updateSettings.isPending}
         onChange={(checked) =>
           updateSettings.mutate(

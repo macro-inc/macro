@@ -46,6 +46,8 @@ wasm-bindgen shell exposing `cache-core` + `cache-turso` + `turso-opfs` as a
 
 ## Gotchas
 
+- Preserve successful hydration replies when optional window-proof computation
+  fails; empty proofs retain broad invalidation after the durable write.
 - Pass the existing entity-filter `baseline` to Mail pagination too; `retainedKeys`
   tells the frontend which server rows still lack canonical local metadata.
 

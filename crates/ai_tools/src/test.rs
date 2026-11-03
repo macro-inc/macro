@@ -204,8 +204,8 @@ fn app_item_actions_are_available_in_every_host() {
     }
 }
 
-/// Every host reads the design files the native engines open, and its
-/// prompt says which tool reads which format.
+/// Every host reads the design files the native engines open, and each
+/// reader's description says the file is read-only to tools.
 #[test]
 fn design_file_readers_are_available_in_every_host_with_their_guidance() {
     for host in [
@@ -215,14 +215,17 @@ fn design_file_readers_are_available_in_every_host_with_their_guidance() {
         AiHost::Mcp,
     ] {
         let tools = tools_for(host);
-        let prompt = tools.prompt.to_string();
         for name in [
             "ReadDesign",
             "ReadPhotoshopDocument",
             "ReadIllustratorDocument",
         ] {
-            assert!(tools.toolset.tools.contains_key(name), "{host:?}: {name}");
-            assert!(prompt.contains(name), "{host:?}: {name}");
+            let tool = &tools.toolset.tools[name];
+            assert!(
+                tool.description
+                    .contains("describe changes for the user to make"),
+                "{host:?}: {name}"
+            );
         }
     }
     assert!(
@@ -294,8 +297,12 @@ fn the_agent_session_host_keeps_chats_user_tools_with_the_review_prompt() {
         tools_for(AiHost::Chat)
             .toolset
             .request_schemas()
-            .map(|schemas| schemas.len()),
-        "the same tools as chat except agent-session connector discovery"
+            .map(|schemas| schemas
+                .into_iter()
+                .filter(|schema| schema.name != "DisplayResults")
+                .count()),
+        "the same tools as chat except agent-session connector discovery and \
+         chat's DisplayResults, which sessions replace with the harness's execution.views.present"
     );
 }
 
@@ -356,7 +363,15 @@ fn frontend_schemas_build() {
     }
     assert!(names.contains("QueryDatabase"));
     assert!(names.contains("DiscoverConnectors"));
+    // DisplayResults renders from the fold's decoded view, not a tool schema.
     for name in tools_for(AiHost::Chat).toolset.tools.keys() {
+        if name == "DisplayResults" {
+            assert!(
+                !names.contains(name.as_str()),
+                "DisplayResults has a frontend schema"
+            );
+            continue;
+        }
         assert!(names.contains(name.as_str()), "missing chat tool: {name}");
     }
     for name in [
@@ -441,7 +456,9 @@ fn every_host_exposes_skill_discovery_and_reading() {
             );
         }
         assert!(
-            tools.prompt.to_string().contains("ReadSkill"),
+            tools.toolset.tools["SearchSkills"]
+                .description
+                .contains("ReadSkill"),
             "{host:?} missing skill reading instructions"
         );
     }
@@ -518,10 +535,11 @@ fn channel_media_uploads_are_mcp_only() {
 
 #[test]
 fn every_eager_tool_exists() {
-    let tools = tools_for(AiHost::AgentSession);
+    let session = tools_for(AiHost::AgentSession);
+    let chat = tools_for(AiHost::Chat);
     for name in EAGER_TOOLS {
         assert!(
-            tools.toolset.tools.contains_key(*name),
+            session.toolset.tools.contains_key(*name) || chat.toolset.tools.contains_key(*name),
             "{name} is not a tool"
         );
     }
@@ -615,7 +633,6 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         assert!(!direct.deferred.iter().any(|t| t.name == name), "{name}");
     }
     for name in [
-        "DisplayResults",
         "NameSearch",
         "ListEntities",
         "ContentSearch",
@@ -684,11 +701,11 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
     assert!(!prompt.contains("you MUST use the `SendEmail` tool"));
     assert!(prompt.contains("Do not wait for the user to act on a saved review"));
     assert!(!prompt.contains("- ReadMetadata:"));
-    let routing = prompt::tool_usage::CODE_MODE_ROUTING.to_string();
-    assert!(prompt.contains(&routing));
-    assert!(!standard.prompt.to_string().contains(&routing));
+    let code_mode = prompt::code_mode::PROMPT.to_string();
+    assert!(prompt.contains(&code_mode));
+    assert!(!standard.prompt.to_string().contains(&code_mode));
     for host in [AiHost::Chat, AiHost::ChannelBot, AiHost::Mcp] {
-        assert!(!tools_for(host).prompt.to_string().contains(&routing));
+        assert!(!tools_for(host).prompt.to_string().contains(&code_mode));
     }
 }
 

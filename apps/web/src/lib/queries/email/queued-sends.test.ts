@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   info: vi.fn(),
 }));
 vi.mock('@macro-inc/observability', () => ({
+  NOOP_SPAN: {},
   Telemetry: { info: mocks.info, warn: mocks.warn },
 }));
 vi.mock('./send-queue', async (original) => ({

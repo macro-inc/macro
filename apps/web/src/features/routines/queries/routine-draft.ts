@@ -13,9 +13,9 @@ export { onceFromCron } from './routine-trigger-mapping';
 
 import { getDefaultTimezone } from '@core/util/cron';
 import type {
-  CreateScheduledAction,
+  ActionConfiguration,
+  ActionConfigurationUpdate,
   ScheduledAction,
-  UpdateScheduledAction,
 } from '@service-scheduled-action/generated/schemas';
 import { z } from 'zod';
 import { DEFAULT_RUN_VISIBILITY, type ScheduleDraft } from '../core/draft';
@@ -131,7 +131,7 @@ function buildAgentTask(draft: ScheduleDraft): RoutineTask {
   return task;
 }
 
-export function draftToCreateBody(draft: ScheduleDraft): CreateScheduledAction {
+export function draftToCreateBody(draft: ScheduleDraft): ActionConfiguration {
   return {
     name: draft.name.trim() || deriveScheduleName(draft.prompt),
     trigger: triggerFromDraft(draft),
@@ -145,7 +145,7 @@ export function draftToCreateBody(draft: ScheduleDraft): CreateScheduledAction {
 export function draftToUpdateBody(
   draft: ScheduleDraft,
   previous: ScheduledAction
-): UpdateScheduledAction | undefined {
+): ActionConfigurationUpdate | undefined {
   const trigger = getCronTrigger(previous);
   const previousTask = getAgentTask(previous);
   const target = routineTargetSchema.safeParse(draft.target);
@@ -216,7 +216,7 @@ export function draftToUpdateBody(
 
 export function scheduleToDuplicateBody(
   schedule: ScheduledAction
-): CreateScheduledAction | undefined {
+): ActionConfiguration | undefined {
   const trigger = schedule.trigger ?? getCronTrigger(schedule);
   if (!trigger) return undefined;
   return {

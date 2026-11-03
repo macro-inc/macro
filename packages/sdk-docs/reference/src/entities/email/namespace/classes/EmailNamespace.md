@@ -376,7 +376,10 @@ Scheduled drafts, fetched lazily in bounded pages.
 
 > **search**(`query`, `opts?`): `AsyncGenerator`\<[`EmailThread`](../../thread/classes/EmailThread.md)\>
 
-Search email threads by subject and content.
+Search email threads by subject and content. To find a person's emails,
+search for their quoted email address, not their name: a name only
+matches where that display name appears. Resolve the address first, for
+example with `macro.users.search(name)`.
 
 #### Parameters
 

@@ -22,7 +22,7 @@ impl ReadReceiptRepository for ReadReceiptPgRepository {
         )
         .fetch_optional(&self.0)
         .await?
-        .unwrap_or(false))
+        .unwrap_or(true))
     }
 
     #[tracing::instrument(skip(self, candidate), err)]

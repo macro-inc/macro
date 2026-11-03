@@ -46,9 +46,12 @@ export const createSearchState = ({
     assignees: assignees(),
   });
 
-  const { entityPool } = useSearchContext();
+  const { entityPool, routinePool } = useSearchContext();
   const localPool = createMemo(() => {
-    const pool = entityPool();
+    const pool =
+      surface() === 'search'
+        ? [...entityPool(), ...routinePool()]
+        : entityPool();
     const activeIds = soup.predicates
       .activeIds()
       .filter((id) => id !== 'explicit-noise');

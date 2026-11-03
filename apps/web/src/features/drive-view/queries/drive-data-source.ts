@@ -75,25 +75,20 @@ export function createDriveDataSource(options: {
 
   const searchContext = useOptionalSearchContext();
   const databasesQuery = useDatabasesQuery();
-  const includesDatabases = () => {
-    const current = selection();
-    return (
-      options.databasesEnabled() &&
-      current.location.kind === 'tab' &&
-      current.location.tab !== 'recent' &&
-      current.scope !== 'attachments'
-    );
+  // Databases and forms come from their own lists, in file tabs and in the
+  // folder they are filed in.
+  const listsDatabasesAndForms = () => {
+    const { location, scope } = selection();
+    if (scope === 'attachments') return false;
+    return location.kind === 'tab'
+      ? location.tab !== 'recent'
+      : Boolean(location.id);
   };
+  const includesDatabases = () =>
+    options.databasesEnabled() && listsDatabasesAndForms();
   const formsQuery = useFormsQuery();
-  const includesForms = () => {
-    const current = selection();
-    return (
-      options.formsEnabled() &&
-      current.location.kind === 'tab' &&
-      current.location.tab !== 'recent' &&
-      current.scope !== 'attachments'
-    );
-  };
+  const includesForms = () =>
+    options.formsEnabled() && listsDatabasesAndForms();
   // Wait for the forms list, which names the databases made for polls.
   const databaseEntities = () =>
     includesDatabases() &&

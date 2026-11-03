@@ -1,7 +1,6 @@
 import type { DocumentOp } from '@ai-ops/editor';
-import { resumeDocumentSpan } from '@block-md/observability';
 import { MACRO_AGENT_NAME } from '@core/constant/macroAgent';
-import { Telemetry } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import { getDocumentPermissionToken } from '@service-storage/client';
 import { createSignal } from 'solid-js';
 import { developmentProxyUrl } from '../../core/constant/developmentProxy';
@@ -108,6 +107,7 @@ export function cancelAiEdit(documentId: string): void {
 export async function requestAiEdit(args: {
   documentId: string;
   prompt: string;
+  parentSpan?: Span;
   /** Defaults to the worker's `supervised` pipeline. */
   mode?: AiEditMode;
   onOps?: (ops: DocumentOp[]) => void;
@@ -115,13 +115,11 @@ export async function requestAiEdit(args: {
   const controller = new AbortController();
   editControllers.set(args.documentId, controller);
   syncActiveEditDocs();
-  // Parent under the document's long-lived span when one exists, so the
-  // worker's whole edit trace joins the user's editing session; the injected
-  // traceparent makes the worker's request span a child of this one.
-  const documentSpan = resumeDocumentSpan(args.documentId);
-  const span = documentSpan
-    ? documentSpan.run(() => Telemetry.clientSpan('http POST /edit'))
-    : Telemetry.clientSpan('http POST /edit');
+  const span = args.parentSpan
+    ? args.parentSpan.run(() =>
+        Telemetry.span('http POST /edit', { kind: 'client' })
+      )
+    : Telemetry.span('http POST /edit', { kind: 'client' });
   span.setAttr('http.method', 'POST');
   span.setAttr('http.url', `${AI_EDITING_WORKER_HOST}/edit`);
   span.setAttr('document.id', args.documentId);
