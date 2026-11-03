@@ -6,9 +6,15 @@
  * `<Suspense>` on its fallback forever.
  */
 
+import type {
+  FoldedMessage,
+  FoldedStreamEvent,
+} from '@service-agent-fold/generated/types';
+import type { AgentSessionLogEntryDto } from '@service-agent-harness/generated/schemas';
 import { err, ok } from 'neverthrow';
 import { batch, createSignal, Show, Suspense } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AgentSessionHandle } from './create-agent-session';
 
 const readiness = vi.hoisted(() => ({ painted: vi.fn(), cancelled: vi.fn() }));
 vi.mock('@app/observability/ui-operation', async (importOriginal) => {
@@ -218,4 +224,111 @@ it('settles view readiness when provisioning fails without a session id', async 
   setPending(false);
   await Promise.resolve();
   expect(readiness.painted).toHaveBeenCalledOnce();
+});
+
+it('appends without traversing settled history and preserves keyed rows across updates and rebases', async () => {
+  const firstParts = [{ kind: 'text' as const, text: 'settled' }];
+  let traversals = 0;
+  const first = new Proxy<FoldedMessage>(
+    {
+      agentSessionId: SESSION,
+      turn: 0,
+      author: { kind: 'agent' },
+      requestId: null,
+      parts: firstParts,
+      stop: null,
+      pending: false,
+      segments: [],
+      phase: null,
+      postedAt: null,
+    },
+    {
+      ownKeys(target) {
+        traversals++;
+        return Reflect.ownKeys(target);
+      },
+    }
+  );
+  fold.readSession.mockResolvedValue({
+    messages: [first],
+    metadata: { turn: 'idle' },
+  });
+  let handle: AgentSessionHandle | undefined;
+  function TranscriptState() {
+    handle = createAgentSession(() => SESSION, {
+      userId: () => 'me',
+      provisioning: () => false,
+    });
+    return <h1>{handle.session()?.name}</h1>;
+  }
+  render(() => (
+    <Suspense fallback={null}>
+      <TranscriptState />
+    </Suspense>
+  ));
+  await screen.findByText('A session');
+  if (!handle) throw new Error('session was not mounted');
+  const messages = handle.messages;
+  const shared = AgentSession.get(SESSION);
+  if (!shared) throw new Error('session was not acquired');
+  const row: AgentSessionLogEntryDto = {
+    id: 'row',
+    direction: 'to_server',
+    createdAt: '2026-01-01T00:00:00Z',
+    content: { type: 'event', event: 'acp_ready' },
+  };
+  const publish = async (events: FoldedStreamEvent[]) => {
+    fold.pushSession.mockResolvedValueOnce(events);
+    AgentSession.ingest({ agentSessionId: SESSION, entries: [row] });
+    await shared.snapshot();
+  };
+  const settled = messages()[0];
+  traversals = 0;
+  const tail: FoldedMessage = {
+    ...first,
+    turn: 2,
+    parts: [{ kind: 'text', text: 'tail' }],
+  };
+  // Count only traversal by the projection, excluding construction above.
+  traversals = 0;
+  await publish([{ kind: 'new', message: tail }]);
+  expect(traversals).toBe(0);
+  expect(messages()[0]).toBe(settled);
+  const tailIdentity = messages()[1];
+
+  const middle: FoldedMessage = {
+    ...tail,
+    turn: 1,
+    author: { kind: 'user', userId: 'me' },
+  };
+  const reply: FoldedMessage = {
+    ...middle,
+    author: { kind: 'agent' },
+  };
+  await publish([
+    { kind: 'new', message: reply },
+    { kind: 'new', message: middle },
+    {
+      kind: 'update',
+      message: { ...tail, parts: [{ kind: 'text', text: 'updated' }] },
+    },
+  ]);
+  expect(
+    messages().map((message) => [message.turn, message.author.kind])
+  ).toEqual([
+    [0, 'agent'],
+    [1, 'user'],
+    [1, 'agent'],
+    [2, 'agent'],
+  ]);
+  expect(messages()[0]).toBe(settled);
+  expect(messages()[3]).toBe(tailIdentity);
+  const middleIdentity = messages()[1];
+  await publish([
+    { kind: 'replace', messages: [middle, { ...tail, pending: true }] },
+  ]);
+  expect(messages().map((message) => message.turn)).toEqual([1, 2]);
+  expect(messages()[0]).toBe(middleIdentity);
+  expect(messages()[1]).toBe(tailIdentity);
+  expect(messages()[1]?.pending).toBe(true);
 });

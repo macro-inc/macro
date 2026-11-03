@@ -894,6 +894,14 @@ On a physical iPhone, WKWebView still synthesises the compatibility `mousedown`/
 Use the existing status dot in Home and Agents rows with `bg-failure` when the
 persisted `turnState` is `failed`; open the session to inspect its error.
 
+### Agent transcript projection
+
+Keep folded messages ordered by turn and author in the transcript store: append
+at the new index, reconcile matching rows in place, binary-search earlier
+updates, and splice only for real insertion/removal. Never `produce` the whole
+array per append; it makes initial projection quadratic. Check with the
+[session-open runner](src/features/block-agent/browser-test/README.md).
+
 ### Agent system events
 
 Agent activity labels share `block-agent/ui/TextShimmer.tsx` and the global
