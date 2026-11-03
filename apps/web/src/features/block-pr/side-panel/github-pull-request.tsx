@@ -210,7 +210,7 @@ export function GithubPullRequestDetailsRows(props: {
           href={props.enrichment.url}
           target="_blank"
           rel="noreferrer"
-          class="min-w-0 truncate text-link hover:text-link-hover visited:text-link-visited underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2 hover:decoration-current"
+          class="min-w-0 truncate text-ink underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2 hover:decoration-current"
         >
           {props.enrichment.displayName}
         </a>
@@ -248,7 +248,7 @@ export function GithubPullRequestChecksContent(props: {
                       target="_blank"
                       rel="noreferrer"
                       aria-label={`Open ${check.name} on GitHub`}
-                      class="text-link hover:text-link-hover visited:text-link-visited transition-colors"
+                      class="text-ink-muted hover:text-ink transition-colors"
                     >
                       <ArrowSquareOut class="size-3" />
                     </a>
