@@ -46,7 +46,7 @@ const BUILTIN_PROPERTIES_BY_BLOCK: Partial<
 
 /**
  * Default pinned properties by block type.
- * These are automatically pinned when a new entity of this block type is created.
+ * Used while the entity has no saved pin list; explicit pins override these defaults.
  */
 const DEFAULT_PINNED_PROPERTIES_BY_BLOCK: Partial<
   Record<BlockName | BlockAlias, readonly string[]>
@@ -55,6 +55,7 @@ const DEFAULT_PINNED_PROPERTIES_BY_BLOCK: Partial<
     SYSTEM_PROPERTY_IDS.STATUS,
     SYSTEM_PROPERTY_IDS.PRIORITY,
     SYSTEM_PROPERTY_IDS.ASSIGNEES,
+    SYSTEM_PROPERTY_IDS.DUE_DATE,
   ],
   company: [
     SYSTEM_PROPERTY_IDS.STAGE,

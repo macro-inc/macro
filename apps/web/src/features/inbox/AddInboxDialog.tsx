@@ -33,16 +33,20 @@ export const isAddInboxDialogOpen = () => request() !== null;
 export function AddInboxDialog() {
   const addInbox = useAddInboxFlow();
   const [pending, setPending] = createSignal(false);
-  const [outlookAvailable, setOutlookAvailable] = createSignal(false);
+  // Undefined until the providers read settles. The dialog waits for it, so
+  // Outlook never flashes in for a user it isn't offered to, or pops in late.
+  const [outlookAvailable, setOutlookAvailable] = createSignal<boolean>();
   createEffect(() => {
     if (!isAddInboxDialogOpen()) return;
     let current = true;
-    setOutlookAvailable(false);
+    setOutlookAvailable(undefined);
     void fetchEmailConnectionProviders()
       .then((providers) => {
         if (current) setOutlookAvailable(providers.outlook);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (current) setOutlookAvailable(false);
+      });
     onCleanup(() => {
       current = false;
     });
@@ -65,13 +69,13 @@ export function AddInboxDialog() {
 
   return (
     <EmailProviderDialog
-      open={isAddInboxDialogOpen()}
+      open={isAddInboxDialogOpen() && outlookAvailable() !== undefined}
       onOpenChange={(open) => {
         if (!open) setRequest(null);
       }}
       onSelect={handleConfirm}
       disabled={pending()}
-      outlookAvailable={outlookAvailable()}
+      outlookAvailable={outlookAvailable() === true}
     />
   );
 }

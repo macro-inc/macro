@@ -22,7 +22,7 @@ const MAX_TOOLS: usize = 100;
 pub enum DiscoveryRequest {
     /// Find connectable apps by name.
     Search {
-        /// App name, e.g. "LinkedIn" or "Linear", not a task description.
+        /// App name, e.g. "Notion" or "Linear", not a task description.
         query: String,
     },
     /// Verify capabilities and connection status for one catalog app.
@@ -120,16 +120,21 @@ where
                 if query.trim().is_empty() {
                     anyhow::bail!("Search for an app name, such as Linear");
                 }
-                let page =
-                    super::catalog::browse_catalog(directory.as_ref(), Some(query), None, Some(10))
-                        .await?;
+                let page = super::catalog::browse_catalog(
+                    directory.as_ref(),
+                    user_id,
+                    Some(query),
+                    None,
+                    Some(10),
+                )
+                .await?;
                 Ok(DiscoveryResult::Search {
                     apps: page.entries.into_iter().map(DiscoveredApp::from).collect(),
                     more_results: page.next_cursor.is_some(),
                 })
             }
             DiscoveryRequest::Inspect { app_slug } => {
-                let Some(app) = directory.retrieve(app_slug).await? else {
+                let Some(app) = directory.retrieve(user_id, app_slug).await? else {
                     anyhow::bail!("No connectable app has that slug; search the catalog first");
                 };
                 let connected = self.connected(user_id, &app.app_slug).await?;

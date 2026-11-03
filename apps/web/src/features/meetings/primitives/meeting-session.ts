@@ -110,10 +110,14 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
     }
     joinTrace.setAttr('meeting.join.outcome', 'cancelled');
     try {
-      await joinTrace.span('meeting.join.previous_session', async () => {
-        await attemptLifecycle.previous;
-        if (previousSession) await release(previousSession);
-      });
+      await joinTrace.span(
+        'meeting.join.previous_session',
+        async (previous) => {
+          await attemptLifecycle.previous;
+          if (previousSession)
+            await previous.run(() => release(previousSession));
+        }
+      );
       if (disposed || attempt !== generation) return;
       // A previous owner may still have been disconnecting when Join was
       // clicked. Check the shared call state after its cleanup has finished.
@@ -137,7 +141,8 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
         shareToken,
       };
       if (disposed || attempt !== generation) {
-        await release(issued);
+        const cancelledSession = issued;
+        await joinTrace.run(() => release(cancelledSession));
         return;
       }
       issuedSession = issued;
@@ -173,7 +178,7 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
         issuedSession = undefined;
         try {
           if (capabilities.activeCallId() === issued.credentials.callId) {
-            await capabilities.disconnect();
+            await joinTrace.run(() => capabilities.disconnect());
           }
         } catch (disconnectError) {
           console.error(
@@ -181,7 +186,8 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
             disconnectError
           );
         } finally {
-          await release(issued);
+          const cancelledSession = issued;
+          await joinTrace.run(() => release(cancelledSession));
         }
       }
       if (disposed || attempt !== generation) return;

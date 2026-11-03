@@ -69,41 +69,51 @@ function ParticipantTileWrapper(props: {
   hidden?: boolean;
   class?: string;
 }) {
+  // Fills its cell, but never wider than 16:9: on a wide panel a full-width
+  // tile crops a 16:9 camera to a zoomed-in strip. Taller cells (phones,
+  // grids) still fill, so portrait video keeps the space.
+  // The minimum height sits on the cell: size containment ignores content.
   return (
     <div
       hidden={props.hidden}
       class={cn(
-        'relative isolate flex items-center justify-center rounded-lg overflow-hidden bg-panel min-h-0 border border-edge-muted',
-        props.isConnecting && 'animate-pulse',
+        'flex size-full min-h-30 items-center justify-center [container-type:size]',
         props.class
       )}
     >
-      {props.children}
-      <Show when={props.isSpeaking}>
-        <div
-          aria-hidden="true"
-          class="pointer-events-none absolute inset-0 z-20 rounded-[inherit] border-2 border-accent"
-        />
-      </Show>
-      <Show when={props.onToggleFocus}>
-        <button
-          type="button"
-          class="absolute inset-0 z-30 rounded-[inherit] focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-accent"
-          aria-label={props.focusLabel}
-          aria-pressed={props.isFocused ?? false}
-          onClick={props.onToggleFocus}
-        />
-      </Show>
-      <Show when={props.isFocused && props.onToggleFocus}>
-        <Button
-          variant="primary"
-          size="sm"
-          class="absolute right-2 top-2 z-40"
-          onClick={props.onToggleFocus}
-        >
-          Back to grid
-        </Button>
-      </Show>
+      <div
+        class={cn(
+          'relative isolate flex h-full w-[min(100cqw,calc(100cqh*16/9))] items-center justify-center rounded-lg overflow-hidden bg-panel border border-edge-muted',
+          props.isConnecting && 'animate-pulse'
+        )}
+      >
+        {props.children}
+        <Show when={props.isSpeaking}>
+          <div
+            aria-hidden="true"
+            class="pointer-events-none absolute inset-0 z-20 rounded-[inherit] border-2 border-accent"
+          />
+        </Show>
+        <Show when={props.onToggleFocus}>
+          <button
+            type="button"
+            class="absolute inset-0 z-30 rounded-[inherit] focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-accent"
+            aria-label={props.focusLabel}
+            aria-pressed={props.isFocused ?? false}
+            onClick={props.onToggleFocus}
+          />
+        </Show>
+        <Show when={props.isFocused && props.onToggleFocus}>
+          <Button
+            variant="primary"
+            size="sm"
+            class="absolute right-2 top-2 z-40"
+            onClick={props.onToggleFocus}
+          >
+            Back to grid
+          </Button>
+        </Show>
+      </div>
     </div>
   );
 }
@@ -240,7 +250,11 @@ function ParticipantTile(props: {
       onToggleFocus={props.onToggleFocus}
       focusLabel={`${props.isFocused ? 'Unfocus' : 'Focus'} ${displayName()}`}
       hidden={props.hidden}
-      class={cn('min-w-0', props.hidden && 'hidden')}
+      class={cn(
+        'min-w-0',
+        props.avatarSize === 'sm' && 'min-h-0',
+        props.hidden && 'hidden'
+      )}
     >
       <Show
         when={cameraTrack()}
@@ -607,7 +621,7 @@ export function CallOverlay(props: {
                 inert={controlsHidden()}
                 data-holds-prompts={isTouchDevice() ? undefined : ''}
               >
-                <div class="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 mobile:grid-cols-[minmax(0,1fr)_auto] mobile:px-[max(16px,var(--mobile-chrome-gutter))] mobile:@max-[21rem]/call-stage:gap-1 @3xl/call-stage:grid-cols-[minmax(0,1fr)_minmax(18rem,2fr)_minmax(0,1fr)]">
+                <div class="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 mobile:grid-cols-[minmax(0,1fr)_auto] mobile:px-[max(16px,var(--mobile-chrome-gutter))] mobile:@max-[24rem]/call-stage:grid-cols-1 mobile:@max-[21rem]/call-stage:gap-1 @3xl/call-stage:grid-cols-[minmax(0,1fr)_minmax(18rem,2fr)_minmax(0,1fr)]">
                   <div class="min-w-0 max-w-48 mobile:hidden">
                     {props.footerLeading}
                   </div>

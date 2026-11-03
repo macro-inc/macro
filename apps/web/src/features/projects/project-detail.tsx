@@ -5,7 +5,9 @@ import {
   makeCopyLinkAction,
 } from '@app/features/next-soup/actions';
 import type { ComposeTaskProps } from '@app/features/task-composer/core/types';
+import { t } from '@app/lib/i18n';
 import { useNavigate } from '@app/lib/split-router';
+import { usePending } from '@app/observability/flow';
 import {
   projectDetailRoute,
   projectTaskRoute,
@@ -17,11 +19,13 @@ import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
+import { getIconConfig } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import StackIcon from '@icon/system/regular/stack.svg';
+import ProjectIcon from '@icon/system/regular/cube.svg';
+import SquaresFourIcon from '@icon/system/regular/squares-four.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
 import { Tabs } from '@ui';
@@ -78,7 +82,7 @@ function ProjectBreadcrumbContent(props: ProjectBreadcrumbProps) {
           onClick={item.onSelect}
           tooltip={name()}
         >
-          <StackIcon class="size-3 shrink-0" />
+          <ProjectIcon class="size-3 shrink-0" />
           <span class="truncate">{name()}</span>
         </ViewBreadcrumbs.Button>
       )}
@@ -96,8 +100,10 @@ export function ProjectBreadcrumb(props: ProjectBreadcrumbProps) {
 
 type ProjectDetailProps = {
   route: ProjectRoute;
+  navigationRequest?: number;
   breadcrumb?: ProjectBreadcrumbProps;
   onDelete?(): void;
+  onSectionChange?(section: ProjectSection): void;
 };
 
 function ProjectTitleMenu(props: {
@@ -205,17 +211,20 @@ function ProjectTitleMenu(props: {
 function ProjectDetailHost(props: ProjectDetailProps) {
   const context = useProjectsContext();
   const source = context.createProjectSource(() => props.route.id);
+  usePending('project.detail', source.loading);
   useSplitDisplayName(() => source.project()?.name ?? 'Project');
   const commands = context.createCommands();
   const openShare = useProjectShareModal(source.project, commands);
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
   const navigate = useNavigate();
-  const section = (section: ProjectSection) =>
-    navigate({
+  const section = (section: ProjectSection) => {
+    if (props.onSectionChange) return props.onSectionChange(section);
+    return navigate({
       route: projectDetailRoute,
       params: { projectId: props.route.id, section },
     });
+  };
   const createTask = (options?: TaskCreateOptions) => {
     const projectId = props.route.id;
     layout.popoverSplit({
@@ -255,19 +264,28 @@ function ProjectDetailHost(props: ProjectDetailProps) {
             )}
           </Show>
         }
-        navigation={
+        navigation={(compact) => (
           <Tabs
-            aria-label="Project sections"
+            aria-label={t('tabs.projectSections')}
             touch="inset"
             class="shrink-0"
             options={[
-              { value: 'overview', label: 'Overview' },
-              { value: 'tasks', label: 'Tasks' },
+              {
+                value: 'overview',
+                label: t('tabs.project-overview'),
+                icon: compact() ? SquaresFourIcon : undefined,
+              },
+              {
+                value: 'tasks',
+                label: t('tabs.project-tasks'),
+                icon: compact() ? getIconConfig('task').icon : undefined,
+              },
             ]}
+            iconOnly={compact()}
             value={props.route.section}
             onChange={section}
           />
-        }
+        )}
       >
         <Show when={source.project()}>
           {(project) => (
@@ -337,6 +355,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
                       projectId={project().id}
                       canWrite={canDiscussProject(project())}
                       targetId={props.route.discussionId}
+                      targetRequestKey={props.navigationRequest}
                     />
                   }
                 />

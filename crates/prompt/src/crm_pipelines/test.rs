@@ -12,24 +12,17 @@ fn every_agent_host_maps_deal_requests_to_the_pipeline_tools() {
         mcp_instructions("https://macro.com"),
     ] {
         for guidance in [
-            "ListPipelines",
-            "FindPipelineEntries",
-            "UpdatePipelineEntries",
-            "AddToPipeline",
-            "RemoveFromPipeline",
-            "EditPipeline",
-            "CreatePipeline",
-            "ImportCompaniesCsv",
-            "ImportPipelineCsv",
-            "ExportPipelineCsv",
+            "\"Deal\", \"opportunity\", \"lead\"",
             "not a Macro database",
-            "SetEntityProperty",
+            "company's own properties",
         ] {
             assert!(
                 text.contains(guidance),
                 "missing pipeline guidance: {guidance}"
             );
         }
+        // How to call the pipeline tools is in their descriptions, not here.
+        assert!(!text.contains("FindPipelineEntries"));
     }
 }
 
@@ -38,6 +31,6 @@ fn the_database_only_assistant_has_no_pipeline_tools_to_describe() {
     assert!(
         !DATABASE_TOOL_USE_PROMPT
             .to_string()
-            .contains("ListPipelines")
+            .contains("How CRM pipelines work")
     );
 }

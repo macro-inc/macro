@@ -12,8 +12,8 @@ use serde::{Deserialize, Serialize};
 use super::ImageGenerationToolContext;
 use crate::domain::{
     models::{
-        GenerateImageError, ImageAspectRatio, ImageGenerationError, ImageReference,
-        NewGeneratedImage, ReadImageError, StoredGeneratedImage,
+        GenerateImageError, ImageAspectRatio, ImageReference, NewGeneratedImage,
+        StoredGeneratedImage,
     },
     ports::ImageGenerationService,
 };
@@ -76,7 +76,7 @@ impl From<ImageReferenceInput> for ImageReference {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "GenerateImage",
-    description = "Generate or edit an image with Google's Nano Banana image model and save the result in static file service. Use for pictures, illustrations, diagram concepts, logo ideas, mockups, or edits based on reference photos. When the user supplies photos or asks to modify an existing image, pass them in referenceImages; describing a photo in the prompt alone does not send it to the image model. Describe the subject, style, composition, lighting, and any text to render; only the prompt is required. Refer to reference images by their order (image 1, image 2, image 3) when explaining how to use them. Returns the static file ID and image URL. The tool displays the image inline in chat. In channel messages without tool cards, copy the returned markdown verbatim on its own line; it includes dimensions so the image reserves space before loading. Do not cite it as a document. Generation takes several seconds."
+    description = "Generate or edit an image with Google's Nano Banana image model and save the result in static file service. Use for pictures, illustrations, diagram concepts, logo ideas, mockups, or edits based on reference photos. When the user supplies photos or asks to modify an existing image, pass them in referenceImages; describing a photo in the prompt alone does not send it to the image model. Describe the subject, style, composition, lighting, and any text to render; only the prompt is required. Refer to reference images by their order (image 1, image 2, image 3) when explaining how to use them. Returns the static file ID and image URL; to edit the result, pass that ID in referenceImages. The tool displays the image inline in chat. In channel messages without tool cards, copy the returned markdown verbatim on its own line; it includes dimensions so the image reserves space before loading. Do not cite it as a document. Generation takes several seconds."
 )]
 /// Generate an image and save it as a static file.
 pub struct GenerateImage {
@@ -129,30 +129,8 @@ impl ToolAnnotated for GenerateImage {
 }
 
 fn generate_error(error: GenerateImageError) -> ToolCallError {
-    let description = match &error {
-        GenerateImageError::BadRequest(message) => message.clone(),
-        GenerateImageError::Reference(ReadImageError::Internal(_)) => {
-            "could not read a reference image; check its ID and access, then retry".to_string()
-        }
-        GenerateImageError::Reference(error) => error.to_string(),
-        GenerateImageError::Generation(ImageGenerationError::Unavailable) => {
-            "image generation is not available in this workspace".to_string()
-        }
-        GenerateImageError::Generation(ImageGenerationError::Refused(reason)) => {
-            format!("the image model did not return an image: {reason}")
-        }
-        GenerateImageError::Generation(ImageGenerationError::Provider(_)) => {
-            "the image model request failed; try again shortly".to_string()
-        }
-        GenerateImageError::Markup(_) => {
-            "the image was saved but its channel markup could not be composed".to_string()
-        }
-        GenerateImageError::Storage(_) => {
-            "the image was generated but could not be saved to Macro".to_string()
-        }
-    };
     ToolCallError {
-        description,
+        description: error.public_message(),
         internal_error: error.into(),
     }
 }

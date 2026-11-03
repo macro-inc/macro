@@ -13,7 +13,7 @@ export const descriptions: Record<string, string> = {
   routines:
     'Create scheduled and event-triggered agent routines and inspect executions.',
   unfurls: 'Read URL preview metadata.',
-  ai: 'Generate structured objects, classify supplied content with Jev and read AI usage.',
+  ai: 'Generate structured objects and images (`macro.images.generate`, attachable to channel messages), classify supplied content with Jev and read AI usage.',
   bots: 'Inspect and manage bots.',
   calendar: 'Find and manage calendar events.',
   calls: 'Read and edit call records, transcripts and meeting links.',
@@ -30,8 +30,11 @@ export const descriptions: Record<string, string> = {
   pins: 'Manage pinned entities.',
   projects: 'Organize entities into projects.',
   properties: 'Read and update entity properties.',
+  referrals:
+    "Share the caller's referral link and email people invites to join Macro.",
   tasks: 'Search, create, and update tasks.',
-  teams: 'Manage teams and membership.',
+  teams:
+    'Manage teams and membership: invite people to the team by email, list and revoke pending invites.',
   users: 'Look up users and their profiles.',
   webhooks: 'Manage API webhook subscriptions.',
 };

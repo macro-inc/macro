@@ -2,6 +2,7 @@ import {
   attachmentLimitBytes,
   MACRO_EMAIL_SIGNATURE,
 } from '@app/features/email-compose/core/constants';
+import { startUiOperation } from '@app/observability/ui-operation';
 import { setEditorStateFromHtml } from '@core/component/LexicalMarkdown/utils/setEditorStateFromHtml';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { $generateHtmlFromNodes } from '@lexical/html';
@@ -25,6 +26,7 @@ import type {
   EmailMessage,
 } from '../../email-message/core/email-message';
 import {
+  operationBlocksDiscard,
   operationBlocksEditing,
   operationBlocksInboxSwitch,
   operationBlocksSending,
@@ -494,7 +496,10 @@ export function createEmailComposer(props: EmailComposerOptions) {
   );
   const currentOperation = () => {
     const live = operationSource?.operation();
-    return live === undefined ? props.draft?.operation : live;
+    // The opened draft's operation stops applying once a discard drops it.
+    return live === undefined && currentDraftId() === props.draft?.db_id
+      ? props.draft?.operation
+      : live;
   };
   const deliveryBlocked = () =>
     operationSource?.needsReload?.() ||
@@ -505,10 +510,9 @@ export function createEmailComposer(props: EmailComposerOptions) {
   const operationBlocked = () =>
     operationSource?.needsReload?.() ||
     operationBlocksEditing(currentOperation());
-  const persistencePaused = () =>
+  const composerBusy = () =>
     restoring() ||
     sendLocked() ||
-    operationBlocked() ||
     submitting() ||
     discarding() ||
     movingInbox() ||
@@ -516,6 +520,12 @@ export function createEmailComposer(props: EmailComposerOptions) {
     completed() ||
     schedule?.pending() ||
     schedule?.state().type === 'scheduled';
+  const persistencePaused = () => operationBlocked() || composerBusy();
+  // A mailbox conflict or unconfirmed write locks editing, not discarding.
+  const discardBlocked = () =>
+    composerBusy() ||
+    !!operationSource?.needsReload?.() ||
+    operationBlocksDiscard(currentOperation());
 
   const autosave = createDraftAutosave({
     ...createDraftSaveNotice(props.notices.feedback),
@@ -929,6 +939,14 @@ export function createEmailComposer(props: EmailComposerOptions) {
     setSendPhase('preparing');
     const sendOperation = ++sendOperationVersion;
     const sendGeneration = identityVersion;
+    // Send to the composer's sent state; an early return cancels it.
+    const sendUi = startUiOperation('email.send', {
+      attributes: {
+        'email.send.queued':
+          props.delivery.queueActive?.(activeInboxId()) ?? false,
+      },
+    });
+    let sent = false;
     try {
       // Durable sends need the latest local copy, without waiting for a server save.
       const epochBeforeSave = session.epoch();
@@ -1057,6 +1075,8 @@ export function createEmailComposer(props: EmailComposerOptions) {
         session.dispatch({ type: 'reset' });
         setDraftGeneration(0);
         afterSend(result, currentLink.id);
+        sent = true;
+        sendUi.afterPaint();
       } finally {
         if (
           sendGeneration === identityVersion &&
@@ -1065,10 +1085,12 @@ export function createEmailComposer(props: EmailComposerOptions) {
           cleanupWatermark();
       }
     } catch (error) {
+      sendUi.finish('error');
       if (sendGeneration !== identityVersion) return;
       props.notices.reportError(error);
       if (!completed()) props.notices.feedback.failure('Failed to send email');
     } finally {
+      if (!sent) sendUi.cancel();
       if (sendOperation === sendOperationVersion) setSendPhase('idle');
     }
   };
@@ -1111,7 +1133,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
       );
       return false;
     }
-    if (persistencePaused() || scheduling()) return false;
+    if (discardBlocked() || scheduling()) return false;
     setDiscarding(true);
     autosave.cancel();
     // A standalone draft owns its thread, so nothing is left to show. Leave
@@ -1485,6 +1507,8 @@ export function createEmailComposer(props: EmailComposerOptions) {
       terminalState() !== undefined ||
       scheduling() ||
       schedule.state().type === 'scheduled',
+    deleteDisabled: () =>
+      discardBlocked() || hasInboxError() || terminalState() !== undefined,
     primaryActionDisabled: () =>
       sendLocked() ||
       deliveryBlocked() ||

@@ -1,6 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
+import { Telemetry } from '@macro-inc/observability';
 import { databaseWebhookUrl } from '@service-storage/databases';
 import type { DatabaseWebhookResponse } from '@service-storage/generated/schemas/databaseWebhookResponse';
 import type { TableDetail } from '@service-storage/generated/schemas/tableDetail';
@@ -9,7 +10,7 @@ import { CopyButton } from '@ui/components/CopyButton';
 import { Dialog } from '@ui/components/Dialog';
 import { Input } from '@ui/components/Input';
 import { Panel } from '@ui/components/Panel';
-import { createSignal, For, Show } from 'solid-js';
+import { createEffect, createSignal, For, on, onCleanup, Show } from 'solid-js';
 import { toast } from '../../../lib/core/component/Toast/Toast';
 import { toViewColumn } from '../../database/queries/column-detail';
 import { webhookCurl, webhookExamplePayload } from '../core/webhook-example';
@@ -36,12 +37,17 @@ export function WebhooksDialog(props: {
   onClose: () => void;
   returnFocus?: HTMLElement;
 }) {
-  const { webhooks, failed } = useTableWebhooks(
+  const { webhooks, failed, ready } = useTableWebhooks(
     () => props.databaseId,
     () => props.table.table.id
   );
   const [created, setCreated] = createSignal<CreatedWebhook>();
   const [pending, setPending] = createSignal(false);
+  let initialCreationHandled = false;
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
   const example = () =>
     webhookExamplePayload(
       props.table.columns.map(toViewColumn),
@@ -50,16 +56,41 @@ export function WebhooksDialog(props: {
 
   async function create() {
     if (pending()) return;
+    initialCreationHandled = true;
     setPending(true);
-    const result = await createTableWebhook(
-      props.databaseId,
-      props.table.table.id
+    const databaseId = props.databaseId;
+    const tableId = props.table.table.id;
+    const result = await Telemetry.span(
+      'database.webhook.create',
+      async (span) => {
+        span.setAttr('database.id', databaseId);
+        span.setAttr('table.id', tableId);
+        const result = await createTableWebhook(databaseId, tableId);
+        if (result.isErr()) span.error('Could not create a webhook');
+        return result;
+      }
     );
+    if (disposed) return;
     setPending(false);
+    if (props.databaseId !== databaseId || props.table.table.id !== tableId)
+      return;
     result.match(setCreated, () =>
       toast.failure('Could not create a webhook.')
     );
   }
+
+  createEffect(
+    on(
+      () => (ready() ? webhooks() : undefined),
+      (loaded) => {
+        if (loaded === undefined || initialCreationHandled) return;
+        initialCreationHandled = true;
+        if (loaded.length === 0) {
+          fireAndForget(create(), 'database-webhooks');
+        }
+      }
+    )
+  );
 
   async function remove(webhook: DatabaseWebhookResponse) {
     const result = await deleteTableWebhook(props.databaseId, webhook.id);
@@ -75,7 +106,7 @@ export function WebhooksDialog(props: {
     <Dialog
       open
       class="w-160 max-w-[calc(100vw-2rem)]"
-      onOpenChange={(open) => !open && props.onClose()}
+      onOpenChange={(open) => !open && !pending() && props.onClose()}
       onCloseAutoFocus={(event) => {
         if (props.returnFocus?.isConnected) {
           event.preventDefault();
@@ -182,7 +213,12 @@ export function WebhooksDialog(props: {
               </ul>
             </Show>
             <div class="flex justify-end gap-2">
-              <Button type="button" variant="ghost" onClick={props.onClose}>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={pending()}
+                onClick={props.onClose}
+              >
                 Done
               </Button>
               <Button

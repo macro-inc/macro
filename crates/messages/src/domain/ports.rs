@@ -328,6 +328,34 @@ pub enum AgentTypingPhase {
     Waiting,
 }
 
+impl MessageEvent {
+    /// A posted message or finalized bot reply to evaluate for agent triggers,
+    /// explicit or implicit. Streaming and ordinary edits must never wake an
+    /// agent.
+    pub fn agent_trigger(&self) -> Option<super::events::MessagePostedMetadata> {
+        let (message, mentions) = match &self.change {
+            MessageChange::Posted {
+                message, mentions, ..
+            } => (message, mentions),
+            MessageChange::Edited {
+                message,
+                mentions,
+                notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
+                ..
+            } if message.sender_id.as_bot().is_some()
+                && self.actor == message.sender_id.as_ref() =>
+            {
+                (message, mentions)
+            }
+            _ => return None,
+        };
+        Some(super::events::MessagePostedMetadata::from_message(
+            message,
+            mentions.clone(),
+        ))
+    }
+}
+
 /// Persisted reaction state and whether this operation changed membership.
 pub struct ReactionResult {
     /// Current message, including its reactions.
@@ -612,8 +640,9 @@ pub fn timeline_parent(activity: &activity::Activity) -> Option<MessageParent> {
 pub struct CrmParentFacts {
     /// The team that owns the record.
     pub team_id: Uuid,
-    /// The company itself, or the contact's company.
-    pub company_id: Uuid,
+    /// The company itself, or the contact's company (`None` for a
+    /// contact without one).
+    pub company_id: Option<Uuid>,
     /// Display name: a company's custom or directory name (else its primary
     /// domain), a contact's name (else its email).
     pub name: String,

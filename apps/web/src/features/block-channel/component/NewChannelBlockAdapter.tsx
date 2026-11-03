@@ -10,6 +10,7 @@ import {
 } from '@app/features/next-soup/actions';
 import { t } from '@app/lib/i18n';
 import { createSearchParams } from '@app/lib/split-router';
+import { TraceFlow } from '@app/observability/flow';
 import { URL_PARAMS } from '@block-channel/constants';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
 import { useChannelBotManagement } from '@channel/Bots/use-channel-bot-management';
@@ -586,31 +587,41 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
             <Switch>
               <Match when={activeTab() === 'messages'}>
                 <Suspense fallback={<ChannelLoading />}>
-                  <ChannelMessages
-                    autofocus={canAutofocusSplitContent && !navigatedFromJK()}
-                  />
+                  <TraceFlow name="channel.messages.view">
+                    <ChannelMessages
+                      autofocus={canAutofocusSplitContent && !navigatedFromJK()}
+                    />
+                  </TraceFlow>
                 </Suspense>
               </Match>
               <Match when={activeTab() === 'attachments'}>
-                <ChannelAttachmentsTab channelId={channelId} />
+                <TraceFlow name="channel.attachments.view">
+                  <ChannelAttachmentsTab channelId={channelId} />
+                </TraceFlow>
               </Match>
               <Match when={activeTab() === 'calls' && ENABLE_CALLS}>
-                <ChannelCallsTab channelId={channelId} />
+                <TraceFlow name="channel.calls.view">
+                  <ChannelCallsTab channelId={channelId} />
+                </TraceFlow>
               </Match>
               <Match when={activeTab() === 'participants'}>
-                <ChannelParticipantsTab
-                  channelId={channelId}
-                  botManagementEnabled={botManagement.enabled()}
-                  onCreateBot={botManagement.openCreateBot}
-                  inviteBotFocusRequest={botManagement.inviteFocusRequest()}
-                  onOpenBot={botManagement.openBot}
-                />
+                <TraceFlow name="channel.participants.view">
+                  <ChannelParticipantsTab
+                    channelId={channelId}
+                    botManagementEnabled={botManagement.enabled()}
+                    onCreateBot={botManagement.openCreateBot}
+                    inviteBotFocusRequest={botManagement.inviteFocusRequest()}
+                    onOpenBot={botManagement.openBot}
+                  />
+                </TraceFlow>
               </Match>
               <Match when={activeTab() === 'call' && canUseInlineCallTab()}>
-                <ChannelCallTab
-                  channelId={channelId}
-                  pendingJoin={pendingJoinCall}
-                />
+                <TraceFlow name="channel.call.view">
+                  <ChannelCallTab
+                    channelId={channelId}
+                    pendingJoin={pendingJoinCall}
+                  />
+                </TraceFlow>
               </Match>
             </Switch>
           </div>

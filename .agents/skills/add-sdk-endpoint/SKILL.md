@@ -14,8 +14,9 @@ Every generated endpoint must either have a call site under `src/` or be listed 
 
 ## 0. Find it
 
-Not in `generated/` yet? `bun run sync-specs && bun run generate` (or ask the user to
-run `just update-generated` if the Rust spec changed locally — it rebuilds apps/web).
+After a local Rust API change, regenerate its web contract from the repository
+root with `bun run --cwd apps/web gen-api <service-name>` before running
+`bun run sync-specs && bun run generate` here.
 
 `just coverage` lists `UNCOVERED <service>.<endpoint>`.
 

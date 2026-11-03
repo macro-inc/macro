@@ -115,6 +115,8 @@ export function createPhaseScopes(
     /** What a pane shows now, which its guards are asked to leave. */
     current(pane: PaneId): Entry | undefined;
     preloadBudgetMs: number;
+    /** Speculative cache admission belongs to the router, not its navigation phase. */
+    preloadSignal: AbortSignal;
   },
   waiting: (state: Running) => void,
   registerCommit: RegisterCommitCallback
@@ -200,12 +202,16 @@ export function createPhaseScopes(
   };
 
   const preloadEntries = (
-    { navigation, signal }: RunContext,
+    { navigation }: RunContext,
     entries: readonly Entry[]
   ): MaybePromise<void> => {
     const intent = intentOf(navigation);
     const work = entries.flatMap((entry) => {
-      const context = { location: entry.location, intent, signal };
+      const context = {
+        location: entry.location,
+        intent,
+        signal: options.preloadSignal,
+      };
 
       return preloadLocation(routes, context) ?? [];
     });

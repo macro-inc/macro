@@ -22,10 +22,15 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   create/dial/prompt against the live harness service.
 - `src/tui.rs` (`src/tui/`): the control panel itself (registration, agents,
   sessions, config form, logs).
-- `src/herdr.rs` (`src/herdr/`): native herdr pane integration — only compiled
-  `#[cfg(unix)]`.
+- `src/herdr.rs` (`src/herdr/`): native herdr integration — only compiled
+  `#[cfg(unix)]`. `src/herdr/cli.rs` picks herdr 0.9 (`herdr`) or herdr-core
+  (`hc`) by environment; both stay supported.
 - `src/executable.rs`: `PATH` lookup; every spawn of a bare command name goes
-  through `launchable`, which finds Windows `.cmd` shims (`npm`, `npx`).
+  through `launchable`, which finds Windows `.cmd` shims (`npm`, `npx`) and
+  never npm's extensionless shell script beside them. The Claude Code adapter
+  gets the program behind an npm `claude.cmd` (`npm_shim_target_or_self`):
+  the Claude SDK spawns `CLAUDE_CODE_EXECUTABLE` without a shell, and Node
+  refuses `.cmd` files there.
 - `install/`: `install.sh` and `install.ps1`, the one-line installers the docs
   serve from `main`. `install.sh` adds `~/.local/bin` to the shell's startup
   file once (`--no-modify-path` opts out); `install.ps1` installs the Windows
@@ -52,7 +57,9 @@ the local ACP process (Claude Code, Codex, ...), and drives native
 - `e2e/`: end-to-end update and installer tests (`build_releases.sh`,
   `update_e2e.py` (update, prompt-in-gap, output-in-gap, and the negative
   cases), `installer_test.sh`, `windows_test.ps1` for the launcher
-  layout, `windows_update_test.ps1` for a running macrod updating itself), run
+  layout, `windows_update_test.ps1` for a running macrod updating itself,
+  `windows_claude_code_test.ps1` for npm-installed Claude Code served over
+  ACP), run
   by the `test_macrod_update` workflow on Linux, macOS and Windows.
 - `README.md`: native Herdr session behavior (repositories, reconnect, model
   switching, MCP) — read before changing anything under `src/herdr/`.
@@ -103,6 +110,9 @@ external chat replies depend on it. Direct session controls still mint IDs.
   Windows-breaking code there without a cfg gate.
 - The ACP child is killed with its whole tree: a process group on Unix, a Job
   Object on Windows (`src/outbound/acp_process/job.rs`).
+- Every herdr call goes through the `HerdrCli` facade; add a capability to both
+  `cli/legacy.rs` and `cli/hc.rs`. herdr-core has no agent registry or
+  worktrees, and status comes only from OSC 7501 (README.md, "Herdr versions").
 - macrod never pulls into the operator's working branch — new herdr worktrees
   start from a fresh fetch of `origin/main` (see README.md).
 - Only release builds update themselves: the tag workflow compiles the tag in

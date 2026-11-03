@@ -14,6 +14,7 @@ import {
   useNavigate,
   useRouteParams,
 } from '@app/lib/split-router';
+import { beginInteraction } from '@app/observability/flow';
 import { usePreference } from '@app/preferences/use-preference';
 import { emailSplitRoute, emailThreadRoute } from '@app/routes/routes';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
@@ -354,14 +355,24 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       closeThread();
       return;
     }
-    setState(
-      produce((draft) => {
-        if (draft.tab === 'reminders' || tab === 'reminders') draft.search = '';
-        draft.tab = tab;
-        draft.facets = {};
-      })
-    );
-    closeThread();
+    // The list's email.list flow restarts for the tab and joins this.
+    const interaction = beginInteraction('email.tab', {
+      attributes: { 'email.tab': tab },
+      closeOnJoin: true,
+    });
+    try {
+      setState(
+        produce((draft) => {
+          if (draft.tab === 'reminders' || tab === 'reminders')
+            draft.search = '';
+          draft.tab = tab;
+          draft.facets = {};
+        })
+      );
+      closeThread();
+    } finally {
+      interaction.end();
+    }
   };
 
   const setInboxIds = (ids: string[] | undefined) => {

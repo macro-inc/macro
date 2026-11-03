@@ -1,4 +1,3 @@
-import CodeIcon from '@icon/system/regular/code.svg';
 import type {
   ExecutionActivity,
   ExecutionRecord,
@@ -7,7 +6,6 @@ import type {
 import { For, Show } from 'solid-js';
 import { isToolActive, ToolCard, type ToolStatus } from '../../ui';
 import { LiveToolGroup } from '../../views/LiveToolGroup';
-import { DisplayResultsToolCall } from './DisplayResultsToolCall';
 import { MacroToolCall } from './MacroToolCall';
 import type { ToolCallCommon, ToolCallContext } from './shared';
 
@@ -39,7 +37,6 @@ export function CodeExecutionToolCall(props: {
       <Show when={activity().length === 0 || errorVisible()}>
         <ToolCard
           title="Workspace activity"
-          icon={<CodeIcon />}
           status={props.common.status}
           muted={props.common.muted}
           trailing={
@@ -156,30 +153,16 @@ function RecordedCall(props: {
         : undefined,
   });
   return (
-    <Show
-      when={
-        props.call.name === 'DisplayResults' &&
-        props.call.status === 'completed'
-      }
-      fallback={
-        <MacroToolCall
-          detail={{
-            kind: 'macro',
-            input: props.call.input,
-            output: props.call.output,
-            error: props.call.error ?? null,
-          }}
-          common={common()}
-          context={props.context}
-          grouped={false}
-        />
-      }
-    >
-      <DisplayResultsToolCall
-        input={props.call.input}
-        error={props.call.error}
-        common={common()}
-      />
-    </Show>
+    <MacroToolCall
+      detail={{
+        kind: 'macro',
+        input: props.call.input,
+        output: props.call.output,
+        error: props.call.error ?? null,
+      }}
+      common={common()}
+      context={props.context}
+      grouped={false}
+    />
   );
 }

@@ -1,4 +1,5 @@
 import { setGlobalSplitManager } from '@app/signal/splitLayout';
+import { createMobilePaneStack } from '@components/app/split-layout/mobile/createMobilePaneStack';
 import { createRoutedSplitLayout } from '@components/app/split-layout/tests/fixtures';
 import { toast } from '@core/component/Toast/Toast';
 import {
@@ -14,6 +15,7 @@ import {
   openNotificationFromId,
 } from '../notification-navigation';
 import {
+  notificationLaunchPath,
   pendingNotificationNavigation,
   receiveNotificationTap,
   setPendingNotificationNavigationId,
@@ -186,6 +188,59 @@ it('opens a direct push target without looking up the notification or loading th
     channel_thread_id: 'message',
   });
   expect(onApplied).toHaveBeenCalledOnce();
+});
+
+it('returns to Home from a channel opened by a cold push launch', async () => {
+  const target = {
+    type: 'channel' as const,
+    channelId: '11111111-1111-4111-8111-111111111111',
+    messageId: '22222222-2222-4222-8222-222222222222',
+    threadId: null,
+  };
+  const recipientId = 'macro|test@example.com';
+  receiveNotificationTap(
+    {
+      type: 'BACKGROUND_TAP',
+      payload: { notificationId: 'cold-push', recipientId, navigation: target },
+    },
+    vi.fn()
+  );
+  const path = notificationLaunchPath(recipientId);
+  if (!path) throw new Error('Expected the authenticated push destination');
+  const navigate = vi.fn();
+  const orchestrator = {
+    createBlockInstance: () => ({ element: undefined }),
+    getBlockHandle: async () => ({ goToLocationFromParams: navigate }),
+  } as unknown as BlockOrchestrator;
+  const { layout, stack } = createRoot((dispose) => {
+    onTestFinished(dispose);
+    const layout = createRoutedSplitLayout(orchestrator, path, true);
+    return { layout, stack: createMobilePaneStack(layout) };
+  });
+
+  const result = await openNotificationFromId(
+    'cold-push',
+    layout,
+    { notifications: () => [] },
+    { target }
+  );
+  expect(result.isOk()).toBe(true);
+  expect(layout.splits().map((split) => split.content)).toMatchObject([
+    { type: 'component', id: 'home' },
+    { type: 'channel', id: target.channelId },
+  ]);
+  expect(stack.canGoBack()).toBe(true);
+  expect(layout.activeSplit()?.content().id).toBe(target.channelId);
+  expect(navigate).toHaveBeenCalledWith({
+    channel_message_id: target.messageId,
+    channel_thread_id: target.messageId,
+  });
+
+  stack.completeGoBack();
+  expect(layout.splits().map((split) => split.content)).toMatchObject([
+    { type: 'component', id: 'home' },
+  ]);
+  expect(stack.canGoBack()).toBe(false);
 });
 
 it('acknowledges a failed lookup and opens the next native tap', async () => {

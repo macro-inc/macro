@@ -1,6 +1,7 @@
 import { DateGroupHeading } from '@app/features/next-soup/soup-view/date-group-heading';
 import { dateBucket } from '@app/features/soup/collection/date-buckets';
 import { createKeyedProjection } from '@app/lib/queries/soup/create-keyed-projection';
+import { usePending } from '@app/observability/flow';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   ListEntity,
@@ -27,6 +28,7 @@ import {
 } from '../components/list-state';
 import { useCrmContext } from '../context/crm-context';
 import type { ItemListSource } from '../context/crm-sources';
+import { useOptionalCrmWorkspace } from '../context/workspace-context';
 import { recordItemMatchesSearch } from '../core/record-search';
 
 /**
@@ -54,6 +56,7 @@ export function RecordItemList(props: {
   dateField?: 'updated_at' | 'created_at' | 'viewed_at';
 }) {
   const { openEntity } = useCrmContext().createNavigation();
+  const workspace = useOptionalCrmWorkspace();
   // Reading `data` before the first page resolves would suspend the tab.
   const items = () =>
     props.source.isPending ? [] : (props.source.data?.entities ?? []);
@@ -97,6 +100,7 @@ export function RecordItemList(props: {
   // paused requests; a disabled one shows the empty state instead.
   const loading = () =>
     props.pending || (props.source.isPending && props.source.isEnabled);
+  usePending('crm.items', () => Boolean(loading()));
 
   return (
     <div class="flex min-h-0 w-full flex-1 flex-col">
@@ -215,7 +219,10 @@ export function RecordItemList(props: {
                         entity={entity}
                         hideCheckbox
                         timestamp={entity.updatedAt}
-                        onClick={() => openEntity(entity)}
+                        onClick={(event) => {
+                          if (!workspace?.host.record.openItem(entity, event))
+                            openEntity(entity);
+                        }}
                         referencePropertyIds={props.referencePropertyIds}
                       />
                     </>

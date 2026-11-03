@@ -47,7 +47,7 @@ pub struct CrmCompanyWithContacts {
 }
 
 /// A known external company tracked by a team (CRM-style record). A company
-/// aggregates one or more email domains and individual contacts that are
+/// aggregates zero or more email domains and individual contacts that are
 /// considered to belong to the same external party.
 ///
 /// Company display metadata (name, description, icon) lives in
@@ -173,10 +173,12 @@ pub struct CrmDomain {
 pub struct CrmContact {
     /// The id of the contact record
     pub id: uuid::Uuid,
-    /// The id of the company the contact belongs to
-    pub company_id: uuid::Uuid,
-    /// The contact's email address
-    pub email: String,
+    /// The id of the company the contact belongs to; `None` for a
+    /// contact without a company
+    pub company_id: Option<uuid::Uuid>,
+    /// The contact's email address; `None` for a manually created
+    /// contact added by name alone
+    pub email: Option<String>,
     /// Display name observed for the contact, if any
     pub name: Option<String>,
     /// Whether the contact is hidden from CRM listings for the owning
@@ -264,11 +266,11 @@ pub struct CrmAddressStatus {
     /// team's company) are reported as `exists = false` so existence
     /// doesn't leak across teams.
     pub exists: bool,
-    /// `crm_contacts.hidden` for the matched contact. `false` when `!exists`.
+    /// Whether any matching team contact is hidden. `false` when `!exists`.
     pub contact_hidden: bool,
-    /// `crm_companies.hidden` for the matched contact's company. `false` when `!exists`.
+    /// Whether any matching contact's company is hidden. `false` when `!exists`.
     pub company_hidden: bool,
-    /// `crm_companies.email_sync` for the matched contact's company. `false` when `!exists`.
+    /// Whether every matching contact's company enables email sync. `false` when `!exists`.
     pub email_sync: bool,
 }
 
@@ -324,6 +326,10 @@ pub struct CrmTeamSettings {
     pub team_views: Value,
     /// Team view applied by default when a member opens the CRM view.
     pub default_team_view_id: Option<String>,
+    /// Whether email sync keeps personal-provider addresses (gmail.com
+    /// etc.) out of the CRM. When off, sync files them as contacts
+    /// without a company.
+    pub exclude_personal_emails: bool,
 }
 
 impl Default for CrmTeamSettings {
@@ -336,8 +342,18 @@ impl Default for CrmTeamSettings {
             legacy_stage_ids: BTreeMap::new(),
             team_views: Value::Array(Vec::new()),
             default_team_view_id: None,
+            exclude_personal_emails: true,
         }
     }
+}
+
+/// A domain a team keeps out of email sync.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CrmBlockedDomain {
+    /// The blocked domain, lowercase.
+    pub domain: String,
+    /// When it was added.
+    pub created_at: DateTime<Utc>,
 }
 
 /// Field-wise partial update of [`CrmTeamSettings`]. Outer `None` =
@@ -359,6 +375,8 @@ pub struct CrmTeamSettingsPatch {
     pub team_views: Option<Value>,
     /// New `default_team_view_id`; `Some(None)` clears it.
     pub default_team_view_id: Option<Option<String>>,
+    /// New `exclude_personal_emails`, if provided.
+    pub exclude_personal_emails: Option<bool>,
 }
 
 /// Errors that can occur in the CRM domain.
@@ -399,9 +417,6 @@ pub enum CrmError {
     /// The company already has a contact with the requested email.
     #[error("a crm contact with this email already exists for the company")]
     ContactAlreadyExistsForCompany,
-    /// The contact's email domain is not one of the company's domains.
-    #[error("contact email domain must match one of the company's domains")]
-    ContactEmailDomainMismatch,
     /// The team-level `team_crm_settings.crm_enabled` killswitch is off.
     #[error("crm is not enabled for this team")]
     CrmDisabledForTeam,
@@ -417,8 +432,9 @@ pub struct CrmContactForSoup {
     pub contact: CrmContact,
     /// Team owning the company/contact record.
     pub team_id: uuid::Uuid,
-    /// The company's display name (team override, directory name, or domain).
-    pub company_name: String,
+    /// The company's display name (team override, directory name, or
+    /// domain); `None` for a contact without a company.
+    pub company_name: Option<String>,
     /// When this viewer last opened this particular contact record.
     pub viewed_at: Option<DateTime<Utc>>,
 }

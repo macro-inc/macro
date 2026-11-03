@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Scan added lines for customer PII and high-signal secrets.
 
-Default mode reads `git diff --cached` so the pre-commit hook stays on the
-staged hunk only. During a merge of origin/main, it compares the staged tree
-with that incoming main commit. `--changed` covers the same scope as `just
-check`. `--text` scans a PR title/body or other free text.
+Default mode reads staged additions. During a merge, it scans only lines added
+relative to every parent, excluding unchanged imported content. `--changed`
+covers the same scope as `just check`. `--text` scans a PR title/body or other
+free text.
 
 Only humans should add `tooling/pii/exceptions` entries, unless they ask an
 agent to.
@@ -221,17 +221,32 @@ def git(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def staged_diff() -> str:
+def staged_diff(parent: str | None = None) -> str:
     args = ["diff", "--cached", "-U0", "--diff-filter=AMR", "--no-color"]
-    merge_head = git("rev-parse", "--verify", "MERGE_HEAD")
-    if merge_head.returncode == 0:
-        main = git("rev-parse", "--verify", "refs/remotes/origin/main")
-        if main.returncode == 0 and merge_head.stdout.strip() == main.stdout.strip():
-            # Scan branch additions and merge resolutions, not existing main content.
-            args.append(main.stdout.strip())
+    if parent is not None:
+        args.extend([parent, "--"])
     result = git(*args)
     result.check_returncode()
     return result.stdout
+
+
+def staged_findings(exceptions: Exceptions) -> list[Finding]:
+    """Keep only staged findings on lines newly added relative to every parent."""
+    findings = list(iter_diff_findings(staged_diff(), exceptions))
+    result = git("rev-parse", "--git-path", "MERGE_HEAD")
+    result.check_returncode()
+    merge_head = ROOT / result.stdout.strip()
+    if not merge_head.exists():
+        return findings
+    parents = merge_head.read_text(encoding="utf-8").splitlines()
+    if not parents:
+        raise ValueError("MERGE_HEAD contains no parents")
+    for parent in parents:
+        verified = git("rev-parse", "--verify", "--end-of-options", f"{parent}^{{commit}}")
+        verified.check_returncode()
+        parent_findings = set(iter_diff_findings(staged_diff(verified.stdout.strip()), exceptions))
+        findings = [finding for finding in findings if finding in parent_findings]
+    return findings
 
 
 def merge_base() -> str:
@@ -331,7 +346,7 @@ def main(argv: list[str] | None = None) -> int:
         findings.extend(untracked_findings(exceptions))
         return report(findings)
 
-    findings = list(iter_diff_findings(staged_diff(), exceptions))
+    findings = staged_findings(exceptions)
     status = report(findings)
     if status != 0 or args.skip_gitleaks:
         return status

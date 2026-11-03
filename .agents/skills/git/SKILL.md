@@ -15,11 +15,8 @@ message, PR title, or PR description. That includes emails, phone numbers,
 physical addresses, API keys, and tokens. Refer to people as "the customer"
 or a placeholder (`customer@example.com`).
 
-The pre-commit hook scans staged added lines. During a merge of `origin/main`,
-it compares the staged result with that incoming main commit, checking all
-branch additions and conflict resolutions without rescanning existing main
-content. Other merges keep the ordinary staged-diff scan. Do not skip the hook
-(`--no-verify`).
+The pre-commit hook scans staged added lines; during merges it scans additions
+relative to every parent, not unchanged imported content. Do not skip it (`--no-verify`).
 Do not add lines to `tooling/pii/exceptions` unless a human asks you to.
 
 Before opening or updating a PR, reread the title and body and strip any PII
@@ -64,7 +61,7 @@ test fixtures. Describe the code change and nothing else.
   (`Slack integration`), never as the source of a request or report.
 - Never cite support channels, tickets, chat channels or threads, calls,
   meetings, emails, or links into support tools or Macro workspace items
-  (task links are fine). Don't say who asked or where it was reported.
+  (task and agent-session links are fine). Don't say who asked or where it was reported.
 - Never mention places tied to a person or customer (cities, offices, regions).
 - When the reason matters, say it in general terms: "Users with long read
   histories saw channels load slowly", not "<customer> reported in
@@ -134,9 +131,9 @@ machines, pipelines). Drop it for small or mechanical changes.
 ```
 
 No test plan or testing section in PR descriptions or commit messages: CI shows
-the checks, and what you ran goes in your report to the user. Attach proof for
-user-visible changes: screenshots or a recording (see the `record-proof` skill
-when it is available).
+the checks, and what you ran goes in your report to the user. Attach screenshots
+or recordings to the PR for user-visible changes (see the `record-proof` skill
+when available). Do not commit verification captures unless explicitly requested.
 
 ## Handing off a PR
 

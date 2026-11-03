@@ -69,9 +69,12 @@ Linux WebKit/D-Bus regression is `bun run native:e2e:notifications`; compositor
 focus behavior still needs a real Wayland/X11 desktop check.
 
 On iOS builds with durable push navigation, a tapped channel push chooses the
-first route after verifying its recipient account. A failed or stalled native
-bridge must release startup within 1.5 seconds; the app can show its auth or
-retry UI while retaining the tap. If the bridge recovers later, the tap uses
+first route after verifying its recipient account. Cold launches open the
+channel in front of Home, retaining the header Back chevron and swipe-back
+destination. Verify both return to Home without reopening the channel first.
+A failed or stalled native bridge must release startup within 1.5 seconds;
+the app can show its auth or retry UI while retaining the tap. If the bridge
+recovers later, the tap uses
 normal navigation without resetting the current page to the app root. Check
 both listener attachment and pending-intent reads, including a tap delivered
 before the pending read stalls. Receiving a push without tapping it must not
@@ -200,6 +203,17 @@ When Macro plays a sound for a notification, its browser or macOS alert is
 sent silent so the person hears one sound. macOS builds older than the
 `silent` argument on `send_macos_notification` ignore it and still play the
 system sound.
+
+**Settings → Notifications → Quiet hours** silences those sounds and skips
+desktop and browser alerts on a weekly schedule. It is off until turned on,
+then covers every day from 10:00 PM to 8:00 AM in the device's time zone. The
+person picks the days, the start and end, and the time zone. A later start
+runs through midnight, and the window is the clock time on each selected day,
+so Tuesday morning is quiet only when Tuesday is selected. An equal start and
+end covers no time. Incoming calls still ring and still show an alert. Inbox
+items still arrive. The schedule is saved on this device with the sound
+settings, so a phone and a computer can differ. A sound preview still plays.
+Mobile push sent while the app is not open is unchanged.
 
 The backend-free desktop/phone regression drives the real settings section,
 persistence, previews, and delivery through a stand-in notification feed:

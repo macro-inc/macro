@@ -124,6 +124,7 @@ async fn update_team_settings_partial_changes_only_provided_fields(
         edit_stages_role: Some(CrmPermissionRole::Owner),
         move_closed_deals_role: Some(CrmPermissionRole::Owner),
         delete_records_role: Some(CrmPermissionRole::Owner),
+        exclude_personal_emails: Some(false),
         closed_stage_ids: Some(Some(vec![stage_id])),
         legacy_stage_ids: Some(std::collections::BTreeMap::from([(
             Uuid::now_v7(),
@@ -150,6 +151,7 @@ async fn update_team_settings_partial_changes_only_provided_fields(
         json!([{ "id": "v1", "name": "My view" }])
     );
     assert_eq!(settings.default_team_view_id, Some("v1".to_string()));
+    assert!(!settings.exclude_personal_emails);
     Ok(())
 }
 

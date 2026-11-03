@@ -6,17 +6,27 @@ import { usePropertiesContext } from '@property/context/PropertiesContext';
 import { openPropertyEditor } from '@property/editor/state/propertyEditor';
 import type { Property as PropertyT } from '@property/types';
 import { Button } from '@ui';
-import { type Component, createSignal, type JSX, Show } from 'solid-js';
+import {
+  type Component,
+  type ComponentProps,
+  createSignal,
+  type JSX,
+  Show,
+} from 'solid-js';
 
 type InlinePropertyValueProps = {
   property: PropertyT;
-  /** Owning entity ID, when the pill is rendered outside its entity block. */
+  /** Owning entity ID; a composer has no entity yet, so it passes none. */
   entityId?: string;
   /** Label rendered when the property is empty. Defaults to "None". */
   emptyLabel?: JSX.Element;
   class?: string;
+  iconClass?: string;
+  showLabel?: boolean;
   canManage?: boolean;
   canRemove?: boolean;
+  /** The editor the pill opens; see `PropertyValuePill`. */
+  editor?: ComponentProps<typeof PropertyValuePill>['editor'];
 };
 
 /**
@@ -57,14 +67,17 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
       variant="secondary"
       size="xs"
       showLabel={
-        props.property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.STATUS &&
-        props.property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.PRIORITY &&
-        !(
-          ctx.entityType === 'TASK' &&
-          (props.property.propertyDefinitionId ===
-            SYSTEM_PROPERTY_IDS.ASSIGNEES ||
-            props.property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT)
-        )
+        props.showLabel ??
+        (props.property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.STATUS &&
+          props.property.propertyDefinitionId !==
+            SYSTEM_PROPERTY_IDS.PRIORITY &&
+          !(
+            ctx.entityType === 'TASK' &&
+            (props.property.propertyDefinitionId ===
+              SYSTEM_PROPERTY_IDS.ASSIGNEES ||
+              props.property.propertyDefinitionId ===
+                SYSTEM_PROPERTY_IDS.PROJECT)
+          ))
       }
       canEdit={ctx.canEdit}
       onSave={ctx.saveHandler.saveProperty}
@@ -86,7 +99,13 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
           : undefined
       }
       class={props.class}
+      iconClass={props.iconClass ?? 'size-3 touch:size-4 shrink-0'}
       emptyLabel={props.emptyLabel}
+      opensProject={
+        props.entityId !== undefined &&
+        ctx.entityType === 'TASK' &&
+        props.property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT
+      }
       hoverTrailingAction={
         <Show when={canManage()}>
           <Button
@@ -119,6 +138,7 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
         </Show>
       }
       entitySelfFilter={{ entityType: ctx.entityType, blockId: props.entityId }}
+      editor={props.editor}
     />
   );
 };

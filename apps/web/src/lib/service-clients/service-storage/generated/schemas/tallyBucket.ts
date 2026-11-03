@@ -4,6 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { TallyBucketVoters } from './tallyBucketVoters';
 import type { TallyValue } from './tallyValue';
 
 /**
@@ -17,4 +19,9 @@ export interface TallyBucket {
   count: number;
   /** The value. */
   value: TallyValue;
+  /** Who chose it, as Macro user ids in submission order: present only
+for the form's editors, or its viewers when it shares its responses,
+and never when it hides respondents. Rows no signed-in respondent
+submitted count without a voter. */
+  voters?: TallyBucketVoters;
 }

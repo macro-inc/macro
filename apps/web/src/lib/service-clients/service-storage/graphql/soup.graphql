@@ -188,6 +188,7 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		providerId
 		ownerId
 		inboxVisible
+		hasReceivedMail
 		linkId
 		latestInboundMessageTs
 		latestOutboundMessageTs
@@ -351,7 +352,8 @@ fragment SoupEntityCoreFields on GraphqlSoupEntity {
 # the session reports a committed change: see AgentSessionRow.
 fragment SoupAgentSessionFields on GraphqlSoupAgentSession {
 	sessionName: name
-	isArchived
+	archivedBy
+	archivedAt
 	ownerId
 	botId
 	harness
@@ -625,6 +627,11 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 	}
 	... on GraphqlInboxReauthRequiredMetadata {
 		inboxReauthRequiredEmailAddress: emailAddress
+	}
+	... on GraphqlRoutineRunFinishedMetadata {
+		routineRunFinishedRoutineId: routineId
+		routineRunFinishedRoutineName: routineName
+		routineRunFinishedSucceeded: succeeded
 	}
 	... on GraphqlInviteToTeamMetadata {
 		inviteToTeamTeamName: teamName

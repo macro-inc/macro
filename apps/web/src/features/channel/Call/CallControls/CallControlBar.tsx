@@ -20,6 +20,8 @@ function MediaSplitButton(props: {
   toggleLabel: string;
   menuLabel: string;
   disabled?: boolean;
+  /** Set for a toggle whose icon stays the same in both states. */
+  pressed?: boolean;
   onToggle: () => void;
   icon: JSX.Element;
   children: JSX.Element;
@@ -44,6 +46,7 @@ function MediaSplitButton(props: {
           <ButtonGroup.Button
             aria-label={props.toggleLabel}
             tooltip={{ content: props.toggleLabel, placement: 'top' }}
+            aria-pressed={props.pressed}
             disabled={props.disabled}
             onClick={props.onToggle}
           >
@@ -90,12 +93,16 @@ export function CallControlBar(props: {
   videoMenu: JSX.Element;
   audioDrawer: JSX.Element;
   videoDrawer: JSX.Element;
+  /** Dropdown items for what a screen share captures. */
+  screenMenu: JSX.Element;
+  screenDrawer: JSX.Element;
   error?: string;
   onSettingsOpenChange?: (open: boolean) => void;
   children?: JSX.Element;
 }) {
   let audioOpen = false;
   let videoOpen = false;
+  let screenOpen = false;
   return (
     <div
       data-call-controls
@@ -106,7 +113,7 @@ export function CallControlBar(props: {
           label="Microphone"
           onOpenChange={(open) => {
             audioOpen = open;
-            props.onSettingsOpenChange?.(audioOpen || videoOpen);
+            props.onSettingsOpenChange?.(audioOpen || videoOpen || screenOpen);
           }}
           toggleLabel={
             props.audioMuted ? 'Unmute microphone' : 'Mute microphone'
@@ -130,7 +137,7 @@ export function CallControlBar(props: {
           label="Camera"
           onOpenChange={(open) => {
             videoOpen = open;
-            props.onSettingsOpenChange?.(audioOpen || videoOpen);
+            props.onSettingsOpenChange?.(audioOpen || videoOpen || screenOpen);
           }}
           toggleLabel={props.videoMuted ? 'Turn on camera' : 'Turn off camera'}
           mobileContent={props.videoDrawer}
@@ -148,24 +155,24 @@ export function CallControlBar(props: {
         >
           {props.videoMenu}
         </MediaSplitButton>
-        <Button
-          size={isMobile() ? 'icon-md' : 'icon-lg'}
-          variant="secondary"
-          aria-label={
+        <MediaSplitButton
+          label="Screen share"
+          onOpenChange={(open) => {
+            screenOpen = open;
+            props.onSettingsOpenChange?.(audioOpen || videoOpen || screenOpen);
+          }}
+          mobileContent={props.screenDrawer}
+          toggleLabel={
             props.screenSharing ? 'Stop sharing screen' : 'Share screen'
           }
-          tooltip={{
-            content: props.screenSharing
-              ? 'Stop sharing screen'
-              : 'Share screen',
-            placement: 'top',
-          }}
-          aria-pressed={props.screenSharing}
+          menuLabel="Screen share settings"
+          pressed={props.screenSharing}
           disabled={props.disabled}
-          onClick={props.onToggleScreen}
+          onToggle={props.onToggleScreen}
+          icon={<Screencast class="size-5" />}
         >
-          <Screencast class="size-5" />
-        </Button>
+          {props.screenMenu}
+        </MediaSplitButton>
         {props.children}
         <Button
           size={isMobile() ? 'icon-md' : 'icon-lg'}

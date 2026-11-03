@@ -1,3 +1,4 @@
+import { usePending } from '@app/observability/flow';
 import { QueuedSendStatus } from '../../email-compose/queued-send-status';
 import '@entity/composed/ListEntity.css';
 import {
@@ -58,6 +59,7 @@ import {
 } from 'solid-js';
 import type { CacheSnapshot } from 'virtua';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
+import { canMarkNotDone } from '../../next-soup/actions/can-mark-not-done';
 import {
   persistSoupNavigationTouchHighlight,
   soupNavigationTouchHighlight,
@@ -126,6 +128,7 @@ export function EmailList(props: EmailListProps) {
     selectedThread,
     filterByTag,
   } = useEmailView();
+  usePending('email.list.items', () => source.isLoading());
   const panel = useSplitPanelOrThrow();
 
   function openEntity(
@@ -305,6 +308,7 @@ export function EmailList(props: EmailListProps) {
   const actionState = toEntityActionListState({
     controller: list,
     getEntity: (row) => (row.kind === 'entity' ? row.entity : undefined),
+    positions: source.positions,
     collapse: {
       // Signal and Noise remove archived threads; finish the row animation first.
       enabled: () =>
@@ -435,6 +439,7 @@ export function EmailList(props: EmailListProps) {
       <EmailRowActions
         archived={archived()}
         canArchive={entityActionViewContext().supportsMarkDone}
+        canUnarchive={canMarkNotDone(props.row.entity)}
         pending={rowActionState.isPending(props.row.rowId)}
         onFocus={() => focusActionRow(props.row)}
         onArchive={() =>

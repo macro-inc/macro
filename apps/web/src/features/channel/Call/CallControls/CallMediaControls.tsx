@@ -21,6 +21,8 @@ export type CallMediaControlsState = Pick<
   | 'toggleAudio'
   | 'toggleVideo'
   | 'toggleScreenShare'
+  | 'shareScreenAudio'
+  | 'setShareScreenAudio'
   | 'audioInputDevices'
   | 'audioOutputDevices'
   | 'videoInputDevices'
@@ -165,6 +167,43 @@ export function CallMediaControls(props: {
                 <span class="flex-1">Noise suppression</span>
               </Dropdown.CheckboxItem>
             </Dropdown.Group>
+          </>
+        }
+        screenMenu={
+          <Dropdown.Group>
+            <Dropdown.CheckboxItem
+              checked={call.shareScreenAudio()}
+              disabled={call.isConnecting() || call.isScreenSharing()}
+              closeOnSelect={false}
+              onChange={(checked) => call.setShareScreenAudio(checked)}
+            >
+              Share audio
+            </Dropdown.CheckboxItem>
+            <p class="px-2 pb-1 text-xs text-ink-muted">
+              {call.isScreenSharing()
+                ? 'Stop sharing to change this.'
+                : 'Shares audio from a tab, or from your whole system where the browser supports it.'}
+            </p>
+          </Dropdown.Group>
+        }
+        screenDrawer={
+          <>
+            <MobileDrawer.Section>
+              <ToggleSwitch
+                size="md"
+                label="Share audio"
+                labelClass="order-first flex-1"
+                class="min-h-11 w-full px-3 py-2.5 text-sm"
+                checked={call.shareScreenAudio()}
+                disabled={call.isConnecting() || call.isScreenSharing()}
+                onChange={(checked) => call.setShareScreenAudio(checked)}
+              />
+            </MobileDrawer.Section>
+            <p class="mt-2 px-3 text-xs text-ink-muted">
+              {call.isScreenSharing()
+                ? 'Stop sharing to change this.'
+                : 'Shares audio from a tab, or from your whole system where the browser supports it.'}
+            </p>
           </>
         }
         videoMenu={

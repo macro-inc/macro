@@ -66,6 +66,7 @@ import { useAgentMentionUsers } from '../use-agent-mention-users';
 import { useMessageBotMentionUsers } from '../use-channel-bot-mention-users';
 import { useMessageParticipants } from '../use-message-participants';
 import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
+import { CollapsedAttachmentPreview } from './CollapsedAttachmentPreview';
 import {
   ComposerAddDrawer,
   ComposerAddMenu,
@@ -865,6 +866,11 @@ export function ChannelInput(props: ChannelInputProps) {
           // mount, but the placeholder can update (e.g. channel name loads).
           placeholder={props.input.placeholder}
           attachmentCount={inputState.view().attachments?.length ?? 0}
+          attachmentPreview={
+            <CollapsedAttachmentPreview
+              attachments={inputState.view().attachments}
+            />
+          }
           pending={inputState.view().hasPendingAttachments}
           disabled={!hasSendableInputContent(inputState.view())}
           getFocusTarget={() => lexicalEditor().getRootElement()}

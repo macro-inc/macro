@@ -155,45 +155,66 @@ class GitDiffTest(unittest.TestCase):
                     findings = list(iter_diff_findings(diff, Exceptions(set(), set(), set())))
                     self.assertEqual([(f.path, f.kind) for f in findings], [("renamed.md", "email")])
 
-    def test_merging_main_scans_branch_and_resolution_not_upstream_content(self):
-        for merging_main in (True, False):
-            with self.subTest(merging_main=merging_main), tempfile.TemporaryDirectory() as tmp:
-                root = Path(tmp)
-                commands = [
-                    ["init", "-q"],
-                    ["-c", "user.name=Test", "-c", "user.email=user@example.com", "commit", "--allow-empty", "-qm", "base"],
-                ]
-                for command in commands:
-                    subprocess.run(["git", "-C", tmp, *command], check=True)
-                base = subprocess.check_output(["git", "-C", tmp, "rev-parse", "HEAD"], text=True).strip()
-                (root / "upstream.md").write_text("upstream@fixture-domain.net\n", encoding="utf-8")
-                subprocess.run(["git", "-C", tmp, "add", "upstream.md"], check=True)
-                subprocess.run([
-                    "git", "-C", tmp, "-c", "user.name=Test", "-c", "user.email=user@example.com",
-                    "commit", "-qm", "upstream",
-                ], check=True)
-                upstream = subprocess.check_output(["git", "-C", tmp, "rev-parse", "HEAD"], text=True).strip()
-                subprocess.run(["git", "-C", tmp, "update-ref", "refs/remotes/origin/main", upstream if merging_main else base], check=True)
-                subprocess.run(["git", "-C", tmp, "checkout", "-qb", "feature", base], check=True)
-                (root / "branch.md").write_text("branch@fixture-domain.net\n", encoding="utf-8")
-                subprocess.run(["git", "-C", tmp, "add", "branch.md"], check=True)
-                subprocess.run([
-                    "git", "-C", tmp, "-c", "user.name=Test", "-c", "user.email=user@example.com",
-                    "commit", "-qm", "branch",
-                ], check=True)
-                subprocess.run([
-                    "git", "-C", tmp, "-c", "user.name=Test", "-c", "user.email=user@example.com",
-                    "merge", "--no-commit", "--no-ff", upstream,
-                ], check=True, capture_output=True)
-                (root / "resolution.md").write_text("resolution@fixture-domain.net\n", encoding="utf-8")
-                subprocess.run(["git", "-C", tmp, "add", "resolution.md"], check=True)
-                (root / "unstaged.md").write_text("unstaged@fixture-domain.net\n", encoding="utf-8")
-                with patch.object(scan, "ROOT", root):
-                    findings = list(iter_diff_findings(scan.staged_diff(), Exceptions(set(), set(), set())))
+    def test_merge_scans_new_resolution_lines_not_unchanged_parent_content(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            subprocess.run(["git", "init", "-q", tmp], check=True)
+            subprocess.run(["git", "-C", tmp, "config", "user.name", "Test"], check=True)
+            subprocess.run(["git", "-C", tmp, "config", "user.email", "user@example.com"], check=True)
+            subprocess.run(["git", "-C", tmp, "config", "core.hooksPath", "/dev/null"], check=True)
+            shared = root / "shared.md"
+            shared.write_text("base\n", encoding="utf-8")
+            subprocess.run(["git", "-C", tmp, "add", "."], check=True)
+            subprocess.run(["git", "-C", tmp, "commit", "-qm", "initial"], check=True)
+            subprocess.run(["git", "-C", tmp, "branch", "incoming"], check=True)
+            shared.write_text("local@customers-inc.com\n", encoding="utf-8")
+            subprocess.run(["git", "-C", tmp, "add", "."], check=True)
+            subprocess.run(["git", "-C", tmp, "commit", "-qm", "local changes"], check=True)
+            local = subprocess.check_output(["git", "-C", tmp, "rev-parse", "HEAD"], text=True).strip()
+            subprocess.run(["git", "-C", tmp, "checkout", "-q", "incoming"], check=True)
+            shared.write_text("incoming@customers-inc.com\n", encoding="utf-8")
+            imported = root / "imported.md"
+            imported.write_text("old@customers-inc.com\n", encoding="utf-8")
+            subprocess.run(["git", "-C", tmp, "add", "."], check=True)
+            subprocess.run(["git", "-C", tmp, "commit", "-qm", "incoming changes"], check=True)
+            subprocess.run(["git", "-C", tmp, "checkout", "-q", local], check=True)
+            merge = subprocess.run(
+                ["git", "-C", tmp, "merge", "--no-commit", "incoming"],
+                text=True, capture_output=True,
+            )
+            self.assertEqual(merge.returncode, 1)
+            key = "-----BEGIN " + "RSA PRIVATE KEY-----"
+            shared.write_text(
+                "local@customers-inc.com\nincoming@customers-inc.com\n"
+                f"resolution@customers-inc.com\n{key}\n",
+                encoding="utf-8",
+            )
+            imported.write_text("old@customers-inc.com\nnew@customers-inc.com\n", encoding="utf-8")
+            (root / "copy.md").write_text("old@customers-inc.com\n", encoding="utf-8")
+            subprocess.run(["git", "-C", tmp, "add", "."], check=True)
+            # Unstaged edits do not change the staged merge result.
+            imported.write_text("unstaged@customers-inc.com\n", encoding="utf-8")
+            with patch.object(scan, "ROOT", root):
+                findings = scan.staged_findings(Exceptions(set(), set(), set()))
                 self.assertEqual(
-                    {finding.path for finding in findings},
-                    {"branch.md" if merging_main else "upstream.md", "resolution.md"},
+                    {(f.path, f.line_no, f.kind) for f in findings},
+                    {
+                        ("copy.md", 1, "email"),
+                        ("imported.md", 2, "email"),
+                        ("shared.md", 3, "email"),
+                        ("shared.md", 4, "secret"),
+                    },
                 )
+                merge_head = root / ".git" / "MERGE_HEAD"
+                merge_head.write_text("imported.md\n", encoding="utf-8")
+                with self.assertRaises(subprocess.CalledProcessError):
+                    scan.staged_findings(Exceptions(set(), set(), set()))
+                merge_head.write_text("not-a-commit\n", encoding="utf-8")
+                with self.assertRaises(subprocess.CalledProcessError):
+                    scan.staged_findings(Exceptions(set(), set(), set()))
+                merge_head.write_text("", encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    scan.staged_findings(Exceptions(set(), set(), set()))
 
     def test_git_errors_fail_the_scan(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(scan, "ROOT", Path(tmp)):

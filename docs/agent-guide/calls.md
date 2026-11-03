@@ -37,6 +37,8 @@ Old copied `/app/call/<callId>` links redirect to the Calls detail without losin
 the transcript target. Existing `/app/drive/call/<callId>` links still work.
 The detail shows a loading state, recording/transcript/summary, Share, and a call
 side panel below the breadcrumb header; a failed load shows Retry.
+While the call is in progress, a `Join call` button under the title joins it
+(desktop and phone); it is hidden once you are in that call.
 `call_transcript_id=<segmentId>` seeks the matching video segment after loading.
 Check a direct link, both old link formats, a Calls-list click, a second split,
 the breadcrumb return, browser Back/Forward, and clicking the same transcript
@@ -198,6 +200,9 @@ call without gaining access to the channel.
 
 The join screen, in-call participant tiles, and incoming direct-call badges use
 profile pictures; initials are the fallback when no photo is available.
+In-call participant tiles fill their grid cell but are never wider than 16:9,
+so a wide window centers them instead of cropping cameras; check a single remote
+participant in a wide window and at phone width.
 The join screen has microphone, camera, and background effects buttons over the
 preview, with pill selectors below for microphone, speaker, camera, and
 backgrounds. The background button over the preview toggles the selected effect
@@ -222,12 +227,18 @@ opens a settings menu above the toolbar on click only; hovering opens nothing.
 **Audio settings** lists microphones, speakers (when the browser can choose one),
 and a noise suppression switch with its label on the left.
 **Video settings** lists cameras and the background effects as tiles: None,
-Light blur, Strong blur, a selected custom image, and Upload. Screen share and
-Leave call are separate buttons. Live channel calls also include **Call sharing**
-in the toolbar: its menu offers **Team sharing** and **Private**, each with a short
-explanation and a checkmark on the current choice. The icon changes between team
-and lock. Audio settings, video settings, and call sharing use bottom drawers on
-phones, with a handle and scrollable options; desktop and tablet keep dropdowns.
+Light blur, Strong blur, a selected custom image, and Upload. Screen share is
+also a split button: the left half starts or stops sharing (pressed while
+sharing), and **Screen share settings** holds **Share audio**, off by default,
+saved per device, and locked while sharing. With it on, the browser picker offers
+tab audio (and system audio where Chromium supports it), and other participants
+hear it alongside microphones, even away from the Call tab. Leave call is a
+separate button. Live channel calls also include **Call sharing** in the toolbar:
+its menu offers **Team sharing** and **Private**, each with a short explanation
+and a checkmark on the current choice. The icon changes between team and lock.
+Audio settings, video settings, screen share settings, and call sharing use
+bottom drawers on phones, with a handle and scrollable options; desktop and
+tablet keep dropdowns.
 The sharing icons align with the option titles, with short descriptions below.
 Click outside or press Escape to close and return focus to the opener. The
 controls also work by keyboard and touch.
@@ -264,6 +275,8 @@ On phones, the fully rounded control bar fits its buttons instead of filling the
 available width. Controls have 8px gaps, expanding to 12px in roomy bars and
 contracting on narrow phones so all controls fit. The sidebar button stays
 separate on the right with a 48px tap target and the row keeps its side gutters.
+On phones at most 384px wide, the sidebar button moves below the bar so the
+additional screen-share settings control fits without clipping.
 On desktop, the sidebar button stays at the bottom-right and Copy Meeting Url
 stays at the bottom-left, without horizontal padding on the footer row. On
 phones, Copy Meeting Url uses the shared `CopyButton` in a standard 40px
@@ -291,6 +304,15 @@ Message hover actions stay within the chat's scroll viewport. The toolbar wraps
 its action groups when the sidebar is narrow, keeping the final actions inside
 the visible surface. Check the first and last visible messages while scrolling,
 with every action available. Check both signed-in and guest calls.
+
+In the macOS desktop app, Screen share opens Macro's own **Share your screen**
+picker (screens first, the main display preselected, then open windows), since
+its Chromium has no system picker. Share publishes the chosen source; Cancel
+leaves sharing off. Without macOS Screen Recording access the picker says so
+and macOS shows its prompt; the user reopens Macro after allowing it. A refused
+or failed capture shows its reason under the call controls. Browsers
+and older desktop builds keep the browser's own picker. Verify on a Mac by
+sharing a display and a window, stopping, and cancelling the picker.
 
 ### Browser call diagnostics
 
@@ -320,7 +342,10 @@ guest names, and bearer URLs/tokens are not attributes.
 `call.connect` and background `call.media.setup` are children of the join flow.
 `call.media.publish_prejoin`, `enable`, and `toggle` expose publishing/capture
 failures after admission; `enumerate` and `background` cover waiting-room
-device lists and effects. A completed join/setup does not imply every device
+device lists and effects. `call.media.screen_share` records which picker ran
+(`native` or `browser`), Screen Recording access, the source count and kind,
+and whether the user cancelled; failures add the underlying
+`call.media.screen_share.error_type`. A completed join/setup does not imply every device
 worked: inspect its media children. Later toggles and connection-state samples
 are searchable by `call.id`. `call.connection.disconnected` records the SDK's
 numeric reason when available. These spans cover the browser LiveKit path,

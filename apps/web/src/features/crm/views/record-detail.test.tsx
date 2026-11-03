@@ -92,6 +92,8 @@ vi.mock('./use-crm', () => ({
       : undefined,
   }),
   useIsTeamAdmin: () => () => false,
+  useSetCompanyHiddenMutation: () => ({ isPending: false, mutate: vi.fn() }),
+  useSetContactHiddenMutation: () => ({ isPending: false, mutate: vi.fn() }),
 }));
 vi.mock('@solidjs/router', () => ({ useSearchParams: () => [{}] }));
 vi.mock('./company-detail', async () => {

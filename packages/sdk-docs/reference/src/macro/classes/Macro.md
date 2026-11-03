@@ -48,12 +48,14 @@
 | <a id="property-forms"></a> `forms` | `readonly` | [`FormNamespace`](../../entities/forms/namespace/classes/FormNamespace.md) | Build forms and submit answers without granting respondents database access. |
 | <a id="property-githubpullrequests"></a> `githubPullRequests` | `readonly` | [`GithubPullRequestNamespace`](../../entities/github-pull-requests/namespace/classes/GithubPullRequestNamespace.md) | githubPullRequests resources and operations. |
 | <a id="property-harnesses"></a> `harnesses` | `readonly` | [`HarnessNamespace`](../../entities/harnesses/namespace/classes/HarnessNamespace.md) | harnesses resources and operations. |
+| <a id="property-images"></a> `images` | `readonly` | [`ImagesNamespace`](../../entities/images/namespace/classes/ImagesNamespace.md) | Generate images with AI and attach them to messages. |
 | <a id="property-initiatives"></a> `initiatives` | `readonly` | [`InitiativeNamespace`](../../entities/initiatives/namespace/classes/InitiativeNamespace.md) | initiatives resources and operations. |
 | <a id="property-meetings"></a> `meetings` | `readonly` | [`MeetingNamespace`](../../entities/meetings/namespace/classes/MeetingNamespace.md) | meetings resources and operations. |
 | <a id="property-notifications"></a> `notifications` | `readonly` | [`NotificationNamespace`](../../entities/notifications/namespace/classes/NotificationNamespace.md) | - |
 | <a id="property-pins"></a> `pins` | `readonly` | [`PinsNamespace`](../../entities/pins/namespace/classes/PinsNamespace.md) | - |
 | <a id="property-projects"></a> `projects` | `readonly` | [`ProjectNamespace`](../../entities/projects/namespace/classes/ProjectNamespace.md) | - |
 | <a id="property-properties"></a> `properties` | `readonly` | [`PropertiesNamespace`](../../entities/properties/namespace/classes/PropertiesNamespace.md) | - |
+| <a id="property-referrals"></a> `referrals` | `readonly` | [`ReferralNamespace`](../../entities/referrals/namespace/classes/ReferralNamespace.md) | Share the caller's referral link and email invites to join Macro. |
 | <a id="property-routines"></a> `routines` | `readonly` | [`RoutineNamespace`](../../entities/routines/namespace/classes/RoutineNamespace.md) | routines resources and operations. |
 | <a id="property-tasks"></a> `tasks` | `readonly` | [`TaskNamespace`](../../entities/tasks/namespace/classes/TaskNamespace.md) | - |
 | <a id="property-teams"></a> `teams` | `readonly` | [`TeamNamespace`](../../entities/teams/namespace/classes/TeamNamespace.md) | - |

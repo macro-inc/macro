@@ -3,6 +3,7 @@ import { SERVER_HOSTS } from '../constant/servers';
 import {
   displayImageUrl,
   githubRawImageUrl,
+  isImageProxyUrl,
   proxyImageUrl,
 } from './imageProxy';
 
@@ -48,9 +49,45 @@ describe('displayImageUrl', () => {
     );
   });
 
+  it('loads a static file directly instead of through the proxy', () => {
+    const src = `${SERVER_HOSTS['static-file']}/file/299c189c-df42-4a9a-b42b-7220264b607b`;
+    expect(displayImageUrl(src)).toBe(src);
+  });
+
+  it('loads public Klipy GIFs directly without proxy authentication', () => {
+    const src = 'https://static.klipy.com/media/example/medium.gif';
+    expect(displayImageUrl(src)).toBe(src);
+  });
+
+  it('does not bypass the proxy for a host impersonating Klipy', () => {
+    const src = 'https://static.klipy.com.example.com/medium.gif';
+    expect(displayImageUrl(src)).toBe(
+      `${SERVER_HOSTS['image-proxy-service']}/proxy?url=${encodeURIComponent(src)}`
+    );
+  });
+
+  it('proxies a host that only begins like the static file host', () => {
+    const src = `${SERVER_HOSTS['static-file']}.example.com/shot.png`;
+    expect(displayImageUrl(src)).toBe(
+      `${SERVER_HOSTS['image-proxy-service']}/proxy?url=${encodeURIComponent(src)}`
+    );
+  });
+
   it('leaves data URLs unchanged', () => {
     expect(proxyImageUrl('data:image/png;base64,AAAA')).toBe(
       'data:image/png;base64,AAAA'
     );
+  });
+});
+
+describe('isImageProxyUrl', () => {
+  it('recognizes a proxied URL and nothing else', () => {
+    const src = 'https://example.com/shot.png';
+    expect(isImageProxyUrl(proxyImageUrl(src))).toBe(true);
+    expect(isImageProxyUrl(src)).toBe(false);
+    expect(
+      isImageProxyUrl(`${SERVER_HOSTS['static-file']}/file/299c189c`)
+    ).toBe(false);
+    expect(isImageProxyUrl('data:image/png;base64,AAAA')).toBe(false);
   });
 });

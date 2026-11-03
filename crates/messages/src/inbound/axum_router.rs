@@ -11,7 +11,8 @@ use entity_access::domain::{
     ports::EntityAccessService,
 };
 use macro_authorization::{
-    AnyPrincipal, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    AnyPrincipal, MacroAuthorization, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationState,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -239,12 +240,13 @@ pub async fn create<A, Auth>(
     State(state): State<MessagesRouterState<A, Auth>>,
     user: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
     Path(path): Path<ParentPath>,
-    Json(input): Json<PostMessage>,
+    Json(mut input): Json<PostMessage>,
 ) -> Result<Json<Message>, MessageHttpError>
 where
     A: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
+    input.attribution = sender_attribution(&user.authorization);
     Ok(Json(
         state
             .service
@@ -254,6 +256,24 @@ where
             )
             .await?,
     ))
+}
+
+/// How a new message's signed agent attribution labels it: with the client a
+/// user drives the agent through, when the credential names one.
+/// Only a user credential carries one; it is set only alongside `agent_id`.
+fn sender_attribution(principal: &MacroAuthorization) -> MessageAttribution {
+    let via = match principal {
+        MacroAuthorization::User(user) => user.agent_via.as_ref(),
+        MacroAuthorization::Bot(_)
+        | MacroAuthorization::Harness(_)
+        | MacroAuthorization::Internal(_) => None,
+    };
+    match via {
+        Some(client) => MessageAttribution::ActingUserVia {
+            client: client.clone(),
+        },
+        None => MessageAttribution::ActingUser,
+    }
 }
 
 #[utoipa::path(operation_id = "entity_message_get_message", get, path = "/messages/{parent_type}/{parent_id}/items/{id}", params(("parent_type" = String, Path), ("parent_id" = String, Path), ("id" = Uuid, Path)), responses((status = 200, body = Message)))]

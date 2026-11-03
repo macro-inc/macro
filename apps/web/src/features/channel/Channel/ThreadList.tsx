@@ -112,6 +112,9 @@ type ThreadListProps = {
 const NEAR_TOP_THRESHOLD = 800;
 const HISTORY_BUFFER_VIEWPORTS = 3;
 const WEBKIT_HISTORY_BUFFER_VIEWPORTS = 6;
+// How far above the reading position WebKit keeps rows measured: about as far
+// as one long momentum fling travels.
+const WEBKIT_MEASURED_HISTORY_VIEWPORTS = 12;
 const EXPLICIT_SCROLL_DOWN_TRIGGER_DISTANCE = 64;
 
 const clamp = (value: number, min: number, max: number) =>
@@ -146,6 +149,9 @@ export function ThreadList(props: ThreadListProps) {
     snapshot?.measurements?.map(({ key, size }) => [key, size])
   );
   let programmaticOffset: number | undefined;
+  // A scroll event dispatched while our own scrollTo runs is ours as well.
+  // Native scrolling activates gesture compensation, so it must not be mistaken.
+  let writingScroll = false;
   let stateQueued = false;
   let nearTopKey: string | undefined;
   let nearBottomFired = false;
@@ -158,23 +164,36 @@ export function ThreadList(props: ThreadListProps) {
   const batchHeights = new Map<Element, number>();
   let applyingBatch = false;
   let deferredScroll: Parameters<ScrollToFn> | undefined;
+  // Rows shift by the gesture adjustment. The sizer's end moves with them, so
+  // native scrolling stops at the latest row instead of blank space past it.
+  let gestureAdjustment = 0;
+  const sizerHeight = (total: number) =>
+    Math.max(viewportSize(), total - gestureAdjustment);
   const scrollCompensation =
     isSafari || isIOS
       ? createScrollCompensation({
           getElement: () => scrollEl(),
           setAdjustment: (adjustment) => {
+            gestureAdjustment = adjustment;
             if (!contentRef) return;
             contentRef.style.setProperty(
               '--channel-scroll-adjustment',
               `${adjustment}px`
             );
-            // Shifted rows must not change the logical scroll extent.
-            contentRef.style.overflow = adjustment === 0 ? '' : 'clip';
           },
           writeOffset: (offset) => {
             const element = scrollEl();
             if (!element) return;
-            element.scrollTo({ top: offset });
+            // Restore the logical extent before the offset replaces the adjustment.
+            if (contentRef) {
+              contentRef.style.height = `${sizerHeight(virtualizer.getTotalSize())}px`;
+            }
+            writingScroll = true;
+            try {
+              element.scrollTo({ top: offset });
+            } finally {
+              writingScroll = false;
+            }
             programmaticOffset = element.scrollTop;
             scheduleScrollState();
           },
@@ -220,6 +239,49 @@ export function ThreadList(props: ThreadListProps) {
       releaseNavigation = props.onReady?.(navigation);
     },
   });
+
+  // Assigned once the virtualizer exists; its first range is computed inside
+  // the constructor, before the binding below is initialized.
+  let measured: { instance: typeof virtualizer } | undefined;
+  // The core reuses extracted indexes while the visible range holds still,
+  // so a pass that stopped at its unmeasured-row cap would not resume once
+  // those rows are measured. Measurements past such a pass start the next.
+  const [historyPass, setHistoryPass] = createSignal(0);
+  let resumeHistoryAfter: number | undefined;
+
+  // A WebKit gesture cannot move the native top boundary, so rows above that
+  // are taller than their estimate grow only the visual adjustment, and a
+  // fling stops at scrollTop 0 with history still above it. Keep the rows a
+  // fling can reach mounted and measured before it starts, a few unmeasured
+  // rows per pass, so the native extent above them is the real one.
+  function withMeasuredHistory(range: Range): number[] {
+    const indexes = defaultRangeExtractor(range);
+    const instance = measured?.instance;
+    const first = indexes[0];
+    const visibleStart = instance?.measurementsCache[range.startIndex]?.start;
+    if (
+      !scrollCompensation ||
+      !instance ||
+      first === undefined ||
+      visibleStart === undefined
+    )
+      return indexes;
+    const buffer = viewportSize() * WEBKIT_MEASURED_HISTORY_VIEWPORTS;
+    const added: number[] = [];
+    let unmeasured = 0;
+    let top = instance.measurementsCache[first]?.start ?? visibleStart;
+    for (let index = first - 1; index >= 0; index--) {
+      const item = instance.measurementsCache[index];
+      if (!item || visibleStart - top >= buffer || unmeasured >= OVERSCAN)
+        break;
+      added.unshift(index);
+      top = item.start;
+      if (!instance.itemSizeCache.has(item.key)) unmeasured += 1;
+    }
+    resumeHistoryAfter =
+      unmeasured >= OVERSCAN ? instance.itemSizeCache.size : undefined;
+    return added.length === 0 ? indexes : [...added, ...indexes];
+  }
 
   const virtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
     // Do not consume initialOffset against an empty query result. Enabling
@@ -289,12 +351,13 @@ export function ThreadList(props: ThreadListProps) {
               )
           : 0,
     get rangeExtractor() {
+      historyPass();
       const index =
         props.targetId === undefined
           ? -1
           : props.keys().indexOf(props.targetId);
       return (range: Range) => {
-        const indexes = defaultRangeExtractor(range);
+        const indexes = withMeasuredHistory(range);
         if (index < 0 || index >= range.count || indexes.includes(index))
           return indexes;
         return [...indexes, index].sort((a, b) => a - b);
@@ -322,8 +385,9 @@ export function ThreadList(props: ThreadListProps) {
       const reportOffset = (offset: number, isScrolling: boolean) => {
         // An instant navigation/correction must not extend gesture compensation.
         const isOwnScroll =
-          programmaticOffset !== undefined &&
-          Math.abs(offset - programmaticOffset) < 1.5;
+          writingScroll ||
+          (programmaticOffset !== undefined &&
+            Math.abs(offset - programmaticOffset) < 1.5);
         programmaticOffset = undefined;
         if (isScrolling && !isOwnScroll) scrollIntent.observeScroll();
         const logicalOffset =
@@ -368,26 +432,40 @@ export function ThreadList(props: ThreadListProps) {
           instance.scrollToEnd();
         }
       }),
-    onChange: scheduleScrollState,
+    onChange: (instance) => {
+      scheduleScrollState();
+      if (
+        resumeHistoryAfter !== undefined &&
+        instance.itemSizeCache.size > resumeHistoryAfter
+      ) {
+        resumeHistoryAfter = undefined;
+        queueMicrotask(() => setHistoryPass((pass) => pass + 1));
+      }
+    },
   });
 
+  measured = { instance: virtualizer };
+
   function writeScroll(...[offset, options, instance]: Parameters<ScrollToFn>) {
+    // WebKit ends native momentum on scrollTo writes. Keep TanStack's logical
+    // offset, but counter-shift the rows until wheel/touch scrolling settles.
+    // Explicit navigation finishes compensation before calculating its target.
+    const deferred =
+      lifecycle.isReady() &&
+      !!scrollCompensation?.defer(offset + (options.adjustments ?? 0));
     // Size corrections happen before the Solid adapter publishes its new
     // total. Commit the sizer first so the browser cannot clamp the requested
     // scroll to the old range (especially with padding below a growing row).
     if (contentRef) {
-      contentRef.style.height = `${Math.max(viewportSize(), instance.getTotalSize())}px`;
+      contentRef.style.height = `${sizerHeight(instance.getTotalSize())}px`;
     }
-    // WebKit ends native momentum on scrollTo writes. Keep TanStack's logical
-    // offset, but counter-shift the rows until wheel/touch scrolling settles.
-    // Explicit navigation finishes compensation before calculating its target.
-    if (
-      lifecycle.isReady() &&
-      scrollCompensation?.defer(offset + (options.adjustments ?? 0))
-    ) {
-      return;
+    if (deferred) return;
+    writingScroll = true;
+    try {
+      elementScroll(offset, options, instance);
+    } finally {
+      writingScroll = false;
     }
-    elementScroll(offset, options, instance);
     programmaticOffset =
       options.behavior === 'smooth'
         ? undefined
@@ -510,11 +588,13 @@ export function ThreadList(props: ThreadListProps) {
     if (!el) return;
     // This microtask runs after synchronous row measurements, before paint.
     lifecycle.send('layout');
-    const distanceFromTop = logicalScrollOffset(el.scrollTop);
+    const scrollTop = el.scrollTop;
+    const distanceFromTop = logicalScrollOffset(scrollTop);
     // The virtualizer's cached offset can trail scrollTop: this publish may run
     // in the microtask before its own scroll listener records the new position.
+    // The sizer excludes the gesture adjustment, so compare native positions.
     const distanceFromBottom = Math.max(
-      el.scrollHeight - el.clientHeight - distanceFromTop,
+      el.scrollHeight - el.clientHeight - scrollTop,
       0
     );
     // WebKit cannot move the native top boundary during a fling without a
@@ -639,7 +719,7 @@ export function ThreadList(props: ThreadListProps) {
           style={{
             position: 'relative',
             width: '100%',
-            height: `${Math.max(viewportSize(), virtualizer.getTotalSize())}px`,
+            height: `${sizerHeight(virtualizer.getTotalSize())}px`,
           }}
         >
           <Key each={virtualItems()} by="key">
