@@ -299,6 +299,7 @@ async fn a_form_needs_a_name() {
                 name: "   ".into(),
                 source: CreateSource::NewDatabase {
                     is_hidden_in_drive: false,
+                    anonymous: false,
                 },
             },
         )
@@ -311,6 +312,7 @@ async fn a_form_needs_a_name() {
                 name: "x".repeat(201),
                 source: CreateSource::NewDatabase {
                     is_hidden_in_drive: false,
+                    anonymous: false,
                 },
             },
         )
@@ -329,6 +331,7 @@ async fn a_form_over_a_new_database_can_stay_out_of_drive() {
                 name: "Lunch?".into(),
                 source: CreateSource::NewDatabase {
                     is_hidden_in_drive: true,
+                    anonymous: false,
                 },
             },
         )
@@ -349,6 +352,7 @@ async fn a_new_database_whose_setup_fails_is_removed_and_no_form_is_left() {
                 name: "Q4 offsite RSVP".into(),
                 source: CreateSource::NewDatabase {
                     is_hidden_in_drive: false,
+                    anonymous: false,
                 },
             },
         )

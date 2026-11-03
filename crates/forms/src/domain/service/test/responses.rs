@@ -145,7 +145,10 @@ async fn a_response_whose_row_was_deleted_reads_with_no_answers() {
         ))
         .await
         .unwrap();
-    assert_eq!(mine.answers, vec![]);
+    let MyResponse::Saved { answers, .. } = mine else {
+        panic!("a saved response");
+    };
+    assert_eq!(answers, vec![]);
 }
 
 #[tokio::test]
@@ -658,9 +661,17 @@ async fn a_database_trashed_while_reading_ones_response_reads_as_the_receipt_wit
         .await
         .unwrap();
 
-    assert_eq!(mine.response.id, response);
-    assert_eq!(mine.response.row, Some(row));
-    assert_eq!(mine.answers, vec![]);
+    let MyResponse::Saved {
+        response: entry,
+        answers,
+        ..
+    } = mine
+    else {
+        panic!("a saved response");
+    };
+    assert_eq!(entry.id, response);
+    assert_eq!(entry.row, Some(row));
+    assert_eq!(answers, vec![]);
 }
 
 #[tokio::test]

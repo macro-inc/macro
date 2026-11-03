@@ -268,3 +268,44 @@ async fn a_form_created_anonymous_has_no_respondent_column() {
         .collect();
     assert_eq!(names, vec!["Submitted"]);
 }
+
+/// Everything a fmt subscriber writes, spans opening and closing included.
+#[derive(Clone, Default)]
+struct Captured(Arc<Mutex<Vec<u8>>>);
+
+impl std::io::Write for Captured {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn no_span_or_log_of_an_anonymous_response_names_its_respondent() {
+    let captured = Captured::default();
+    let writer = captured.clone();
+    let subscriber = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::TRACE)
+        .with_span_events(tracing_subscriber::fmt::format::FmtSpan::FULL)
+        .with_ansi(false)
+        .with_writer(move || writer.clone())
+        .finish();
+    let _guard = tracing::subscriber::set_default(subscriber);
+    tracing::callsite::rebuild_interest_cache();
+
+    let world = world();
+    seed_anonymous(&world);
+    let forms = service(&world);
+    submit_as(&forms, VIEWER, employee_answers()).await.unwrap();
+    // A refused second vote logs its error.
+    let again = submit_as(&forms, VIEWER, employee_answers()).await;
+    assert!(matches!(again, Err(FormError::AlreadyResponded)));
+
+    let output = String::from_utf8(captured.0.lock().unwrap().clone()).unwrap();
+    assert!(output.contains("submit_response"), "spans were captured");
+    assert!(!output.contains(VIEWER), "{output}");
+}

@@ -4,15 +4,14 @@
 use std::collections::BTreeMap;
 
 use ::databases::domain::models::{DatabaseError, OpRefusal};
-use entity_access::domain::models::{EditAccessLevel, ViewAccessLevel};
+use entity_access::domain::models::ViewAccessLevel;
 use models_databases::{
     CellValue, CellWrite, DatabaseOp, EntityKind, EntityRef, OptionRef, RowsChange,
 };
 
 use super::*;
 use crate::domain::models::{
-    Answer, FormError, FormResponse, ResponseStatus, SharingRefusal, Submission, SubmissionOutcome,
-    UpdateForm,
+    Answer, FormError, FormResponse, ResponseStatus, Submission, SubmissionOutcome,
 };
 use crate::domain::ports::FormsService;
 

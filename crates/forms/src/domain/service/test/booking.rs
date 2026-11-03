@@ -426,10 +426,16 @@ async fn a_stopped_response_reads_back_no_booking_step() {
     submit_as(&forms, VIEWER, answers(CONTRACTOR))
         .await
         .unwrap();
-    let mine = mine(&forms, VIEWER).await;
-    assert_eq!(mine.response.status, ResponseStatus::Stopped);
-    assert_eq!(mine.booking, None);
-    assert!(!reveals_target(&serde_json::to_string(&mine).unwrap()));
+    let wire = my_response(&forms, VIEWER).await;
+    let MyResponse::Saved {
+        response, booking, ..
+    } = &wire
+    else {
+        panic!("a saved response");
+    };
+    assert_eq!(response.status, ResponseStatus::Stopped);
+    assert_eq!(*booking, None);
+    assert!(!reveals_target(&serde_json::to_string(&wire).unwrap()));
 }
 
 #[tokio::test]

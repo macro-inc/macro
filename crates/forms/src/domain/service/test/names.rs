@@ -26,6 +26,7 @@ async fn create_standalone(world: &Shared) -> (FormId, DatabaseId) {
                 name: "Offsite RSVP".into(),
                 source: CreateSource::NewDatabase {
                     is_hidden_in_drive: false,
+                    anonymous: false,
                 },
             },
         )

@@ -141,7 +141,8 @@ submitting are not recorded; answers stay in the browser until Submit.
 **Who can respond**: Invited people (sign in, one response each, editable
 while open) or Anyone with the link (anonymous; no file questions). The
 respond link with Copy, Accepting responses, Close automatically, Show results
-to respondents, Share responses with team, Anonymous, Confirmation message, **Branding**, and **Manage access** (the
+to respondents, Share responses with team, Anonymous (locked, with a tooltip
+saying why, once anyone has responded), Confirmation message, **Branding**, and **Manage access** (the
 share dialog, which also shows the audience panel). Branding (editors) sets a
 logo (**Upload**/**Replace**/**Remove**, shown above the title), a cover image
 (a banner across the top of the respond page) and an accent color (color
@@ -211,7 +212,10 @@ waits for server acceptance. Preview can show real slots, but its booking button
 is disabled.
 
 In a message or document, a form card fills in place; a poll card shows one
-bar per option, your vote marked, and "N votes · one vote each". Click an
+bar per option, your vote marked, and "N votes · one vote each". An anonymous
+poll says "Anonymous poll: votes aren't linked to people"; once you vote it
+says "You voted", marks no option, and the vote can't be changed. Its respond
+page shows that you responded without your answers. Click an
 option to vote; click another to change it. Editors, and everyone who can vote
 when responses are shared, get **Results**: each option with the people who
 chose it (avatar and name, yours marked "(you)") and a **Responses table** link

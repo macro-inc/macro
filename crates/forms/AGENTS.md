@@ -42,6 +42,14 @@ service.
 - Add a submission rule: `src/domain/service.rs` (`submit`/`answers` modules)
   → `src/outbound/pg_forms_repo.rs`.
 
+## Gotchas
+
+- An anonymous form (`forms.anonymous`) keeps who responded in
+  `form_submission_receipts` (no response, row or time) and writes ledger
+  entries with no respondent, a random v4 id and the day only. Nothing may
+  join the two: no span, log, event or row author names a voter next to a
+  response.
+
 ## Checks
 
 - `cargo test -p forms --all-features` (`SQLX_OFFLINE` unset).
