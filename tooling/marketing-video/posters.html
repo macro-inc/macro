@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Macro posters</title>
+<!--
+  Static poster ads in a different format from "X wasn't built like Macro": a centered serif headline with
+  one highlighted phrase, a short line under it, one hero image and a pill CTA; `raise` is an announcement
+  card. The hero images are frames of the blocks v3 ads (img/posters/).
+    ?c=price|replace|call|raise   &fmt=45|916|11
+  Render a PNG with: PAGE=posters.html FMT=45 QS="&c=price" node render.mjs stills <dir> 0
+-->
+<style>
+@font-face { font-family: "Inter"; src: url("fonts/inter-variable.woff2") format("woff2"); font-weight: 100 900; font-display: block; }
+@font-face { font-family: "display"; src: url("fonts/roboto-slab-variable.woff2") format("woff2"); font-weight: 100 900; font-display: block; }
+:root {
+  --page: #f2f2eb; --ink: #1a1917; --body: #4a4844; --lab: #77756f;
+  --red: #d2432e; --yellow: #e8b13a; --blue: #2a4abd;
+  /* the web app's composer-shadow (light), as on the blocks */
+  --card-sh: 0 0 0 1px rgba(11, 11, 11, .04), 0 2px 8px rgba(11, 11, 11, .04), 0 4px 80px 8px rgba(11, 11, 11, .024);
+}
+* { box-sizing: border-box; margin: 0; }
+html, body { background: var(--page); }
+body { font-family: "Inter", sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; overflow: hidden; }
+#stage { position: absolute; left: 0; top: 0; width: 1080px; transform-origin: 0 0; display: flex; flex-direction: column; align-items: center; }
+.logo { height: 34px; display: block; }
+h1 { font-family: "display"; font-weight: 400; text-align: center; text-wrap: balance; letter-spacing: -0.01em; color: var(--ink); }
+h1 .hl { background: linear-gradient(transparent 8%, #e8b13a66 8%, #e8b13a66 92%, transparent 92%); padding: 0 .08em; margin: 0 -.04em; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.sub { text-align: center; color: var(--body); font-size: 30px; line-height: 1.4; max-width: 860px; }
+.hero { flex: 1 1 auto; min-height: 0; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
+.hero img { max-width: 100%; max-height: 100%; display: block;
+  /* a soft edge so the frame's table melts into the page; the frames are cropped clear of every card */
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent), linear-gradient(transparent, #000 4%, #000 96%, transparent);
+  -webkit-mask-composite: source-in; mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent), linear-gradient(transparent, #000 4%, #000 96%, transparent); mask-composite: intersect; }
+.cta { display: inline-flex; align-items: center; gap: 12px; height: 84px; padding: 0 44px; border-radius: 42px; background: var(--ink); color: #f5f4ef; font-size: 32px; font-weight: 500; letter-spacing: -0.005em; white-space: nowrap; }
+.cta svg { width: 28px; height: 28px; }
+.proof { display: flex; gap: 26px; color: var(--lab); font-size: 21px; white-space: nowrap; }
+.proof span + span::before { content: "·"; margin-right: 26px; color: #b3b1aa; }
+.total { display: flex; justify-content: space-between; align-items: baseline; width: 840px; padding: 0 6px; }
+.total .k { font-size: 18px; font-weight: 600; letter-spacing: .12em; color: var(--lab); }
+.total .v { font-family: "display"; font-size: 56px; color: var(--ink); }
+.foot { font-size: 18px; color: var(--lab); }
+/* the announcement card */
+.news { background: #fff; border-radius: 40px; box-shadow: var(--card-sh); width: 900px; overflow: hidden; display: flex; flex-direction: column; }
+.news .bar { display: flex; align-items: center; justify-content: space-between; height: 108px; padding: 0 48px; border-bottom: 1px solid #ecebe6; }
+.news .bar .tag { font-size: 22px; font-weight: 600; letter-spacing: .14em; color: var(--lab); }
+.news h1 { font-weight: 600; font-size: 74px; line-height: 1.08; letter-spacing: -0.02em; padding: 48px 56px 40px; }
+.news .panel { margin: 0 44px 44px; border-radius: 24px; background: #0e0e0e; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.news .panel img { display: block; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script>
+const Q = new URLSearchParams(location.search);
+const FMT = Q.get("fmt") || "45", C = Q.get("c") || "price";
+// each format is laid out on a 1080-wide canvas; 1x1 is drawn at 1080 and scaled to 1440
+const [W, H] = { "45": [1080, 1350], "916": [1080, 1920], "11": [1080, 1080] }[FMT];
+const SCALE = FMT === "11" ? 1440 / 1080 : 1;
+const ARROW = `<svg viewBox="0 0 256 256" fill="currentColor"><path d="M221.66 133.66l-72 72a8 8 0 0 1-11.32-11.32L196.69 136H40a8 8 0 0 1 0-16h156.69l-58.35-58.34a8 8 0 0 1 11.32-11.32l72 72a8 8 0 0 1 0 11.32Z"/></svg>`;
+const CTA = `<div class="cta">Get started at macro.com${ARROW}</div>`;
+const PROOF = `<div class="proof"><span>Backed by a16z</span><span>SOC 2 Type II</span><span>Fully open source</span></div>`;
+const LOGO = `<img class="logo" src="img/macro-logo.svg" alt="Macro">`;
+
+// [headline html, sub line, hero html, extra html under the hero]
+const POSTERS = {
+  price: ["Four apps cost <span class=\"hl\">$84 a seat.</span> Macro is $40.",
+    "Notion, Slack, Linear and Superhuman, against one workspace with every module included.",
+    `<img src="img/posters/price.webp" alt="">`,
+    `<div class="total"><span class="k">PER SEAT, PER MONTH</span><span class="v">$84</span></div><div class="foot" style="margin-top:6px">Business plans, billed annually. List prices checked September 2026.</div>`],
+  replace: ["<span class=\"hl\">27+ apps,</span> replaced by a single system.",
+    "Email, chat, docs, tasks, calls, CRM and agents in one workspace, for $40 a seat.",
+    `<img src="img/posters/grid.webp" alt="">`, ""],
+  call: ["<span class=\"hl\">One call</span> updates your CRM, tasks and calendar.",
+    "Then an agent drafts the follow-up. Nothing sends until you press Send.",
+    `<img src="img/posters/call.webp" alt="">`, ""],
+};
+
+const S = document.getElementById("stage");
+S.style.height = H + "px";
+S.style.transform = `scale(${SCALE})`;
+// vertical rhythm per format: [top pad, logo→headline, headline size, headline→sub, sub→hero, hero→cta, cta→bottom]
+const R = {
+  "45": { top: 70, gH: 64, hs: 78, gS: 26, gHero: 28, gCta: 30, bot: 64 },
+  "916": { top: 292, gH: 64, hs: 84, gS: 28, gHero: 40, gCta: 40, bot: 520 },
+  "11": { top: 56, gH: 44, hs: 64, gS: 18, gHero: 16, gCta: 20, bot: 50 },
+}[FMT];
+
+if (C === "raise") {
+  // announcement card: Macro's own news, drawn as a card, with the module grid on the app's dark page
+  const panelH = { "45": 520, "916": 640, "11": 360 }[FMT], hs = { "45": 74, "916": 78, "11": 60 }[FMT];
+  S.innerHTML = `
+    <div style="height:${R.top + (FMT === "916" ? 0 : 10)}px"></div>
+    <div class="news">
+      <div class="bar">${LOGO}<span class="tag">NEWS</span></div>
+      <h1 style="font-size:${hs}px">Macro raises $30M led&nbsp;by&nbsp;a16z</h1>
+      <div class="panel" style="height:${panelH}px"><img src="img/posters/grid-dark.webp" style="height:${panelH - 40}px" alt=""></div>
+    </div>
+    <div style="height:${R.gCta + 14}px"></div>${CTA}
+    <div style="flex:1"></div>`;
+} else {
+  const [hd, sub, hero, extra] = POSTERS[C];
+  S.innerHTML = `
+    <div style="height:${R.top}px;flex:none"></div>${LOGO}
+    <div style="height:${R.gH}px;flex:none"></div>
+    <h1 style="font-size:${R.hs}px;line-height:1.12;max-width:${FMT === "11" ? 900 : 940}px">${hd}</h1>
+    <div style="height:${R.gS}px;flex:none"></div><div class="sub" style="${FMT === "11" ? "font-size:26px" : ""}">${sub}</div>
+    <div style="height:${R.gHero}px;flex:none"></div>
+    <div class="hero">${hero}</div>
+    ${extra ? `<div style="flex:none;display:flex;flex-direction:column;align-items:center">${extra}</div>` : ""}
+    <div style="height:${R.gCta}px;flex:none"></div>${CTA}
+    <div style="height:${R.bot}px;flex:none"></div>`;
+}
+
+// render.mjs contract: a still page, so time does nothing
+window.DURATION = 0; window.CUES = []; window.B = (b) => b * 0.6; window.seek = () => {};
+window.ready = Promise.all([document.fonts.ready, ...[...document.images].map((i) => i.decode().catch(() => {}))]).then(() => {
+  // the price total lines up with the cards, whatever size the hero lands at
+  const img = document.querySelector(".hero img"), total = document.querySelector(".total");
+  if (img && total) total.style.width = (img.getBoundingClientRect().width / SCALE - 0.07 * img.getBoundingClientRect().width / SCALE) + "px";
+});
+</script>
+</body>
+</html>
