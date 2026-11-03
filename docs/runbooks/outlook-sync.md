@@ -112,8 +112,8 @@ until each user reconnects, so a spike is user-visible.
 ## Persistence errors
 
 More than 500 units of Outlook sync work in 15 minutes were deferred because
-their database writes failed. Projection is left out: it reports a failed
-Kafka, SQS or HTTP effect as a persistence deferral too.
+their database writes failed. Failed Kafka, SQS or HTTP effects are deferred
+as `effect` instead and don't count here.
 
 - Group the deferral logs (`"mailbox sync work deferred"`) for
   `persistence` by their database error kind or SQLSTATE: lock timeouts and
