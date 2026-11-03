@@ -19,6 +19,7 @@ use std::fmt;
 
 use uuid::Uuid;
 
+pub mod calendar;
 pub mod catch_me_up;
 pub mod configure_agent;
 pub mod crm;
@@ -96,6 +97,7 @@ pub static SYSTEM_SKILLS: &[&SystemSkill] = &[
     &databases::SKILL,
     &crm::SKILL,
     &email::SKILL,
+    &calendar::SKILL,
 ];
 
 /// Look up a system skill by its well-known id.

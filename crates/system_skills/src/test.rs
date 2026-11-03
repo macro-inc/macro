@@ -121,3 +121,20 @@ fn crm_skill_maps_deal_requests_to_pipelines_without_tool_how_to() {
     // How to call the pipeline tools is in their descriptions, not here.
     assert!(!text.contains("FindPipelineEntries"));
 }
+
+#[test]
+fn calendar_skill_makes_booking_links_wait_for_a_reply_to_the_proposal() {
+    let text = calendar::SKILL.render_content();
+    for rule in [
+        "Booking links use conversational confirmation",
+        "never ask for IDs, revisions or JSON",
+        "Ask whether to proceed, and end the turn",
+        "Only after the user's reply approving",
+        "`userConfirmation`",
+        "Do not quote the original request or invent approval",
+        "Do not use `AskUser` or an elicitation",
+        "re-read and reconfirm",
+    ] {
+        assert!(text.contains(rule), "Missing booking rule: {rule}");
+    }
+}

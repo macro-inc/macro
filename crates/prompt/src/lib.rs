@@ -63,7 +63,6 @@ pub static DIRECT_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
 /// only apply on surfaces that can render the composer card. Composed as its
 /// own chain so the document-content linking section stays last.
 pub static TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
-    .compose(&user_tools::BOOKING_PROMPT)
     .compose(&user_tools::PROMPT)
     .compose(&skills::PROMPT)
     .compose(&document_content_links::PROMPT);
@@ -73,7 +72,6 @@ pub static TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
 /// reviews those calls in the turn - a review card the user answers while the
 /// agent waits, not a composer left pending after it.
 pub static SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROMPT
-    .compose(&user_tools::BOOKING_PROMPT)
     .compose(&user_tools::SESSION_PROMPT)
     .compose(&skills::PROMPT)
     .compose(&document_content_links::PROMPT);
@@ -82,7 +80,6 @@ pub static SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROMPT
 /// the [`code_mode`] section and nonblocking saved reviews.
 pub static CODE_MODE_SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROMPT
     .compose(&code_mode::PROMPT)
-    .compose(&user_tools::BOOKING_PROMPT)
     .compose(&user_tools::CODE_MODE_SESSION_PROMPT)
     .compose(&tasks::PROMPT)
     .compose(&skills::PROMPT)

@@ -39,10 +39,6 @@ const PLANNED: &[(&str, &str)] = &[
         "Use when something should happen later, on a schedule, or whenever an event occurs, such as every Monday, a reminder, or when an email arrives.",
     ),
     (
-        "Calendar",
-        "Use when working with calendar events, availability, scheduling a meeting or booking links.",
-    ),
-    (
         "Channels",
         "Use when posting, reacting, running a poll or managing members in a channel or direct message; not reading a thread already in context.",
     ),
