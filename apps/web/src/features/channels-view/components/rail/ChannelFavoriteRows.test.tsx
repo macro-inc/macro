@@ -70,7 +70,8 @@ vi.mock('@queries/favorites/favorites', () => ({
   useReorderFavoritesMutation: () => ({ mutateAsync: drag.reorder }),
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => drag.viewer() }));
-vi.mock('@macro-inc/observability', () => ({
+vi.mock('@macro-inc/observability', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@macro-inc/observability')>()),
   Telemetry: {
     span: async (
       _name: string,

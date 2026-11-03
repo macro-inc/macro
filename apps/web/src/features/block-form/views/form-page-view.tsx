@@ -1,4 +1,9 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import {
+  beginInteraction,
+  TraceFlow,
+  usePending,
+} from '@app/observability/flow';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Button } from '@ui';
 import {
@@ -141,6 +146,20 @@ function EditorPanels(
   const context = useFormContext();
   const collaboration = context.createLayoutCollaboration(props.detail.form.id);
   props.preview.trackLayout(collaboration.flush);
+  usePending('form.layout', () => collaboration.status().kind === 'loading');
+  const changeTab = (tab: FormTab) => {
+    if (tab === props.tab) return;
+    const interaction = beginInteraction('form.tab', {
+      attributes: { 'form.tab': tab },
+      closeOnJoin: true,
+    });
+    try {
+      props.onTabChange(tab);
+    } finally {
+      // Tabs commit inside an event batch; let that flush join its new panel.
+      queueMicrotask(interaction.end);
+    }
+  };
   // Authoring state and pending writes belong to the editor, across tab changes.
   const builder = (
     <BuilderView
@@ -168,7 +187,7 @@ function EditorPanels(
         detail={props.detail}
         idPrefix={props.tabsId}
         tab={props.tab}
-        onTabChange={props.onTabChange}
+        onTabChange={changeTab}
       />
       <div
         id={`${props.tabsId}-panel-${props.tab}`}
@@ -177,11 +196,17 @@ function EditorPanels(
         class="min-h-0 flex-1"
       >
         <Switch>
-          <Match when={props.tab === 'build'}>{builder}</Match>
-          <Match when={props.tab === 'responses'}>
-            <ResponsesView detail={props.detail} />
+          <Match when={props.tab === 'build'}>
+            <TraceFlow name="form.build">{builder}</TraceFlow>
           </Match>
-          <Match when={props.tab === 'share'}>{sharing}</Match>
+          <Match when={props.tab === 'responses'}>
+            <TraceFlow name="form.responses">
+              <ResponsesView detail={props.detail} />
+            </TraceFlow>
+          </Match>
+          <Match when={props.tab === 'share'}>
+            <TraceFlow name="form.settings">{sharing}</TraceFlow>
+          </Match>
         </Switch>
       </div>
     </>
@@ -189,6 +214,10 @@ function EditorPanels(
 }
 
 export function FormPageView(props: FormPageProps) {
+  usePending(
+    'form.detail',
+    () => !props.source.detail() && !props.source.failure()
+  );
   let respondScroll: HTMLDivElement | undefined;
   // One per mount: the same form can be open in two splits.
   const tabsId = createUniqueId();

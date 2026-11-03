@@ -3,6 +3,7 @@ import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateBut
 import { calendarSearch } from '@app/features/calendar-view/calendar-url';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { createSearchParams, SplitRouter } from '@app/lib/split-router';
+import { TraceFlow } from '@app/observability/flow';
 import { homeCalendarRoute } from '@app/routes/routes';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
@@ -76,11 +77,13 @@ function HomeListPane(props: {
     >
       <ViewTour tour={homeTour} />
       <DebugSuspense name="HomeView.list" fallback={<HomeFallback />}>
-        <HomeList
-          hasPreview={props.hasPreview}
-          onPreviewEntityChange={props.onPreviewEntityChange}
-          onPreviewActivate={showContent}
-        />
+        <TraceFlow name="home.list">
+          <HomeList
+            hasPreview={props.hasPreview}
+            onPreviewEntityChange={props.onPreviewEntityChange}
+            onPreviewActivate={showContent}
+          />
+        </TraceFlow>
       </DebugSuspense>
     </HomeListLayout>
   );
