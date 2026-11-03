@@ -1,4 +1,5 @@
 import type { EntityDetailNavigationOptions } from '@app/components/entity-detail/entity-detail-target';
+import { composeDraftSearch } from '@app/features/email-compose/compose-route-draft';
 import {
   createListController,
   type ListActivation,
@@ -11,12 +12,17 @@ import { registerListNavigationSource } from '@app/features/soup/collection/list
 import { makePersistedState } from '@app/lib/persistence';
 import {
   createSearchParams,
+  useMatches,
   useNavigate,
   useRouteParams,
 } from '@app/lib/split-router';
 import { beginInteraction } from '@app/observability/flow';
 import { usePreference } from '@app/preferences/use-preference';
-import { emailSplitRoute, emailThreadRoute } from '@app/routes/routes';
+import {
+  emailComposeRoute,
+  emailSplitRoute,
+  emailThreadRoute,
+} from '@app/routes/routes';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import {
   useSplitPanelOrThrow,
@@ -112,6 +118,8 @@ export type EmailViewContext = {
     ) => void
   ) => void;
   selectedThread: Accessor<EmailThreadTarget | undefined>;
+  /** A new email is open in the view (desktop). */
+  composing: Accessor<boolean>;
   /** Returns false when inline detail is unavailable so the caller opens a split instead. */
   openThread: (
     thread: EmailThreadTarget,
@@ -135,6 +143,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   const panel = useSplitPanelOrThrow();
   const navigate = useNavigate();
   const routeParams = useRouteParams(emailThreadRoute);
+  const matches = useMatches();
   const [tabSearch] = createSearchParams(emailTabSearch);
   const selectPreview = createPreviewSelectionGuard();
   const userId = useUserId();
@@ -246,6 +255,9 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     return typeof threadId === 'string' ? { id: threadId } : undefined;
   });
 
+  const composing = () =>
+    matches().some((match) => match.id === emailComposeRoute.id);
+
   const opensInline = (options?: EntityDetailNavigationOptions) => {
     const event = options?.event;
     return (
@@ -259,6 +271,8 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
         { route: emailSplitRoute, params: {} },
         {
           search: {
+            // A new email's draft stays with its own entry.
+            [composeDraftSearch.namespace]: {},
             [emailTabSearch.namespace]: emailTabSearchCodec.serialize({
               tab: state.tab,
             }),
@@ -283,6 +297,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
         {
           replace: options?.replace,
           search: {
+            [composeDraftSearch.namespace]: {},
             [emailDetailSearch.namespace]: {},
             [emailTabSearch.namespace]: emailTabSearchCodec.serialize({
               tab: state.tab,
@@ -473,6 +488,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     list,
     registerListActivationHandler,
     selectedThread,
+    composing,
     openThread,
     closeThread,
     isSidebarSectionOpen,

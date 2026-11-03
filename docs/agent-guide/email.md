@@ -556,6 +556,15 @@ Opening a saved draft from **Drafts** shows the title menu beside Back, since
 the composer has no subject line above it, and keeps the applicable header
 controls. Verify these remain
 available when returning to Drafts and reopening the draft.
+On desktop a new email opens inside the Email view at `/app/mail/new`, from
+Email's **New**, the app's New menu, a `mailto:` link, a calendar event's
+guest email, or the agent's send-email card: the composer takes the list's
+place beside the Email sidebar, and the reading pane folds away while it is
+open. Its Back arrow returns to the list. Replies stay in their thread. Touch
+keeps the full-screen composer. Check with the reading pane on and off that
+the sidebar stays usable while composing, that Back and sidebar tabs return
+to the list without the draft in its URL, that reloading keeps the draft, and
+that a second **New** starts an empty composer.
 **Delete** in the title menu moves the thread to Trash and returns to the same
 filtered list. Its toast offers **Undo** to restore the email.
 **Sender → Signal**, **Sender → Noise** and **Block Sender**, and the sender

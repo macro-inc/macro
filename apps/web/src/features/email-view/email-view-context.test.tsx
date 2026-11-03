@@ -42,6 +42,7 @@ vi.mock('@app/lib/split-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@app/lib/split-router')>()),
   useNavigate: () => mocks.navigate,
   useRouteParams: () => mocks.useRouteParams(),
+  useMatches: () => () => [],
   createSearchParams: () => [
     {
       get tab() {

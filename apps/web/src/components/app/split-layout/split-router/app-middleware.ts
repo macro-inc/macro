@@ -123,6 +123,11 @@ function redirectLegacyRoutes(
     .with({ type: 'component', id: CALENDAR_VIEW_ID }, () =>
       calendarPath(getPreferredCalendarPeriodView())
     )
+    // Desktop writes a new email beside the Email list; touch keeps the
+    // full-screen composer.
+    .with({ type: 'component', id: 'email-compose' }, () =>
+      isTouch ? undefined : '/mail/new'
+    )
     .with({ type: 'component' }, ({ id }) =>
       routes.byId.has(`view-${id}`) ? `/${id}` : undefined
     )

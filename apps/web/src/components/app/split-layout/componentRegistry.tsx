@@ -3,6 +3,7 @@ import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CreatedCalendarEvent } from '@app/features/calendar/hooks/use-event-editor';
 import type { CalendarEvent } from '@app/features/calendar/types';
+import { composePropsFromParams } from '@app/features/email-compose/compose-params';
 import { HomeRouteView } from '@app/features/home/route-views';
 import { parseProjectRoute } from '@app/features/projects/core/route';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -392,46 +393,14 @@ registerComponent('email-compose', (params) => {
   usePageViewTracking('email-compose');
   // mailto: links land here as `component/email-compose?to=a@x.com,b@y.com`.
   const toParam = new URLSearchParams(window.location.search).get('to');
-  const paramsInitialTo = Array.isArray(params.initialTo)
-    ? params.initialTo.filter(
-        (value): value is string => typeof value === 'string'
-      )
-    : undefined;
+  const props = composePropsFromParams(params);
   const initialTo =
-    paramsInitialTo ??
+    props.initialTo ??
     toParam
       ?.split(',')
       .map((e) => e.trim())
       .filter(Boolean);
-  const draftID =
-    typeof params.draftID === 'string' ? params.draftID : undefined;
-  const initialInboxId =
-    typeof params.initialInboxId === 'string'
-      ? params.initialInboxId
-      : undefined;
-  const initialSubject =
-    typeof params.initialSubject === 'string'
-      ? params.initialSubject
-      : undefined;
-  const initialBodyText =
-    typeof params.initialBodyText === 'string'
-      ? params.initialBodyText
-      : undefined;
-  const initialAttachments = Array.isArray(params.initialAttachments)
-    ? params.initialAttachments.filter(
-        (value): value is File => value instanceof File
-      )
-    : undefined;
-  return (
-    <EmailCompose
-      draftId={draftID}
-      initialTo={initialTo}
-      initialInboxId={initialInboxId}
-      initialSubject={initialSubject}
-      initialBodyText={initialBodyText}
-      initialAttachments={initialAttachments}
-    />
-  );
+  return <EmailCompose {...props} initialTo={initialTo} />;
 });
 registerComponent('routine-compose', (params) => (
   <RoutineCreator
