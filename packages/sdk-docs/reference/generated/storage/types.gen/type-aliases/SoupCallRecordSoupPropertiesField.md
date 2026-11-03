@@ -1,6 +1,6 @@
 # Type Alias: SoupCallRecordSoupPropertiesField
 
-> **SoupCallRecordSoupPropertiesField** = \{ `properties`: [`SoupProperty`](SoupProperty.md)[]; \} & \{ `attended`: `boolean`; `callId`: `string`; `channelId?`: `string` \| `null`; `channelName?`: `string` \| `null`; `createdBy`: `string`; `customName?`: `string` \| `null`; `durationMs?`: `number` \| `null`; `endedAt?`: `string` \| `null`; `guests`: [`SoupCallRecordGuest`](SoupCallRecordGuest.md)[]; `isActive`: `boolean`; `participants`: [`SoupCallRecordParticipant`](SoupCallRecordParticipant.md)[]; `startedAt`: `string`; `status`: [`CallStatus`](CallStatus.md); `summary?`: `string` \| `null`; \}
+> **SoupCallRecordSoupPropertiesField** = \{ `properties`: [`SoupProperty`](SoupProperty.md)[]; \} & \{ `attended`: `boolean`; `callId`: `string`; `channelId?`: `string` \| `null`; `channelName?`: `string` \| `null`; `createdBy`: `string`; `customName?`: `string` \| `null`; `durationMs?`: `number` \| `null`; `endedAt?`: `string` \| `null`; `guests`: [`SoupCallRecordGuest`](SoupCallRecordGuest.md)[]; `isActive`: `boolean`; `participants`: [`SoupCallRecordParticipant`](SoupCallRecordParticipant.md)[]; `provider?`: `null` \| [`CallProvider`](CallProvider.md); `startedAt`: `string`; `status`: [`CallStatus`](CallStatus.md); `summary?`: `string` \| `null`; \}
 
 A call record as displayed in Soup. Excludes room_name, egress_id,
 and transcript — fields that are irrelevant for the soup feed.
@@ -24,6 +24,7 @@ and transcript — fields that are irrelevant for the soup feed.
 | `guests` | [`SoupCallRecordGuest`](SoupCallRecordGuest.md)[] | Non-account guests in the call. |
 | `isActive` | `boolean` | Whether the call is currently active. |
 | `participants` | [`SoupCallRecordParticipant`](SoupCallRecordParticipant.md)[] | Macro-account participants in the call. |
+| `provider?` | `null` \| [`CallProvider`](CallProvider.md) | - |
 | `startedAt` | `string` | When the call started. |
 | `status` | [`CallStatus`](CallStatus.md) | Viewer-relative call status for the requesting user. |
 | `summary?` | `string` \| `null` | AI-generated summary of the call. Only set on archived `call_records` once summarization has run; active calls always return `None`. |
