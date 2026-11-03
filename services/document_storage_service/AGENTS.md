@@ -97,6 +97,7 @@ threads, pins, recents, notifications, folders, activity.
 - The GraphQL calendar feed (occurrence ranges and `calendarChanges`) reads the
   primary, like the REST calendar routes: a `refresh_calendar` poke goes out as
   a write commits, so a replica-backed delta misses the change it announces.
+- `GraphqlUser.contacts` shares the primary-backed contacts domain service with database SQL; insert `ContactsGraphqlContext` into both HTTP and WebSocket request data so invalidation refreshes cannot read a lagging replica.
 
 ## Related
 

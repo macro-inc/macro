@@ -14,6 +14,7 @@ agent_session = { path = "../agent_session", default-features = false }
 agent_session_realtime = { path = "../agent_session_realtime", default-features = false }
 async-stream = { workspace = true }
 bots = { path = "../bots", default-features = false, features = ["ports"] }
+contacts = { path = "../contacts", default-features = false, features = ["ports"] }
 email = { path = "../email", default-features = false, features = [
   "axum",
   "inbound",

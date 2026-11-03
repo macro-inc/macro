@@ -24,6 +24,7 @@ import * as Effect from 'effect/Effect';
 import * as Fiber from 'effect/Fiber';
 import * as Schedule from 'effect/Schedule';
 import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
+import { createGraphqlContactsQuery } from '../contacts/graphql';
 import { useMailAccountsQuery } from '../email/mail-accounts';
 
 // Bump when a default backfill input or completion guarantee changes so
@@ -722,6 +723,14 @@ export function useSoupBackfills(userId: Accessor<string | undefined>): void {
   // Sender metadata must be durable before the first composer is opened.
   // This small catalog runs alongside the paged backfill, never behind it.
   useMailAccountsQuery(
+    () =>
+      ENABLE_GRAPHQL_BACKFILL &&
+      graphqlSoupFlag().enabled &&
+      isLeader() &&
+      !!userId()
+  );
+  // Normal contacts are a small viewer catalog, not CRM/Soup entities.
+  createGraphqlContactsQuery(
     () =>
       ENABLE_GRAPHQL_BACKFILL &&
       graphqlSoupFlag().enabled &&

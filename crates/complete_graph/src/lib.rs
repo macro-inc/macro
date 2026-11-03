@@ -6,6 +6,8 @@
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
 
+/// Normal contacts read adapter.
+mod contacts;
 /// Cross-domain fields composed onto Soup entities.
 mod edges;
 mod mail_cache_profile;
@@ -16,6 +18,7 @@ mod schema;
 #[cfg(test)]
 mod sdl_test;
 
+pub use contacts::ContactsGraphqlContext;
 pub use edges::{
     AgentSessionBotDataLoader, AgentSessionBotLoader, GraphqlSessionBot, SoupAgentSessionEdges,
     SoupEdges, SoupEmailThreadEdges, agent_session_bot_loader, agent_session_log_loader,

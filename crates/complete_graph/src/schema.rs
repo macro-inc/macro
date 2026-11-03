@@ -727,6 +727,11 @@ where
         async_graphql::ID(self.user_id.to_string())
     }
 
+    /// All normal contact user IDs for the authenticated viewer, including the viewer.
+    async fn contacts(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<ID>> {
+        crate::contacts::resolve_contacts(ctx, self.user_id.clone()).await
+    }
+
     /// A page filtered and ordered across the entire authorized table.
     async fn database_view_rows(
         &self,

@@ -1648,16 +1648,21 @@ pub async fn run() -> anyhow::Result<()> {
         )),
     );
 
+    // Contact invalidations follow committed writes, so the shared catalog reads the primary.
+    let contacts_service = Arc::new(contacts::domain::service::ContactsDomainService {
+        repository: contacts::outbound::repository::DbContactsRepository::new(db.clone()),
+        notifier: None::<contacts::outbound::gateway::ConnectionGatewayNotifier>,
+    });
+    let graphql_contacts_context =
+        complete_graph::ContactsGraphqlContext::new(contacts_service.clone());
+
     // SQL predicates and follow-up reads use the primary, matching the catalog
     // versions and writes; replica lag must not select stale rows for an edit.
     let sql_service = databases_sql::DatabasesSql::new(
         databases_service.clone(),
         entity_access_service.clone(),
         primary_entity_soup.clone(),
-        Arc::new(contacts::domain::service::ContactsDomainService {
-            repository: contacts::outbound::repository::DbContactsRepository::new(db.clone()),
-            notifier: None::<contacts::outbound::gateway::ConnectionGatewayNotifier>,
-        }),
+        contacts_service,
     );
 
     let favorites_service = Arc::new(FavoritesServiceImpl::new(PgFavoritesRepo::new(db.clone())));
@@ -2241,6 +2246,7 @@ pub async fn run() -> anyhow::Result<()> {
             scheduled_action_read_service,
         ),
         graphql_calendar_context,
+        graphql_contacts_context,
         graphql_calendar_mutation_context,
         initiative_state: InitiativeRouterState::new(
             initiative_service,
