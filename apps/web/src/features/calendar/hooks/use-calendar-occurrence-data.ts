@@ -52,15 +52,18 @@ export function useCalendarOccurrenceData(
       };
     }
   );
+  const emptyEvents: CalendarEvent[] = [];
   const events = createMemo(() => {
     if (
       !isRangeSupported() ||
       !occurrencesQuery.isSuccess ||
       options.sourcesReady?.() === false
     )
-      return [];
+      return emptyEvents;
+    const items = occurrencesQuery.data?.items;
+    if (!items?.length) return emptyEvents;
     const sourceById = options.sourceById?.();
-    return (occurrencesQuery.data?.items ?? []).map((item) =>
+    return items.map((item) =>
       mapCalendarOccurrence(item, {
         sourceById,
         isSourceVisible: options.isSourceVisible,

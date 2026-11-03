@@ -314,3 +314,16 @@ describe('calendar occurrence presentation readiness', () => {
     );
   });
 });
+
+it('keeps an empty event presentation stable as metadata and query status settle', async () => {
+  const calendars = deferred<VisibleCalendar[]>();
+  requests.calendars.mockReturnValue(calendars.promise);
+  requests.occurrences.mockResolvedValue({ syncStatus: 'ready', items: [] });
+  const data = renderCalendarData();
+  const initial = data.visibleEvents();
+  await waitFor(() => expect(data.occurrencesQuery.isSuccess).toBe(true));
+  expect(data.visibleEvents()).toBe(initial);
+  calendars.resolve([]);
+  await waitFor(() => expect(data.isLoading()).toBe(false));
+  expect(data.visibleEvents()).toBe(initial);
+});

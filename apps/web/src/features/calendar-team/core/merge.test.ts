@@ -14,3 +14,10 @@ describe('calendar overlay composition', () => {
     expect(mergeCalendarOverlays([own], [bobOoo])).toEqual([own, bobOoo]);
   });
 });
+
+it('preserves unchanged event lists when no overlay merge is needed', () => {
+  const own = [{ id: 'meeting' }];
+  const overlay = [{ id: 'out-of-office' }];
+  expect(mergeCalendarOverlays(own, [])).toBe(own);
+  expect(mergeCalendarOverlays([], overlay)).toBe(overlay);
+});

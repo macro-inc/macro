@@ -519,6 +519,11 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   through the notification source (`markRowNotificationsSeenOnOpen`) so read dots update
   immediately and failed writes roll back; calendar grid selections and links
   to an event also mark the canonical event read, excluding team projections.
+- `CalendarGrid` owns FullCalendar option identities: isolate the day-header
+  format from unrelated settings and keep event-click dispatch stable
+  (`CalendarGrid.test.tsx`). Keep empty occurrence lists stable and reuse the
+  input list when no team overlay merges; a new empty identity resets every
+  FullCalendar page's event source.
 - Route explicit meeting-page exits using the server's `callEnded` result: ended
   calls open their record; ongoing channel and scheduled calls return to the
   channel and Calendar. Leaving from a channel's Call tab stays in the channel. Preserve the session ID and send the server leave before media
