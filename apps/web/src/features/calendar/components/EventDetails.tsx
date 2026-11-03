@@ -136,8 +136,7 @@ function CalendarUserItem(props: {
 }) {
   const secondaryLabelPosition = () => props.secondaryLabelPosition ?? 'below';
   const nameIsEmail = () => props.displayName() === props.email;
-  const email = () =>
-    props.email && !nameIsEmail() ? props.email : undefined;
+  const email = () => (props.email && !nameIsEmail() ? props.email : undefined);
 
   return (
     <div class="flex min-w-0 items-center gap-4 sm:gap-3">
