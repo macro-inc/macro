@@ -51,7 +51,7 @@ async fn insert_recipient_inbox(pool: &Pool<Postgres>) -> anyhow::Result<Uuid> {
     let inbox = Uuid::parse_str("dddddddd-dddd-dddd-dddd-dddddddddddd")?;
     sqlx::query!(
         "INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active, created_at, updated_at)
-         VALUES ($1, 'macro|user2@test.com', 'fa-user-2', 'user2@test.com', 'GMAIL', true, NOW(), NOW())",
+         VALUES ($1, 'macro|user2@example.com', 'fa-user-2', 'user2@example.com', 'GMAIL', true, NOW(), NOW())",
         inbox
     )
     .execute(pool)
@@ -60,7 +60,7 @@ async fn insert_recipient_inbox(pool: &Pool<Postgres>) -> anyhow::Result<Uuid> {
 }
 
 fn recipient() -> MacroUserIdStr<'static> {
-    MacroUserIdStr::parse_from_str("macro|user2@test.com").unwrap()
+    MacroUserIdStr::parse_from_str("macro|user2@example.com").unwrap()
 }
 
 fn reply_to(message: Uuid) -> CreateDraftInput {
@@ -143,6 +143,33 @@ async fn reply_to_an_unshared_thread_is_not_found(pool: Pool<Postgres>) -> anyho
     let parent = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
     let recipient_inbox = insert_recipient_inbox(&pool).await?;
     let service = service(pool, NoSharedThreadReplies);
+
+    let result = service
+        .save_draft_for_user_impl(recipient(), Some(recipient_inbox), reply_to(parent))
+        .await;
+
+    assert!(matches!(result, Err(EmailErr::MessageNotFound(id)) if id == parent));
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn reply_cannot_adopt_a_draft_planted_for_an_unshared_message(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let parent = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
+    let recipient_inbox = insert_recipient_inbox(&pool).await?;
+    let service = service(pool, NoSharedThreadReplies);
+
+    // A draft whose client-written header names a message in another inbox.
+    let mut planted = reply_to(parent);
+    planted.replying_to_id = None;
+    planted.headers_json = Some(serde_json::json!([{ "Macro-In-Reply-To": parent.to_string() }]));
+    service
+        .save_draft_for_user_impl(recipient(), Some(recipient_inbox), planted)
+        .await?;
 
     let result = service
         .save_draft_for_user_impl(recipient(), Some(recipient_inbox), reply_to(parent))

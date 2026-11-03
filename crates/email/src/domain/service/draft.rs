@@ -702,15 +702,18 @@ where
             return Ok(());
         };
 
+        // Authorize the target on every save, before an existing reply draft
+        // is reused: that draft is found by a header the client can write.
+        let reply_target = self
+            .reply_target(input.actor.as_ref(), replying_to_id, accessible_link_ids)
+            .await?;
+        if reply_target.is_draft {
+            return Err(EmailErr::CannotReplyToDraft);
+        }
+
         // An explicit, validated identity must never be retargeted to a newer
         // reply draft by a delayed save from an obsolete composer.
         if input.db_id.is_some() {
-            let parent = self
-                .reply_target(input.actor.as_ref(), replying_to_id, accessible_link_ids)
-                .await?;
-            if parent.is_draft {
-                return Err(EmailErr::CannotReplyToDraft);
-            }
             return Ok(());
         }
         // The draft replying to this message lives in the inbox being sent from.
@@ -722,8 +725,7 @@ where
         {
             self.apply_existing_draft(input, existing_draft);
         } else {
-            self.apply_reply_target(link_id, accessible_link_ids, input, replying_to_id)
-                .await?;
+            apply_reply_target(link_id, input, &reply_target);
         }
 
         Ok(())
@@ -775,42 +777,6 @@ where
         input.thread_db_id = Some(existing_draft.thread_db_id);
         input.provider_thread_id = existing_draft.provider_thread_id;
         input.headers_json = existing_draft.headers_json;
-    }
-
-    async fn apply_reply_target(
-        &self,
-        link_id: Uuid,
-        accessible_link_ids: &[Uuid],
-        input: &mut CreateDraftInput,
-        replying_to_id: Uuid,
-    ) -> Result<(), EmailErr> {
-        let reply_target = self
-            .reply_target(input.actor.as_ref(), replying_to_id, accessible_link_ids)
-            .await?;
-
-        if reply_target.is_draft {
-            return Err(EmailErr::CannotReplyToDraft);
-        }
-
-        if reply_target.link_id == link_id {
-            // Same inbox: thread into the target's existing thread.
-            input.thread_db_id = Some(reply_target.thread_db_id);
-            input.provider_thread_id = reply_target.provider_thread_id;
-        } else {
-            // The target lives in a different inbox (a different provider
-            // account, possibly another user's through a share), so it cannot
-            // thread into that account's provider thread. Start a fresh thread in the sending inbox; the
-            // Macro-In-Reply-To header below preserves the reference.
-            input.thread_db_id = None;
-            input.provider_thread_id = None;
-        }
-
-        // Generate Macro-In-Reply-To header
-        input.headers_json = Some(serde_json::json!([{
-            "Macro-In-Reply-To": reply_target.db_id.to_string()
-        }]));
-
-        Ok(())
     }
 
     /// Validate a client-supplied thread hint on the no-reply-target path.
@@ -880,6 +846,32 @@ where
         let thread_db_id = thread.db_id;
         (thread_db_id, Some(thread))
     }
+}
+
+/// Thread a new reply draft under an authorized target.
+fn apply_reply_target(
+    link_id: Uuid,
+    input: &mut CreateDraftInput,
+    reply_target: &SimpleMessageInfo,
+) {
+    if reply_target.link_id == link_id {
+        // Same inbox: thread into the target's existing thread.
+        input.thread_db_id = Some(reply_target.thread_db_id);
+        input.provider_thread_id = reply_target.provider_thread_id.clone();
+    } else {
+        // The target lives in a different inbox (a different provider
+        // account, possibly another user's through a share), so it cannot
+        // thread into that account's provider thread. Start a fresh thread in
+        // the sending inbox; the Macro-In-Reply-To header below preserves the
+        // reference.
+        input.thread_db_id = None;
+        input.provider_thread_id = None;
+    }
+
+    // Generate Macro-In-Reply-To header
+    input.headers_json = Some(serde_json::json!([{
+        "Macro-In-Reply-To": reply_target.db_id.to_string()
+    }]));
 }
 
 /// The decision for a compose draft's client-supplied thread hint.
