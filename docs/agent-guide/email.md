@@ -70,7 +70,12 @@ In every composer `Cmd+Shift+.`, `Cmd+Shift+,` and `Cmd+Shift+D` discard the
 draft exactly like its trash button, `Cmd+Shift+U` opens the attach picker, and
 `Cmd+Shift+X`, `7`, `8` and `9` apply strikethrough, numbered list, bulleted
 list and quote. Check discard from both a reply (the reply closes) and
-standalone compose (the view goes back), with focus in the body.
+standalone compose (the view goes back), with focus in the body. The same
+three keys discard the drafts on the focused or selected rows of a list (Email
+or a soup view) that carry the Draft badge. The thread keeps its row and its
+place, even though its sort time falls back to the last real message, until
+the tab, filters, or sort change; only the badge and preview change back to
+that message. Check it on a reply draft in All: the row must not move.
 
 Star and mute feedback reports what happened to the write. With GraphQL Soup
 enabled, a star queued while offline toasts that it is waiting to sync (for
@@ -80,8 +85,10 @@ waiting for reconnect, so pressing them again works at once.
 
 Recipient fields turn complete addresses into chips when the typed or pasted
 text ends in a comma or semicolon, so `a@example.com, b@example.com,` adds both.
-Enter or a click picks the highlighted suggestion. Type, paste, or Tab straight
-after picking one and check that both recipients stay and the input is empty.
+Enter or a click picks the highlighted suggestion; on a complete typed address,
+Enter or Tab adds that address unless an arrow key picked another row. Type,
+paste, or Tab straight after picking one and check that both recipients stay
+and the input is empty.
 
 Outlook connections support personal Outlook.com and individual Microsoft 365
 inboxes. Choose the inbox explicitly when testing mixed-provider accounts. The
@@ -672,10 +679,13 @@ written message and these controls on desktop and mobile, where sending inserts
 the signature above the quoted thread on Gmail and Outlook.
 Check recipient suggestions from a Gmail and an Outlook inbox. Typing a full
 address and pressing Enter commits that address, ahead of longer matches such
-as `teo+123456@macro.com`, whether or not it is a saved contact. A name or
-address word that starts with the query ranks above recent substring matches
-(`gab` finds Gab Rowan). Opened empty, the list puts colleagues on the sending
-inbox's domain first. A chip shows the name and its hover card the address.
+as `teo+123456@macro.com`, whether or not it is a saved contact. That holds
+when contacts or their names load after typing starts and reorder the list,
+including under a resting pointer, and when the address was typed or pasted
+before suggestions loaded. A name or address word that starts with the query
+ranks above recent substring matches (`gab` finds Gab Rowan). Opened empty,
+the list puts colleagues on the sending inbox's domain first. A chip shows the
+name followed by the address in muted ink.
 Press Send with To empty, then add a recipient: the error clears at once, as a
 missing message or subject error does once filled in. Suggestions leave out
 automated addresses (`notifications@`, `mailer-daemon@`, `postmaster@`,

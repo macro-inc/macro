@@ -14,7 +14,6 @@ import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
 import { createWritableMemo } from '@solid-primitives/memo';
 import { mergeRefs } from '@solid-primitives/refs';
-import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn } from '@ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
 import { tourTarget } from '@ui/components/Tour';
@@ -24,6 +23,7 @@ import {
   type ComponentProps,
   createComputed,
   createContext,
+  createMemo,
   createSignal,
   createUniqueId,
   type JSX,
@@ -35,6 +35,7 @@ import {
   untrack,
   useContext,
 } from 'solid-js';
+import { createFrameWidth } from './create-frame-width';
 import { createSidebarMotion } from './create-sidebar-motion';
 import { VIEW_SHELL_TOUR } from './tour';
 import {
@@ -202,7 +203,7 @@ function Root(props: ViewShellRootProps) {
   const id = createUniqueId();
   const [root, setRoot] = createSignal<HTMLDivElement>();
   const animateSidebar = createSidebarMotion(root);
-  const size = createElementSize(root);
+  const width = createFrameWidth(root);
 
   const thresholds = (): BreakpointThresholds =>
     local.breakpoints ?? DEFAULT_VIEW_SHELL_BREAKPOINT_THRESHOLDS;
@@ -246,7 +247,6 @@ function Root(props: ViewShellRootProps) {
   };
 
   const resizable = () => local.resizable ?? false;
-  const width = () => size.width ?? undefined;
   const breakpoints = createSizeBreakpoints(width, thresholds);
 
   const atLayoutBreakpoint = () => {
@@ -290,34 +290,44 @@ function Root(props: ViewShellRootProps) {
       } else setWideAsideCollapsed(!open);
     });
   };
+  // Keep the last measured breakpoint while the view is detached or hidden.
+  const measuredLayoutBreakpoint = createMemo<boolean | undefined>(
+    (previous) => {
+      const currentWidth = width();
+      return currentWidth === undefined || currentWidth <= 0
+        ? previous
+        : atLayoutBreakpoint();
+    }
+  );
   // Measure the old host before the slots react to a breakpoint transition.
   createComputed(
-    on(
-      atLayoutBreakpoint,
-      (narrow, previous) => {
-        if (narrow === previous) return;
-        const docked = Array.from(
-          root()?.querySelectorAll<HTMLElement>(
-            ':scope > [data-resize-zone] > [data-resize-panel]'
-          ) ?? []
-        ).find((panel) => panel.querySelector('[data-view-shell-aside]'));
-        const retain =
-          narrow &&
-          !asideRequired() &&
-          !!docked &&
-          !docked.classList.contains('hidden');
-        animateSidebar(
-          () => {
-            if (!narrow) setAsideHost('docked');
-            else setAsideHost(retain ? 'closing' : 'overlay');
-          },
-          () => {
-            if (narrow) setAsideHost('overlay');
-          }
-        );
-      },
-      { defer: true }
-    )
+    on(measuredLayoutBreakpoint, (narrow, previous) => {
+      if (narrow === undefined || narrow === previous) return;
+      // The first measurable layout is not a user-initiated resize.
+      if (previous === undefined) {
+        setAsideHost(narrow ? 'overlay' : 'docked');
+        return;
+      }
+      const docked = Array.from(
+        root()?.querySelectorAll<HTMLElement>(
+          ':scope > [data-resize-zone] > [data-resize-panel]'
+        ) ?? []
+      ).find((panel) => panel.querySelector('[data-view-shell-aside]'));
+      const retain =
+        narrow &&
+        !asideRequired() &&
+        !!docked &&
+        !docked.classList.contains('hidden');
+      animateSidebar(
+        () => {
+          if (!narrow) setAsideHost('docked');
+          else setAsideHost(retain ? 'closing' : 'overlay');
+        },
+        () => {
+          if (narrow) setAsideHost('overlay');
+        }
+      );
+    })
   );
   // Pin changes animate the current docked host, but cannot interrupt its exit.
   createComputed(

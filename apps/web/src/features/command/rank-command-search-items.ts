@@ -69,11 +69,13 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
       fuzzyWeight: 0.7,
       timeWeight: 0.7,
       minFuzzyThreshold: 0.1,
+      commaSeparatedChannelMatch: true,
     },
     getName: (item) => item.searchText,
     getDisplayName: displayName,
     isChannelItem: (item) => item.bucket === 'channel' || item.bucket === 'dm',
     isDmItem: (item) => item.bucket === 'dm',
+    isPersonItem: (item) => item.bucket === 'dm' || item.bucket === 'person',
     getTimestamp: (item) => item.timestamps,
   });
 

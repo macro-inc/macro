@@ -1,3 +1,4 @@
+import { webviewFetch } from '@core/util/platformFetch';
 import { z } from 'zod';
 
 // Klipy keys are meant to ship in the client: its terms require requests to
@@ -62,7 +63,7 @@ async function fetchGifs(
     contentfilter: CONTENT_FILTER,
     ...params,
   });
-  const response = await fetch(`${KLIPY_BASE_URL}/${endpoint}?${query}`);
+  const response = await webviewFetch(`${KLIPY_BASE_URL}/${endpoint}?${query}`);
   if (!response.ok) {
     throw new Error(`Klipy API error: ${response.status}`);
   }

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE database_entities SET project_id = $2, updated_at = now() WHERE database_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4c2396ca61a5060acd24cd3c0d37322a8450d9f8cbf90e43e1906ba6432a4e95"
+}

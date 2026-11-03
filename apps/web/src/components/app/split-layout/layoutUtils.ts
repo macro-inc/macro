@@ -20,6 +20,7 @@ import type {
   SplitHandle,
   SplitManager,
 } from './layoutManager';
+import { shouldAutofocusNavigation } from './should-autofocus-navigation';
 
 const _isInSplit = createCallback(() => {
   return !!useContext(SplitPanelContext);
@@ -115,7 +116,14 @@ export function shouldShowSplitCloseButton(manager: SplitManager) {
 
 /** Inline previews stay passive until the user focuses them. */
 export function useCanAutofocusSplitContent() {
-  return !useSplitPanel()?.isInlinePreview;
+  const panel = useSplitPanel();
+  if (panel?.isInlinePreview) return false;
+  return panel
+    ? shouldAutofocusNavigation(
+        panel.handle.lastNavigationSource(),
+        panel.handle.lastNavigationCause()
+      )
+    : true;
 }
 
 /**

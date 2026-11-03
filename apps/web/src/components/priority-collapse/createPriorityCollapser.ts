@@ -7,6 +7,8 @@ export type CollapsibleRegistration = {
   id: string;
   /** Lower numbers collapse first. */
   priority: number;
+  /** Reclaim lower-priority items when lifting a last-resort width cap. */
+  reclaimSpaceOnExpand?: boolean;
   collapsed: Accessor<boolean>;
   /** `silent` suppresses callbacks during pre-paint trial measurements. */
   setCollapsed: (value: boolean, options?: { silent?: boolean }) => void;
@@ -71,6 +73,16 @@ export function createPriorityCollapser(
     );
   };
 
+  const collapseUntilFits = (beforePriority = Infinity) => {
+    const byCollapseOrder = items()
+      .filter((item) => !item.collapsed() && item.priority < beforePriority)
+      .sort((a, b) => a.priority - b.priority);
+    for (const item of byCollapseOrder) {
+      item.setCollapsed(true);
+      if (!overflows()) break;
+    }
+  };
+
   const evaluate = () => {
     const measurement = probe.measure();
     if (!measurement || items().length === 0) return;
@@ -79,13 +91,7 @@ export function createPriorityCollapser(
       measurement.requiredWidth - measurement.availableWidth >
       OVERFLOW_EPSILON_PX
     ) {
-      const byCollapseOrder = items()
-        .filter((item) => !item.collapsed())
-        .sort((a, b) => a.priority - b.priority);
-      for (const item of byCollapseOrder) {
-        item.setCollapsed(true);
-        if (!overflows()) break;
-      }
+      collapseUntilFits();
 
       const collapsedMeasurement = probe.measure();
       if (collapsedMeasurement) {
@@ -115,6 +121,10 @@ export function createPriorityCollapser(
     // never visible; silent keeps onCollapsedChange from firing for it.
     for (const item of byExpandOrder) {
       item.setCollapsed(false, { silent: true });
+      // A width cap can conceal space needed by newly registered items.
+      if (item.reclaimSpaceOnExpand && overflows()) {
+        collapseUntilFits(item.priority);
+      }
       if (overflows()) {
         item.setCollapsed(true, { silent: true });
         const collapsedMeasurement = probe.measure();

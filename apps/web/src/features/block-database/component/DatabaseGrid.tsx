@@ -1,3 +1,4 @@
+import { usePending } from '@app/observability/flow';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { refreshInBackground } from '@queries/database-sql/create-database-sql-query';
@@ -163,6 +164,8 @@ function RelatedDatabaseSync(props: {
 }
 
 function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
+  const canEdit = createMemo(() => props.canEdit);
+
   const queryClient = useQueryClient();
   const openDocumentMention = createDatabaseDocumentNavigation();
   // Keep the final schema for this table available to already-queued writes
@@ -257,6 +260,7 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
     }),
     relations
   );
+  usePending('database.rows', source.loading);
   // Embedded grids have no database BlockContainer to subscribe for them.
   // Tracking is reference-counted across grids and full database blocks.
   useDatabaseSubscription(databaseId, () => refreshInBackground(source));
@@ -331,15 +335,15 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
       <StaticMarkdownContext>
         <ColumnUsageContext.Provider value={formsAsking}>
           <OptionEditingContext.Provider
-            value={props.canEdit ? optionEditing : undefined}
+            value={canEdit() ? optionEditing : undefined}
           >
             <DatabaseProvider
               api={createMacroDatabaseApi(databaseId, queryClient)}
               tableId={props.tableId}
               view={props.view}
               capabilities={{
-                editRows: props.canEdit,
-                editColumns: props.canEdit,
+                editRows: canEdit(),
+                editColumns: canEdit(),
               }}
               data={{ table: () => editorTable(table()), rows: source }}
               inferNewColumns

@@ -4,7 +4,11 @@ import { CODE } from '@lexical/markdown';
 import { registerPlainText } from '@lexical/plain-text';
 import { registerRichText } from '@lexical/rich-text';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
-import { ALL_TRANSFORMERS, type EditorType } from '@macro-inc/lexical-core';
+import {
+  ALL_TRANSFORMERS,
+  type EditorType,
+  ORDERED_LIST_ENTER,
+} from '@macro-inc/lexical-core';
 import { HR } from '@macro-inc/lexical-core/transformers/transformers';
 import type { EditorState, LexicalEditor, UpdateListener } from 'lexical';
 import {
@@ -79,7 +83,7 @@ export function createPluginManager(editor: LexicalEditor, type: EditorType) {
       cleanupFunctions.push(
         markdownShortcutsPlugin({
           transformers,
-          triggerOnEnterTransformers: [HR, CODE],
+          triggerOnEnterTransformers: [HR, CODE, ORDERED_LIST_ENTER],
         })(editor)
       );
       return pluginManager;

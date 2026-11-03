@@ -123,6 +123,7 @@ function renderDetailSplit() {
     content,
     referredFrom: null,
     lastNavigationCause: 'fresh',
+    lastNavigationSource: null,
     mount: {
       kind: 'component',
       name: 'md',
@@ -162,6 +163,7 @@ function renderDetailSplit() {
     updateMeta: () => {},
     referredFrom: () => null,
     lastNavigationCause: () => 'fresh',
+    lastNavigationSource: () => null,
     registerEntryStateCaptor: () => () => {},
     captureEntryState: () => {},
     currentEntryState: () => undefined,

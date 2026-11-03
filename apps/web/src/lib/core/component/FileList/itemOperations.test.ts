@@ -1,4 +1,4 @@
-import { err, ok } from 'neverthrow';
+import { err, errAsync, ok, okAsync } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   resources: vi.fn(),
   removeDeleted: vi.fn(),
+  duplicateDatabase: vi.fn(),
 }));
 vi.mock('@app/lib/analytics', () => ({ analytics: { track: vi.fn() } }));
 vi.mock('@core/constant/featureFlags', () => ({
@@ -26,6 +27,9 @@ vi.mock('@core/constant/PaywallState', () => ({
 }));
 vi.mock('@queries/history/history', () => ({
   removeHistoryItem: mocks.removeHistory,
+}));
+vi.mock('@queries/storage/databases', () => ({
+  duplicateDatabase: mocks.duplicateDatabase,
 }));
 vi.mock('@queries/storage/deleted', () => ({
   getDeletedTree: () => ({ itemMap: {} }),
@@ -74,6 +78,7 @@ vi.mock('@service-call/client', () => ({ callServiceClient: {} }));
 
 import { getOperationAST } from 'graphql';
 import {
+  canDuplicateItemType,
   copyItem,
   deleteItem,
   moveToFolder,
@@ -126,6 +131,29 @@ describe('flagged entity callers', () => {
         expect(variables()).toEqual({
           inputs: [{ entity: { type, id: 'source' }, projectId: folderId }],
         });
+      }
+      expect(mocks.edit).not.toHaveBeenCalled();
+      expect(mocks.metadata).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([
+    ['database', 'DATABASE'],
+    ['form', 'FORM'],
+  ] as const)(
+    'moves a %s through the entity mutation, its only route, with or without the GraphQL soup',
+    async (itemType, type) => {
+      for (const graphql of [true, false]) {
+        mocks.graphql = graphql;
+        for (const folderId of ['folder', null]) {
+          mocks.mutation.mockClear();
+          expect(await moveToFolder({ itemType, id: 'source', folderId })).toBe(
+            true
+          );
+          expect(variables()).toEqual({
+            inputs: [{ entity: { type, id: 'source' }, projectId: folderId }],
+          });
+        }
       }
       expect(mocks.edit).not.toHaveBeenCalled();
       expect(mocks.metadata).not.toHaveBeenCalled();
@@ -248,6 +276,35 @@ describe('flagged entity callers', () => {
       expect(mocks.refresh).not.toHaveBeenCalled();
     }
   );
+
+  it.each([true, false])(
+    'duplicates a database through its own route, named like documents (GraphQL Soup %s)',
+    async (graphql) => {
+      mocks.graphql = graphql;
+      mocks.duplicateDatabase.mockReturnValue(okAsync('database-copy'));
+
+      expect(canDuplicateItemType('database')).toBe(true);
+      expect(
+        await copyItem({ itemType: 'database', id: 'source', name: 'Plans' })
+      ).toBe('database-copy');
+
+      expect(mocks.duplicateDatabase).toHaveBeenCalledWith({
+        id: 'source',
+        name: 'Plans copy',
+      });
+      expect(mocks.mutation).not.toHaveBeenCalled();
+    }
+  );
+
+  it('answers a failed database duplicate with no copy', async () => {
+    mocks.duplicateDatabase.mockReturnValue(
+      errAsync([{ code: 'NOT_FOUND', message: 'gone' }])
+    );
+
+    expect(
+      await copyItem({ itemType: 'database', id: 'source', name: 'Plans' })
+    ).toBeNull();
+  });
 
   it('preserves every REST path when the flag is disabled', async () => {
     mocks.graphql = false;

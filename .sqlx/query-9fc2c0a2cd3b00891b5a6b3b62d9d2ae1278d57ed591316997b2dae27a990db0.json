@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT u.id\n            FROM \"User\" u\n            JOIN macro_user m ON m.id = u.macro_user_id\n            WHERE m.id = $1\n            ORDER BY lower(u.email) = lower(m.email) DESC, u.id\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9fc2c0a2cd3b00891b5a6b3b62d9d2ae1278d57ed591316997b2dae27a990db0"
+}

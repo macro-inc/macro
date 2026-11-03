@@ -76,6 +76,8 @@ edit capability but calls no nested model and emits no additional model charge; 
 
 - Executable toolsets exclude legacy chats in every host and code mode. Keep historical parsing compatibility only in `frontend_compat.rs`; never merge it into provider schemas.
 
+- `src/memory.rs` wires private memory tools and read-only research; `src/bin/memory.rs` runs awaited one-user generation.
+
 ## Checks
 
 - `cargo test -p ai_tools` (`SQLX_OFFLINE` unset).

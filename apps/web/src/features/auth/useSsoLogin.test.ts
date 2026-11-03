@@ -24,7 +24,10 @@ vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: mocks.track }),
 }));
 vi.mock('@solidjs/router', () => ({ useLocation: () => mocks.location }));
-vi.mock('@core/constant/servers', () => ({ SERVER_HOSTS: mocks.servers }));
+vi.mock('@core/constant/servers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/servers')>()),
+  SERVER_HOSTS: mocks.servers,
+}));
 vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
   isNativeMobilePlatform: () => mocks.nativeMobile,
 }));

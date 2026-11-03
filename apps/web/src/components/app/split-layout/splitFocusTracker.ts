@@ -1,5 +1,6 @@
 import { activeElement } from '@app/signal/focus';
 import { splitContainerSelector } from '@core/dom-selectors';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isEditableInput } from '@core/util/isEditableInput';
 import { type Accessor, createEffect, on, onCleanup } from 'solid-js';
 import {
@@ -9,6 +10,7 @@ import {
   type SplitManager,
   type SplitState,
 } from './layoutManager';
+import { shouldAutofocusNavigation } from './should-autofocus-navigation';
 
 function getParentSplitId(element: Element | null) {
   if (!element || !element.isConnected) return null;
@@ -73,7 +75,7 @@ export function createSplitFocusTracker(props: {
 
     // look for a child to return focus to.
     const child = lastFocusedChildBySplitId.get(id);
-    if (child && child.isConnected) {
+    if (child && child.isConnected && splitPanelRef.contains(child)) {
       child.focus();
       return;
     }
@@ -138,6 +140,18 @@ export function createSplitFocusTracker(props: {
       case SplitEvent.Insert: {
         if (event.activate === false) break;
         focusSplitById(event.splitId);
+        break;
+      }
+      case SplitEvent.ContentChange: {
+        // The pane stays mounted when its content changes, so its one-time
+        // autofocus does not run again. Focus the new content's shell if no
+        // child has claimed focus by the time navigation finishes.
+        if (isTouchDevice()) break;
+        if (!shouldAutofocusNavigation(event.referredFrom, event.cause)) break;
+        if (event.splitId !== activeSplitId()) break;
+        const panel = props.panelRefs.get(event.splitId);
+        if (!panel || panel.contains(document.activeElement)) break;
+        panel.focus({ preventScroll: true });
         break;
       }
       case SplitEvent.Remove: {
