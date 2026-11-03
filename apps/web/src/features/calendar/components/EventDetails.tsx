@@ -125,6 +125,7 @@ function resolveCalendarAttendee(
 
 function CalendarUserItem(props: {
   displayName: Accessor<string>;
+  email?: string;
   iconProps?: UserIconProps;
   isSelf: boolean;
   secondaryLabel?: JSX.Element;
@@ -134,6 +135,8 @@ function CalendarUserItem(props: {
   nameClass?: string;
 }) {
   const secondaryLabelPosition = () => props.secondaryLabelPosition ?? 'below';
+  const nameIsEmail = () => props.displayName() === props.email;
+  const email = () => (props.email && !nameIsEmail() ? props.email : undefined);
 
   return (
     <div class="flex min-w-0 items-center gap-4 sm:gap-3">
@@ -168,13 +171,21 @@ function CalendarUserItem(props: {
         </Show>
         <span
           class={cn(
-            'block select-text truncate text-ink-muted',
+            'block select-text text-ink-muted',
+            nameIsEmail() ? 'wrap-anywhere' : 'truncate',
             props.nameClass
           )}
         >
           {props.displayName()}
           <Show when={props.isSelf}> (you)</Show>
         </span>
+        <Show when={email()}>
+          {(address) => (
+            <span class="block select-text text-xs text-ink-extra-muted wrap-anywhere sm:text-xxs">
+              {address()}
+            </span>
+          )}
+        </Show>
         <Show
           when={secondaryLabelPosition() === 'below' && props.secondaryLabel}
         >
@@ -228,6 +239,7 @@ function CalendarAttendeeItem(props: {
   return (
     <CalendarUserItem
       displayName={props.item.displayName}
+      email={attendee.email}
       iconProps={props.item.iconProps}
       isSelf={attendee.isSelf}
       secondaryLabel={secondaryLabel}
@@ -429,6 +441,7 @@ function CalendarOrganizerItem(props: { organizer: CalendarPerson }) {
       <div class="min-w-0">
         <CalendarUserItem
           displayName={displayName}
+          email={props.organizer.email}
           iconProps={iconProps}
           isSelf={props.organizer.isSelf}
           secondaryLabel="Organizer"
