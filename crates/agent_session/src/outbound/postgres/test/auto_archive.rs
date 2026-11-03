@@ -2,6 +2,8 @@ use super::*;
 use crate::domain::auto_archive::{
     AutoArchiveOverrides, AutoArchivePreferences, AutoArchiveReason, AutoArchiveRepo,
 };
+use crate::domain::coding_preferences::CodingPreferences;
+use crate::domain::model::ArchiveCause;
 use crate::domain::pull_request_links::SessionPullRequestLinkRepo;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -16,6 +18,13 @@ async fn preferences_default_off_and_round_trip(pool: PgPool) {
             on_runtime_closed: false,
         }
     );
+    let coding = CodingPreferences {
+        create_tasks: true,
+        open_pull_requests: false,
+    };
+    AgentSessionRepo::set_user_coding_preferences(&repo, &owner, coding)
+        .await
+        .unwrap();
     repo.set_user_auto_archive_preferences(
         &owner,
         AutoArchivePreferences {
@@ -31,6 +40,13 @@ async fn preferences_default_off_and_round_trip(pool: PgPool) {
             on_pull_request_merged: true,
             on_runtime_closed: false,
         }
+    );
+    // Both live on the user's coding preferences; neither write clears the other.
+    assert_eq!(
+        AgentSessionRepo::user_coding_preferences(&repo, &owner)
+            .await
+            .unwrap(),
+        coding
     );
 }
 
@@ -93,12 +109,12 @@ async fn archives_only_when_the_trigger_is_on_for_the_session(pool: PgPool) {
             .await
             .unwrap()
     );
-    assert!(
-        AgentSessionRepo::get(&repo, session.id)
-            .await
-            .unwrap()
-            .is_archived
-    );
+    let archive = AgentSessionRepo::get(&repo, session.id)
+        .await
+        .unwrap()
+        .archived
+        .unwrap();
+    assert_eq!(archive.by, ArchiveCause::PullRequestMerged);
     let settings = repo.session_auto_archive(session.id).await.unwrap();
     assert_eq!(
         settings.overrides,
@@ -114,10 +130,7 @@ async fn archives_only_when_the_trigger_is_on_for_the_session(pool: PgPool) {
             on_runtime_closed: true,
         }
     );
-    assert_eq!(
-        settings.archived.map(|record| record.reason),
-        Some(AutoArchiveReason::PullRequestMerged)
-    );
+    assert_eq!(settings.auto_archived_at, Some(archive.at));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -155,20 +168,20 @@ async fn a_restored_session_is_never_archived_again(pool: PgPool) {
     ] {
         assert!(!repo.auto_archive(session.id, reason).await.unwrap());
     }
-    assert!(
-        !AgentSessionRepo::get(&repo, session.id)
+    assert_eq!(
+        AgentSessionRepo::get(&repo, session.id)
             .await
             .unwrap()
-            .is_archived
+            .archived,
+        None
     );
-    let record = repo
-        .session_auto_archive(session.id)
-        .await
-        .unwrap()
-        .archived
-        .unwrap();
-    assert_eq!(record.reason, AutoArchiveReason::RuntimeClosed);
-    assert!(record.restored_at.is_some());
+    assert!(
+        repo.session_auto_archive(session.id)
+            .await
+            .unwrap()
+            .auto_archived_at
+            .is_some()
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -327,5 +340,52 @@ async fn sessions_archive_for_pull_requests_once_all_are_closed_and_one_merged(p
             .await
             .unwrap()
             .is_empty()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_person_archives_as_user_and_restoring_clears_who_archived(pool: PgPool) {
+    let repo = test_repo(&pool);
+    let bot = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot, None, None)).await;
+    assert_eq!(session.archived, None);
+
+    AgentSessionRepo::set_archived(&repo, session.id, true)
+        .await
+        .unwrap();
+    let archive = AgentSessionRepo::get(&repo, session.id)
+        .await
+        .unwrap()
+        .archived
+        .unwrap();
+    assert_eq!(archive.by, ArchiveCause::User);
+    // Archiving again keeps who archived it and when.
+    AgentSessionRepo::set_archived(&repo, session.id, true)
+        .await
+        .unwrap();
+    assert_eq!(
+        AgentSessionRepo::get(&repo, session.id)
+            .await
+            .unwrap()
+            .archived,
+        Some(archive)
+    );
+
+    AgentSessionRepo::set_archived(&repo, session.id, false)
+        .await
+        .unwrap();
+    assert_eq!(
+        AgentSessionRepo::get(&repo, session.id)
+            .await
+            .unwrap()
+            .archived,
+        None
+    );
+    assert_eq!(
+        repo.session_auto_archive(session.id)
+            .await
+            .unwrap()
+            .auto_archived_at,
+        None
     );
 }

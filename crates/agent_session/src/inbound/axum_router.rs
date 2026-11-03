@@ -50,8 +50,9 @@ use utoipa::ToSchema;
 use crate::domain::coding_preferences::CodingPreferences;
 use crate::domain::error::AgentSessionError;
 use crate::domain::model::{
-    AgentSession, AgentSessionId, AgentSessionPreview, ExternalSession, Message, SandboxSize,
-    SessionBot, SessionSource, SessionStatus, SessionVisibility, StoredAgentSessionLog,
+    AgentSession, AgentSessionId, AgentSessionPreview, ArchiveCause, ExternalSession, Message,
+    SandboxSize, SessionBot, SessionSource, SessionStatus, SessionVisibility,
+    StoredAgentSessionLog,
 };
 use crate::domain::ports::{
     AgentSessionNotificationRecipient, BotDirectory, BotFacts, ControlDisposition, ControlEvent,
@@ -492,8 +493,8 @@ pub struct RenameAgentSessionRequest {
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SetAgentSessionArchivedRequest {
-    /// The requested archive state.
-    pub is_archived: bool,
+    /// Archive the session, or restore it.
+    pub archived: bool,
 }
 
 /// Request body for a control operation on a live session.
@@ -600,8 +601,11 @@ pub struct AgentSessionResponse {
     pub id: Uuid,
     /// User-facing session name.
     pub name: String,
-    /// Whether the session is archived and read-only.
-    pub is_archived: bool,
+    /// Who or what archived the session, or `None` while it is active. An archived session is
+    /// read-only.
+    pub archived_by: Option<ArchiveCause>,
+    /// When the session was archived, or `None` while it is active.
+    pub archived_at: Option<DateTime<Utc>>,
     /// The user who created and owns the session.
     pub owner_id: String,
     /// Whether the caller may drive the session - prompt it, answer its
@@ -694,7 +698,8 @@ impl AgentSessionResponse {
         Self {
             id: session.id.as_uuid(),
             name: session.name,
-            is_archived: session.is_archived,
+            archived_by: session.archived.map(|archive| archive.by),
+            archived_at: session.archived.map(|archive| archive.at),
             owner_id: session.owner_id.to_string(),
             can_edit,
             thread_id: session.thread_id,
@@ -757,7 +762,7 @@ pub async fn get_agent_session_handler<
         .service
         .get_session(AgentSessionId::new_from_uuid(session_id))
         .await?;
-    let can_edit = !session.is_archived
+    let can_edit = !session.is_archived()
         && access
             .entity_access_receipt
             .entity_permission()
@@ -974,7 +979,7 @@ pub async fn set_agent_session_archived_handler<
 ) -> Result<StatusCode, AgentSessionApiError> {
     state
         .service
-        .set_archived(&access.entity_access_receipt, request.is_archived)
+        .set_archived(&access.entity_access_receipt, request.archived)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

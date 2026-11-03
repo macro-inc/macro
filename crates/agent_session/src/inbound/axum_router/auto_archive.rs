@@ -15,8 +15,7 @@ use utoipa::ToSchema;
 
 use super::{AgentSessionApiError, AgentSessionRouterState};
 use crate::domain::auto_archive::{
-    AutoArchive, AutoArchiveOverrides, AutoArchivePreferences, AutoArchiveReason,
-    SessionAutoArchive,
+    AutoArchive, AutoArchiveOverrides, AutoArchivePreferences, SessionAutoArchive,
 };
 
 /// The caller's defaults and per-session auto-archive routes. Mount at the root.
@@ -100,18 +99,6 @@ impl From<AutoArchiveOverridesBody> for AutoArchiveOverrides {
     }
 }
 
-/// The time a session archived itself.
-#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct AutoArchivedBody {
-    /// What finished the session's work.
-    pub reason: AutoArchiveReason,
-    /// When it archived.
-    pub archived_at: DateTime<Utc>,
-    /// When a person restored it, after which the archive no longer stands.
-    pub restored_at: Option<DateTime<Utc>>,
-}
-
 /// A session's auto-archive settings and history.
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -120,8 +107,9 @@ pub struct SessionAutoArchiveResponse {
     pub overrides: AutoArchiveOverridesBody,
     /// The owner's defaults, which apply where the session has no choice of its own.
     pub defaults: AutoArchivePreferencesBody,
-    /// The archive a trigger made, if one did. A session archives itself at most once.
-    pub archived: Option<AutoArchivedBody>,
+    /// When a trigger first archived the session. Kept when a person restores it: a session
+    /// archives itself at most once.
+    pub auto_archived_at: Option<DateTime<Utc>>,
 }
 
 impl From<SessionAutoArchive> for SessionAutoArchiveResponse {
@@ -129,11 +117,7 @@ impl From<SessionAutoArchive> for SessionAutoArchiveResponse {
         Self {
             overrides: settings.overrides.into(),
             defaults: settings.defaults.into(),
-            archived: settings.archived.map(|record| AutoArchivedBody {
-                reason: record.reason,
-                archived_at: record.archived_at,
-                restored_at: record.restored_at,
-            }),
+            auto_archived_at: settings.auto_archived_at,
         }
     }
 }

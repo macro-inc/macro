@@ -2,7 +2,7 @@
 //! the runtime session backing it is deliberately closed.
 //!
 //! Each trigger is opt-in. A user sets a default for their sessions, and a session's owner can
-//! override it for one session. A session archives itself at most once: the record of that
+//! override it for one session. A session archives itself at most once: the time of that
 //! archive stays when a person restores the session, so later triggers leave it visible.
 
 use chrono::{DateTime, Utc};
@@ -13,32 +13,29 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
 use super::error::{AgentSessionError, Result};
-use super::model::AgentSessionId;
+use super::model::{AgentSessionId, ArchiveCause};
 use super::ports::AgentSessionRealtime;
 
 #[cfg(test)]
 mod test;
 
 /// What finished a session's work.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    strum::AsRefStr,
-    strum::EnumString,
-    serde::Serialize,
-    serde::Deserialize,
-)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[serde(rename_all = "snake_case")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum AutoArchiveReason {
     /// Every pull request linked to the session is closed, and at least one merged.
     PullRequestMerged,
     /// The person or agent ended the runtime session backing it.
     RuntimeClosed,
+}
+
+impl From<AutoArchiveReason> for ArchiveCause {
+    fn from(reason: AutoArchiveReason) -> Self {
+        match reason {
+            AutoArchiveReason::PullRequestMerged => Self::PullRequestMerged,
+            AutoArchiveReason::RuntimeClosed => Self::RuntimeClosed,
+        }
+    }
 }
 
 /// Which triggers archive a session. Each is off unless chosen.
@@ -59,17 +56,6 @@ pub struct AutoArchiveOverrides {
     pub on_runtime_closed: Option<bool>,
 }
 
-/// The time a session archived itself.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AutoArchiveRecord {
-    /// What finished the session's work.
-    pub reason: AutoArchiveReason,
-    /// When it archived.
-    pub archived_at: DateTime<Utc>,
-    /// When a person restored it, after which the archive no longer stands.
-    pub restored_at: Option<DateTime<Utc>>,
-}
-
 /// A session's auto-archive settings and history.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SessionAutoArchive {
@@ -77,8 +63,9 @@ pub struct SessionAutoArchive {
     pub overrides: AutoArchiveOverrides,
     /// The owner's defaults the session follows where it has no choice of its own.
     pub defaults: AutoArchivePreferences,
-    /// The archive a trigger made, if one did. A session archives itself at most once.
-    pub archived: Option<AutoArchiveRecord>,
+    /// When a trigger first archived the session. Kept when a person restores it: a session
+    /// archives itself at most once.
+    pub auto_archived_at: Option<DateTime<Utc>>,
 }
 
 /// Storage for auto-archive settings and the archive itself.
@@ -96,7 +83,7 @@ pub trait AutoArchiveRepo: Send + Sync + 'static {
         preferences: AutoArchivePreferences,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// The session's settings and the archive a trigger made.
+    /// The session's settings and when a trigger archived it.
     fn session_auto_archive(
         &self,
         session: AgentSessionId,

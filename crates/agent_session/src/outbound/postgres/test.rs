@@ -3392,7 +3392,7 @@ async fn active_execution_turn_excludes_stopped_archived_and_deleted_sessions(po
         );
     }
     sqlx::query!(
-        "UPDATE agent_session SET turn_state = 'running', is_archived = true WHERE id = $1",
+        "UPDATE agent_session SET turn_state = 'running', archived_by = 'user', archived_at = now() WHERE id = $1",
         session.id.as_uuid()
     )
     .execute(&pool)

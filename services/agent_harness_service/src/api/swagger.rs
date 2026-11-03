@@ -21,14 +21,12 @@ use agent_harness::inbound::tool_approvals::{
     ToolApprovalStatusDto,
 };
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
-use agent_session::domain::auto_archive::AutoArchiveReason;
-use agent_session::domain::model::{SandboxSize, SessionBot};
+use agent_session::domain::model::{ArchiveCause, SandboxSize, SessionBot};
 use agent_session::domain::pull_request_links::{
     PullRequestLinkSource, PullRequestLinkedSession, PullRequestSessions, SessionPullRequestLink,
 };
 use agent_session::inbound::axum_router::auto_archive::{
-    AutoArchiveOverridesBody, AutoArchivePreferencesBody, AutoArchivedBody,
-    SessionAutoArchiveResponse,
+    AutoArchiveOverridesBody, AutoArchivePreferencesBody, SessionAutoArchiveResponse,
 };
 use agent_session::inbound::axum_router::pull_requests::{
     PullRequestSessionsResponse, PullRequestUrl, PullRequestUrls, PullRequestsSessionsResponse,
@@ -159,8 +157,7 @@ impl Modify for SecurityAddon {
         CodingPreferencesBody,
         AutoArchivePreferencesBody,
         AutoArchiveOverridesBody,
-        AutoArchivedBody,
-        AutoArchiveReason,
+        ArchiveCause,
         SessionAutoArchiveResponse,
         LoadAgentModelsRequest,
         LoadAgentModelsResponse,

@@ -2,9 +2,10 @@
 
 use super::*;
 use crate::domain::auto_archive::{
-    AutoArchiveOverrides, AutoArchivePreferences, AutoArchiveReason, AutoArchiveRecord,
-    AutoArchiveRepo, SessionAutoArchive,
+    AutoArchiveOverrides, AutoArchivePreferences, AutoArchiveReason, AutoArchiveRepo,
+    SessionAutoArchive,
 };
+use crate::domain::model::ArchiveCause;
 
 impl<B: BotFacts + 'static> AutoArchiveRepo for PgAgentSessionRepo<B> {
     async fn user_auto_archive_preferences(
@@ -13,8 +14,8 @@ impl<B: BotFacts + 'static> AutoArchiveRepo for PgAgentSessionRepo<B> {
     ) -> Result<AutoArchivePreferences> {
         let row = sqlx::query!(
             r#"
-            SELECT on_pull_request_merged, on_runtime_closed
-            FROM user_agent_session_auto_archive
+            SELECT auto_archive_on_pull_request_merged, auto_archive_on_runtime_closed
+            FROM user_agent_coding_preferences
             WHERE user_id = $1
             "#,
             user.as_ref(),
@@ -24,8 +25,8 @@ impl<B: BotFacts + 'static> AutoArchiveRepo for PgAgentSessionRepo<B> {
         .context("read user auto-archive preferences")?;
         Ok(row
             .map(|row| AutoArchivePreferences {
-                on_pull_request_merged: row.on_pull_request_merged,
-                on_runtime_closed: row.on_runtime_closed,
+                on_pull_request_merged: row.auto_archive_on_pull_request_merged,
+                on_runtime_closed: row.auto_archive_on_runtime_closed,
             })
             .unwrap_or_default())
     }
@@ -37,12 +38,14 @@ impl<B: BotFacts + 'static> AutoArchiveRepo for PgAgentSessionRepo<B> {
     ) -> Result<()> {
         sqlx::query!(
             r#"
-            INSERT INTO user_agent_session_auto_archive
-                (user_id, on_pull_request_merged, on_runtime_closed, modified_at)
+            INSERT INTO user_agent_coding_preferences
+                (user_id, auto_archive_on_pull_request_merged, auto_archive_on_runtime_closed,
+                 modified_at)
             VALUES ($1, $2, $3, NOW())
             ON CONFLICT (user_id) DO UPDATE
-            SET on_pull_request_merged = EXCLUDED.on_pull_request_merged,
-                on_runtime_closed = EXCLUDED.on_runtime_closed,
+            SET auto_archive_on_pull_request_merged =
+                    EXCLUDED.auto_archive_on_pull_request_merged,
+                auto_archive_on_runtime_closed = EXCLUDED.auto_archive_on_runtime_closed,
                 modified_at = NOW()
             "#,
             user.as_ref(),
@@ -59,20 +62,16 @@ impl<B: BotFacts + 'static> AutoArchiveRepo for PgAgentSessionRepo<B> {
         let row = sqlx::query!(
             r#"
             SELECT
-                override.on_pull_request_merged AS "override_on_pull_request_merged?",
-                override.on_runtime_closed AS "override_on_runtime_closed?",
-                COALESCE(defaults.on_pull_request_merged, false) AS "default_on_pull_request_merged!",
-                COALESCE(defaults.on_runtime_closed, false) AS "default_on_runtime_closed!",
-                archive.reason AS "reason?",
-                archive.archived_at AS "archived_at?",
-                archive.restored_at AS "restored_at?"
+                session.auto_archive_on_pull_request_merged,
+                session.auto_archive_on_runtime_closed,
+                COALESCE(defaults.auto_archive_on_pull_request_merged, false)
+                    AS "default_on_pull_request_merged!",
+                COALESCE(defaults.auto_archive_on_runtime_closed, false)
+                    AS "default_on_runtime_closed!",
+                session.auto_archived_at
             FROM agent_session session
-            LEFT JOIN agent_session_auto_archive_override override
-                ON override.agent_session_id = session.id
-            LEFT JOIN user_agent_session_auto_archive defaults
+            LEFT JOIN user_agent_coding_preferences defaults
                 ON defaults.user_id = session.owner_id
-            LEFT JOIN agent_session_auto_archive archive
-                ON archive.agent_session_id = session.id
             WHERE session.id = $1
             "#,
             session.as_uuid(),
@@ -81,26 +80,16 @@ impl<B: BotFacts + 'static> AutoArchiveRepo for PgAgentSessionRepo<B> {
         .await
         .context("read session auto-archive")?
         .ok_or_else(|| anyhow::anyhow!("agent session not found"))?;
-        let archived = match (row.reason, row.archived_at) {
-            (Some(reason), Some(archived_at)) => Some(AutoArchiveRecord {
-                reason: reason
-                    .parse::<AutoArchiveReason>()
-                    .context("read auto-archive reason")?,
-                archived_at,
-                restored_at: row.restored_at,
-            }),
-            _ => None,
-        };
         Ok(SessionAutoArchive {
             overrides: AutoArchiveOverrides {
-                on_pull_request_merged: row.override_on_pull_request_merged,
-                on_runtime_closed: row.override_on_runtime_closed,
+                on_pull_request_merged: row.auto_archive_on_pull_request_merged,
+                on_runtime_closed: row.auto_archive_on_runtime_closed,
             },
             defaults: AutoArchivePreferences {
                 on_pull_request_merged: row.default_on_pull_request_merged,
                 on_runtime_closed: row.default_on_runtime_closed,
             },
-            archived,
+            auto_archived_at: row.auto_archived_at,
         })
     }
 
@@ -111,13 +100,10 @@ impl<B: BotFacts + 'static> AutoArchiveRepo for PgAgentSessionRepo<B> {
     ) -> Result<()> {
         sqlx::query!(
             r#"
-            INSERT INTO agent_session_auto_archive_override
-                (agent_session_id, on_pull_request_merged, on_runtime_closed, modified_at)
-            VALUES ($1, $2, $3, NOW())
-            ON CONFLICT (agent_session_id) DO UPDATE
-            SET on_pull_request_merged = EXCLUDED.on_pull_request_merged,
-                on_runtime_closed = EXCLUDED.on_runtime_closed,
-                modified_at = NOW()
+            UPDATE agent_session
+            SET auto_archive_on_pull_request_merged = $2,
+                auto_archive_on_runtime_closed = $3
+            WHERE id = $1
             "#,
             session.as_uuid(),
             overrides.on_pull_request_merged,
@@ -181,27 +167,26 @@ impl<B: BotFacts + 'static> AutoArchiveRepo for PgAgentSessionRepo<B> {
             r#"
             SELECT session.id
             FROM agent_session session
-            LEFT JOIN agent_session_auto_archive_override override
-                ON override.agent_session_id = session.id
-            LEFT JOIN user_agent_session_auto_archive defaults
+            LEFT JOIN user_agent_coding_preferences defaults
                 ON defaults.user_id = session.owner_id
             WHERE session.id = $1
-              AND NOT session.is_archived
+              AND session.archived_by IS NULL
+              AND session.auto_archived_at IS NULL
               AND CASE $2::text
                   WHEN 'pull_request_merged' THEN COALESCE(
-                      override.on_pull_request_merged, defaults.on_pull_request_merged, false)
+                      session.auto_archive_on_pull_request_merged,
+                      defaults.auto_archive_on_pull_request_merged,
+                      false)
                   WHEN 'runtime_closed' THEN COALESCE(
-                      override.on_runtime_closed, defaults.on_runtime_closed, false)
+                      session.auto_archive_on_runtime_closed,
+                      defaults.auto_archive_on_runtime_closed,
+                      false)
                   ELSE false
               END
               AND session.turn_state IS DISTINCT FROM 'starting'
               AND session.turn_state IS DISTINCT FROM 'running'
               AND session.turn_state IS DISTINCT FROM 'blocked'
               AND session.turn_state IS DISTINCT FROM 'stopping'
-              AND NOT EXISTS (
-                  SELECT 1 FROM agent_session_auto_archive archive
-                  WHERE archive.agent_session_id = session.id
-              )
               AND NOT EXISTS (
                   SELECT 1 FROM agent_conversation_sessions conversation
                   WHERE conversation.session_id = session.id AND conversation.is_current
@@ -222,25 +207,19 @@ impl<B: BotFacts + 'static> AutoArchiveRepo for PgAgentSessionRepo<B> {
         if eligible.is_none() {
             return Ok(false);
         }
-        sqlx::query!(
-            r#"
-            INSERT INTO agent_session_auto_archive (agent_session_id, reason)
-            VALUES ($1, $2)
-            "#,
-            session.as_uuid(),
-            reason.as_ref(),
-        )
-        .execute(&mut *transaction)
-        .await
-        .context("record agent session auto-archive")?;
+        let cause = ArchiveCause::from(reason);
         let modified_at = sqlx::query_scalar!(
             r#"
             UPDATE agent_session
-            SET is_archived = true, modified_at = NOW()
+            SET archived_by = $2::text::agent_session_archive_cause,
+                archived_at = NOW(),
+                auto_archived_at = NOW(),
+                modified_at = NOW()
             WHERE id = $1
             RETURNING modified_at
             "#,
             session.as_uuid(),
+            cause.as_ref(),
         )
         .fetch_one(&mut *transaction)
         .await

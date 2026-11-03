@@ -569,7 +569,7 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     fn set_archived(
         &self,
         id: AgentSessionId,
-        is_archived: bool,
+        archived: bool,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Whether the session is an agent conversation's current one: the
