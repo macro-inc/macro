@@ -64,7 +64,12 @@ function PopoverContent(props: PopoverContentProps) {
   );
 }
 
-/** Click-open form overlay. Content owns its portal and surface. */
+/** Click-open form overlay. Content owns its portal and surface.
+ *
+ * @do Name the overlay with Popover.Title and compose controls inside Content.
+ * @do Use portalScope="local" when the overlay belongs to a local portal scope.
+ * @dont Wrap Content in another Portal or use a dropdown menu for form controls.
+ */
 export const Popover = Object.assign(PopoverRoot, {
   Root: PopoverRoot,
   Trigger: KobaltePopover.Trigger,
