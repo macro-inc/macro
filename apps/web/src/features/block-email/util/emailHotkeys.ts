@@ -17,24 +17,15 @@ export function registerEmailHotkeys(
     });
   }
 
+  // As in other mail clients, r replies to the sender and Enter replies all.
   registerHotkey({
     hotkey: 'r',
     scopeId: scopeId,
-    description: 'Reply to message',
-    keyDownHandler: handlers.replyToFocusedMessage,
-    hotkeyToken: TOKENS.email.reply,
+    description: 'Reply to sender',
+    keyDownHandler: handlers.replyToSenderOfFocusedMessage,
+    hotkeyToken: TOKENS.email.replyToSender,
     displayPriority: 9,
   });
-
-  if (handlers.replyToSenderOfFocusedMessage) {
-    registerHotkey({
-      scopeId: scopeId,
-      description: 'Reply to sender',
-      keyDownHandler: handlers.replyToSenderOfFocusedMessage,
-      hotkeyToken: TOKENS.email.replyToSender,
-      displayPriority: 8,
-    });
-  }
 
   registerHotkey({
     hotkey: 'f',
@@ -73,14 +64,17 @@ export function registerEmailHotkeys(
     displayPriority: 9,
     condition: () => !handlers.isThreadMarkedUnread(),
   });
+  // u toggles: it shares the key with Mark as unread, whose condition is the
+  // opposite of this one.
   registerHotkey({
-    hotkey: 'shift+u',
+    hotkey: 'u',
     scopeId,
     description: 'Mark as read',
     keyDownHandler: handlers.markRead,
     hotkeyToken: TOKENS.entity.action.markRead,
     displayPriority: 9,
     condition: () => handlers.isThreadMarkedUnread(),
+    registrationType: 'add',
   });
   registerHotkey({
     scopeId: scopeId,

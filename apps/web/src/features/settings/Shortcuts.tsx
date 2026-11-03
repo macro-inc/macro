@@ -1099,14 +1099,7 @@ const shortcutSections: ShortcutSection[] = [
         keys: ['u'],
         codes: ['KeyU'],
         get description() {
-          return t('settingsShortcuts.markUnread');
-        },
-      },
-      {
-        keys: ['shift+u'],
-        codes: ['ShiftLeft', 'KeyU'],
-        get description() {
-          return t('settingsShortcuts.markRead');
+          return t('settingsShortcuts.markReadOrUnread');
         },
       },
       {

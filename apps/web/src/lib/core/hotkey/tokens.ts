@@ -156,7 +156,6 @@ export const TOKENS = {
     send: 'email.send',
     sendAndMarkDone: 'email.sendAndMarkDone',
     archive: 'email.archive',
-    reply: 'email.reply',
     replyToSender: 'email.replyToSender',
     replyAll: 'email.replyAll',
     forward: 'email.forward',

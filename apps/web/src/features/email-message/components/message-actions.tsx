@@ -37,7 +37,7 @@ export function MessageActions(props: {
           size="icon-sm"
           class="size-6 p-0"
           onClick={onChangeReplyType('reply-all')}
-          tooltip={{ content: 'Reply', hotkey: TOKENS.email.reply }}
+          tooltip={{ content: 'Reply', hotkey: TOKENS.email.replyAll }}
         >
           <ArrowBendUpLeft class="size-3.5" />
         </Button>
