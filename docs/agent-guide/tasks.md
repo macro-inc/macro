@@ -109,7 +109,11 @@ keeps that named chip, including on phones, rather than showing “1 tag”.
 Open the overflow to edit all tags; hover it for hidden-tag names and filter/edit actions.
 The overflow chip reads “N tags” when it represents all tags, or “+N tags” when
 individual tag chips remain visible.
-An open picker or nested tag editor stays mounted while resizing. Add tags in a
+An open picker or nested tag editor stays mounted while resizing or when a
+sorted insertion moves its chip into overflow. Keep the active chip within the
+visible-chip cap until closing, then restore normal order. Live tag refreshes
+retain staged picker changes while accepting remote changes and deleted tags,
+including when a failed tag deletion restores its option. Add tags in a
 constrained row and close the picker: excess tags must enter overflow without
 resizing or reloading, restoring title space before truncating it. The share
 indicator remains immediately beside the title whenever it is shown.

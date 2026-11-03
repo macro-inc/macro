@@ -159,7 +159,10 @@ to compact rows like the session's tool rows: the label, and **Failed** or
 Documents, sessions, pull requests, and contacts an agent's reply mentions are
 set in the accent color.
 Stored activity snapshots keep the status and label but omit commands and tool
-input details, in both shared threads and DMs. The line follows the session
+input details, in both shared threads and DMs. A view the agent presents
+(`execution.views.present`) is part of the reply: it is stored with its run and
+drawn after the run's line or summary, never folded into it, and each item it
+shows loads with the reader's own access. The line follows the session
 live while the run is open; the summary shows the snapshot saved in the
 message. Readers without session access always see that snapshot. Only the
 turn's last message notifies. Previews and search
@@ -328,14 +331,17 @@ verify that its tool response includes the matching attachment URLs.
 
 ## Messages sent through an MCP client
 
-A message a user's MCP client (Claude Code, Cursor, ChatGPT) sends through
-Macro MCP's `SendChannelMessage` is posted by the Macro bot with a
-**from <user> via <client>** pill under the sender name, where the client is the
-name it registered with Macro's OAuth broker. A self-hosted agent's message
-shows the agent as the sender with **from <user>**, and a message sent with a
-pasted Macro API key shows the Macro bot with **from <user>**. To check this,
-connect an MCP client over OAuth, ask it to post in a channel, and confirm the
-pill names both you and the client on desktop and at phone width.
+A message, comment, or thread reply a user's MCP client (Claude Code, Cursor,
+ChatGPT) posts through Macro MCP, with a direct tool such as
+`SendChannelMessage` or from code mode (`ExecuteCode`), shows the client as its
+sender: **Claude Code · Agent** with the client's initial as its avatar and a
+**from <user>** pill underneath. The client is the name it registered with
+Macro's OAuth broker, or "MCP client" if it registered none. Notifications name
+the client as the sender too. A self-hosted agent's message shows the agent as
+the sender with **from <user>**, and a message sent with a pasted Macro API key
+shows the Macro bot with **from <user>**. To check this, connect an MCP client
+over OAuth, ask it to post in a channel and to comment on a document, and
+confirm both show the client and the user on desktop and at phone width.
 
 ## Message composer
 

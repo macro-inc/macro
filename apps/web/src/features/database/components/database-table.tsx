@@ -377,7 +377,18 @@ export function DatabaseTable(props: DatabaseTableProps) {
         ? { rowId: cell.rowId, columnId: cell.columnId }
         : undefined;
     },
+    canSelectRow: (rowId) => !props.isUnsavedRow?.(rowId),
     focus: () => gridElement.focus({ preventScroll: true }),
+    // The corner may be in a row the virtualizer hasn't mounted yet.
+    focusCell: (cell) => {
+      pendingFocus = {
+        rowId: cell.rowId,
+        column: selection.columnIndex().get(cell.columnId)! + 1,
+      };
+      revealRow(cell.rowId);
+      focusRequestedCell();
+      queueMicrotask(focusRequestedCell);
+    },
     onChange: (range) =>
       announceCell(
         range
