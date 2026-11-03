@@ -469,7 +469,7 @@ Broadcast a typing indicator, optionally scoped to a thread.
 
 | Parameter | Type |
 | ------ | ------ |
-| `action` | `"stop"` \| `"start"` |
+| `action` | `"start"` \| `"stop"` |
 | `opts?` | \{ `thread?`: [`Thread`](../../thread/classes/Thread.md); \} |
 | `opts.thread?` | [`Thread`](../../thread/classes/Thread.md) |
 

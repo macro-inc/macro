@@ -275,6 +275,7 @@ async fn macro_ai_bot_profile_is_builtin_without_context_lookup() {
         thread_id: None,
         sender_id: Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID),
         triggered_by: None,
+        triggered_via: None,
         content: "hello".to_string(),
         created_at: now,
         updated_at: now,
@@ -288,6 +289,43 @@ async fn macro_ai_bot_profile_is_builtin_without_context_lookup() {
         .expect("Macro AI should have a built-in profile");
 
     assert_eq!(profile.name, bot_id::MACRO_AI_NAME);
+    assert_eq!(profile.avatar_url, None);
+    assert_eq!(*lookup_count.lock().unwrap(), 0);
+}
+
+#[tokio::test]
+async fn mcp_client_post_is_named_after_the_client() {
+    let lookup_count = Arc::new(Mutex::new(0));
+    let service = ChannelSideEffectService::new(
+        FakeContext {
+            bot_profile_lookup_count: lookup_count.clone(),
+            ..FakeContext::default()
+        },
+        FakeRealtime::default(),
+        FakeNotifications::default(),
+        FakeContacts::default(),
+    );
+    let now = Utc::now();
+    let message = MutatedMessage {
+        id: Uuid::new_v4(),
+        channel_id: Uuid::new_v4(),
+        thread_id: None,
+        sender_id: Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID),
+        triggered_by: Some("macro|alice@example.com".to_string()),
+        triggered_via: Some("Claude Code".to_string()),
+        content: "hello".to_string(),
+        created_at: now,
+        updated_at: now,
+        edited_at: None,
+        deleted_at: None,
+    };
+
+    let profile = service
+        .bot_profile_for_message(&message)
+        .await
+        .expect("a client post should have a profile");
+
+    assert_eq!(profile.name, "Claude Code");
     assert_eq!(profile.avatar_url, None);
     assert_eq!(*lookup_count.lock().unwrap(), 0);
 }
@@ -311,6 +349,7 @@ async fn non_macro_bot_profile_uses_context_lookup() {
         thread_id: None,
         sender_id: Sender::new_from_bot(BotId::new_from_uuid(Uuid::new_v4())),
         triggered_by: None,
+        triggered_via: None,
         content: "hello".to_string(),
         created_at: now,
         updated_at: now,
@@ -373,6 +412,7 @@ async fn message_posted_derives_notification_effects_without_legacy_realtime() {
                 thread_id: None,
                 sender_id: Sender::new_from_user(sender.clone()),
                 triggered_by: None,
+                triggered_via: None,
                 content: "hello".to_string(),
                 created_at: now,
                 updated_at: now,
@@ -438,6 +478,7 @@ fn bot_message_posted_event(
             thread_id,
             sender_id: Sender::new_from_bot(BotId::new_from_uuid(Uuid::new_v4())),
             triggered_by: None,
+            triggered_via: None,
             content: "hello".to_string(),
             created_at: now,
             updated_at: now,
@@ -495,6 +536,7 @@ async fn silent_message_posted_skips_notifications_only() {
                 thread_id: None,
                 sender_id: Sender::new_from_user(sender),
                 triggered_by: None,
+                triggered_via: None,
                 content: "transient".to_string(),
                 created_at: now,
                 updated_at: now,
@@ -556,6 +598,7 @@ async fn mentions_only_skips_failing_invite_lookup_and_sends_mention() {
                 thread_id: None,
                 sender_id: Sender::new_from_user(sender),
                 triggered_by: None,
+                triggered_via: None,
                 content: "welcome".to_string(),
                 created_at: now,
                 updated_at: now,
@@ -832,6 +875,7 @@ async fn document_mentions_notify_participants_except_sender() {
                 thread_id: None,
                 sender_id: Sender::new_from_user(sender.clone()),
                 triggered_by: None,
+                triggered_via: None,
                 content: "hello".to_string(),
                 created_at: now,
                 updated_at: now,
@@ -1226,6 +1270,7 @@ fn mention_broker_events_map_message_posted_mentions() {
             thread_id: None,
             sender_id: Sender::new_from_user(user("alice@example.com")),
             triggered_by: None,
+            triggered_via: None,
             content: "@bot @doc-1".to_string(),
             created_at: now,
             updated_at: now,

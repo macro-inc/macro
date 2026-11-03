@@ -16,6 +16,12 @@ export type EntityActionViewContext = {
   supportsMarkDone: boolean;
   supportsOpenInNewSplit: boolean;
   senderBucket: EntityActionSenderBucket | undefined;
+  /**
+   * How an open action treats a conversation, for views whose rows don't
+   * stand for a notification. Unset views keep the open defaults.
+   */
+  channelNavigation?: 'latest';
+  channelReadScope?: 'top-level';
 };
 
 export type EntityActionNavigationEvent = {

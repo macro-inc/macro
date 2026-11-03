@@ -121,7 +121,7 @@ where
             return Ok(());
         }
         let session = self.sessions.get_session(session_id).await?;
-        if session.is_archived
+        if session.is_archived()
             || AgentKind::for_session(session.bot_id, &session.harness) != AgentKind::External
         {
             return Ok(());

@@ -6,6 +6,12 @@ Sidebar `Search` button → `/app/search` with a focused query box. Results
 (including a `Featured Results` group) filter live as you type; no Enter needed. `Ctrl+K` is
 usually faster for jump-to-entity; `/` opens workspace search when no editor is focused.
 
+Routines are found by name in a typed `Ctrl+K` **All** query, in touch Search's
+**All** name results, and in the desktop Search page's `Featured Results`. They
+come from the routines list (Quick Access `routine` bucket), not the search
+service, and open the routine in the Agents workspace. They stay out of the
+empty recency list and out of Home, Drive and Tasks searches.
+
 Desktop filter chips use one compact control size for values, match mode, and
 clear actions. Labels and controls stay vertically centered inside a frame that
 grows to fit them, rather than clipping taller segments.
@@ -54,7 +60,7 @@ the build-time `VITE_ENABLE_GRAPHQL_SOUP=true` override; see the
 
 Category/mode changes keep the same input mounted and focused. Return inserts
 a newline and keeps the keyboard open; the Search bar expands with the text.
-When **enable-universal-input** is on, three words or 24 characters reveal
+When **enable-universal-input** is on, 34 characters (regardless of word count) reveal
 Universal Input's suggested form above the bar. The editor stays mounted while
 classification and extraction update the form. Shorter edits keep the form until
 the input is cleared. While the card is active, the normal search results and top

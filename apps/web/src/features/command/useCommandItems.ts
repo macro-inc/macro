@@ -464,6 +464,7 @@ export function useCommandItems(
   return {
     items: filteredItems,
     isLoadingEntities: entities.isLoadingEntities,
+    isSettling: entities.isSettling,
     pagination: entities.pagination,
   };
 }

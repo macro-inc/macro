@@ -7735,6 +7735,96 @@
         }
       }
     },
+    "/databases/{id}/duplicate": {
+      "post": {
+        "tags": ["databases"],
+        "summary": "Copy a database, with its tables, columns, views and rows, into a new one\nthe caller owns. Its sharing, forms, webhooks and history stay behind.",
+        "operationId": "duplicate_database",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DuplicateDatabaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Database"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/databases/{id}/import": {
       "post": {
         "tags": ["databases"],
@@ -20178,6 +20268,11 @@
         "description": "Last synchronized state of a session's linked GitHub pull request.",
         "enum": ["open", "draft", "closed", "merged"]
       },
+      "AgentSessionArchiveCause": {
+        "type": "string",
+        "description": "Who or what archived an agent session.",
+        "enum": ["user", "pull_request_merged", "runtime_closed"]
+      },
       "AgentSessionFilters": {
         "type": "object",
         "description": "Filters for agent sessions.",
@@ -27026,7 +27121,14 @@
       "Database": {
         "type": "object",
         "description": "A database: a named collection of tables, owned and shared as one entity.",
-        "required": ["id", "name", "owner_id", "created_at", "trashed_at"],
+        "required": [
+          "id",
+          "name",
+          "owner_id",
+          "created_at",
+          "trashed_at",
+          "project_id"
+        ],
         "properties": {
           "created_at": {
             "type": "string",
@@ -27045,6 +27147,10 @@
           "owner_id": {
             "type": "string",
             "description": "Owning user."
+          },
+          "project_id": {
+            "type": ["string", "null"],
+            "description": "The folder it is filed in; `null` at the root."
           },
           "trashed_at": {
             "type": ["string", "null"],
@@ -28616,6 +28722,16 @@
           "share_permission_updated": {
             "type": "boolean",
             "description": "Whether share permissions were updated."
+          }
+        }
+      },
+      "DuplicateDatabaseRequest": {
+        "type": "object",
+        "description": "Request body for duplicating a database.",
+        "properties": {
+          "name": {
+            "type": ["string", "null"],
+            "description": "The copy's name; left out, \"<name> copy\"."
           }
         }
       },
@@ -31735,15 +31851,22 @@
           "respondentColumnId",
           "audience",
           "tallyVisible",
+          "responsesVisible",
+          "anonymous",
           "status",
           "closesAt",
           "confirmationMessage",
           "branding",
           "createdAt",
           "updatedAt",
+          "projectId",
           "isHiddenInDrive"
         ],
         "properties": {
+          "anonymous": {
+            "type": "boolean",
+            "description": "Whether nobody, the owner included, can see who gave which response.\nWho responded is kept apart from the responses, only so nobody\nresponds twice. Fixed once anyone has responded."
+          },
           "audience": {
             "$ref": "#/components/schemas/Audience",
             "description": "Who may respond."
@@ -31792,10 +31915,18 @@
             "type": "string",
             "description": "Its owner."
           },
+          "projectId": {
+            "type": ["string", "null"],
+            "description": "The folder it is filed in; `null` at the root."
+          },
           "respondentColumnId": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "The person column each signed-in submission names its respondent in;\n`null` once deleted."
+            "description": "The person column each signed-in submission names its respondent in;\n`null` once deleted, and on a form created anonymous. An anonymous\nform never writes it."
+          },
+          "responsesVisible": {
+            "type": "boolean",
+            "description": "Whether people with View may read individual response rows."
           },
           "status": {
             "$ref": "#/components/schemas/FormStatus",
@@ -31824,7 +31955,7 @@
       },
       "FormAccess": {
         "type": "string",
-        "description": "The caller's level on a form: view responds, edit changes questions and\nreads responses, owner also sets the audience, closes and trashes it.",
+        "description": "The caller's level on a form: view responds (and reads responses when\nthey are shared), edit changes questions and reads responses, owner\nalso sets the audience, closes and trashes it.",
         "enum": ["view", "edit", "owner"]
       },
       "FormBranding": {
@@ -31909,6 +32040,7 @@
           "tableGone",
           "alreadyResponded",
           "noResponse",
+          "anonymousResponseFinal",
           "unknownQuestion",
           "repeatedAnswer",
           "missingAnswer",
@@ -32360,6 +32492,10 @@
             "description": "A new database named like the form, whose one table, \"Responses\",\nstarts with only the form's own columns.",
             "required": ["kind"],
             "properties": {
+              "anonymous": {
+                "type": "boolean",
+                "description": "Make the form anonymous from the start: its table gets no\nRespondent column."
+              },
               "isHiddenInDrive": {
                 "type": "boolean",
                 "description": "Keep the form, and the database made for it, out of Drive, as\nfor a channel poll."
@@ -36293,26 +36429,46 @@
         "description": "Lifecycle events for the common message service, one per committed fact.\nReactions and typing never reach the topic."
       },
       "MyResponse": {
-        "type": "object",
-        "description": "A signed-in respondent's own response, with its answers as the row\nholds them now.",
-        "required": ["response", "answers"],
-        "properties": {
-          "answers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Answer"
-            },
-            "description": "The row's cells for the form's current questions, the empty ones\nleft out; none when the row is gone."
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Their ledger entry, with its answers as the row holds them now.",
+            "required": ["response", "answers", "kind"],
+            "properties": {
+              "answers": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Answer"
+                },
+                "description": "The row's cells for the form's current questions, the empty ones\nleft out; none when the row is gone."
+              },
+              "booking": {
+                "$ref": "#/components/schemas/UnlockedBooking",
+                "description": "The form's booking step, while the saved row still passes the\nform's current required questions and gates."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["saved"]
+              },
+              "response": {
+                "$ref": "#/components/schemas/FormResponse",
+                "description": "The ledger entry."
+              }
+            }
           },
-          "booking": {
-            "$ref": "#/components/schemas/UnlockedBooking",
-            "description": "The form's booking step, while the saved row still passes the form's\ncurrent required questions and gates."
-          },
-          "response": {
-            "$ref": "#/components/schemas/FormResponse",
-            "description": "The ledger entry."
+          {
+            "type": "object",
+            "description": "They responded to an anonymous form. Nothing links them to their\nresponse, so there is nothing more to show.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["anonymous"]
+              }
+            }
           }
-        }
+        ],
+        "description": "A signed-in respondent's own response."
       },
       "NewAttachment": {
         "type": "object",
@@ -40239,7 +40395,6 @@
             "required": [
               "id",
               "name",
-              "isArchived",
               "ownerId",
               "botId",
               "harness",
@@ -40248,6 +40403,22 @@
               "updatedAt"
             ],
             "properties": {
+              "archivedAt": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When the session was archived, or `None` while it is active."
+              },
+              "archivedBy": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AgentSessionArchiveCause",
+                    "description": "Who or what archived the session, or `None` while it is active. An archived session is\nread-only."
+                  }
+                ]
+              },
               "botId": {
                 "type": "string",
                 "format": "uuid",
@@ -40266,10 +40437,6 @@
                 "type": "string",
                 "format": "uuid",
                 "description": "The agent session uuid"
-              },
-              "isArchived": {
-                "type": "boolean",
-                "description": "Whether the session is archived and read-only."
               },
               "name": {
                 "type": "string",
@@ -43452,6 +43619,13 @@
           "value": {
             "$ref": "#/components/schemas/TallyValue",
             "description": "The value."
+          },
+          "voters": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Who chose it, as Macro user ids in submission order: present only\nfor the form's editors, or its viewers when it shares its responses,\nand never when it hides respondents. Rows no signed-in respondent\nsubmitted count without a voter."
           }
         }
       },
@@ -44616,6 +44790,10 @@
             "description": "A new accent color, or `null` for the default.",
             "pattern": "^#[0-9a-fA-F]{6}$"
           },
+          "anonymous": {
+            "type": "boolean",
+            "description": "Whether nobody can see who gave which response; refused once anyone\nhas responded."
+          },
           "audience": {
             "$ref": "#/components/schemas/Audience",
             "description": "Who may respond from now on."
@@ -44642,6 +44820,10 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "A new logo, or `null` to remove it."
+          },
+          "responsesVisible": {
+            "type": "boolean",
+            "description": "Whether people with View may read individual response rows."
           },
           "status": {
             "$ref": "#/components/schemas/FormStatus",

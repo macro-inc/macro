@@ -12,7 +12,8 @@ mod test;
 
 /// The highest access level `source_ids` hold on a database row: a row has
 /// no grants of its own, so this is its database's access, including Edit
-/// through a live form over that database.
+/// through a live form over that database and View through a live form that
+/// shares its responses.
 #[tracing::instrument(err, skip(pool, source_ids))]
 pub async fn get_database_row_access(
     pool: &PgPool,
@@ -46,6 +47,20 @@ pub async fn get_database_row_access(
         AND f.trashed_at IS NULL
         AND ea.source_id = ANY($2)
         AND ea.access_level IN ('edit', 'owner')
+
+        UNION ALL
+
+        SELECT 'view'
+        FROM database_rows r
+        JOIN database_tables t ON t.id = r.table_id
+        JOIN forms f ON f.database_id = t.database_id
+        JOIN database_entities d ON d.database_id = f.database_id
+        JOIN entity_access ea ON ea.entity_id = f.id AND ea.entity_type = 'form'
+        WHERE r.id = $1
+        AND f.trashed_at IS NULL
+        AND f.responses_visible
+        AND ea.source_id = ANY($2)
+        AND ea.access_level = 'view'
         "#,
         row_id,
         &source_ids.0,
@@ -57,7 +72,8 @@ pub async fn get_database_row_access(
 }
 
 /// Highest database grant for each requested row, using the caller's shared
-/// sources, including Edit through a live form over the row's database.
+/// sources, including Edit through a live form over the row's database and
+/// View through a live form that shares its responses.
 #[tracing::instrument(err, skip_all, fields(row_count = row_ids.len()))]
 pub async fn get_database_rows_access(
     pool: &PgPool,
@@ -91,6 +107,20 @@ pub async fn get_database_rows_access(
         AND f.trashed_at IS NULL
         AND ea.source_id = ANY($2)
         AND ea.access_level IN ('edit', 'owner')
+
+        UNION ALL
+
+        SELECT r.id, 'view'::"AccessLevel"
+        FROM database_rows r
+        JOIN database_tables t ON t.id = r.table_id
+        JOIN forms f ON f.database_id = t.database_id
+        JOIN database_entities d ON d.database_id = f.database_id
+        JOIN entity_access ea ON ea.entity_id = f.id AND ea.entity_type = 'form'
+        WHERE r.id = ANY($1)
+        AND f.trashed_at IS NULL
+        AND f.responses_visible
+        AND ea.source_id = ANY($2)
+        AND ea.access_level = 'view'
         "#,
         row_ids,
         &source_ids.0,

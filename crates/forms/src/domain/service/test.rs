@@ -24,6 +24,7 @@ use crate::domain::models::{
     FormSectionId, FormStatus, QuestionLayout, StoredForm, Widget,
 };
 
+mod anonymous;
 mod authoring_workflow;
 mod booking;
 mod catalog;
@@ -298,7 +299,10 @@ fn seed_rsvp(world: &Shared, audience: Audience) {
             branding: FormBranding::default(),
             created_at: now,
             updated_at: now,
+            project_id: None,
             is_hidden_in_drive: false,
+            responses_visible: false,
+            anonymous: false,
         },
         trashed_at: None,
         name_follows_database: false,

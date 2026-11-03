@@ -308,6 +308,11 @@ where
             },
         ));
     }
+
+    /// The queue has nothing to do when a runtime closes: an idle session
+    /// stays idle, and a later prompt relaunches it. Auto-archive hears this
+    /// fact through its own observer.
+    fn runtime_closed(&self, _id: AgentSessionId) {}
 }
 
 impl<

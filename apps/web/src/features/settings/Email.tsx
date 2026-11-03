@@ -73,7 +73,7 @@ export function useConnectInbox(): (provider?: EmailProvider) => void {
           toast.failure('New Outlook connections are temporarily unavailable.');
           return;
         }
-        await startAddInbox({ provider });
+        await span.run(() => startAddInbox({ provider }));
         span.setAttr('email.link.outcome', 'started');
       } finally {
         addingInbox = false;

@@ -113,12 +113,15 @@ describe('the booking step', () => {
     status: 'open',
     closesAt: null,
     tallyVisible: false,
+    responsesVisible: false,
+    anonymous: false,
     confirmationMessage: '',
     branding: { logoFileId: null, coverFileId: null, accentColor: null },
     submittedColumnId: null,
     respondentColumnId: null,
     createdAt: '2026-10-01T12:00:00Z',
     updatedAt: '2026-10-01T12:00:00Z',
+    projectId: null,
     isHiddenInDrive: false,
   } as const;
 
@@ -257,6 +260,7 @@ describe('the booking step', () => {
     ).toEqual({ kind: 'stopped', sectionId: 'fit', message: 'Not a fit yet.' });
     expect(
       toMyResponse({
+        kind: 'saved',
         response: {
           id: 'response-1',
           formId: 'form-1',

@@ -2,6 +2,7 @@ import {
   attachmentLimitBytes,
   MACRO_EMAIL_SIGNATURE,
 } from '@app/features/email-compose/core/constants';
+import { startUiOperation } from '@app/observability/ui-operation';
 import { setEditorStateFromHtml } from '@core/component/LexicalMarkdown/utils/setEditorStateFromHtml';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { $generateHtmlFromNodes } from '@lexical/html';
@@ -938,6 +939,14 @@ export function createEmailComposer(props: EmailComposerOptions) {
     setSendPhase('preparing');
     const sendOperation = ++sendOperationVersion;
     const sendGeneration = identityVersion;
+    // Send to the composer's sent state; an early return cancels it.
+    const sendUi = startUiOperation('email.send', {
+      attributes: {
+        'email.send.queued':
+          props.delivery.queueActive?.(activeInboxId()) ?? false,
+      },
+    });
+    let sent = false;
     try {
       // Durable sends need the latest local copy, without waiting for a server save.
       const epochBeforeSave = session.epoch();
@@ -1066,6 +1075,8 @@ export function createEmailComposer(props: EmailComposerOptions) {
         session.dispatch({ type: 'reset' });
         setDraftGeneration(0);
         afterSend(result, currentLink.id);
+        sent = true;
+        sendUi.afterPaint();
       } finally {
         if (
           sendGeneration === identityVersion &&
@@ -1074,10 +1085,12 @@ export function createEmailComposer(props: EmailComposerOptions) {
           cleanupWatermark();
       }
     } catch (error) {
+      sendUi.finish('error');
       if (sendGeneration !== identityVersion) return;
       props.notices.reportError(error);
       if (!completed()) props.notices.feedback.failure('Failed to send email');
     } finally {
+      if (!sent) sendUi.cancel();
       if (sendOperation === sendOperationVersion) setSendPhase('idle');
     }
   };
