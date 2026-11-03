@@ -198,16 +198,24 @@ export function StepRevision(props: {
 }
 
 function WordChange(props: { part: DiffPart }) {
+  // Spaces around a change stay plain, so the mark fits its words.
+  const pieces = () => props.part.text.match(/^(\s*)(.*?)(\s*)$/s) ?? [];
   return (
     <>
-      {props.part.change === 'added' ? (
-        <mark class="rounded-sm bg-accent/15 px-0.5 text-ink">
-          {props.part.text}
-        </mark>
-      ) : props.part.change === 'removed' ? (
-        <del class="text-ink-extra-muted">{props.part.text}</del>
-      ) : (
+      {props.part.change === 'same' ? (
         props.part.text
+      ) : (
+        <>
+          {pieces()[1]}
+          {props.part.change === 'added' ? (
+            <mark class="rounded-sm bg-accent-bg px-0.5 font-medium text-accent-ink">
+              {pieces()[2]}
+            </mark>
+          ) : (
+            <del class="text-ink-extra-muted">{pieces()[2]}</del>
+          )}
+          {pieces()[3]}
+        </>
       )}
     </>
   );

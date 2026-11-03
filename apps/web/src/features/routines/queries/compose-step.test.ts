@@ -6,7 +6,7 @@ import {
   type StepDraft,
 } from '../core/routine-steps';
 import type { RoutineTriggerDraft } from '../core/routine-triggers';
-import { composeStep, reviseStep } from './compose-step';
+import { composeStep, reviseStep, shortReason } from './compose-step';
 
 const clients = vi.hoisted(() => ({
   structuredCompletion: vi.fn(),
@@ -209,5 +209,18 @@ describe('changing a step in words', () => {
     const [check] = clients.checkCode.mock.calls[0] ?? [];
     expect(check.steps).toHaveLength(2);
     expect(check.steps[0].source).toContain('/* v2 */');
+  });
+});
+
+describe('a step’s reason', () => {
+  it('keeps one short phrase, and drops the model thinking aloud', () => {
+    expect(shortReason(' Writing the summary takes judgment each run. ')).toBe(
+      'Writing the summary takes judgment each run'
+    );
+    expect(
+      shortReason(
+        'Code can check what tasks were updated or post deterministic notes, but writing a human summary of what changed fits Ask AI better here. Wait.'
+      )
+    ).toBe('');
   });
 });

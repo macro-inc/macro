@@ -113,7 +113,7 @@ function AddStepBox(props: {
   };
 
   return (
-    <div class="grid min-w-0 gap-2 py-1">
+    <div class="grid w-full min-w-0 gap-2 py-1">
       <form
         class="flex min-h-11 min-w-0 items-center gap-2 rounded-xl border border-edge-frame bg-control py-1 pl-3 pr-1 focus-within:ring-1 focus-within:ring-edge"
         onSubmit={(event) => {
