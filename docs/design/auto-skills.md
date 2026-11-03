@@ -4,185 +4,363 @@ Status: proposal. Nothing here is built yet.
 
 ## Goal
 
-Agents should follow a skill whenever a request needs it, without the user
-attaching it with `/`. For example, "draft the release notes" should use the
-user's "Release notes" skill. A request that no skill covers should load
-nothing.
+1. **Agents load skills automatically.** An agent should follow a skill
+   whenever a request needs it, without the user attaching it with `/`. For
+   example, "draft the release notes" should use the user's "Release notes"
+   skill. A request that no skill covers should load nothing.
+2. **Core areas become built-in skills.** Routines, databases, CRM, search,
+   documents, email, calendar, channels, tasks and coding each become a
+   built-in skill that owns its prompt guidance and its tools. Jev loads the
+   ones a request needs, and the always-on prompt keeps only cross-cutting
+   rules.
 
 ## What exists
 
-- A skill is a markdown document whose sub type is `skill`. Its only metadata
-  is its name. There is no description and no trigger
-  (`crates/skills/src/domain/model.rs`). Visibility follows ordinary document
-  access: skills the user owns, skills shared with them, and skills in their
-  projects. Three system skills are defined in code (`crates/system_skills`).
-- `ListSkills` returns at most 100 skills, as id and name only.
-  `SearchSkills` matches names only. `ReadSkill` returns the body after an
-  access check. All three are eager, direct tools, in code mode as well.
-- Agent sessions do not resolve skill mentions. The model sees the mention
-  and has to call `ReadSkill` itself. Legacy chat resolves a mention into an
-  attachment tagged `<metadata key=type value=skill/>`.
-- Nothing finds a skill automatically. Unless a skill is attached, the model
-  has to decide on its own to search for one, and it searches by name.
-  `apps/docs/product/skills.mdx` already promises that agents use a matching
-  skill without it being attached.
-- Jev (`crates/jev`) is a cheap yes/no classifier. It answers at most 32
-  questions per call, has no prompt cache, and costs $0.042 per million input
-  tokens. Agent sessions already call it before each turn:
-  - Auto model choice (`agent.auto_model`).
-  - SDK docs selection (`select_documentation`): one question per SDK entity,
-    a 1 s deadline, a 0.5 threshold, the top 4 entities, and the result
-    placed in the turn part of the system prompt. It runs alongside the memory
-    fetch, so it adds no wall time on its own.
-- Prompt layout (`agent::SystemPrompt`): the `shared` part is the same for
-  every session and is the Anthropic cache breakpoint. `rest` is per session.
-  `turn` comes last, so changing it costs only the tokens after it.
+- **Skills are documents.** A skill is a markdown document whose sub type is
+  `skill`. Its only metadata is its name: there is no description and no
+  trigger (`crates/skills/src/domain/model.rs`). Visibility follows ordinary
+  document access.
+- **System skills are code.** They are defined in `crates/system_skills` as
+  `SystemSkill { slug, name, content }`, with a UUIDv5 id. There are three:
+  `catch-me-up`, `what-i-did-yesterday` and `configure-agent`. All are shown
+  to users in the `/` menu.
+- **Skill tools.**
+  - `ListSkills` returns at most 100 skills, as id and name.
+  - `SearchSkills` matches names only.
+  - `ReadSkill` returns the body after an access check.
+  - All three are eager, direct tools, including in code mode.
+- **Nothing finds a skill automatically.** Unless the user attaches a skill,
+  the model has to decide on its own to search for one by name.
+- **Jev** (`crates/jev`) is a cheap yes/no classifier: at most 32 questions per
+  call, no prompt cache, $0.042 per million input tokens. Agent sessions
+  already call it before each turn for SDK docs selection
+  (`select_documentation`):
+  - one question per SDK entity, built from its `catalog.ts` one-liner;
+  - a 1 s deadline, run alongside the memory fetch;
+  - entities scoring 0.5 or higher are kept, at most 4;
+  - the result goes in the turn part of the prompt.
+- **Prompt layout** (`agent::SystemPrompt`):
+  - `shared` is identical for every session and is the Anthropic cache
+    breakpoint;
+  - `rest` is per session;
+  - `turn` comes last.
+- **Area guidance is scattered** across prompt sections, tool descriptions,
+  SDK TSDoc and code-mode topic guides (`crates/agent_code_mode/.../guides`).
+  Tools are eager (27, mostly core search, read and edit) or deferred, and
+  the deferred ones are listed one line each in the prompt.
+
+Sizes below are rendered characters on #9396, which this builds on.
+Excluding the deferred-tool catalog, the tool prompt is:
+
+| Host | Characters |
+| --- | --- |
+| Chat | 26,896 |
+| Agent session | 28,408 |
+| Agent session, code mode | 29,489 |
+| Channel bot and MCP toolset | 24,192 |
 
 ## Prior art
 
-- **Agent Skills** (Claude Code, the Claude API): each skill has a required
-  `name` and a `description` written as "what it does and when to use it". The
-  name and description of every skill are always in the system prompt, and
-  the model loads a skill's body with a tool call when it decides the skill
-  applies.
-- **Cursor rules**: "Agent Requested" rules work the same way, by description.
-  "Auto Attached" rules are routed by file glob before the turn.
-- **Macro's deferred tools**: a `- Name: first sentence` catalog in the prompt,
-  with the schema loaded on demand. Same idea, applied to tools.
+- **Agent Skills** (Claude Code, the Claude API): `name` and `description`
+  ("what it does and when to use it") are always in context. The model loads
+  the body with a tool call.
+- **Cursor rules**: "Agent Requested" rules work by description. "Auto
+  Attached" rules are routed by file glob before the turn.
+- **Macro's deferred tools**: a catalog in the prompt, with each schema
+  loaded on demand.
 
-## Options
+## Built-in skills
 
-**(a) Catalog only.** Put every skill's name and description in the prompt.
-The model calls `ReadSkill` when one applies.
+Each built-in is a code-defined system skill with these fields:
 
-- Accuracy depends on the turn's model. The default Auto model is Gemini
-  Flash, which is weaker at deciding to load something on its own than Claude
-  is.
-- Every skill use costs an extra model round trip before the real work
-  starts.
-- The catalog is per user, so it cannot go in the cached `shared` part. It
-  belongs in `rest`.
-- It grows linearly with the number of skills: 100 skills at about 30 tokens
-  each is roughly 3k tokens on every turn.
-- It needs no new per-turn call.
+- `description`: one "Use when …" sentence that also says what the skill is
+  not for, because this is what Jev routes on.
+- `instructions`: the area's domain rules, moved out of `crates/prompt`.
+- `tools`: the deferred tools the skill owns.
+- `sdk_entities`: the SDK entities the skill covers.
 
-**(b) Jev router.** Before the turn, ask Jev one question per skill ("Would
-skill X help with this request? Use when …") and put the bodies of the
-matching skills in the `turn` part of the prompt.
+Loading a skill brings all of it into the turn: its instructions, its tools,
+and, in code mode, its entities' indexes. **Loading one of its tools loads the
+skill too**, so a model that reaches for `QueryDatabase` without the skill
+still gets the database rules. The table lists each candidate; "Tools" are
+deferred unless noted.
 
-- The skill is in context on the first model call, with no extra round trip.
-  This works the same for every turn model.
-- It reuses the `select_documentation` code path, deadline and span shape.
-  Jev's cost is negligible, and the call is hidden behind the memory fetch.
-- A missed or wrong pick gives the model no fallback, and a wrongly loaded
-  skill is worse than a wrongly loaded SDK doc, because the model is told to
-  follow it.
-- Jev answers 32 questions per call, so more skills need parallel calls, and
-  past some count a shortlist.
+| Skill | Use when … | Moves in from `crates/prompt` (chars) | Tools | SDK |
+| --- | --- | --- | --- | --- |
+| `finding-things` | the user asks to find, look up or list their own Macro content (documents, emails, messages, tasks, people), or asks something their workspace answers; not for the web | code-mode `guides/search.md` (1,427) becomes its body | ContentSearch, NameSearch, ListEntities, ReadContent, ReadMetadata (eager, they stay eager), ReadActivity | search, entity |
+| `documents` | creating, writing into or editing a document, canvas, spreadsheet, Word document or deck; not databases | `document_content_links` (3,339) | CreateDocument, EditDocument (eager); canvas, spreadsheet, Word, PowerPoint, design readers, RenameDocument, CommentOnText, UploadFile, GenerateImage | documents |
+| `databases` | working with a Macro database or table: creating one, querying it, adding rows, columns or views; not CRM pipelines or spreadsheets | `databases` (2,766) | ListDatabases, DescribeDatabase, QueryDatabase, SaveDatabaseQuery, Save/DeleteDatabaseView | databases |
+| `crm` | deals, pipelines, stages, companies or contacts; not generic databases | `crm_pipelines` (749) | the 14 pipeline, company and contact tools | crm |
+| `routines` | something should happen later, on a schedule, or whenever an event occurs ("every Monday", "remind me", "when an email arrives") | new body: the general rules in CreateRoutine's description (agent target, once vs cron, never create a routine per run) | Create/List/Read/Update/Run/DeleteRoutine | routines |
+| `email` | reading, searching, labelling, drafting or sending email, or working across inboxes | `email` (2,024) plus the email half of `user_tools` | ListInboxes, ListLabels, UpdateThreadLabels, SetSenderPolicy, SendEmail, SendConfirmedEmail; GetThread (eager) | email |
+| `calendar` | events, availability, scheduling a meeting or booking links | `user_tools::BOOKING` (1,324) plus the event half of `user_tools` | the 9 calendar-event and 9 booking tools | calendar, meetings |
+| `channels` | posting, reacting, polls or managing members in a channel or direct message; not reading a thread that is already in context | the polls subsection of `mentions` (960) | Create/Rename/ManageParticipants, Edit/Delete/ReactTo message, OpenDirectMessage; reading and sending stay eager | channels, messages |
+| `tasks` | creating, assigning or updating tasks or initiatives | `tasks` (791) | properties tools | tasks, initiatives |
+| `coding` | changing code, a repository, a pull request or a coding agent | `coding_agents` (1,560), `pull_requests` | DispatchCodingAgent, ListCodingAgents, CreateAgentSession, ManageAgentSession | agent-sessions, harnesses |
+| `configure-agent` (exists) | changing an agent's or bot's instructions or settings | none | ListAgents, ConfigureAgent, the bot tools | agents, bots |
 
-**(c) Hybrid (recommended).** Jev pre-loads the bodies of skills it is
-confident about, and a compact catalog of the user's other skills lets the
-model load one that Jev missed.
+**Shared fragments.** The rules in `user_tools` cover both `SendEmail` and
+`CreateCalendarEvent`: review card versus thread, and the confirmed twins.
+They become one fragment composed into both `email` and `calendar`, so the
+text exists in one place.
 
-## Recommendation: (c)
+**What stays always-on:**
 
-Per agent-session turn, in `drive_turn`'s existing `tokio::join!`:
+| Section | Characters | Notes |
+| --- | --- | --- |
+| `tone` (`agent_session` in sessions) | | |
+| `math` | | |
+| `citations` | | |
+| `mentions` | 7.4k | Every reply may mention items |
+| `do_not` | | |
+| `about_macro` | | Terms |
+| `code_mode` | | Code mode only |
+| `skills` | | Rewritten to explain built-ins and catalog |
+| Built-in catalog | about 1.5k | New, see below |
 
-1. **Candidates.** Fetch the user's skills with their descriptions through the
-   existing access-checked lister, plus the system skills. Skip the whole step
-   when the message already mentions a skill; the user's explicit choice wins.
-2. **Route.** Send one Jev decision with the last user message, plus the
-   previous one so that "now do it for Q3" keeps its skill. Ask one question
-   per candidate, as name plus description. Up to 64 candidates, the most
-   recently updated, are split into parallel calls of 32. The deadline is 1 s.
-3. **Load.** Read the bodies of skills scoring at least 0.8, at most 2 of
-   them, within a 16 KiB budget, through the `ReadSkill` service so that every
-   read passes the access check. Put them in `turn` as
-   `<skills_for_this_request>`, with the rule that they apply to this request
-   only. Skills that score at least 0.5 but are not loaded are listed there by
-   name and id.
-4. **Catalog.** Put the name and description of the other candidates in
-   `rest`, at most 64 lines, so the model can still `ReadSkill` one Jev missed.
-   Past 64 skills, `SearchSkills` remains the way to find the rest.
-5. **Failure.** On a timeout, a Jev error, or no cognition service, load
-   nothing and keep the catalog. The turn never waits longer than the deadline.
+**Per-host prompt size**, before and after, excluding the deferred catalog.
+The after column subtracts the moved sections and adds about 1.8k for the
+built-in catalog and the skills rule.
 
-The 0.8 threshold and the limit of 2 skills are starting points. The
-evaluation below calibrates them. A wrongly loaded skill costs more than a
-wrongly loaded SDK reference, so the threshold sits above the docs path's 0.5.
+| Host | Before | After | Change |
+| --- | --- | --- | --- |
+| Chat | 26,896 | about 14,600 | −46% |
+| Agent session | 28,408 | about 14,050 | −51% |
+| Agent session, code mode | 29,489 | about 15,550 | −47% |
+| Channel bot and MCP toolset | 24,192 | about 14,600 | −40% |
 
-### Metadata
+The deferred catalog shrinks as well: tools a skill owns leave it and appear
+under their skill. That saving is not measured yet; PR 4 measures it.
 
-Add a `description` to skills: required, plain text, at most 300 characters,
-written as "Use when …". Claude Code's guidance is the reason: the description
-is the only thing the router sees.
+A turn that loads skills pays for their bodies: 1–4k characters each, usually
+zero to two skills. A turn that needs none (chit-chat, a follow-up, a plain
+answer) pays nothing. **A skill that loads on most turns belongs in the
+always-on prompt instead.** `finding-things` is the likeliest case, and the
+traffic sample in the evaluation decides it.
 
-- Store it in the database: a `skill` row keyed by `document_id`, next to
-  `document_sub_type`. Do not put it in front matter in the body. The router
-  reads every candidate on every turn, and reading the body of each one
-  through lexical is too slow.
-- `create_skill`, `CreateSkill`, `DocumentNamespace.createSkill` and the
-  ComposeSkill popover take the description, and editing a skill can change
-  it. System skills get descriptions in code.
-- An existing skill without a description is routed by name only, and the UI
-  asks for a description. No backfill.
+## Hidden skills (interpretation)
 
-### Scope
+Wolf asked to "make skills hidden a column". Read here as: built-in skills
+are loaded by agents but do not clutter users' Drive, `/` menu or skill
+lists.
 
-- **Agent sessions** (`agent_inmem`), in both direct and code mode. Skill
-  reading stays a direct tool in both.
-- **Legacy chat and the channel bot**: the same function, wired in once the
-  agent-session path has been evaluated.
-- **Public MCP**: the server never sees the user's message, so it cannot
-  route. `ListSkills` gains the description, which gives MCP clients option (a)
-  on their own.
+**Recommended: built-ins stay in code, with a flag on `SystemSkill`.**
 
-### Observability
+- The flag is `visibility: Listed | AgentOnly`. The three existing skills are
+  `Listed`; the new area skills are `AgentOnly`.
+- `AgentOnly` skills are routed, appear in the model's catalog and
+  `ListSkills`, and are readable with `ReadSkill`, including by MCP clients.
+- `GET /documents/system_skills`, which feeds the `/` menu and
+  `systemSkills()`, omits them.
+- Being in code means they are versioned with the tools they describe,
+  reviewed in pull requests, identical across environments, needing no
+  seeding, and cache-friendly.
+
+**Not recommended: a `hidden` column on skill documents.**
+
+- A built-in stored as a document has to be shared with every user to be
+  readable.
+- Once shared, it shows up everywhere, so the flag would have to be filtered
+  in the soup document clause and its candidate, by-id and cursor queries,
+  the work feed, GraphQL soup, `ListEntities`, the quick-access `skill` query
+  behind the `/` menu, Drive (which follows soup), search indexing
+  (`raw_document.rs` indexes `sub_type`), and the `ListSkills` lister.
+- There is no existing hidden-document mechanism to reuse.
+
+A column becomes worth adding only if users or teams need to write their own
+agent-only skills. If they do, store it with the description (below) and
+filter it in soup's sub-type clause and the search indexer.
+
+## Skills and SDK guidance in code mode
+
+One source per topic:
+
+| What | Where it lives |
+| --- | --- |
+| When and why to use an area, plus its domain rules (column types, a pipeline is not a database, once versus cron) | The built-in skill, shared by direct and code mode |
+| How to call one direct tool | That tool's description |
+| How to call the SDK (signatures, options, short usage notes) | TSDoc, generated into the entity index and `ReadCodeDocs` |
+
+**Consequences:**
+
+- **Skill descriptions are the routing questions.** For an entity a skill
+  covers, the skill's description replaces the `catalog.ts` one-liner as the
+  Jev question.
+- **One router.** The router picks skills, and a loaded skill brings its
+  entities' indexes. `select_documentation`'s separate Jev pass goes away
+  once every entity is covered; until then, uncovered entities stay in the
+  catalog and `DescribeCodeTools`.
+- **No separate "entity guide" in TSDoc for agents.** The skill is the entity
+  guide. TSDoc keeps the "how to call" text #9396 added to namespace classes,
+  which also serves external SDK users.
+- **Topic guides move into skills.** `DescribeCodeTools` topics that are really
+  area guides become skill bodies; `search` becomes `finding-things`.
+  `DescribeCodeTools({topics: ["search"]})` returns the skill body, so the
+  text exists once.
+
+## Loading
+
+The hybrid still holds, with three changes now that most guidance lives in
+skills.
+
+1. **Candidates.** The built-ins (about 11, fixed), plus up to 53 of the
+   user's skills by recency, giving at most 64 questions and two parallel Jev
+   calls. Skills already loaded in this session, and skills the message
+   explicitly mentions, are skipped.
+2. **Route.** Jev gets the last user message plus the previous one, and one
+   independent question per candidate, so several skills can match. "Every
+   Monday, summarise new rows in Leads" loads both `routines` and
+   `databases`. Thresholds:
+   - Built-ins: 0.5, at most 3. They are reviewed text, and missing one
+     costs domain rules.
+   - User skills: 0.8, at most 2. They redirect behaviour, so a false
+     positive costs more.
+   - The evaluation calibrates both.
+3. **Discriminating descriptions.** Each built-in description says what it is
+   not for (databases: "not CRM pipelines or spreadsheets"). The evaluation
+   reports the confusable pairs: databases/crm, databases/documents,
+   finding-things/email, routines/calendar.
+4. **Load, sticky.** A loaded skill's body goes into the context of the turn
+   that triggered it, and its tools are loaded (Anthropic `tool_reference`;
+   other providers get the tools added). The agent session records which
+   skills were loaded with that turn. Replay therefore rebuilds the same
+   history, the skill stays in effect for the rest of the session without
+   being routed again, and the cached prefix only grows. This replaces the
+   earlier per-turn `turn` placement.
+5. **Catalog.**
+   - Built-in names and descriptions go in `shared`. They are identical for
+     everyone, so they are cached.
+   - User skills go in `rest`, at most 64 lines.
+   - The model can load anything Jev missed with `ReadSkill`, which also
+     loads the skill's tools.
+6. **Backstop.** Loading a tool a skill owns loads the skill.
+   `CreateDocument` and `EditDocument` stay eager, so `documents` has no
+   backstop: if the evaluation shows its recall below 95%,
+   `document_content_links` stays always-on.
+7. **Failure.** On a timeout, a Jev error, or no cognition service, nothing
+   loads and the catalog stays. The turn never waits longer than the 1 s
+   deadline.
+
+**Hosts:**
+
+- **Agent sessions:** first, direct and code mode.
+- **Chat and channel bot:** next.
+- **Public MCP:** never sees the user's message, so it cannot route. Its
+  instructions shrink in the same way, pointing at `ListSkills` (now with
+  descriptions) and `ReadSkill`.
+
+## Metadata
+
+**User skills** get a `description`:
+
+- required for new skills, at most 300 characters, written as "Use when …";
+- stored in a `skill` table keyed by `document_id`, not in front matter,
+  because the router reads every candidate on every turn and reading each
+  body through lexical is too slow;
+- set through `create_skill`, `CreateSkill`, `DocumentNamespace.createSkill`
+  and ComposeSkill, and editable afterwards;
+- an existing skill without one is routed by name, and the UI asks for one.
+
+**Built-ins** carry `description`, `visibility`, `tools` and `sdk_entities`
+in code.
+
+## Observability
 
 Add an `agent.skill_selection` span, a sibling of the docs-selection span,
 with these fields:
 
 - `candidates`
-- `loaded` (skill ids)
-- `suggested` (skill ids)
+- `loaded_builtin` (slugs)
+- `loaded_user` (ids)
+- `suggested` (ids)
 - `top_score`
 - `bytes`
-- `selection_status` (`selected`, `skipped_explicit`, `timeout`,
-  `provider_error`, `unconfigured`)
+- `selection_status` (`selected`, `timeout`, `provider_error`,
+  `unconfigured`)
 
-Record skill ids, never skill names or the request text. Jev's `jev.decide`
-child span carries latency and usage, and the turn's `invoke_agent` span
-records the loaded ids, so it is possible to search for "turns where skill X
-loaded".
+Loads the model makes itself through `ReadSkill` or the tool backstop record
+`skill.loaded` with `source=model|tool`. That makes it possible to count
+router misses and loads per turn, which drive the always-on decision. Record
+slugs and ids, never user skill names or request text.
 
-## Tests and evaluation
+## Evaluation
 
-- Domain tests with a fake `Cognition`:
-  - An irrelevant request loads nothing.
-  - A matching request loads that one skill.
-  - An explicit mention skips routing.
-  - A timeout loads nothing and keeps the catalog.
-  - A skill the user cannot read is never a candidate.
-  - The 32-question split and the budget are respected.
-- Evaluation: a dozen real prompts against a seeded set of about 15 skills,
-  with relevant, near-miss and irrelevant requests. Run them through the real
-  Jev and record precision and recall at 0.5, 0.7 and 0.8 before fixing the
-  threshold.
+The prompts below are written for this document, modelled on common request
+shapes. Real user prompts never go in the repository. A private run samples
+recent agent-session prompts outside it, to measure how often each skill
+loads.
+
+| # | Prompt | Expected |
+| --- | --- | --- |
+| 1 | What did the design team decide about the Q3 launch? | finding-things |
+| 2 | Find the contract we sent Acme last month | finding-things |
+| 3 | Every Monday at 9, send me a summary of my open tasks | routines, tasks |
+| 4 | Remind me tomorrow at 3pm to call the bank | routines |
+| 5 | Add a Status column to the Hiring table and mark the first three rows done | databases |
+| 6 | How many rows in Leads have revenue over 10k? | databases |
+| 7 | Move Acme to Negotiation | crm |
+| 8 | Which deals in the pipeline are owned by Sam? | crm |
+| 9 | Draft a reply to the latest email from our landlord | email |
+| 10 | Label every newsletter in my work inbox as Later | email |
+| 11 | Find 30 minutes next week with Priya and Leo | calendar |
+| 12 | Send me my booking link | calendar |
+| 13 | Write a project brief for the onboarding revamp | documents |
+| 14 | Fix the formulas in the budget spreadsheet | documents |
+| 15 | Post a poll in #design about the two logo options | channels |
+| 16 | Create a task for Sam to review the deck by Friday | tasks |
+| 17 | Fix the flaky login test and open a PR | coding |
+| 18 | Make my agent always answer in French | configure-agent |
+| 19 | When a new row is added to Leads, email me | routines, databases |
+| 20 | Thanks, that's perfect! | none |
+| 21 | What's 15% of 2,340? | none |
+
+**Targets:**
+
+- No skill loads on irrelevant prompts (#20, #21) in at least 95% of runs.
+- Built-in recall is at least 90%.
+- The exact expected set loads in at least 80% of runs.
+
+Run each prompt five times against the real Jev, and report precision and
+recall per skill at thresholds 0.5, 0.7 and 0.8.
+
+## Tests
+
+Domain tests with a fake `Cognition`:
+
+- An irrelevant request loads nothing.
+- A matching request loads exactly that skill.
+- Two independent matches load both.
+- An explicit mention skips routing.
+- An already-loaded skill is not routed again.
+- A timeout loads nothing and keeps the catalog.
+- An unreadable user skill is never a candidate.
+- An `AgentOnly` skill is absent from `/documents/system_skills`.
+- Loading a skill's tool loads the skill.
+- The 32-question split and the size budgets hold.
 
 ## Implementation PRs
 
-1. `description` on skills: migration, API, SDK, tool and UI. Ships on its
-   own.
-2. `select_skills` in the `skills` domain, with tests, and the span.
-3. Wiring into `agent_inmem` behind the `auto-skills` flag, the catalog in
-   `rest`, and the prompt section text in `crates/prompt/src/skills.rs`.
-4. The evaluation, the threshold, and docs: `skills.mdx`, the agent guide,
-   and the `AGENTS.md` files.
+1. **Metadata.** `SystemSkill` gains `description`, `visibility`, `tools` and
+   `sdk_entities`. User skills get a description (migration, API, SDK, tool,
+   UI).
+2. **Router.** `select_skills` in the `skills` domain, with tests and the
+   span.
+3. **Loading in agent sessions,** behind the `auto-skills` flag: sticky
+   loading, tool loading, the tool backstop, and the catalog.
+4. **Move areas into built-ins.** `databases` and `crm` first, then the rest,
+   one area per PR. Each PR measures the prompt and deferred catalog before
+   and after, and re-runs the evaluation. Code-mode entity selection moves to
+   the router as entities gain skills.
+5. **Chat, channel bot and MCP instructions.**
+6. **Docs:** `skills.mdx`, the agent guide and the `AGENTS.md` files, in each
+   PR they affect.
 
 ## Open questions
 
-- How many skills a real user has. The code assumes tens (the cap of 100 in
-  `ListSkills`). If many users have hundreds, the shortlist in step 2 needs a
-  pre-filter, such as name search over the message, before Jev.
-- Whether to keep a loaded skill across turns instead of routing again each
-  turn. This proposal routes each turn and passes the previous message to Jev.
+- How many skills a real user has. The design assumes tens. If many users
+  have hundreds, a name-search pre-filter shortlists them before Jev.
+- Whether `finding-things` loads so often that it belongs in the always-on
+  prompt. The traffic sample decides.
+- Whether providers other than Anthropic tolerate tools added mid-session
+  without losing their cache. If they don't, those providers get the
+  instructions only, and the model loads the tools with `LoadTools`.
