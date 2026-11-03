@@ -135,10 +135,9 @@ function CalendarUserItem(props: {
   nameClass?: string;
 }) {
   const secondaryLabelPosition = () => props.secondaryLabelPosition ?? 'below';
+  const nameIsEmail = () => props.displayName() === props.email;
   const email = () =>
-    props.email && props.email !== props.displayName()
-      ? props.email
-      : undefined;
+    props.email && !nameIsEmail() ? props.email : undefined;
 
   return (
     <div class="flex min-w-0 items-center gap-4 sm:gap-3">
@@ -173,7 +172,8 @@ function CalendarUserItem(props: {
         </Show>
         <span
           class={cn(
-            'block select-text truncate text-ink-muted',
+            'block select-text text-ink-muted',
+            nameIsEmail() ? 'wrap-anywhere' : 'truncate',
             props.nameClass
           )}
         >
