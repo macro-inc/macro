@@ -7598,21 +7598,21 @@ export interface CreateConfirmedCalendarEvent {
   userConfirmation: string;
 }
 /**
- * Add a contact person to a company in the user's team CRM, as Add Contact on a company does. Personal email and addresses with a different domain are accepted; selecting a company is an explicit association. Find the company with ListCompanies, or add it first with CreateCompany.
+ * Add a contact person to the user's team CRM, as New contact does. The company and the email are both optional. Personal email and addresses with a different domain are accepted; selecting a company is an explicit association. Find the company with ListCompanies, or add it first with CreateCompany.
  */
 export interface CreateContact {
   /**
-   * The CRM company id to add the contact to.
+   * The CRM company id to add the contact to. Omit it for a person with no company.
    */
-  companyId: string;
+  companyId?: string | null;
   /**
    * The contact's name.
    */
   name: string;
   /**
-   * The contact's email address, e.g. "jane@acme.com".
+   * The contact's email address, e.g. "jane@example.com". Omit it to add the contact by name only.
    */
-  email: string;
+  email?: string | null;
 }
 /**
  * The created contact.
@@ -7623,13 +7623,13 @@ export interface CreateContactResponse {
    */
   contactId: string;
   /**
-   * The company the contact belongs to.
+   * The company the contact belongs to, if any.
    */
-  companyId: string;
+  companyId?: string | null;
   /**
-   * The contact's email.
+   * The contact's email, if it has one.
    */
-  email: string;
+  email?: string | null;
   /**
    * The contact's display name.
    */
@@ -10543,9 +10543,9 @@ export interface CompanyContactItem {
    */
   id: string;
   /**
-   * The contact's email address.
+   * The contact's email address, if it has one.
    */
-  email: string;
+  email?: string | null;
   /**
    * The contact's display name, when known.
    */

@@ -225,6 +225,12 @@ test-i18n-browser *ARGS:
 test-database-browser *ARGS:
     env -u LD_LIBRARY_PATH bunx playwright test --config src/features/database/browser-test/playwright.config.ts {{ARGS}}
 
+# Event details placement and guest editors on desktop and phone, in Chromium
+# over preview adapters. Same LD_LIBRARY_PATH caveat as the sign-up browser
+# tests above.
+test-calendar-details-browser *ARGS:
+    env -u LD_LIBRARY_PATH bunx playwright test --config src/features/calendar-view/browser-test/playwright.config.ts {{ARGS}}
+
 # Optimistic mutations through the real worker/WASM cache in Chromium. Same
 # LD_LIBRARY_PATH caveat as the sign-up browser tests above.
 test-functional *ARGS:

@@ -236,7 +236,7 @@ export function CrmRecordDetail(props: {
                           open({
                             type: 'contact',
                             id: contact.id,
-                            name: contact.name ?? contact.email,
+                            name: contact.name ?? contact.email ?? '',
                           })
                         }
                       />

@@ -384,6 +384,43 @@ fn test_job_runs_signup_browser_tests_after_vitest() {
     );
 }
 
+/// The event details fixture replaces the calendar query modules with preview
+/// adapters, so a change to those modules runs the suite that would show a
+/// blank page when an adapter export goes missing.
+#[test]
+fn calendar_details_browser_tests_run_when_the_replaced_queries_change() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    let filters = yaml
+        .split("filters: |")
+        .nth(1)
+        .and_then(|rest| rest.split("id: filter").next())
+        .expect("path-check filters");
+    let calendar = filters
+        .split("calendar_details_changed:")
+        .nth(1)
+        .expect("calendar_details_changed filter");
+    for path in [
+        "apps/web/src/features/calendar-view/**",
+        "apps/web/src/lib/queries/calendar/**",
+    ] {
+        assert!(calendar.contains(path), "{path} runs the suite: {calendar}");
+    }
+    let start = yaml.find("name: Test\n").expect("Test job");
+    let end = yaml[start..]
+        .find("name: Cycles Import Check")
+        .map_or(yaml.len(), |offset| start + offset);
+    let step = yaml[start..end]
+        .split("- name: Calendar Event Details Browser Tests")
+        .nth(1)
+        .and_then(|rest| rest.split("- name:").next())
+        .expect("calendar details browser step");
+    assert!(
+        step.contains("needs.path-check.outputs.calendar_details_changed == 'true'")
+            && step.contains("just test-calendar-details-browser"),
+        "the step runs the suite when calendar details change: {step}"
+    );
+}
+
 #[test]
 fn test_job_keeps_vitest_module_cache_on_the_cache_volume() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
