@@ -147,7 +147,10 @@ further reloads, even while an offline edit is still queued.
 Opening an attachment opens it in a split from its Drive copy, except a
 calendar file: it opens its event (see the calendar invitations section of the
 calendar guide), or downloads when Macro could not read one, and creates no
-Drive file.
+Drive file. Every received attachment chip, of any file type, has a download
+button joined to the filename that saves the file without opening it. Images
+and videos keep their previews and get the same chip. Cloud-reference chips
+stay open-only.
 
 Imported Outlook attachments keep their provider identity, including inline
 images. Cloud-reference attachment chips open the original Outlook message.
@@ -540,10 +543,13 @@ In the new Email view, ordinary row activation opens the thread inside
 `/app/component/mail`. On desktop the thread's header has a Back arrow instead
 of breadcrumbs; it returns to the filtered list (hidden in the reading pane,
 where the list is already beside the thread). The subject, tags and
-participants stay put while only the messages scroll. Pressing `Escape` in the open thread
-with focus outside any input does the same once there is nothing left to unwind
-(an open reply, an expanded body, or a focused message each take one `Escape`
-first); the list keeps the row you came from focused and comes back at the same
+participants stay put while only the messages scroll. The full subject, including
+its last word beside the title action, supports text selection. Pressing `Escape`
+in the open thread with focus outside any input returns to the originating list
+once there is nothing left to unwind (an open reply, an expanded body, or a
+focused message each take one `Escape` first). In the reading pane, it restores
+list focus without closing the thread. The list keeps the row you came from
+focused and comes back at the same
 scroll position, scrolling only if j/k in the thread moved focus off screen. If
 the focused row leaves the list without a list `e` (a reply in Signal marks it
 done, or another device archives it), focus moves to the row that took its
@@ -851,8 +857,8 @@ open shadow root: Playwright text locators can reach them, but a card's ordinary
 
 ### Read receipts
 
-With `enable-email-read-receipts` on and read receipts turned on for an inbox
-(see [Settings](settings.md#email-read-receipts)), messages sent from that
+With `enable-email-read-receipts` on and read receipts on for an inbox, which
+is the default (see [Settings](settings.md#email-read-receipts)), messages sent from that
 inbox show **Opened** or **Not opened** beside the date in the expanded
 message header. The desktop tooltip and the expanded header details (tap the
 header caret on touch) give the count and first and last open times. Only

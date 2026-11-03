@@ -46,6 +46,18 @@ Re-exports [ApplyOpsOptions](../entities/databases/database/type-aliases/ApplyOp
 
 ***
 
+### ArchiveCause
+
+Re-exports [ArchiveCause](../../generated/agent-harness/types.gen/type-aliases/ArchiveCause.md)
+
+***
+
+### AutoArchiveOverrides
+
+Re-exports [AutoArchiveOverrides](../entities/agent-sessions/agent-session/type-aliases/AutoArchiveOverrides.md)
+
+***
+
 ### CallMessage
 
 Re-exports [CallMessage](../entities/calls/message/classes/CallMessage.md)
@@ -556,6 +568,12 @@ Re-exports [QueryTableVersion](../entities/databases/query/interfaces/QueryTable
 
 ***
 
+### ReferralLink
+
+Re-exports [ReferralLink](../entities/referrals/namespace/interfaces/ReferralLink.md)
+
+***
+
 ### ReviewCalendarDraft
 
 Re-exports [ReviewCalendarDraft](../entities/agent-sessions/review/type-aliases/ReviewCalendarDraft.md)
@@ -610,6 +628,18 @@ Re-exports [RoutineTriggerOptions](../entities/routines/routine/type-aliases/Rou
 
 ***
 
+### SavedFormResponse
+
+Re-exports [SavedFormResponse](../entities/forms/form/type-aliases/SavedFormResponse.md)
+
+***
+
+### SessionAutoArchive
+
+Re-exports [SessionAutoArchive](../entities/agent-sessions/agent-session/type-aliases/SessionAutoArchive.md)
+
+***
+
 ### SessionReview
 
 Re-exports [SessionReview](../entities/agent-sessions/review/classes/SessionReview.md)
@@ -661,6 +691,12 @@ Re-exports [StructuredCompletionResponse](../../generated/cognition/types.gen/ty
 ### TaskSummary
 
 Re-exports [TaskSummary](../entities/tasks/task/interfaces/TaskSummary.md)
+
+***
+
+### TeamInvite
+
+Re-exports [TeamInvite](../entities/teams/invite/classes/TeamInvite.md)
 
 ***
 

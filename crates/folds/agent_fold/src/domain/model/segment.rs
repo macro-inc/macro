@@ -84,12 +84,11 @@ pub struct ActivityRow {
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ActivityCard {
     /// A view the agent presented: the `view` of a presented `PresentView`
-    /// call, as the model wrote it. Its widgets name the items they show, and
-    /// readers load those with their own access.
+    /// call. Its widgets name the items they show, and readers load those
+    /// with their own access.
     View {
         /// The dynamic-UI view.
-        #[specta(type = specta_typescript::Unknown)]
-        view: serde_json::Value,
+        view: dynamic_ui::View,
     },
 }
 
@@ -399,15 +398,12 @@ fn tool_row(
             input.as_ref().and_then(input_detail),
         ),
         ToolDetail::Macro { input, .. } => (named_label(&named, status), input_detail(input)),
+        ToolDetail::View { .. } => (named_label(&named, status), None),
         ToolDetail::UserTool { outcome, .. } => (user_tool_label(&named, outcome), None),
         ToolDetail::Subagent { title, .. } => verbed(&DELEGATE, Some(truncate(title))),
     };
     let detail = match &card {
-        Some(ActivityCard::View { view }) => view
-            .get("title")
-            .and_then(serde_json::Value::as_str)
-            .map(truncate)
-            .or(detail),
+        Some(ActivityCard::View { view }) => view.title.as_deref().map(truncate).or(detail),
         None => detail,
     };
     ActivityRow {
@@ -438,13 +434,12 @@ fn presented_view(
     {
         return None;
     }
-    let ToolDetail::Other {
-        input: Some(input), ..
+    let ToolDetail::View {
+        view: Some(view), ..
     } = detail
     else {
         return None;
     };
-    let view = input.get("view").filter(|view| view.is_object())?;
     Some(ActivityCard::View { view: view.clone() })
 }
 

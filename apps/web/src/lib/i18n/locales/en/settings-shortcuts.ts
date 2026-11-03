@@ -14,6 +14,7 @@ export default {
   backToListCloseSplit: 'Back to list / close split',
   spotlightSplit: 'Spotlight split',
   createASplit: 'Create a split',
+  createASplitBelow: 'Create a split below',
   openItemInCurrentSplit: 'Open item in current split',
   openItemInANewSplit: 'Open item in a new split',
   openItemInPlaceOfPreview: 'Open item in place of the preview',

@@ -14,7 +14,7 @@ export const agentReviewClient = {
     );
   },
   async decide(session: string, review: string, decision: ReviewDecision) {
-    const span = Telemetry.clientSpan('agent.review.decide');
+    const span = Telemetry.span('agent.review.decide', { kind: 'client' });
     span.setAttr('agent.session.id', session);
     span.setAttr('agent.review.id', review);
     span.setAttr('agent.review.action', decision.action);
@@ -25,7 +25,12 @@ export const agentReviewClient = {
     try {
       const result = await fetchWithToken<ReviewRecord>(
         `${host}/agent-sessions/${session}/reviews/${review}`,
-        { method: 'POST', headers, body: JSON.stringify(decision) }
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(decision),
+          trace: { parentSpan: span },
+        }
       );
       if (result.isErr()) span.error('Review decision failed');
       return result;

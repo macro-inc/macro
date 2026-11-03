@@ -27,6 +27,7 @@ import {
   scopeChannelNotificationsForEntity,
 } from '@app/features/soup/entity-notifications';
 import { replacePaneSearchParams } from '@app/lib/split-router';
+import { beginInteraction } from '@app/observability/flow';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import {
@@ -627,6 +628,22 @@ export const getRowClickFallbackLocation = (
  * @param options - Configuration options including whether to open in new split, location, and split handle
  */
 export const openEntityInSplitFromUnifiedList = async (
+  entity: EntityData,
+  options: OpenEntityOptions
+): Promise<void> => {
+  // From the row action to the opened view's paint: the navigation it commits
+  // and the view it mounts join this interaction.
+  const interaction = beginInteraction('list.open', {
+    attributes: { 'entity.type': entity.type },
+  });
+  try {
+    await openEntity(entity, options);
+  } finally {
+    interaction.end();
+  }
+};
+
+const openEntity = async (
   entity: EntityData,
   options: OpenEntityOptions
 ): Promise<void> => {

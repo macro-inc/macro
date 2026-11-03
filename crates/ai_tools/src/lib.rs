@@ -73,7 +73,10 @@ pub use build_context::{
 };
 pub use deferred::{DeferredToolSet, deferred_tools};
 pub use import_jobs::{IMPORT_JOBS_HANDOVER_TIMEOUT, ImportJobs};
-pub use mcp_app_catalog::{PipedreamMcpAppCatalog, pipedream_client_from_env};
+pub use mcp_app_catalog::{
+    PipedreamMcpAppCatalog, connect_adapter, connector_backends_from_env, macro_connect_rollout,
+    pipedream_client_from_env,
+};
 pub use search::search_toolset;
 pub use tool_context::{
     ChannelSideEffectClients, FormsToolConfig, MaybeToolEventBroker, NoOpCallRtcClient,
@@ -377,11 +380,6 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
             Box::new(prompt::DIRECT_TOOL_USE_PROMPT.compose(&prompt::coding_agents::PROMPT))
         }
     };
-    let prompt: Box<dyn std::fmt::Display + Send + Sync> = if code_mode_direct {
-        Box::new(format!("{prompt}{}", prompt::tool_usage::CODE_MODE_ROUTING))
-    } else {
-        prompt
-    };
     let catalog: Vec<(&str, &str)> = deferred
         .iter()
         .map(|tool| (tool.name.as_str(), tool.description.as_str()))
@@ -405,8 +403,6 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
 pub fn all_tool_frontend_schemas() -> FrontendSchemas {
     frontend_schemas_builder()
         .merge(&tools_for(AiHost::AgentSession))
-        // Chat's view tool, which agent sessions also used before `execution.views.present`.
-        .merge(&AsyncToolCollection::new().add_tool::<DisplayResults, ToolServiceContext>())
         .merge(&agent_code_mode::inbound::toolset::toolset())
         // Persisted legacy calls still render, but are never executable or advertised.
         .merge(&chat::inbound::toolset::chat_toolset::<

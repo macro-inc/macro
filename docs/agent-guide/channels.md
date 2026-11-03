@@ -1,5 +1,10 @@
 # Channels and Messaging
 
+User mentions sent by integrations may contain only `userId`. For human user
+IDs, messages and editors resolve the current name and fall back to the email
+local part when lookup fails. Verify that these mentions remain intact when
+editing and saving a message; integrations need not supply email or displayName.
+
 ## Channel list previews
 
 Message text in channel rows and Home cards is display-only, including quoted
@@ -1627,3 +1632,8 @@ Sending clears the composer immediately while delivery is pending. If delivery
 fails and the composer is still empty, its text, mentions, and attachments return.
 A new draft typed during delivery stays intact if the earlier send fails. Verify
 this with both the Send button on a phone and the desktop composer.
+
+For tab performance QA, switch Attachments → Calls → Participants → Messages
+in both the routed channel and a block split. Each actual selection should
+produce one `channel.tab` interaction with its `channel.*.view` child; repeat
+the current selection and confirm it does not create a new interaction.

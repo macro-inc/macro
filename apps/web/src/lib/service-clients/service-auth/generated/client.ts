@@ -41,6 +41,7 @@ import type {
   GetLegacyUserPermissionsResponse,
   GetNamesWithEmailRequestBody,
   GetProfilePicturesRequestBody,
+  GetTeamInvitesParams,
   GetUserInfo,
   GetUserLinkExistsParams,
   GithubLinkStatusResponse,
@@ -4966,6 +4967,11 @@ export type inviteToTeamResponse404 = {
   status: 404;
 };
 
+export type inviteToTeamResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
 export type inviteToTeamResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -4979,6 +4985,7 @@ export type inviteToTeamResponseError = (
   | inviteToTeamResponse400
   | inviteToTeamResponse401
   | inviteToTeamResponse404
+  | inviteToTeamResponse409
   | inviteToTeamResponse500
 ) & {
   headers: Headers;
@@ -5428,6 +5435,11 @@ export type getTeamInvitesResponse401 = {
   status: 401;
 };
 
+export type getTeamInvitesResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
 export type getTeamInvitesResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -5439,6 +5451,7 @@ export type getTeamInvitesResponseSuccess = getTeamInvitesResponse200 & {
 export type getTeamInvitesResponseError = (
   | getTeamInvitesResponse400
   | getTeamInvitesResponse401
+  | getTeamInvitesResponse409
   | getTeamInvitesResponse500
 ) & {
   headers: Headers;
@@ -5448,14 +5461,27 @@ export type getTeamInvitesResponse =
   | getTeamInvitesResponseSuccess
   | getTeamInvitesResponseError;
 
-export const getGetTeamInvitesUrl = () => {
-  return `/team/invites`;
+export const getGetTeamInvitesUrl = (params?: GetTeamInvitesParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/team/invites?${stringifiedParams}`
+    : `/team/invites`;
 };
 
 export const getTeamInvites = async (
+  params?: GetTeamInvitesParams,
   options?: RequestInit
 ): Promise<getTeamInvitesResponse> => {
-  const res = await fetch(getGetTeamInvitesUrl(), {
+  const res = await fetch(getGetTeamInvitesUrl(params), {
     ...options,
     method: 'GET',
   });

@@ -997,6 +997,13 @@ const shortcutSections: ShortcutSection[] = [
           return t('settingsShortcuts.createASplit');
         },
       },
+      {
+        keys: ['|'],
+        codes: ['ShiftLeft', 'Backslash'],
+        get description() {
+          return t('settingsShortcuts.createASplitBelow');
+        },
+      },
     ],
   },
   {

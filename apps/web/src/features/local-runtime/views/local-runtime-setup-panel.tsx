@@ -6,7 +6,14 @@ import CheckCircleIcon from '@icon/system/regular/check-circle.svg';
 import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
 import type { MacrodStatus } from '@macro/tauri/macrod';
 import { Button, cn, ToggleSwitch } from '@ui';
-import { createSignal, Match, onMount, Show, Switch } from 'solid-js';
+import {
+  createSignal,
+  Match,
+  onCleanup,
+  onMount,
+  Show,
+  Switch,
+} from 'solid-js';
 import { match } from 'ts-pattern';
 import {
   type ChecklistStep,
@@ -73,9 +80,15 @@ export function LocalRuntimeSetupPanel(props: {
       start();
       return;
     }
+    // Closing the panel mid-scan must not start setup behind the user's back.
+    let disposed = false;
+    onCleanup(() => {
+      disposed = true;
+    });
     fireAndForget(
       (async () => {
         await setup.scan();
+        if (disposed) return;
         if (props.autoStart && (setup.agents()?.length ?? 0) > 0) start();
       })(),
       'local-runtime-setup'

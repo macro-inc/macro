@@ -5,6 +5,7 @@ import {
 } from '@app/components/view-shell';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { SplitRouter } from '@app/lib/split-router';
+import { TraceFlow } from '@app/observability/flow';
 import { usePreference } from '@app/preferences/use-preference';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
@@ -255,7 +256,9 @@ function EmailViewRoot() {
 
   const list = () => (
     <Suspense fallback={<EmailListFallback />}>
-      <EmailList ref={setListElement} pane={listPane()} />
+      <TraceFlow name="email.list" key={() => state.tab}>
+        <EmailList ref={setListElement} pane={listPane()} />
+      </TraceFlow>
     </Suspense>
   );
 

@@ -1213,6 +1213,12 @@ export type InviteToTeamRequest = {
      * The invites to send, each with an email and tier
      */
     invites: Array<InviteEntry>;
+    /**
+     * The team the caller means to invite to. Invites always go to the
+     * caller's current team; when this names another team, nothing is sent
+     * and the request answers 409.
+     */
+    team_id?: string | null;
 };
 
 /**
@@ -4023,6 +4029,10 @@ export type InviteToTeamErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
     404: ErrorResponse;
+    /**
+     * `team_id` names a team other than the caller's current team
+     */
+    409: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -4166,13 +4176,24 @@ export type DeleteTeamInviteHandlerResponses = {
 export type GetTeamInvitesData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * The team the caller means to list. Invites are always read from the
+         * caller's current team; when this names another team, the request
+         * answers 409.
+         */
+        team_id?: string;
+    };
     url: '/team/invites';
 };
 
 export type GetTeamInvitesErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
+    /**
+     * `team_id` names a team other than the caller's current team
+     */
+    409: ErrorResponse;
     500: ErrorResponse;
 };
 
