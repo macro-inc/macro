@@ -145,7 +145,11 @@ describe('parked layouts', () => {
     const { router, history } = track(setup('/home/~/drive'));
     const home = router.entry('pane-1' as PaneId);
     await router.openLayout(router.layoutFromHref('/mail'));
-    const stop = router.registerGuard('pane-3' as PaneId, PANE_LEVEL, () => false);
+    const stop = router.registerGuard(
+      'pane-3' as PaneId,
+      PANE_LEVEL,
+      () => false
+    );
 
     const result = await router.showLayout(['pane-1', 'pane-2'] as PaneId[]);
     expect(result.status).toBe('committed');
@@ -159,7 +163,11 @@ describe('parked layouts', () => {
   it('closing the open panes while showing parked ones asks their guards', async () => {
     const { router } = track(setup('/home'));
     await router.openLayout(router.layoutFromHref('/mail'));
-    const stop = router.registerGuard('pane-2' as PaneId, PANE_LEVEL, () => false);
+    const stop = router.registerGuard(
+      'pane-2' as PaneId,
+      PANE_LEVEL,
+      () => false
+    );
 
     const refused = await router.showLayout(['pane-1'] as PaneId[], {
       closeOpen: true,

@@ -1,9 +1,5 @@
 import { batch, untrack } from 'solid-js';
-import {
-  type ChangedPane,
-  changedPanes,
-  type PanesDiff,
-} from '../panes/diff';
+import { type ChangedPane, changedPanes, type PanesDiff } from '../panes/diff';
 import type { PaneId } from '../panes/types';
 import {
   decodePanes,
@@ -150,9 +146,13 @@ export function createLayout(options: {
   /**
    * Shows a captured layout in new panes, with the ids it names, and parks
    * the open panes instead of removing them: nothing leaves, so no leave
-   * guard runs. The layout's pane ids must not be retained already.
+   * guard runs (with `closeOpen`, they are removed through their guards).
+   * The layout's pane ids must not be retained already.
    */
-  const open = (layout: LayoutSnapshot): MaybePromise<NavigationResult> => {
+  const open = (
+    layout: LayoutSnapshot,
+    openOptions: ShowLayoutOptions = {}
+  ): MaybePromise<NavigationResult> => {
     const retained = untrack(panes.retained);
     const reused = layout.panes.some((pane) => retained.includes(pane.pane));
     if (layout.panes.length === 0 || reused) return CANCELLED_RESULT;
@@ -163,7 +163,7 @@ export function createLayout(options: {
         pane: pane.pane,
         entry: shownEntry(pane),
       })),
-      removed: [],
+      removed: openOptions.closeOpen ? untrack(panes.ids) : [],
     };
 
     return runner.startUrl(applyLayout(layout, diff, 'replace'), false);
