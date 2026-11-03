@@ -1,6 +1,6 @@
 # Macro on Kubernetes, declared in Nix
 
-Status: spec for review. Nothing in this document is implemented yet. The
+Status: approved spec. Nothing in this document is implemented yet. The
 earlier compose-to-Helm prototype on this branch is superseded (see
 [What happens to the prototype](#what-happens-to-the-prototype)).
 
@@ -125,12 +125,12 @@ Operators are installed once per cluster.
 | Today | Replacement | License | Evidence / notes |
 | --- | --- | --- | --- |
 | RDS Postgres (pgvector) | CloudNativePG cluster | Apache-2.0 | Operator, backups to object storage, pgvector image from nixpkgs. |
-| SQS (incl. FIFO) | ElasticMQ | Apache-2.0 | **Tested:** FIFO ordering, content-based dedup. SQS API, so no code change. Durability: file persistence on a PVC; not HA. See open questions. |
+| SQS (incl. FIFO) | Kafka, the same cluster as events (see [Queues on Kafka](#queues-on-kafka)) | Apache-2.0 | One durable, replicated system for events and work queues. ElasticMQ (**tested**: FIFO ordering and dedup work) is only a transitional shim while each queue moves, then it is removed. |
 | DynamoDB | ExtendDB on the instance's Postgres | Apache-2.0 (AWS-maintained) | **Tested:** async create → ACTIVE, `TransactWriteItems`, conditional `ADD`, `begins_with` query, TTL, conditional-put failure. Imported fixed access keys. v0.1.x, so treat as early. |
 | S3 | RustFS | Apache-2.0 | **Tested** as celld's backing store. Upstream still marks distributed mode as "under testing". Fallback: SeaweedFS (Apache-2.0). |
 | Cloudflare Workers + Durable Objects, KV, D1, R2, Queues, Cron | celld | Apache-2.0 | **Tested** on RustFS: a Durable Object counter kept its state across a node restart. v0.6.3 covers every binding our workers use except Browser Rendering and rate limits. One fleet per worker per instance. `wrangler.toml` must become `wrangler.jsonc`. |
-| Lambda | Plain Deployments, scaled by KEDA (Apache-2.0) on queue depth | Apache-2.0 | The handlers already have local-worker forms (`document_upload_finalizer_local_worker`). No FaaS framework: Knative, Fission, and OpenFaaS add a runtime we don't need. |
-| S3 event → SQS → Lambda | RustFS bucket notifications → ElasticMQ → worker | — | To verify: RustFS notification targets. Fallback: a small poller. |
+| Lambda | Plain Deployments, scaled by KEDA (Apache-2.0) on Kafka consumer lag | Apache-2.0 | The handlers already have local-worker forms (`document_upload_finalizer_local_worker`). No FaaS framework: Knative, Fission, and OpenFaaS add a runtime we don't need. |
+| S3 event → SQS → Lambda | RustFS bucket notifications → Kafka topic → worker | — | To verify: RustFS's Kafka notification target. Fallback: a small poller that publishes to Kafka. |
 | MSK (Kafka) | Strimzi, KRaft | Apache-2.0 | Same Kafka protocol; topics declared from `macro_event_topics`. |
 | ElastiCache Redis | Valkey | BSD-3 | Drop-in. |
 | OpenSearch Service | OpenSearch (operator) | Apache-2.0 | Same engine version (3.5) and `analysis-icu`. |
@@ -141,8 +141,39 @@ Operators are installed once per cluster.
 | Cloudflare Browser Rendering (ai-editing-worker) | Headless Chromium pod over CDP | BSD | Already exists locally (`docker/headless-chrome`). |
 | Workers rate-limit binding (analytics-proxy) | Small rate-limit shim on Valkey | — | celld does not implement `ratelimits`. |
 
-Kept, not replaced: SES and SNS mobile push (they need a deliverability or
-APNs/FCM provider; see open questions), FusionAuth (already a pod), Doppler.
+Kept as external providers behind ports: outbound email and mobile push. Each
+gets a provider-neutral port with two adapters: SMTP to Mailpit (local and
+every non-prod instance) and SES (prod) for email; a recording fake (local)
+and SNS or direct APNs/FCM (prod) for push. No service imports `aws-sdk-sesv2`
+or `aws-sdk-sns` directly. Also kept: FusionAuth (already a pod), Doppler.
+
+### Queues on Kafka
+
+Kafka (Apache-2.0) replaces SQS everywhere, so an instance runs one messaging
+system. Mapping of the SQS features we use:
+
+| SQS feature (uses in code) | On Kafka |
+| --- | --- |
+| Work queue, per-message delete (`receive`/`delete_message`) | Consumer group per queue; commit the offset after the handler succeeds. |
+| Visibility timeout extension (5) | Not needed: a record is redelivered only if the consumer dies or exceeds `max.poll.interval.ms`, tuned per queue. |
+| Redrive to a dead-letter queue | Retry topic with a delivery count header, then `<queue>.dlq` after N attempts. |
+| FIFO message group (1) | Record key = group id, so one partition keeps the group's order. |
+| Deduplication id (1) | Idempotent producer, plus an idempotent handler keyed by the dedup id. |
+| Delay seconds (2) | A `<queue>.delayed` topic whose consumer holds each record until its due time, then republishes it. |
+| Lambda-style scaling | KEDA's Kafka scaler on consumer lag. |
+
+Kafka 4.2 made share groups (KIP-932, per-record ack like SQS) production-ready.
+Its C client exposes them only as a preview (librdkafka 2.15), and the Rust
+`rdkafka` crate does not expose them yet. The design above uses plain consumer
+groups, which work today. A later switch to share groups stays inside the
+adapter.
+
+All of this lives behind one queue port in `sqs_worker`, renamed when it
+moves. Services do not call `aws-sdk-sqs` or `rdkafka` directly. Queues are
+declared in Nix next to the Kafka topics, from `macro_queues` and
+`macro_event_topics`. Locally Kafka runs one broker; prod runs three, with
+replication factor 3. That is a size difference, as the parity rule
+allows.
 
 ### Service decomposition and gRPC
 
@@ -199,7 +230,7 @@ changes).
 ### Multiple instances per cluster
 
 - **Per instance:** one namespace (`macro-<name>`) holding the services and
-  the data plane: CNPG cluster, RustFS, ElasticMQ, ExtendDB, Kafka, OpenSearch,
+  the data plane: CNPG cluster, RustFS, ExtendDB, Kafka, OpenSearch,
   Valkey, FusionAuth, and the celld fleets. There are no cluster-scoped
   resources, and no names outside the namespace.
 - **Per cluster:**
@@ -237,8 +268,10 @@ changes).
    module; config through External Secrets; migrations as a Job. Done when
    `just instance up demo` serves the app and login works end to end, and
    `just dev <service>` replaces one pod in under 30 seconds.
-4. **Replacements.** Switch the AWS SDK endpoints to ElasticMQ, ExtendDB,
-   RustFS, and OpenBao; Lambdas to KEDA workers; Workers to celld. Done when
+4. **Replacements.** Move queues to Kafka behind the queue port (ElasticMQ
+   covers any queue not yet moved); switch the AWS SDK endpoints to ExtendDB,
+   RustFS, and OpenBao; email and push behind their ports; Lambdas to KEDA
+   workers; Workers to celld. Done when
    the local E2E suite (`just local-e2e`) passes against an instance.
 5. **Aux.** ARC runners and the bots on the cluster.
 6. **AWS.** terranix/OpenTofu for nodes and networking; the dev instance on
@@ -248,20 +281,15 @@ changes).
 8. **Prod cutover.** A separate plan for data migration (RDS → CNPG, DynamoDB
    → ExtendDB, S3 → RustFS) and rollback.
 
-## Open questions
+## Resolved questions
 
-1. **sync-service.** The instruction "keep sync service for se…" was cut off.
-   Default in this spec: sync-service stays on Cloudflare in prod for now, and
-   runs in celld in every instance (it uses DO + KV + D1, all supported). Is
-   that the intent?
-2. **Durable queues in prod.** ElasticMQ is a single node with file
-   persistence. Is that acceptable for prod queues, or should prod queues move
-   to Kafka/NATS (a code change) in a later phase?
-3. **Email and push.** Keep SES (SMTP) and SNS mobile push as external
-   providers, or replace them?
-4. **Grafana's AGPL components** for observability: acceptable?
-5. **Running our own control plane on AWS** instead of EKS, accepted for
-   parity?
+1. **sync-service:** stays on Cloudflare in prod for now; runs in celld in
+   every instance.
+2. **Queues:** Kafka for everything ([Queues on Kafka](#queues-on-kafka)).
+3. **Email and push:** external providers behind ports, with open-source
+   adapters (Mailpit SMTP) for local and non-prod instances.
+4. **Grafana's AGPL components:** accepted.
+5. **Own control plane on AWS** instead of EKS: accepted, for parity.
 
 ## What happens to the prototype
 
