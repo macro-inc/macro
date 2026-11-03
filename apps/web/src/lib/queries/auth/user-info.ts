@@ -76,6 +76,40 @@ export function invalidateUserInfo() {
 
 /** Invalidate all queries after a successful login. */
 export function invalidateAllAfterLogin() {
+   // Login may replace a session without visiting logout (including native auth).
+   // Invalidate old display-intent handles before refetching the new identity.
+   resetGraphqlSoupDoneSession();
+   resetGraphqlPresenceRequests();
+   resetTeamCalendarSession();
+-  enableUserInfoQuery();
+-  const invalidated = queryClient.invalidateQueries();
++  const invalidated = cacheSession.ready
++    .catch((error: unknown) => {
++      toast.failure('Sign-in could not finish', {
++        subtext:
++          'Local storage cleanup failed. Your queued changes are preserved. Try signing in again.',
++      });
++      throw error;
++    })
++    .then(() => {
++      if (!cacheSession.isCurrent()) return;
++      enableUserInfoQuery();
++      return queryClient.invalidateQueries();
++    });
+   // Rebind this device's push registrations once the refetches above have
+   // exercised the fresh session — registering earlier can race auth state
+   // that is still settling. Fire-and-forget so login isn't blocked on the
+   // notification service.
+   fireAndForget(
+-    invalidated.catch(() => {}).then(() => syncPushRegistrations()),
++    invalidated
++      .catch(() => {})
++      .then(() => {
++        if (cacheSession.isCurrent()) return syncPushRegistrations();
++      }),
+     'push-registration'
+   );
+   return invalidated;
   return Telemetry.anonymousSpan('auth.refresh_after_login', async (span) => {
     const cacheSession = replaceCacheWriteSession();
     try {

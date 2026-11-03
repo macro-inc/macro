@@ -1241,6 +1241,9 @@ into at most `limit + 1` unique winners, applying exclusions and DM deduplicatio
 before that limit. This joined-record path costs more than ordinary covering-only
 search; it does not change storage schema 12. `CacheHost.people` now exposes state,
 update and search through coordinator protocol 14 and dedicated native commands.
+The app's retiring-host wrapper forwards this capability through the current host,
+including methods captured before disposal. Retired reads report unsupported;
+retired context writes reject instead of acknowledging a discarded publication.
 Ranked person continuations bind the scope, policy and publication epoch and pin
 the first window's scoring clock. A bounded-memory second pass suppresses prior
 DM aliases; short/empty pages can still continue. Ordinary incremental changes
