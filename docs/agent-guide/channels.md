@@ -1018,12 +1018,16 @@ explain the name and sharing, without overlapping native title hints. Personal
 sections have no scope icon or badge. Header focus backgrounds fill the entire header row, including its
 trailing controls, with no extra right padding.
 
-The sidebar scrolls through all sections. Each expanded section has its own
-virtualized, scrollable list. Lists with more than two items have a resize grip;
-drag it to choose a height between two rows (68px) and the end of the list,
-capped by the available pane space. Shorter lists fit their content and have no
+The sidebar virtualizes the section stack and each expanded channel list.
+Capped sections scroll independently. When All channels is last and has no saved
+height, it grows to show its full list while rows remain virtualized against the
+outer sidebar scroll. Moving another section below it restores the normal height
+cap. A manually saved All channels height takes precedence in either position.
+Lists with more than two items have a resize grip; drag it to choose a height
+between two rows (68px) and the end of the list, capped by the section's maximum. Shorter lists fit their content and have no
 resize grip. Favorites and Direct messages default to four visible rows;
-other sections default to their maximum height. Focus the grip and use Up/Down
+other sections default to their maximum height within the pane, except the
+unresized final All channels section. Focus the grip and use Up/Down
 to resize by 20px (100px with Shift), or double-click to restore the default.
 Section heights persist as personal preferences alongside sorting and sidebar
 width. Heights adapt to filtered content and smaller panes without discarding
@@ -1031,9 +1035,12 @@ the saved preference. Search covers channels and DMs regardless of section
 placement and restores the selected row in its section when closed. Mobile
 retains the recent-conversation feed below.
 
-Use the drag grip in the left gutter before the section name to reorder sections,
-or focus the grip and use Up/Down. The grip does not shift the header's text or
-controls. An insertion line shows the destination. Section order is a personal
+Drag a section heading, its name, or the grip in the left gutter to reorder
+sections, or focus the grip and use Up/Down. Pointer dragging starts only after
+more than 8px of movement, never from holding still. A normal heading click still
+toggles the section; releasing a drag does not. Add and menu buttons never start
+a drag. The grip does not shift the header's text or controls. An insertion line
+shows the destination. Section order is a personal
 preference, including for shared sections, and survives reloads. The dragged
 section appears as a card preview while its source is subdued. Other sections
 animate into their new positions on drop or keyboard reorder, except with reduced
@@ -1047,14 +1054,22 @@ per batch supplies cached channel data and fetches only missing records using
 Soup's generic explicit-entity hydration. Channel batching and unread refreshes
 stay in the channel query layer; the sidebar does not coordinate separate cache
 and network queries.
-Each expanded section appends skeleton rows while its remaining channels load.
+Each expanded section appends skeleton rows while its remaining channels load,
+using the same row indentation and icon/text columns as loaded channels.
 A failed fetch keeps available rows and replaces that section's loading feedback
 with Retry. Loading sections must not briefly show an empty-state hint.
 Collapsing a section hides its loading feedback without changing membership or
 stopping shared channel hydration.
+The header does not show a Loading sections/Retry strip during normal loading.
+Section reads use the shared bounded retry policy, retry on focus, and preserve
+cached sections during a refetch. A failed initial load retains a compact error
+and Retry action. Until section metadata is available, New section explains its
+unavailable state in the creation menu; ordinary conversations remain usable.
 
-Favorites open the same channel detail as ordinary rows. Shift-clicking a
-favorite, channel, or DM opens it in a new split. Rejected navigation and failed
+Favorites open the same channel detail as ordinary rows. A single click opens a
+row even when channel data refreshes between pressing and releasing the pointer;
+section and search lists retain row identity through those updates. Shift-clicking
+a favorite, channel, or DM opens it in a new split. Rejected navigation and failed
 hydration must not mark notifications read. Context menus retain Mark Read,
 Open in new split, Unfavorite, notification controls, and Copy Link.
 
@@ -1115,7 +1130,7 @@ Deleting a section does not delete its conversations or change channel access.
 
 Every desktop section menu, including **Favorites**, **All channels**,
 **[team name] channels**, and **Direct messages**, offers **Mute all channels**,
-**Unmute all channels**, and **Snooze all channels…**. These update only your
+**Unmute all channels**, and **Snooze all channels**. These update only your
 notifications, including for shared sections. Each action uses the section's
 complete current membership, including filtered-out and unloaded channels;
 channels added later do not inherit the change. Built-in lists resolve all pages
@@ -1125,8 +1140,12 @@ Favorites targets only channel favorites, not documents or other favorite types.
 Snooze uses the usual
 duration/date picker and resumes notifications at the chosen time. A partial
 failure keeps successful updates and reports the failures; snooze retries only
-failed channels. Empty or unavailable custom sections and empty Favorites disable
-these actions. Mobile remains unchanged.
+failed channels. Mute, unmute, and snooze submit up to 500 item preferences in
+one atomic backend request, rather than one request per channel. Larger selections
+use sequential requests. The frontend applies confirmed changes in one cache
+update, preserving unrelated preferences and successful requests if another fails.
+Empty or unavailable custom sections and empty Favorites disable these actions.
+Mobile remains unchanged.
 
 Use a channel's Add to section menu to change the personal or shared assignment.
 Each section uses a checkbox: checking moves the channel into that section,
@@ -1136,6 +1155,10 @@ and shared assignments remain independent.
 Choose smart grouping in the section dialog for automatic name matching.
 Smart sections match channel names literally and without regard to capitalization. They preserve ordinary section permissions and are not manual
 drop targets. Channels can appear in multiple matching smart sections.
+Loaded same-team channels join matching shared smart sections immediately,
+including after a rename; they do not wait for the next section refresh. If a
+channel's team metadata is missing, only an existing server-authorized match is
+retained. Channels from another team never become new local matches.
 Hovering an incompatible item over a section shows a not-allowed cursor and an
 explanation over the section, including automatic membership, shared-scope
 restrictions, and channels already in the section. Returning a channel to its

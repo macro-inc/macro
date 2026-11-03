@@ -36,7 +36,7 @@ export default {
   markLabelReadFailed: 'Failed to mark channel label as read',
   muteAllChannels: 'Mute all channels',
   unmuteAllChannels: 'Unmute all channels',
-  snoozeAllChannels: 'Snooze all channels…',
+  snoozeAllChannels: 'Snooze all channels',
   notificationsFailed:
     'Could not update section notifications. Please try again.',
   deleteForEveryone: 'Delete for everyone',

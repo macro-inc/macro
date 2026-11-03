@@ -380,6 +380,12 @@ export function ChannelsRail(props: ChannelsRailProps) {
     Boolean(labelsQuery.data) &&
     (!sectionsEnabled() ||
       (!personalLabelsQuery.isPending && Boolean(personalLabelsQuery.data)));
+  const labelsFailed = () =>
+    channelTagsEnabled() &&
+    !labelsAvailable() &&
+    !labelsQuery.isPending &&
+    (!sectionsEnabled() || !personalLabelsQuery.isPending) &&
+    (labelsQuery.isError || (sectionsEnabled() && personalLabelsQuery.isError));
   const labelsUnavailableReason = () => {
     if (labelsAvailable()) return '';
     if (
@@ -1236,12 +1242,12 @@ export function ChannelsRail(props: ChannelsRailProps) {
     labels,
     labelsAvailable,
     labelsUnavailableReason,
+    labelsFailed,
     retryLabels: async () => {
-      await labelsQuery.refetch();
-
-      if (sectionsEnabled()) {
-        await personalLabelsQuery.refetch();
-      }
+      await Promise.all([
+        labelsQuery.refetch(),
+        ...(sectionsEnabled() ? [personalLabelsQuery.refetch()] : []),
+      ]);
     },
     retryReferencedChannels: nextReferencedChannels.retry,
     isLabelOpen,

@@ -1,8 +1,10 @@
 import { createDragAutoScroll } from '@app/components/drag-drop/create-drag-auto-scroll';
 import { createLayoutAnimation } from '@app/components/drag-drop/create-layout-animation';
+import type { ListScrollHandle } from '@app/components/list';
 import { SearchBar, ViewSidebar } from '@app/components/view-shell';
 import { SlackImportSidebar } from '@app/features/slack-import/slack-import-sidebar';
 import { t } from '@app/lib/i18n';
+import { useUserId } from '@core/context/user';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { ChannelEntity } from '@entity';
@@ -17,16 +19,16 @@ import {
   createEffect,
   createMemo,
   createSignal,
-  For,
-  type JSX,
   Match,
   on,
   onCleanup,
+  onMount,
   Show,
   Switch,
 } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import {
+  CHANNEL_SECTION_MAX_HEIGHT,
   CHANNEL_SECTION_MIN_HEIGHT,
   CHANNEL_SECTION_ROW_HEIGHT,
 } from '../../../constants';
@@ -57,8 +59,8 @@ import { ChannelLabelEmptyState, ChannelLabelRow } from './ChannelLabelRows';
 import { ChannelSectionDropZone } from './ChannelSectionDropZone';
 import { ChannelSectionEmptyState } from './ChannelSectionEmptyState';
 import {
-  ChannelSectionDragHandle,
   ChannelSectionHeading,
+  DraggableChannelSectionHeading,
 } from './ChannelSectionHeading';
 import {
   ChannelSectionContextMenu,
@@ -134,7 +136,7 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
           />
         </div>
       </ViewSidebar.Primary>
-      <Show when={rail.channelTagsEnabled() && !rail.labelsAvailable()}>
+      <Show when={rail.labelsFailed()}>
         <div
           class="flex items-center gap-2 px-3 text-xs text-ink-muted"
           role="status"
@@ -153,10 +155,7 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
   );
 }
 
-function SectionHeading(props: {
-  group: 'favorites' | ChannelsGroup;
-  dragHandle?: JSX.Element;
-}) {
+function SectionHeading(props: { group: 'favorites' | ChannelsGroup }) {
   const rail = useChannelsRail();
   const team = useCurrentTeamQuery(() => props.group === 'team_channels');
   const title = () => {
@@ -192,7 +191,6 @@ function SectionHeading(props: {
         open={open()}
         focused={rail.list.focus.key() === key()}
         unreadCount={unreadCount()}
-        dragHandle={props.dragHandle}
         onToggle={() => rail.toggleGroup(props.group)}
       >
         <ChannelSectionDropdown section={props.group} label={title()} />
@@ -247,7 +245,6 @@ function SectionStatus(props: { group: ChannelsGroup }) {
 function BrowseRow(props: {
   row: ChannelRailRow;
   favoriteReorder: ReturnType<typeof useFavoriteReorder>;
-  dragHandle?: JSX.Element;
 }) {
   const rail = useChannelsRail();
 
@@ -257,14 +254,13 @@ function BrowseRow(props: {
         'pl-2':
           props.row.kind === 'favorite' ||
           props.row.kind === 'conversation' ||
+          props.row.kind === 'status' ||
           props.row.kind === 'reference-status',
       }}
     >
       <Switch>
         <Match when={props.row.kind === 'section' ? props.row : undefined}>
-          {(row) => (
-            <SectionHeading group={row().group} dragHandle={props.dragHandle} />
-          )}
+          {(row) => <SectionHeading group={row().group} />}
         </Match>
         <Match when={props.row.kind === 'status' ? props.row : undefined}>
           {(row) => <SectionStatus group={row().group} />}
@@ -284,12 +280,7 @@ function BrowseRow(props: {
           )}
         </Match>
         <Match when={props.row.kind === 'label' ? props.row : undefined}>
-          {(row) => (
-            <ChannelLabelRow
-              label={row().label}
-              dragHandle={props.dragHandle}
-            />
-          )}
+          {(row) => <ChannelLabelRow label={row().label} />}
         </Match>
         <Match when={props.row.kind === 'favorite' ? props.row : undefined}>
           {(row) => (
@@ -318,12 +309,21 @@ type SectionHandle = {
   layout?: HTMLDivElement;
   root?: HTMLDivElement;
   virtualizer?: VirtualizerHandle;
+  viewport?: HTMLDivElement;
+  outerScroll?: boolean;
 };
 
 function BrowseSection(props: {
   sectionKey: ChannelSectionKey;
   section: ChannelRailSectionRows;
   maxHeight: number;
+  outerScrollRoot: HTMLDivElement | undefined;
+  layoutVersion: number;
+  sectionOrder: readonly ChannelSectionKey[];
+  scrollVersion: number;
+  savedScrollTop: number;
+  onReady: () => void;
+  onPointerDown: () => void;
   favoriteReorder: ReturnType<typeof useFavoriteReorder>;
   sectionReorder: ReturnType<typeof useSectionReorder>;
   register: (key: ChannelSectionKey, handle: SectionHandle) => () => void;
@@ -333,6 +333,14 @@ function BrowseSection(props: {
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
   const size = createElementSize(scrollRoot);
+  const [resizing, setResizing] = createSignal(false);
+  const [startMargin, setStartMargin] = createSignal(0);
+  const outerScroll = () =>
+    props.maxHeight === Number.POSITIVE_INFINITY &&
+    rail.sectionPreferences(props.sectionKey).height === undefined &&
+    !resizing();
+  const rowsScrollRoot = () =>
+    outerScroll() ? props.outerScrollRoot : scrollRoot();
   const droppable = createDroppable(
     `${props.sectionReorder.scope}:${props.sectionKey}`,
     {
@@ -343,7 +351,45 @@ function BrowseSection(props: {
   );
 
   onCleanup(props.register(props.sectionKey, handle));
+  onMount(() => {
+    const viewport = scrollRoot();
+    if (viewport && !outerScroll()) viewport.scrollTop = props.savedScrollTop;
+  });
 
+  createEffect(
+    on(
+      [
+        scrollRoot,
+        outerScroll,
+        () => props.layoutVersion,
+        () => props.sectionOrder,
+        () => size.height,
+      ],
+      () => {
+        if (!outerScroll()) return;
+        const frame = requestAnimationFrame(() => {
+          let element: HTMLElement | undefined = scrollRoot();
+          let offset = 0;
+          while (element && element !== props.outerScrollRoot) {
+            offset += element.offsetTop;
+            element =
+              element.offsetParent instanceof HTMLElement
+                ? element.offsetParent
+                : undefined;
+          }
+          setStartMargin(offset);
+        });
+        onCleanup(() => cancelAnimationFrame(frame));
+      }
+    )
+  );
+
+  // Virtualizer keys by item identity. Row IDs keep an in-flight pointer gesture
+  // attached to the same element when hydration or unread updates replace data.
+  const rowsById = createMemo(
+    () => new Map(props.section.rows.map((row) => [row.id, row]))
+  );
+  const rowIds = () => [...rowsById().keys()];
   const heading = () => props.section.heading;
   const customLabel = () => {
     const row = heading();
@@ -387,14 +433,31 @@ function BrowseSection(props: {
       : t('channelSections.emptySection');
   };
 
-  const focusIndex = () =>
-    props.section.rows.findIndex((row) => row.id === rail.list.focus.key());
+  const [dragState] = useDragDropContext() ?? [];
+  const keepRows = createMemo(() => {
+    const source = dragState?.active.draggable?.data;
+    return props.section.rows.flatMap((row, index) => {
+      if (row.id === rail.list.focus.key()) return [index];
+      if (row.kind === 'conversation' && row.channel.id === source?.channelId)
+        return [index];
+      if (row.kind === 'favorite' && row.id === source?.favoriteKey)
+        return [index];
+      return [];
+    });
+  });
   const loadVisibleSections = () => {
     const current = virtualizer();
 
     if (!open() || !current) {
       return;
     }
+
+    const viewport = scrollRoot();
+    const outer = props.outerScrollRoot;
+    if (!viewport || !outer) return;
+    const bounds = viewport.getBoundingClientRect();
+    const visible = outer.getBoundingClientRect();
+    if (bounds.bottom <= visible.top || bounds.top >= visible.bottom) return;
 
     const first = current.findItemIndex(
       Math.max(0, current.scrollOffset - 100)
@@ -417,14 +480,23 @@ function BrowseSection(props: {
   };
 
   createEffect(
-    on([() => props.section.rows, open, virtualizer, () => size.height], () => {
-      if (!open()) {
-        return;
-      }
+    on(
+      [
+        () => props.section.rows,
+        open,
+        virtualizer,
+        () => size.height,
+        () => props.scrollVersion,
+      ],
+      () => {
+        if (!open()) {
+          return;
+        }
 
-      const frame = requestAnimationFrame(loadVisibleSections);
-      onCleanup(() => cancelAnimationFrame(frame));
-    })
+        const frame = requestAnimationFrame(loadVisibleSections);
+        onCleanup(() => cancelAnimationFrame(frame));
+      }
+    )
   );
 
   const content = (
@@ -436,12 +508,14 @@ function BrowseSection(props: {
       dropEdge={props.sectionReorder.dropEdge(props.sectionKey)}
       dragging={props.sectionReorder.isDragging(props.sectionKey)}
       itemCount={itemCount()}
+      onResizingChange={setResizing}
       rootRef={(element) => {
         handle.root = element;
         droppable.ref(element);
       }}
       scrollRef={(element) => {
         setScrollRoot(element);
+        handle.viewport = element;
 
         const row = heading();
 
@@ -450,17 +524,13 @@ function BrowseSection(props: {
         }
       }}
       header={
-        <BrowseRow
-          row={heading()}
-          favoriteReorder={props.favoriteReorder}
-          dragHandle={
-            <ChannelSectionDragHandle
-              section={props.sectionKey}
-              label={label()}
-              reorder={props.sectionReorder}
-            />
-          }
-        />
+        <DraggableChannelSectionHeading
+          section={props.sectionKey}
+          label={label()}
+          reorder={props.sectionReorder}
+        >
+          <BrowseRow row={heading()} favoriteReorder={props.favoriteReorder} />
+        </DraggableChannelSectionHeading>
       }
     >
       <Show
@@ -478,29 +548,44 @@ function BrowseSection(props: {
           </Show>
         }
       >
-        <Virtualizer
-          ref={(current) => {
-            handle.virtualizer = current;
-            setVirtualizer(current);
-          }}
-          data={props.section.rows}
-          scrollRef={scrollRoot()}
-          itemSize={CHANNEL_SECTION_ROW_HEIGHT}
-          bufferSize={200}
-          keepMounted={focusIndex() >= 0 ? [focusIndex()] : undefined}
-          onScroll={loadVisibleSections}
-        >
-          {(row) => (
-            <BrowseRow row={row} favoriteReorder={props.favoriteReorder} />
+        <Show when={rowsScrollRoot()} keyed>
+          {(root) => (
+            <Virtualizer
+              ref={(current) => {
+                handle.virtualizer = current;
+                handle.outerScroll = outerScroll();
+                setVirtualizer(current);
+                props.onReady();
+              }}
+              data={rowIds()}
+              scrollRef={root}
+              startMargin={outerScroll() ? startMargin() : 0}
+              itemSize={CHANNEL_SECTION_ROW_HEIGHT}
+              bufferSize={200}
+              keepMounted={keepRows()}
+              onScroll={loadVisibleSections}
+            >
+              {(id) => (
+                <Show when={rowsById().get(id)}>
+                  {(row) => (
+                    <BrowseRow
+                      row={row()}
+                      favoriteReorder={props.favoriteReorder}
+                    />
+                  )}
+                </Show>
+              )}
+            </Virtualizer>
           )}
-        </Virtualizer>
+        </Show>
       </Show>
     </ResizableRailSection>
   );
 
   return (
     <div
-      class="min-w-0 shrink-0"
+      class="min-w-0 shrink-0 pb-0.5"
+      on:pointerdown={{ capture: true, handleEvent: props.onPointerDown }}
       ref={(element) => {
         handle.layout = element;
       }}
@@ -515,11 +600,50 @@ function BrowseSection(props: {
 function ExpandedBrowse() {
   const rail = useChannelsRail();
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
+  const [stackContent, setStackContent] = createSignal<HTMLDivElement>();
+  const [stackVirtualizer, setStackVirtualizer] =
+    createSignal<VirtualizerHandle>();
+  const [scrollVersion, setScrollVersion] = createSignal(0);
+  const [handlesVersion, setHandlesVersion] = createSignal(0);
+  const [gestureSection, setGestureSection] = createSignal<ChannelSectionKey>();
+  const [pendingScroll, setPendingScroll] = createSignal<{
+    section: ChannelSectionKey;
+    rowId: string;
+    options: Parameters<ListScrollHandle['scrollToIndex']>[1];
+    actorId: string | undefined;
+  }>();
+  const userId = useUserId();
   const scrollSize = createElementSize(scrollRoot);
+  const stackSize = createElementSize(stackContent);
+  const scrollOffsets = new Map<ChannelSectionKey, number>();
   const sections = createMemo(() =>
     groupChannelRailSections(rail.list.items.all())
   );
   const keys = createMemo(() => [...sections().keys()]);
+  const rowSections = createMemo(() => {
+    const lookup = new Map<string, ChannelSectionKey>();
+    for (const [key, section] of sections()) {
+      lookup.set(section.heading.id, key);
+      for (const row of section.rows) lookup.set(row.id, key);
+    }
+    return lookup;
+  });
+  const maximumHeight = (key: ChannelSectionKey) => {
+    const paneHeight = Math.min(
+      CHANNEL_SECTION_MAX_HEIGHT,
+      Math.max(CHANNEL_SECTION_MIN_HEIGHT, (scrollSize.height ?? 300) - 48)
+    );
+
+    if (key !== 'channels') {
+      return paneHeight;
+    }
+
+    if (keys().at(-1) === key) {
+      return Number.POSITIVE_INFINITY;
+    }
+
+    return Math.max(paneHeight, rail.sectionPreferences(key).height ?? 0);
+  };
   const handles = new Map<ChannelSectionKey, SectionHandle>();
   const motion = createLayoutAnimation({
     viewport: scrollRoot,
@@ -542,6 +666,57 @@ function ExpandedBrowse() {
     }
   });
   const [dragState, dragActions] = useDragDropContext() ?? [];
+  const sidebarDragActive = () => {
+    const scope = dragState?.active.draggable?.data.dndScope;
+    return (
+      scope === rail.railId ||
+      scope === sectionReorder.scope ||
+      scope === `${rail.railId}:favorites`
+    );
+  };
+  const keepSections = createMemo(() => {
+    if (sidebarDragActive()) return keys().map((_, index) => index);
+    const retained = new Set([
+      rowSections().get(rail.list.focus.key() ?? ''),
+      gestureSection(),
+      pendingScroll()?.section,
+    ]);
+    return keys().flatMap((key, index) => (retained.has(key) ? [index] : []));
+  });
+  let releaseFrame: number | undefined;
+  const releaseGesture = () => {
+    if (releaseFrame !== undefined) cancelAnimationFrame(releaseFrame);
+    releaseFrame = requestAnimationFrame(() => setGestureSection(undefined));
+  };
+  window.addEventListener('pointerup', releaseGesture, true);
+  window.addEventListener('pointercancel', releaseGesture, true);
+  window.addEventListener('blur', releaseGesture);
+  onCleanup(() => {
+    window.removeEventListener('pointerup', releaseGesture, true);
+    window.removeEventListener('pointercancel', releaseGesture, true);
+    window.removeEventListener('blur', releaseGesture);
+    if (releaseFrame !== undefined) cancelAnimationFrame(releaseFrame);
+  });
+  createEffect(
+    on(
+      userId,
+      () => {
+        scrollOffsets.clear();
+        setPendingScroll(undefined);
+        setGestureSection(undefined);
+      },
+      { defer: true }
+    )
+  );
+  createEffect(
+    on([sidebarDragActive, handlesVersion], () => {
+      if (!sidebarDragActive()) return;
+      const frame = requestAnimationFrame(() =>
+        dragActions?.detectCollisions()
+      );
+      onCleanup(() => cancelAnimationFrame(frame));
+    })
+  );
   createDragAutoScroll({
     getViewport: () => {
       const scope = dragState?.active.draggable?.data.dndScope;
@@ -559,6 +734,7 @@ function ExpandedBrowse() {
 
   // Wheel scrolling changes nested drop target positions during a drag too.
   const updateDropTarget = () => {
+    setScrollVersion((version) => version + 1);
     if (dragState?.active.draggable) {
       dragActions?.detectCollisions();
     }
@@ -574,11 +750,14 @@ function ExpandedBrowse() {
 
   createScrollTopFade(scrollRoot);
 
+  const ready = () => setHandlesVersion((version) => version + 1);
   const register = (key: ChannelSectionKey, handle: SectionHandle) => {
     handles.set(key, handle);
-
     return () => {
       if (handles.get(key) === handle) {
+        if (handle.viewport && !handle.outerScroll) {
+          scrollOffsets.set(key, handle.viewport.scrollTop);
+        }
         handles.delete(key);
       }
     };
@@ -588,45 +767,66 @@ function ExpandedBrowse() {
     rail.registerBrowseScrollHandle({
       scrollToIndex: (index, options) => {
         const row = rail.list.items.at(index);
+        const section = row && rowSections().get(row.id);
+        if (!row || !section) return;
 
-        if (!row) {
-          return;
-        }
-
-        for (const [key, section] of sections()) {
-          const localIndex = section.rows.findIndex(
-            (item) => item.id === row.id
-          );
-
-          if (section.heading.id !== row.id && localIndex < 0) {
-            continue;
-          }
-
-          const handle = handles.get(key);
-
-          if (!handle) {
-            return;
-          }
-
-          if (localIndex >= 0) {
-            handle.virtualizer?.scrollToIndex(localIndex, options);
-          }
-
-          const container = scrollRoot();
-          if (container && handle.root) {
-            const bounds = handle.root.getBoundingClientRect();
-            const viewport = container.getBoundingClientRect();
-
-            if (bounds.top < viewport.top) {
-              container.scrollTop += bounds.top - viewport.top;
-            } else if (bounds.bottom > viewport.bottom) {
-              container.scrollTop += bounds.bottom - viewport.bottom;
-            }
-          }
-
-          return;
+        setPendingScroll({
+          section,
+          rowId: row.id,
+          options,
+          actorId: userId(),
+        });
+        const outerRows =
+          row.kind !== 'section' &&
+          maximumHeight(section) === Number.POSITIVE_INFINITY &&
+          rail.sectionPreferences(section).height === undefined;
+        if (!outerRows) {
+          stackVirtualizer()?.scrollToIndex(keys().indexOf(section), {
+            align: 'nearest',
+          });
         }
       },
+    })
+  );
+
+  createEffect(
+    on([pendingScroll, handlesVersion], () => {
+      const request = pendingScroll();
+      if (!request) return;
+      if (request.actorId !== userId()) {
+        setPendingScroll(undefined);
+        return;
+      }
+      const section = sections().get(request.section);
+      const handle = handles.get(request.section);
+      if (!section || !handle?.root) return;
+      const localIndex = section.rows.findIndex(
+        (row) => row.id === request.rowId
+      );
+      if (localIndex >= 0 && !handle.virtualizer) return;
+
+      const frame = requestAnimationFrame(() => {
+        if (pendingScroll() !== request) return;
+        const currentIndex =
+          sections()
+            .get(request.section)
+            ?.rows.findIndex((row) => row.id === request.rowId) ?? -1;
+        if (currentIndex >= 0) {
+          handle.virtualizer?.scrollToIndex(currentIndex, request.options);
+        }
+        const container = scrollRoot();
+        if (container && handle.root && !handle.outerScroll) {
+          const bounds = handle.root.getBoundingClientRect();
+          const viewport = container.getBoundingClientRect();
+          if (bounds.top < viewport.top) {
+            container.scrollTop += bounds.top - viewport.top;
+          } else if (bounds.bottom > viewport.bottom) {
+            container.scrollTop += bounds.bottom - viewport.bottom;
+          }
+        }
+        setPendingScroll(undefined);
+      });
+      onCleanup(() => cancelAnimationFrame(frame));
     })
   );
 
@@ -634,28 +834,44 @@ function ExpandedBrowse() {
     <div class="flex min-h-0 flex-1 flex-col">
       <div
         ref={setScrollRoot}
-        class="scrollbar-hidden flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-(--sidebar-gutter) [&:has([data-resizing])]:[overflow-anchor:none]"
+        class="scrollbar-hidden relative min-h-0 flex-1 overflow-y-auto px-(--sidebar-gutter) [&:has([data-resizing])]:[overflow-anchor:none]"
         on:scroll={{ capture: true, handleEvent: updateDropTarget }}
       >
-        <For each={keys()}>
-          {(key) => (
-            <Show when={sections().get(key)}>
-              {(section) => (
-                <BrowseSection
-                  sectionKey={key}
-                  section={section()}
-                  maxHeight={Math.max(
-                    CHANNEL_SECTION_MIN_HEIGHT,
-                    (scrollSize.height ?? 300) - 48
-                  )}
-                  favoriteReorder={favoriteReorder}
-                  sectionReorder={sectionReorder}
-                  register={register}
-                />
-              )}
-            </Show>
-          )}
-        </For>
+        <div ref={setStackContent}>
+          <Show when={scrollRoot()}>
+            {(root) => (
+              <Virtualizer
+                ref={setStackVirtualizer}
+                scrollRef={root()}
+                data={keys()}
+                keepMounted={keepSections()}
+                bufferSize={300}
+              >
+                {(key) => (
+                  <Show when={sections().get(key)}>
+                    {(section) => (
+                      <BrowseSection
+                        sectionKey={key}
+                        section={section()}
+                        maxHeight={maximumHeight(key)}
+                        outerScrollRoot={scrollRoot()}
+                        layoutVersion={stackSize.height ?? 0}
+                        sectionOrder={keys()}
+                        scrollVersion={scrollVersion()}
+                        savedScrollTop={scrollOffsets.get(key) ?? 0}
+                        onReady={ready}
+                        onPointerDown={() => setGestureSection(key)}
+                        favoriteReorder={favoriteReorder}
+                        sectionReorder={sectionReorder}
+                        register={register}
+                      />
+                    )}
+                  </Show>
+                )}
+              </Virtualizer>
+            )}
+          </Show>
+        </div>
       </div>
     </div>
   );
@@ -664,6 +880,10 @@ function ExpandedBrowse() {
 function ExpandedSearchResults(props: { search: ChannelRailSearch }) {
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
   const pagination = useChannelRailVirtualizer(() => 'search');
+  const channelsById = createMemo(
+    () =>
+      new Map(props.search.results().map((channel) => [channel.id, channel]))
+  );
 
   createScrollTopFade(scrollRoot);
 
@@ -682,12 +902,16 @@ function ExpandedSearchResults(props: { search: ChannelRailSearch }) {
       </Show>
       <Virtualizer
         ref={pagination.registerVirtualizer}
-        data={props.search.results()}
+        data={[...channelsById().keys()]}
         scrollRef={scrollRoot()}
         itemSize={CHANNEL_SECTION_ROW_HEIGHT}
         onScroll={pagination.loadMoreNearEnd}
       >
-        {(channel) => <ChannelOption channel={channel} />}
+        {(id) => (
+          <Show when={channelsById().get(id)}>
+            {(channel) => <ChannelOption channel={channel()} />}
+          </Show>
+        )}
       </Virtualizer>
       <Show
         when={

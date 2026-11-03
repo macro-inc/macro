@@ -11,7 +11,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import { getOwner, onCleanup } from 'solid-js';
+import { createSignal, getOwner, type JSX, onCleanup } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChannelsSources } from '../../queries';
 import type { ChannelRailRow } from './ChannelsRailContext';
@@ -58,6 +58,7 @@ const mocks = vi.hoisted(() => ({
   listRows: undefined as ChannelRailRow[] | undefined,
   focusSet: vi.fn(),
   hotkeys: new Map<string, () => unknown>(),
+  realRenderer: false,
 }));
 vi.mock('@app/components/list', () => ({
   createListController: (options: {
@@ -94,8 +95,15 @@ vi.mock('@app/components/list', () => ({
 
     return {
       items: { at: (index: number) => items()[index], all: items },
+      activate: {
+        key: (id: string, activation: { metadata: { event: MouseEvent } }) => {
+          const item = items().find((row) => row.id === id);
+          if (item) options.onActivate({ item, metadata: activation.metadata });
+        },
+      },
       focus: {
         item: () => mocks.focusedRow,
+        key: () => undefined,
         set: (id: string, options: { reason: string }) => {
           mocks.focusSet(id, options);
           const index = items().findIndex((row) => row.id === id);
@@ -110,6 +118,13 @@ vi.mock('@app/components/list', () => ({
   },
 }));
 vi.mock('@app/components/view-shell', () => ({
+  ViewSidebar: {
+    Header: (props: { children: JSX.Element }) => <div>{props.children}</div>,
+    Primary: (props: { children: JSX.Element }) => <div>{props.children}</div>,
+    CloseButton: () => null,
+    Title: (props: { children: JSX.Element }) => <span>{props.children}</span>,
+  },
+  SearchBar: () => null,
   useViewControlHotkeys: vi.fn(),
   useViewTabHotkeys: vi.fn(),
 }));
@@ -157,7 +172,10 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: mocks.failure, success: mocks.success },
 }));
-vi.mock('@core/constant/featureFlags', () => ({ enableChannelTags: {} }));
+vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
+  enableChannelTags: {},
+}));
 vi.mock('@channel/queries/prefetch-channel-target', () => ({
   prefetchLatestChannelMessages: mocks.prefetch,
 }));
@@ -204,11 +222,13 @@ vi.mock('@queries/channel-labels/channel-labels', () => ({
 }));
 vi.mock('@queries/favorites/favorites', () => ({
   useFavoritesData: () => () => ({ favorites: [] }),
+  useReorderFavoritesMutation: () => ({ mutateAsync: vi.fn() }),
 }));
 vi.mock('@queries/soup/search', () => ({
   useSearchSoupQuery: () => ({ isSuccess: false }),
 }));
 vi.mock('@thisbeyond/solid-dnd', () => ({
+  createDroppable: () => ({ ref: () => {}, isActiveDroppable: false }),
   useDragDropContext: () => undefined,
 }));
 vi.mock('@ui', () => ({ confirmDialog: vi.fn() }));
@@ -219,6 +239,12 @@ vi.mock('../../channels-view-context', () => ({
       expandedGroups: { channels: true, direct_messages: true },
       collapsedLabels: [],
       sectionPreferences: {},
+      sortBy: {
+        channels: 'viewed_at',
+        team_channels: 'viewed_at',
+        direct_messages: 'viewed_at',
+        threads: 'viewed_at',
+      },
     },
     tab: () => mocks.tab,
     sectionsEnabled: () => true,
@@ -259,10 +285,13 @@ vi.mock('./hooks/useChannelCalls', () => ({ useChannelCalls: () => ({}) }));
 vi.mock('./hooks/useChannelRailActivity', () => ({
   useChannelRailActivity: () => ({ unreadChannelIds: () => new Set<string>() }),
 }));
-vi.mock('./next/ExpandedChannelsRail', async () => {
+vi.mock('./next/ExpandedChannelsRail', async (importOriginal) => {
+  const { ExpandedChannelsRail: RealRenderer } =
+    await importOriginal<typeof import('./next/ExpandedChannelsRail')>();
   const { useChannelsRail } = await import('./ChannelsRailContext');
   return {
-    ExpandedChannelsRail: () => {
+    ExpandedChannelsRail: (props: Parameters<typeof RealRenderer>[0]) => {
+      if (mocks.realRenderer) return <RealRenderer {...props} />;
       const rail = useChannelsRail();
       onCleanup(
         rail.registerBrowseScrollHandle({ scrollToIndex: mocks.scrollBrowse })
@@ -278,6 +307,94 @@ vi.mock('./next/ExpandedChannelsRail', async () => {
     },
   };
 });
+
+vi.mock('@queries/team/teams', () => ({ useCurrentTeamQuery: () => ({}) }));
+vi.mock('@ui/components/Tour', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@ui/components/Tour')>()),
+  tourTarget: () => () => {},
+}));
+vi.mock('./next/ChannelFavoriteRow', () => ({
+  ChannelFavoriteRow: () => null,
+}));
+vi.mock('./next/ChannelSectionEmptyState', () => ({
+  ChannelSectionEmptyState: () => null,
+}));
+vi.mock('./next/ChannelLabelRows', () => ({
+  ChannelLabelEmptyState: () => null,
+  ChannelLabelRow: () => null,
+}));
+// Keep the section layout and Virtua real; isolate unrelated menus and decoration.
+vi.mock('./next/ResizableRailSection', () => ({
+  ResizableRailSection: (props: {
+    header: JSX.Element;
+    children: JSX.Element;
+    rootRef: (element: HTMLDivElement) => void;
+    scrollRef: (element: HTMLDivElement) => void;
+  }) => (
+    <div ref={props.rootRef}>
+      {props.header}
+      <div ref={props.scrollRef}>{props.children}</div>
+    </div>
+  ),
+}));
+vi.mock('./next/ChannelSectionDropZone', () => ({
+  ChannelSectionDropZone: (props: { children: JSX.Element }) => (
+    <div>{props.children}</div>
+  ),
+}));
+vi.mock('./next/ChannelSectionHeading', () => ({
+  ChannelSectionHeading: () => <div />,
+  DraggableChannelSectionHeading: (props: { children: JSX.Element }) => (
+    <div>{props.children}</div>
+  ),
+}));
+vi.mock('./next/ChannelSectionMenu', () => ({
+  ChannelSectionContextMenu: (props: { children: JSX.Element }) => (
+    <div>{props.children}</div>
+  ),
+  ChannelSectionDropdown: () => null,
+}));
+vi.mock('./ChannelOption', async () => {
+  const { useChannelsRail } = await import('./ChannelsRailContext');
+  return {
+    ChannelOption: (props: {
+      channel: ChannelEntity;
+      rowId: ChannelRailRow['id'];
+    }) => {
+      const rail = useChannelsRail();
+      return (
+        <button
+          type="button"
+          onPointerDown={(event) => rail.prefetchRow(props.rowId, event)}
+          onClick={(event) => rail.activateRow(props.rowId, event)}
+        >
+          {props.channel.name}
+        </button>
+      );
+    },
+  };
+});
+vi.mock('@app/components/drag-drop/create-drag-auto-scroll', () => ({
+  createDragAutoScroll: () => {},
+}));
+vi.mock('@app/components/drag-drop/create-layout-animation', () => ({
+  createLayoutAnimation: () => ({
+    cancel: () => {},
+    beginHover: () => () => {},
+  }),
+}));
+vi.mock('@core/util/createScrollTopFade', () => ({
+  createScrollTopFade: () => {},
+}));
+vi.mock('../../live-calls-sidebar', () => ({
+  ChannelsLiveCallsSidebar: () => null,
+}));
+vi.mock('@app/features/slack-import/slack-import-sidebar', () => ({
+  SlackImportSidebar: () => null,
+}));
+vi.mock('../ConversationsCreateMenu', () => ({
+  ConversationsCreateMenu: () => null,
+}));
 
 import { ChannelsRail } from './ChannelsRail';
 import { useChannelSectionNotifications } from './hooks/useChannelSectionNotifications';
@@ -329,6 +446,7 @@ const mount = () =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.realRenderer = false;
   mocks.focusedRow = undefined;
   mocks.listRows = undefined;
   mocks.hotkeys.clear();
@@ -367,12 +485,98 @@ beforeEach(() => {
   mocks.select.mockReturnValue(true);
   mocks.hydrate.mockReturnValue(hydrated);
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 it('delegates keyboard scrolling to the sectioned renderer instead of global indexes', () => {
   mount();
   mocks.scroll(0);
   expect(mocks.scrollBrowse).toHaveBeenCalledExactlyOnceWith(0, undefined);
+});
+
+it('keeps a pressed channel row attached through a live data refresh and activates once', async () => {
+  mocks.realRenderer = true;
+  vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(
+    function (this: HTMLElement) {
+      return this.parentElement;
+    }
+  );
+  const observers: Array<{
+    callback: ResizeObserverCallback;
+    targets: Element[];
+  }> = [];
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      targets: Element[] = [];
+      constructor(readonly callback: ResizeObserverCallback) {
+        observers.push(this);
+      }
+      observe(target: Element) {
+        this.targets.push(target);
+      }
+      unobserve(target: Element) {
+        this.targets = this.targets.filter((item) => item !== target);
+      }
+      disconnect() {
+        this.targets = [];
+      }
+    }
+  );
+  mocks.selected = undefined;
+  const [channels, setChannels] = createSignal([channel]);
+  const liveSources: ChannelsSources = {
+    ...sources,
+    channels: { ...source, items: channels },
+    direct_messages: { ...source, items: () => [] },
+  };
+  const { container } = render(() => (
+    <ChannelsRail
+      sources={liveSources}
+      searchQuery=""
+      onSearchQueryChange={() => {}}
+      searchOpen={false}
+      onSearchOpenChange={() => {}}
+    />
+  ));
+  for (let pass = 0; pass < 3; pass++) {
+    await Promise.resolve();
+    for (const observer of observers) {
+      if (observer.targets.length === 0) continue;
+      observer.callback(
+        observer.targets.map((target) => ({
+          target,
+          contentRect: new DOMRect(
+            0,
+            0,
+            300,
+            target.hasAttribute('index') ? 64 : 200
+          ),
+          borderBoxSize: [],
+          contentBoxSize: [],
+          devicePixelContentBoxSize: [],
+        })),
+        observer as unknown as ResizeObserver
+      );
+    }
+  }
+  const row = screen.getByRole('button', { name: 'One' });
+  fireEvent.pointerDown(row, { pointerType: 'mouse', button: 0 });
+  setChannels([{ ...channel, name: 'One updated' }]);
+
+  expect(screen.getByRole('button', { name: 'One updated' })).toBe(row);
+  expect(container.contains(row)).toBe(true);
+  fireEvent.pointerUp(row, { pointerType: 'mouse', button: 0 });
+  fireEvent.click(row);
+  expect(mocks.select).toHaveBeenCalledExactlyOnceWith({
+    type: 'channel',
+    id: 'one',
+    target: undefined,
+  });
 });
 
 describe('section heading navigation', () => {

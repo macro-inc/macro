@@ -157,6 +157,7 @@ export type ChannelsRailContext = {
   labelsAvailable: Accessor<boolean>;
   /** Why labels are unavailable, for the create menu and refused drops. */
   labelsUnavailableReason: Accessor<string>;
+  labelsFailed: Accessor<boolean>;
   retryLabels: () => Promise<void>;
   /** Retry unresolved channels referenced by section membership or favorites. */
   retryReferencedChannels: () => Promise<void>;

@@ -4,7 +4,6 @@ import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn, Tooltip } from '@ui';
 import { createMemo, createSignal, type JSX, onCleanup, Show } from 'solid-js';
 import {
-  CHANNEL_SECTION_MAX_HEIGHT,
   CHANNEL_SECTION_MIN_HEIGHT,
   CHANNEL_SECTION_MIN_ITEMS,
   CHANNEL_SECTION_ROW_HEIGHT,
@@ -22,6 +21,7 @@ export function ResizableRailSection(props: {
   itemCount: number;
   dropEdge?: 'top' | 'bottom';
   dragging?: boolean;
+  onResizingChange?: (resizing: boolean) => void;
   header: JSX.Element;
   children: JSX.Element;
   rootRef: (element: HTMLDivElement) => void;
@@ -37,7 +37,6 @@ export function ResizableRailSection(props: {
 
   const maximum = () =>
     Math.min(
-      CHANNEL_SECTION_MAX_HEIGHT,
       props.maxHeight,
       contentSize.height && contentSize.height > 0
         ? contentSize.height
@@ -114,6 +113,7 @@ export function ResizableRailSection(props: {
     }
 
     setPreview(undefined);
+    props.onResizingChange?.(false);
   };
 
   return (
@@ -156,6 +156,7 @@ export function ResizableRailSection(props: {
             onCleanup(() => {
               drag = undefined;
               setPreview(undefined);
+              props.onResizingChange?.(false);
             });
 
             return (
@@ -191,6 +192,7 @@ export function ResizableRailSection(props: {
                       handle: event.currentTarget,
                     };
                     setPreview(element.offsetHeight);
+                    props.onResizingChange?.(true);
                     event.currentTarget.setPointerCapture(event.pointerId);
                   }}
                   onPointerMove={(event) => {
