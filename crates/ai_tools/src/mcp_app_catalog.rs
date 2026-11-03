@@ -1,4 +1,6 @@
-//! Pipedream app directory used when an agent pins MCP servers.
+//! Pipedream app directory used when an agent pins MCP servers, and the
+//! connector backends (Pipedream plus Macro Connect) built from the
+//! environment.
 
 use std::sync::Arc;
 
@@ -10,6 +12,8 @@ use pipedream_mcp::domain::ports::ConnectorDirectory;
 use pipedream_mcp::outbound::api::{
     DEFAULT_API_URL, DEFAULT_MCP_URL, PipedreamClient, PipedreamConfig,
 };
+use pipedream_mcp::outbound::connect::{ConnectAdapter, ConnectConfig};
+use pipedream_mcp::outbound::dispatch::ConnectorBackends;
 
 maybe_env_var! {
     struct PipedreamCatalogEnv {
@@ -25,7 +29,46 @@ maybe_env_var! {
         PipedreamApiUrl,
         /// Base URL of the Pipedream MCP server, shared with execution.
         PipedreamMcpUrl,
+        /// Macro's customer key for the Macro Connect API.
+        ConnectCustomerKey,
     }
+}
+
+/// The Macro Connect adapter for `customer_key`, or `None` when the host has
+/// no key (Connect off). Connect sends consent back to the cognition
+/// service's callback page, whichever host builds the adapter.
+pub fn connect_adapter(customer_key: Option<&str>) -> anyhow::Result<Option<Arc<ConnectAdapter>>> {
+    let Some(customer_key) = customer_key.filter(|key| !key.is_empty()) else {
+        return Ok(None);
+    };
+    let public_url = macro_service_urls::CognitionPublicUrl::new()?;
+    let callback_url = url::Url::parse(&format!(
+        "{}/pipedream/mcp/connect/callback",
+        public_url.as_str().trim_end_matches('/')
+    ))
+    .context("Connect callback is not a URL")?;
+    let adapter = ConnectAdapter::new(ConnectConfig {
+        api_url: macro_service_urls::ConnectApiUrl::new()?.to_string(),
+        customer_key: customer_key.to_owned(),
+        callback_url,
+    })
+    .context("building Macro Connect client")?;
+    Ok(Some(Arc::new(adapter)))
+}
+
+/// Pipedream plus Macro Connect when this process has credentials for both
+/// (Connect is optional), otherwise `None`.
+pub fn connector_backends_from_env() -> anyhow::Result<Option<Arc<ConnectorBackends>>> {
+    let Some(pipedream) = pipedream_client_from_env()? else {
+        return Ok(None);
+    };
+    let env = PipedreamCatalogEnv::new();
+    let connect = connect_adapter(
+        env.connect_customer_key
+            .as_ref()
+            .and_then(|value| value.value()),
+    )?;
+    Ok(Some(Arc::new(ConnectorBackends::new(pipedream, connect))))
 }
 
 /// A Pipedream client when this process has the credentials, otherwise `None`.

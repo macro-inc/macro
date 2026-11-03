@@ -594,7 +594,7 @@ pub async fn build(
     // endpoints answer 501 and its toolsets come up empty. Connect-flow
     // webhooks need both URI and secret; a half-set pair is ignored so we
     // never mint a callback we cannot serve.
-    let pipedream_client: ai_tools::ToolPipedreamConnection = match (
+    let pipedream_client: Option<Arc<pipedream_mcp::outbound::api::PipedreamClient>> = match (
         config.pipedream_client_id.value(),
         config.pipedream_client_secret.value(),
         config.pipedream_project_id.value(),
@@ -664,6 +664,16 @@ pub async fn build(
             None
         }
     };
+    // Macro Connect, beside Pipedream rather than instead of it: connections
+    // reach the backend their row names, and the `macro-connect` rollout
+    // decides which one a new connection goes through.
+    let connect_adapter = ai_tools::connect_adapter(config.connect_customer_key.value())?;
+    let connectors: ai_tools::ToolPipedreamConnection = pipedream_client.as_ref().map(|client| {
+        Arc::new(pipedream_mcp::outbound::dispatch::ConnectorBackends::new(
+            client.clone(),
+            connect_adapter.clone(),
+        ))
+    });
     let pipedream_repo =
         pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone());
     let granola_sync: Option<Arc<dyn granola_sync::domain::service::SyncService>> =
@@ -698,7 +708,7 @@ pub async fn build(
     let mcp_selector: Arc<ai_tools::ToolMcpSelector> = Arc::new(mcp_select::McpToolSelector::new(
         Arc::new(mcp_server_repo.clone()),
         Arc::new(pipedream_repo.clone()),
-        Arc::new(pipedream_client.clone()),
+        Arc::new(connectors.clone()),
     ));
 
     // Nudges the user's connected clients when import rows flip, so setup
@@ -761,20 +771,20 @@ pub async fn build(
             Arc::new(
                 import_linear::outbound::client::PipedreamLinearConnections::new(
                     Arc::new(pipedream_repo.clone()),
-                    pipedream_client.clone(),
+                    connectors.clone(),
                 ),
             ),
             Arc::new(
                 import_jira::outbound::client::PipedreamJiraConnections::new(
                     Arc::new(pipedream_repo.clone()),
-                    pipedream_client.clone(),
+                    connectors.clone(),
                 ),
             ),
         )
         .with_notion_connections(Arc::new(
             import_notion::outbound::pipedream::PipedreamNotionConnections::new(
                 Arc::new(pipedream_repo.clone()),
-                pipedream_client.clone(),
+                connectors.clone(),
             ),
         ))
         .with_admission(admission.clone())
@@ -1078,13 +1088,25 @@ pub async fn build(
                 Box::pin(async {})
             },
         );
-    let pipedream_state = pipedream_mcp::inbound::PipedreamRouterState::new(
+    let mut pipedream_state = pipedream_mcp::inbound::PipedreamRouterState::new(
         pipedream_repo,
-        pipedream_client,
+        connectors,
         authorization_state.clone(),
     )
     .with_auth_completed_hook(pipedream_auth_hook)
     .with_disconnected_hook(pipedream_disconnected_hook);
+    if let (Some(_), Some(key)) = (&connect_adapter, config.posthog_api_key.value()) {
+        let flags = feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+            config
+                .posthog_host
+                .value()
+                .unwrap_or("https://us.i.posthog.com"),
+            key.to_owned(),
+            std::time::Duration::from_secs(3),
+        )
+        .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
+        pipedream_state = pipedream_state.with_connect_rollout(macro_connect_rollout(flags));
+    }
 
     let cancellation = tokio_util::sync::CancellationToken::new();
     super::refresh::start(
@@ -1154,5 +1176,29 @@ pub async fn build(
         router,
         workers,
         cancellation,
+    })
+}
+
+/// The PostHog flag that routes a user's new connections through Macro
+/// Connect. Keep in sync with the web flag of the same key.
+const MACRO_CONNECT_FLAG: &str = "macro-connect";
+
+/// Reads `macro-connect` for each user; a failed read keeps them on
+/// Pipedream.
+fn macro_connect_rollout<F>(flags: F) -> pipedream_mcp::inbound::ConnectRollout
+where
+    F: feature_flags::FeatureFlags + Clone + 'static,
+{
+    Arc::new(move |user_id| {
+        let flags = flags.clone();
+        Box::pin(async move {
+            match flags.load(&user_id).await {
+                Ok(snapshot) => snapshot.is_enabled(MACRO_CONNECT_FLAG),
+                Err(error) => {
+                    tracing::warn!(error = ?error, "could not read the macro-connect flag; using Pipedream");
+                    false
+                }
+            }
+        })
     })
 }

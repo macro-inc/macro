@@ -73,7 +73,9 @@ pub use build_context::{
 };
 pub use deferred::{DeferredToolSet, deferred_tools};
 pub use import_jobs::{IMPORT_JOBS_HANDOVER_TIMEOUT, ImportJobs};
-pub use mcp_app_catalog::{PipedreamMcpAppCatalog, pipedream_client_from_env};
+pub use mcp_app_catalog::{
+    PipedreamMcpAppCatalog, connect_adapter, connector_backends_from_env, pipedream_client_from_env,
+};
 pub use search::search_toolset;
 pub use tool_context::{
     ChannelSideEffectClients, FormsToolConfig, MaybeToolEventBroker, NoOpCallRtcClient,
