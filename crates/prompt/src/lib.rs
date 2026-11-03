@@ -420,6 +420,11 @@ mod tests {
         let coding = coding_agents::PROMPT.to_string();
         assert!(coding.contains("ready for review, not a draft"));
         assert!(coding.contains("CI passing"));
+
+        let code_mode = coding_agents::CODE_MODE_PROMPT.to_string();
+        assert!(code_mode.contains("macro.agentSessions.createManaged"));
+        assert!(code_mode.contains("ready for review, not a draft"));
+        assert!(!code_mode.contains("DispatchCodingAgent"));
     }
 
     #[test]

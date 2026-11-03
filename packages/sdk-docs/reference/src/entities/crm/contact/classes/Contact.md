@@ -10,9 +10,9 @@ A CRM contact: a person observed interacting with the team.
 
 | Property | Modifier | Type | Default value | Description | Overrides | Inherited from |
 | ------ | ------ | ------ | ------ | ------ | ------ | ------ |
-| <a id="property-company"></a> `company` | `readonly` | () => `Promise`\<[`Company`](../../company/classes/Company.md)\> | `...` | The CRM company this contact belongs to. | - | - |
+| <a id="property-company"></a> `company` | `readonly` | () => `Promise`\<[`Company`](../../company/classes/Company.md) \| `undefined`\> | `...` | The CRM company this contact belongs to, if it has one. | - | - |
 | <a id="property-createdat"></a> `createdAt` | `readonly` | () => `Promise`\<`string`\> | `...` | When the contact was first created in the CRM. | - | - |
-| <a id="property-email"></a> `email` | `readonly` | () => `Promise`\<`string`\> | `...` | The contact's email address. | - | - |
+| <a id="property-email"></a> `email` | `readonly` | () => `Promise`\<`string` \| `undefined`\> | `...` | The contact's email address; absent for a contact added by name alone. | - | - |
 | <a id="property-entitytype"></a> `entityType` | `readonly` | `"crm_contact"` | `'crm_contact'` | Favorites identify CRM contacts as `crm_contact`. | [`FavoritableEntity`](../../../entity/classes/FavoritableEntity.md).[`entityType`](../../../entity/classes/FavoritableEntity.md#property-entitytype) | - |
 | <a id="property-firstinteraction"></a> `firstInteraction` | `readonly` | () => `Promise`\<`string`\> | `...` | When the team first interacted with this contact. | - | - |
 | <a id="property-hidden"></a> `hidden` | `readonly` | () => `Promise`\<`boolean`\> | `...` | Whether the contact is hidden from CRM listings. | - | - |

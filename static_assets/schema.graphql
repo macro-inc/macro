@@ -8647,17 +8647,29 @@ type GraphqlSoupCrmContact implements GraphqlSoupEntity {
 	"""
 	teamId: ID!
 	"""
-	Parent company.
+	Parent company; null for a contact without a company.
 	"""
-	companyId: ID!
+	parentCompanyId: ID
 	"""
-	Parent company's display name.
+	Parent company's display name; null without a company.
 	"""
-	companyName: String!
+	parentCompanyName: String
 	"""
-	Full email address.
+	Full email address; null for a contact added by name alone.
 	"""
-	email: String!
+	emailAddress: String
+	"""
+	Parent company, or the nil ID for a contact without a company.
+	"""
+	companyId: ID! @deprecated(reason: "Use parentCompanyId. Remove after 2026-12-10.")
+	"""
+	Parent company's display name, or empty without a company.
+	"""
+	companyName: String! @deprecated(reason: "Use parentCompanyName. Remove after 2026-12-10.")
+	"""
+	Full email address, or empty for a contact added by name alone.
+	"""
+	email: String! @deprecated(reason: "Use emailAddress. Remove after 2026-12-10.")
 	"""
 	Team-local display name.
 	"""

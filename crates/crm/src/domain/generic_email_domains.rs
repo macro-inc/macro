@@ -57,6 +57,16 @@ pub(crate) fn is_generic_email_domain(domain: &str) -> bool {
         || contains_ci(BULK_SENDER_DOMAINS, &normalized)
 }
 
+/// Returns `true` when `domain` is a personal / free email provider
+/// (gmail.com, outlook.com, …): the subset of
+/// [`is_generic_email_domain`] where an address belongs to a person,
+/// which email sync may file as a contact without a company when a team
+/// lets personal emails in. Vendors, brands, disposable inboxes, and bulk
+/// senders stay out regardless.
+pub(crate) fn is_personal_email_domain(domain: &str) -> bool {
+    contains_ci(CONSUMER_EMAIL_DOMAINS, &normalize_domain(domain))
+}
+
 /// Trim surrounding whitespace, lowercase, and strip a leading `www.`
 /// label. We don't attempt IDN/punycode normalization here — the
 /// curated lists are all ASCII, and IDN-form variants of consumer

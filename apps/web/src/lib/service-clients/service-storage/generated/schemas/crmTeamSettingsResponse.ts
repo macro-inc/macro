@@ -25,6 +25,9 @@ falls back to its label heuristic. */
   delete_records_role: CrmPermissionRole;
   /** Who can change the deal stage set in CRM settings. */
   edit_stages_role: CrmPermissionRole;
+  /** Whether email sync keeps personal-provider addresses (gmail.com
+etc.) out of the CRM. */
+  exclude_personal_emails: boolean;
   /** System stage option id to team stage option id for seeded stages. */
   legacy_stage_ids: CrmTeamSettingsResponseLegacyStageIds;
   /** Who can move deals out of a closed stage. */

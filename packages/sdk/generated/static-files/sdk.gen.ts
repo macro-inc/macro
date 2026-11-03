@@ -20,7 +20,7 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
 
 class HeyApiClient {
     protected client: Client;
-    
+
     constructor(args?: {
         client?: Client;
     }) {
@@ -30,9 +30,9 @@ class HeyApiClient {
 
 class HeyApiRegistry<T> {
     private readonly defaultKey = 'default';
-    
+
     private readonly instances: Map<string, T> = new Map();
-    
+
     get(key?: string): T {
         const instance = this.instances.get(key ?? this.defaultKey);
         if (!instance) {
@@ -40,7 +40,7 @@ class HeyApiRegistry<T> {
         }
         return instance;
     }
-    
+
     set(value: T, key?: string): void {
         this.instances.set(key ?? this.defaultKey, value);
     }
@@ -48,7 +48,7 @@ class HeyApiRegistry<T> {
 
 export class Sdk extends HeyApiClient {
     public static readonly __registry: HeyApiRegistry<Sdk> = new HeyApiRegistry<Sdk>();
-    
+
     constructor(args?: {
         client?: Client;
         key?: string;
@@ -56,7 +56,7 @@ export class Sdk extends HeyApiClient {
         super(args);
         Sdk.__registry.set(this, args?.key);
     }
-    
+
     public putPresignedUrl<ThrowOnError extends boolean = false>(options: Options<PutPresignedUrlData, ThrowOnError>): RequestResult<PutPresignedUrlResponses, PutPresignedUrlErrors, ThrowOnError> {
         return (options.client ?? this.client).put<PutPresignedUrlResponses, PutPresignedUrlErrors, ThrowOnError>({
             url: '/api/file',
@@ -67,7 +67,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Bulk delete files.
      */
@@ -81,15 +81,15 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     public handleGetMetadata<ThrowOnError extends boolean = false>(options: Options<HandleGetMetadataData, ThrowOnError>): RequestResult<HandleGetMetadataResponses, HandleGetMetadataErrors, ThrowOnError> {
         return (options.client ?? this.client).get<HandleGetMetadataResponses, HandleGetMetadataErrors, ThrowOnError>({ url: '/api/file/metadata/{file_id}', ...options });
     }
-    
+
     public handleDeleteFile<ThrowOnError extends boolean = false>(options: Options<HandleDeleteFileData, ThrowOnError>): RequestResult<HandleDeleteFileResponses, HandleDeleteFileErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<HandleDeleteFileResponses, HandleDeleteFileErrors, ThrowOnError>({ url: '/api/file/{file_id}', ...options });
     }
-    
+
     public getFileDocumentation<ThrowOnError extends boolean = false>(options: Options<GetFileDocumentationData, ThrowOnError>): RequestResult<GetFileDocumentationResponses, GetFileDocumentationErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetFileDocumentationResponses, GetFileDocumentationErrors, ThrowOnError>({ url: '/file/{file_id}', ...options });
     }
