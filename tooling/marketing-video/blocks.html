@@ -286,7 +286,7 @@ const CAMK = [];   // camera keys: [beat, cx, cy, z, sy, resp, damp]
   const rest = [GX, GY, 1, GY];
   if (CHAIN) {
     const shots = [[0, ["calls"], LY.zmax || 2.05], [1.25, ["calls", "crm"], 1.75, "crm"], [3.25, ["crm", "tasks"], 1.75, "tasks"], [5.25, ["tasks", "calendar"], 1.75, "calendar"],
-      [7.25, ["calendar", "agents"], 1.75, "agents"], [9.75, ["agents", "email"], 1.75, "email"], [12.25, ["email", "chat"], 1.75, "chat"], [13.25, ["chat", "docs"], 1.75, "docs"]];
+      [7.25, ["calendar", "agents"], 1.75, "agents"], [9.75, ["agents", "email"], 1.75, "email"], [12.75, ["email", "chat"], 1.75, "chat"], [13.25, ["chat", "docs"], 1.75, "docs"]];
     shots.forEach(([b, keys, zm, bias]) => CAMK.push([b - 0.15, ...fit(keys, zm, bias), 0.62, 0.92]));
     CAMK.push([14.75, ...rest, 1.0, 0.95]);
   } else CAMK.push([0, ...rest]);
