@@ -1,9 +1,12 @@
 use crate::domain::{
-    models::{CatalogEntry, PipedreamConnection},
-    ports::{ConnectionStore, ConnectorDirectory, PipedreamConnect},
+    models::{CatalogEntry, ConnectorOverlay, PipedreamConnection},
+    ports::{ConnectionStore, ConnectorDirectory, ConnectorOverlays, PipedreamConnect},
     service::{
         catalog::browse_catalog,
-        connect::{PipedreamConnectError, complete_pipedream_connection, disconnect_mcp_server},
+        connect::{
+            PipedreamConnectError, complete_pipedream_connection, disconnect_mcp_server,
+            recover_pipedream_connection,
+        },
     },
 };
 use axum::{
@@ -121,7 +124,7 @@ pub fn pipedream_mcp_router<S, P, Auth, Global>(
     state: PipedreamRouterState<S, P, Auth>,
 ) -> Router<Global>
 where
-    S: ConnectionStore,
+    S: ConnectionStore + ConnectorOverlays,
     P: PipedreamConnect + ConnectorDirectory,
     Auth: MacroAuthorizationService,
     anyhow::Error: From<S::Err>,
@@ -149,9 +152,14 @@ where
             post(complete_connection::<S, P, Auth>),
         )
         .route(
+            "/pipedream/mcp/recover",
+            post(recover_connection::<S, P, Auth>),
+        )
+        .route(
             "/pipedream/mcp/catalog",
             get(browse_catalog_handler::<S, P, Auth>),
         )
+        .route("/pipedream/mcp/overlays", get(list_overlays::<S, P, Auth>))
         .with_state(state)
 }
 
@@ -195,8 +203,9 @@ pub struct PipedreamWebhookQuery {
 /// The body is taken as raw JSON on purpose. The payload shape is
 /// Pipedream's to change, and an endpoint whose whole job is telling us why
 /// connections fail must not start dropping events with a 422 the day they
-/// add a field. Known keys are pulled out so they can be indexed; the rest
-/// is logged verbatim.
+/// add a field. Only opaque ids, the app, and Pipedream's error text are
+/// logged: the payload also carries the Connect token and the account's
+/// name and external id, which are personal data.
 #[tracing::instrument(skip_all)]
 async fn pipedream_webhook(
     State(state): State<PipedreamWebhookState>,
@@ -209,25 +218,29 @@ async fn pipedream_webhook(
         return StatusCode::UNAUTHORIZED;
     }
 
-    let event = payload.get("event").and_then(serde_json::Value::as_str);
-    let external_user_id = payload
-        .get("external_user_id")
-        .and_then(serde_json::Value::as_str);
-    let failed = payload.get("error").is_some()
-        || event.is_some_and(|e| e.to_ascii_uppercase().contains("ERROR"));
+    let str_at = |pointer: &str| payload.pointer(pointer).and_then(serde_json::Value::as_str);
+    let event = str_at("/event");
+    let error = str_at("/error");
+    let account_id = str_at("/account/id");
+    let app_slug = str_at("/account/app/name_slug");
+    let connect_session_id = payload.get("connect_session_id").map(ToString::to_string);
+    let failed = error.is_some() || event.is_some_and(|e| e.to_ascii_uppercase().contains("ERROR"));
 
     if failed {
         tracing::warn!(
-            event = event,
-            external_user_id = external_user_id,
-            payload = %payload,
+            event,
+            error,
+            account_id,
+            connector.app_slug = app_slug,
+            connect_session_id,
             "Pipedream connect flow failed"
         );
     } else {
         tracing::info!(
-            event = event,
-            external_user_id = external_user_id,
-            payload = %payload,
+            event,
+            account_id,
+            connector.app_slug = app_slug,
+            connect_session_id,
             "Pipedream connect flow event"
         );
     }
@@ -276,6 +289,17 @@ pub struct PipedreamCompleteRequest {
     account_id: String,
     /// Optional display name for the connector. Defaults to the app's name
     /// for new connections; existing connections keep their name.
+    #[serde(default)]
+    server_name: Option<String>,
+}
+
+/// Request body for recovering a connect flow whose result the Connect UI
+/// never reported.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct PipedreamRecoverRequest {
+    /// The Pipedream app the flow was connecting, by name slug.
+    app_slug: String,
+    /// Optional display name for the connector, as for completion.
     #[serde(default)]
     server_name: Option<String>,
 }
@@ -353,6 +377,25 @@ pub struct PipedreamCatalogResponse {
     next_cursor: Option<String>,
 }
 
+/// A catalog app that connects through its own MCP server instead of
+/// Pipedream.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PipedreamOverlayResponse {
+    /// Pipedream app name slug, as it appears in the catalog.
+    app_slug: String,
+    /// The MCP server to authorize with the native MCP OAuth flow.
+    server_url: String,
+}
+
+impl From<ConnectorOverlay> for PipedreamOverlayResponse {
+    fn from(overlay: ConnectorOverlay) -> Self {
+        Self {
+            app_slug: overlay.app_slug,
+            server_url: overlay.server_url,
+        }
+    }
+}
+
 // -- error --------------------------------------------------------------------
 
 /// Error type for MCP HTTP handlers.
@@ -364,6 +407,9 @@ pub enum PipedreamHandlerErr {
     /// Pipedream is not configured for this deployment.
     #[error("Pipedream is not configured")]
     PipedreamNotConfigured,
+    /// The app connects through its own MCP server, never Pipedream.
+    #[error("{0}")]
+    Overlaid(String),
     /// An internal error occurred.
     #[error("{0}")]
     Internal(#[from] anyhow::Error),
@@ -373,6 +419,9 @@ impl From<PipedreamConnectError> for PipedreamHandlerErr {
     fn from(err: PipedreamConnectError) -> Self {
         match err {
             PipedreamConnectError::NotFound => PipedreamHandlerErr::NotFound,
+            err @ PipedreamConnectError::Overlaid { .. } => {
+                PipedreamHandlerErr::Overlaid(err.to_string())
+            }
             PipedreamConnectError::Internal(e) => PipedreamHandlerErr::Internal(e),
         }
     }
@@ -383,6 +432,7 @@ impl IntoResponse for PipedreamHandlerErr {
         let status = match &self {
             PipedreamHandlerErr::NotFound => StatusCode::NOT_FOUND,
             PipedreamHandlerErr::PipedreamNotConfigured => StatusCode::NOT_IMPLEMENTED,
+            PipedreamHandlerErr::Overlaid(_) => StatusCode::CONFLICT,
             PipedreamHandlerErr::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (
@@ -576,6 +626,7 @@ where
         (status = 200, body = PipedreamConnectionResponse),
         (status = 401, body = String),
         (status = 404, body = ErrorResponse),
+        (status = 409, body = ErrorResponse),
         (status = 501, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
@@ -583,7 +634,8 @@ where
 /// Register a connected account reported by the Pipedream Connect UI.
 ///
 /// Verifies with Pipedream that the account exists and was connected for
-/// the authenticated user before persisting anything.
+/// the authenticated user before persisting anything. An overlaid app is
+/// refused with 409: it connects through its own MCP server instead.
 #[tracing::instrument(skip_all, err)]
 pub async fn complete_connection<S, P, Auth>(
     State(state): State<PipedreamRouterState<S, P, Auth>>,
@@ -591,7 +643,7 @@ pub async fn complete_connection<S, P, Auth>(
     Json(body): Json<PipedreamCompleteRequest>,
 ) -> Result<Json<PipedreamConnectionResponse>, PipedreamHandlerErr>
 where
-    S: ConnectionStore,
+    S: ConnectionStore + ConnectorOverlays,
     P: PipedreamConnect + ConnectorDirectory,
     Auth: MacroAuthorizationService,
     anyhow::Error: From<S::Err>,
@@ -599,12 +651,66 @@ where
     let user = &authorization.authorization.user;
     let record = complete_pipedream_connection(
         state.store.as_ref(),
+        state.store.as_ref(),
         state.pipedream()?.as_ref(),
         &user.macro_user_id,
         &body.account_id,
         body.server_name.as_deref(),
     )
     .await?;
+
+    if let Some(hook) = &state.on_auth_completed {
+        hook(record.clone()).await;
+    }
+
+    Ok(Json(PipedreamConnectionResponse::from_record(&record)))
+}
+
+#[utoipa::path(
+    post,
+    path = "/pipedream/mcp/recover",
+    tag = "pipedream-mcp",
+    operation_id = "recover_pipedream_mcp_connection",
+    request_body = PipedreamRecoverRequest,
+    responses(
+        (status = 200, body = PipedreamConnectionResponse),
+        (status = 401, body = String),
+        (status = 404, body = ErrorResponse),
+        (status = 409, body = ErrorResponse),
+        (status = 501, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+/// Register an account a Connect flow created but the Connect UI never
+/// reported.
+///
+/// Called after the Connect UI closes without a success event. Answers 404
+/// when Pipedream has no new account for this user and app.
+/// An overlaid app is refused with 409, as in [`complete_connection`].
+#[tracing::instrument(skip_all, err, fields(connector.app_slug = %body.app_slug))]
+pub async fn recover_connection<S, P, Auth>(
+    State(state): State<PipedreamRouterState<S, P, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Json(body): Json<PipedreamRecoverRequest>,
+) -> Result<Json<PipedreamConnectionResponse>, PipedreamHandlerErr>
+where
+    S: ConnectionStore + ConnectorOverlays,
+    P: PipedreamConnect + ConnectorDirectory,
+    Auth: MacroAuthorizationService,
+    anyhow::Error: From<S::Err>,
+{
+    let user = &authorization.authorization.user;
+    let record = recover_pipedream_connection(
+        state.store.as_ref(),
+        state.store.as_ref(),
+        state.pipedream()?.as_ref(),
+        &user.macro_user_id,
+        &body.app_slug,
+        body.server_name.as_deref(),
+        chrono::Utc::now(),
+    )
+    .await?
+    .ok_or(PipedreamHandlerErr::NotFound)?;
 
     if let Some(hook) = &state.on_auth_completed {
         hook(record.clone()).await;
@@ -652,4 +758,33 @@ where
         servers: page.entries.into_iter().map(Into::into).collect(),
         next_cursor: page.next_cursor,
     }))
+}
+
+#[utoipa::path(
+    get,
+    path = "/pipedream/mcp/overlays",
+    tag = "pipedream-mcp",
+    operation_id = "list_pipedream_mcp_overlays",
+    responses(
+        (status = 200, body = Vec<PipedreamOverlayResponse>),
+        (status = 401, body = String),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+/// List the catalog apps that connect through their own MCP server.
+///
+/// Clients connect these with the native MCP OAuth flow against
+/// `server_url`; Pipedream refuses to complete a connection for them.
+#[tracing::instrument(skip_all, err)]
+pub async fn list_overlays<S, P, Auth>(
+    State(state): State<PipedreamRouterState<S, P, Auth>>,
+    _authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+) -> Result<Json<Vec<PipedreamOverlayResponse>>, PipedreamHandlerErr>
+where
+    S: ConnectionStore + ConnectorOverlays,
+    P: PipedreamConnect + ConnectorDirectory,
+    Auth: MacroAuthorizationService,
+{
+    let overlays = state.store.overlays().await?;
+    Ok(Json(overlays.into_iter().map(Into::into).collect()))
 }

@@ -16,8 +16,12 @@
             NULL::text as "model",
             NULL::text as "sha",
             NULL::document_sub_type_value as "sub_type",
+            false as "is_email_attachment",
+            true as "is_important",
+            ARRAY[]::uuid[] as "status_option_ids",
             NULL::timestamptz as "viewed_at",
             gi.sort_ts as "sort_ts",
+            gi.sort_key as "sort_key",
             NULL::boolean as "is_completed",
             NULL::timestamptz as "deleted_at",
             NULL::jsonb as "calendar_event",
@@ -28,10 +32,12 @@
                 'createdBy', r.created_by
             ) as "database_row",
             gi.group_key as "group_key",
+            gi.group_order as "group_order",
             gi.group_total_count as "group_total_count",
             gi.row_in_group as "row_in_group"
         FROM GroupedItems gi
-        INNER JOIN database_rows r ON r.id::text = gi.id
+        -- Keep the indexed UUID column bare. Other Soup kinds can have legacy text ids.
+        INNER JOIN database_rows r ON r.id = (CASE WHEN gi.item_type = 'database_row' THEN gi.id END)::uuid
         INNER JOIN database_tables row_table ON row_table.id = r.table_id
         INNER JOIN database_entities row_database ON row_database.database_id = row_table.database_id
         WHERE gi.item_type = 'database_row'

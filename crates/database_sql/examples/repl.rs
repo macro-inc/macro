@@ -46,6 +46,7 @@ const RENEWAL: Uuid = Uuid::from_u128(0x34);
 
 fn catalog() -> Catalog {
     Catalog {
+        scope: None,
         tables: vec![Table {
             id: TableId::from_uuid(DEALS),
             database_id: DatabaseId::from_uuid(CRM),
@@ -333,6 +334,7 @@ impl Memory {
             CellValue::Number(number) => Some(Cell::Number(number)),
             CellValue::Boolean(checked) => Some(Cell::Bool(checked)),
             CellValue::Date(date) => Some(Cell::Date(date)),
+            CellValue::DateRange(range) => Some(Cell::DateRange(range)),
             CellValue::Link(urls) => Some(Cell::Text(urls.join(" "))),
             CellValue::Options(refs) => Some(Cell::Options(
                 refs.into_iter()

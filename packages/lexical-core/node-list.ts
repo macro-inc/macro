@@ -138,7 +138,8 @@ export const NodeReplacements: LexicalNodeReplacement[] = [
   },
   {
     replace: ListNode,
-    with: (node: ListNode) => new TaskListNode(node.getListType()),
+    with: (node: ListNode) =>
+      new TaskListNode(node.getListType(), node.getStart()),
     withKlass: TaskListNode,
   },
 ];

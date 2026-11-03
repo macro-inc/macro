@@ -1356,6 +1356,16 @@ impl<G: GoogleRequestGate> CalendarMutationProvider for GoogleCalendarClient<G> 
         else {
             return Ok(ProviderSeriesMutationOutcome::Gone);
         };
+        // Google answers a read of a deleted or replaced series with its
+        // tombstone and refuses any change to it, so there is nothing left to
+        // truncate. The caller retires the source, as for a missing series.
+        if master.status.as_deref() == Some("cancelled") {
+            tracing::info!(
+                master_provider_event_id,
+                "the series is a tombstone, nothing to truncate"
+            );
+            return Ok(ProviderSeriesMutationOutcome::Gone);
+        }
         // Removing everything from the first occurrence onward is a series
         // deletion, matching Google Calendar's own behavior.
         let master_start = google_time(&master).ok().map(|time| event_start_of(&time));
@@ -2492,10 +2502,26 @@ fn google_time(event: &GoogleEvent) -> Result<EventTime, Report> {
                 .with_timezone(&Utc),
             time_zone: start.time_zone.clone(),
         },
-        (_, _, Some(start_value), Some(end_value)) => EventTime::AllDay {
-            start_date: NaiveDate::parse_from_str(start_value, "%Y-%m-%d").map_err(report)?,
-            end_date: NaiveDate::parse_from_str(end_value, "%Y-%m-%d").map_err(report)?,
-        },
+        (_, _, Some(start_value), Some(end_value)) => {
+            let start_date = NaiveDate::parse_from_str(start_value, "%Y-%m-%d").map_err(report)?;
+            let mut end_date = NaiveDate::parse_from_str(end_value, "%Y-%m-%d").map_err(report)?;
+            // Imported Google events can use the same date for both ends.
+            // Represent that day with an exclusive end; retain Google's
+            // original dates in the source payload without writing them back.
+            if end_date == start_date {
+                end_date = end_date.succ_opt().ok_or_else(|| {
+                    rootcause::report!("Google event {} has an out-of-range all-day end", event.id)
+                })?;
+                tracing::debug!(
+                    provider_event_id = %event.id,
+                    "normalized a Google all-day event with matching dates"
+                );
+            }
+            EventTime::AllDay {
+                start_date,
+                end_date,
+            }
+        }
         _ => {
             return Err(rootcause::report!(
                 "Google event {} has mixed or missing time fields",

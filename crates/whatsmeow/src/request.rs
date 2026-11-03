@@ -12,6 +12,7 @@
 use std::time::Duration;
 
 use tokio::sync::oneshot;
+use tracing::Instrument;
 
 use crate::binary::{Attrs, Node, NodeContent};
 use crate::client::Client;
@@ -152,13 +153,24 @@ impl Client {
     /// Sends an info query and waits for the response; an error response is
     /// an [`IqError`]. A disconnect before the response retries once after
     /// reconnecting, unless `no_retry` is set.
-    #[tracing::instrument(
-        name = "whatsmeow.iq",
-        skip_all,
-        fields(xmlns = query.namespace, iq_type = %query.r#type),
-        err
-    )]
-    pub(crate) async fn send_iq(&self, mut query: InfoQuery) -> Result<Node, ClientError> {
+    pub(crate) async fn send_iq(&self, query: InfoQuery) -> Result<Node, ClientError> {
+        // Macro addition: one span per info query with its outcome. Not
+        // `err`: an IQ error's message can hold the raw response node.
+        let span = tracing::info_span!(
+            "whatsmeow.iq",
+            xmlns = query.namespace,
+            iq_type = %query.r#type,
+            kind = crate::telemetry::iq_kind(query.content.as_ref()),
+            outcome = tracing::field::Empty,
+            error_code = tracing::field::Empty,
+            otel.status_code = tracing::field::Empty,
+        );
+        let result = self.send_iq_inner(query).instrument(span.clone()).await;
+        crate::telemetry::record_iq_result(&span, &result);
+        result
+    }
+
+    async fn send_iq_inner(&self, mut query: InfoQuery) -> Result<Node, ClientError> {
         if query.timeout.is_zero() {
             query.timeout = DEFAULT_REQUEST_TIMEOUT;
         }

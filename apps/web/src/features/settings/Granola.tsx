@@ -24,7 +24,7 @@ export function GranolaCard() {
           />
         }
         title="Granola"
-        description="Import your Granola meetings into Calls."
+        description="Import Granola meetings into Calls to make transcripts available to agents and team-level memory."
         status={
           <Switch>
             <Match when={granola.status() === 'connected'}>

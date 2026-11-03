@@ -4,18 +4,17 @@ import {
   ViewShell,
 } from '@app/components/view-shell';
 import { ViewTour } from '@app/features/tours/ViewTour';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { SplitRouter } from '@app/lib/split-router';
+import { TraceFlow } from '@app/observability/flow';
 import { usePreference } from '@app/preferences/use-preference';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { enableReminders } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import {
   createSignal,
   type JSX,
@@ -36,6 +35,7 @@ import { emailTour } from './tour';
 import type { EmailTab, EmailViewStateOptions } from './types';
 import { useEmailViewHotkeys } from './use-email-view-hotkeys';
 import { useReadingPaneHotkey } from './use-reading-pane-hotkey';
+import { useVisibleEmailTab } from './use-visible-email-tab';
 
 export type EmailViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */
@@ -65,7 +65,11 @@ function EmailViewBreadcrumbs(props: ParentProps) {
 function EmailListFallback() {
   return (
     <div class="grid size-full min-h-0 min-w-0 place-items-center text-ink-muted touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
-      <SpinnerIcon aria-label="Loading email" class="size-5 animate-spin" />
+      <SpinnerIcon
+        aria-hidden={false}
+        aria-label="Loading email"
+        class="size-5 animate-spin"
+      />
     </div>
   );
 }
@@ -166,13 +170,14 @@ function EmailDesktopLayout(props: {
   );
 }
 
-const MOBILE_EMAIL_TABS: PillTabItem<EmailTab>[] = EMAIL_TABS.map((tab) => ({
-  value: tab.id,
-  label: tab.label,
-}));
+// Focus leads, as it does in the desktop Inbox tabs.
+const MOBILE_EMAIL_TABS: PillTabItem<EmailTab>[] = [
+  ...EMAIL_TABS.filter((tab) => tab.id === 'focus'),
+  ...EMAIL_TABS.filter((tab) => tab.id !== 'focus'),
+].map((tab) => ({ value: tab.id, label: tab.label }));
 
 function EmailMobileLayout(props: ParentProps) {
-  const reminders = useFeatureFlag(enableReminders);
+  const isVisible = useVisibleEmailTab();
   const { state, setTab } = useEmailView();
 
   return (
@@ -184,12 +189,7 @@ function EmailMobileLayout(props: ParentProps) {
             class="-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none"
             contentClass="px-(--mobile-chrome-gutter)"
             leading={<EmailFilterDrawer />}
-            items={MOBILE_EMAIL_TABS.filter(
-              (tab) =>
-                tab.value !== 'reminders' ||
-                reminders().enabled ||
-                (reminders().loading && state.tab === 'reminders')
-            )}
+            items={MOBILE_EMAIL_TABS.filter((tab) => isVisible(tab.value))}
             value={state.tab}
             onChange={setTab}
           />
@@ -247,7 +247,9 @@ function EmailViewRoot() {
 
   const list = () => (
     <Suspense fallback={<EmailListFallback />}>
-      <EmailList ref={setListElement} pane={listPane()} />
+      <TraceFlow name="email.list" key={() => state.tab}>
+        <EmailList ref={setListElement} pane={listPane()} />
+      </TraceFlow>
     </Suspense>
   );
 

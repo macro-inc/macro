@@ -5,6 +5,12 @@ import {
   buildChannelRailRows,
   buildChannelSectionRows,
 } from './build-channel-rail-rows';
+import {
+  buildChannelSectionRows as buildSectionedChannelRows,
+  buildChannelRailRows as buildSectionedRailRows,
+  groupChannelRailSections,
+  orderChannelRailSections,
+} from './next/build-channel-rail-rows';
 
 function channel(
   id: string,
@@ -123,7 +129,7 @@ describe('buildChannelSectionRows', () => {
   });
 
   it.each([true, false])(
-    'keeps non-team channels in the plain list when labels are open=%s, ignoring cached memberships',
+    'excludes non-team channels from team sections when labels are open=%s',
     (isOpen) => {
       const publicChannel = channel('public', 'Public', 'public');
       const privateChannel = channel('private', 'Private', 'private');
@@ -151,10 +157,7 @@ describe('buildChannelSectionRows', () => {
 
       expect(
         rows.filter((row) => row.kind === 'conversation' && !row.labelId)
-      ).toEqual([
-        { kind: 'conversation', channel: publicChannel },
-        { kind: 'conversation', channel: privateChannel },
-      ]);
+      ).toEqual([]);
       expect(
         rows.filter((row) => row.kind === 'conversation' && row.labelId)
       ).toEqual(
@@ -172,6 +175,7 @@ describe('buildChannelSectionRows', () => {
 describe('buildChannelRailRows', () => {
   const expanded = {
     favorites: true,
+    team_channels: true,
     channels: true,
     direct_messages: true,
   };
@@ -182,7 +186,8 @@ describe('buildChannelRailRows', () => {
       expanded,
       {
         favorites: [],
-        channels: [acme, zeta],
+        team_channels: [acme, zeta],
+        channels: [],
         direct_messages: [],
         recents: [],
         threads: [],
@@ -196,9 +201,78 @@ describe('buildChannelRailRows', () => {
     );
 
     expect(rows.map((row) => row.id)).toEqual([
-      'section:channels',
+      'section:team_channels',
       'channel:acme',
       'channel:zeta',
+      'section:channels',
+      'section:direct_messages',
+    ]);
+  });
+
+  it('orders Team channels, Channels, then DMs, with labels only under Team channels', () => {
+    const privateChannel = channel('private', 'private', 'private');
+    const dm = channel('dm', 'Bob', 'direct_message');
+    const rows = buildChannelRailRows(
+      'browse',
+      expanded,
+      {
+        favorites: [],
+        team_channels: [deals],
+        channels: [privateChannel],
+        direct_messages: [dm],
+        recents: [],
+        threads: [],
+      },
+      buildChannelSectionRows({
+        labels: [label('l1', 'Enterprise', ['acme'])],
+        channels: [deals],
+        channelsById: byId,
+        isLabelOpen: () => true,
+      })
+    );
+
+    expect(rows.map((row) => row.id)).toEqual([
+      'section:team_channels',
+      'label:l1',
+      'channel:acme:label:l1',
+      'channel:deals',
+      'section:channels',
+      'channel:private',
+      'section:direct_messages',
+      'channel:dm',
+    ]);
+    expect(rows[5]).toMatchObject({
+      group: 'channels',
+      scope: 'channels',
+      localIndex: 0,
+    });
+  });
+
+  it('collapses each section on its own', () => {
+    const privateChannel = channel('private', 'private', 'private');
+    const rows = buildChannelRailRows(
+      'browse',
+      { ...expanded, team_channels: false },
+      {
+        favorites: [],
+        team_channels: [deals],
+        channels: [privateChannel],
+        direct_messages: [],
+        recents: [],
+        threads: [],
+      },
+      buildChannelSectionRows({
+        labels: [],
+        channels: [deals],
+        channelsById: byId,
+        isLabelOpen: () => true,
+      })
+    );
+
+    expect(rows.map((row) => row.id)).toEqual([
+      'section:team_channels',
+      'section:channels',
+      'channel:private',
       'section:direct_messages',
     ]);
   });
@@ -215,7 +289,8 @@ describe('buildChannelRailRows', () => {
       expanded,
       {
         favorites: [],
-        channels: [deals],
+        team_channels: [deals],
+        channels: [],
         direct_messages: [],
         recents: [],
         threads: [],
@@ -230,7 +305,7 @@ describe('buildChannelRailRows', () => {
         id: 'channel:acme:label:l1',
         localIndex: 1,
         labelId: 'l1',
-        scope: 'channels',
+        scope: 'team_channels',
       }),
       expect.objectContaining({
         kind: 'conversation',
@@ -247,7 +322,8 @@ describe('buildChannelRailRows', () => {
       expanded,
       {
         favorites: [],
-        channels: [acme],
+        team_channels: [acme],
+        channels: [],
         direct_messages: [],
         recents: [zeta, acme],
         threads: [],
@@ -264,7 +340,8 @@ describe('buildChannelRailRows', () => {
       expanded,
       {
         favorites: [],
-        channels: [acme],
+        team_channels: [acme],
+        channels: [],
         direct_messages: [],
         recents: [],
         threads: [dm, acme],
@@ -310,10 +387,16 @@ it('renders a channel in every matching smart tag with unique navigation IDs, ex
   ).toEqual(['deals']);
   const rows = buildChannelRailRows(
     'browse',
-    { favorites: true, channels: true, direct_messages: true },
+    {
+      favorites: true,
+      team_channels: true,
+      channels: true,
+      direct_messages: true,
+    },
     {
       favorites: [],
-      channels: [acme, zeta, deals],
+      team_channels: [acme, zeta, deals],
+      channels: [],
       direct_messages: [],
       recents: [],
       threads: [],
@@ -338,5 +421,211 @@ it('renders a channel in every matching smart tag with unique navigation IDs, ex
   });
   expect(collapsed.filter((row) => row.kind === 'conversation')).toEqual([
     { kind: 'conversation', channel: deals },
+  ]);
+});
+
+it('keeps saved favorite order unless an automatic sort is selected', () => {
+  const items: Parameters<typeof buildSectionedRailRows>[2] = {
+    favorites: [zeta, deals].map((item, sortOrder) => ({
+      entityId: item.id,
+      entityType: 'channel',
+      sortOrder,
+      createdAt: '2026-01-01',
+    })),
+    team_channels: [],
+    channels: [],
+    direct_messages: [],
+    recents: [],
+    threads: [],
+  };
+  const expanded = {
+    favorites: true,
+    team_channels: false,
+    channels: false,
+    direct_messages: false,
+  };
+  const rows = (sort?: 'manual' | 'name') =>
+    buildSectionedRailRows('browse', expanded, items, [], {
+      preferences: { favorites: { sort } },
+      channelById: (id) => byId.get(id),
+      unreadChannelIds: new Set(),
+    }).flatMap((row) =>
+      row.kind === 'favorite' ? [row.favorite.entityId] : []
+    );
+  expect(rows()).toEqual(['zeta', 'deals']);
+  expect(rows('manual')).toEqual(['zeta', 'deals']);
+  expect(rows('name')).toEqual(['deals', 'zeta']);
+});
+
+it('keeps overlapping section members and loading rows in their own scroll regions', () => {
+  const labels = [
+    label('first', 'First', ['acme']),
+    label('second', 'Second', ['acme']),
+  ];
+  const sections = buildChannelSectionRows({
+    labels,
+    channels: [acme],
+    channelsById: byId,
+    isLabelOpen: (id) => id === 'first',
+  });
+  const rows = buildSectionedRailRows(
+    'browse',
+    {
+      favorites: false,
+      team_channels: true,
+      channels: true,
+      direct_messages: true,
+    },
+    {
+      favorites: [],
+      team_channels: [acme],
+      channels: [],
+      direct_messages: [deals],
+      recents: [],
+      threads: [],
+    },
+    sections,
+    {
+      preferences: {},
+      channelById: (id) => byId.get(id),
+      unreadChannelIds: new Set(),
+      referenceStatuses: { 'label:first': 'loading' },
+    }
+  );
+  const grouped = groupChannelRailSections(rows);
+  expect([...grouped.keys()]).toEqual([
+    'favorites',
+    'direct_messages',
+    'team_channels',
+    'label:first',
+    'label:second',
+  ]);
+  expect(grouped.get('label:first')?.rows.map((row) => row.id)).toEqual([
+    'channel:acme:label:first',
+    'reference-status:label:first',
+  ]);
+  expect(grouped.get('label:second')?.rows).toEqual([]);
+  expect(grouped.get('direct_messages')?.rows.map((row) => row.id)).toEqual([
+    'channel:deals',
+    'status:direct_messages',
+  ]);
+  expect(grouped.get('team_channels')?.rows.map((row) => row.id)).toEqual([
+    'channel:acme',
+    'status:team_channels',
+  ]);
+  expect(
+    rows.filter((row) => row.kind === 'conversation').map((row) => row.id)
+  ).toEqual(['channel:deals', 'channel:acme', 'channel:acme:label:first']);
+});
+
+it.each([true, false])(
+  'keeps assigned team channels in the built-in section when custom sections are open=%s',
+  (open) => {
+    const labels: ChannelLabel[] = [
+      label('manual', 'Manual', ['acme']),
+      {
+        ...label('smart', 'Smart', ['zeta']),
+        rule: { attribute: 'name', contains: 'support' },
+      },
+    ];
+    const sections = buildSectionedChannelRows({
+      labels,
+      channels: [acme, zeta, deals],
+      channelsById: byId,
+      isLabelOpen: () => open,
+    });
+    const rows = buildSectionedRailRows(
+      'browse',
+      {
+        favorites: true,
+        direct_messages: true,
+        team_channels: true,
+        channels: true,
+      },
+      {
+        favorites: [],
+        direct_messages: [],
+        team_channels: [acme, zeta, deals],
+        channels: [],
+        recents: [],
+        threads: [],
+      },
+      sections
+    );
+    const grouped = groupChannelRailSections(rows);
+
+    expect(grouped.get('team_channels')?.rows.map((row) => row.id)).toEqual([
+      'channel:acme',
+      'channel:zeta',
+      'channel:deals',
+      'status:team_channels',
+    ]);
+    expect(grouped.get('label:manual')?.rows.map((row) => row.id)).toEqual(
+      open ? ['channel:acme:label:manual'] : []
+    );
+    expect(grouped.get('label:smart')?.rows.map((row) => row.id)).toEqual(
+      open ? ['channel:zeta:label:smart'] : []
+    );
+    expect(new Set(rows.map((row) => row.id)).size).toBe(rows.length);
+  }
+);
+
+it('keeps section membership and navigation together after reordering with stale or duplicate keys', () => {
+  const rows = buildSectionedRailRows(
+    'browse',
+    {
+      favorites: true,
+      direct_messages: true,
+      team_channels: true,
+      channels: true,
+    },
+    {
+      favorites: [],
+      direct_messages: [],
+      team_channels: [deals],
+      channels: [channel('private', 'Private', 'private')],
+      recents: [],
+      threads: [],
+    },
+    [
+      { kind: 'label', label: label('first', 'First', ['acme']) },
+      { kind: 'conversation', channel: acme, labelId: 'first' },
+    ],
+    {
+      order: ['label:removed', 'label:first', 'team_channels', 'label:first'],
+      preferences: {},
+      channelById: (id) => byId.get(id),
+      unreadChannelIds: new Set(),
+      referenceStatuses: { 'label:first': 'loading' },
+    }
+  );
+  const grouped = groupChannelRailSections(rows);
+
+  expect([...grouped.keys()]).toEqual([
+    'label:first',
+    'team_channels',
+    'favorites',
+    'direct_messages',
+    'channels',
+  ]);
+  expect(grouped.get('label:first')?.rows.map((row) => row.id)).toEqual([
+    'channel:acme:label:first',
+    'reference-status:label:first',
+  ]);
+  expect(grouped.get('channels')?.rows.map((row) => row.id)).toEqual([
+    'channel:private',
+    'status:channels',
+  ]);
+  expect(new Set(rows.map((row) => row.id)).size).toBe(rows.length);
+  expect([
+    ...groupChannelRailSections(
+      orderChannelRailSections(rows, ['favorites', 'channels'])
+    ).keys(),
+  ]).toEqual([
+    'favorites',
+    'label:first',
+    'team_channels',
+    'direct_messages',
+    'channels',
   ]);
 });

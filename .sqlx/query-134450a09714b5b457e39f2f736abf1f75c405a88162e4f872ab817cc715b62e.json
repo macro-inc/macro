@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT b.id, b.remote_id FROM external_chat b\n        WHERE b.provider = 'whatsapp' AND b.remote_id = ANY($1) AND b.id = ANY($3) AND b.state <> 'detached'\n          AND external_chat_can_view(b.id, $2)\n        ORDER BY b.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "remote_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Text",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "134450a09714b5b457e39f2f736abf1f75c405a88162e4f872ab817cc715b62e"
+}

@@ -88,6 +88,7 @@ const cachedPage: EmailThreadPageQuery = {
       providerId: 'provider-thread-1',
       linkId: 'link-1',
       inboxVisible: true,
+      hasReceivedMail: true,
       isRead: false,
       projectId: null,
       latestInboundMessageTs: '2026-08-06T12:00:00Z',

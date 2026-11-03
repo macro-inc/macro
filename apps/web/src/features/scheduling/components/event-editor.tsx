@@ -1,11 +1,11 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
+import PencilSimple from '@icon/system/regular/pencil-simple.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Trash from '@icon/system/regular/trash.svg';
+import VideoCamera from '@icon/system/regular/video-camera.svg';
+import Warning from '@icon/system/regular/warning.svg';
 import { Popover } from '@kobalte/core/popover';
-import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
-import PencilSimple from '@phosphor/pencil-simple.svg';
-import Plus from '@phosphor/plus.svg';
-import Trash from '@phosphor/trash.svg';
-import VideoCamera from '@phosphor/video-camera.svg';
-import Warning from '@phosphor/warning.svg';
 import { Button, Tabs, ToggleSwitch } from '@ui';
 import { Stepper } from '@ui/components/Stepper';
 import {
@@ -114,10 +114,11 @@ function QuestionField(props: {
             onChange={(required) => props.onUpdate({ required })}
           />
           <Button
+            aria-label={`Remove question ${props.index + 1}`}
+            tooltip={`Remove question ${props.index + 1}`}
             type="button"
             size="icon-sm"
             variant="ghost"
-            label={`Remove question ${props.index + 1}`}
             disabled={props.disabled}
             onClick={props.onRemove}
           >
@@ -313,12 +314,13 @@ export function EventEditor(props: EventEditorProps) {
                       onOpenChange={setLinkOpen}
                     >
                       <Popover.Trigger
+                        aria-label="Edit link"
+                        tooltip="Edit link"
                         as={Button}
                         ref={setLinkTrigger}
                         type="button"
                         size="icon-xs"
                         variant="ghost"
-                        label="Edit link"
                         class="shrink-0 -mt-0.5 text-ink-muted aria-invalid:ring-2 aria-invalid:ring-failure/40"
                         aria-invalid={error('slug') ? true : undefined}
                         aria-describedby={
@@ -573,10 +575,11 @@ export function EventEditor(props: EventEditorProps) {
                       Team scheduling
                     </h4>
                     <Button
+                      aria-label="Reset team settings"
+                      tooltip="Reset team settings"
                       type="button"
                       variant="ghost"
                       size="icon-sm"
-                      label="Reset team settings"
                       disabled={
                         props.saving ||
                         props.step !== 'location' ||
@@ -830,7 +833,7 @@ export function EventEditor(props: EventEditorProps) {
           <div class="flex min-w-0 max-w-full flex-col items-end gap-2">
             <Button
               type="submit"
-              variant="cta"
+              variant="primary"
               size="lg"
               disabled={props.saving}
               aria-invalid={primaryError() ? true : undefined}

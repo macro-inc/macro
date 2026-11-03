@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT granularity AS \"granularity: Granularity\", period_start, period_end, content\n            FROM memory_activity WHERE user_id = $1 AND period_start <= $3 AND period_end >= $2\n            ORDER BY period_start, granularity LIMIT 1500\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "granularity: Granularity",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "period_start",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 2,
+        "name": "period_end",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 3,
+        "name": "content",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Date",
+        "Date"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "57a971d32357549901f04e9ea1b8c16f963593eee67f5572d5f5d7cb4d13f72b"
+}

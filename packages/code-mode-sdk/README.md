@@ -11,10 +11,14 @@ handles plus `token`, `hosts`, `sessionId` and `executionId`. Explicit imports f
 or TypeScript compilation happen during a run. SDK local portmap discovery is
 removed from the bundle because service hosts are supplied by the harness.
 
-The harness mints a normal user token lasting 60 seconds after the session's
-execution approval policy permits the run. Its signed agent identity comes from
+The harness mints a Macro API JWT for the owner, lasting 60 seconds, after the
+session's execution approval policy permits the run. Its signed agent identity comes from
 the authenticated session. SDK messages use that agent as sender and record the
 owner as `triggered_by`; other SDK endpoints retain normal user authentication.
+External chat reads, sends and media uploads use the credential owner's own
+provider connection. Owner API tokens can send, including signed agent-attributed tokens;
+bot credentials never send. Pairing and account/access controls require the person's
+bearer session.
 Deno permits network access only to configured Macro service hosts and denies
 filesystem writes, arbitrary imports, subprocesses, environment access and FFI.
 User API authorization and metering apply. Tokens expire; process exit does not
@@ -27,15 +31,18 @@ interactive after execution. A review is an optional human workflow, not a
 security barrier against direct SDK writes.
 
 The independent `@macro-inc/sdk-docs` package uses TypeDoc and its Markdown plugin to generate the canonical public SDK Markdown
-hierarchy and an HTML site from one reflection model. Backend entity sections
-and namespace overviews use those Markdown pages. Compact overviews include
-linked local option types and enums; full sections also include linked wire types.
-Discovery uses at most 32 topics; agent and host setup share a topic. New SDK
+hierarchy and an HTML site from one reflection model. The backend catalog is built from those Markdown pages: an index per entity
+(classes, methods with signatures, and types, by symbol) and a reference per
+symbol, each class split into its own methods, with links rewritten to the
+symbols they name. Wire types an entity reaches are included as symbols; a name
+two pages share is qualified by its service or entity (`storage.Message`).
+Discovery uses at most 32 topics; agent and host setup share a topic, as do
+native channels, external chats and WhatsApp. New SDK
 services must also be registered in the generated operation-label catalog.
 There is no separate declaration parser. Private, protected and internal members
-are excluded. `DescribeCodeTools` provides the compact catalog, generated API
-documentation and workflow guides. See [documentation hosting](../sdk-docs/README.md). Jev
-selects likely sections before a code-mode turn, bounded by
+are excluded. `DescribeCodeTools` provides the compact catalog, entity indexes and workflow
+guides; `ReadCodeDocs` provides symbol references. See [documentation hosting](../sdk-docs/README.md). Jev
+selects likely entity indexes before a code-mode turn, bounded by
 one second and a context byte cap; failure leaves the compact catalog available.
 There is no runtime documentation helper. See the
 [agent playbook](../../crates/agent_code_mode/SKILL.md).

@@ -34,6 +34,7 @@
 	},
 	"packageManager": "bun@1.3.5",
 	"patchedDependencies": {
+		"@opentelemetry/otlp-exporter-base@0.220.0": "apps/web/patches/opentelemetry-otlp-exporter-base-0.220.0.patch",
 		"@thisbeyond/solid-dnd@0.7.5": "apps/web/patches/@thisbeyond%2Fsolid-dnd@0.7.5.patch",
 		"@lexical/markdown@0.45.0": "apps/web/patches/@lexical%2Fmarkdown@0.45.0.patch",
 		"@kobalte/core@0.13.11": "apps/web/patches/@kobalte%2Fcore@0.13.11.patch",
@@ -78,6 +79,7 @@
 			"packages/lexical-core",
 			"services/ai-editing-worker",
 			"services/bots/anthropic-status-bot",
+			"services/bots/goalert-bot",
 			"services/bots/stripe-payment-bot",
 			"services/lexical-service",
 			"packages/spreadsheet",

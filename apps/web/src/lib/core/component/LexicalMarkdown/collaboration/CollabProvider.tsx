@@ -37,6 +37,7 @@ import { createWALSyncSource } from '@macro-inc/collaboration/collab/wal';
 import {
   $isCustomCodeNode,
   $updateAllNodeIds,
+  COLLAB_SELECTION_TAG,
   COLLABORATION_TAG,
   CustomCodeNode,
   LOCAL_STATUS_TAG,
@@ -71,14 +72,6 @@ import {
 
 type MutatedNodes = UpdateListenerPayload['mutatedNodes'];
 
-/** Hooks into the caller's tracing, all optional. */
-export type CollabObservability = {
-  /** Resume the caller's open span for this session id, if any. */
-  resumeSpan?: (id: string) => Span | undefined;
-  /** End the caller's span for this session id. */
-  endSpan?: (id: string) => void;
-};
-
 export type CollabProviderProps = {
   editor: LexicalEditor;
   pluginManager: PluginManager;
@@ -105,7 +98,8 @@ export type CollabProviderProps = {
   canComment: Accessor<boolean | undefined>;
   /** External error state; the engine stops when it becomes non-null. */
   editorError: Accessor<MarkdownEditorErrors | null>;
-  observability?: CollabObservability;
+  /** Caller-owned load context; the provider never ends it. */
+  span?: Span;
   /** Optional status UI (e.g. the md block's CollabStatus chrome). */
   statusChrome?: JSX.Element;
 };
@@ -133,10 +127,6 @@ export function CollabProvider(props: CollabProviderProps) {
 
   if (!syncSource()) return null;
 
-  const resumeSpan = (id: string): Span | undefined =>
-    props.observability?.resumeSpan?.(id);
-  const endSpan = (id: string): void => props.observability?.endSpan?.(id);
-
   const awareness = createAwareness(
     loroManager.peerIdStr,
     userId(),
@@ -151,6 +141,7 @@ export function CollabProvider(props: CollabProviderProps) {
   const walSyncer = createWALSyncSource(syncSource()!);
   const syncEngine = createSyncEngine({
     loroManager,
+    parentSpan: props.span,
     awareness,
     syncs: { wal: walSyncer, live: syncSource()! },
     bindings: {
@@ -217,6 +208,7 @@ export function CollabProvider(props: CollabProviderProps) {
         // Queue microtask after this `editor.update` to ensure that all the nodeIds are updated
         queueMicrotask(() => {
           props.editor.update(() => {
+            $addUpdateTag(COLLAB_SELECTION_TAG);
             $updateAllNodeIds(props.mappings);
             // If we import a remote update, it's possible that the update
             // has shifted out own selection / cursor. We need to re-position our local
@@ -507,7 +499,7 @@ export function CollabProvider(props: CollabProviderProps) {
               message:
                 'editor init: no state from loroManager — editor will NOT become ready (skeleton stays)',
             });
-            endSpan(syncSource()!.documentId);
+            props.span?.error('Editor initial state is missing');
             return;
           }
 
@@ -549,8 +541,8 @@ export function CollabProvider(props: CollabProviderProps) {
                 message:
                   'editor init: initializeEditorWithVersionedState failed',
               });
+              props.span?.error('Editor initialization failed');
               props.setEditorError(initError);
-              endSpan(syncSource()!.documentId);
               return;
             }
           }
@@ -562,9 +554,7 @@ export function CollabProvider(props: CollabProviderProps) {
             props.editor.dispatchCommand(FORCE_SYNC_COMMAND, undefined);
           }
           props.setEditorReady(true);
-          const documentId = syncSource()!.documentId;
-          resumeSpan(documentId)?.event('editor.ready');
-          endSpan(documentId);
+          props.span?.event('editor.ready');
           logSyncService({
             documentId: syncSource()!.documentId,
             level: 'info',
@@ -595,8 +585,6 @@ export function CollabProvider(props: CollabProviderProps) {
   onCleanup(() => {
     syncEngine.stop();
     walSyncer.destroy();
-    const documentId = syncSource()?.documentId;
-    if (documentId) endSpan(documentId);
   });
 
   return (

@@ -54,6 +54,15 @@ impl CompaniesRepository for StubRepo {
         Ok(vec![])
     }
 
+    async fn resolve_activity(
+        &self,
+        scope: CrmContactListScope<'_>,
+    ) -> Result<crate::domain::association::CrmRecordAssociation, CrmError> {
+        self.resolve_association(scope, crate::domain::association::CrmAssociation::Activity)
+            .await
+            .map(Option::unwrap_or_default)
+    }
+
     async fn resolve_association(
         &self,
         scope: CrmContactListScope<'_>,
@@ -86,7 +95,7 @@ impl CompaniesRepository for StubRepo {
     async fn create_company_for_team(
         &self,
         _team_id: &uuid::Uuid,
-        _domain: &str,
+        _domain: Option<&str>,
         _name: &str,
         _now: DateTime<Utc>,
     ) -> Result<CrmCompanyWithContacts, CrmError> {
@@ -140,6 +149,15 @@ impl CompaniesRepository for StubRepo {
         _domain: &str,
         _email: &str,
     ) -> Result<DepopulateContactOutcome, CrmError> {
+        unimplemented!()
+    }
+
+    async fn has_depopulate_target(
+        &self,
+        _team_id: &uuid::Uuid,
+        _domain: &str,
+        _email: &str,
+    ) -> Result<bool, CrmError> {
         unimplemented!()
     }
 
@@ -627,7 +645,7 @@ async fn create_company_rejects_blank_name() {
     let access = receipt_with_role(TeamRole::Member);
     for name in ["", "   ", "\t\n"] {
         let err = service()
-            .create_company(&access, name, "acme.com")
+            .create_company(&access, name, Some("acme.com"))
             .await
             .unwrap_err();
         assert!(matches!(err, CrmError::InvalidRequest(_)), "name {name:?}");
@@ -639,7 +657,7 @@ async fn create_company_rejects_overlong_name() {
     let access = receipt_with_role(TeamRole::Member);
     let name = "x".repeat(201);
     let err = service()
-        .create_company(&access, &name, "acme.com")
+        .create_company(&access, &name, Some("acme.com"))
         .await
         .unwrap_err();
     assert!(matches!(err, CrmError::InvalidRequest(_)));
@@ -661,7 +679,7 @@ async fn create_company_rejects_malformed_domains() {
         "acme .com",
     ] {
         let err = service()
-            .create_company(&access, "Acme", domain)
+            .create_company(&access, "Acme", Some(domain))
             .await
             .unwrap_err();
         assert!(
@@ -676,7 +694,7 @@ async fn create_company_rejects_generic_email_domains() {
     let access = receipt_with_role(TeamRole::Member);
     for domain in ["gmail.com", "Yahoo.com", "outlook.com"] {
         let err = service()
-            .create_company(&access, "Acme", domain)
+            .create_company(&access, "Acme", Some(domain))
             .await
             .unwrap_err();
         assert!(
@@ -817,6 +835,25 @@ async fn set_company_hidden_requires_admin_role() {
             .set_company_hidden(&company_edit_receipt_with_role(role), true)
             .await
             .unwrap();
+    }
+}
+
+#[tokio::test]
+async fn malformed_emails_have_no_depopulate_target() {
+    let team_id = uuid::Uuid::now_v7();
+    for email in [
+        "",
+        "jane",
+        "jane@",
+        "@acme.test",
+        "jane@@acme.test",
+        "a@b@c.test",
+    ] {
+        let has_target = service()
+            .has_depopulate_target(&team_id, email)
+            .await
+            .unwrap();
+        assert!(!has_target, "email {email:?}");
     }
 }
 

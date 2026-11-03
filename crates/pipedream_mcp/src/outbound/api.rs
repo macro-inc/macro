@@ -29,6 +29,10 @@ pub const DEFAULT_MCP_URL: &str = "https://remote.mcp.pipedream.net";
 /// present a token about to expire mid-request.
 const TOKEN_EXPIRY_MARGIN: Duration = Duration::from_secs(60);
 
+/// The most accounts one listing asks for; a user holds one per app unless a
+/// connect flow went unreported.
+const ACCOUNTS_PAGE_LIMIT: &str = "100";
+
 /// Configuration for [`PipedreamClient`].
 #[derive(Clone, Debug)]
 pub struct PipedreamConfig {
@@ -214,13 +218,32 @@ impl PipedreamConnect for PipedreamClient {
         let account: AccountResponse =
             serde_json::from_value(account).context("parsing Pipedream account")?;
 
-        Ok(Some(PipedreamAccount {
-            id: account.id,
-            external_user_id: account.external_id,
-            app_slug: account.app.name_slug,
-            app_name: account.app.name,
-            healthy: account.healthy.unwrap_or(true),
-        }))
+        Ok(Some(account.into()))
+    }
+
+    #[tracing::instrument(skip(self, external_user_id), err)]
+    async fn list_accounts(
+        &self,
+        external_user_id: &str,
+        app_slug: &str,
+    ) -> anyhow::Result<Vec<PipedreamAccount>> {
+        let response = self
+            .authed(self.http.get(self.connect_api("/accounts")).query(&[
+                ("external_user_id", external_user_id),
+                ("app", app_slug),
+                ("limit", ACCOUNTS_PAGE_LIMIT),
+            ]))
+            .await?
+            .send()
+            .await
+            .context("listing Pipedream accounts")?;
+        let response = error_for_status(response).await?;
+
+        let accounts: AccountsResponse = response
+            .json()
+            .await
+            .context("decoding Pipedream accounts response")?;
+        Ok(accounts.data.into_iter().map(Into::into).collect())
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -326,15 +349,7 @@ impl ConnectorDirectory for PipedreamClient {
         let entries = body
             .data
             .into_iter()
-            // Apps without an auth flow have nothing to connect.
-            .filter(|app| app.auth_type.as_deref() != Some("none"))
-            .map(|app| CatalogEntry {
-                categories: app.categories,
-                app_slug: app.name_slug,
-                display_name: app.name,
-                description: app.description.filter(|d| !d.is_empty()),
-                icon_url: Some(app.img_src).filter(|u| u.starts_with("https://")),
-            })
+            .filter_map(offered_catalog_entry)
             .collect();
 
         Ok(CatalogPage {
@@ -490,10 +505,24 @@ fn is_app_slug(slug: &str) -> bool {
             .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-' || ch == '_')
 }
 
-/// An app the catalog would offer to connect: the slug we asked for, with an
-/// auth flow. Apps with `auth_type: none` have nothing to connect.
+/// Apps the catalog never offers. `linkedin` can only post and look up
+/// profiles by ID, not search people or read a feed as users expect.
+const HIDDEN_APP_SLUGS: &[&str] = &["linkedin"];
+
+/// The app the catalog would offer under `requested_slug`, if that is the app.
 fn connectable_catalog_entry(requested_slug: &str, app: AppResponse) -> Option<CatalogEntry> {
-    if app.auth_type.as_deref() == Some("none") || app.name_slug != requested_slug {
+    if app.name_slug != requested_slug {
+        return None;
+    }
+    offered_catalog_entry(app)
+}
+
+/// An app the catalog offers to connect: one with an auth flow that isn't
+/// hidden. Apps with `auth_type: none` have nothing to connect.
+fn offered_catalog_entry(app: AppResponse) -> Option<CatalogEntry> {
+    if app.auth_type.as_deref() == Some("none")
+        || HIDDEN_APP_SLUGS.contains(&app.name_slug.as_str())
+    {
         return None;
     }
     Some(CatalogEntry {
@@ -536,7 +565,26 @@ struct AccountResponse {
     id: String,
     external_id: Option<String>,
     healthy: Option<bool>,
+    created_at: Option<chrono::DateTime<chrono::Utc>>,
     app: AccountApp,
+}
+
+impl From<AccountResponse> for PipedreamAccount {
+    fn from(account: AccountResponse) -> Self {
+        Self {
+            id: account.id,
+            external_user_id: account.external_id,
+            app_slug: account.app.name_slug,
+            app_name: account.app.name,
+            healthy: account.healthy.unwrap_or(true),
+            created_at: account.created_at,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct AccountsResponse {
+    data: Vec<AccountResponse>,
 }
 
 #[derive(Deserialize)]

@@ -1,4 +1,4 @@
-import TrayArrowDown from '@phosphor-icons/core/regular/tray-arrow-down.svg';
+import TrayArrowDown from '@icon/system/regular/tray-arrow-down.svg';
 import { queryReadyGate } from '@queries/gate';
 import { useWorkspaceImportReportQuery } from '@queries/import';
 import { createSignal, Show } from 'solid-js';

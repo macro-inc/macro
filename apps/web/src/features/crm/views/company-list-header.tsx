@@ -1,6 +1,6 @@
 import type { SystemSortOption } from '@app/features/next-soup/soup-view/sort-options';
 import { useListLayout } from '@entity/composed/list-entity/shared';
-import ArrowDownIcon from '@phosphor/arrow-down.svg';
+import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
 import { cn } from '@ui/utils/classname';
 import { createMemo, For, Show } from 'solid-js';
 import { useCrmWorkspace } from '../context/workspace-context';

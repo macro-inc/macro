@@ -5,7 +5,7 @@ import {
 import { EntityIcon } from '@core/component/EntityIcon';
 import { Layout as EntityLayout } from '@entity/core/Layout';
 import { Slot as EntitySlot } from '@entity/core/Slot';
-import ClockIcon from '@phosphor/clock-clockwise.svg';
+import ClockIcon from '@icon/system/regular/clock-clockwise.svg';
 import { cn, InlineCheckbox, Layer, Tooltip } from '@ui';
 import { type JSX, type ParentProps, Show } from 'solid-js';
 import type { RoutineRow } from '../core/types';

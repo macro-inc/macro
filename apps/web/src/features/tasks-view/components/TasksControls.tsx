@@ -7,10 +7,10 @@ import {
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import GanttIcon from '@phosphor/chart-bar-horizontal.svg';
-import BoardIcon from '@phosphor/kanban.svg';
-import ListIcon from '@phosphor/list-bullets.svg';
-import { Button } from '@ui';
+import GanttIcon from '@icon/system/regular/chart-gantt.svg';
+import BoardIcon from '@icon/system/regular/kanban.svg';
+import ListIcon from '@icon/system/regular/list-bullets.svg';
+import { ButtonGroup } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createSignal, Show } from 'solid-js';
 import { TASK_GROUP_OPTIONS, TASK_SORT_OPTIONS } from '../constants';
@@ -19,6 +19,7 @@ import { useTaskFilters } from '../filters/use-task-filters';
 import { useTasksView } from '../tasks-view-context';
 import { TASKS_TOUR } from '../tour';
 import { TasksFilterDrawer } from './TasksFilterDrawer';
+import { TaskDueDateRangeDialog } from './task-due-date-range-dialog';
 
 export function TasksControls() {
   return (
@@ -60,7 +61,7 @@ function DesktopTasksControls() {
     sort: {
       description: 'Sort tasks',
       run: () => {
-        if (!sortTrigger) return false;
+        if (!sortTrigger || state.search.trim()) return false;
 
         setOpenMenu('sort');
         return true;
@@ -69,7 +70,7 @@ function DesktopTasksControls() {
   });
 
   const primarySort = () => state.sort[0]?.id ?? 'updated_at';
-  const isBoardSearch = () => state.layout === 'board' && !!state.search.trim();
+  const isSearching = () => !!state.search.trim();
 
   const groupOptions = () => {
     if (state.layout !== 'board') {
@@ -83,9 +84,11 @@ function DesktopTasksControls() {
 
   return (
     <>
-      <HeaderActionGroup label="Task filters">
+      <HeaderActionGroup label="Task filters" size="md">
         <div class="shrink-0" ref={tourTarget(TASKS_TOUR.filter)}>
           <ListFilterDropdown
+            grouped
+            size={filters.activeCount() ? 'md' : 'icon-md'}
             label="Filter tasks"
             activeCount={filters.activeCount()}
             groups={filters.groups()}
@@ -103,50 +106,55 @@ function DesktopTasksControls() {
           />
         </div>
       </HeaderActionGroup>
-      <HeaderActionGroup label="Task layout">
-        <Button
+      <HeaderActionGroup label="Task layout" size="md">
+        <ButtonGroup.Button
+          aria-label="List"
+          tooltip="List"
           variant="ghost"
           size="icon-md"
-          label="List"
           aria-pressed={state.layout === 'list'}
           onClick={() => setState('layout', 'list')}
         >
           <ListIcon class="size-4" />
-        </Button>
-        <Button
+        </ButtonGroup.Button>
+        <ButtonGroup.Button
+          aria-label="Board"
+          tooltip="Board"
           variant="ghost"
           size="icon-md"
-          label="Board"
           aria-pressed={state.layout === 'board'}
           onClick={() => setState('layout', 'board')}
         >
           <BoardIcon class="size-4" />
-        </Button>
+        </ButtonGroup.Button>
         <Show when={ganttEnabled()}>
-          <Button
+          <ButtonGroup.Button
+            aria-label="Gantt"
+            tooltip="Gantt"
             variant="ghost"
             size="icon-md"
-            label="Gantt"
             aria-pressed={state.layout === 'gantt'}
             onClick={() => setState('layout', 'gantt')}
           >
             <GanttIcon class="size-4" />
-          </Button>
+          </ButtonGroup.Button>
         </Show>
       </HeaderActionGroup>
-      <HeaderActionGroup label="Task view options">
+      <HeaderActionGroup label="Task view options" size="md">
         <Show
-          when={!isBoardSearch()}
+          when={!isSearching()}
           fallback={
             <span
               class="text-xs text-ink-muted"
-              title="Search results are ranked by relevance. Clear search to sort the board."
+              title="Search keeps its existing result ordering. Clear search to sort tasks."
             >
-              Relevance
+              Search order
             </span>
           }
         >
           <ListSortDropdown
+            grouped
+            size="icon-md"
             label="Sort tasks"
             value={primarySort()}
             options={TASK_SORT_OPTIONS}
@@ -157,12 +165,19 @@ function DesktopTasksControls() {
           />
         </Show>
         <ListGroupDropdown
+          grouped
+          size="icon-md"
           label="Group by"
           value={state.groupBy}
           options={groupOptions()}
           onChange={(groupBy) => setState('groupBy', groupBy)}
         />
       </HeaderActionGroup>
+      <TaskDueDateRangeDialog
+        value={filters.customRange()}
+        onChange={filters.setCustomRange}
+        onApply={filters.applyCustomRange}
+      />
     </>
   );
 }

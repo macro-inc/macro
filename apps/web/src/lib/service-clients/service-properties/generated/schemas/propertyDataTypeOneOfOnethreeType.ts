@@ -10,5 +10,5 @@ export type PropertyDataTypeOneOfOnethreeType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const PropertyDataTypeOneOfOnethreeType = {
-  entity: 'entity',
+  select_string: 'select_string',
 } as const;

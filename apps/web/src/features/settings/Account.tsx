@@ -1,6 +1,7 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import type { AccountDeletionReason } from '@app/lib/analytics/app-events';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { usePending } from '@app/observability/flow';
 import { useHasPaidAccess } from '@core/auth';
 import { useLogout } from '@core/auth/logout';
 import { toast } from '@core/component/Toast/Toast';
@@ -26,19 +27,19 @@ import {
 import { createStaticFile } from '@core/util/create';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { openFilePicker } from '@core/util/upload';
+import CheckIcon from '@icon/system/regular/check.svg';
+import PencilIcon from '@icon/system/regular/pencil-simple.svg';
+import SignOutIcon from '@icon/system/regular/sign-out.svg?component-solid';
+import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
+import IconUpload from '@icon/system/regular/upload-simple.svg?component-solid';
+import WarningIcon from '@icon/system/regular/warning.svg';
+import WarningCircleIcon from '@icon/system/regular/warning-circle.svg';
 import {
   type BundleUpdateStatus,
   nativeUpdateDescription,
   useTauri,
 } from '@macro/tauri';
-import CheckIcon from '@phosphor/check.svg';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import WarningIcon from '@phosphor/warning.svg';
-import WarningCircleIcon from '@phosphor/warning-circle.svg';
-import SignOutIcon from '@phosphor-icons/core/regular/sign-out.svg?component-solid';
-import IconUpload from '@phosphor-icons/core/regular/upload-simple.svg?component-solid';
 import { useAiBillingSummaryQuery } from '@queries/auth';
 import {
   invalidateOwnUserName,
@@ -66,6 +67,7 @@ import {
   buildAccountDeletionFeedbackPayload,
   performAccountDeletion,
 } from './account-deletion-feedback';
+import { getBundleDebugInfo } from './app-build';
 import { CurrentPlanCard } from './components/current-plan-card';
 import { resolvePlanTier } from './core/billing-state';
 import {
@@ -295,15 +297,13 @@ function ProfilePictureRow(props: { userId: string }) {
             <div class="pt-3 justify-end items-center gap-3 inline-flex">
               <Button
                 variant="ghost"
-                depth={3}
                 disabled={isRemoving()}
                 onClick={() => setShowRemoveConfirmModal(false)}
               >
                 Cancel
               </Button>
               <Button
-                variant="strong"
-                depth={3}
+                variant="secondary"
                 disabled={isRemoving()}
                 onClick={handleRemove}
               >
@@ -321,6 +321,7 @@ function AccountPlanCard() {
   const { openSettings } = useSettingsState();
   const hasPaid = useHasPaidAccess();
   const summary = useAiBillingSummaryQuery();
+  usePending('settings.plan', () => summary.isLoading);
   // Wait for the summary before falling back to the license, so a Max plan
   // doesn't flash as Pro while it loads.
   const tier = () =>
@@ -503,12 +504,7 @@ export function Account() {
           label="Log out"
           description="Sign out of Macro on this device."
         >
-          <Button
-            variant="outline"
-            size="sm"
-            depth={3}
-            onClick={() => logout()}
-          >
+          <Button variant="secondary" size="sm" onClick={() => logout()}>
             <SignOutIcon class="size-4" />
             Log out
           </Button>
@@ -525,7 +521,6 @@ export function Account() {
         <Button
           variant="danger"
           size="sm"
-          depth={3}
           onClick={() => {
             resetDeleteFlow();
             setShowDeleteModal(true);
@@ -616,7 +611,6 @@ export function Account() {
             <div class="pt-3 justify-end items-center gap-3 inline-flex">
               <Button
                 variant="ghost"
-                depth={3}
                 onClick={() => {
                   setShowDeleteModal(false);
                   resetDeleteFlow();
@@ -625,8 +619,7 @@ export function Account() {
                 Cancel
               </Button>
               <Button
-                variant="strong"
-                depth={3}
+                variant="secondary"
                 onClick={() => {
                   setShowDeleteConfirmModal(true);
                   setShowDeleteModal(false);
@@ -663,7 +656,6 @@ export function Account() {
             <div class="pt-3 justify-end items-center gap-3 inline-flex">
               <Button
                 variant="ghost"
-                depth={3}
                 disabled={isDeleting()}
                 onClick={() => {
                   setShowDeleteConfirmModal(false);
@@ -674,7 +666,6 @@ export function Account() {
               </Button>
               <HoldButton
                 variant="danger"
-                depth={3}
                 duration={DELETE_HOLD_MS}
                 disabled={isDeleting()}
                 onConfirm={deleteAccountHandler}
@@ -850,20 +841,9 @@ function bundleUpdateAction(
   }
 }
 
-type BundleDebugInfo = {
-  bundleBuild: number;
-  source: 'embedded' | 'ota';
-  nativeBuild: number;
-};
-
 function BundleVersionRow() {
   if (!isNativeMobilePlatform()) return null;
-  const [bundleDebugInfo] = createResource(() =>
-    invoke<BundleDebugInfo>('get_bundle_debug_info').catch((error) => {
-      console.error('[bundle-update] get_bundle_debug_info failed', error);
-      return null;
-    })
-  );
+  const [bundleDebugInfo] = createResource(getBundleDebugInfo);
 
   return (
     <Show when={bundleDebugInfo()}>
@@ -893,7 +873,7 @@ function BundleUpdateRow() {
         </span>
         <Show when={action()}>
           {(a) => (
-            <Button variant="accent" size="sm" depth={3} onClick={a().action}>
+            <Button variant="primary" size="sm" onClick={a().action}>
               {a().label}
             </Button>
           )}
@@ -914,9 +894,8 @@ function NativeUpdateRow() {
           </span>
           <Show when={tauri?.nativeUpdateStatus().status === 'Ready'}>
             <Button
-              variant="accent"
+              variant="primary"
               size="sm"
-              depth={3}
               onClick={() =>
                 fireAndForget(tauri?.restartNativeUpdate(), 'native-updates')
               }

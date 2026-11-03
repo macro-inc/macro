@@ -1,7 +1,7 @@
 import { SplitRouter } from '@app/lib/split-router';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isScopeInActiveBranch } from '@core/hotkey/utils';
-import EnvelopeOpenIcon from '@phosphor/envelope-simple-open.svg';
+import EnvelopeOpenIcon from '@icon/system/regular/envelope-simple-open.svg';
 import { createSignal, onCleanup, Suspense } from 'solid-js';
 import { type EmailListPane, EmailReaderPaneContext } from '../reader-pane';
 

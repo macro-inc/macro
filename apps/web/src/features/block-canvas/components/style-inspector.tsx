@@ -1,7 +1,7 @@
+import Corners from '@icon/system/regular/corners-out.svg';
+import Drop from '@icon/system/regular/drop.svg';
+import Line from '@icon/system/regular/line-segment.svg';
 import type { Appearance } from '@macro-inc/graphics';
-import Corners from '@phosphor/corners-out.svg';
-import Drop from '@phosphor/drop.svg';
-import Line from '@phosphor/line-segment.svg';
 import { Show } from 'solid-js';
 import type { InspectorNumberScrub } from '../primitives/create-inspector-preview';
 import { StrokeStyleIcon } from './connector-style-icon';

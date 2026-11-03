@@ -19,6 +19,7 @@ use macro_user_id::{
     user_id::MacroUserIdStr,
 };
 use model_owner::Owner;
+use model_user::Language;
 use models_permissions::share_permission::LinkShare;
 use sqlx::{PgPool, Row};
 use std::str::FromStr;
@@ -79,6 +80,7 @@ impl TeamRepositoryImpl {
         team_slug: &str,
         subscription_id: Option<&stripe::SubscriptionId>,
         owner_plan: SeatPlan,
+        auto_join_domain: Option<&str>,
     ) -> Result<Team, sqlx::Error> {
         let mut transaction = self.pool.begin().await?;
 
@@ -86,10 +88,14 @@ impl TeamRepositoryImpl {
 
         let team = sqlx::query!(
             r#"
-            INSERT INTO team (id, name, slug, owner_id, seat_count, subscription_id, paying)
-            VALUES ($1, $2, $3, $4, 1, $5, $6)
+            INSERT INTO team (
+                id, name, slug, owner_id, seat_count, subscription_id, paying, auto_join_domain
+            )
+            VALUES ($1, $2, $3, $4, 1, $5, $6, $7)
             RETURNING id, name, slug, owner_id, enterprise, allow_non_admin_invites,
-                default_link_share as "default_link_share: LinkShare"
+                auto_join_domain,
+                default_link_share as "default_link_share: LinkShare",
+                language as "language: Language"
             "#,
             id,
             team_name,
@@ -97,6 +103,7 @@ impl TeamRepositoryImpl {
             user_id.as_ref(),
             subscription_id.map(|s| s.to_string()),
             subscription_id.is_some(),
+            auto_join_domain,
         )
         .try_map(|row| {
             Ok(Team {
@@ -108,11 +115,11 @@ impl TeamRepositoryImpl {
                     .into_owned(),
                 // New teams have no team_crm_settings row yet.
                 crm_enabled: false,
-                // New teams start without an auto-join domain.
-                auto_join_domain: None,
+                auto_join_domain: row.auto_join_domain,
                 enterprise: row.enterprise,
                 allow_non_admin_invites: row.allow_non_admin_invites,
                 default_link_share: row.default_link_share,
+                language: row.language,
             })
         })
         .fetch_one(&mut *transaction)
@@ -347,14 +354,22 @@ impl TeamRepository for TeamRepositoryImpl {
         team_slug: &str,
         subscription_id: Option<&stripe::SubscriptionId>,
         owner_plan: SeatPlan,
+        auto_join_domain: Option<&str>,
     ) -> Result<Team, CreateTeamError> {
         if team_name.is_empty() || team_name.len() > 50 {
             return Err(CreateTeamError::InvalidTeamName(team_name.to_string()));
         }
 
-        self.create_team_inner(user_id, team_name, team_slug, subscription_id, owner_plan)
-            .await
-            .map_err(|e| e.into())
+        self.create_team_inner(
+            user_id,
+            team_name,
+            team_slug,
+            subscription_id,
+            owner_plan,
+            auto_join_domain,
+        )
+        .await
+        .map_err(|e| e.into())
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -1152,6 +1167,7 @@ impl TeamRepository for TeamRepositoryImpl {
             SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain, t.enterprise,
                 t.allow_non_admin_invites,
                 t.default_link_share as "default_link_share: LinkShare",
+                t.language as "language: Language",
                 COALESCE(tcs.crm_enabled, FALSE) AS "crm_enabled!"
             FROM team t
             LEFT JOIN team_crm_settings tcs ON tcs.team_id = t.id
@@ -1172,6 +1188,7 @@ impl TeamRepository for TeamRepositoryImpl {
                 enterprise: row.enterprise,
                 allow_non_admin_invites: row.allow_non_admin_invites,
                 default_link_share: row.default_link_share,
+                language: row.language,
             })
         })
         .fetch_one(&self.pool)
@@ -1218,6 +1235,7 @@ impl TeamRepository for TeamRepositoryImpl {
             SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain, t.enterprise,
                 t.allow_non_admin_invites,
                 t.default_link_share as "default_link_share: LinkShare",
+                t.language as "language: Language",
                 COALESCE(tcs.crm_enabled, FALSE) AS "crm_enabled!"
             FROM team t
             JOIN team_user tu ON t.id = tu.team_id
@@ -1239,6 +1257,7 @@ impl TeamRepository for TeamRepositoryImpl {
                 enterprise: row.enterprise,
                 allow_non_admin_invites: row.allow_non_admin_invites,
                 default_link_share: row.default_link_share,
+                language: row.language,
             })
         })
         .fetch_all(&self.pool)
@@ -1349,15 +1368,23 @@ impl TeamRepository for TeamRepositoryImpl {
         // "keep".
         let default_link_share_provided = req.default_link_share.is_some();
         let default_link_share = req.default_link_share.flatten();
+        // Same for language: NULL lets each member's browser decide.
+        let language_provided = req.language.is_some();
+        let language = req.language.flatten();
 
-        if req.name.is_some() || normalized_slug.is_some() || default_link_share_provided {
+        if req.name.is_some()
+            || normalized_slug.is_some()
+            || default_link_share_provided
+            || language_provided
+        {
             let result = sqlx::query!(
                 r#"
                 UPDATE team
                 SET
                     name = COALESCE($2, name),
                     slug = COALESCE($3, slug),
-                    default_link_share = CASE WHEN $4 THEN $5 ELSE default_link_share END
+                    default_link_share = CASE WHEN $4 THEN $5 ELSE default_link_share END,
+                    language = CASE WHEN $6 THEN $7 ELSE language END
                 WHERE id = $1
                 "#,
                 team_id,
@@ -1365,6 +1392,8 @@ impl TeamRepository for TeamRepositoryImpl {
                 normalized_slug.as_deref(),
                 default_link_share_provided,
                 default_link_share as Option<LinkShare>,
+                language_provided,
+                language as Option<Language>,
             )
             .execute(&self.pool)
             .await?;
@@ -1616,8 +1645,17 @@ impl TeamRepository for TeamRepositoryImpl {
         &self,
         team_id: &uuid::Uuid,
         token: &TeamInviteLinkToken,
+        created_by: &MacroUserIdStr<'_>,
     ) -> Result<(), TeamError> {
-        invite_link::set_team_invite_link(&self.pool, team_id, token).await
+        invite_link::set_team_invite_link(&self.pool, team_id, token, created_by).await
+    }
+
+    #[tracing::instrument(skip(self, token), err)]
+    async fn get_team_invite_link_creator(
+        &self,
+        token: &TeamInviteLinkToken,
+    ) -> Result<Option<MacroUserIdStr<'static>>, TeamError> {
+        invite_link::get_team_invite_link_creator(&self.pool, token).await
     }
 
     #[tracing::instrument(skip(self), err)]

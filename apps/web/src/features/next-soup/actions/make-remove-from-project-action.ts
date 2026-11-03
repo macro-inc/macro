@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
@@ -13,7 +14,9 @@ export const makeRemoveFromProjectAction = () => {
     entity.type === 'document' ||
     entity.type === 'chat' ||
     entity.type === 'project' ||
-    entity.type === 'email';
+    entity.type === 'email' ||
+    entity.type === 'database' ||
+    entity.type === 'form';
 
   const execute = async (entities: EntityData[]): Promise<boolean> => {
     // Failure toast is shown by the mutation
@@ -23,8 +26,10 @@ export const makeRemoveFromProjectAction = () => {
     if (!result) return false;
     toast.success(
       entities.length > 1
-        ? `Removed ${entities.length} items from folder`
-        : 'Removed from folder'
+        ? t('entityActions.toastRemovedCountFromFolder', {
+            count: entities.length,
+          })
+        : t('entityActions.toastRemovedFromFolder')
     );
     return true;
   };

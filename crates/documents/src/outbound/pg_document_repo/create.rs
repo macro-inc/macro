@@ -13,6 +13,10 @@ use crate::domain::models::{CreateDocumentRepoArgs, DocumentError, NewDocument};
 /// Inserts a record into the document table
 /// Returns the document id
 #[tracing::instrument(skip(transaction), err)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "a document row carries its id, owner, name, type, folder and both dates"
+)]
 pub async fn insert_document_row(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     document_id: Option<&uuid::Uuid>,
@@ -21,6 +25,7 @@ pub async fn insert_document_row(
     file_type: Option<FileType>,
     project_id: Option<&uuid::Uuid>,
     created_at: &chrono::DateTime<chrono::Utc>,
+    updated_at: &chrono::DateTime<chrono::Utc>,
 ) -> Result<uuid::Uuid, DocumentError> {
     // Generate id if one is not provided
     let id = macro_uuid::generate_uuid_v7();
@@ -30,14 +35,15 @@ pub async fn insert_document_row(
     let result = sqlx::query!(
                 r#"
                 INSERT INTO "Document" (id, owner, name, "fileType", "projectId", "createdAt", "updatedAt")
-                VALUES ($1, $2, $3, $4, $5, $6, $6)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
                 "#,
                 &document_id.to_string(),
                 owner.principal_id(),
                 document_name,
                 file_type.map(|ft| ft.as_str().to_string()),
                 project_id.map(|s| s.to_string()),
-                created_at.naive_utc()
+                created_at.naive_utc(),
+                updated_at.naive_utc()
             )
             .execute(transaction.as_mut())
             .await;
@@ -402,6 +408,7 @@ pub async fn insert_new_document<B: BotFacts>(
         team_id,
         share_with_team,
         created_at: provided_created_at,
+        updated_at: provided_updated_at,
         sub_type: requested_sub_type,
         skip_history,
         initial_link_share: _,
@@ -409,6 +416,7 @@ pub async fn insert_new_document<B: BotFacts>(
 
     let now = chrono::Utc::now();
     let created_at = provided_created_at.as_ref().unwrap_or(&now);
+    let updated_at = provided_updated_at.as_ref().unwrap_or(created_at);
 
     let project_name: Option<String> = if let Some(ref proj_id) = project_id {
         sqlx::query_scalar!(
@@ -429,6 +437,7 @@ pub async fn insert_new_document<B: BotFacts>(
         file_type,
         project_id.as_ref(),
         created_at,
+        updated_at,
     )
     .await?;
 

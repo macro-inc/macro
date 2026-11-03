@@ -13,8 +13,9 @@ use crate::domain::{
         GithubGrantLinkOutcome, GithubLink, GithubLinkStatus, GithubMergeMethod,
         GithubMergeOutcome, GithubMergeRejection, GithubPullRequestMergeabilityEntry,
         GithubPullRequestMergeabilityRequest, GithubPullRequestNumber, GithubPullRequestRef,
-        MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
+        GithubStateOutcome, MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
         SetGithubPullRequestDraftRequest, SetGithubPullRequestDraftResponse,
+        SetGithubPullRequestStateRequest, SetGithubPullRequestStateResponse,
     },
     ports::{Auth, GithubLinkService, GithubOauth, GithubRepo},
 };
@@ -98,14 +99,14 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService>
                 &link.github_user_id,
             )
             .await
-            .map_err(|e| GithubError::Internal(e.into()))?
+            .map_err(Into::into)?
             .ok_or(GithubError::ReauthenticationRequired)?;
 
         let token_is_expired = self
             .oauth
             .is_access_token_expired(access_token.as_str())
             .await
-            .map_err(|e| GithubError::Internal(e.into()))?;
+            .map_err(Into::into)?;
 
         if token_is_expired {
             return Err(GithubError::ReauthenticationRequired);
@@ -152,9 +153,10 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService>
         }
     }
 
-    /// The pull request as GitHub reports it after a merge or draft change,
-    /// written back to its foreign entities so the app shows the change
-    /// before the webhook arrives. Best-effort: the change already happened.
+    /// The pull request as GitHub reports it after a merge, a draft change, or
+    /// a close or reopen, written back to its foreign entities so the app
+    /// shows the change before the webhook arrives. Best-effort: the change
+    /// already happened.
     async fn refresh_changed_pull_request(
         &self,
         access_token: &GithubAccessToken,
@@ -206,7 +208,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
     fn construct_oauth_url(&self, redirect_uri: &str, state: &str) -> Result<String, GithubError> {
         self.oauth
             .construct_oauth_url(&self.config.client_id, redirect_uri, state)
-            .map_err(|e| GithubError::Internal(e.into()))
+            .map_err(Into::into)
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -225,6 +227,15 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
             }
             Err(error) => Err(error),
         }
+    }
+
+    // No `err`: a missing link and an expired token are expected answers.
+    #[tracing::instrument(skip(self))]
+    async fn get_user_access_token(
+        &self,
+        macro_user_id: &MacroUserId<Lowercase<'static>>,
+    ) -> Result<GithubAccessToken, GithubError> {
+        self.validated_access_token(macro_user_id).await
     }
 
     #[tracing::instrument(skip(self, pull_requests), err)]
@@ -298,7 +309,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
                 merge_method,
             )
             .await
-            .map_err(|error| GithubError::Internal(error.into()))?;
+            .map_err(Into::into)?;
 
         let merge = match outcome {
             GithubMergeOutcome::Merged(merge) => merge,
@@ -336,7 +347,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
                 request.draft,
             )
             .await
-            .map_err(|error| GithubError::Internal(error.into()))?;
+            .map_err(Into::into)?;
 
         let draft = match outcome {
             GithubDraftOutcome::Changed { draft } => draft,
@@ -351,6 +362,43 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
 
         Ok(SetGithubPullRequestDraftResponse {
             draft,
+            pull_request,
+        })
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn set_pull_request_state(
+        &self,
+        macro_user_id: &MacroUserId<Lowercase<'static>>,
+        request: SetGithubPullRequestStateRequest,
+    ) -> Result<SetGithubPullRequestStateResponse, GithubError> {
+        let access_token = self.validated_access_token(macro_user_id).await?;
+
+        let outcome = self
+            .oauth
+            .set_pull_request_state(
+                access_token.as_str(),
+                &request.owner,
+                &request.repo,
+                request.number,
+                request.state,
+            )
+            .await
+            .map_err(Into::into)?;
+
+        let state = match outcome {
+            GithubStateOutcome::Changed { state } => state,
+            GithubStateOutcome::Rejected { rejection, message } => {
+                return Err(GithubError::PullRequestUpdateRejected { rejection, message });
+            }
+        };
+
+        let pull_request = self
+            .refresh_changed_pull_request(&access_token, request.to_reference())
+            .await;
+
+        Ok(SetGithubPullRequestStateResponse {
+            state,
             pull_request,
         })
     }
@@ -373,7 +421,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
         self.oauth
             .get_pull_request_mergeability(access_token.as_str(), &pull_requests)
             .await
-            .map_err(|error| GithubError::Internal(error.into()))
+            .map_err(Into::into)
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -425,7 +473,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
             self.auth
                 .delete_user_link(&link, &self.config.idp_id)
                 .await
-                .map_err(|e| GithubError::Internal(e.into()))?;
+                .map_err(Into::into)?;
         }
 
         // Delete from repo
@@ -455,13 +503,13 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
                 code,
             )
             .await
-            .map_err(|e| GithubError::Internal(e.into()))?;
+            .map_err(Into::into)?;
 
         let user_info = self
             .oauth
             .get_user_info(&tokens.access_token)
             .await
-            .map_err(|e| GithubError::Internal(e.into()))?;
+            .map_err(Into::into)?;
 
         tracing::trace!(github_user_id = user_info.id, "got github user identity");
 
@@ -504,7 +552,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
                         &tokens.access_token,
                     )
                     .await
-                    .map_err(|e| GithubError::Internal(e.into()))?;
+                    .map_err(Into::into)?;
                 if result == GithubGrantLinkOutcome::IdentityMissing {
                     // OAuth verified this GitHub account; migrate every sharer
                     // only after storing the grant on the current identity.
@@ -518,7 +566,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
                             &tokens.access_token,
                         )
                         .await
-                        .map_err(|e| GithubError::Internal(e.into()))?;
+                        .map_err(Into::into)?;
                     if result == GithubGrantLinkOutcome::IdentityMissing {
                         return Err(GithubError::ReauthenticationRequired);
                     }
@@ -552,7 +600,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
                         &tokens.access_token,
                     )
                     .await
-                    .map_err(|e| GithubError::Internal(e.into()))?;
+                    .map_err(Into::into)?;
 
                 if result == GithubGrantLinkOutcome::IdentityMissing {
                     return Err(GithubError::ReauthenticationRequired);

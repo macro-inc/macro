@@ -1,4 +1,5 @@
 use super::*;
+mod auto_archive;
 mod list_activity;
 mod queue;
 mod recovery;
@@ -2744,6 +2745,7 @@ async fn a_document_session_preserves_its_origin_and_inherits_live_document_acce
             canonical_root_id: None,
             parent: parent.clone(),
             actor: OWNER.to_owned().try_into().unwrap(),
+            triggered_via: None,
             triggered_by: None,
             input: PostMessage {
                 id: None,
@@ -3390,7 +3392,7 @@ async fn active_execution_turn_excludes_stopped_archived_and_deleted_sessions(po
         );
     }
     sqlx::query!(
-        "UPDATE agent_session SET turn_state = 'running', is_archived = true WHERE id = $1",
+        "UPDATE agent_session SET turn_state = 'running', archived_by = 'user', archived_at = now() WHERE id = $1",
         session.id.as_uuid()
     )
     .execute(&pool)

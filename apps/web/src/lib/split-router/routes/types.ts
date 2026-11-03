@@ -98,9 +98,14 @@ export type SplitRouteRemountContext = {
 };
 
 export type SplitRoutePreloadContext<TParams = SplitRouteParams> = {
+  /** Entity declared by the destination leaf, when it has one. */
+  reference?: SplitReference;
+  /** Full destination for an ancestor that owns shared resource preloading. */
+  location: SplitLocation;
   params: TParams;
   search: SplitSearchState | undefined;
   intent: PreloadIntent;
+  /** Cache admission survives navigation commit; aborts on router disposal. */
   signal: AbortSignal;
 };
 
@@ -150,6 +155,12 @@ export type SplitRouteDefinition<
     | readonly string[]
     | '*'
     | ((entry: Readonly<Entry>) => readonly string[]);
+  /**
+   * Routes sharing a `mountKey` keep one mounted view while the pane moves
+   * between them, so a workspace that renders several routes is not rebuilt on
+   * each step. Defaults to the route id.
+   */
+  mountKey?: string;
   remountKey?: {
     bivarianceHack(
       params: StandardSchemaV1.InferOutput<TParamsSchema>,

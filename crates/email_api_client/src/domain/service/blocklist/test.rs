@@ -2,7 +2,7 @@ use uuid::Uuid;
 
 use super::super::super::models::{AccessToken, EmailApiError, TokenFreshness};
 use super::super::super::ports::MailboxBlocklistClient;
-use super::super::test_support::{Call, FakeRateLimiter, FakeTokenSource, call_log};
+use super::super::test_support::{Call, FakeGate, FakeTokenSource, call_log};
 use super::EmailApiClientServiceImpl;
 
 #[derive(Clone)]
@@ -77,9 +77,10 @@ async fn blocklist_methods_use_their_matching_costs_and_operations() {
         assert_eq!(
             *calls.lock().unwrap(),
             vec![
-                Call::RateLimit(Uuid::nil(), operation),
+                Call::Acquire(Uuid::nil(), operation),
                 Call::Token(Uuid::nil(), TokenFreshness::Cached),
                 Call::Repository(repository_call),
+                Call::Finish(Uuid::nil(), None),
             ]
         );
     }
@@ -87,12 +88,12 @@ async fn blocklist_methods_use_their_matching_costs_and_operations() {
 
 fn service(
     calls: super::super::test_support::CallLog,
-) -> EmailApiClientServiceImpl<BlocklistClient, FakeTokenSource, FakeRateLimiter> {
+) -> EmailApiClientServiceImpl<BlocklistClient, FakeTokenSource, FakeGate> {
     EmailApiClientServiceImpl::new(
         BlocklistClient {
             calls: calls.clone(),
         },
         FakeTokenSource::new(calls.clone(), Ok(AccessToken::new("access-token"))),
-        FakeRateLimiter::new(calls, Ok(())),
+        FakeGate::new(calls, Ok(())),
     )
 }

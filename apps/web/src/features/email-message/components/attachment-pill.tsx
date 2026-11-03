@@ -1,6 +1,6 @@
 import { EntityIcon } from '@core/component/EntityIcon';
-import DownloadSimple from '@phosphor/download-simple.svg';
-import X from '@phosphor/x.svg';
+import DownloadSimple from '@icon/system/regular/download-simple.svg';
+import X from '@icon/system/regular/x.svg';
 import { FileTypeMap } from '@service-storage/fileTypeMap';
 import { Tooltip } from '@ui';
 import { Show } from 'solid-js';

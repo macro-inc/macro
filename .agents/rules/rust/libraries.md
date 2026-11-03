@@ -23,9 +23,12 @@ them instead of their generic equivalents.
   map adapter errors with `rootcause::Report::new(e).into_dynamic()`. Binaries
   return `Result<(), rootcause::Report>`. Never add `anyhow` to a crate that
   doesn't use it (CS-46). Model: `crates/user_api_key`.
-- **CS-57** No `Box<dyn Error>`, `Result<_, String>`, or `.unwrap()` /
-  `.expect()` outside tests and startup invariants; an `expect` states the
-  invariant it relies on.
+- **CS-57** No panics outside tests and startup: no `.unwrap()`, `.expect()`,
+  `unreachable!`, `panic!`, `todo!`, or unchecked indexing on a path a request,
+  tool call, or message can reach. Return a typed error the caller can show
+  instead, even for an "impossible" state. Never recover from a panic with
+  `catch_unwind` or a `JoinError`; fix the code that panics. No
+  `Box<dyn Error>` or `Result<_, String>` either.
 - **CS-58** Parse structured text with `nom` (and `logos` for tokenizing a real
   grammar, as `crates/database_sql` does), not hand-rolled `split_once` /
   `strip_prefix` / index scanners.

@@ -96,13 +96,21 @@ export type AppEvents = {
   onboarding_v4_connector_connected: { connector: string };
   /** What happened on the team step. */
   onboarding_v4_team: {
-    action: 'created' | 'joined_invite' | 'already_on_team';
+    action:
+      | 'created'
+      | 'joined_invite'
+      | 'already_on_team'
+      | 'invite_link_copied'
+      | 'referrals_sent'
+      | 'referral_link_copied';
     invites_sent?: number;
     /** Same-domain teammates the step pre-added to the invite list. */
     invites_prefilled?: number;
     /** How many of those the user removed before creating the team. */
     invites_removed?: number;
     used_domain_suggestion?: boolean;
+    /** Whether people on the work domain may join, which also sends the notice. */
+    allow_domain_join?: boolean;
   };
   /**
    * The flow finished (free, premium, or plan skipped) with a rollup of
@@ -149,7 +157,8 @@ export type AppEvents = {
   hotkey_use: Record<string, unknown>;
   mentions_menu_use: { itemType: string };
   snippets_menu_use: Record<string, unknown>;
-  split_created: { from: string };
+  /** `side` is where a split opened beside another; absent, it opened at the end. */
+  split_created: { from: string; side?: 'left' | 'right' | 'above' | 'below' };
 
   // --- Entity lifecycle ----------------------------------------------------
   // Fired at data-layer chokepoints (core/util/create.ts, FileList
@@ -218,18 +227,25 @@ export type AppEvents = {
   /** An existing subscriber moved between Premium and Max. */
   plan_changed: { plan: 'premium' | 'max'; from?: string };
 
-  email_message_sent: Record<string, unknown>;
   /**
-   * How the inbox-link OAuth callback ended. `connected` covers re-linking an
-   * inbox that was already connected; the client cannot tell them apart.
+   * An email the user sent, counted once when the outbox accepts it. Undo
+   * does not retract it. Older events have no properties.
+   */
+  email_message_sent: { isReply: boolean };
+  /**
+   * How the inbox-link OAuth callback ended. `already_connected` is a plain add
+   * whose account chooser returned an inbox the user already had; `connected`
+   * still covers reconnects and calendar upgrades of an existing inbox.
    */
   email_link_callback_result: {
     outcome:
       | 'connected'
+      | 'already_connected'
       | 'already_initialized'
       | 'shared_inbox_conflict'
       | 'payment_required'
       | 'no_gmail_grant'
+      | 'gmail_not_granted'
       | 'failed'
       | 'exception'
       | 'missing_link_id';
@@ -259,6 +275,8 @@ export type AppEvents = {
       | 'screen_share_toggled';
     channelId: string;
     callId?: string;
+    /** On `left`: seconds since this client joined the call. */
+    secondsInCall?: number;
   } & Record<string, unknown>;
   // Mic audio-processing state transitions (noise suppression attach /
   // detach / fallback). `constraintMismatch` flags engines that report

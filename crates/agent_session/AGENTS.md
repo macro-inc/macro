@@ -19,6 +19,8 @@ consumer talks to.
   same fold run server-side for the SDK and agents.
 - `src/domain/read.rs` and `src/inbound/toolset/read_agent_session.rs`: bounded,
   view-authorized conversation reads using the shared transcript fold.
+- `src/domain/updates.rs`: owner-scoped blocked and stalled coding-session updates,
+  capped to 25 sessions before folding their logs.
 - `src/outbound/postgres.rs`: the session repository.
 - `src/outbound/broker_lifecycle_publisher.rs` /
   `broker_log_realtime.rs`: Kafka publication of lifecycle and log events.
@@ -33,7 +35,7 @@ consumer talks to.
 
 ## Boundaries
 
-- Depends on: `agent_runtime_protocol`, `agent_fold`, `teams`,
+- Depends on: `agent_runtime_protocol`, `agent_fold`, `jev`, `teams`,
   `macro_authorization`.
 - Used by: `agent_harness`, `agent_inmem`, `agent_egress`, `agent_trigger`,
   `agent_changes`, `agent_session_realtime`, `ai_tools` (coding-agent
@@ -50,7 +52,7 @@ consumer talks to.
 
 ## Tool contracts
 
-- `src/inbound/toolset/`: session reads, creation, lifecycle actions, and sharing. Mutations preserve acting-user identity and existing owner/edit receipts; internal controls accept only prompt/stop, never human approvals.
+- `src/inbound/toolset/`: session reads, creation, lifecycle actions, and sharing. Mutations preserve acting-user identity and existing owner/edit receipts; internal controls accept only prompt/stop, never human approvals. `link_task` returns a `mention` chip to paste when naming the task.
 
 Internal action recovery uses `AgentSessionService::recorded_action`, which reads
 one durable log snapshot including pre-load frames. Keep this separate from the
@@ -74,6 +76,31 @@ private-context entries; the migration bridge preserves their review outcomes
 without restoring owner authority. Claim legacy actions with a conditional
 update of only their matching prompter; recover acting identity from that
 persisted prompter, never from an old wire actor or a newer user turn.
+
+Archive state lives on `agent_session`: `archived_by`
+(`agent_session_archive_cause`: `user`, `pull_request_merged`,
+`runtime_closed`; NULL is active) and `archived_at`. A person archiving sets
+`user`; restoring clears both. `is_archived` remains only while older replicas
+roll out; a trigger mirrors it, and no code may read or write it.
+
+Auto-archive (`domain/auto_archive.rs`, `outbound/postgres/auto_archive.rs`,
+`inbound/axum_router/auto_archive.rs`): opt-in triggers (pull requests merged,
+runtime deliberately closed). User defaults are columns on
+`user_agent_coding_preferences`; per-session overrides are nullable
+`agent_session.auto_archive_on_*` columns (NULL follows the owner).
+`auto_archive` locks the row and archives only an idle session with no queued
+prompts that does not answer a conversation, setting `archived_by` to the
+trigger and `auto_archived_at`. `auto_archived_at` is never cleared, even on
+restore, so a session auto-archives at most once. A session archives for pull
+requests once every linked pull request is closed and at least one merged;
+links with no `github_pull_request` row count as open.
+
+Session names: the first prompt names a session (`set_name_if_default`), and
+after each turn that ends with a reply, `domain/retitle.rs` hands the
+conversation digest to the namer. `name_generation::ClassifiedRetitle` asks Jev
+whether the name stopped fitting (threshold 0.8) before Haiku proposes a new
+one. Only names with `agent_session.name_is_generated` are retitled; a rename
+through `set_name` clears it, so a name a person chose is never replaced.
 
 ## Checks
 

@@ -2,7 +2,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isPlatform } from '@core/util/platform';
 
 const GROUP =
-  '[data-mobile-dock-island], [data-header-island], [data-slot="button-group"].glass';
+  '[data-mobile-dock-island], [data-header-island], [data-slot="button-group"]:is(.glass, [class~="touch:glass"])';
 const CONTROL =
   'button, a, [role="button"], [role="tab"], [data-header-island]';
 const INPUT = '[data-glass-input], [data-input] [data-composer-collapsed]';
@@ -72,7 +72,9 @@ export function installGlassPress() {
     const element =
       input ??
       control?.closest<HTMLElement>(GROUP) ??
-      (control?.matches('.glass, .island, [class~="touch:island"]')
+      (control?.matches(
+        '.glass, [class~="touch:glass"], .island, [class~="touch:island"]'
+      )
         ? control
         : undefined);
     if (!element) return;

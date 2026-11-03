@@ -46,9 +46,15 @@ Re-exports [ApplyOpsOptions](../entities/databases/database/type-aliases/ApplyOp
 
 ***
 
-### CalendarNote
+### ArchiveCause
 
-Re-exports [CalendarNote](../entities/calendar/note/classes/CalendarNote.md)
+Re-exports [ArchiveCause](../../generated/agent-harness/types.gen/type-aliases/ArchiveCause.md)
+
+***
+
+### AutoArchiveOverrides
+
+Re-exports [AutoArchiveOverrides](../entities/agent-sessions/agent-session/type-aliases/AutoArchiveOverrides.md)
 
 ***
 
@@ -220,6 +226,42 @@ Re-exports [EntityReference](../entities/reference/type-aliases/EntityReference.
 
 ***
 
+### ExternalChat
+
+Re-exports [ExternalChat](../entities/external-chat/chat/classes/ExternalChat.md)
+
+***
+
+### ExternalChatContent
+
+Re-exports [ExternalChatContent](../entities/external-chat/chat/type-aliases/ExternalChatContent.md)
+
+***
+
+### ExternalChatMessage
+
+Re-exports [ExternalChatMessage](../entities/external-chat/message/classes/ExternalChatMessage.md)
+
+***
+
+### ExternalChatParticipant
+
+Re-exports [ExternalChatParticipant](../entities/external-chat/participant/classes/ExternalChatParticipant.md)
+
+***
+
+### ExternalChatSend
+
+Re-exports [ExternalChatSend](../entities/external-chat/send/classes/ExternalChatSend.md)
+
+***
+
+### ExternalChatUpload
+
+Re-exports [ExternalChatUpload](../entities/external-chat/upload/classes/ExternalChatUpload.md)
+
+***
+
 ### FoldedAgentSessionLog
 
 Re-exports [FoldedAgentSessionLog](../entities/agent-sessions/agent-session/type-aliases/FoldedAgentSessionLog.md)
@@ -340,6 +382,24 @@ Re-exports [FormSubmissionOutcome](../entities/forms/form/type-aliases/FormSubmi
 
 ***
 
+### GeneratedImage
+
+Re-exports [GeneratedImage](../entities/images/image/classes/GeneratedImage.md)
+
+***
+
+### GenerateImageAspectRatio
+
+Re-exports [GenerateImageAspectRatio](../../generated/cognition/types.gen/type-aliases/GenerateImageAspectRatio.md)
+
+***
+
+### GenerateImageOptions
+
+Re-exports [GenerateImageOptions](../entities/images/namespace/interfaces/GenerateImageOptions.md)
+
+***
+
 ### GithubPullRequest
 
 Re-exports [GithubPullRequest](../entities/github-pull-requests/pull-request/classes/GithubPullRequest.md)
@@ -373,6 +433,12 @@ Re-exports [Initiative](../entities/initiatives/initiative/classes/Initiative.md
 ### InitiativeOptions
 
 Re-exports [InitiativeOptions](../entities/initiatives/initiative/interfaces/InitiativeOptions.md)
+
+***
+
+### InitiativeSummary
+
+Re-exports [InitiativeSummary](../entities/initiatives/namespace/interfaces/InitiativeSummary.md)
 
 ***
 
@@ -556,9 +622,27 @@ Re-exports [RoutineTriggerOptions](../entities/routines/routine/type-aliases/Rou
 
 ***
 
+### SavedFormResponse
+
+Re-exports [SavedFormResponse](../entities/forms/form/type-aliases/SavedFormResponse.md)
+
+***
+
+### SessionAutoArchive
+
+Re-exports [SessionAutoArchive](../entities/agent-sessions/agent-session/type-aliases/SessionAutoArchive.md)
+
+***
+
 ### SessionReview
 
 Re-exports [SessionReview](../entities/agent-sessions/review/classes/SessionReview.md)
+
+***
+
+### SessionView
+
+Re-exports [SessionView](../entities/agent-sessions/view/type-aliases/SessionView.md)
 
 ***
 
@@ -580,6 +664,12 @@ Re-exports [SingleRoutineTrigger](../entities/routines/routine/type-aliases/Sing
 
 ***
 
+### StaticImage
+
+Re-exports [StaticImage](../entities/images/image/classes/StaticImage.md)
+
+***
+
 ### StructuredCompletionRequest
 
 Re-exports [StructuredCompletionRequest](../../generated/cognition/types.gen/type-aliases/StructuredCompletionRequest.md)
@@ -589,6 +679,12 @@ Re-exports [StructuredCompletionRequest](../../generated/cognition/types.gen/typ
 ### StructuredCompletionResponse
 
 Re-exports [StructuredCompletionResponse](../../generated/cognition/types.gen/type-aliases/StructuredCompletionResponse.md)
+
+***
+
+### TaskSummary
+
+Re-exports [TaskSummary](../entities/tasks/task/interfaces/TaskSummary.md)
 
 ***
 
@@ -613,6 +709,24 @@ Re-exports [ToolApproval](../entities/agent-sessions/tool-approval/classes/ToolA
 ### UserApiKey
 
 Re-exports [UserApiKey](../entities/api-keys/api-key/classes/UserApiKey.md)
+
+***
+
+### WhatsAppAccount
+
+Re-exports [WhatsAppAccount](../entities/whatsapp/account/classes/WhatsAppAccount.md)
+
+***
+
+### WhatsAppChat
+
+Re-exports [WhatsAppChat](../entities/whatsapp/chat/classes/WhatsAppChat.md)
+
+***
+
+### WhatsAppCommunity
+
+Re-exports [WhatsAppCommunity](../entities/whatsapp/chat/type-aliases/WhatsAppCommunity.md)
 
 ***
 

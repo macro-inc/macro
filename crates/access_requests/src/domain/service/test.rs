@@ -1,6 +1,23 @@
 use super::*;
 
 #[test]
+fn canonical_external_chat_share_address_supports_view_access() {
+    let entity: ShareEntity = serde_json::from_value(serde_json::json!({
+        "entityType": "external_chat",
+        "entityId": "00000000-0000-0000-0000-000000000123"
+    }))
+    .unwrap();
+    assert_eq!(
+        model_entity::EntityType::from(entity.entity_type),
+        model_entity::EntityType::ExternalChat
+    );
+    assert_eq!(
+        supported_levels(entity.entity_type, None),
+        vec![AccessLevel::View]
+    );
+}
+
+#[test]
 fn capabilities_match_existing_sharing() {
     assert_eq!(
         supported_levels(ShareEntityType::Document, Some("pdf")),

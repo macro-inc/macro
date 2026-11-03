@@ -41,6 +41,9 @@ macro_env_var::env_vars!(
     /// custom MCP servers a person added in Macro are the ones the egress
     /// proxy can refresh and stamp for their sandboxes.
     pub struct McpCredentialsKeySecretName;
+    /// Dedicated KMS key the public MCP OAuth broker encrypts the upstream
+    /// tokens behind its authorization codes with.
+    pub struct McpOauthKmsKeyId;
 );
 
 macro_env_var::maybe_env_vars!(
@@ -72,6 +75,13 @@ fn default_pipedream_environment() -> String {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// Optional TypeSafe key for Command K classification and for routing
+    /// unmentioned thread replies to agents.
+    pub typesafe_api_key: jev::outbound::TypesafeApiKey,
+    /// Optional Workers AI account for Clairic extraction and Auto mode's Clef Flash.
+    pub cloudflare_account_id: universal_input::outbound::clairic::CloudflareAccountId,
+    /// Workers AI token paired with the account ID.
+    pub cloudflare_api_token: universal_input::outbound::clairic::CloudflareApiToken,
     /// Shared pool for sessions, chat, integrations, and routine workers.
     #[macro_config_default(30)]
     pub database_max_connections: u32,
@@ -135,6 +145,8 @@ pub struct Config {
     pub database_url: DatabaseUrl,
     /// Shared Redis used for cross-replica command forwarding.
     pub redis_uri: RedisUri,
+    /// KMS key for the public MCP OAuth broker's authorization codes.
+    pub mcp_oauth_kms_key_id: McpOauthKmsKeyId,
     /// Base URL of the Daytona REST API.
     #[macro_config_default(String::from("https://app.daytona.io/api"))]
     pub daytona_api_url: String,
@@ -292,23 +304,42 @@ impl Config {
     /// while `ENABLE_AI_USAGE_BILLING` is true, which then requires
     /// `AUTHENTICATION_SERVICE_SECRET_KEY`; nowhere otherwise.
     pub fn settlement_route(&self) -> anyhow::Result<ai_billing::composition::SettlementRoute> {
-        let client = self
-            .authentication_service_secret_key
+        Ok(ai_billing::composition::SettlementRoute::from_policy(
+            self.enable_ai_usage_billing,
+            self.auth_service_client()?.map(std::sync::Arc::new),
+        )?)
+    }
+
+    /// The authentication service client, when
+    /// `AUTHENTICATION_SERVICE_SECRET_KEY` is set.
+    pub fn auth_service_client(
+        &self,
+    ) -> anyhow::Result<Option<authentication_service_client::AuthServiceClient>> {
+        self.authentication_service_secret_key
             .value()
             .filter(|key| !key.trim().is_empty())
             .map(|key| {
-                anyhow::Ok(std::sync::Arc::new(
-                    authentication_service_client::AuthServiceClient::new(
-                        key.to_owned(),
-                        macro_service_urls::AuthServiceUrl::new()?.to_string(),
-                    ),
+                anyhow::Ok(authentication_service_client::AuthServiceClient::new(
+                    key.to_owned(),
+                    macro_service_urls::AuthServiceUrl::new()?.to_string(),
                 ))
             })
-            .transpose()?;
-        Ok(ai_billing::composition::SettlementRoute::from_policy(
-            self.enable_ai_usage_billing,
-            client,
-        )?)
+            .transpose()
+    }
+
+    /// Reads GitHub account-link tokens, so GitHub's MCP server needs no
+    /// separate authorization. `None` without the authentication service.
+    pub fn linked_github_tokens(
+        &self,
+    ) -> anyhow::Result<Option<std::sync::Arc<dyn mcp_client::domain::ports::LinkedGithubTokens>>>
+    {
+        Ok(self.auth_service_client()?.map(|client| {
+            std::sync::Arc::new(
+                mcp_client::outbound::auth_service_github_tokens::AuthServiceGithubTokens::new(
+                    client,
+                ),
+            ) as std::sync::Arc<dyn mcp_client::domain::ports::LinkedGithubTokens>
+        }))
     }
 
     /// Load the configuration from the environment.

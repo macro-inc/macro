@@ -1,0 +1,1 @@
+People who explicitly created or reported the requested tasks, including tasks from a named person. Return names or supplied addresses, never IDs. This is not the assignee. Use [] when absent. Do not infer creators from names inside the topic or turn negated filters positive.

@@ -30,6 +30,11 @@ const graphqlMocks = vi.hoisted(() => ({
   hydrateGraphqlSoup: vi.fn(),
 }));
 
+const mailAccounts = vi.hoisted(() => vi.fn());
+vi.mock('../email/mail-accounts', () => ({
+  useMailAccountsQuery: mailAccounts,
+}));
+
 const leaderMocks = vi.hoisted(() => ({
   createTabLeaderSignal: vi.fn(),
 }));
@@ -103,7 +108,7 @@ function seedCheckpoint(overrides: Partial<SoupBackfillCheckpoint> = {}) {
     ...overrides,
   };
   localStorage.setItem(
-    'graphql-soup-backfill:v17:user-1:core-entities',
+    'graphql-soup-backfill:v18:user-1:core-entities',
     JSON.stringify(checkpoint)
   );
 }
@@ -324,6 +329,7 @@ describe('runSoupBackfills', () => {
       DEFAULT_SOUP_BACKFILL_LANES.map((lane) => lane.checkpointId)
     ).toEqual([
       'core-entities',
+      'initiatives',
       'email-signal-filter-metadata',
       'email-noise-filter-metadata',
       'shared-email-filter-metadata',
@@ -819,7 +825,7 @@ describe('runSoupBackfills', () => {
     'restarts the runner with %s storage semantics and ignores obsolete completions',
     async (storage) => {
       localStorage.setItem(
-        'graphql-soup-backfill:v17:user-1:core-entities',
+        'graphql-soup-backfill:v18:user-1:core-entities',
         JSON.stringify({
           userId: 'user-1',
           storageGeneration: 'storage-1',
@@ -893,7 +899,7 @@ describe('runSoupBackfills', () => {
       const watermark = '2026-09-01T00:00:00.000Z';
       for (const checkpointId of ['core-entities', 'email-thread-pages']) {
         localStorage.setItem(
-          `graphql-soup-backfill:v17:user-1:${checkpointId}`,
+          `graphql-soup-backfill:v18:user-1:${checkpointId}`,
           JSON.stringify({
             userId: 'user-1',
             storageGeneration: 'storage-1',
@@ -1054,4 +1060,32 @@ describe('runSoupBackfills', () => {
     rendered.unmount();
     expect(fetchSignals[1]?.aborted).toBe(true);
   });
+});
+
+it('warms sender metadata before paged backfill and pauses it without identity or leadership', () => {
+  const [user, setUser] = createSignal<string>();
+  const [leader, setLeader] = createSignal(true);
+  const [enabled, setEnabled] = createSignal(true);
+  featureFlagMocks.useFeatureFlag.mockReturnValue(() => ({
+    enabled: enabled(),
+  }));
+  leaderMocks.createTabLeaderSignal.mockReturnValue(leader);
+  mailAccounts.mockClear();
+  const rendered = render(() => {
+    useSoupBackfills(user);
+    return null;
+  });
+  try {
+    const active = mailAccounts.mock.calls[0][0];
+    expect(active()).toBe(false);
+    setUser('owner');
+    expect(active()).toBe(true);
+    setLeader(false);
+    expect(active()).toBe(false);
+    setLeader(true);
+    setEnabled(false);
+    expect(active()).toBe(false);
+  } finally {
+    rendered.unmount();
+  }
 });

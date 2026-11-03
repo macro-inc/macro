@@ -15,16 +15,12 @@ if [[ "$before" == "$after" ]]; then
   echo "No Android native changes in this push; the release stays valid."
 else
   echo "changed=true" >> "$GITHUB_OUTPUT"
-  # The version code that may already be on Play is the old head's. After a
-  # force-push the old head is gone; the new head's code is the best guess (a
-  # push rarely changes it), and it keeps the Play check running — that
-  # check is what tells the author a stale bundle is already in production.
+  # Only the verified old head identifies the version that may be on Play.
+  # A force-push may also bump the version, so the new head cannot substitute.
   if [[ "$before" != unknown ]]; then
-    released=$BEFORE_SHA
+    echo "version_code=$(bun scripts/android-native.mjs version-code "$BEFORE_SHA")" >> "$GITHUB_OUTPUT"
   else
-    released=$AFTER_SHA
-    echo "The previous head is unreachable (force-push); checking Play for the current head's version code instead."
+    echo "The previous native tree could not be verified; the prior Play version and production status remain unknown."
   fi
-  echo "version_code=$(bun scripts/android-native.mjs version-code "$released")" >> "$GITHUB_OUTPUT"
-  echo "Android native code changed; the released bundle is stale."
+  echo "Android native code changed or cannot be verified; treating the released bundle as stale."
 fi

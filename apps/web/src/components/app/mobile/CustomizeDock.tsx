@@ -1,6 +1,6 @@
 import { DragSessionSensors } from '@app/components/drag-drop/drag-session-sensors';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import DotsSixVerticalIcon from '@phosphor/dots-six-vertical.svg';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
+import DotsSixVerticalIcon from '@icon/system/regular/dots-six-vertical.svg';
 import {
   closestCenter,
   createSortable,

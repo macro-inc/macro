@@ -118,7 +118,15 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
         .nest("/logout", logout::router())
         .nest("/oauth", oauth::router(state.clone()))
         .nest("/oauth2", oauth2::router())
-        .nest("/user", user::router())
+        .nest(
+            "/user",
+            user::router().merge(user_language::inbound::axum_router::user_language_router(
+                user_language::inbound::axum_router::UserLanguageRouterState::new(
+                    state.user_language_service.clone(),
+                    state.authorization_state.clone(),
+                ),
+            )),
+        )
         .nest("/link", link::router())
         .nest("/cursor-api-key", cursor_api_key::router())
         .nest("/agents", agent_api_keys::router())
@@ -129,6 +137,15 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
             teams::inbound::axum_router::teams_router(
                 teams::inbound::axum_router::TeamRouterState {
                     service: state.teams_service.clone(),
+                    entity_access_service: state.entity_access_service.clone(),
+                    authorization_state: state.authorization_state.clone(),
+                },
+            ),
+        )
+        .merge(
+            teams::inbound::axum_router::domain_notice::domain_notice_router(
+                teams::inbound::axum_router::domain_notice::DomainNoticeRouterState {
+                    service: state.domain_notice_service.clone(),
                     entity_access_service: state.entity_access_service.clone(),
                     authorization_state: state.authorization_state.clone(),
                 },
@@ -150,6 +167,15 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
                 gtm_invite::inbound::axum_router::GtmInviteRouterState {
                     service: state.gtm_invite_service.clone(),
                     rate_limiter: state.rate_limit_service.clone(),
+                    authorization_state: state.authorization_state.clone(),
+                },
+            ),
+        )
+        .nest(
+            "/system-status",
+            system_status::inbound::axum_router::system_status_router(
+                system_status::inbound::axum_router::SystemStatusRouterState {
+                    service: state.system_status_service.clone(),
                     authorization_state: state.authorization_state.clone(),
                 },
             ),

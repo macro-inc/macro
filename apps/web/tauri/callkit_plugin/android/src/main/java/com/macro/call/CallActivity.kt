@@ -42,10 +42,13 @@ class CallActivity : Activity() {
     private val renderers = mutableListOf<Pair<VideoTrack, SurfaceViewRenderer>>()
     private var permissionAction: (() -> Unit)? = null
     private var permissionCallId: String? = null
+    private var permissionTrace: CallTrace.Phase? = null
     private var rendered: List<Any?>? = null
     private val callback: () -> Unit = { render() }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (!matchesCall(intent)) { finish(); return }
+        val receipt = Calls.trace?.activity(intent)
         current = WeakReference(this)
         if (Build.VERSION.SDK_INT >= 33) {
             backCallback = android.window.OnBackInvokedCallback { dismissDrawer() }
@@ -73,12 +76,20 @@ class CallActivity : Activity() {
             permission(Manifest.permission.RECORD_AUDIO, id) { Calls.answer(this, id) }
         }
         render()
+        receipt?.end("shown")
     }
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (!matchesCall(intent)) return
+        val receipt = Calls.trace?.activity(intent)
         setIntent(intent)
         intent.getStringExtra("answer")?.let { id -> permission(Manifest.permission.RECORD_AUDIO, id) { Calls.answer(this, id) } }
         render()
+        receipt?.end("shown")
+    }
+    private fun matchesCall(intent: Intent): Boolean {
+        val id = intent.getStringExtra("callId") ?: intent.getStringExtra("answer")
+        return Calls.offer != null && (id == null || id == Calls.offer?.callId)
     }
     private fun permission(name: String, callId: String? = null, action: () -> Unit) {
         if (permissionAction != null) {
@@ -86,6 +97,7 @@ class CallActivity : Activity() {
             return
         }
         if (checkSelfPermission(name) == PackageManager.PERMISSION_GRANTED) {
+            if (callId != null) Calls.trace?.takeIf { it.callId == callId }?.phase("call.permission.microphone")?.end("already_granted")
             callId?.let { Calls.finishMicrophonePermission(it) }
             action()
             return
@@ -93,8 +105,10 @@ class CallActivity : Activity() {
         if (callId != null && !Calls.beginMicrophonePermission(callId)) return
         permissionCallId = callId
         permissionAction = action
+        if (callId != null) permissionTrace = Calls.trace?.takeIf { it.callId == callId }?.phase("call.permission.microphone")
         try { requestPermissions(arrayOf(name), 4) }
         catch (_: Exception) {
+            permissionTrace?.end("request_error", failed = true); permissionTrace = null
             permissionCallId?.let { Calls.finishMicrophonePermission(it) }
             permissionCallId = null; permissionAction = null
             Calls.error = "Could not request permission. Try again."; render()
@@ -105,9 +119,11 @@ class CallActivity : Activity() {
         if (code != 4 || permissionAction == null) return
         val action = permissionAction
         val callId = permissionCallId
+        val granted = grants.firstOrNull() == PackageManager.PERMISSION_GRANTED
+        permissionTrace?.end(if (granted) "granted" else "denied"); permissionTrace = null
         permissionAction = null; permissionCallId = null
         callId?.let { Calls.finishMicrophonePermission(it) }
-        if (grants.firstOrNull() == PackageManager.PERMISSION_GRANTED) action?.invoke()
+        if (granted) action?.invoke()
         else { Calls.error = "Permission denied. Enable it in Android settings to use this control."; render() }
     }
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
@@ -160,6 +176,48 @@ class CallActivity : Activity() {
         if (participant?.local == true && Calls.video && large) addView(icon(R.drawable.macro_call_camera_rotate, "switch", "Switch camera") { Calls.switchCamera() },
             FrameLayout.LayoutParams(dp(48), dp(48), Gravity.TOP or Gravity.END).apply { topMargin = dp(8); rightMargin = dp(8) })
     }
+    private fun incoming(call: CallOffer) {
+        val colors = theme!!
+        // Cover the whole lock screen; the translucent drawer theme is only for an active call.
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(colors.drawer))
+        layout.setBackgroundColor(colors.drawer)
+        layout.setOnClickListener(null)
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(dp(24), dp(24), dp(24), dp(24)); tag = "incoming-call"
+        }
+        layout.addView(content, FrameLayout.LayoutParams(-1, -1))
+        content.addView(label("Incoming Macro call", 14f, colors.muted).apply { gravity = Gravity.CENTER },
+            LinearLayout.LayoutParams(-1, -2))
+        val identity = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
+            setPadding(0, dp(24), 0, dp(24))
+        }
+        val name = call.callerName ?: Calls.title ?: call.title
+        identity.addView(label(Calls.initials(name), 36f).apply {
+            gravity = Gravity.CENTER; background = background(colors.edgeMuted, 100)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(dp(112), dp(112)))
+        identity.addView(label(name, 28f).apply { gravity = Gravity.CENTER; maxLines = 3 },
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(24) })
+        if (call.callerName != null) identity.addView(label(Calls.title ?: call.title, 16f, colors.muted).apply {
+            gravity = Gravity.CENTER; maxLines = 2
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        content.addView(ScrollView(this).apply {
+            isFillViewport = true; addView(identity, FrameLayout.LayoutParams(-1, -1))
+        }, LinearLayout.LayoutParams(-1, 0, 1f))
+        Calls.error?.let { message ->
+            content.addView(label(message, 14f, colors.muted).apply { gravity = Gravity.CENTER; maxLines = 3 },
+                LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(16) })
+        }
+        val actions = LinearLayout(this).apply { gravity = Gravity.CENTER }
+        actions.addView(actionButton("Decline", colors.failure) { Calls.end(this, call.callId, outcome = "declined") },
+            LinearLayout.LayoutParams(0, dp(64), 1f).apply { marginEnd = dp(8) })
+        actions.addView(actionButton("Answer", colors.success) {
+            permission(Manifest.permission.RECORD_AUDIO, call.callId) { Calls.answer(this, call.callId) }
+        }, LinearLayout.LayoutParams(0, dp(64), 1f).apply { marginStart = dp(8) })
+        content.addView(actions, LinearLayout.LayoutParams(-1, -2))
+    }
     private fun render() {
         val call = Calls.offer ?: run { finish(); return }
         theme = Calls.drawerTheme ?: theme ?: CallTheme.load(this)
@@ -183,6 +241,8 @@ class CallActivity : Activity() {
         stripScroll = participantStrip?.scrollX ?: stripScroll
         participantStrip = null
         detach(); layout.removeAllViews()
+        if (Calls.state == "ringing") { incoming(call); return }
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
         layout.setBackgroundColor(theme!!.scrim)
         if (isInPictureInPictureMode) {
             val pip = CallPictureInPicture.view(this, media?.let { Calls.localName(it) } ?: "You", local?.track, speaker?.name, speaker?.track) { track, mirror ->
@@ -267,6 +327,8 @@ class CallActivity : Activity() {
         }.show()
     }
     private fun dismissDrawer() {
+        // Back hides an unanswered call; its notification remains available to answer or decline.
+        if (Calls.state == "ringing") { finish(); return }
         // Macro can't show over the lock screen, so the call stays in PiP there.
         if (getSystemService(KeyguardManager::class.java).isKeyguardLocked && pip()) return
         // As on iOS, the call shrinks to a thumbnail over Macro; PiP starts once the user leaves the app.
@@ -286,7 +348,7 @@ class CallActivity : Activity() {
     override fun onUserLeaveHint() { pip() }
     override fun onResume() {
         super.onResume()
-        if (!isInPictureInPictureMode) Calls.setOverlay("expanded")
+        if (!isFinishing && !isInPictureInPictureMode) Calls.setOverlay("expanded")
     }
     override fun onPictureInPictureModeChanged(inPip: Boolean, config: android.content.res.Configuration) {
         super.onPictureInPictureModeChanged(inPip, config); pipRequested = inPip
@@ -306,6 +368,7 @@ class CallActivity : Activity() {
         Calls.stopCamera(this)
     }
     override fun onDestroy() {
+        permissionTrace?.end("activity_destroyed"); permissionTrace = null
         if (Build.VERSION.SDK_INT >= 33) backCallback?.let { onBackInvokedDispatcher.unregisterOnBackInvokedCallback(it) }
         backCallback = null
         permissionCallId?.let { Calls.finishMicrophonePermission(it) }

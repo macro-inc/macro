@@ -18,6 +18,8 @@ pub mod ports;
 pub mod presenter;
 /// The per-session queue of turn-occupying actions awaiting their turn.
 pub mod queue;
+/// Archiving a session once its runtime session is deliberately closed.
+pub mod runtime_closed;
 /// Compute resources for a sandbox size.
 pub mod sandbox;
 /// The harness orchestrator: containers, announcements, and trigger commands.
@@ -28,6 +30,8 @@ pub mod trigger_router;
 /// Per-owner hosted Codex runtime authorization.
 pub mod codex;
 
+/// Auto mode: whether a composer prompt goes to a chat or a coding agent.
+pub mod mode_choice;
 /// Compatible agent model discovery.
 pub mod model_load;
 /// Admitted model-backed repository choice, with deterministic paths kept free.

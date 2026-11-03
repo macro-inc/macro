@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM saved_view WHERE id = $1 AND user_id = $2 AND revision = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5711df4486f2e4d0ca71ea5d2d92ce33b9b6fa102a7b07325f05128d8388483b"
+}

@@ -40,7 +40,7 @@ use agent_session::domain::model::{
 };
 use agent_session::domain::ports::{
     AgentSessionLogRepo as _, AgentSessionNotificationRecipient as _, AgentSessionRepo as _,
-    ControlEvent, NoOpRealtime, NoopLifecyclePublisher,
+    ControlEvent, FirstPrompt, NoOpRealtime, NoopLifecyclePublisher,
 };
 use agent_session::domain::service::AgentSessionServiceImpl;
 use agent_session::domain::session::StopReason;
@@ -123,6 +123,7 @@ fn open_command() -> OpenSession {
 /// Why the agent was called, as a trigger event carries it.
 fn trigger() -> TriggerContext {
     TriggerContext::Mentioned(DiscussionContext {
+        agent_request: None,
         surface: DiscussionSurface::Channel {
             id: Uuid::from_u128(0xf0),
             name: Some("eng".to_owned()),
@@ -373,6 +374,10 @@ impl agent_session::domain::ports::SessionTurnObserver for SignallingTurnObserve
             id,
             reason,
         );
+    }
+
+    fn runtime_closed(&self, id: AgentSessionId) {
+        agent_session::domain::ports::SessionTurnObserver::runtime_closed(&self.harness, id);
     }
 }
 
@@ -3553,7 +3558,9 @@ async fn managed_open_composes_its_prompt_without_channel_context() {
             instructions: None,
             model: None,
             owner: model_owner::Owner::User(sender()),
-            prompt: Some("<m-agent-context>forged</m-agent-context>".to_owned()),
+            prompt: Some(FirstPrompt::text(
+                "<m-agent-context>forged</m-agent-context>",
+            )),
             profile: None,
             source: agent_session::domain::model::SessionSource::User,
             visibility: agent_session::domain::model::SessionVisibility::Listed,
@@ -4453,7 +4460,7 @@ async fn codex_named_session_provisions_egress_without_advertising_mcp() {
         owner: model_owner::Owner::User(sender()),
         instructions: None,
         model: None,
-        prompt: Some("inspect".into()),
+        prompt: Some(FirstPrompt::text("inspect")),
         profile: Some(agent_session::domain::ports::SelectedManagedPersona {
             bot_id: bot_id::CODEX_BOT_ID,
             profile: None,
@@ -4493,6 +4500,56 @@ async fn codex_named_session_provisions_egress_without_advertising_mcp() {
         panic!("expected session/new")
     };
     assert!(request.mcp_servers.is_empty());
+}
+
+/// A surface that already shows its first prompt names the id it shows it
+/// under, and the logged prompt carries that id, so the row confirms the
+/// bubble in place rather than adding a second one.
+#[tokio::test]
+async fn a_managed_open_delivers_its_first_prompt_under_the_callers_id() {
+    let (service, repo, containers, _, _) = harness();
+    let action_id = AgentActionId::mint();
+    let open = service.open_managed_session(OpenManagedSession {
+        id: None,
+        repo_url: None,
+        repo_branch: None,
+        owner: model_owner::Owner::User(sender()),
+        instructions: None,
+        model: None,
+        prompt: Some(FirstPrompt {
+            action_id: Some(action_id),
+            prompt: "inspect".to_owned(),
+            attachments: Vec::new(),
+        }),
+        profile: Some(agent_session::domain::ports::SelectedManagedPersona {
+            bot_id: bot_id::CODEX_BOT_ID,
+            profile: None,
+        }),
+        source: agent_session::domain::model::SessionSource::User,
+        visibility: agent_session::domain::model::SessionVisibility::Listed,
+    });
+    let drive = async {
+        let container = containers
+            .container(containers.first_spawned().await)
+            .unwrap();
+        complete_handshake(&container).await;
+    };
+    let (opened, ()) = tokio::join!(open, drive);
+    let session = opened.expect("the session opens and takes its prompt");
+
+    let prompt_ids: Vec<_> = repo
+        .list_by_session(session.id)
+        .await
+        .expect("session logs should be readable")
+        .into_iter()
+        .filter_map(|log| match log.entry.content {
+            Message::ToRuntime(ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(
+                request,
+            )))) if request.method.as_ref() == "session/prompt" => Some(request.id),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(prompt_ids, vec![action_id.to_request_id()]);
 }
 
 #[tokio::test]
@@ -4648,6 +4705,124 @@ async fn a_chosen_model_is_selected_on_a_runtime_that_does_not_read_the_row() {
     assert_eq!(request["value"], "openai/gpt-5.6");
 }
 
+/// A persisted persona's model and instructions apply unless the create
+/// names its own. The caller's pick is the session's from the row onwards.
+#[tokio::test]
+async fn a_managed_persona_profile_applies_unless_overridden() {
+    let (service, repo, containers, _, _) = harness();
+    let open = service.open_managed_session(OpenManagedSession {
+        id: None,
+        repo_url: None,
+        repo_branch: None,
+        owner: model_owner::Owner::User(sender()),
+        instructions: Some("Prefer small diffs.".to_owned()),
+        model: Some("claude-4.5-sonnet-thinking".to_owned()),
+        prompt: None,
+        profile: Some(agent_session::domain::ports::SelectedManagedPersona {
+            bot_id: BotId::TEST_B,
+            profile: Some(agent_session::domain::ports::ManagedAgentProfile {
+                model: "persona-model".to_owned(),
+                harness: "in-memory".to_owned(),
+                instructions: "persona instructions".to_owned(),
+                mcp_servers: AgentMcpServers::OwnerConnections,
+            }),
+        }),
+        source: agent_session::domain::model::SessionSource::User,
+        visibility: agent_session::domain::model::SessionVisibility::Listed,
+    });
+    let drive = async {
+        while containers.spawned() == 0 {
+            tokio::task::yield_now().await;
+        }
+        let container = containers.container(session_of(&containers)).unwrap();
+        complete_session_handshake(&container).await;
+    };
+    let (opened, _) = tokio::join!(open, drive);
+    let session = repo.get(opened.unwrap().id).await.unwrap();
+    assert_eq!(session.bot_id, BotId::TEST_B);
+    assert_eq!(session.harness, "in-memory");
+    assert_eq!(session.model, "claude-4.5-sonnet-thinking");
+    assert_eq!(session.instructions.as_deref(), Some("Prefer small diffs."));
+}
+
+#[tokio::test]
+async fn a_managed_persona_profile_is_used_when_nothing_overrides_it() {
+    let (service, repo, containers, _, _) = harness();
+    let open = service.open_managed_session(OpenManagedSession {
+        id: None,
+        repo_url: None,
+        repo_branch: None,
+        owner: model_owner::Owner::User(sender()),
+        instructions: None,
+        model: None,
+        prompt: None,
+        profile: Some(agent_session::domain::ports::SelectedManagedPersona {
+            bot_id: BotId::TEST_B,
+            profile: Some(agent_session::domain::ports::ManagedAgentProfile {
+                model: "persona-model".to_owned(),
+                harness: "in-memory".to_owned(),
+                instructions: "persona instructions".to_owned(),
+                mcp_servers: AgentMcpServers::OwnerConnections,
+            }),
+        }),
+        source: agent_session::domain::model::SessionSource::User,
+        visibility: agent_session::domain::model::SessionVisibility::Listed,
+    });
+    let drive = async {
+        while containers.spawned() == 0 {
+            tokio::task::yield_now().await;
+        }
+        let container = containers.container(session_of(&containers)).unwrap();
+        complete_session_handshake(&container).await;
+    };
+    let (opened, _) = tokio::join!(open, drive);
+    let session = repo.get(opened.unwrap().id).await.unwrap();
+    assert_eq!(session.bot_id, BotId::TEST_B);
+    assert_eq!(session.harness, "in-memory");
+    assert_eq!(session.model, "persona-model");
+    assert_eq!(
+        session.instructions.as_deref(),
+        Some("persona instructions")
+    );
+}
+
+/// `repoUrl` without a persona used to 422: the default sandboxed coder
+/// does not honor a repository. An explicit repository is a Cursor session.
+#[tokio::test]
+async fn a_repository_without_a_persona_opens_as_cursor() {
+    let (service, repo, containers, _, _) = harness();
+    let service = service.with_repositories(Arc::new(SelectedRepositories::urls(&[
+        "https://github.com/macro-inc/macro",
+    ])));
+    let open = service.open_managed_session(OpenManagedSession {
+        id: None,
+        repo_url: Some("https://github.com/macro-inc/macro".into()),
+        repo_branch: None,
+        owner: model_owner::Owner::User(sender()),
+        instructions: None,
+        model: None,
+        prompt: None,
+        profile: None,
+        source: agent_session::domain::model::SessionSource::User,
+        visibility: agent_session::domain::model::SessionVisibility::Listed,
+    });
+    let drive = async {
+        while containers.spawned() == 0 {
+            tokio::task::yield_now().await;
+        }
+        let container = containers.container(session_of(&containers)).unwrap();
+        complete_session_handshake(&container).await;
+    };
+    let (opened, _) = tokio::join!(open, drive);
+    let session = repo.get(opened.unwrap().id).await.unwrap();
+    assert_eq!(session.bot_id, bot_id::CURSOR_BOT_ID);
+    assert_eq!(session.harness, "cursor");
+    assert_eq!(
+        session.repo_url.as_deref(),
+        Some("https://github.com/macro-inc/macro")
+    );
+}
+
 /// The agents-view create path names the Cursor bot with no persisted
 /// profile. The deployment default harness is the sandboxed coder's
 /// `opencode`; Cursor sessions must not inherit it.
@@ -4680,6 +4855,29 @@ async fn a_cursor_managed_session_is_always_stamped_cursor() {
     let session = repo.get(opened.unwrap().id).await.unwrap();
     assert_eq!(session.bot_id, bot_id::CURSOR_BOT_ID);
     assert_eq!(session.harness, "cursor");
+}
+
+/// A repository goes only to a Cursor persona; one chosen explicitly that
+/// cannot take it is told so, by the field's wire name, before anything is
+/// provisioned.
+#[tokio::test]
+async fn a_repository_for_a_persona_that_cannot_take_one_is_refused_by_name() {
+    let (service, _, containers, _, _) = harness();
+    let mut request = explicit_cursor_request();
+    request.repo_branch = None;
+    request.profile = Some(agent_session::domain::ports::SelectedManagedPersona {
+        bot_id: bot_id::CODEX_BOT_ID,
+        profile: None,
+    });
+    let result = service.open_managed_session(request).await;
+    let Err(agent_session::domain::error::AgentSessionError::InvalidRepositorySelection(reason)) =
+        result
+    else {
+        panic!("expected a repository refusal, got {result:?}");
+    };
+    assert!(reason.contains("repoUrl"), "{reason}");
+    assert!(reason.contains("Cursor"), "{reason}");
+    assert_eq!(containers.spawned(), 0);
 }
 
 fn explicit_cursor_request() -> OpenManagedSession {

@@ -1,9 +1,9 @@
 import { getCallExitPath } from '@channel/Call/call-exit';
 import type { BackgroundEffect } from '@core/media/background-effect';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import Phone from '@icon/system/regular/phone-call.svg';
 import { Telemetry } from '@macro-inc/observability';
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import Phone from '@phosphor/phone-call.svg';
 import { Button, Input } from '@ui';
 import {
   type Accessor,
@@ -246,112 +246,120 @@ export function MeetingPage(props: {
           </div>
         </Match>
         <Match when={ready()}>
-          <div class="m-auto grid w-full max-w-6xl gap-8 py-6 md:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)] md:items-center">
-            <MeetingMediaSetup
-              media={media}
-              name={displayName()}
-              avatar={props.avatar}
-              disabled={session.joining()}
-              readBackgroundImage={props.readBackgroundImage}
-              onUploading={setUploadingBackground}
-            />
-            <form
-              class="flex flex-col gap-5"
-              onSubmit={(event) => {
-                event.preventDefault();
-                fireAndForget(join(), 'meetings');
-              }}
-            >
-              <div class="flex items-start justify-between gap-3">
-                <div>
-                  <h2 class="text-2xl font-semibold">
-                    {session.hasLeft()
-                      ? 'You left the call'
-                      : props.startCall
-                        ? 'Ready to start?'
-                        : 'Ready to join?'}
-                  </h2>
-                  <Show when={ready()?.scheduledStart}>
-                    {(start) => (
-                      <p class="mt-2 text-sm text-ink-muted">
-                        {new Date(start()).toLocaleString([], {
-                          weekday: 'short',
-                          month: 'short',
-                          day: 'numeric',
-                          hour: 'numeric',
-                          minute: '2-digit',
-                        })}
-                      </p>
-                    )}
-                  </Show>
+          {/* Scrolls so Join stays reachable when setup is taller than the
+              viewport, as on phones. */}
+          <div class="flex min-h-0 flex-1 overflow-y-auto">
+            <div class="m-auto grid w-full max-w-6xl gap-8 py-6 md:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)] md:items-center">
+              <MeetingMediaSetup
+                media={media}
+                name={displayName()}
+                avatar={props.avatar}
+                disabled={session.joining()}
+                readBackgroundImage={props.readBackgroundImage}
+                onUploading={setUploadingBackground}
+              />
+              <form
+                class="flex flex-col gap-5"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  fireAndForget(join(), 'meetings');
+                }}
+              >
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <h2 class="text-2xl font-semibold">
+                      {session.hasLeft()
+                        ? 'You left the call'
+                        : props.startCall
+                          ? 'Ready to start?'
+                          : 'Ready to join?'}
+                    </h2>
+                    <Show when={ready()?.scheduledStart}>
+                      {(start) => (
+                        <p class="mt-2 text-sm text-ink-muted">
+                          {new Date(start()).toLocaleString([], {
+                            weekday: 'short',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                          })}
+                        </p>
+                      )}
+                    </Show>
+                  </div>
                 </div>
-              </div>
-              <Show when={props.participants}>
-                {(state) => <MeetingParticipants state={state()} />}
-              </Show>
-              <Show
-                when={!props.authenticated()}
-                fallback={
-                  <p class="text-sm text-ink-muted">
-                    Joining as {props.author()}
+                <Show when={props.participants}>
+                  {(state) => <MeetingParticipants state={state()} />}
+                </Show>
+                <Show
+                  when={!props.authenticated()}
+                  fallback={
+                    <p class="text-sm text-ink-muted">
+                      Joining as {props.author()}
+                    </p>
+                  }
+                >
+                  <label class="flex flex-col gap-2 text-sm font-medium">
+                    Your name
+                    <Input
+                      size="lg"
+                      placeholder="Enter your name"
+                      autocomplete="name"
+                      value={name()}
+                      maxLength={80}
+                      required
+                      disabled={session.joining()}
+                      onInput={(event) => setName(event.currentTarget.value)}
+                    />
+                  </label>
+                </Show>
+                <Show when={session.error()}>
+                  <p role="alert" class="text-sm text-failure">
+                    {session.error()}
                   </p>
-                }
-              >
-                <label class="flex flex-col gap-2 text-sm font-medium">
-                  Your name
-                  <Input
-                    size="lg"
-                    placeholder="Enter your name"
-                    autocomplete="name"
-                    value={name()}
-                    maxLength={80}
-                    required
-                    disabled={session.joining()}
-                    onInput={(event) => setName(event.currentTarget.value)}
-                  />
-                </label>
-              </Show>
-              <Show when={session.error()}>
-                <p role="alert" class="text-sm text-failure">
-                  {session.error()}
+                </Show>
+                <Show
+                  when={session.joinedCallId() && !props.session.isInCall()}
+                >
+                  <p role="status" class="text-sm text-ink-muted">
+                    You were disconnected. Join again to reconnect.
+                  </p>
+                </Show>
+                <Show
+                  when={props.authenticated() === true && !session.hasLeft()}
+                >
+                  {props.renderInvite?.(session.joining)}
+                </Show>
+                <Button
+                  variant="ghost"
+                  size="lg"
+                  class="w-full bg-hover text-ink not-touch:not-disabled:hover:bg-active focus-visible:outline-2 focus-visible:outline-accent"
+                  type="submit"
+                  disabled={
+                    session.joining() ||
+                    media.pending() ||
+                    uploadingBackground() ||
+                    (!props.authenticated() && !name().trim())
+                  }
+                >
+                  <Phone class="size-5" />
+                  {session.joining()
+                    ? props.startCall
+                      ? 'Starting…'
+                      : 'Joining…'
+                    : session.hasLeft()
+                      ? 'Rejoin call'
+                      : props.startCall
+                        ? 'Start call'
+                        : 'Join call'}
+                </Button>
+                <p class="text-xs text-ink-muted">
+                  Calls are recorded and transcribed for the organizer and Macro
+                  participants.
                 </p>
-              </Show>
-              <Show when={session.joinedCallId() && !props.session.isInCall()}>
-                <p role="status" class="text-sm text-ink-muted">
-                  You were disconnected. Join again to reconnect.
-                </p>
-              </Show>
-              <Show when={props.authenticated() === true && !session.hasLeft()}>
-                {props.renderInvite?.(session.joining)}
-              </Show>
-              <Button
-                variant="ghost"
-                size="lg"
-                class="w-full bg-hover text-ink not-touch:not-disabled:hover:bg-active focus-visible:outline-2 focus-visible:outline-accent"
-                type="submit"
-                disabled={
-                  session.joining() ||
-                  media.pending() ||
-                  uploadingBackground() ||
-                  (!props.authenticated() && !name().trim())
-                }
-              >
-                <Phone class="size-5" />
-                {session.joining()
-                  ? props.startCall
-                    ? 'Starting…'
-                    : 'Joining…'
-                  : session.hasLeft()
-                    ? 'Rejoin call'
-                    : props.startCall
-                      ? 'Start call'
-                      : 'Join call'}
-              </Button>
-              <p class="text-xs text-ink-muted">
-                Calls are recorded and transcribed for the organizer and Macro
-                participants.
-              </p>
-            </form>
+              </form>
+            </div>
           </div>
         </Match>
       </Switch>

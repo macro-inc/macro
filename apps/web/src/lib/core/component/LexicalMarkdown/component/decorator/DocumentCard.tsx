@@ -14,6 +14,14 @@ import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { matches } from '@core/util/match';
+import Minimize from '@icon/system/regular/arrows-in.svg';
+import ColumnsPlusRight from '@icon/system/regular/columns-plus-right.svg';
+import DotsThree from '@icon/system/regular/dots-three.svg';
+import GitBranch from '@icon/system/regular/git-branch.svg';
+import Link from '@icon/system/regular/link.svg';
+import Sparkle from '@icon/system/regular/sparkle.svg';
+import LoadingSpinner from '@icon/system/regular/spinner.svg';
+import TrashSimple from '@icon/system/regular/trash-simple.svg';
 import {
   $convertCardToMention,
   $getId,
@@ -25,17 +33,10 @@ import {
   setDocumentCardPreviewComponent,
   unsetDocumentCardPreviewCache,
 } from '@macro-inc/lexical-core';
-import Minimize from '@phosphor/arrows-in.svg';
-import ColumnsPlusRight from '@phosphor/columns-plus-right.svg';
-import DotsThree from '@phosphor/dots-three.svg';
-import GitBranch from '@phosphor/git-branch.svg';
-import Link from '@phosphor/link.svg';
-import Sparkle from '@phosphor/sparkle.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
-import TrashSimple from '@phosphor/trash-simple.svg';
 import {
   type AccessiblePreviewItem,
   isAccessiblePreviewItem,
+  isPreviewItemNoAccess,
 } from '@queries/preview';
 import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
@@ -431,9 +432,20 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
   // A form fits its content (a poll is a few rows); other previews keep a
   // resizable box.
   const resizable = () => isPreviewable() && props.blockName !== 'form';
-  const pollHeight = () =>
-    props.blockName === 'form' ? pollCardHeight(props.previewData) : undefined;
-  const boundedPreview = () => resizable() || Boolean(pollHeight());
+  const isPoll = () =>
+    props.blockName === 'form' && Boolean(pollCardHeight(props.previewData));
+  // A poll reserves its space before its form loads, then grows to fit. A
+  // form the viewer can't open renders no body, so it reserves nothing.
+  const pollMinHeight = () => {
+    if (!isPoll()) return;
+    const i = item();
+    if (i && !i.loading && !isAccessiblePreviewItem(i)) return;
+    return pollCardHeight(props.previewData);
+  };
+  const cardNoun = () => {
+    if (isPoll()) return 'poll';
+    return props.blockName === 'form' ? 'form' : 'item';
+  };
 
   const [previewBoxHeight, setPreviewBoxHeight] = createSignal(
     stringifyPreviewBox(props.previewBox || DEFAULT_PREVIEW_BOX)[1]
@@ -545,7 +557,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
                 variant="ghost"
                 aria-label="Document card actions"
               >
-                <DotsThree />
+                <DotsThree class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
               </Dropdown.Trigger>
               <Dropdown.Content mount={portalMount()}>
                 <Dropdown.Group>
@@ -620,7 +632,8 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
         resizable() && 'resize-y shrink-0 min-h-80'
       )}
       style={{
-        height: pollHeight() ?? (resizable() ? previewBoxHeight() : 'auto'),
+        height: resizable() ? previewBoxHeight() : 'auto',
+        'min-height': pollMinHeight(),
       }}
       onClick={(e) => {
         if (channelMessageId()) return;
@@ -672,7 +685,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
                   data-lexical-interactive
                   class={cn(
                     'mx-3 mt-2 mb-3 p-0',
-                    boundedPreview() && 'flex min-h-0 flex-1'
+                    resizable() && 'flex min-h-0 flex-1'
                   )}
                   data-document-card-controls
                 >
@@ -681,13 +694,13 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
                     offset={1}
                     class={cn(
                       'w-full overflow-hidden rounded-lg',
-                      boundedPreview() && 'min-h-0 flex-1'
+                      resizable() && 'min-h-0 flex-1'
                     )}
                   >
                     <div
                       class={cn(
                         'relative min-w-0',
-                        boundedPreview() && 'min-h-0 flex-1 overflow-y-auto'
+                        resizable() && 'min-h-0 flex-1 overflow-y-auto'
                       )}
                     >
                       <Dynamic component={previewComponent()} {...props} />
@@ -696,6 +709,18 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
                 </Card.Body>
               </Show>
             </TaskPropertiesPreviewProvider>
+          )}
+        </Match>
+        <Match when={matches(item(), isPreviewItemNoAccess)}>
+          {(item) => (
+            <div
+              role="status"
+              class="flex flex-1 items-center justify-center p-4 text-sm text-ink-muted"
+            >
+              {item().access === 'no_access'
+                ? `You don’t have access to this ${cardNoun()}`
+                : `This ${cardNoun()} was deleted`}
+            </div>
           )}
         </Match>
       </Switch>

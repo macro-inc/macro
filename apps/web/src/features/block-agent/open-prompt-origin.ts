@@ -20,14 +20,16 @@ import type { OriginDestination } from './state/prompt-origin';
  * feature layers. Called during setup: it reads the split layout from context.
  */
 export function useOpenPromptOrigin(): (
-  destination: OriginDestination
+  destination: OriginDestination,
+  options?: { newSplit?: boolean }
 ) => void {
   const layout = useSplitLayout();
 
   /** A document's block depends on its file type, which the context omits. */
   const openDocumentComment = async (
     documentId: string,
-    commentId: string | undefined
+    commentId: string | undefined,
+    newSplit: boolean | undefined
   ) => {
     const preview = await ResultAsync.fromPromise(
       getItemPreview({ id: documentId, type: 'document' }),
@@ -48,11 +50,13 @@ export function useOpenPromptOrigin(): (
     openDocument(
       location.blockName,
       documentId,
-      commentId ? location.params : undefined
+      commentId ? location.params : undefined,
+      newSplit
     );
   };
 
-  return (destination) =>
+  return (destination, options) => {
+    const newSplit = options?.newSplit;
     match(destination)
       .with({ kind: 'channel_message' }, (target) => {
         const orchestrator = globalSplitManager()?.getOrchestrator();
@@ -62,56 +66,73 @@ export function useOpenPromptOrigin(): (
               orchestrator,
               target.channelId,
               target.messageId,
-              target.threadId
+              target.threadId,
+              { preferNewSplit: newSplit }
             ),
             'agent-prompt-origin'
           );
           return;
         }
-        layout.openWithSplit({ type: 'channel', id: target.channelId });
+        layout.openWithSplit(
+          { type: 'channel', id: target.channelId },
+          { preferNewSplit: newSplit }
+        );
       })
       .with({ kind: 'document' }, ({ documentId, commentId }) => {
         fireAndForget(
-          openDocumentComment(documentId, commentId),
+          openDocumentComment(documentId, commentId, newSplit),
           'agent-prompt-origin'
         );
       })
       .with({ kind: 'project' }, ({ projectId, commentId }) =>
-        openProject(layout, projectId, { discussionId: commentId })
+        openProject(layout, projectId, { discussionId: commentId, newSplit })
       )
       .with({ kind: 'crm_company' }, ({ companyId, commentId }) => {
         openDocument(
           'company',
           companyId,
-          commentId ? { [COMMENT_LINK_PARAM]: commentId } : undefined
+          commentId ? { [COMMENT_LINK_PARAM]: commentId } : undefined,
+          newSplit
         );
       })
       .with({ kind: 'crm_contact' }, ({ contactId, commentId }) => {
         openDocument(
           'contact',
           contactId,
-          commentId ? { [COMMENT_LINK_PARAM]: commentId } : undefined
+          commentId ? { [COMMENT_LINK_PARAM]: commentId } : undefined,
+          newSplit
         );
       })
       .with({ kind: 'call' }, ({ callId }) => {
         const content = callsHostedContent({ type: 'call', id: callId });
-        if (content) layout.openWithSplit(content);
+        if (content)
+          layout.openWithSplit(content, { preferNewSplit: newSplit });
       })
       .with({ kind: 'task' }, ({ taskId }) => {
-        layout.openWithSplit({ type: 'task', id: taskId });
+        layout.openWithSplit(
+          { type: 'task', id: taskId },
+          { preferNewSplit: newSplit }
+        );
       })
       .with({ kind: 'routine' }, ({ routineId }) => {
-        layout.openWithSplit(routineContent(routineId), { activate: true });
+        layout.openWithSplit(routineContent(routineId), {
+          activate: true,
+          preferNewSplit: newSplit,
+        });
       })
       .with({ kind: 'email_thread' }, ({ threadId }) => {
-        layout.openWithSplit({ type: 'email', id: threadId });
+        layout.openWithSplit(
+          { type: 'email', id: threadId },
+          { preferNewSplit: newSplit }
+        );
       })
       .with({ kind: 'agent_session' }, ({ sessionId }) => {
         layout.openWithSplit(
           { type: 'agent', id: sessionId },
-          { activate: true }
+          { activate: true, preferNewSplit: newSplit }
         );
       })
       .with({ kind: 'external' }, ({ url }) => openExternalUrl(url))
       .exhaustive();
+  };
 }

@@ -1,7 +1,7 @@
 import IconJira from '@icon/import/jira.svg';
 import IconNotion from '@icon/import/notion.svg';
 import IconLinear from '@icon/mcp-linear.svg';
-import CaretDown from '@phosphor/caret-down.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
 import { ActionDialogShell } from '@ui/components/ActionDialogShell';
 import { Button } from '@ui/components/Button';
 import { Card } from '@ui/components/Card';
@@ -305,7 +305,7 @@ function PlanContents(
           <Show when={props.onReload}>
             {(reload) => (
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 disabled={props.working}
                 onClick={() => reload()()}
@@ -430,7 +430,7 @@ function PlanContents(
             Dismiss
           </Button>
           <Button
-            variant="cta"
+            variant="primary"
             size="sm"
             disabled={!props.editable || props.count === 0}
             onClick={() => props.onApprove()}

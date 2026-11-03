@@ -15,11 +15,13 @@ WHERE r.id = ANY($2)
         EXISTS (SELECT 1 FROM entity_access ea
             WHERE ea.entity_id = row_database.database_id AND ea.entity_type = 'database'
             AND ea.source_id IN (SELECT source_id FROM user_source_ids))
-        -- Editors of a live form over the database edit its rows.
+        -- Editors of a live form over the database edit its rows; viewers
+        -- read them when the form shares its responses.
         OR EXISTS (SELECT 1 FROM forms f
             JOIN entity_access ea ON ea.entity_id = f.id AND ea.entity_type = 'form'
             WHERE f.database_id = row_database.database_id AND f.trashed_at IS NULL
-            AND ea.access_level IN ('edit', 'owner')
+            AND (ea.access_level IN ('edit', 'owner')
+                OR (ea.access_level = 'view' AND f.responses_visible))
             AND ea.source_id IN (SELECT source_id FROM user_source_ids))
     )
 ORDER BY r.created_at DESC, r.id DESC

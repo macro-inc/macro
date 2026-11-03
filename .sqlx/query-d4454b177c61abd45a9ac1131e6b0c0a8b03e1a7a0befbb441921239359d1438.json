@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM whatsapp_roster WHERE account_id = $1 AND NOT (group_jid = ANY($2)) RETURNING group_jid",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "group_jid",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d4454b177c61abd45a9ac1131e6b0c0a8b03e1a7a0befbb441921239359d1438"
+}

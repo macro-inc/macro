@@ -299,6 +299,7 @@ impl TeamService for FakeTeamService {
         _user_id: &MacroUserIdStr<'_>,
         _team_name: &str,
         _subscription_id: Option<&stripe::SubscriptionId>,
+        _allow_domain_join: bool,
     ) -> Result<Team, CreateTeamError> {
         panic!("unexpected create_team call")
     }
@@ -665,6 +666,15 @@ impl MacroAuthorizationService for FakeAuthorizationService {
             return Ok(user_context(USER_ID));
         }
         Err(Report::new(MacroAuthorizationError::InvalidCredentials))
+    }
+
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.authorize(jwt)
+            .await
+            .map(macro_authorization::ValidatedCredential::session)
     }
 
     async fn authorize_internal(

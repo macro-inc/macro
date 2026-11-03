@@ -1,6 +1,6 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
-import Copy from '@phosphor/copy.svg';
+import Copy from '@icon/system/regular/copy.svg';
 import { Button, Dialog } from '@ui';
 import { Show } from 'solid-js';
 
@@ -32,7 +32,7 @@ export function PasteTextViewer(props: {
           tooltip="Copy"
           on:click={() => props.onCopy()}
         >
-          <Copy />
+          <Copy class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
     </>

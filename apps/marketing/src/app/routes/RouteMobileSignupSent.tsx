@@ -4,20 +4,31 @@ import { MobileSignupMark } from '../components/graphics/MobileSignupMark';
 import { analytics } from '../utils/utilAnalytic';
 import {
   conversionAlreadyFired,
-  isIOS,
   MOBILE_WEB_SIGNUP_LEAD_VALUE,
+  type MobileStorePlatform,
   markConversionFired,
+  mobileStorePlatform,
   submittedEmail,
 } from '../utils/utilMobileSignup';
 import { setPageSeo } from '../utils/utilSeo';
 import './RouteMobileSignup.css';
 
-const APP_STORE_URL = 'https://apps.apple.com/us/app/macro-app/id6743133649';
+const STORES: Record<MobileStorePlatform, { url: string; buttonName: string }> =
+  {
+    ios: {
+      url: 'https://apps.apple.com/us/app/macro-app/id6743133649',
+      buttonName: 'mobile_signup_sent_app_store',
+    },
+    android: {
+      url: 'https://play.google.com/store/apps/details?id=com.macro.workspace.mobile',
+      buttonName: 'mobile_signup_sent_google_play',
+    },
+  };
 
 /**
  * Confirmation step of the site's mobile email capture: the visitor has been
- * emailed a link to finish signing up on a computer. iOS visitors are also
- * offered the App Store app; there is no Android app.
+ * emailed a link to finish signing up on a computer. iOS and Android visitors
+ * are also offered the app from their store.
  *
  * This page also owns the ad-platform conversions for the captured lead (Meta
  * Lead + CompleteRegistration, Google Ads `mobile_web_lead`) — they used to
@@ -40,10 +51,12 @@ export const RouteMobileSignupSent: Component = () => {
   const email = (): string | null => location.state?.email ?? submittedEmail();
 
   // Hidden in the prerendered page; only the browser knows the platform.
-  const [showAppStore, setShowAppStore] = createSignal(false);
+  const [store, setStore] = createSignal<MobileStorePlatform>();
 
   onMount(() => {
-    setShowAppStore(isIOS(navigator.userAgent, navigator.maxTouchPoints));
+    setStore(
+      mobileStorePlatform(navigator.userAgent, navigator.maxTouchPoints)
+    );
 
     // The email field can stay focused across this route change — force the
     // keyboard down even if blur-before-navigate was skipped somehow.
@@ -97,23 +110,25 @@ export const RouteMobileSignupSent: Component = () => {
           )}
         </Show>
       </p>
-      <Show when={showAppStore()}>
-        <div class="mobile-signup-card-body">
-          <a
-            href={APP_STORE_URL}
-            class="mobile-signup-card-pill"
-            target="_blank"
-            rel="noreferrer"
-            onClick={() => {
-              analytics.track('app_redirect', {
-                page_location: window.location.href,
-                button_name: 'mobile_signup_sent_app_store',
-              });
-            }}
-          >
-            Download our mobile app
-          </a>
-        </div>
+      <Show when={store()}>
+        {(platform) => (
+          <div class="mobile-signup-card-body">
+            <a
+              href={STORES[platform()].url}
+              class="mobile-signup-card-pill"
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => {
+                analytics.track('app_redirect', {
+                  page_location: window.location.href,
+                  button_name: STORES[platform()].buttonName,
+                });
+              }}
+            >
+              Download our mobile app
+            </a>
+          </div>
+        )}
       </Show>
     </section>
   );

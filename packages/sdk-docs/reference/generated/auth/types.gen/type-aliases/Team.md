@@ -1,6 +1,6 @@
 # Type Alias: Team
 
-> **Team** = \{ `allow_non_admin_invites`: `boolean`; `auto_join_domain?`: `string` \| `null`; `crm_enabled`: `boolean`; `default_link_share?`: `null` \| [`LinkShare`](LinkShare.md); `enterprise`: `boolean`; `id`: `string`; `name`: `string`; `owner_id`: `string`; `slug`: `string`; \}
+> **Team** = \{ `allow_non_admin_invites`: `boolean`; `auto_join_domain?`: `string` \| `null`; `crm_enabled`: `boolean`; `default_link_share?`: `null` \| [`LinkShare`](LinkShare.md); `enterprise`: `boolean`; `id`: `string`; `language?`: `null` \| [`Language`](Language.md); `name`: `string`; `owner_id`: `string`; `slug`: `string`; \}
 
 The Team struct
 
@@ -14,6 +14,7 @@ The Team struct
 | <a id="property-default_link_share"></a> `default_link_share?` | `null` \| [`LinkShare`](LinkShare.md) | - |
 | <a id="property-enterprise"></a> `enterprise` | `boolean` | Whether this team is on an enterprise license. Enterprise teams are billed out-of-band; membership changes skip all Stripe subscription bookkeeping (no seat counts, no subscription backfill, no paying check). |
 | <a id="property-id"></a> `id` | `string` | - |
+| <a id="property-language"></a> `language?` | `null` \| [`Language`](Language.md) | - |
 | <a id="property-name"></a> `name` | `string` | - |
 | <a id="property-owner_id"></a> `owner_id` | `string` | - |
 | <a id="property-slug"></a> `slug` | `string` | - |

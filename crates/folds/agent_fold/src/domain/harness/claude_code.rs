@@ -21,11 +21,16 @@
 
 use agent_client_protocol::schema::v1::{ContentBlock, Meta};
 use lazy_regex::regex_is_match;
+use nom::bytes::complete::{tag, take_until, take_while1};
+use nom::character::complete::{char, multispace0};
+use nom::multi::many0;
+use nom::sequence::{delimited, preceded};
+use nom::{IResult, Parser};
 use serde::Deserialize;
 use serde_json::Value;
 
 use super::{HarnessReader, ToolFrame, generic, has_namespace, namespaced, raw};
-use crate::domain::model::{SubagentResult, ToolName, ToolStats, ToolUseId};
+use crate::domain::model::{MessagePart, SubagentResult, ToolName, ToolStats, ToolUseId};
 
 /// The `_meta` namespace Claude Code writes under.
 pub const NAMESPACE: &str = "claudeCode";
@@ -45,6 +50,7 @@ struct ClaudeCodeMeta {
     subagent: bool,
     parent_tool_use_id: Option<String>,
     tool_response: Option<Value>,
+    origin: Option<String>,
 }
 
 fn meta_of(meta: Option<&Meta>) -> ClaudeCodeMeta {
@@ -196,4 +202,76 @@ impl HarnessReader for ClaudeCode {
 #[must_use]
 pub fn tool_name(meta: Option<&Meta>) -> Option<String> {
     meta_of(meta).tool_name
+}
+
+/// Whether a user chunk is a task report the CLI itself injected. Only the
+/// `_meta.claudeCode.origin` tag `claude_fold` copies from the transcript
+/// marks one, never its text: a person can type the same XML.
+#[must_use]
+pub fn is_task_notification(meta: Option<&Meta>) -> bool {
+    meta_of(meta).origin.as_deref() == Some("task-notification")
+}
+
+/// The reports in a [`is_task_notification`] chunk, one part per
+/// `<task-notification>` block, and never none.
+#[must_use]
+pub fn task_notifications(text: &str) -> Vec<MessagePart> {
+    let blocks = many0(preceded(
+        take_until(TASK_NOTIFICATION_OPEN),
+        task_notification,
+    ))
+    .parse(text)
+    .map(|(_, blocks)| blocks)
+    .unwrap_or_default();
+    // Tagged but unparseable is still the CLI's: show that it reported.
+    if blocks.is_empty() {
+        return vec![MessagePart::TaskNotification {
+            status: None,
+            summary: String::new(),
+            event: None,
+        }];
+    }
+    blocks
+        .into_iter()
+        .map(|fields| {
+            let field = |name: &str| {
+                fields
+                    .iter()
+                    .find(|(field, _)| *field == name)
+                    .map(|(_, value)| html_escape::decode_html_entities(value.trim()).into_owned())
+            };
+            MessagePart::TaskNotification {
+                status: field("status").and_then(|status| status.parse().ok()),
+                summary: field("summary").unwrap_or_default(),
+                event: field("event"),
+            }
+        })
+        .collect()
+}
+
+const TASK_NOTIFICATION_OPEN: &str = "<task-notification>";
+
+/// One `<task-notification>` block, as its `<name>value</name>` fields.
+fn task_notification(input: &str) -> IResult<&str, Vec<(&str, &str)>> {
+    delimited(
+        tag(TASK_NOTIFICATION_OPEN),
+        many0(preceded(multispace0, field)),
+        (multispace0, tag("</task-notification>")),
+    )
+    .parse(input)
+}
+
+/// `<name>value</name>`, the value raw: a subagent's `<result>` is prose
+/// that may hold markup of its own.
+fn field(input: &str) -> IResult<&str, (&str, &str)> {
+    let (input, name) = delimited(
+        char('<'),
+        take_while1(|c: char| c.is_ascii_alphanumeric() || c == '-'),
+        char('>'),
+    )
+    .parse(input)?;
+    let close = format!("</{name}>");
+    let (input, value) = take_until(close.as_str()).parse(input)?;
+    let (input, _) = tag(close.as_str()).parse(input)?;
+    Ok((input, (name, value)))
 }

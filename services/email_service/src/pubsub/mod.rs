@@ -7,6 +7,8 @@ pub use context::CrmMetadataResolver;
 pub mod crm_cleanup;
 pub mod gmail_ops;
 pub mod inbox_sync;
+#[cfg(test)]
+mod label_write_sim;
 pub mod link_manager;
 pub mod scheduled;
 #[cfg(feature = "sfs_delete")]

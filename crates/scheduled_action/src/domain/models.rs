@@ -1,5 +1,6 @@
-use anyhow::Result;
+use anyhow::{Result, bail};
 use bot_id::BotId;
+use bots::domain::models::AgentMcpServer;
 use chrono::{DateTime, Duration, Utc};
 use chrono_tz::Tz;
 use cron::Schedule as CronSchedule;
@@ -28,7 +29,17 @@ impl Schedule {
     /// Parse a cron expression in the 6-/7-field format required by the `cron`
     /// crate (`sec min hour dom mon dow [year]`).
     pub fn from_cron(cron: String) -> Result<Self> {
-        CronSchedule::from_str(&cron).map_err(anyhow::Error::from)?;
+        let fields = cron.split_whitespace().count();
+        if !(6..=7).contains(&fields) {
+            bail!(
+                "cron schedule `{cron}` has {fields} fields; use 6 or 7 \
+                 (second minute hour day-of-month month day-of-week [year]), \
+                 e.g. `0 */10 * * * *` for every ten minutes"
+            );
+        }
+        if let Err(error) = CronSchedule::from_str(&cron) {
+            bail!("invalid cron schedule `{cron}`: {error}");
+        }
         Ok(Self(cron))
     }
 
@@ -108,6 +119,10 @@ pub struct AgentTask {
     /// Absent when using Macro's agent-session runtime with a selected model.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent: Option<AgentTaskAgent>,
+    /// Apps the routine requires on top of the agent's own. The owner must
+    /// have each one connected to save the routine and for it to run.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mcp_servers: Vec<AgentMcpServer>,
     pub prompt: String,
     pub user_prompt: String,
 }
@@ -187,7 +202,8 @@ impl AgentTask {
     }
 }
 
-/// Canonical client configuration. Ownership and execution state are server-owned.
+/// Client configuration, the create body. Ownership and execution state are
+/// server-owned.
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ActionConfiguration {
@@ -202,45 +218,7 @@ pub struct ActionConfiguration {
     pub run_visibility: RunVisibility,
 }
 
-/// Deprecated cron-only input, accepted during the compatibility rollout.
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-#[serde(deny_unknown_fields)]
-pub struct LegacyActionConfiguration {
-    pub name: String,
-    pub schedule: Schedule,
-    pub kind: ActionKind,
-    #[schema(value_type = String)]
-    pub timezone: Tz,
-    #[schema(value_type = Object)]
-    pub task: Value,
-    pub enabled: bool,
-}
-
-impl From<LegacyActionConfiguration> for ActionConfiguration {
-    fn from(input: LegacyActionConfiguration) -> Self {
-        Self {
-            name: input.name,
-            trigger: ActionTrigger::Cron {
-                schedule: input.schedule,
-                timezone: input.timezone,
-            },
-            kind: input.kind,
-            task: input.task,
-            enabled: input.enabled,
-            run_visibility: RunVisibility::default(),
-        }
-    }
-}
-
-/// Exactly one representation is accepted, even if mixed fields agree or are null.
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-#[serde(untagged)]
-pub enum CreateScheduledAction {
-    Canonical(ActionConfiguration),
-    Legacy(LegacyActionConfiguration),
-}
-
-/// Canonical configuration replacement. Activation has its own endpoint, so
+/// Configuration replacement, the update body. Activation has its own endpoint, so
 /// omitting `enabled` keeps the stored value; omitting `run_visibility` keeps
 /// it too, so clients that predate the setting do not reset it.
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
@@ -259,40 +237,17 @@ pub struct ActionConfigurationUpdate {
     pub run_visibility: Option<RunVisibility>,
 }
 
-/// Full replacement of client configuration, not of server-owned action state.
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-#[serde(untagged)]
-pub enum UpdateScheduledAction {
-    Canonical(ActionConfigurationUpdate),
-    Legacy(LegacyActionConfiguration),
-}
-
-impl UpdateScheduledAction {
+impl ActionConfigurationUpdate {
     /// The replacement configuration, keeping the stored values of fields
     /// the input omits.
     pub fn into_configuration(self, stored: &ScheduledAction) -> ActionConfiguration {
-        match self {
-            Self::Canonical(input) => ActionConfiguration {
-                name: input.name,
-                trigger: input.trigger,
-                kind: input.kind,
-                task: input.task,
-                enabled: input.enabled.unwrap_or(stored.enabled),
-                run_visibility: input.run_visibility.unwrap_or(stored.run_visibility),
-            },
-            Self::Legacy(input) => ActionConfiguration {
-                run_visibility: stored.run_visibility,
-                ..input.into()
-            },
-        }
-    }
-}
-
-impl From<CreateScheduledAction> for ActionConfiguration {
-    fn from(input: CreateScheduledAction) -> Self {
-        match input {
-            CreateScheduledAction::Canonical(input) => input,
-            CreateScheduledAction::Legacy(input) => input.into(),
+        ActionConfiguration {
+            name: self.name,
+            trigger: self.trigger,
+            kind: self.kind,
+            task: self.task,
+            enabled: self.enabled.unwrap_or(stored.enabled),
+            run_visibility: self.run_visibility.unwrap_or(stored.run_visibility),
         }
     }
 }
@@ -308,6 +263,8 @@ pub enum ActionPolicyError {
     EventManagementDisabled,
     #[error("trigger conditions are not enabled")]
     ConditionsDisabled,
+    #[error("connect GitHub before enabling a GitHub trigger")]
+    GithubNotLinked,
     #[error("scheduled action changed or is running; reload before updating")]
     UpdateConflict,
 }
@@ -342,6 +299,10 @@ pub struct ScheduledAction {
     pub enabled: bool,
     /// Whether the action's runs are listed in Home and the Agents list.
     pub run_visibility: RunVisibility,
+    /// The shared template this routine was activated from, if any.
+    #[serde(default)]
+    #[schema(value_type = Option<String>, format = Uuid)]
+    pub template_id: Option<Uuid>,
 }
 
 impl ScheduledAction {

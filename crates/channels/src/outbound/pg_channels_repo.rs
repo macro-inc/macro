@@ -1,6 +1,7 @@
 /// Silent historical persistence and transaction-aware activity updates.
 pub mod historical;
 #[cfg(feature = "list")]
+#[cfg(feature = "list")]
 mod references;
 
 #[cfg(test)]

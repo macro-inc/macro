@@ -1,14 +1,14 @@
 import { openExternalUrl } from '@core/util/url';
-import CalendarBlank from '@phosphor/calendar-blank.svg';
-import CalendarCheck from '@phosphor/calendar-check.svg';
-import Check from '@phosphor/check.svg';
-import Clock from '@phosphor/clock.svg';
-import Info from '@phosphor/info.svg';
-import MapPin from '@phosphor/map-pin.svg';
-import PauseCircle from '@phosphor/pause-circle.svg';
-import Users from '@phosphor/users.svg';
-import VideoCamera from '@phosphor/video-camera.svg';
-import X from '@phosphor/x.svg';
+import CalendarBlank from '@icon/system/regular/calendar-blank.svg';
+import CalendarCheck from '@icon/system/regular/calendar-check.svg';
+import Check from '@icon/system/regular/check.svg';
+import Clock from '@icon/system/regular/clock.svg';
+import Info from '@icon/system/regular/info.svg';
+import MapPin from '@icon/system/regular/map-pin.svg';
+import PauseCircle from '@icon/system/regular/pause-circle.svg';
+import Users from '@icon/system/regular/users.svg';
+import VideoCamera from '@icon/system/regular/video-camera.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button, Tabs } from '@ui';
 import {
   createMemo,
@@ -366,7 +366,7 @@ export function CalendarInviteCard(props: {
                   }
                 >
                   <Button
-                    variant="strong"
+                    variant="secondary"
                     onClick={() => props.actions?.connectCalendar?.()}
                   >
                     Connect calendar
@@ -374,7 +374,7 @@ export function CalendarInviteCard(props: {
                 </Show>
                 <Show when={conference() && props.actions?.openExternal}>
                   <Button
-                    variant="cta"
+                    variant="primary"
                     aria-label="Join meeting"
                     onClick={() => props.actions?.openExternal?.(conference()!)}
                   >
@@ -384,9 +384,10 @@ export function CalendarInviteCard(props: {
                 </Show>
                 <Show when={props.actions?.openCalendar}>
                   <Button
-                    variant="outline"
+                    aria-label="Open in calendar"
+                    tooltip="Open in calendar"
+                    variant="secondary"
                     size="icon-md"
-                    label="Open in calendar"
                     onClick={(event) =>
                       props.actions?.openCalendar?.({
                         openInNewSplit: event.shiftKey,

@@ -1,15 +1,15 @@
-import ChatCircle from '@phosphor/chat-circle.svg';
-import ClipboardText from '@phosphor/clipboard-text.svg';
-import Eye from '@phosphor/eye.svg';
-import Minus from '@phosphor/minus.svg';
-import PaperPlaneTilt from '@phosphor/paper-plane-tilt.svg';
-import PencilSimple from '@phosphor/pencil-simple.svg';
-import Phone from '@phosphor/phone.svg';
-import Plus from '@phosphor/plus.svg';
-import SlidersHorizontal from '@phosphor/sliders-horizontal.svg';
-import Trash from '@phosphor/trash.svg';
-import UserMinus from '@phosphor/user-minus.svg';
-import UserPlus from '@phosphor/user-plus.svg';
+import ChatCircle from '@icon/system/regular/chat-circle.svg';
+import ClipboardText from '@icon/system/regular/clipboard-text.svg';
+import Eye from '@icon/system/regular/eye.svg';
+import Minus from '@icon/system/regular/minus.svg';
+import PaperPlaneTilt from '@icon/system/regular/paper-plane-tilt.svg';
+import PencilSimple from '@icon/system/regular/pencil-simple.svg';
+import Phone from '@icon/system/regular/phone.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import SlidersHorizontal from '@icon/system/regular/sliders-horizontal.svg';
+import Trash from '@icon/system/regular/trash.svg';
+import UserMinus from '@icon/system/regular/user-minus.svg';
+import UserPlus from '@icon/system/regular/user-plus.svg';
 import { Dynamic } from 'solid-js/web';
 import type { ActivityAction } from '../core/event';
 

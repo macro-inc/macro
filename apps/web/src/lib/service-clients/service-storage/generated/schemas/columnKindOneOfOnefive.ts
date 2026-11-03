@@ -7,8 +7,10 @@
 import type { ColumnKindOneOfOnefiveType } from './columnKindOneOfOnefiveType';
 
 /**
- * Colored labels; always several per cell.
+ * Numeric options.
  */
 export type ColumnKindOneOfOnefive = {
+  /** Whether a cell holds several options. */
+  multi: boolean;
   type: ColumnKindOneOfOnefiveType;
 };

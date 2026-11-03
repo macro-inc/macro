@@ -1,6 +1,6 @@
 import { canonicalPipedreamSlug } from '@core/pipedream/slugs';
 import { fireAndForget } from '@core/util/fireAndForget';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { createEffect, createSignal, For, Show } from 'solid-js';
 import { ContinueButton } from '../components/controls';
 import { ToolTile } from '../components/tool-tile';

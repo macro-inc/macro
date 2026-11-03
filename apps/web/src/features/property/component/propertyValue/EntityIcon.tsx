@@ -1,7 +1,7 @@
 import { openProject } from '@app/features/projects/open-project';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { BlockLink } from '@core/component/LexicalMarkdown/component/core/BlockLink';
-import DeleteIcon from '@phosphor/x.svg';
+import DeleteIcon from '@icon/system/regular/x.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { type Component, createSignal, type ParentProps, Show } from 'solid-js';
 import { usePropertyEntityDisplay } from '../../hooks';

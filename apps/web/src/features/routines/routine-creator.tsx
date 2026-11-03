@@ -9,6 +9,7 @@ import {
   saveRoutineComposerDraft,
 } from './draft-storage';
 import { createRoutineCreatorSource } from './queries/routine-sources';
+import { createRoutineConnectedApps, RoutineApps } from './routine-apps';
 import { RoutineExecutionPicker } from './routine-execution-picker';
 import { RoutinePromptEditor } from './routine-prompt-editor';
 import { RoutineTriggers } from './routine-triggers';
@@ -35,6 +36,8 @@ export function RoutineCreator(
         PromptEditor: RoutinePromptEditor,
         ExecutionPicker: RoutineExecutionPicker,
         Triggers: RoutineTriggers,
+        Apps: RoutineApps,
+        createConnectedApps: createRoutineConnectedApps,
       }}
       onClose={() => panel.handle.close()}
       onCreated={(id) => {

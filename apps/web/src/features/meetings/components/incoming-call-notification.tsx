@@ -1,4 +1,4 @@
-import PhoneIcon from '@phosphor/phone.svg';
+import PhoneIcon from '@icon/system/regular/phone.svg';
 import { Avatar, Button, Tooltip } from '@ui';
 import { MEETING_INVITATION_RING_MS } from '../core/meeting-invitations';
 

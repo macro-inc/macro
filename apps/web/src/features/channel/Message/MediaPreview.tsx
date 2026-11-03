@@ -6,6 +6,8 @@ import { createSignal } from 'solid-js';
 type MediaPreviewProps = {
   items: MediaItem[];
   class?: string;
+  /** An item whose file failed to load. */
+  onError?: (id: string) => void;
 };
 
 export function MediaPreview(props: MediaPreviewProps) {
@@ -18,6 +20,7 @@ export function MediaPreview(props: MediaPreviewProps) {
         items={props.items}
         variant="message"
         class={props.class}
+        onError={props.onError}
         onOpen={(index) => {
           setSelectedIndex(index);
           setViewerOpen(true);

@@ -98,13 +98,20 @@ const TEAM_ID: Uuid = Uuid::from_u128(0x7EA3);
 struct FakeJwtValidator;
 
 impl JwtValidator for FakeJwtValidator {
-    fn validate(&self, jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
-        Ok(ValidatedIdentity {
-            agent_id: None,
-            user_id: jwt.to_string(),
-            fusion_user_id: "fusion-user".to_string(),
-            organization_id: None,
-            permissions: None,
+    fn validate_credential(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        Ok(macro_authorization::ValidatedCredential {
+            origin: macro_authorization::CredentialOrigin::Session,
+            identity: ValidatedIdentity {
+                agent_id: None,
+                agent_via: None,
+                user_id: jwt.to_string(),
+                fusion_user_id: "fusion-user".to_string(),
+                organization_id: None,
+                permissions: None,
+            },
         })
     }
 }
@@ -128,7 +135,9 @@ impl BotAuthorizer for SelfBotAuthorizer {
                 let macro_user_id = MacroUserIdStr::try_from(user_id.clone())
                     .map_err(|_| Report::new(MacroAuthorizationError::ActingUserNotAuthorized))?;
                 Some(MacroUserAuthentication {
+                    origin: macro_authorization::CredentialOrigin::Bot,
                     agent_id: None,
+                    agent_via: None,
                     macro_user_id,
                     user_context: model_user::UserContext {
                         user_id,
@@ -175,7 +184,9 @@ impl HarnessAuthorizer for SelfHarnessAuthorizer {
                 user_id: user_id.clone(),
             },
             acting_user: MacroUserAuthentication {
+                origin: macro_authorization::CredentialOrigin::Harness,
                 agent_id: None,
+                agent_via: None,
                 macro_user_id,
                 user_context: model_user::UserContext {
                     user_id,
@@ -215,7 +226,7 @@ impl SessionOpener for RecordingOpener {
             task_id: None,
             id: AgentSessionId::TEST_A,
             name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
-            is_archived: false,
+            archived: None,
             owner_id: request.owner.clone(),
             thread_id: request.thread.as_ref().map(|thread| thread.thread_id),
             thread_parent: request.thread.as_ref().map(|thread| thread.parent.clone()),
@@ -255,7 +266,7 @@ impl SessionOpener for RecordingOpener {
             task_id: None,
             id: AgentSessionId::TEST_A,
             name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
-            is_archived: false,
+            archived: None,
             owner_id: request.owner.clone(),
             thread_id: None,
             thread_parent: None,
@@ -474,7 +485,7 @@ impl ExternalSessionRequester for RecordingRequester {
             task_id: None,
             id: request.session_id,
             name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
-            is_archived: false,
+            archived: None,
             owner_id: Owner::User(request.owner.clone()),
             thread_id: None,
             thread_parent: None,
@@ -1076,6 +1087,58 @@ async fn a_managed_open_carries_its_instructions() {
     );
 }
 
+/// The first prompt keeps the id the caller already shows it under and the
+/// files attached to it, so creating and prompting take one round trip.
+#[tokio::test]
+async fn a_managed_open_carries_its_first_prompts_id_and_attachments() {
+    let action_id = AgentActionId::mint();
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_user(
+        OWNER,
+        serde_json::json!({
+            "prompt": "summarize this",
+            "promptActionId": action_id,
+            "promptAttachments": [{ "uri": "macro://sfs/report.pdf", "name": "report.pdf" }],
+        })
+        .to_string(),
+    );
+
+    let response = router(opener.clone()).oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let managed = opener.managed.lock().unwrap();
+    let [open] = managed.as_slice() else {
+        panic!("expected one managed open, got {managed:?}");
+    };
+    let prompt = open.prompt.as_ref().expect("the first prompt is carried");
+    assert_eq!(prompt.action_id, Some(action_id));
+    assert_eq!(prompt.prompt, "summarize this");
+    assert_eq!(
+        prompt
+            .attachments
+            .iter()
+            .map(|attachment| attachment.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["report.pdf"]
+    );
+}
+
+/// A prompt's id or files mean nothing without the prompt, and dropping them
+/// would leave the caller showing a prompt nobody sent.
+#[tokio::test]
+async fn a_first_prompts_details_without_a_prompt_are_refused() {
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_user(
+        OWNER,
+        serde_json::json!({ "promptActionId": AgentActionId::mint() }).to_string(),
+    );
+
+    let response = router(opener.clone()).oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(opener.managed.lock().unwrap().is_empty());
+}
+
 #[tokio::test]
 async fn an_owner_can_select_a_managed_persona() {
     let opener = Arc::new(RecordingOpener::default());
@@ -1253,6 +1316,23 @@ async fn a_stranger_cannot_start_someone_elses_macrod_agent() {
 
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
     assert!(requests.requested.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn an_unknown_managed_persona_is_a_404() {
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_user(
+        OWNER,
+        serde_json::json!({ "botId": BotId::TEST_B.as_uuid(), "prompt": "fix it" }).to_string(),
+    );
+
+    let response = router_for(opener.clone(), OneBotDirectory::managed_agent())
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert!(opener.managed.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

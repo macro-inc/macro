@@ -1,4 +1,4 @@
-import LightningIcon from '@phosphor-fill/lightning-fill.svg';
+import LightningIcon from '@icon/system/fill/lightning-fill.svg';
 import { Button, cn } from '@ui';
 import { onCleanup, Show } from 'solid-js';
 import { acceleratedSpeed } from '../../constant/speed';
@@ -37,9 +37,9 @@ export function SpeedToggle(props: { model: string }) {
   return (
     <Show when={speed()}>
       <Button
+        tooltip={label()}
         variant="ghost"
-        size="icon-composer"
-        label={label()}
+        size="icon-md"
         aria-label={label()}
         aria-pressed={enabled()}
         onMouseDown={(event) => event.preventDefault()}

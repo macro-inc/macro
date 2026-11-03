@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT user_id FROM external_chat_read_state WHERE chat_id = $1 AND external_chat_can_view(chat_id, user_id)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1a5b9839ada6468b33f920448809bb3e0ae0ee8e1d980eae3417e489788c8957"
+}

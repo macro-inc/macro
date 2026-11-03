@@ -21,6 +21,7 @@ import {
   emailSendFailureKind,
   recordEmailSend,
   traceEmailSend,
+  trackEmailMessageSent,
 } from './send-telemetry';
 
 export type { EmailSendIntent } from './send-intent';
@@ -132,6 +133,8 @@ export async function sendEmailQueued(args: {
     persistLocalEmailSend(intent, true)
   );
   recordEmailSend({ operation: 'enqueue', outcome: 'queued' }, intent);
+  // Every queued send passes here once, whichever surface started it.
+  trackEmailMessageSent({ isReply: draft.replyingToId != null });
   return {
     draftId: String(draft.draftId),
     threadId: draft.threadDbId,

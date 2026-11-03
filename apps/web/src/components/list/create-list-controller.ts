@@ -1,4 +1,4 @@
-import { createMemo, createSignal } from 'solid-js';
+import { createMemo, createSelector, createSignal } from 'solid-js';
 import {
   createSelectionState,
   type SelectionState,
@@ -134,6 +134,21 @@ export function createListController<TItem, TMetadata = unknown>(
     if (key === undefined) return undefined;
     const result = itemResultFor(key);
     return result && canNavigateTo(result, forcedFocus()) ? result : undefined;
+  });
+
+  const isFocused = createSelector(() => focusedResult()?.key);
+
+  // Where the focused item last sat: the list it sat in and its index. Only
+  // the reference is kept, so lists pay nothing per change; neighbours are
+  // read when a removed item needs a successor.
+  const focusedPlace = createMemo<
+    { key: ListKey; index: number; all: readonly TItem[] } | undefined
+  >((previous) => {
+    const focused = focusedResult();
+    if (!focused) {
+      return previous?.key === requestedFocusKey() ? previous : undefined;
+    }
+    return { key: focused.key, index: focused.index, all: snapshot().all };
   });
 
   const commitFocus = (
@@ -280,7 +295,7 @@ export function createListController<TItem, TMetadata = unknown>(
 
   const restoreFocus = (
     key: ListKey | undefined,
-    restoreOptions: ListRestoreFocusOptions = {}
+    restoreOptions: ListRestoreFocusOptions<TItem> = {}
   ) => {
     const reason = restoreOptions.reason ?? 'restore';
     if (key !== undefined) {
@@ -301,6 +316,22 @@ export function createListController<TItem, TMetadata = unknown>(
           restoreOptions.nearestIndex ?? focusedResult()?.index ?? 0,
           { ...restoreOptions, reason }
         );
+      case 'successor': {
+        const place = focusedPlace();
+        if (key !== undefined && place?.key === key) {
+          const { all, index } = place;
+          const neighbours = [
+            ...all.slice(index + 1),
+            ...all.slice(0, index).reverse(),
+          ];
+          for (const neighbour of neighbours) {
+            const result = itemResultFor(options.getKey(neighbour));
+            if (!result || !matchesNavigation(result, restoreOptions)) continue;
+            return focusResult(result, { ...restoreOptions, reason });
+          }
+        }
+        return restoreFocus(key, { ...restoreOptions, fallback: 'none' });
+      }
       case 'none':
         commitFocus(
           restoreOptions.retainUnavailable !== false &&
@@ -363,8 +394,10 @@ export function createListController<TItem, TMetadata = unknown>(
     const result = selectableResult(rowKey);
     return result ? selectionKeyForResult(result) : undefined;
   };
-  const isSelectionKeySelected = (selectionKey: ListKey) =>
-    effectiveSelectionKeys().has(selectionKey);
+  const isSelectionKeySelected = createSelector(
+    effectiveSelectionKeys,
+    (selectionKey: ListKey, keys) => keys.has(selectionKey)
+  );
   const isRowSelected = (rowKey: ListKey) => {
     const selectionKey = selectionKeyForRow(rowKey);
     return selectionKey !== undefined && isSelectionKeySelected(selectionKey);
@@ -522,6 +555,7 @@ export function createListController<TItem, TMetadata = unknown>(
   return {
     items,
     focus: {
+      isFocused,
       requestedKey: requestedFocusKey,
       key: () => focusedResult()?.key,
       item: () => focusedResult()?.item,

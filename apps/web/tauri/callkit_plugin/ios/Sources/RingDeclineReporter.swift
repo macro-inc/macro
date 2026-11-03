@@ -27,7 +27,7 @@ enum RingDeclineReporter {
 
     static func report(uuid: UUID, ringStatusUrl: String, bearerToken: String) {
         guard let url = declineUrl(fromRingStatusUrl: ringStatusUrl) else {
-            print("[CallKit] Invalid ringStatusUrl for decline uuid=\(uuid.uuidString)")
+            callKitLog("Invalid ringStatusUrl for decline uuid=\(uuid.uuidString)")
             return
         }
 
@@ -44,15 +44,15 @@ enum RingDeclineReporter {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("Bearer \(bearerToken)", forHTTPHeaderField: "Authorization")
-        print("[CallKit] Reporting decline uuid=\(uuid.uuidString)")
+        callKitLog("Reporting decline uuid=\(uuid.uuidString)")
         let task = session.dataTask(with: request) { _, response, error in
             if let error {
-                print("[CallKit] Decline report failed uuid=\(uuid.uuidString) error=\(error.localizedDescription)")
+                callKitLog("Decline report failed uuid=\(uuid.uuidString) error=\(error.localizedDescription)", level: .error)
             } else if let http = response as? HTTPURLResponse, !(200 ..< 300).contains(http.statusCode) {
                 // 404 means the call already ended or was replaced; nothing left to decline.
-                print("[CallKit] Decline report rejected uuid=\(uuid.uuidString) httpStatus=\(http.statusCode)")
+                callKitLog("Decline report rejected uuid=\(uuid.uuidString) httpStatus=\(http.statusCode)")
             } else {
-                print("[CallKit] Decline reported uuid=\(uuid.uuidString)")
+                callKitLog("Decline reported uuid=\(uuid.uuidString)")
             }
             DispatchQueue.main.async(execute: finish)
         }

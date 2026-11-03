@@ -1,3 +1,4 @@
+import { beginInteraction } from '@app/observability/flow';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createMachine,
@@ -167,20 +168,23 @@ export function createRunner(options: {
     navigation: Navigation,
     begin: () => void
   ): MaybePromise<NavigationResult> => {
-    const deferred = Promise.withResolvers<NavigationResult>();
+    let resolve!: (value: NavigationResult) => void;
+    const promise = new Promise<NavigationResult>((settle) => {
+      resolve = settle;
+    });
     let result: NavigationResult | undefined;
 
     settlers.set(navigation, {
       settle(value) {
         result = value;
-        deferred.resolve(value);
+        resolve(value);
       },
       callbacks: [],
     });
-    fireAndForget(track(deferred.promise), 'split-router');
+    fireAndForget(track(promise), 'split-router');
     begin();
 
-    return result ?? deferred.promise;
+    return result ?? promise;
   };
 
   const settle = (navigation: Navigation, result: NavigationResult) => {
@@ -217,6 +221,14 @@ export function createRunner(options: {
     entries: readonly Entry[]
   ): NavigationResult => {
     committing += 1;
+    // Views the commit mounts join this trace until they have loaded.
+    const interaction = beginInteraction('navigation', {
+      kind: 'navigation',
+      attributes: {
+        'navigation.cause': navigation.cause,
+        'navigation.pane_count': navigation.targets.length,
+      },
+    });
 
     try {
       const result = navigation.apply(entries);
@@ -236,6 +248,7 @@ export function createRunner(options: {
       console.error('Split router could not commit a navigation', error);
       return CANCELLED_RESULT;
     } finally {
+      interaction.end();
       committing -= 1;
       release();
     }

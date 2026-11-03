@@ -1,4 +1,5 @@
 import type { DateValue } from '@core/util/date';
+import type { ArchiveCause } from '@service-agent-harness/generated/schemas';
 import type { ApiLabel } from '@service-email/generated/schemas';
 import type {
   GithubPullRequestCheckRun,
@@ -138,6 +139,7 @@ export type ChannelEntity = EntityBase & {
     createdAt: DateValue;
   }[];
   channelType: 'direct_message' | 'private' | 'public' | 'team';
+  teamId?: string;
   interactedAt?: DateValue | null;
   participantIds?: string[];
   /**
@@ -196,7 +198,9 @@ export type ChatEntity = EntityBase & {
 
 export type AgentSessionEntity = EntityBase & {
   type: 'agent_session';
-  isArchived?: boolean;
+  /** Who archived the session; null while it is not archived. */
+  archivedBy?: ArchiveCause | null;
+  archivedAt?: string | null;
   botId: string;
   harness?: string;
   repoUrl?: string | null;
@@ -295,6 +299,14 @@ export type EmailAttachment = {
   sizeBytes?: number | null;
 };
 
+/** A thread's Focus classification; present only on Focus list rows. */
+export type EmailFocus = {
+  /** 0 to 100. */
+  importance: number;
+  needsReply: boolean;
+  needsFollowUp: boolean;
+};
+
 // We spread ApiThreadPreviewCursor into the email entity, should we explcitly include all those fields here, or only add them as needed?
 export type EmailEntity = EntityBase & {
   type: 'email';
@@ -305,6 +317,9 @@ export type EmailEntity = EntityBase & {
   /** Server-computed Signal membership; unavailable on some search results. */
   isSignal?: boolean;
   done: boolean;
+  /** Whether any message was received rather than drafted or sent. Only such
+   * threads can return to the inbox. Unknown on REST Soup rows. */
+  hasReceivedMail?: boolean;
   projectId?: string;
   participants?: EmailThreadParticipants;
   senderEmail?: string;
@@ -319,6 +334,7 @@ export type EmailEntity = EntityBase & {
   properties?: SoupProperty[];
   /** ISO 8601 time of the thread draft's confirmed scheduled send. */
   scheduledSendTime?: string;
+  focus?: EmailFocus;
 };
 
 export type ProjectEntity = EntityBase & {
@@ -429,6 +445,8 @@ export type DatabaseEntity = EntityBase & {
   type: 'database';
   /** What the viewer may do with the database. */
   grant: AccessLevel;
+  /** The folder it is filed in. */
+  projectId?: string;
 };
 
 /** A Macro Form. Like a database, not a Soup entity: `createdAt` is its only timestamp. */
@@ -436,6 +454,8 @@ export type FormEntity = EntityBase & {
   type: 'form';
   /** What the viewer may do: view responds, edit builds and reads responses. */
   access: 'view' | 'edit' | 'owner';
+  /** The folder it is filed in. */
+  projectId?: string;
 };
 
 /** Normalized time shape of a calendar event soup row. */

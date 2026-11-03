@@ -4,7 +4,9 @@
 //! the company, its Contacts property names one of the company's contacts,
 //! or it references the company or one of those contacts. An item is
 //! associated with a contact when its Contacts property names the contact
-//! or it references the contact. The Soup domain authorizes the record and
+//! or it references the contact. Activity instead matches properties across
+//! visible, CRM-enabled teams and email participants from their domains and
+//! addresses. The Soup domain authorizes the record and
 //! resolves that membership before any source query runs; renderers never
 //! evaluate these values themselves.
 
@@ -23,6 +25,8 @@ pub enum CrmAssociation {
     Company(Uuid),
     /// Items associated with the contact.
     Contact(Uuid),
+    /// Activity across visible CRM-enabled teams, excluding hidden records.
+    Activity,
 }
 
 /// Every distinct CRM record a document tree names through

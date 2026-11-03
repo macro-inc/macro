@@ -1,4 +1,4 @@
-import RobotIcon from '@phosphor/robot.svg';
+import RobotIcon from '@icon/system/regular/robot.svg';
 import type { Bot } from '@service-storage/generated/schemas/bot';
 import { Avatar } from '@ui';
 import { Show } from 'solid-js';

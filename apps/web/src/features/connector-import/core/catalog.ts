@@ -19,6 +19,7 @@ import type {
   ImportCategory,
   ImportCategoryConfig,
   ImportIcon,
+  ImportProvider,
 } from './providers';
 
 // Order is promotion order: the sidebar card shows these left to right and
@@ -111,8 +112,7 @@ export const IMPORT_CATEGORIES: Record<ImportCategory, ImportCategoryConfig> = {
         name: 'GitHub',
         detail: 'Issues',
         icon: IconGithub as ImportIcon,
-        // Macro's GitHub preset in `QUICK_CONNECT_SERVERS`.
-        mcpUrl: 'https://api.githubcopilot.com/mcp',
+        // Connects through the GitHub account link (an overlaid app).
       },
       {
         appSlug: 'trello',
@@ -185,3 +185,14 @@ export const IMPORT_CATEGORIES: Record<ImportCategory, ImportCategoryConfig> = {
     ],
   },
 };
+
+/** Where Macro can import an app's data from, if it can. */
+export function importSourceFor(
+  appSlug: string
+): { config: ImportCategoryConfig; provider: ImportProvider } | undefined {
+  for (const config of Object.values(IMPORT_CATEGORIES)) {
+    const provider = config.providers.find((row) => row.appSlug === appSlug);
+    if (provider) return { config, provider };
+  }
+  return undefined;
+}

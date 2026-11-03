@@ -8,7 +8,7 @@ import { I_CURSOR_SYSTEM_NOTIFICATION } from './cursorSystemNotification';
 import { CUSTOM_TRANSFORMERS } from './customTransformers';
 import { I_DATABASE_QUERY, I_DATABASE_QUERY_BLOCK } from './databaseQuery';
 import { I_HTML_RENDER } from './htmlRender';
-import { I_IMAGE_CONSTRAINED, IMAGE } from './image';
+import { I_IMAGE_CONSTRAINED, IMAGE, listItemImage } from './image';
 import {
   E_BLOCK_EQUATION_NODE,
   E_INLINE_EQUATION_NODE,
@@ -53,6 +53,7 @@ import {
   LINK_XML,
   MARK_XML,
   PRESERVE_LINES,
+  protectEmptyParagraphLines,
   SEARCH_MATCH,
   UNLINKED_TEXT,
 } from './transformers';
@@ -60,7 +61,8 @@ import { UNKNOWN_MENTION } from './unknownMention';
 import { I_VIDEO, VIDEO_LINK } from './video';
 import { E_WATERMARK, I_WATERMARK } from './watermark';
 
-export { isConversionOnlyTransformer };
+export { ORDERED_LIST_ENTER } from './customTransformers';
+export { isConversionOnlyTransformer, protectEmptyParagraphLines };
 
 /**
  * Internal transformers for converting markdown between Lexical state and markdown.
@@ -82,6 +84,7 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_VIDEO,
   I_IMAGE_CONSTRAINED,
   IMAGE, // Standard markdown images (fallback)
+  listItemImage(I_IMAGE_CONSTRAINED, IMAGE),
   I_USER_MENTION,
   I_GROUP_MENTION,
   I_DOCUMENT_MENTION,
@@ -124,6 +127,7 @@ export const EXTERNAL_TRANSFORMERS: Transformer[] = [
   VIDEO_LINK,
   I_VIDEO,
   IMAGE,
+  listItemImage(IMAGE),
   BR_TAG_TO_LINE_BREAK,
   E_TABLE_NODE,
   HTML_BLOCKQUOTE,
@@ -177,6 +181,7 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   I_VIDEO,
   I_IMAGE_CONSTRAINED,
   IMAGE,
+  listItemImage(I_IMAGE_CONSTRAINED, IMAGE),
   BR_TAG_TO_LINE_BREAK,
   I_TABLE_NODE,
   E_TABLE_NODE,

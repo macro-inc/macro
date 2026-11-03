@@ -55,7 +55,7 @@ export function useChannelPicture(channelId: Accessor<string>) {
   const query = useQuery(() => channelPictureQueryOptions(channelId()));
 
   // The icon keeps its fallback while loading; it must never suspend its row.
-  const pictureId = () => (query.isSuccess ? query.data : null);
+  const pictureId = () => (query.isPending ? null : query.data);
   return {
     url: () => {
       const id = pictureId();

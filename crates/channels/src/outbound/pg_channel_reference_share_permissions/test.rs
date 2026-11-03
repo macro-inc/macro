@@ -228,6 +228,36 @@ async fn form_references_grant_the_channel_view_and_keep_an_existing_grant(pool:
     }
 }
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn external_chat_mentions_let_the_channel_read_the_chat(pool: PgPool) {
+    let channel_id = Uuid::now_v7();
+    let chat_id = Uuid::now_v7();
+    let item = ReferencedShareItem::from_raw(chat_id.to_string(), "external_chat").unwrap();
+    assert_eq!(item.entity_type(), ReferencedShareItemType::ExternalChat);
+    assert_eq!(
+        grant_level(item.entity_type(), None, None),
+        None,
+        "someone who cannot see the chat shares nothing"
+    );
+    let level = grant_level(item.entity_type(), None, Some(AccessLevel::Owner)).unwrap();
+    for _ in 0..2 {
+        ensure_referenced_item_visible_to_channel(&pool, channel_id, &item, level)
+            .await
+            .unwrap();
+    }
+    let levels = sqlx::query_scalar!(
+        r#"SELECT access_level AS "access_level: AccessLevel" FROM entity_access
+        WHERE entity_id = $1 AND entity_type = 'external_chat' AND source_id = $2
+            AND source_type = 'channel' AND granted_from_project_id IS NULL"#,
+        chat_id,
+        channel_id.to_string(),
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(levels, vec![AccessLevel::View]);
+}
+
 /// Explicit sharing refuses a direct agent conversation's sessions, which are
 /// private to their owner. Posting one's link in another channel must not
 /// share it either, while a session from anywhere else still is.
@@ -293,4 +323,27 @@ async fn direct_conversation_session_references_grant_nothing(pool: PgPool) {
     };
     assert_eq!(granted(private_session_id).await, None);
     assert_eq!(granted(shared_session_id).await, Some(AccessLevel::View));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_external_chat_mention_by_someone_it_was_shared_with_shares_nothing(pool: PgPool) {
+    let channel_id = Uuid::now_v7();
+    let chat_id = Uuid::now_v7();
+    let item = ReferencedShareItem::from_raw(chat_id.to_string(), "external_chat").unwrap();
+    for sharer_access in [AccessLevel::View, AccessLevel::Comment, AccessLevel::Edit] {
+        let outcome =
+            share_referenced_item_with_channel(&pool, channel_id, &item, Some(sharer_access))
+                .await
+                .unwrap();
+        assert_eq!(outcome, ReferenceShareOutcome::NotPermitted);
+    }
+    let grants = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM entity_access
+        WHERE entity_id = $1 AND entity_type = 'external_chat' AND source_type = 'channel'"#,
+        chat_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(grants, 0);
 }

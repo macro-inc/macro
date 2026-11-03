@@ -3,9 +3,9 @@ import { MediaDeviceRadioItems } from '@core/component/media/media-device-picker
 import type { BackgroundEffect } from '@core/media/background-effect';
 import { readBackgroundImage } from '@core/media/read-background-image';
 import { fireAndForget } from '@core/util/fireAndForget';
-import Image from '@phosphor/image.svg';
-import Prohibit from '@phosphor/prohibit.svg';
-import Upload from '@phosphor/upload-simple.svg';
+import Image from '@icon/system/regular/image.svg';
+import Prohibit from '@icon/system/regular/prohibit.svg';
+import Upload from '@icon/system/regular/upload-simple.svg';
 import { Dropdown } from '@ui';
 import { createSignal, type JSX, onCleanup, Show } from 'solid-js';
 import type { CallState } from '../CallContext';
@@ -20,6 +20,8 @@ export type CallMediaControlsState = Pick<
   | 'toggleAudio'
   | 'toggleVideo'
   | 'toggleScreenShare'
+  | 'shareScreenAudio'
+  | 'setShareScreenAudio'
   | 'audioInputDevices'
   | 'audioOutputDevices'
   | 'videoInputDevices'
@@ -149,6 +151,23 @@ export function CallMediaControls(props: {
               </Dropdown.CheckboxItem>
             </Dropdown.Group>
           </>
+        }
+        screenMenu={
+          <Dropdown.Group>
+            <Dropdown.CheckboxItem
+              checked={call.shareScreenAudio()}
+              disabled={call.isConnecting() || call.isScreenSharing()}
+              closeOnSelect={false}
+              onChange={(checked) => call.setShareScreenAudio(checked)}
+            >
+              Share audio
+            </Dropdown.CheckboxItem>
+            <p class="px-2 pb-1 text-xs text-ink-muted">
+              {call.isScreenSharing()
+                ? 'Stop sharing to change this.'
+                : 'Shares audio from a tab, or from your whole system where the browser supports it.'}
+            </p>
+          </Dropdown.Group>
         }
         videoMenu={
           <>

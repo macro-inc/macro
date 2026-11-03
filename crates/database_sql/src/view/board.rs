@@ -3,6 +3,8 @@
 #[cfg(test)]
 mod test;
 
+use std::collections::HashMap;
+
 use models_databases::RowId;
 use models_databases::position::Position;
 use models_databases::views::{
@@ -56,7 +58,7 @@ pub fn board(
     else {
         return Err(ViewProblem::NotABoard);
     };
-    let grouping = placed(table, *group_by);
+    let grouping = placed(table, *group_by)?;
     let cell_index = outcome
         .columns
         .iter()
@@ -69,21 +71,23 @@ pub fn board(
         .collect();
 
     let order = lane_order(&grouping.kind, listed, &card_lanes);
-    let mut cards: Vec<Vec<RowId>> = vec![Vec::new(); order.len()];
-    for (row, lane) in outcome.row_ids.iter().zip(&card_lanes) {
-        let lane = order
-            .iter()
-            .position(|key| key == lane)
-            .or_else(|| order.iter().position(|key| *key == LaneKey::None))
-            .expect("every board has the lane of empty cells");
-        cards[lane].push(*row);
+    // A card in no lane of the order (an option since removed) shows in the
+    // lane of empty cells, which every order has.
+    let mut cards: HashMap<LaneKey, Vec<RowId>> = HashMap::new();
+    for (row, lane) in outcome.row_ids.iter().zip(card_lanes) {
+        let lane = if order.contains(&lane) {
+            lane
+        } else {
+            LaneKey::None
+        };
+        cards.entry(lane).or_default().push(*row);
     }
 
     let sorted = !view.query.sort.is_empty();
     let lanes = order
         .into_iter()
-        .zip(cards)
-        .map(|(key, cards)| {
+        .map(|key| {
+            let cards = cards.remove(&key).unwrap_or_default();
             let cards = if sorted {
                 cards
             } else {

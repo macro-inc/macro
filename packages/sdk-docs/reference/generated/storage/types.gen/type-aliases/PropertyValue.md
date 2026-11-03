@@ -1,6 +1,6 @@
 # Type Alias: PropertyValue
 
-> **PropertyValue** = \{ `type`: `"Boolean"`; `value`: `boolean`; \} \| \{ `type`: `"Number"`; `value`: `number`; \} \| \{ `type`: `"String"`; `value`: `string`; \} \| \{ `type`: `"Date"`; `value`: `string`; \} \| \{ `type`: `"SelectOption"`; `value`: `string`[]; \} \| \{ `type`: `"EntityReference"`; `value`: [`EntityReference`](EntityReference.md)[]; \} \| \{ `type`: `"Link"`; `value`: `string`[]; \}
+> **PropertyValue** = \{ `type`: `"Boolean"`; `value`: `boolean`; \} \| \{ `type`: `"Number"`; `value`: `number`; \} \| \{ `type`: `"String"`; `value`: `string`; \} \| \{ `type`: `"Date"`; `value`: `string`; \} \| \{ `type`: `"DateRange"`; `value`: [`DateRange`](DateRange.md); \} \| \{ `type`: `"SelectOption"`; `value`: `string`[]; \} \| \{ `type`: `"EntityReference"`; `value`: [`EntityReference`](EntityReference.md)[]; \} \| \{ `type`: `"Link"`; `value`: `string`[]; \}
 
 Property value (service representation).
 
@@ -50,6 +50,17 @@ This is serialized to/from JSONB in the database.
 | ------ | ------ | ------ |
 | `type` | `"Date"` | - |
 | `value` | `string` | Date/timestamp value Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"} |
+
+***
+
+### Type Literal
+
+\{ `type`: `"DateRange"`; `value`: [`DateRange`](DateRange.md); \}
+
+| Name | Type | Description |
+| ------ | ------ | ------ |
+| `type` | `"DateRange"` | - |
+| `value` | [`DateRange`](DateRange.md) | Date range value Serializes as: {"type": "DateRange", "value": {"start": "2025-01-01T00:00:00Z", "end": "2025-01-31T00:00:00Z"}} |
 
 ***
 

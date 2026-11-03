@@ -106,7 +106,7 @@ impl Client {
     #[tracing::instrument(
         name = "whatsmeow.app_state.fetch",
         skip_all,
-        fields(name = %name, full_sync, only_if_not_synced),
+        fields(name = %name, full_sync, only_if_not_synced, patches, events),
         err
     )]
     async fn fetch_app_state_events(
@@ -143,6 +143,7 @@ impl Client {
         let mut want_snapshot = full_sync;
         let mut events = Vec::new();
         let emit = !full_sync || self.config.emit_app_state_events_on_full_sync;
+        let mut patch_count = 0_usize;
         while has_more {
             let patches = match self
                 .fetch_app_state_patches(name, state.version, want_snapshot)
@@ -173,6 +174,9 @@ impl Client {
             }
             want_snapshot = false;
             has_more = patches.has_more_patches;
+            // Macro addition: how much the sync applied.
+            patch_count += patches.patches.len();
+            tracing::Span::current().record("patches", patch_count);
             state = self
                 .apply_app_state_patches(
                     name,
@@ -193,6 +197,7 @@ impl Client {
         } else {
             tracing::debug!(name = %name, from = version, to = state.version, "synced app state");
         }
+        tracing::Span::current().record("events", events.len());
         Ok(events)
     }
 
