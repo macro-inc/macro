@@ -996,13 +996,12 @@ between Threads, All, and Recent preserves an already-open navigation overlay.
 
 With the flag on, desktop Chat has one conversation sidebar, without All, Recent,
 or Threads view tabs. The default order is Favorites, Direct messages, the
-team's channels, custom sections, then **All channels**. The team heading is
-**[Team name] channels**, with **Team channels** as the fallback while the name
-is unavailable. The team section always shows joined team channels, including
-channels assigned to manual or smart custom sections. All channels shows joined
-public/private channels, including custom-section members; it excludes team
-channels and DMs. Each custom section is a top-level heading, independent of the
-Team channels disclosure. Empty sections
+team's channels, then custom sections. There is no All channels section; search
+still finds joined public/private conversations outside these sections. The team
+heading is **[Team name] channels**, with **Team channels** as the fallback while
+its name is unavailable. The team section always shows joined team channels,
+including channels assigned to manual or smart custom sections. Each custom
+section is a top-level heading, independent of the Team channels disclosure. Empty sections
 use padded, bordered cards like saved views, with a subtle background and secondary
 actions; empty Favorites explains how to add a favorite. Private conversations
 use a lock icon in the sidebar and mobile feed, including favorited private
@@ -1031,16 +1030,13 @@ Keyboard navigation scrolls immediately, without animation, only when the
 highlighted row enters the viewport's two-row context margin, leaving neighboring
 rows visible above and below. The margin shrinks in short sections.
 Section jumps also reveal the heading with surrounding context.
-Capped sections scroll independently. When All channels is last and has no saved
-height, it grows to show its full list while rows remain virtualized against the
-outer sidebar scroll. Moving another section below it restores the normal height
-cap. A manually saved All channels height takes precedence in either position.
-Lists with more than two items have a resize grip; drag it to choose a height
-between two rows (68px) and the end of the list, capped by the section's maximum. Shorter lists fit their content and have no
+Every section scrolls independently. Lists with more than two items have a resize
+grip; drag it to choose a height between two rows (68px) and the end of the list,
+capped by the section's maximum. Shorter lists fit their content and have no
 resize grip. Favorites and Direct messages default to four visible rows;
-other sections default to their maximum height within the pane, except the
-unresized final All channels section. Focus the grip and use Up/Down
-to resize by 20px (100px with Shift), or double-click to restore the default.
+other sections default to their maximum height within the pane. Focus the grip
+and use Up/Down to resize by 20px (100px with Shift), or double-click to restore
+the default.
 Section heights persist as personal preferences alongside sorting and sidebar
 width. Heights adapt to filtered content and smaller panes without discarding
 the saved preference. Search covers channels and DMs regardless of section
@@ -1142,14 +1138,14 @@ Filtered-out channels retain their membership and do not reappear ungrouped.
 Shared name and rule edits apply to the team; personal edits affect only the account.
 Deleting a section does not delete its conversations or change channel access.
 
-Every desktop section menu, including **Favorites**, **All channels**,
-**[team name] channels**, and **Direct messages**, offers **Mute all channels**,
+Every desktop section menu, including **Favorites**, **[team name] channels**,
+and **Direct messages**, offers **Mute all channels**,
 **Unmute all channels**, and **Snooze all channels**. These update only your
 notifications, including for shared sections. Each action uses the section's
 complete current membership, including filtered-out and unloaded channels;
 channels added later do not inherit the change. Built-in lists resolve all pages
-before applying an action and never include unjoined channels. Both the team
-section and All channels include their custom-section members.
+before applying an action and never include unjoined channels. The team
+section includes its custom-section members.
 Favorites targets only channel favorites, not documents or other favorite types.
 Snooze uses the usual
 duration/date picker and resumes notifications at the chosen time. A partial
