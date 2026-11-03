@@ -17,15 +17,16 @@ use super::{
 pub enum TargetValidationError {
     #[error("invalid routine task; select a model or agent and provide instructions")]
     InvalidTask,
-    #[error("agent routines are not enabled")]
-    AgentsDisabled,
+    /// The scheduler has no session domain to authorize agents or apps with.
+    #[error("this scheduler cannot check agents or required apps")]
+    SessionsUnavailable,
     #[error("this routine selects an agent; reload or upgrade your client before updating")]
     ExplicitAgentRequired,
     #[error("this routine requires apps; reload or upgrade your client before updating")]
     ExplicitAppsRequired,
 }
 
-/// Default acceptance policy for composition roots that have not enabled agents.
+/// Default acceptance policy for composition roots without a session domain.
 pub struct ModelOnlyTargets;
 
 impl TaskTargetValidator for ModelOnlyTargets {
@@ -35,7 +36,7 @@ impl TaskTargetValidator for ModelOnlyTargets {
         if matches!(task.resolve_target()?, ResolvedTaskTarget::Agent { .. })
             || !task.mcp_servers.is_empty()
         {
-            return Err(TargetValidationError::AgentsDisabled.into());
+            return Err(TargetValidationError::SessionsUnavailable.into());
         }
         Ok(())
     }

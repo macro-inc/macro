@@ -116,7 +116,7 @@ async fn a_validator_without_sessions_rejects_agents() {
         .unwrap_err();
     assert_eq!(
         error.downcast_ref(),
-        Some(&TargetValidationError::AgentsDisabled)
+        Some(&TargetValidationError::SessionsUnavailable)
     );
 }
 
@@ -255,7 +255,7 @@ async fn a_validator_that_cannot_check_connections_rejects_routine_apps() {
         .unwrap_err();
     assert_eq!(
         error.downcast_ref(),
-        Some(&TargetValidationError::AgentsDisabled)
+        Some(&TargetValidationError::SessionsUnavailable)
     );
 }
 

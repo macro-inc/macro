@@ -697,7 +697,7 @@ async fn target_errors_have_deliberate_sanitized_status_codes() {
             StatusCode::BAD_REQUEST,
         ),
         (
-            TargetValidationError::AgentsDisabled.into(),
+            TargetValidationError::SessionsUnavailable.into(),
             StatusCode::BAD_REQUEST,
         ),
         (

@@ -373,7 +373,7 @@ async fn validates_before_persistence_and_rejects_cross_owner_selection() {
 }
 
 #[tokio::test]
-async fn gated_acceptance_allows_models_and_explicit_switch_but_rejects_old_clients() {
+async fn without_sessions_agents_are_refused_but_models_and_explicit_switches_are_kept() {
     let base = service(false);
     let svc = TestService::new(
         base.repo.clone(),
@@ -390,7 +390,7 @@ async fn gated_acceptance_allows_models_and_explicit_switch_but_rejects_old_clie
         .unwrap_err();
     assert_eq!(
         error.downcast_ref(),
-        Some(&TargetValidationError::AgentsDisabled)
+        Some(&TargetValidationError::SessionsUnavailable)
     );
     let created = svc
         .create_action(&user_principal(), config.clone())
@@ -403,7 +403,7 @@ async fn gated_acceptance_allows_models_and_explicit_switch_but_rejects_old_clie
         .unwrap_err();
     assert_eq!(
         error.downcast_ref(),
-        Some(&TargetValidationError::AgentsDisabled)
+        Some(&TargetValidationError::SessionsUnavailable)
     );
 
     // An old client cannot erase the agent even when trying to pause it.
