@@ -17,12 +17,12 @@ function sessionAutoArchiveQueryOptions(sessionId: string | undefined) {
         agentHarnessServiceClient.getSessionAutoArchive(sessionId!)
       ),
     enabled: Boolean(sessionId),
-    // A trigger or a restore can change the record while it sits in the cache.
+    // A trigger can archive the session while the record sits in the cache.
     staleTime: 0,
   });
 }
 
-/** The session's auto-archive choices, its owner's defaults, and the archive a trigger made. */
+/** The session's auto-archive choices, its owner's defaults, and when a trigger archived it. */
 export function useSessionAutoArchiveQuery(
   sessionId: Accessor<string | undefined>
 ) {

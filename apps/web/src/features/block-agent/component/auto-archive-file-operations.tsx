@@ -103,7 +103,7 @@ export function useAutoArchiveFileOperations(props: {
     const sessionId = props.sessionId();
     if (!sessionId || !props.enabled() || !autoArchive.isSuccess) return [];
     const current = autoArchive.data;
-    if (current.archived) return [];
+    if (current.autoArchivedAt) return [];
     return [
       triggerMenu(
         sessionId,

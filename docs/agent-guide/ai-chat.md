@@ -776,9 +776,9 @@ the shimmer.
   and quoting remain available.
   Archived sessions are read-only: Rename and all message controls are unavailable,
   and an **Unarchive** action replaces the composer at the bottom. Archive /
-  Unarchive is also available from the title dropdown. A session that archived
-  itself says why and when in that footer (its pull requests merged, or its
-  machine session closed). For the owner of an unarchived session that has never
+  Unarchive is also available from the title dropdown. The footer says when the
+  session was archived and, if it archived itself, why (its pull requests
+  merged, or its machine session closed). For the owner of an unarchived session that has never
   archived itself, the title dropdown also has **Archive when PRs merge** and
   **Archive when session closes** submenus, each with **Use default (On/Off)**,
   **On**, and **Off**; the defaults live in Settings → Agents → **Auto-archive**.

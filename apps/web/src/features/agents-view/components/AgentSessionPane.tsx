@@ -47,6 +47,7 @@ import type { AgentSessionEntity } from '@entity';
 import ShareIcon from '@icon/share.svg';
 import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
 import type { NotificationSource } from '@notifications/notification-source';
+import { isSessionArchived } from '@service-agent-harness/session-archive';
 import { EmptyStatePanel } from '@ui';
 import { Show } from 'solid-js';
 import { changeSessionArchiveState } from '../../block-agent/queries/change-session-archive-state';
@@ -101,7 +102,8 @@ function SessionContent(props: {
       type: 'agent_session',
       id,
       name: title(),
-      isArchived: current.isArchived,
+      archivedBy: current.archivedBy,
+      archivedAt: current.archivedAt,
       ownerId: current.ownerId,
       botId: current.botId,
       status:
@@ -127,12 +129,14 @@ function SessionContent(props: {
     const id = sessionId();
     const current = session();
     if (!id || !current) return;
-    await changeSessionArchiveState(id, !current.isArchived);
+    await changeSessionArchiveState(id, !isSessionArchived(current));
   };
   const autoArchive = useAutoArchiveFileOperations({
     sessionId,
     enabled: () =>
-      permissions() === Permissions.OWNER && session()?.isArchived === false,
+      permissions() === Permissions.OWNER &&
+      session() !== undefined &&
+      !isSessionArchived(session()),
   });
   return (
     <>
@@ -290,10 +294,12 @@ function SessionContent(props: {
                 >
                   <div class="composer-anchor flex flex-col gap-2">
                     <Show
-                      when={!session()?.isArchived}
+                      when={!isSessionArchived(session())}
                       fallback={
-                        <Show when={sessionId()}>
-                          {(id) => <ArchivedSessionFooter sessionId={id()} />}
+                        <Show when={session()}>
+                          {(current) => (
+                            <ArchivedSessionFooter session={current()} />
+                          )}
                         </Show>
                       }
                     >

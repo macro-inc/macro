@@ -16,6 +16,7 @@ import type {
   AgentSessionResponse,
   AnswerToolApprovalResponse,
   AppConnectedRequest,
+  ArchiveCause,
   AutoArchiveOverridesBody,
   AutoArchivePreferencesBody,
   CodingPreferencesBody,
@@ -42,6 +43,7 @@ import type {
 } from './generated/schemas';
 
 export type {
+  ArchiveCause,
   AutoArchiveOverridesBody,
   AutoArchivePreferencesBody,
   CodingPreferencesBody,
@@ -219,13 +221,13 @@ export const agentHarnessServiceClient = {
     ).then((result) => result.map(() => undefined));
   },
 
-  setArchived(sessionId: string, isArchived: boolean) {
+  setArchived(sessionId: string, archived: boolean) {
     return fetchWithToken<Record<string, never>>(
       `${agentHarnessHost}/agent-sessions/${sessionId}/archived`,
       {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isArchived }),
+        body: JSON.stringify({ archived }),
         errorResponseHandler: sessionError,
       }
     ).then((result) => result.map(() => undefined));
