@@ -23,6 +23,10 @@
 
 ## Verifying a change in a real browser
 
+ID-only user mention rendering, name lookup failure, and composer save/reopen
+are covered on desktop/tablet/phone by `user-mentions.browser.e2e.ts` in the
+LexicalMarkdown core browser suite (see its README).
+
 During iterative visual tweaks, use focused browser verification; defer full typechecks and CI checks until the batch is ready or the user requests them.
 
 Any user-visible change should be exercised in a browser before you call it fixed — type-check, biome, and vitest all pass on code that still has the interaction bug.
@@ -41,6 +45,13 @@ static-file endpoints receive thumbnail sizing. The backend-free regression is
 Split dragging and composer reflow have a backend-free browser regression:
 `bunx playwright test --config src/lib/core/component/Resize/browser-test/playwright.config.ts`.
 It exercises the real resize solver, scroll container, and Lexical layout primitive.
+
+Stacked splits have a backend-free browser regression over the real split
+router and tiled layout: splitting keeps the pane mounted, stacked gutters drag
+and nudge to the minimum height, and closing hands the column back:
+`bunx playwright test --config src/components/app/split-layout/browser-test/playwright.config.ts`.
+Keep panes in one keyed list positioned by the layout tree; nesting a
+`Resize.Zone` per split remounts a pane whenever its split changes.
 
 Desktop app switches open the requested list in the target split when the
 retained detail is claimed by another pane or preview. Keep this check in view
@@ -304,6 +315,12 @@ key, and projects sort by name with No Project last. Data a grouped list shows
 about its groups (labels, order, membership) is computed on the server and
 mirrored by the cache's local grouping projection; never add a side cache in
 feature code to cover a remount.
+Project identity chips use cache-first reads and the shared `GraphqlUser.initiative`
+entity resolver to reuse complete authorized records from project lists or details.
+Keep cold row metadata reads non-suspending so virtual scrolling never detaches
+its list; permission revalidation remains independent of row mounts. Project
+reads retain client-scoped denial state across remounts and immediately reauthorize
+previous-viewer cache hits; older requests never clear newer denial decisions.
 
 Resolve server date-group keys through the shared `DATE_GROUP_BUCKETS` metadata
 in `lib/queries/soup/grouped/api.ts` for labels and display order; cached Mail
@@ -501,7 +518,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   for checkbox, row, Only, keyboard, and touch behavior.
 - Keep added external chats (WhatsApp today) in External at `/external/chat/:chatId` with their own queries (`features/external-chat`); sharing controls viewing and the viewer's own provider membership controls sending. Never route them through channel context or services.
 - All API/network calls live in service-clients.
-- Open projects through `openProject` (`features/projects/open-project.ts`): it
+- Preview Home project rows with the shared `ProjectDetail`; preserve its project
+  search namespace, comment target, and Home breadcrumb. Touch and explicit split
+  activation use the full project route. Open other projects through `openProject` (`features/projects/open-project.ts`): it
   retargets an already-open project split to the section or comment in place.
   Shared open paths (unified list rows) use its `projectHostedContent`, whose
   identity is the project itself, so the router focuses the split already
@@ -814,9 +833,11 @@ raise `min-native-build.json` to the first build with it, or handle
 
 Keep `nix/tauri-desktop.nix` in sync with generated WASM dependencies: desktop
 releases run Vite directly and do not call `just build-tauri` or `build-wasm`.
-Build and copy the agent-fold JavaScript glue and WASM before Vite runs, and
-check that both appear in the output. Without them, Vite leaves the worker's
-relative imports unchanged and Tauri can serve HTML for the missing module.
+A new `build-*-wasm` package under `src/lib/core/` gets an entry in
+`coreWasmPackages`, which builds its JavaScript glue and WASM before Vite runs
+and checks that both appear in the output. Without them, Vite leaves the
+loader's relative imports unchanged and Tauri serves HTML for the missing
+module, so that file type fails to open on desktop.
 
 ## macOS desktop runtime: Chromium (CEF)
 `tauri/desktop-cef` builds the shipped macOS app with Chromium in its own Cargo
@@ -900,6 +921,14 @@ On a physical iPhone, WKWebView still synthesises the compatibility `mousedown`/
 Use the existing status dot in Home and Agents rows with `bg-failure` when the
 persisted `turnState` is `failed`; open the session to inspect its error.
 
+### Agent transcript projection
+
+Keep folded messages ordered by turn and author in the transcript store: append
+at the new index, reconcile matching rows in place, binary-search earlier
+updates, and splice only for real insertion/removal. Never `produce` the whole
+array per append; it makes initial projection quadratic. Check with the
+[session-open runner](src/features/block-agent/browser-test/README.md).
+
 ### Agent system events
 
 Agent activity labels share `block-agent/ui/TextShimmer.tsx` and the global
@@ -972,7 +1001,15 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 
 - Reuse `CreateMenuItem` for explanatory New menu entries: original icons, a title, and muted wrapping descriptions, preserving the existing `ViewCreateButton` trigger and each action's feature gates.
 - Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus. Mobile toasts dismiss by swiping left or right and have no corner close button. Phone prompts stay in their own stack under the modal layer, never on `z-toast-region`, and never hide with a document-wide `:has()` (#8840).
-- Notification sounds are off by default and saved per user per device; map each new notification event in `features/notification-sounds/core/categories.ts` and keep system alerts silent when Macro plays its own sound. See the [notification sounds walkthrough](../../docs/agent-guide/notifications.md#notification-sounds).
+- Notification sounds are off by default and saved per user per device; map each new notification event in `features/notification-sounds/core/categories.ts` and keep system alerts silent when Macro plays its own sound. Quiet hours on the same page silence those sounds and skip desktop alerts on a per-device weekly schedule; incoming calls still ring. See the [notification sounds walkthrough](../../docs/agent-guide/notifications.md#notification-sounds).
+
+### Agent result task lists
+
+Agent result task titles wrap above live metadata; nested horizontal groups
+stack below 672px of container width. The backend-free browser regression is
+`bunx playwright test --config src/features/dynamic-ui/browser-test/playwright.config.ts`.
+It covers desktop and touch layouts, narrow containers inside a wide viewport,
+unbroken titles, and keyboard opening.
 
 ### Inline property values
 

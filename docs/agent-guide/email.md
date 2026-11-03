@@ -131,7 +131,10 @@ further reloads, even while an offline edit is still queued.
 Opening an attachment opens it in a split from its Drive copy, except a
 calendar file: it opens its event (see the calendar invitations section of the
 calendar guide), or downloads when Macro could not read one, and creates no
-Drive file.
+Drive file. Every received attachment chip, of any file type, has a download
+button joined to the filename that saves the file without opening it. Images
+and videos keep their previews and get the same chip. Cloud-reference chips
+stay open-only.
 
 Imported Outlook attachments keep their provider identity, including inline
 images. Cloud-reference attachment chips open the original Outlook message.

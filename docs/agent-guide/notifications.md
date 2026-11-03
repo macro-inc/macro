@@ -225,6 +225,17 @@ sent silent so the person hears one sound. macOS builds older than the
 `silent` argument on `send_macos_notification` ignore it and still play the
 system sound.
 
+**Settings → Notifications → Quiet hours** silences those sounds and skips
+desktop and browser alerts on a weekly schedule. It is off until turned on,
+then covers every day from 10:00 PM to 8:00 AM in the device's time zone. The
+person picks the days, the start and end, and the time zone. A later start
+runs through midnight, and the window is the clock time on each selected day,
+so Tuesday morning is quiet only when Tuesday is selected. An equal start and
+end covers no time. Incoming calls still ring and still show an alert. Inbox
+items still arrive. The schedule is saved on this device with the sound
+settings, so a phone and a computer can differ. A sound preview still plays.
+Mobile push sent while the app is not open is unchanged.
+
 The backend-free desktop/phone regression drives the real settings section,
 persistence, previews, and delivery through a stand-in notification feed:
 `bunx playwright test --config src/features/notification-sounds/browser-test/playwright.config.ts`

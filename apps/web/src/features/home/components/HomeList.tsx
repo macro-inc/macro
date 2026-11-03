@@ -173,10 +173,7 @@ export function HomeList(props: HomeListProps) {
     const newSplit =
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
 
-    // Projects have no Home preview, so activating one opens it in place
-    // instead of selecting a row that shows nothing.
-    const previewable = sourceRow.entity.type !== 'initiative';
-    if (!isTouchDevice() && !newSplit && previewable) {
+    if (!isTouchDevice() && !newSplit) {
       if (!isNonMemberChannelEntity(sourceRow.entity)) {
         markChannelNotificationsSeenOnOpen(
           sourceRow.entity,
@@ -210,13 +207,8 @@ export function HomeList(props: HomeListProps) {
     entity: WithNotification<EntityData> | undefined,
     options?: { activate?: boolean }
   ) {
-    if (entity && entity.type !== 'initiative') {
-      markRowNotificationsSeenOnOpen(entity, notificationSource);
-    }
-    props.onPreviewEntityChange(
-      entity?.type === 'initiative' ? undefined : entity,
-      options
-    );
+    if (entity) markRowNotificationsSeenOnOpen(entity, notificationSource);
+    props.onPreviewEntityChange(entity, options);
   }
 
   const previewAfterNavigation = debounce(showPreview, 150);

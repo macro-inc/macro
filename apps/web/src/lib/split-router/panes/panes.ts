@@ -12,6 +12,24 @@ import {
   type PanesDiff,
 } from './diff';
 import { currentEntry } from './history';
+import {
+  fillShape,
+  insertColumn,
+  type LayoutShape,
+  type PaneLayout,
+  paneIds,
+  removePane,
+  reorderPanes,
+  resetShares,
+  resizeSplit,
+  rowLayout,
+  type SplitPath,
+  type SplitSide,
+  splitPane,
+  tilesFor,
+  withoutPanes,
+  withSharesFrom,
+} from './layout-tree';
 import type {
   CloseAction,
   OpenIntent,
@@ -79,6 +97,18 @@ function historyChangeFor<E extends PaneEntry>(
   return { type: 'go', index, entry };
 }
 
+/**
+ * How panes landing together tile, in order: a URL's `shape`, keeping the
+ * current sizes where it matches, or a captured `layout` with its own sizes.
+ */
+export type Arrangement = { shape?: LayoutShape } | { layout: PaneLayout };
+
+/** Where `insert` puts a new pane. */
+export type NewPanePlacement = {
+  insertAt: number;
+  split?: { pane: PaneId; side: SplitSide };
+};
+
 export type PanesOptions<E extends PaneEntry, D> = {
   store: PaneStore<E>;
   policy: PanePolicy<E, D>;
@@ -99,11 +129,18 @@ export function createPanes<E extends PaneEntry, D>(
   const [ids, setIds] = createSignal<readonly PaneId[]>([], {
     equals: sameIds,
   });
+  // The open panes are this layout's panes, in order; set both together.
+  const [layout, setLayout] = createSignal<PaneLayout | undefined>();
   // Every pane with a history: the open ones plus any a host parked (took
   // out of `ids` without removing) to show again later.
   const [retained, setRetained] = createSignal<readonly PaneId[]>([], {
     equals: sameIds,
   });
+  // How parked panes tile, one layout per group parked together, so a group
+  // shows again as it was.
+  const [parkedLayouts, setParkedLayouts] = createSignal<readonly PaneLayout[]>(
+    []
+  );
   const [arrivals, setArrivals] = createStore<
     Record<string, PaneArrival | undefined>
   >({});
@@ -116,11 +153,55 @@ export function createPanes<E extends PaneEntry, D>(
     return currentEntry(snapshot);
   };
 
-  const arrange = (next: readonly PaneId[], changes: () => void) => {
+  /**
+   * Makes `next` the open layout once `changes` ran. Open panes it leaves out
+   * that still have a history are parked, keeping their tiles.
+   */
+  const arrange = (next: PaneLayout | undefined, changes: () => void) => {
     batch(() => {
+      const before = untrack(layout);
       changes();
-      setIds(next);
+
+      const open = paneIds(next);
+      const kept = untrack(retained);
+      const parks = (pane: PaneId) =>
+        !open.includes(pane) && kept.includes(pane);
+      const parked = withoutPanes(before, (pane) => !parks(pane));
+      setParkedLayouts((list) => {
+        const rest = list.flatMap(
+          (tiles) => withoutPanes(tiles, (pane) => open.includes(pane)) ?? []
+        );
+
+        return parked ? [...rest, parked] : rest;
+      });
+      setLayout(next);
+      setIds(open);
     });
+  };
+
+  /** The layout holding `pane`: the open one, or the one it was parked in. */
+  const layoutOf = (pane: PaneId): PaneLayout | undefined =>
+    [layout(), ...parkedLayouts()].find((tiles) =>
+      paneIds(tiles).includes(pane)
+    );
+
+  /** How the panes landing in a diff tile; in a row when the arrangement doesn't fit them. */
+  const landedLayout = (
+    landed: readonly PaneId[],
+    arrangement: Arrangement
+  ): PaneLayout | undefined => {
+    if ('layout' in arrangement) {
+      const fits = paneIds(arrangement.layout).length === landed.length;
+
+      return fits
+        ? reorderPanes(arrangement.layout, landed)
+        : rowLayout(landed);
+    }
+
+    const { shape } = arrangement;
+    const shaped = shape ? fillShape(shape, landed) : undefined;
+
+    return withSharesFrom(shaped ?? rowLayout(landed), untrack(layout));
   };
 
   const addPane = (pane: PaneId, entry: E) => {
@@ -133,6 +214,9 @@ export function createPanes<E extends PaneEntry, D>(
     store.remove(pane);
     setArrivals(pane, undefined);
     setRetained((list) => list.filter((id) => id !== pane));
+    setParkedLayouts((list) =>
+      list.flatMap((tiles) => removePane(tiles, pane) ?? [])
+    );
     options.onRemove?.(pane);
   };
 
@@ -159,6 +243,8 @@ export function createPanes<E extends PaneEntry, D>(
 
   return {
     ids,
+    layout,
+    layoutOf,
     retained,
     read: (pane: PaneId) => store.read(pane),
     current,
@@ -173,34 +259,50 @@ export function createPanes<E extends PaneEntry, D>(
       });
     },
 
-    /** Adds a pane at `insertAt` as chosen against `decided`, the panes at the time. */
+    /**
+     * Adds a pane where `placement` says: splitting a pane that is still
+     * open, or else as a column at `insertAt` as chosen against `decided`,
+     * the panes at the time.
+     */
     insert(
       pane: PaneId,
       entry: E,
-      insertAt: number,
+      placement: NewPanePlacement,
       decided: readonly PaneId[] = untrack(ids)
     ) {
-      const next = [...untrack(ids)];
-      const at = insertionIndex(decided, insertAt, next);
-      next.splice(at, 0, pane);
+      const current = untrack(layout);
+      const open = untrack(ids);
+      const { split } = placement;
+
+      if (current && split && open.includes(split.pane)) {
+        const next = splitPane(current, split.pane, pane, split.side);
+        arrange(next, () => addPane(pane, entry));
+        return;
+      }
+
+      const at = insertionIndex(decided, placement.insertAt, open);
+      const next = insertColumn(current, pane, open[at - 1]);
       arrange(next, () => addPane(pane, entry));
     },
 
     remove(pane: PaneId) {
-      const next = untrack(ids).filter((id) => id !== pane);
+      const next = removePane(untrack(layout), pane);
       arrange(next, () => forget(pane));
     },
 
     /**
-     * Makes `next`, retained panes, the open ones. Open panes not in `next`
-     * stay retained (parked) with their histories until `discard`.
+     * Makes `next`, retained panes, the open ones, in the tiles they last
+     * had together (side by side when they never tiled together). Open panes
+     * not in `next` stay retained (parked) with their histories and tiles
+     * until `discard`.
      */
     show(next: readonly PaneId[]) {
       const known = untrack(retained);
       const missing = next.some((pane) => !known.includes(pane));
       if (missing) throw new Error('Only retained panes can be shown');
 
-      setIds(next);
+      const together = untrack(() => tilesFor(layoutOf(next[0]!), next));
+      arrange(together ?? rowLayout(next), () => {});
     },
 
     /** Forgets a parked pane; open panes are removed through `remove`. */
@@ -211,7 +313,11 @@ export function createPanes<E extends PaneEntry, D>(
       forget(pane);
     },
 
-    /** False when `pane` isn't open or already sits at `to`. */
+    /**
+     * Moves `pane` to `to` in the order; the tiles keep their sizes and show
+     * the panes in their new order. False when `pane` isn't open or already
+     * sits at `to`.
+     */
     move(pane: PaneId, to: number): boolean {
       const before = untrack(ids);
       if (!before.includes(pane)) return false;
@@ -221,9 +327,19 @@ export function createPanes<E extends PaneEntry, D>(
       next.splice(at, 0, pane);
       if (sameIds(before, next)) return false;
 
-      setIds(next);
+      arrange(reorderPanes(untrack(layout), next), () => {});
 
       return true;
+    },
+
+    /** Divides the split at `path` by `shares`; the URL doesn't record sizes. */
+    resize(path: SplitPath, shares: readonly number[]) {
+      setLayout(resizeSplit(untrack(layout), path, shares));
+    },
+
+    /** Divides every split equally. */
+    resetShares() {
+      setLayout(resetShares(untrack(layout)));
     },
 
     /** How `incoming` lines up with the open panes. */
@@ -241,9 +357,17 @@ export function createPanes<E extends PaneEntry, D>(
       return diffPanes(live, incoming, { ...diffOptions, createPaneId });
     },
 
-    /** Applies `diff`; `entries` are what its changed panes show, in order. */
-    applyDiff(diff: PanesDiff<E>, entries: readonly E[]) {
-      const next = diff.panes.map((item) => item.pane);
+    /**
+     * Applies `diff`; `entries` are what its changed panes show, in order,
+     * and `arrangement` is how its panes tile.
+     */
+    applyDiff(
+      diff: PanesDiff<E>,
+      entries: readonly E[],
+      arrangement: Arrangement = {}
+    ) {
+      const landed = diff.panes.map((item) => item.pane);
+      const next = landedLayout(landed, arrangement);
 
       arrange(next, () => {
         for (const pane of diff.removed) forget(pane);

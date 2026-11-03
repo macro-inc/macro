@@ -1,5 +1,5 @@
-//! How agents work with CRM pipelines: the deal vocabulary users speak and
-//! the pipeline tools that carry it out.
+//! The deal vocabulary users speak and how it maps to CRM pipelines. How to
+//! call the pipeline tools is in their descriptions.
 
 use crate::types::StaticPrompt;
 
@@ -7,7 +7,7 @@ use crate::types::StaticPrompt;
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(
     "CRM pipelines",
     include_str!("crm_pipelines.md"),
-    "Map deal, stage and pipeline requests to pipeline entries, find them by name, change them by field name and stage label, verify the saved values, and keep pipeline stages apart from a company's own properties.",
+    "Map deal, stage and pipeline requests to pipeline entries rather than databases, and keep pipeline stages apart from a company's own properties.",
 );
 
 #[cfg(test)]
