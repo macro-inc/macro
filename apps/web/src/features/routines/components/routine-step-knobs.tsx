@@ -34,7 +34,7 @@ export function StepSentence(props: {
   return (
     <Show when={parts()}>
       {(parts) => (
-        <p class="text-base leading-8 text-ink-muted">
+        <p class="text-[15px] leading-7 text-ink-muted">
           <For each={parts()}>
             {(part) => <SentencePiece part={part} onKnob={props.onKnob} />}
           </For>
@@ -176,7 +176,7 @@ function KnobPopover(props: {
   const [open, setOpen] = createSignal(false);
   const [draft, setDraft] = createSignal<Knob['value']>(props.knob.value);
   const problem = () => knobValueProblem(props.knob, draft());
-  let trigger: HTMLButtonElement | undefined;
+  let trigger: HTMLElement | undefined;
   const save = () => {
     if (problem()) return;
     props.onChange(draft());
@@ -195,7 +195,18 @@ function KnobPopover(props: {
     >
       <Popover.Trigger
         ref={trigger}
-        class={props.knob.type === 'question' ? QUESTION : VALUE}
+        // Inline, so a long question wraps with the sentence; a button
+        // would move it whole onto its own line.
+        as="span"
+        onKeyDown={(event: KeyboardEvent) => {
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+          event.preventDefault();
+          (event.currentTarget as HTMLElement).click();
+        }}
+        class={cn(
+          'cursor-pointer',
+          props.knob.type === 'question' ? QUESTION : VALUE
+        )}
         aria-label={
           props.knob.type === 'question'
             ? `AI decides whether ${props.knob.label}. Change the question`

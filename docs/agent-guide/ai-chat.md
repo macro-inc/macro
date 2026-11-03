@@ -779,8 +779,8 @@ rewrites the step, keeping its place, output name and values, and
 type-checks it with the routine around it. The rewrite shows the sentence
 with new words marked, **Rewritten and checked** (or its errors, which block
 keeping it), changed values, **Keep**, **Undo** and **Show code changes**;
-the step is unchanged until **Keep**. **Show code** reveals the code, folded
-by default. Under the steps, one box (**Then… say what should happen next**)
+the step is unchanged until **Keep**. **Show code** in the step's ⋯ menu shows
+the code under the sentence; code steps never fold. Under the steps, one box (**Then… say what should happen next**)
 adds a step at the end: AI writes it as code whenever code can do it
 (sending a message, changing items, with AI judging or writing the text
 inside the code) and as Ask AI only for open-ended work such as research,

@@ -198,22 +198,45 @@ type StepCardProps = {
 };
 
 /**
- * One step: closed, a single line (its title and what it does); open, its
- * settings or code under its name.
+ * One step under its name. A code step always shows what it does, with its
+ * values; an Ask AI step closes to a single line.
  */
 function StepCard(props: StepCardProps) {
   const steps = useSteps();
   // Saying what to change in a code step, from its menu's Edit.
   const [editing, setEditing] = createSignal(false);
+  // A code step's code, from its menu.
+  const [showCode, setShowCode] = createSignal(false);
   // Open where there is something to do; a finished routine reads as a list.
   const [open, setOpen] = createSignal(
     (steps.steps().length === 1 && steps.steps()[0]?.id === props.step.id) ||
       steps.fresh.has(props.step.id) ||
       (props.step.kind === 'agent' && !props.step.instructions.trim())
   );
+  const isCode = () => props.step.kind === 'code';
+  const shown = () => isCode() || open();
   const headline = () => stepHeadline(props.step);
   let header: HTMLButtonElement | undefined;
   let group: HTMLDivElement | undefined;
+  const heading = () => (
+    <>
+      <span class="w-4.5 shrink-0 text-right text-xs tabular-nums text-ink-extra-muted">
+        {props.number}
+      </span>
+      <StepIcon step={props.step} />
+      <span class="shrink-0 text-sm font-medium">{headline().title}</span>
+      <span class="min-w-0 flex-1 truncate text-sm text-ink-muted">
+        {shown() ? '' : headline().summary}
+      </span>
+      <Show when={headline().mode}>
+        {(mode) => (
+          <Badge variant="secondary" size="xs" class="@max-[24rem]/step:hidden">
+            {mode()}
+          </Badge>
+        )}
+      </Show>
+    </>
+  );
   return (
     <RoutineSurface>
       {/* A named group, not a landmark: a routine has many steps. */}
@@ -221,7 +244,9 @@ function StepCard(props: StepCardProps) {
         ref={group}
         role="group"
         aria-label={headline().title}
-        class="@container/step group/step min-w-0"
+        // Where focus returns after a move, on a card without a header button.
+        tabIndex={-1}
+        class="@container/step group/step min-w-0 outline-none"
         onKeyDown={(event) => {
           if (!event.altKey) return;
           if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
@@ -233,48 +258,36 @@ function StepCard(props: StepCardProps) {
           event.preventDefault();
           props.onMove(event.key === 'ArrowUp' ? -1 : 1);
           // Moving a card re-inserts it, which drops focus.
-          queueMicrotask(() => header?.focus());
+          queueMicrotask(() => (header ?? group)?.focus());
         }}
       >
         <div class="flex min-w-0 items-center gap-1 pr-2.5">
-          <button
-            ref={header}
-            type="button"
-            aria-expanded={open()}
-            class="flex min-h-13 min-w-0 flex-1 items-center gap-2.5 rounded-xl py-2 pl-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-edge-muted"
-            onClick={() => setOpen(!open())}
+          <Show
+            when={!isCode()}
+            fallback={
+              <div class="flex min-h-12 min-w-0 flex-1 items-center gap-2.5 py-2 pl-4">
+                {heading()}
+              </div>
+            }
           >
-            <span class="w-4.5 shrink-0 text-right text-xs tabular-nums text-ink-extra-muted">
-              {props.number}
-            </span>
-            <StepIcon step={props.step} />
-            <span class="shrink-0 text-sm font-medium">{headline().title}</span>
-            <span class="min-w-0 flex-1 truncate text-sm text-ink-muted">
-              {open() ? '' : headline().summary}
-            </span>
-            <Show when={headline().mode}>
-              {(mode) => (
-                <Badge
-                  variant="secondary"
-                  size="xs"
-                  class="@max-[24rem]/step:hidden"
-                >
-                  {mode()}
-                </Badge>
-              )}
-            </Show>
-          </button>
+            <button
+              ref={header}
+              type="button"
+              aria-expanded={open()}
+              class="flex min-h-13 min-w-0 flex-1 items-center gap-2.5 rounded-xl py-2 pl-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-edge-muted"
+              onClick={() => setOpen(!open())}
+            >
+              {heading()}
+            </button>
+          </Show>
           <StepMenu
             {...props}
-            open={open()}
+            open={shown()}
             onEdit={
-              props.step.kind === 'code' && steps.author
-                ? () => {
-                    setOpen(true);
-                    setEditing(true);
-                  }
-                : undefined
+              isCode() && steps.author ? () => setEditing(true) : undefined
             }
+            showCode={isCode() ? showCode() : undefined}
+            onShowCode={setShowCode}
             onEditShown={() =>
               group
                 ?.querySelector<HTMLInputElement>('[data-step-change]')
@@ -282,13 +295,19 @@ function StepCard(props: StepCardProps) {
             }
           />
         </div>
-        <Show when={open()}>
+        <Show when={shown()}>
           {/* Fields keep the card's padding on every side. */}
-          <div class="grid min-w-0 gap-3 px-4 pb-4 pt-1">
+          <div
+            class={cn(
+              'grid min-w-0 px-4',
+              isCode() ? 'gap-2.5 pb-3.5' : 'gap-3 pb-4 pt-1'
+            )}
+          >
             <StepBody
               step={props.step}
               editing={editing()}
               onEditing={setEditing}
+              showCode={showCode()}
               onChange={props.onChange}
             />
           </div>
@@ -306,11 +325,14 @@ function MenuShortcut(props: { children: JSX.Element }) {
   );
 }
 
-/** Edit, move, duplicate, or delete a step. */
+/** Edit, show code, move, duplicate, or delete a step. */
 function StepMenu(
   props: StepCardProps & {
     open: boolean;
     onEdit?: () => void;
+    /** Whether a code step's code shows; undefined for other steps. */
+    showCode?: boolean;
+    onShowCode(show: boolean): void;
     /** Focus what Edit opened, once the menu has let go of focus. */
     onEditShown(): void;
   }
@@ -342,20 +364,28 @@ function StepMenu(
           queueMicrotask(() => props.onEditShown());
         }}
       >
-        <Show when={props.onEdit}>
-          {(edit) => (
-            <Dropdown.Group>
-              <Dropdown.Item
-                onSelect={() => {
-                  editing = true;
-                  edit()();
-                }}
-              >
-                <PencilIcon class="size-4" />
-                Edit
+        <Show when={props.onEdit || props.showCode !== undefined}>
+          <Dropdown.Group>
+            <Show when={props.onEdit}>
+              {(edit) => (
+                <Dropdown.Item
+                  onSelect={() => {
+                    editing = true;
+                    edit()();
+                  }}
+                >
+                  <PencilIcon class="size-4" />
+                  Edit
+                </Dropdown.Item>
+              )}
+            </Show>
+            <Show when={props.showCode !== undefined}>
+              <Dropdown.Item onSelect={() => props.onShowCode(!props.showCode)}>
+                <CodeIcon class="size-4" />
+                {props.showCode ? 'Hide code' : 'Show code'}
               </Dropdown.Item>
-            </Dropdown.Group>
-          )}
+            </Show>
+          </Dropdown.Group>
         </Show>
         <Dropdown.Group>
           <Dropdown.Item
@@ -395,6 +425,8 @@ export function StepBody(props: {
   /** Whether a code step shows where to say what to change. */
   editing?: boolean;
   onEditing?(editing: boolean): void;
+  /** Whether a code step shows its code. */
+  showCode?: boolean;
   onChange(step: StepDraft): void;
 }) {
   return (
@@ -408,6 +440,7 @@ export function StepBody(props: {
             step={step()}
             editing={props.editing ?? false}
             onEditing={(editing) => props.onEditing?.(editing)}
+            showCode={props.showCode ?? false}
             onChange={props.onChange}
           />
         )}

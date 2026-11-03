@@ -1,4 +1,3 @@
-import { Button } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import {
   type Knob,
@@ -18,18 +17,20 @@ export function StepNote(props: { children: JSX.Element }) {
 
 /**
  * A code step: what it does in its owner's words, with its knobs to change
- * in place, and its code, folded away. The owner changes the knobs; editing
- * the step asks AI in words for the rest, kept once they've seen it.
+ * in place, and its code when the step's menu shows it. The owner changes
+ * the knobs; editing the step asks AI in words for the rest, kept once
+ * they've seen it.
  */
 export function CodeStepBody(props: {
   step: CodeStepDraft;
   /** Whether it shows where to say what to change, from the step's Edit. */
   editing: boolean;
   onEditing(editing: boolean): void;
+  /** Whether its code shows, from the step's menu. */
+  showCode: boolean;
   onChange(step: CodeStepDraft): void;
 }) {
   const steps = useSteps();
-  const [showCode, setShowCode] = createSignal(false);
   // A rewrite waiting to be kept or undone; the step is unchanged until then.
   const [revision, setRevision] = createSignal<CodeStepDraft>();
   const sentence = () => {
@@ -45,7 +46,7 @@ export function CodeStepBody(props: {
       knobs: withKnobValue(props.step.knobs, name, value),
     });
   return (
-    <div class="grid min-w-0 gap-3">
+    <div class="grid min-w-0 gap-2.5">
       <Show when={revision()}>
         {(revised) => (
           <StepRevision
@@ -120,19 +121,12 @@ export function CodeStepBody(props: {
           )}
         </Show>
       </Show>
-      <div class="grid min-w-0 gap-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          class="w-fit"
-          aria-expanded={showCode()}
-          onClick={() => setShowCode(!showCode())}
-        >
-          {showCode() ? 'Hide code' : 'Show code'}
-        </Button>
-        <Show when={showCode()}>
-          <pre class="max-h-80 min-w-0 overflow-auto rounded-xl border border-edge-frame bg-control px-3 py-2 font-mono text-xs leading-relaxed text-ink">
+      <Show when={props.showCode}>
+        <div class="grid min-w-0 gap-1.5">
+          <pre
+            aria-label="Code"
+            class="max-h-80 min-w-0 overflow-auto rounded-xl border border-edge-frame bg-control px-3 py-2 font-mono text-xs leading-relaxed text-ink"
+          >
             <code>{props.step.source}</code>
           </pre>
           <StepNote>
@@ -140,8 +134,8 @@ export function CodeStepBody(props: {
             underlined values yourself; Edit in the step’s menu changes the
             rest.
           </StepNote>
-        </Show>
-      </div>
+        </div>
+      </Show>
     </div>
   );
 }

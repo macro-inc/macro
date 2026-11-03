@@ -1117,13 +1117,14 @@ under Home's composer) holds **Then… say what should happen next**, where AI
 adds the next step; where AI can't write steps it is **Add step**, which
 offers **Ask AI** while the routine has none.
 
-Steps are numbered, labelled groups that read as one line closed (a code step's
-title and summary with a **Code** badge; **Ask AI** and the first line of its
-instructions); click the header to open or close one. New steps and a routine's
-only step start open. On a routine's page the **Steps** heading carries how
+Steps are numbered, labelled groups. A code step (title with a **Code** badge)
+always shows its sentence with its values, never folding. An **Ask AI** step
+reads as one line closed (the first line of its instructions); click its
+header to open or close it. New steps and a routine's only step start open. On a routine's page the **Steps** heading carries how
 many AI calls a run makes (**1 AI call per email**); what runs did is on the
-**Runs** tab, not on the steps. Each step's ⋯ menu has **Edit** (code steps,
-which opens **Change this step** in the card), **Move up** /
+**Runs** tab, not on the steps. Each step's ⋯ menu has, for code steps, **Edit**
+(opens **Change this step** in the card) and **Show code** / **Hide code**,
+then **Move up** /
 **Move down** (also Alt/⌥+↑/↓ on the card outside its text fields, keeping
 focus on the moved card), **Duplicate** and **Delete step**.
 

@@ -334,4 +334,33 @@ describe('routine steps editor', () => {
       screen.queryByRole('textbox', { name: 'Change this step' })
     ).toBeNull();
   });
+
+  it('always shows what a code step does, with its code behind the step’s menu', () => {
+    renderSteps({
+      triggers: [email],
+      steps: [
+        {
+          ...codeStep('Label invoices'),
+          knobs: [{ type: 'text', name: 'label', label: 'Label', value: 'vc' }],
+          sentence: 'Label it {label}.',
+        },
+        agentStep({ kind: 'model', model: 'm' }, 'Summarize'),
+      ],
+    });
+    // Code steps don't fold; Ask AI steps still do.
+    expect(screen.getByText(/^Label it/).textContent).toBe('Label it vc.');
+    expect(
+      screen.queryByRole('button', { name: /^1.*Label invoices/ })
+    ).toBeNull();
+    expect(screen.getByRole('button', { name: /^2.*Ask AI/ })).toBeTruthy();
+    expect(screen.queryByLabelText('Code')).toBeNull();
+    openMenu('Step actions', 0);
+    choose('Show code');
+    expect(
+      screen.getByLabelText('Code', { selector: 'pre' }).textContent
+    ).toContain('export async function main');
+    openMenu('Step actions', 0);
+    choose('Hide code');
+    expect(screen.queryByLabelText('Code', { selector: 'pre' })).toBeNull();
+  });
 });
