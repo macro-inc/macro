@@ -145,7 +145,8 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
     );
     return cn({
       'text-failure': urgency === 'danger',
-      'text-warning': urgency === 'warning',
+      'text-warning light-mode:text-[color-mix(in_srgb,var(--color-warning)_60%,var(--color-ink))]':
+        urgency === 'warning',
       'text-ink-muted': !urgency,
     });
   };

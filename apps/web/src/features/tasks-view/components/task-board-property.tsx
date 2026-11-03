@@ -137,7 +137,8 @@ export function TaskBoardProperty(props: {
                       class="size-3.5 shrink-0"
                       classList={{
                         'text-failure': props.dueDateUrgency === 'danger',
-                        'text-warning': props.dueDateUrgency === 'warning',
+                        'text-warning light-mode:text-[color-mix(in_srgb,var(--color-warning)_60%,var(--color-ink))]':
+                          props.dueDateUrgency === 'warning',
                       }}
                     />
                   </Match>
@@ -152,7 +153,7 @@ export function TaskBoardProperty(props: {
                   <Property.Text
                     property={shown()}
                     resolveSingleEntity={isProject()}
-                    class={`min-w-0 truncate ${isDate() && props.dueDateUrgency === 'danger' ? 'text-failure' : ''} ${isDate() && props.dueDateUrgency === 'warning' ? 'text-warning' : ''}`}
+                    class={`min-w-0 truncate ${isDate() && props.dueDateUrgency === 'danger' ? 'text-failure' : ''} ${isDate() && props.dueDateUrgency === 'warning' ? 'text-warning light-mode:text-[color-mix(in_srgb,var(--color-warning)_60%,var(--color-ink))]' : ''}`}
                     fallback={<span>{shown().displayName}</span>}
                   />
                 </Show>

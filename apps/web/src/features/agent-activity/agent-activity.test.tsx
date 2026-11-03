@@ -27,6 +27,11 @@ vi.mock('@app/features/block-agent/ui', () => ({
   WorkingDots: () => null,
   DisclosureCaret: () => null,
 }));
+vi.mock('@app/features/dynamic-ui/DashboardToolView.lazy', () => ({
+  DashboardToolView: (props: { view: { title?: string } }) => (
+    <section aria-label={props.view.title} />
+  ),
+}));
 
 import type { AgentActivityData } from '@macro-inc/lexical-core';
 import { AgentActivity as Activity } from './agent-activity';
@@ -146,6 +151,29 @@ it('shows an open run as one line naming the step it is on, live from the sessio
     ]),
   ]);
   expect(line(view)).toEqual(['Read', 'completed']);
+});
+
+it('draws a presented view after its run’s summary, never folded into it', () => {
+  const view = render(() => (
+    <AgentActivity
+      agentSessionId="session"
+      turn={2}
+      segment={1}
+      rows={[
+        { id: 't1', label: 'Searched', status: 'completed' },
+        {
+          id: 'view_1',
+          label: 'Present view',
+          detail: 'Launch notes',
+          status: 'completed',
+          card: { kind: 'view', view: { title: 'Launch notes', widgets: [] } },
+        },
+      ]}
+      sealed
+    />
+  ));
+  expect(view.getByRole('button', { name: 'Used 1 tool' })).toBeTruthy();
+  expect(view.getByRole('region', { name: 'Launch notes' })).toBeTruthy();
 });
 
 it('takes turns among tools called at once, and a new call takes the line at once', () => {

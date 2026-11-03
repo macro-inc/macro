@@ -109,7 +109,13 @@ keeps that named chip, including on phones, rather than showing “1 tag”.
 Open the overflow to edit all tags; hover it for hidden-tag names and filter/edit actions.
 The overflow chip reads “N tags” when it represents all tags, or “+N tags” when
 individual tag chips remain visible.
-An open picker or nested tag editor stays mounted while resizing. The share
+An open picker or nested tag editor stays mounted while resizing or when a
+sorted insertion moves its chip into overflow. Keep the active chip within the
+visible-chip cap until closing, then restore normal order. Live tag refreshes
+retain staged picker changes while accepting remote changes and deleted tags,
+including when a failed tag deletion restores its option. Add tags in a
+constrained row and close the picker: excess tags must enter overflow without
+resizing or reloading, restoring title space before truncating it. The share
 indicator remains immediately beside the title whenever it is shown.
 Compact desktop rows keep tags after the title and before the trailing properties;
 phone rows retain the single tag or collapsed multi-tag chip instead of dropping tags.
@@ -203,7 +209,7 @@ remain available. In the theme editor's **Task statuses** section, change a stat
 color and verify its icons and group-header tints update together in List and Gantt,
 while Board column icons match and global warning/success colors stay unchanged.
 In Progress defaults to amber blended with the theme's foreground: 20% foreground
-in dark mode and 50% in light mode. Check the icon's legibility against the list,
+in dark mode and 15% in light mode. Check the icon's legibility against the list,
 menu, and board surfaces in both modes; custom status-color overrides stay intact.
 
 Click a task row or favorite to replace the list with the editable task document. Its top
@@ -275,8 +281,10 @@ dropdown shows the current date, or **No due date** when unset, above the date
 choices. Due dates stay outside the title.
 Board cards show due dates in property pills. Overdue dates
 on open tasks use the danger color; only dates due today or tomorrow use the
-warning color. Later dates, completed tasks, and canceled tasks have neutral due
-dates. Urgency refreshes at local midnight, on timezone changes, and app resume.
+warning color. On light themes, list and board warning icons and text mix 60%
+warning with 40% foreground for contrast; dark themes keep the warning color.
+Later dates, completed tasks, and canceled tasks have neutral due dates. Urgency
+refreshes at local midnight, on timezone changes, and app resume.
 Date selections persist with the navigation entry and round-trip through
 `tasks.dueDate`, `tasks.dueStart`, and `tasks.dueEnd` URL parameters.
 

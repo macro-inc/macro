@@ -468,6 +468,7 @@ where
             branding: FormBranding::default(),
             created_at: now,
             updated_at: now,
+            project_id: None,
             is_hidden_in_drive: matches!(
                 provenance,
                 Provenance::OwnDatabase {

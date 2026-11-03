@@ -2191,14 +2191,16 @@ impl ToolServiceContext {
 
     /// Run the tools for `caller`, as the public MCP authenticated it: an
     /// agent writes as itself; an MCP client writes as the Macro bot with its
-    /// name on the post ("via Claude Code"); a pasted API key writes as the
-    /// Macro bot.
+    /// name on the post, shown as the author ("Claude Code · Agent"); a pasted
+    /// API key writes as the Macro bot.
     pub fn for_caller(self, caller: &ai_toolset::ToolCaller) -> Self {
         match caller {
             ai_toolset::ToolCaller::Agent(agent) => self.with_actor(*agent),
-            ai_toolset::ToolCaller::McpClient { name: Some(name) } => self.with_via(name),
-            ai_toolset::ToolCaller::McpClient { name: None } | ai_toolset::ToolCaller::ApiKey => {
-                self
+            ai_toolset::ToolCaller::McpClient { .. } | ai_toolset::ToolCaller::ApiKey => {
+                match caller.via() {
+                    Some(client) => self.with_via(client),
+                    None => self,
+                }
             }
         }
     }
@@ -2208,6 +2210,7 @@ impl ToolServiceContext {
     fn with_via(mut self, client: &str) -> Self {
         self.message_tool_context = self.message_tool_context.with_via(client.to_owned());
         self.channel_tool_context = self.channel_tool_context.with_via(client.to_owned());
+        self.document_tool_context = self.document_tool_context.with_via(client.to_owned());
         self
     }
 

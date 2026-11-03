@@ -300,6 +300,8 @@ export function createSoupEntityActions(
         splitHandle,
         referredFrom: 'entity-actions-menu',
         notificationSource,
+        channelNavigation: viewContext.channelNavigation,
+        channelReadScope: viewContext.channelReadScope,
       });
     };
 

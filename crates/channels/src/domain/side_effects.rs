@@ -459,9 +459,16 @@ where
     N: ChannelNotificationSender + Clone,
     K: ChannelContactsDispatcher + Clone,
 {
-    /// Resolve the public bot profile when the message sender is a bot.
+    /// Resolve the public bot profile when the message sender is a bot. A post
+    /// a user made through a client, such as an MCP client, is that client's.
     async fn bot_profile_for_message(&self, message: &MutatedMessage) -> Option<BotSenderProfile> {
         let bot_id = message.sender_id.as_bot()?.bot_id();
+        if let Some(client) = &message.triggered_via {
+            return Some(BotSenderProfile {
+                name: client.clone(),
+                avatar_url: None,
+            });
+        }
         if bot_id == bot_id::MACRO_AI_BOT_ID {
             return Some(BotSenderProfile {
                 name: bot_id::MACRO_AI_NAME.to_string(),
