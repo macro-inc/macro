@@ -1,10 +1,6 @@
 //! System skill for changing an agent's instructions and settings.
 
-use prompt::StaticPrompt;
-
 use crate::SystemSkill;
-
-static TITLE: &str = "Configure Agent";
 
 static INSTRUCTIONS: &str = r##"Follow this skill when the user asks to change how one of their agents behaves - its instructions or system prompt, the model or runtime it runs on, which channels it answers in, which connected apps its sessions get, whether it asks before using tools, or whether it is a coding or chat agent. Agents are the personas people `@` mention in channels and open sessions with; each has a bot profile plus this configuration.
 
@@ -42,13 +38,6 @@ Profile changes - display name, handle, description, picture - go through `Confi
 State what changed in one or two sentences, quoting the new instruction text or setting values. Mention that sessions already running keep the configuration they opened with; only new sessions pick up the change. If the tool refused the change, relay its reason and what would make it valid.
 "##;
 
-static INTENT: &str = "Requests to change an agent's behavior are resolved to one manageable agent, applied as a \
-     whole-text instruction replacement or a minimal settings patch through ConfigureAgent, and \
-     reported with what changed and that only new sessions see it.";
-
-/// The skill's instructions as a composable prompt section.
-pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);
-
 /// The configure-agent system skill.
 pub static SKILL: SystemSkill = SystemSkill {
     slug: "configure-agent",
@@ -57,5 +46,5 @@ pub static SKILL: SystemSkill = SystemSkill {
     visibility: crate::Visibility::Listed,
     tools: &["ListAgents", "ConfigureAgent", "ConfigureBot"],
     sdk_entities: &["agents"],
-    content: &PROMPT,
+    instructions: INSTRUCTIONS,
 };

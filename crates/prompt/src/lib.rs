@@ -56,7 +56,6 @@ static SESSION_BASE_PROMPT: ComposedPrompt = math::PROMPT
 /// composer-confirmed user tools — those hosts' toolsets execute
 /// `CreateCalendarEvent` directly and have no `SendEmail` at all.
 pub static DIRECT_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
-    .compose(&databases::PROMPT)
     .compose(&crm_pipelines::PROMPT)
     .compose(&skills::PROMPT)
     .compose(&document_content_links::PROMPT)
@@ -67,7 +66,6 @@ pub static DIRECT_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
 /// only apply on surfaces that can render the composer card. Composed as its
 /// own chain so the email section stays last.
 pub static TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
-    .compose(&databases::PROMPT)
     .compose(&crm_pipelines::PROMPT)
     .compose(&user_tools::BOOKING_PROMPT)
     .compose(&user_tools::PROMPT)
@@ -80,7 +78,6 @@ pub static TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
 /// reviews those calls in the turn - a review card the user answers while the
 /// agent waits, not a composer left pending after it.
 pub static SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROMPT
-    .compose(&databases::PROMPT)
     .compose(&crm_pipelines::PROMPT)
     .compose(&user_tools::BOOKING_PROMPT)
     .compose(&user_tools::SESSION_PROMPT)
@@ -92,7 +89,6 @@ pub static SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROMPT
 /// the [`code_mode`] section and nonblocking saved reviews.
 pub static CODE_MODE_SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROMPT
     .compose(&code_mode::PROMPT)
-    .compose(&databases::PROMPT)
     .compose(&crm_pipelines::PROMPT)
     .compose(&user_tools::BOOKING_PROMPT)
     .compose(&user_tools::CODE_MODE_SESSION_PROMPT)
@@ -102,7 +98,8 @@ pub static CODE_MODE_SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROM
     .compose(&email::PROMPT);
 
 /// Database-only agent instructions, without unrelated tool capabilities.
-pub static DATABASE_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT.compose(&databases::PROMPT);
+pub static DATABASE_TOOL_USE_PROMPT: ComposedPrompt =
+    BASE_PROMPT.compose(&system_skills::databases::SKILL);
 
 /// Database question instructions for hosts that only discover and read data.
 pub static DATABASE_READ_ONLY_TOOL_USE_PROMPT: ComposedPrompt =
@@ -126,7 +123,7 @@ static MCP_STATIC_INSTRUCTIONS: ComposedPrompt = citations::PROMPT
     .compose(&do_not::PROMPT)
     .compose(&about_macro::PROMPT)
     .compose(&pull_requests::PROMPT)
-    .compose(&databases::PROMPT)
+    .compose(&system_skills::databases::SKILL)
     .compose(&crm_pipelines::PROMPT)
     .compose(&document_content_links::PROMPT);
 

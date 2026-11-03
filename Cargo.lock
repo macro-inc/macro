@@ -15822,6 +15822,7 @@ dependencies = [
 name = "prompt"
 version = "0.1.0"
 dependencies = [
+ "system_skills",
  "workspace-hack",
 ]
 
@@ -19930,7 +19931,6 @@ dependencies = [
 name = "system_skills"
 version = "0.1.0"
 dependencies = [
- "prompt",
  "uuid",
  "workspace-hack",
 ]

@@ -5,4 +5,5 @@ edition = "2024"
 publish = false
 
 [dependencies]
+system_skills = { path = "../system_skills" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

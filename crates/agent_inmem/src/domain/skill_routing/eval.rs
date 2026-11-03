@@ -35,10 +35,6 @@ const PLANNED: &[(&str, &str)] = &[
         "Use when creating, writing into or editing a document, canvas, spreadsheet, Word document or deck; not databases.",
     ),
     (
-        "Databases",
-        "Use when working with a Macro database or table: creating one, querying it, adding rows, columns or views; not CRM pipelines or spreadsheets.",
-    ),
-    (
         "CRM",
         "Use when working with deals, pipelines, stages, companies or contacts; not generic databases.",
     ),

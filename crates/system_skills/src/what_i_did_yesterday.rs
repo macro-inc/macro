@@ -1,10 +1,6 @@
 //! System skill for reconstructing a timeline of the user's activity yesterday.
 
-use prompt::StaticPrompt;
-
 use crate::SystemSkill;
-
-static TITLE: &str = "What I Did Yesterday";
 
 static INSTRUCTIONS: &str = r##"Follow this skill when the user asks what they did yesterday (or on another specific day) — for a standup, a work log, or their own recall. Build a single chronological timeline from every source available, then present it.
 
@@ -31,13 +27,6 @@ Order everything chronologically and group by part of day (morning / afternoon /
 Link each event to its Macro item or external URL. After the timeline, add a two-or-three-sentence summary of the day's main threads of work — what the day was mostly about, not a restatement of every line. If a source returned nothing, note it in one line ("No GitHub activity yesterday").
 "##;
 
-static INTENT: &str = "Day-recap requests produce a chronological, linked timeline of the user's own actions \
-     across Macro, GitHub, and connected integrations, grouped by part of day and followed by a short \
-     summary of the day's main work.";
-
-/// The skill's instructions as a composable prompt section.
-pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);
-
 /// The what-i-did-yesterday system skill.
 pub static SKILL: SystemSkill = SystemSkill {
     slug: "what-i-did-yesterday",
@@ -46,5 +35,5 @@ pub static SKILL: SystemSkill = SystemSkill {
     visibility: crate::Visibility::Listed,
     tools: &[],
     sdk_entities: &[],
-    content: &PROMPT,
+    instructions: INSTRUCTIONS,
 };

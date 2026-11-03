@@ -37,6 +37,7 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "activity": [
@@ -81,6 +82,7 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "agent_api_keys": [
@@ -183,6 +185,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -295,6 +298,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -406,6 +410,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -1140,6 +1145,7 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "agent_runtime_protocol": [
@@ -1249,6 +1255,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -1358,6 +1365,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -1469,6 +1477,7 @@
       "crates/static_file",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -1582,6 +1591,7 @@
       "crates/static_file",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -1686,6 +1696,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -1789,6 +1800,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -2294,6 +2306,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -2503,6 +2516,7 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "bot_id": [
@@ -2585,6 +2599,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "broadcast": [
@@ -2725,6 +2740,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -2811,6 +2827,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "calendar_scheduling": [
@@ -2912,6 +2929,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -3021,6 +3039,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -3098,6 +3117,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "call_recording_preview_handler": [
@@ -3325,6 +3345,7 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "channel_sender": [
@@ -3403,6 +3424,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "chat": [
@@ -3454,6 +3476,7 @@
       "crates/remote_env_var",
       "crates/roles_and_permissions",
       "crates/share_permission_db_utils",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "claude_fold": [
@@ -3575,6 +3598,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -3685,6 +3709,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -3941,6 +3966,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -4022,6 +4048,7 @@
       "crates/sync_service",
       "crates/sync_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/trigger_context",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -4096,6 +4123,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "complete_graph": [
@@ -4313,6 +4341,7 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "connection_gateway": [
@@ -4363,6 +4392,7 @@
       "crates/remote_env_var",
       "crates/secretsmanager_client",
       "crates/stream",
+      "crates/system_skills",
       "crates/workspace-hack",
       "services/connection_gateway"
     ],
@@ -4443,6 +4473,7 @@
       "crates/remote_env_var",
       "crates/secretsmanager_client",
       "crates/sqs_worker",
+      "crates/system_skills",
       "crates/workspace-hack",
       "services/contacts_service"
     ],
@@ -4554,6 +4585,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/trigger_context",
       "crates/unfurl",
       "crates/user_quota",
@@ -4639,6 +4671,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -4750,6 +4783,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -4840,6 +4874,7 @@
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "databases": [
@@ -4905,6 +4940,7 @@
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "databases_sql": [
@@ -5020,6 +5056,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -5492,6 +5529,7 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "document_sub_type": [
@@ -5530,6 +5568,7 @@
       "crates/prompt",
       "crates/remote_env_var",
       "crates/s3_key",
+      "crates/system_skills",
       "crates/workspace-hack",
       "services/document_text_extractor"
     ],
@@ -5900,6 +5939,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/trigger_context",
       "crates/unfurl",
       "crates/user_quota",
@@ -6011,6 +6051,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/trigger_context",
       "crates/unfurl",
       "crates/workspace-hack"
@@ -6091,6 +6132,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "email_db_client": [
@@ -6375,6 +6417,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/trigger_context",
       "crates/unfurl",
       "crates/workspace-hack",
@@ -6474,6 +6517,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/trigger_context",
       "crates/unfurl",
       "crates/workspace-hack",
@@ -6588,6 +6632,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/trigger_context",
       "crates/unfurl",
       "crates/user_quota",
@@ -6685,6 +6730,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/trigger_context",
       "crates/unfurl",
       "crates/workspace-hack"
@@ -6783,6 +6829,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/trigger_context",
       "crates/unfurl",
       "crates/workspace-hack",
@@ -6856,6 +6903,7 @@
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/user_quota",
       "crates/workspace-hack",
       "services/email_suppression_handler"
@@ -6910,6 +6958,7 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "entity_access_db_utils": [
@@ -6974,6 +7023,7 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "entity_registry": [
@@ -7059,6 +7109,7 @@
       "crates/prompt",
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "favorites": [
@@ -7096,6 +7147,7 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "feature_flags": [
@@ -7148,6 +7200,7 @@
       "crates/notification_state",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "forms": [
@@ -7261,6 +7314,7 @@
       "crates/sync_service",
       "crates/sync_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -7474,6 +7528,7 @@
       "crates/notification_state",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "gmail_client": [
@@ -7519,6 +7574,7 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "granola_sync": [
@@ -7596,6 +7652,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "graphql_activity": [
@@ -7644,6 +7701,7 @@
       "crates/notification_state",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "graphql_calendar": [
@@ -7721,6 +7779,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "graphql_channel": [
@@ -7794,6 +7853,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "graphql_common": [
@@ -7901,6 +7961,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -8147,6 +8208,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/trigger_context",
       "crates/unfurl",
       "crates/workspace-hack"
@@ -8681,6 +8743,7 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "graphql_properties": [
@@ -8739,6 +8802,7 @@
       "crates/rate_limit",
       "crates/remote_env_var",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "graphql_scheduled_action": [
@@ -9352,6 +9416,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -9439,6 +9504,7 @@
       "crates/secretsmanager_client",
       "crates/share_permission_db_utils",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/user_quota",
       "crates/workspace-hack",
       "services/image_proxy_service"
@@ -9554,6 +9620,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -9709,6 +9776,7 @@
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "initiative_description": [
@@ -9788,6 +9856,7 @@
       "crates/sync_service",
       "crates/sync_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/trigger_context",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -9952,6 +10021,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -10038,6 +10108,7 @@
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/trigger_context",
       "crates/workspace-hack"
     ],
@@ -10107,6 +10178,7 @@
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/trigger_context",
       "crates/workspace-hack"
     ],
@@ -10257,6 +10329,7 @@
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/user_quota",
       "crates/workspace-hack"
     ],
@@ -10360,6 +10433,7 @@
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/user_quota",
       "crates/workspace-hack"
     ],
@@ -10410,6 +10484,7 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "macro_sync_service_jwt": [
@@ -10477,6 +10552,7 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "mcp_select": [
@@ -10516,6 +10592,7 @@
       "crates/pipedream_mcp",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "mcp_toolset": [
@@ -10735,6 +10812,7 @@
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "microsoft_oauth_grant_db_utils": [
@@ -10775,6 +10853,7 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "model-entity": [
@@ -11003,6 +11082,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/trigger_context",
       "crates/unfurl",
       "crates/workspace-hack"
@@ -11106,6 +11186,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/trigger_context",
       "crates/unfurl",
       "crates/workspace-hack"
@@ -11186,6 +11267,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "native_app_server": [
@@ -11416,6 +11498,7 @@
       "crates/share_permission_db_utils",
       "crates/sns_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/user_quota",
       "crates/workspace-hack",
       "services/notification_service"
@@ -11457,6 +11540,7 @@
       "crates/onboarding",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "opensearch_client": [
@@ -11564,6 +11648,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/trigger_context",
       "crates/unfurl",
       "crates/workspace-hack",
@@ -11663,6 +11748,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/trigger_context",
       "crates/unfurl",
       "crates/workspace-hack",
@@ -11828,6 +11914,7 @@
     ],
     "prompt": [
       "crates/prompt",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "properties": [
@@ -11884,6 +11971,7 @@
       "crates/rate_limit",
       "crates/remote_env_var",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "properties_service": [
@@ -11941,6 +12029,7 @@
       "crates/rate_limit",
       "crates/remote_env_var",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "psd_engine": [
@@ -12079,6 +12168,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/trigger_context",
       "crates/unfurl",
       "crates/workspace-hack"
@@ -12534,6 +12624,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -12637,6 +12728,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/trigger_context",
       "crates/unfurl",
       "crates/workspace-hack"
@@ -12676,6 +12768,7 @@
       "crates/prompt",
       "crates/remote_env_var",
       "crates/s3_key",
+      "crates/system_skills",
       "crates/workspace-hack",
       "services/search_upload_handler"
     ],
@@ -12776,6 +12869,7 @@
       "crates/sync_service",
       "crates/sync_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/trigger_context",
       "crates/upstream_error",
       "crates/user_quota",
@@ -12824,6 +12918,7 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/system_skills",
       "crates/workspace-hack",
       "services/sha_cleanup_worker"
     ],
@@ -13109,6 +13204,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -13228,6 +13324,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -13349,6 +13446,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -13473,6 +13571,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -13593,6 +13692,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -13826,6 +13926,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/trigger_context",
       "crates/unfurl",
       "crates/workspace-hack"
@@ -13884,6 +13985,7 @@
       "crates/remote_env_var",
       "crates/s3_key",
       "crates/secretsmanager_client",
+      "crates/system_skills",
       "crates/workspace-hack",
       "services/static_file_service"
     ],
@@ -13947,6 +14049,7 @@
       "crates/remote_env_var",
       "crates/sync_service",
       "crates/sync_service_client",
+      "crates/system_skills",
       "crates/workspace-hack"
     ],
     "sync_service_hex": [
@@ -13976,7 +14079,6 @@
       "crates/workspace-hack"
     ],
     "system_skills": [
-      "crates/prompt",
       "crates/system_skills",
       "crates/workspace-hack"
     ],
@@ -14070,6 +14172,7 @@
       "crates/secretsmanager_client",
       "crates/share_permission_db_utils",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/task_dedup",
       "crates/trigger_context",
       "crates/workspace-hack"
@@ -14171,6 +14274,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -14300,6 +14404,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -14402,6 +14507,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/trigger_context",
       "crates/unfurl",
       "crates/workspace-hack",
@@ -14502,6 +14608,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/trigger_context",
       "crates/unfurl",
       "crates/workspace-hack",
@@ -14613,6 +14720,7 @@
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
       "crates/system_properties",
+      "crates/system_skills",
       "crates/user_quota",
       "crates/workspace-hack",
       "services/user_link_cleanup_handler"
@@ -14805,6 +14913,7 @@
       "crates/prompt",
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
+      "crates/system_skills",
       "crates/whatsapp_e2e",
       "crates/whatsapp_fake_server",
       "crates/whatsapp_linked",
@@ -14862,6 +14971,7 @@
       "crates/prompt",
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
+      "crates/system_skills",
       "crates/whatsapp_linked",
       "crates/workspace-hack"
     ],
@@ -14909,6 +15019,7 @@
       "crates/prompt",
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
+      "crates/system_skills",
       "crates/whatsapp_linked",
       "crates/whatsapp_store_pg",
       "crates/whatsmeow",

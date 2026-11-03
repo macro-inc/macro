@@ -1,10 +1,6 @@
 //! System skill for catching the user up on messages and activity they missed.
 
-use prompt::StaticPrompt;
-
 use crate::SystemSkill;
-
-static TITLE: &str = "Catch Me Up";
 
 static INSTRUCTIONS: &str = r##"Follow this skill when the user asks to catch up on what they missed — unread messages, new activity, or what happened while they were away.
 
@@ -31,13 +27,6 @@ Link every item you mention so the user can jump in. Keep the whole briefing sca
 End by offering to mark the covered notifications as seen (`MarkNotificationsSeen`); only do so if the user says yes.
 "##;
 
-static INTENT: &str = "Catch-up requests produce a prioritized, linked briefing — needs-response first, \
-     then notable activity, then per-channel roll-ups — built from unseen notifications and recent \
-     workspace activity.";
-
-/// The skill's instructions as a composable prompt section.
-pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);
-
 /// The catch-me-up system skill.
 pub static SKILL: SystemSkill = SystemSkill {
     slug: "catch-me-up",
@@ -46,5 +35,5 @@ pub static SKILL: SystemSkill = SystemSkill {
     visibility: crate::Visibility::Listed,
     tools: &["ListNotifications", "MarkNotificationsSeen"],
     sdk_entities: &[],
-    content: &PROMPT,
+    instructions: INSTRUCTIONS,
 };

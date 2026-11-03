@@ -18,10 +18,14 @@ it. Design: `docs/design/auto-skills.md`.
 - Owns: built-in skill text, routing descriptions, and their ids.
 - Not here: serving skills as tools → `crates/skills`; the menu endpoint →
   `crates/documents` (`axum_router/system_skills.rs`); composing prompts →
-  `crates/ai_tools`.
+  `crates/ai_tools` and `crates/prompt` (a skill renders as a prompt section).
 
 ## Recipes
 
+- Move an area's guidance out of `crates/prompt`: `git mv` its text to
+  `src/<slug>.md`, add an `AgentOnly` skill → drop the section from the
+  `crates/prompt` chains (hosts get it from `ai_tools`) → drop the area from
+  `PLANNED` in `agent_inmem`'s `route_evaluation` and rerun it.
 - Add a skill: `src/<slug>.rs` exporting `SKILL` → register in
   `SYSTEM_SKILLS` → its `tools` must be deferred session tools (checked in
   `ai_tools`) and its `sdk_entities` real SDK entities (checked in

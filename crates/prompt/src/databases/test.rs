@@ -1,16 +1,13 @@
-use crate::{
-    DATABASE_TOOL_USE_PROMPT, DIRECT_TOOL_USE_PROMPT, SESSION_TOOL_USE_PROMPT, TOOL_USE_PROMPT,
-};
+use crate::{DATABASE_TOOL_USE_PROMPT, mcp_instructions};
 
+/// Hosts that carry the databases skill whole. Agent hosts get it from
+/// `ai_tools`, inline or loaded on demand.
 #[test]
-fn database_workflow_reaches_every_agent_host_without_unrelated_scoped_tools() {
-    for prompt in [
-        &DATABASE_TOOL_USE_PROMPT,
-        &DIRECT_TOOL_USE_PROMPT,
-        &SESSION_TOOL_USE_PROMPT,
-        &TOOL_USE_PROMPT,
+fn database_rules_reach_the_database_host_and_mcp_clients() {
+    for text in [
+        DATABASE_TOOL_USE_PROMPT.to_string(),
+        mcp_instructions("https://macro.com"),
     ] {
-        let text = prompt.to_string();
         for rule in [
             "check every database's tables",
             "entity(USER)",
@@ -35,7 +32,10 @@ fn database_workflow_reaches_every_agent_host_without_unrelated_scoped_tools() {
         }
     }
     let scoped = DATABASE_TOOL_USE_PROMPT.to_string();
-    assert_eq!(scoped, format!("{}{}", crate::BASE_PROMPT, super::PROMPT));
+    assert_eq!(
+        scoped,
+        format!("{}{}", crate::BASE_PROMPT, system_skills::databases::SKILL)
+    );
     // BASE_PROMPT's Markdown formatting note mentions email bodies without
     // granting an email tool; the scoped prompt must omit its action rules.
     assert!(!scoped.contains("MUST use the `SendEmail` tool"));

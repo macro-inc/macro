@@ -1,14 +1,7 @@
-//! How Macro databases work and the rules for changing them, shared across
-//! agent hosts. How to call the database tools is in their descriptions.
+//! The read-only database question host's instructions. How Macro databases
+//! work is the `databases` built-in skill (`system_skills::databases`).
 
 use crate::types::StaticPrompt;
-
-/// Instructions for tools that operate on Macro databases.
-pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(
-    "Macro databases",
-    include_str!("databases.md"),
-    "Find nested tables before claiming absence, type columns by their values, never invent people, change data only within the requested scope, verify persisted results, and answer data questions with live saved-query blocks.",
-);
 
 /// Read-only database questions rendered by their host as live query results.
 pub static READ_ONLY_PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(

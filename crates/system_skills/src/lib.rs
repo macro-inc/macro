@@ -1,7 +1,8 @@
 //! Built-in "system" skills available to every user.
 //!
-//! System skills are defined entirely in code as composable static strings
-//! (see the [`prompt`] crate) — they are not documents. They surface through
+//! System skills are defined entirely in code as static strings — they are
+//! not documents. Each renders as a prompt section, so prompts that carry an
+//! area's guidance whole compose the skill itself. They surface through
 //! the same AI tools as user-authored skills (`ListSkills`, `SearchSkills`,
 //! `ReadSkill`) but cannot be opened or edited as markdown documents.
 //! [`Visibility::Listed`] skills also appear in the skills menu;
@@ -14,11 +15,13 @@
 //! `GET /system_skills` endpoint.
 #![deny(missing_docs)]
 
-use prompt::Section;
+use std::fmt;
+
 use uuid::Uuid;
 
 pub mod catch_me_up;
 pub mod configure_agent;
+pub mod databases;
 pub mod what_i_did_yesterday;
 
 #[cfg(test)]
@@ -41,8 +44,8 @@ pub struct SystemSkill {
     pub tools: &'static [&'static str],
     /// The SDK entities whose use in code the skill's instructions cover.
     pub sdk_entities: &'static [&'static str],
-    /// The skill's markdown instructions as a composable prompt section.
-    pub content: Section,
+    /// The skill's markdown instructions, rendered under its name.
+    pub instructions: &'static str,
 }
 
 /// Where a system skill is listed.
@@ -72,7 +75,14 @@ impl SystemSkill {
 
     /// Render the skill's markdown instructions.
     pub fn render_content(&self) -> String {
-        self.content.to_string()
+        self.to_string()
+    }
+}
+
+/// A skill renders as a prompt section titled with its name.
+impl fmt::Display for SystemSkill {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "# {}\n{}", self.name, self.instructions)
     }
 }
 
@@ -81,6 +91,7 @@ pub static SYSTEM_SKILLS: &[&SystemSkill] = &[
     &catch_me_up::SKILL,
     &what_i_did_yesterday::SKILL,
     &configure_agent::SKILL,
+    &databases::SKILL,
 ];
 
 /// Look up a system skill by its well-known id.

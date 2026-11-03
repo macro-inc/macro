@@ -13,20 +13,24 @@ AI system prompts: one module per prompt section, each exporting a
   `agent_identity.rs`, `mentions.rs`, `databases.rs`, `crm_pipelines.rs`, ...).
 - `src/types.rs`: `StaticPrompt` and `ComposedPrompt` — the composition
   mechanism every module uses.
-- `src/databases.rs` / `src/crm_pipelines.rs`: examples pairing a `.rs` module
-  with a sibling `.md` file for the actual prompt text.
+- `src/crm_pipelines.rs`: an example pairing a `.rs` module with a sibling
+  `.md` file for the actual prompt text.
 
 ## Scope
 
 - Owns: the wording of static, reusable prompt sections and how they compose.
 - Not here: deciding which sections go into a given agent's final prompt, or
-  per-turn dynamic context → `agent`, `agent_harness`.
+  per-turn dynamic context → `agent`, `agent_harness`. Guidance for one area
+  (databases, CRM, email, ...) → an agent-only built-in skill in
+  `crates/system_skills`, which `ai_tools` inlines or routes; compose a skill
+  here only for a host that carries it whole (the database host, MCP
+  instructions).
 
 ## Boundaries
 
+- Depends on: `system_skills` (built-in skills compose as sections).
 - Used by: `ai_tools`, `agent_inmem`, `channel_bots`, `agent`,
-  `system_skills`, `services/agent_harness_service`,
-  `services/agent_harness_service`, `services/agent_harness_service`.
+  `services/agent_harness_service`.
 
 ## Recipes
 
