@@ -45,6 +45,38 @@ for (const company of ['Acme', 'Community group']) {
   });
 }
 
+test('creates a contact by name alone, without a company or email', async ({
+  page,
+}, testInfo) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'New contact', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Contact name' }).fill('Jane Doe');
+  await page.screenshot({ path: testInfo.outputPath('name-only-contact.png') });
+  await page.getByRole('button', { name: /^Create Contact/ }).click();
+  await expect(page.getByTestId('created')).toHaveText('{"name":"Jane Doe"}');
+});
+
+test('uses the server character limit for Unicode contact names', async ({
+  page,
+}, testInfo) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'New contact', exact: true }).click();
+  const name = page.getByRole('textbox', { name: 'Contact name' });
+  await name.fill('𐐀'.repeat(201));
+  await page.getByRole('button', { name: /^Create Contact/ }).click();
+  await expect(name).toHaveAttribute('aria-invalid', 'true');
+  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(page.getByTestId('created')).toBeEmpty();
+  await page.screenshot({
+    path: testInfo.outputPath('unicode-name-limit.png'),
+  });
+  await name.fill('𐐀'.repeat(200));
+  await page.getByRole('button', { name: /^Create Contact/ }).click();
+  await expect(page.getByTestId('created')).toHaveText(
+    JSON.stringify({ name: '𐐀'.repeat(200) })
+  );
+});
+
 test('creates a name-only company while adding a deal', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'New deal', exact: true }).click();

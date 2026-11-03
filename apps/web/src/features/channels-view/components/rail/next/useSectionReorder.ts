@@ -95,5 +95,9 @@ export function useSectionReorder(
     state?.active.draggable?.data.dndScope === scope &&
     state.active.draggable.data.section === key;
 
-  return { scope, dropEdge, move, isDragging };
+  const cancel = () => {
+    dragAccount = undefined;
+  };
+
+  return { scope, dropEdge, move, isDragging, cancel };
 }
