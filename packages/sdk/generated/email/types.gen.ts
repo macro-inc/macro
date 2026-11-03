@@ -1893,6 +1893,28 @@ export type MessageOperationResponse = {
     operation?: null | ApiMessageOperation;
 };
 
+/**
+ * Open state of one tracked, sent message.
+ */
+export type MessageReadReceipt = {
+    /**
+     * First counted fetch.
+     */
+    first_opened_at?: string | null;
+    /**
+     * Latest counted fetch.
+     */
+    last_opened_at?: string | null;
+    /**
+     * The tracked message.
+     */
+    message_id: string;
+    /**
+     * Counted pixel fetches.
+     */
+    open_count: number;
+};
+
 export type ParsedMessage = {
     bcc: Array<ContactInfo>;
     body_parsed?: string | null;
@@ -2163,6 +2185,10 @@ export type SequenceSummary = {
 
 export type Settings = {
     /**
+     * Whether messages sent from this inbox carry an open-tracking pixel.
+     */
+    read_receipts_enabled?: boolean | null;
+    /**
      * The user's email signature content (HTML). On a patch, omit or send
      * `null` to leave unchanged (both deserialize to `None`); pass an empty
      * string to clear it. The column cannot be set to SQL NULL via patch.
@@ -2267,6 +2293,13 @@ export type ThreadPreviewCursor = {
     sortTs: string;
     updatedAt: string;
     viewedAt?: string | null;
+};
+
+/**
+ * Open state of the caller's tracked, sent messages in one thread.
+ */
+export type ThreadReadReceipts = {
+    receipts: Array<MessageReadReceipt>;
 };
 
 /**
@@ -4220,6 +4253,29 @@ export type UpdateThreadProjectResponses = {
 
 export type UpdateThreadProjectResponse2 = UpdateThreadProjectResponses[keyof UpdateThreadProjectResponses];
 
+export type GetThreadReadReceiptsData = {
+    body?: never;
+    path: {
+        /**
+         * Authorized email thread
+         */
+        thread_id: string;
+    };
+    query?: never;
+    url: '/email/threads/{thread_id}/read-receipts';
+};
+
+export type GetThreadReadReceiptsErrors = {
+    401: unknown;
+    403: unknown;
+};
+
+export type GetThreadReadReceiptsResponses = {
+    200: ThreadReadReceipts;
+};
+
+export type GetThreadReadReceiptsResponse = GetThreadReadReceiptsResponses[keyof GetThreadReadReceiptsResponses];
+
 export type HealthHandlerData = {
     body?: never;
     path?: never;
@@ -4235,3 +4291,22 @@ export type HealthHandlerResponses = {
 };
 
 export type HealthHandlerResponse = HealthHandlerResponses[keyof HealthHandlerResponses];
+
+export type GetReadReceiptPixelData = {
+    body?: never;
+    path: {
+        /**
+         * Opaque pixel token
+         */
+        token: string;
+    };
+    query?: never;
+    url: '/opens/{token}';
+};
+
+export type GetReadReceiptPixelResponses = {
+    /**
+     * Transparent pixel, for any token
+     */
+    200: unknown;
+};

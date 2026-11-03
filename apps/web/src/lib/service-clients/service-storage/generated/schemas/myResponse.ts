@@ -4,21 +4,10 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { Answer } from './answer';
-import type { FormResponse } from './formResponse';
-import type { UnlockedBooking } from './unlockedBooking';
+import type { MyResponseOneOf } from './myResponseOneOf';
+import type { MyResponseOneOfThree } from './myResponseOneOfThree';
 
 /**
- * A signed-in respondent's own response, with its answers as the row
-holds them now.
+ * A signed-in respondent's own response.
  */
-export interface MyResponse {
-  /** The row's cells for the form's current questions, the empty ones
-left out; none when the row is gone. */
-  answers: Answer[];
-  /** The form's booking step, while the saved row still passes the form's
-current required questions and gates. */
-  booking?: UnlockedBooking;
-  /** The ledger entry. */
-  response: FormResponse;
-}
+export type MyResponse = MyResponseOneOf | MyResponseOneOfThree;

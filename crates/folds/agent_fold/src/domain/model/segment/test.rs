@@ -101,25 +101,29 @@ fn code_execution_steps_show_observed_sdk_operations_without_source_or_results()
                 id: "code-1:1".into(),
                 label: "Search documents".into(),
                 detail: None,
-                status: ActivityStatus::Completed
+                status: ActivityStatus::Completed,
+                card: None,
             },
             ActivityRow {
                 id: "code-1:2".into(),
                 label: "Read email".into(),
                 detail: None,
-                status: ActivityStatus::Failed
+                status: ActivityStatus::Failed,
+                card: None,
             },
             ActivityRow {
                 id: "code-1:3".into(),
                 label: "Create document".into(),
                 detail: None,
-                status: ActivityStatus::Interrupted
+                status: ActivityStatus::Interrupted,
+                card: None,
             },
             ActivityRow {
                 id: "code-1:4".into(),
                 label: "Read email".into(),
                 detail: None,
-                status: ActivityStatus::Running
+                status: ActivityStatus::Running,
+                card: None,
             },
         ]
     );
@@ -192,12 +196,14 @@ fn narration_work_and_answer_are_three_segments_with_the_steps_grouped() {
                 label: "Ran".to_owned(),
                 detail: Some("cargo test".to_owned()),
                 status: ActivityStatus::Completed,
+                card: None,
             },
             ActivityRow {
                 id: "b".to_owned(),
                 label: "Read".to_owned(),
                 detail: Some("lib.rs".to_owned()),
                 status: ActivityStatus::Completed,
+                card: None,
             },
         ]
     );
@@ -391,4 +397,52 @@ fn session_activity_retains_command_and_tool_input_details_for_authorized_live_v
     let live = segments(&parts, true);
     assert_eq!(live[0].rows[0].detail.as_deref(), Some(command));
     assert_eq!(live[0].rows[1].detail.as_deref(), Some(query));
+}
+
+fn present_view(id: &str, view: Option<dynamic_ui::View>, status: ToolStatus) -> MessagePart {
+    MessagePart::ToolUse {
+        id: ToolUseId(id.to_owned()),
+        name: ToolName::Mcp {
+            server: "macro_internal".into(),
+            tool: "PresentView".into(),
+        },
+        status,
+        detail: ToolDetail::View { view, error: None },
+    }
+}
+
+#[test]
+fn a_presented_view_is_its_steps_card() {
+    let view = dynamic_ui::View {
+        title: Some("Launch notes".to_owned()),
+        widgets: vec![dynamic_ui::Widget::Md {
+            markdown: "Shipped.".to_owned(),
+        }],
+    };
+    let parts = [
+        present_view("call-1", Some(view.clone()), ToolStatus::Completed),
+        present_view("view_0199", Some(view.clone()), ToolStatus::Completed),
+    ];
+    let rows = &segments(&parts, true)[0].rows;
+    // The agent's own call is its receipt; the presented call shows the view.
+    assert_eq!(rows[0].card, None);
+    assert_eq!(rows[0].detail, None);
+    assert_eq!(rows[1].card, Some(ActivityCard::View { view }));
+    assert_eq!(rows[1].detail.as_deref(), Some("Launch notes"));
+}
+
+#[test]
+fn only_a_finished_presentation_with_a_view_has_a_card() {
+    let view = dynamic_ui::View {
+        title: None,
+        widgets: Vec::new(),
+    };
+    for part in [
+        present_view("view_1", Some(view.clone()), ToolStatus::Running),
+        present_view("view_2", Some(view.clone()), ToolStatus::Failed),
+        present_view("view_3", None, ToolStatus::Completed),
+    ] {
+        let parts = [part];
+        assert_eq!(segments(&parts, false)[0].rows[0].card, None);
+    }
 }

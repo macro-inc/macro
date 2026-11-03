@@ -64,6 +64,7 @@ import type {
   SequenceErrorResponse,
   SequenceInput,
   SharedInboxConflictResponse,
+  ThreadReadReceipts,
   TransferDraftRequest,
   TransferDraftResponse,
   TransferRecoveryResponse,
@@ -271,6 +272,11 @@ export const emailClient = {
       body: JSON.stringify(args),
       errorResponseHandler: forwardCalendarEventErrorHandler,
     });
+  },
+  async getThreadReadReceipts(threadId: string) {
+    return emailFetch<ThreadReadReceipts>(
+      `/email/threads/${threadId}/read-receipts`
+    );
   },
   async init(args?: { linkId?: string; forceShare?: boolean }) {
     const params = new URLSearchParams();

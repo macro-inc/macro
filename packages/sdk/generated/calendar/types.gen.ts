@@ -395,85 +395,6 @@ export type CalendarJoinRequestDecision = 'accept' | 'decline';
 export type CalendarJoinRequestStatus = 'pending' | 'accepted' | 'declined';
 
 /**
- * Meeting-level fields shown in a calendar event mention preview, taken from
- * the requester's own projection of the meeting, or — when the requester has
- * none — from the mentioned projection a channel they belong to was given.
- */
-export type CalendarMentionEvent = {
-    /**
-     * Number of attendees on the previewed copy.
-     */
-    attendeeCount: number;
-    /**
-     * For a channel-shared preview, whether the person who shared it can
-     * add the requester as a guest. Always false for the requester's own
-     * copy.
-     */
-    canRequestToJoin?: boolean;
-    /**
-     * Provider description, plain text or HTML, truncated for the preview.
-     * Clients must sanitize it before rendering.
-     */
-    description?: string | null;
-    /**
-     * Whether the event repeats.
-     */
-    isRecurring: boolean;
-    joinRequestStatus?: null | CalendarJoinRequestStatus;
-    /**
-     * Location label, when set.
-     */
-    location?: string | null;
-    /**
-     * Key of the previewed instance, absent when no occurrence is
-     * materialized.
-     */
-    occurrenceKey?: string | null;
-    /**
-     * Organizer email.
-     */
-    organizerEmail?: string | null;
-    /**
-     * Organizer display name.
-     */
-    organizerName?: string | null;
-    /**
-     * Time of the previewed instance: the requested occurrence when it
-     * exists, else the next upcoming one, else the latest past one, else the
-     * series start.
-     */
-    time: EventTime;
-    /**
-     * Display title.
-     */
-    title: string;
-    /**
-     * Entity update time of the previewed copy.
-     */
-    updatedAt: string;
-    /**
-     * The calendars holding `viewer_event_id`, the canonical copy's first.
-     */
-    viewerCalendarIds?: Array<string>;
-    viewerCopy?: null | CalendarMentionViewerCopy;
-    /**
-     * The requester's own event entity for the mentioned meeting. Differs
-     * from the mentioned id when the mention came from another attendee.
-     * Absent when the meeting is on none of the requester's calendars and
-     * they see it only because it was shared with one of their channels:
-     * that preview is read-only and there is no event of theirs to open.
-     */
-    viewerEventId?: string | null;
-};
-
-/**
- * How a requester holds a mentioned meeting on their own calendar, decided
- * by the copy's own inbox, the way viewer capabilities decide organizer and
- * guest.
- */
-export type CalendarMentionViewerCopy = 'snapshot' | 'invitation' | 'event';
-
-/**
  * HTTP error body returned by calendar mutation endpoints.
  */
 export type CalendarMutationApiError = {
@@ -652,35 +573,6 @@ export type CreateCalendarEventRequest = {
 };
 
 /**
- * A visible meeting link, or an owner's durable grant they can no longer open.
- */
-export type DocumentNoteLink = {
-    /**
-     * Whether the reader may resolve this exact meeting's details right now.
-     */
-    canViewMeeting: boolean;
-    /**
-     * Current name of the markdown document.
-     */
-    documentName: string;
-    event?: null | CalendarMentionEvent;
-    /**
-     * Linked calendar copy.
-     */
-    eventId: string;
-    /**
-     * Current title, or a safe placeholder when meeting details are unavailable.
-     */
-    eventTitle: string;
-    /**
-     * Original occurrence start, or `single` for a one-time meeting.
-     */
-    occurrenceKey: string;
-    team?: null | NoteTeam;
-    teamEvent?: null | TeamCalendarItem;
-};
-
-/**
  * One reminder: how it alerts and how many minutes before the event start
  * (before midnight in the calendar's zone for all-day events) it fires.
  */
@@ -815,16 +707,6 @@ export type InviteCalendarEventGuestsRequest = {
 };
 
 /**
- * Optional additional view access for one team.
- */
-export type LinkNoteRequest = {
-    /**
-     * Null means the meeting audience only.
-     */
-    teamId?: string | null;
-};
-
-/**
  * Calendars visible to the requester across connected and delegated inboxes.
  */
 export type ListCalendarsResponse = {
@@ -832,67 +714,6 @@ export type ListCalendarsResponse = {
      * Primaries and writable calendars first.
      */
     calendars: Array<VisibleCalendar>;
-};
-
-/**
- * One linked document and the extra access this link grants.
- */
-export type MeetingNote = {
-    /**
-     * Whether this viewer can change this document's sharing.
-     */
-    canManage: boolean;
-    /**
-     * Markdown document identity.
-     */
-    documentId: string;
-    /**
-     * Current document name.
-     */
-    name: string;
-    team?: null | NoteTeam;
-};
-
-/**
- * A document available in the note picker.
- */
-export type NoteDocument = {
-    /**
-     * Markdown document identity.
-     */
-    documentId: string;
-    /**
-     * Current document name, never a copied title.
-     */
-    name: string;
-};
-
-/**
- * Picker results; only documents whose owner is the caller are suggested.
- */
-export type NotePicker = {
-    /**
-     * At most 30 matching markdown documents, most recently updated first.
-     */
-    documents: Array<NoteDocument>;
-    /**
-     * Teams the caller currently belongs to.
-     */
-    teams: Array<NoteTeam>;
-};
-
-/**
- * An additional team audience, separate from the meeting's audience.
- */
-export type NoteTeam = {
-    /**
-     * Team identity.
-     */
-    id: string;
-    /**
-     * Display name.
-     */
-    name: string;
 };
 
 /**
@@ -1000,80 +821,6 @@ export type RsvpCalendarEventRequest = {
      */
     response: AttendeeResponseStatus;
     scope?: null | CalendarRsvpScopeParam;
-};
-
-/**
- * Disjoint busy/detail shapes prevent new event fields leaking by default.
- */
-export type TeamCalendarContent = {
-    kind: 'busy';
-} | {
-    /**
-     * Detail projection.
-     */
-    details: TeamCalendarDetails;
-    kind: 'details';
-};
-
-/**
- * Safe details from a single authorized source.
- */
-export type TeamCalendarDetails = {
-    /**
-     * Attendees; self flags are relative to the requesting viewer.
-     */
-    attendees: Array<CalendarAttendee>;
-    /**
-     * Source calendar name, shown only with details.
-     */
-    calendarName: string;
-    /**
-     * Join URL, if supplied by this source.
-     */
-    conferenceUrl?: string | null;
-    /**
-     * Body, if supplied by this source.
-     */
-    description?: string | null;
-    /**
-     * Location, if supplied by this source.
-     */
-    location?: string | null;
-    /**
-     * Organizer address from this source.
-     */
-    organizerEmail?: string | null;
-    /**
-     * Organizer name from this source.
-     */
-    organizerName?: string | null;
-    /**
-     * Display title.
-     */
-    title: string;
-};
-
-/**
- * A read-only team calendar occurrence.
- */
-export type TeamCalendarItem = TeamCalendarContent & {
-    /**
-     * Whether this occurrence blocks the sharer's personal availability.
-     * A subscribed calendar's block can be shared without occupying the sharer.
-     */
-    contributesToAvailability: boolean;
-    /**
-     * Stable opaque projection identity, never an event entity id.
-     */
-    id: string;
-    /**
-     * The person sharing access to the source.
-     */
-    ownerId: string;
-    /**
-     * Occurrence interval.
-     */
-    time: EventTime;
 };
 
 /**
@@ -1551,68 +1298,6 @@ export type InviteCalendarEventGuestsResponses = {
 
 export type InviteCalendarEventGuestsResponse = InviteCalendarEventGuestsResponses[keyof InviteCalendarEventGuestsResponses];
 
-export type EventNotesData = {
-    body?: never;
-    path: {
-        event_id: string;
-    };
-    query: {
-        /**
-         * Stable occurrence key returned by the calendar read API.
-         */
-        occurrenceKey: string;
-    };
-    url: '/events/{event_id}/notes';
-};
-
-export type EventNotesResponses = {
-    200: Array<MeetingNote>;
-};
-
-export type EventNotesResponse = EventNotesResponses[keyof EventNotesResponses];
-
-export type UnlinkEventNoteData = {
-    body?: never;
-    path: {
-        event_id: string;
-        document_id: string;
-    };
-    query: {
-        /**
-         * Stable occurrence key returned by the calendar read API.
-         */
-        occurrenceKey: string;
-    };
-    url: '/events/{event_id}/notes/{document_id}';
-};
-
-export type UnlinkEventNoteResponses = {
-    204: void;
-};
-
-export type UnlinkEventNoteResponse = UnlinkEventNoteResponses[keyof UnlinkEventNoteResponses];
-
-export type LinkEventNoteData = {
-    body: LinkNoteRequest;
-    path: {
-        event_id: string;
-        document_id: string;
-    };
-    query: {
-        /**
-         * Stable occurrence key returned by the calendar read API.
-         */
-        occurrenceKey: string;
-    };
-    url: '/events/{event_id}/notes/{document_id}';
-};
-
-export type LinkEventNoteResponses = {
-    204: void;
-};
-
-export type LinkEventNoteResponse = LinkEventNoteResponses[keyof LinkEventNoteResponses];
-
 export type CalendarEventProviderUrlData = {
     body?: never;
     path: {
@@ -1771,39 +1456,6 @@ export type RespondToJoinRequestResponses = {
 };
 
 export type RespondToJoinRequestResponse = RespondToJoinRequestResponses[keyof RespondToJoinRequestResponses];
-
-export type NoteDocumentsData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Empty returns recent documents.
-         */
-        query?: string;
-    };
-    url: '/meeting-notes/documents';
-};
-
-export type NoteDocumentsResponses = {
-    200: NotePicker;
-};
-
-export type NoteDocumentsResponse = NoteDocumentsResponses[keyof NoteDocumentsResponses];
-
-export type DocumentNoteLinksData = {
-    body?: never;
-    path: {
-        document_id: string;
-    };
-    query?: never;
-    url: '/meeting-notes/documents/{document_id}/links';
-};
-
-export type DocumentNoteLinksResponses = {
-    200: Array<DocumentNoteLink>;
-};
-
-export type DocumentNoteLinksResponse = DocumentNoteLinksResponses[keyof DocumentNoteLinksResponses];
 
 export type DiscardCalendarReplacementData = {
     body?: never;

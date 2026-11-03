@@ -5,7 +5,8 @@ const requests = vi.hoisted(() => ({
   authenticated: vi.fn(),
   public: vi.fn(),
 }));
-vi.mock('@core/constant/servers', () => ({
+vi.mock('@core/constant/servers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/servers')>()),
   SERVER_HOSTS: { 'document-storage-service': 'https://gateway.example/dss' },
 }));
 vi.mock('@core/util/fetchWithToken', () => ({

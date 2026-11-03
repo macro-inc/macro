@@ -101,8 +101,14 @@ import {
   channelsSplitRoute,
   codersRoute,
   companiesRoute,
+  crmItemRoute,
+  crmPipelineItemRoute,
+  crmPipelineRecordFileItemRoute,
+  crmPipelineRecordItemRoute,
   crmPipelineRecordRoute,
   crmPipelineRoute,
+  crmRecordFileItemRoute,
+  crmRecordItemRoute,
   crmRecordRoute,
   crmSequenceRoute,
   debugRoutes,
@@ -127,6 +133,7 @@ import {
   homeSplitRoute,
   inboxLinkCallbackRoute,
   internalInviteLinksRoute,
+  internalSystemStatusRoute,
   inviteRoute,
   legacyContentRoute,
   loginPopupSuccessRoute,
@@ -180,6 +187,10 @@ const BookingLinksRouteView = lazyNamed(
 const ExternalRouteView = lazyNamed(
   () => import('@app/features/external-view/route-views'),
   'ExternalRouteView'
+);
+const SystemStatusDashboard = lazyNamed(
+  () => import('@app/features/system-status/views/SystemStatusDashboard'),
+  'SystemStatusDashboard'
 );
 
 /** Debug views stay behind the registry's lazy import. */
@@ -265,6 +276,10 @@ export function AppRouterView() {
         <Route
           definition={internalInviteLinksRoute}
           component={InviteLinksPortal}
+        />
+        <Route
+          definition={internalSystemStatusRoute}
+          component={SystemStatusDashboard}
         />
         <Route definition={teamInviteRoute} component={TeamInviteAcceptance} />
         <Route
@@ -429,10 +444,16 @@ export function AppRouterView() {
         <Route definition={callDetailRoute} component={CallDetailRouteView} />
         <Route definition={companiesRoute} component={CompaniesRouteView}>
           <Route definition={crmPipelineRoute}>
+            <Route definition={crmPipelineItemRoute} />
             <Route definition={crmPipelineRecordRoute} />
+            <Route definition={crmPipelineRecordItemRoute} />
+            <Route definition={crmPipelineRecordFileItemRoute} />
           </Route>
           <Route definition={crmSequenceRoute} />
+          <Route definition={crmItemRoute} />
           <Route definition={crmRecordRoute} />
+          <Route definition={crmRecordItemRoute} />
+          <Route definition={crmRecordFileItemRoute} />
         </Route>
         <Route definition={foldersRoute} component={FoldersRouteView} />
         <Route definition={searchRoute} component={SearchRouteView} />

@@ -18,6 +18,8 @@ function MediaSplitButton(props: {
   toggleLabel: string;
   menuLabel: string;
   disabled?: boolean;
+  /** Set for a toggle whose icon stays the same in both states. */
+  pressed?: boolean;
   onToggle: () => void;
   icon: JSX.Element;
   children: JSX.Element;
@@ -29,6 +31,7 @@ function MediaSplitButton(props: {
         <ButtonGroup.Button
           aria-label={props.toggleLabel}
           tooltip={{ content: props.toggleLabel, placement: 'top' }}
+          aria-pressed={props.pressed}
           disabled={props.disabled}
           onClick={props.onToggle}
         >
@@ -73,6 +76,8 @@ export function CallControlBar(props: {
   audioMenu: JSX.Element;
   /** Dropdown items for the camera and its background effect. */
   videoMenu: JSX.Element;
+  /** Dropdown items for what a screen share captures. */
+  screenMenu: JSX.Element;
   error?: string;
 }) {
   return (
@@ -114,24 +119,19 @@ export function CallControlBar(props: {
         >
           {props.videoMenu}
         </MediaSplitButton>
-        <Button
-          size="icon-lg"
-          variant="secondary"
-          aria-label={
+        <MediaSplitButton
+          label="Screen share"
+          toggleLabel={
             props.screenSharing ? 'Stop sharing screen' : 'Share screen'
           }
-          tooltip={{
-            content: props.screenSharing
-              ? 'Stop sharing screen'
-              : 'Share screen',
-            placement: 'top',
-          }}
-          aria-pressed={props.screenSharing}
+          menuLabel="Screen share settings"
+          pressed={props.screenSharing}
           disabled={props.disabled}
-          onClick={props.onToggleScreen}
+          onToggle={props.onToggleScreen}
+          icon={<Screencast class="size-5" />}
         >
-          <Screencast class="size-5" />
-        </Button>
+          {props.screenMenu}
+        </MediaSplitButton>
         <Button
           size="icon-lg"
           variant="danger"

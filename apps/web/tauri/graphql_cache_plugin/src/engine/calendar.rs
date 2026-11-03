@@ -38,14 +38,21 @@ impl EngineHandle {
             .map_err(|error| error.to_string())
     }
 
-    /// Applies a calendar commit atomically.
+    /// Applies a calendar commit atomically. Callers await occurrence hydration
+    /// before publishing coverage; this commit supersedes unrelated queued warming.
     pub async fn calendar_commit(&self, commit: CalendarCommit) -> Result<WriteResultWire, String> {
-        let mut state = self.inner.lock().await;
+        let mut state = self.inner.write().await;
         let EngineState { engine, ops, .. } = &mut *state;
         let result = engine
             .calendar_commit(&commit)
             .await
             .map_err(|error| error.to_string())?;
-        Ok(wire_write_result(ops, result))
+        let unchanged_views = engine
+            .unchanged_observed_windows()
+            .await
+            .unwrap_or_default();
+        let mut result = wire_write_result(ops, result);
+        result.unchanged_views = Some(unchanged_views);
+        Ok(result)
     }
 }

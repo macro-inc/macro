@@ -38,10 +38,9 @@ Unlike Calls, it lists only personal tags; team-shared tags are hidden,
 and its `New tag` action creates a personal tag with no Team sharing option.
 
 Full email client. Desktop groups `Signal` and `Noise` under one `Inbox` sidebar
-item, with pill tabs beside the Inbox title in the content header, matching the
-Chat sidebar tabs; with the Focus flags on, a `Focus` tab leads them. Selecting
-Inbox from another mailbox opens Signal; selecting it while in Focus or Noise
-keeps that tab.
+item, with pill tabs beside the Inbox title in the content header; with the Focus
+flags on, a `Focus` tab leads them. Selecting Inbox from another mailbox opens
+Signal; selecting it while in Focus or Noise keeps that tab.
 The desktop sidebar continues with `Favorites`, `Drafts`, `Sent`, `Scheduled`,
 and `Reminders` (when reminders are enabled), followed by a **Library** section containing `All mail`,
 `Archived`, and `Shared`, then **Tags**. Sidebar number shortcuts follow that
@@ -71,7 +70,12 @@ In every composer `Cmd+Shift+.`, `Cmd+Shift+,` and `Cmd+Shift+D` discard the
 draft exactly like its trash button, `Cmd+Shift+U` opens the attach picker, and
 `Cmd+Shift+X`, `7`, `8` and `9` apply strikethrough, numbered list, bulleted
 list and quote. Check discard from both a reply (the reply closes) and
-standalone compose (the view goes back), with focus in the body.
+standalone compose (the view goes back), with focus in the body. The same
+three keys discard the drafts on the focused or selected rows of a list (Email
+or a soup view) that carry the Draft badge. The thread keeps its row and its
+place, even though its sort time falls back to the last real message, until
+the tab, filters, or sort change; only the badge and preview change back to
+that message. Check it on a reply draft in All: the row must not move.
 
 Star and mute feedback reports what happened to the write. With GraphQL Soup
 enabled, a star queued while offline toasts that it is waiting to sync (for
@@ -81,8 +85,10 @@ waiting for reconnect, so pressing them again works at once.
 
 Recipient fields turn complete addresses into chips when the typed or pasted
 text ends in a comma or semicolon, so `a@example.com, b@example.com,` adds both.
-Enter or a click picks the highlighted suggestion. Type, paste, or Tab straight
-after picking one and check that both recipients stay and the input is empty.
+Enter or a click picks the highlighted suggestion; on a complete typed address,
+Enter or Tab adds that address unless an arrow key picked another row. Type,
+paste, or Tab straight after picking one and check that both recipients stay
+and the input is empty.
 
 Outlook connections support personal Outlook.com and individual Microsoft 365
 inboxes. Choose the inbox explicitly when testing mixed-provider accounts. The
@@ -125,7 +131,10 @@ further reloads, even while an offline edit is still queued.
 Opening an attachment opens it in a split from its Drive copy, except a
 calendar file: it opens its event (see the calendar invitations section of the
 calendar guide), or downloads when Macro could not read one, and creates no
-Drive file.
+Drive file. Every received attachment chip, of any file type, has a download
+button joined to the filename that saves the file without opening it. Images
+and videos keep their previews and get the same chip. Cloud-reference chips
+stay open-only.
 
 Imported Outlook attachments keep their provider identity, including inline
 images. Cloud-reference attachment chips open the original Outlook message.
@@ -518,10 +527,13 @@ In the new Email view, ordinary row activation opens the thread inside
 `/app/component/mail`. On desktop the thread's header has a Back arrow instead
 of breadcrumbs; it returns to the filtered list (hidden in the reading pane,
 where the list is already beside the thread). The subject, tags and
-participants stay put while only the messages scroll. Pressing `Escape` in the open thread
-with focus outside any input does the same once there is nothing left to unwind
-(an open reply, an expanded body, or a focused message each take one `Escape`
-first); the list keeps the row you came from focused and comes back at the same
+participants stay put while only the messages scroll. The full subject, including
+its last word beside the title action, supports text selection. Pressing `Escape`
+in the open thread with focus outside any input returns to the originating list
+once there is nothing left to unwind (an open reply, an expanded body, or a
+focused message each take one `Escape` first). In the reading pane, it restores
+list focus without closing the thread. The list keeps the row you came from
+focused and comes back at the same
 scroll position, scrolling only if j/k in the thread moved focus off screen. If
 the focused row leaves the list without a list `e` (a reply in Signal marks it
 done, or another device archives it), focus moves to the row that took its
@@ -673,10 +685,13 @@ written message and these controls on desktop and mobile, where sending inserts
 the signature above the quoted thread on Gmail and Outlook.
 Check recipient suggestions from a Gmail and an Outlook inbox. Typing a full
 address and pressing Enter commits that address, ahead of longer matches such
-as `teo+123456@macro.com`, whether or not it is a saved contact. A name or
-address word that starts with the query ranks above recent substring matches
-(`gab` finds Gab Rowan). Opened empty, the list puts colleagues on the sending
-inbox's domain first. A chip shows the name and its hover card the address.
+as `teo+123456@macro.com`, whether or not it is a saved contact. That holds
+when contacts or their names load after typing starts and reorder the list,
+including under a resting pointer, and when the address was typed or pasted
+before suggestions loaded. A name or address word that starts with the query
+ranks above recent substring matches (`gab` finds Gab Rowan). Opened empty,
+the list puts colleagues on the sending inbox's domain first. A chip shows the
+name followed by the address in muted ink.
 Press Send with To empty, then add a recipient: the error clears at once, as a
 missing message or subject error does once filled in. Suggestions leave out
 automated addresses (`notifications@`, `mailer-daemon@`, `postmaster@`,
@@ -823,6 +838,30 @@ signature. Plaintext and Macro Markdown use the existing Markdown renderer;
 Macro Markdown messages retain document mentions. Ordinary HTML bodies use an
 open shadow root: Playwright text locators can reach them, but a card's ordinary
 `innerText` or `querySelector` does not traverse that root.
+
+### Read receipts
+
+With `enable-email-read-receipts` on and read receipts on for an inbox, which
+is the default (see [Settings](settings.md#email-read-receipts)), messages sent from that
+inbox show **Opened** or **Not opened** beside the date in the expanded
+message header. The desktop tooltip and the expanded header details (tap the
+header caret on touch) give the count and first and last open times. Only
+people with access to the sending inbox see it, and the thread refreshes it
+about once a minute. Turning the setting off stops tracking new messages;
+statuses already recorded for that inbox stay visible while another of the
+viewer's inboxes has read receipts on, and every status hides once none does.
+A recipient who reads their own copy in Macro counts as
+an open; the reader loads the pixel only on copies in an inbox the viewer owns
+or is a delegate of that were not sent from one of the viewer's addresses or
+send-as aliases. The sender's copy never loads it, including a copy the sender
+received by CC'ing themselves, and neither does a thread seen only through
+sharing or any copy while the viewer's inboxes load. Quoted replies and
+forwards always drop it, so new recipients never inherit the original's pixel.
+With the image proxy on, a browser caches the pixel, so a recipient's repeat
+opens in Macro on one device count once. Verify with two Macro accounts: open
+the recipient's copy, then check the sender's status; the sender's own views
+must not change it. Opens need the email service's public URL, which the local
+Docker stack cannot serve.
 
 Sending a reply from an inbox thread marks that thread done but stays on it.
 Send and mark done (Shift+Cmd+Enter) and Mark done open the next email, counted

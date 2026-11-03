@@ -320,10 +320,11 @@ pub struct OpenManagedSession {
     /// idle session its owner prompts from the session's own surface.
     pub prompt: Option<FirstPrompt>,
     /// A selected persona's authoritative runtime profile. `None` uses the
-    /// deployment's default managed coding persona.
+    /// deployment's default managed coding persona, or Cursor when a
+    /// repository is selected — the only managed persona that honors one.
     pub profile: Option<SelectedManagedPersona>,
-    /// Ad-hoc instructions for the default managed persona. Ignored when a
-    /// persisted persona profile is selected.
+    /// Instructions the session's runtime works under. Outranks a persisted
+    /// persona's when both are set.
     pub instructions: Option<String>,
     /// Model to run on instead of the persona's own. The session's model from
     /// creation, so its runtime starts on it and nothing is sent to change it.
@@ -569,7 +570,7 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     fn set_archived(
         &self,
         id: AgentSessionId,
-        is_archived: bool,
+        archived: bool,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Whether the session is an agent conversation's current one: the
@@ -1095,6 +1096,11 @@ pub trait SessionTurnObserver: Send + Sync + 'static {
     /// The session's live actor is gone - disconnect, teardown, or crash. Any
     /// in-flight turn went with it, without a [`TurnSignal::TurnEnded`].
     fn session_stopped(&self, id: AgentSessionId, reason: StopReason);
+
+    /// The runtime reported, with `_session/closed`, that the person or agent
+    /// deliberately ended the runtime session backing this session. Never
+    /// told for a disconnect or crash; may be told again after a reconnect.
+    fn runtime_closed(&self, id: AgentSessionId);
 }
 
 impl<T: SessionTurnObserver + ?Sized> SessionTurnObserver for std::sync::Arc<T> {
@@ -1104,6 +1110,10 @@ impl<T: SessionTurnObserver + ?Sized> SessionTurnObserver for std::sync::Arc<T> 
 
     fn session_stopped(&self, id: AgentSessionId, reason: StopReason) {
         (**self).session_stopped(id, reason);
+    }
+
+    fn runtime_closed(&self, id: AgentSessionId) {
+        (**self).runtime_closed(id);
     }
 }
 
@@ -1120,6 +1130,11 @@ impl<A: SessionTurnObserver, B: SessionTurnObserver> SessionTurnObserver for (A,
         self.0.session_stopped(id, reason.clone());
         self.1.session_stopped(id, reason);
     }
+
+    fn runtime_closed(&self, id: AgentSessionId) {
+        self.0.runtime_closed(id);
+        self.1.runtime_closed(id);
+    }
 }
 
 /// A [`SessionTurnObserver`] for services with no queue above them: tests,
@@ -1131,6 +1146,8 @@ impl SessionTurnObserver for NoOpTurnObserver {
     fn signal(&self, _id: AgentSessionId, _signal: TurnSignal) {}
 
     fn session_stopped(&self, _id: AgentSessionId, _reason: StopReason) {}
+
+    fn runtime_closed(&self, _id: AgentSessionId) {}
 }
 
 /// A [`SessionTurnObserver`] bound after construction, for the composition
@@ -1168,6 +1185,12 @@ impl SessionTurnObserver for LateBoundTurnObserver {
     fn session_stopped(&self, id: AgentSessionId, reason: StopReason) {
         if let Some(observer) = self.observer.get() {
             observer.session_stopped(id, reason);
+        }
+    }
+
+    fn runtime_closed(&self, id: AgentSessionId) {
+        if let Some(observer) = self.observer.get() {
+            observer.runtime_closed(id);
         }
     }
 }

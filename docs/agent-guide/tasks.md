@@ -47,6 +47,11 @@ wrapping property pills, description, and discussion for Overview; toolbar and
 rows for Tasks. The mobile skeleton uses the same compact insets as the content.
 The description has its own subtle three-line skeleton while its collaborative
 editor initializes; the project title, properties, and discussion stay visible.
+
+Priority groups appear in **Urgent → High → Medium → Low** order, followed by
+the unset-priority group, in desktop and mobile lists. Verify this order with
+REST and GraphQL Soup before and after refresh; item sorting is independent.
+
 Task lists, including project and CRM task lists, load a group's next page when
 the end of that group scrolls into view, with a spinner row instead of a
 `Load More` button. A failed
@@ -91,6 +96,57 @@ The Project column shows the linked project's name when one project is assigned,
 and `Project` when empty. Multiple linked projects show an item count.
 Long assignee and project names truncate within their columns; hover the cell
 to read the full value.
+Editable property controls use ghost-button hover styling. Empty values are
+dimmed, without adding opacity to the already-muted No priority icon. Folder
+and assigned Project hover cards put their heading above the value; empty
+Project keeps its simple one-line message.
+Folder pills keep their link color and become circular when icon-only. When the
+title area runs out of room, the folder path collapses to a clickable icon with
+a full-path hover card first. Show at most three individual tag chips and keep the
+rest in the existing overflow chip. As space shrinks, move more chips into
+overflow one at a time before truncating the title. A task with only one tag
+keeps that named chip, including on phones, rather than showing “1 tag”.
+Open the overflow to edit all tags; hover it for hidden-tag names and filter/edit actions.
+The overflow chip reads “N tags” when it represents all tags, or “+N tags” when
+individual tag chips remain visible.
+An open picker or nested tag editor stays mounted while resizing or when a
+sorted insertion moves its chip into overflow. Keep the active chip within the
+visible-chip cap until closing, then restore normal order. Live tag refreshes
+retain staged picker changes while accepting remote changes and deleted tags,
+including when a failed tag deletion restores its option. Add tags in a
+constrained row and close the picker: excess tags must enter overflow without
+resizing or reloading, restoring title space before truncating it. The share
+indicator remains immediately beside the title whenever it is shown.
+Compact desktop rows keep tags after the title and before the trailing properties;
+phone rows retain the single tag or collapsed multi-tag chip instead of dropping tags.
+Tag pills keep their compact height on touch.
+Task rows order trailing properties as Due date, Project, then Assignees on
+desktop and phones. List Due date icons use 12px on wide rows and the shared
+16px icon size in compact columns. No due date uses a slashed calendar in rows,
+property pills, the Properties panel, board cards, and group headers; populated
+dates keep their calendar icon. Compact rows show both avatars for exactly
+two assignees; larger groups show the first avatar
+and the remaining count. Compact assignee slots reserve their width and keep the
+first avatar anchored left, so a second avatar or count grows only to the right
+without shifting Project or other properties.
+Desktop and tablet rows keep the compact column grid and its header at every
+pane width; only phones use the headerless narrow row layout. At list-container
+widths up to 840px, Project, Assignees, Due date, and Updated headers
+become icons with hover/focus tooltips and accessible names. Project occupies 32px
+and Assignees 44px. The assignee header aligns with the first avatar. Updated
+fits its full header and sort arrow, with a 56px content minimum for single-line
+timestamps. At 600px, Updated fades and collapses over
+160ms to leave more room for the title. Hidden Updated and Created by
+columns reserve no width or spacing; visible cells own their 8px leading inset.
+Reduced-motion preferences disable the transition. Visible timestamps stay on one line, and
+Updated remains sortable. Created by is the final column, with a 16px avatar above
+840px and a 20px avatar at compact widths, plus a 16px gap after Updated. Its header
+keeps a 16px user-plus icon with a “Created by” tooltip on hover or focus. Owner names and the column label
+stay accessible; names remain available on hover. The creator header and avatar
+stay visible above 600px and hide alongside Updated at 600px. Shared tasks show the
+shared badge next to the title only while the creator column is hidden.
+The Projects collection reuses a single Due date column and hides Updated in compact panes.
+Property controls retain their selected values in accessible names when compact styles hide the text.
 The project pill beneath a task title shows the project icon and name without
 a `Project:` prefix. It and the Project row in the Properties side panel split in
 two once a project is set: the name opens the project (shift-click for a new
@@ -98,8 +154,63 @@ split, and an already open project is focused instead of opened again), and the
 caret changes the project. Hovering the name turns its icon into an arrow. People
 who can't edit the task get the name alone, so they can still open the project.
 An empty or unavailable project keeps the plain pill, and composers never split it.
-Enter activates a pill or any other document control reached by keyboard. After a
-mouse click, Enter still moves to the editor.
+The property pills beneath the task title place Due date before Project and
+Assignees. Due date has no `Due date:` prefix and uses a 12px desktop icon.
+On touch devices, these pills use 16px Status, Priority, Due date, and Project
+icons, including empty values. The tags selector in that row has a 36px minimum
+touch height.
+Task-list tags and property icons retain their separate compact sizing.
+Empty values in the Properties panel show No status, No priority, Unassigned,
+No due date, or No project with the shared empty-value icons; custom fields show
+Not set. Click the empty value to open its existing picker or inline editor.
+The Properties panel also uses 16px Project icons on touch, for both assigned
+and empty values, without changing desktop sizes.
+Enter activates a pill or any other document control holding focus, including one
+that gets focus back when its picker or menu closes, however it closed. After a
+mouse click on a control, Enter still moves to the editor. Tab reaches an editable
+property's pill directly, so its hover card opens on hover only; a read-only
+property keeps a stop that opens the card.
+Wide desktop task rows and group headers share their leading icon alignment.
+Task group headers retain their wide-layout caret-to-content gap at every list
+width, including phones: 8px in the Tasks header and 10px in the next-soup header.
+Their padding and the spacing between the value icon, label, and count stay
+unchanged; the value-icon slot keeps its width when the pane narrows. Long labels
+truncate on one line. Group-header caret containers stay square around their
+16px glyphs, with 16px status and priority icons. Desktop list insets follow the
+list container: 8px below 640px and 12px from 640px; phone insets remain 4px.
+In grouped task and project lists, the current group header stays pinned at the top
+of the scrolling pane until the next group pushes it away. The pinned header still
+collapses or expands its group; keyboard navigation keeps rows below it visible.
+Mobile headers remain below the floating chrome.
+Phone task rows have 44px row height and an 8px unread-dot rail without a checkbox
+column. The rail stays reserved on read tasks so titles do not shift. Status and
+priority controls retain their 36px touch targets; selection highlighting and row
+selection behavior remain available.
+Click or tap the leading status or priority icon to edit without opening the task.
+Status icons are 18px on desktop and phones; priority icons are 16px on desktop
+and 20px on phones and never flex-shrink. Phone tap targets sit edge-to-edge.
+Priority comes first, then Status directly beside the title. The shared badge follows with
+4px of layout spacing and its existing internal padding. Their pickers replace
+the separate Status/Priority columns and duplicate trailing mobile pills; Project
+and Assignees stay on the right, with 20px phone icons. Empty assignees use a filled
+person in a dashed circular frame. Empty priority shows the same wide ascending
+bars as Low/Medium/High, with every bar at 30% opacity. Urgent shows a rounded
+square with a transparent exclamation cutout. Completed and Canceled use filled
+discs with transparent check and cross cutouts. Set projects use a cube; empty
+projects use its corner-dashed counterpart. Not started stays a neutral hollow
+ring without shadows or highlights; In progress and In review add counterclockwise
+half and three-quarter pies from 12 o'clock. Current status colors and icon
+dimensions stay unchanged.
+The property edit menus use 16px status and priority icons on desktop and mobile,
+including empty-value options.
+Each status has its own `task-status-*` theme color, shared by task icons and
+group-header tints. Completed defaults to accent; explicit Completed theme overrides
+remain available. In the theme editor's **Task statuses** section, change a status
+color and verify its icons and group-header tints update together in List and Gantt,
+while Board column icons match and global warning/success colors stay unchanged.
+In Progress defaults to amber blended with the theme's foreground: 20% foreground
+in dark mode and 15% in light mode. Check the icon's legibility against the list,
+menu, and board surfaces in both modes; custom status-color overrides stay intact.
 
 Click a task row or favorite to replace the list with the editable task document. Its top
 bar shows the originating task tab as a text-only return breadcrumb,
@@ -109,6 +220,13 @@ layouts. Narrow splits also show a close button when multiple splits are open. C
 the originating tab breadcrumb, a task tab, or a tag to return to the list.
 Shift-click a row or favorite to open it in a new split
 instead. Keyboard list navigation only moves focus; press Enter to open the focused task.
+
+Status and Priority values use 12px icons beneath the opened task's title on
+desktop, 16px on touch, and 16px in the Properties side panel.
+Number, text, and link values in the Properties side panel edit in place. Enter
+saves and Escape cancels, and both return focus to the value, or to **+** on a link
+list, so the keyboard stays on the row. A failed save leaves the field open and
+focused. Tab or a click elsewhere saves and leaves focus where it went.
 
 In the task's Properties side panel, hover or focus a row for **Pin below title**
 or **Unpin from title**. Pinning adds the property to the title row; unpinning keeps
@@ -134,6 +252,47 @@ should appear immediately and stay visible through both responses in the list,
 task header, side panel, and a reopened picker. A rejected save should remove only
 the optimistic tag. Repeat with an existing assignment and with removal.
 
+## Due dates
+
+Tasks lists and boards offer **Status**, **Priority**, **Due soonest**, and
+**Due furthest away** sorting alongside Viewed, Updated, and Created. Status
+follows stored option order; Priority puts urgent tasks first. Missing values
+stay last. Property-sort ties use newest update, then descending task ID.
+Text search retains its existing ordering and flat list results; clear search to sort.
+Boards group the loaded search results as before, without complete counts or grouped-search requests.
+
+**Filter → Due date** offers Overdue, Today, Tomorrow, Next 7 days, Later,
+Has due date, No due date, and Custom range. **Any due date** removes only the date
+filter. Custom range includes both selected calendar dates; either endpoint can be
+empty. Cancel leaves the previous filter unchanged. Status remains independent:
+select Completed or Canceled explicitly to include closed tasks in a date filter.
+The mobile controls use the same options and date-range dialog in the sliders drawer.
+
+**Group → Due date** puts No due date first, then uses non-overlapping viewer-local calendar buckets:
+Overdue is before today's midnight; Today and Tomorrow cover those entire days;
+Next 7 days covers D+2 through D+7; Later starts at D+8; No due date includes
+missing and cleared dates. Relative filters and groups refresh at local midnight,
+timezone changes, and app resume. Changed boundaries start fresh continuation pages.
+Task lists show an editable **Due date** property column with a calendar icon
+only when a date is set; click its header to switch between Due soonest and Due
+furthest away. Phones and narrow panes show only the urgency-colored icon for
+dated tasks. Empty date cells remain editable without a calendar icon. The
+dropdown shows the current date, or **No due date** when unset, above the date
+choices. Due dates stay outside the title.
+Board cards show due dates in property pills. Overdue dates
+on open tasks use the danger color; only dates due today or tomorrow use the
+warning color. On light themes, list and board warning icons and text mix 60%
+warning with 40% foreground for contrast; dark themes keep the warning color.
+Later dates, completed tasks, and canceled tasks have neutral due dates. Urgency
+refreshes at local midnight, on timezone changes, and app resume.
+Date selections persist with the navigation entry and round-trip through
+`tasks.dueDate`, `tasks.dueStart`, and `tasks.dueEnd` URL parameters.
+
+Verify dates around midnight and a daylight-saving transition. Check both sort
+directions with tied and undated tasks. Filter during local and service search,
+then edit or clear a due date: loaded rows move between buckets immediately,
+and refetches correct complete counts and previously absent tasks. Gantt's
+saved-date semantics do not change.
 ## Saved views
 
 Saved views are available on main Tasks, not inside Project or CRM task lists.
@@ -143,14 +302,14 @@ Saved views are available on main Tasks, not inside Project or CRM task lists.
 - The empty sidebar and mobile picker show **Your go-to views**, the muted description **Save your setup for next time.**, and a secondary **Create view** button with a leading plus icon in a rounded container with a subtle border, 12px padding, the surrounding background, and no shadow or illustration. It starts the same unsaved draft as desktop **+**; on mobile, the picker closes first. Configure the draft in Filters, then choose **Save view**.
 - Desktop **+** starts an unsaved view without person restrictions and with explicit open-status filters. It expands the section and adds a selected, italic **New view** row labeled **Draft** in the sidebar and mobile picker. Configure filters, then choose **Save view**; the name defaults to **New view** and can be edited before saving. A confirmed save replaces the draft with the named view; **Cancel** in the desktop toolbar or mobile filter drawer, another selection, or leaving Tasks removes the unsaved row. Canceling only the name dialog keeps the draft for later.
 - Desktop **Save view** and draft **Cancel** are separate standalone buttons with a gap, not segments of a button group.
-- When filters, layout, grouping, or sort differ from the built-in tab defaults, the filled **Save view** button appears immediately left of Filters on desktop and in an edge-to-edge mobile banner above the filter drawer footer. The borderless banner overlays content on a drawer-colored backing and has a leading bookmark icon on its button. Base settings and search alone do not show the banner. It captures current filters, layout, grouping, and ordered sort directions, but excludes text search and scroll state. My Tasks adds **Me** to Assignee; Created by me adds it to Created by. Additional people in the same filter use OR matching.
+- When filters, due date, layout, grouping, or sort differ from the built-in tab defaults, the filled **Save view** button appears immediately left of Filters on desktop and in an edge-to-edge mobile banner above the filter drawer footer. The borderless banner overlays content on a drawer-colored backing and has a leading bookmark icon on its button. Base settings and search alone do not show the banner. It captures current filters, relative due-date presets or custom calendar bounds, layout, grouping, and ordered sort directions, but excludes text search and scroll state. My Tasks adds **Me** to Assignee; Created by me adds it to Created by. Additional people in the same filter use OR matching.
 - Saved views use the normal Assignee and Created by filters, not a separate Scope control. **Me** stays relative; its tooltip says “Matches whoever opens this saved view.” A named person stays fixed. Removing Me removes that restriction.
-- Temporary filter, layout, grouping, or sort edits show a filled **Save changes** button and **Reset**. Opening or resetting a saved view restores all four. Mobile still displays a list without replacing the stored desktop layout. Right-click a sidebar view or use its **…** button for **Edit**, **Duplicate**, **Copy link**, and confirmed **Delete view**. On desktop, the selected view's topbar shows a bookmark icon before its name and an unframed ghost overflow button immediately after it. On mobile, the picker shows the name and contains row menus; creation and draft cancellation appear in the filter drawer's overlay banner above the footer; Save changes and Reset sit on the footer's right, opposite Clear all, not below the tabs. Non-owners cannot rename, share, overwrite, or delete a shared view.
+- Temporary filter, due-date, layout, grouping, or sort edits show a filled **Save changes** button and **Reset**. Opening or resetting a saved view restores all five, including due-date grouping and property sorts. Older definitions without a due-date filter remain unrestricted. Mobile still displays a list without replacing the stored desktop layout. Right-click a sidebar view or use its **…** button for **Edit**, **Duplicate**, **Copy link**, and confirmed **Delete view**. On desktop, the selected view's topbar shows a bookmark icon before its name and an unframed ghost overflow button immediately after it. On mobile, the picker shows the name and contains row menus; creation and draft cancellation appear in the filter drawer's overlay banner above the footer; Save changes and Reset sit on the footer's right, opposite Clear all, not below the tabs. Non-owners cannot rename, share, overwrite, or delete a shared view.
 - **Edit** opens the shared create/edit dialog with the saved name and team-sharing checkbox prefilled, without saving temporary filter, layout, grouping, or sort changes. Edit and delete dialog titles identify the saved view by name and wrap long names. Both create and edit modes use a 600px-wide dialog that stays within narrow viewports. **Duplicate** opens a private copy with a prefilled “(copy)” name; duplicating the selected view includes its temporary settings. If the original has unsupported or invalid settings, the dialog warns that the copy omits them and leaves the original unchanged. Sidebar actions on another view do not change the current selection unless a duplicate is saved.
 - The optional **Share with team** checkbox shares only the view definition. Its adjacent info icon shows the explanation on hover; click, tap, or keyboard activation opens it without changing the checkbox. Each teammate still sees only permitted items. Both the owner and viewer must currently belong to that team; leaving disables access and rejoining restores it.
 - Leaving the view or opening task detail discards temporary edits. The return breadcrumb retains the saved-view identity and reloads its saved filters, layout, grouping, and sort.
 - An unavailable or deleted view shows an explicit unavailable state, not All Tasks under the old name. Unsupported or malformed filters are skipped while supported filters apply immediately. A danger-colored banner above the results names affected filters or view settings without an extra description. If no filters apply, the list shows all permitted tasks, including closed tasks. Loading never changes the saved definition. Unknown tag/person labels retain their filters until deliberately removed. Ordinary **Save changes** is disabled until the app understands every setting or the owner explicitly removes unsupported settings; Edit remains available.
-- Owners can choose **Remove & save** at the right edge of that banner. It removes only skipped settings from the stored definition, preserves supported filters, layout, grouping, sort, and sharing, and leaves temporary edits unsaved. The banner disappears only after a confirmed save; failures retain it for retry, and revision conflicts offer **Reload saved view**.
+- Owners can choose **Remove & save** at the right edge of that banner. It removes only skipped settings from the stored definition, preserves supported filters, due date, layout, grouping, sort, and sharing, and leaves temporary edits unsaved. The banner disappears only after a confirmed save; failures retain it for retry, and revision conflicts offer **Reload saved view**.
 - A conflicting save retains the draft and offers **Reload saved view** or **Duplicate**. A network failure also retains the name and sharing inputs.
 - Copy links use the existing split search codec, for example `/app/component/tasks?s0.tasks.savedView=<uuid>`.
 
@@ -308,20 +467,26 @@ Gantt persists in `tasks.layout` or `projectTasks.layout`, just like List and Bo
 
 Choose **Board** in the **Task layout** group in the toolbar
 (or **List** to switch back). One icon is selected at a time; hover or focus shows
-its label. **Group by**
-offers Status, Priority, Assignee, and (when Projects is enabled) Project.
+its label. **Group by** offers Status, Priority, Assignee, Due date,
+and (when Projects is enabled) Project.
 Both layouts share one grouping, which restores with the Tasks navigation entry.
 List-only None and Date groupings display Status columns in Board; switching
 back to List retains those selections and collapsed groups until grouping changes.
 
-Each column header has an icon-only **Add task** plus button. It opens the task
-composer with that column's Status, Priority, Assignee, or Project preselected,
-while preserving the originating pane's other creation presets. **Unassigned**
+Status, Priority, Assignee, Project, and Due date column headers have an icon-only
+**Add task** plus button. The button opens the task composer with that column's
+property preselected, while preserving the originating pane's other creation
+presets. Due-date columns prefill yesterday for Overdue, today or tomorrow for
+their named columns, D+2 for Next 7 days, and D+8 for Later. No due date clears any
+inherited date preset. The draft's due date remains editable. **Unassigned**
 and **No priority** start with that property empty. **No project** starts empty
 outside project boards; project boards always retain the current project.
 **No status** starts with **Not started**, because new tasks require a status.
-Each pane or project scope and column keeps a separate composer draft. Project
-boards hide creation actions when the project is read-only.
+Each pane or project scope and column keeps a separate composer draft. Dated
+column drafts are also scoped to the current local day and timezone, so reopening
+after midnight or a timezone change starts with the new date preset. Undated and
+non-date columns keep their existing draft scope. Normal draft expiration still
+applies. Project boards hide creation actions when the project is read-only.
 
 Click a card's body or title to open the task. Right-click a card, or press
 Shift+F10 on its focused title, for the List row's task menu; it acts on that
@@ -331,9 +496,9 @@ mouse button held to start dragging to another column; holding still does not
 start a drag. Property pills remain interactive and do not start a drag.
 A new destination column highlights once movement slows
 or pauses for about 100 ms. Fast travel suppresses activation of new columns.
-A valid hover shows **Board sorted by Updated**, **Created**, or **Viewed**
-using the active sort label. The drop does not choose a pointer insertion slot:
-its card takes its place in the current sort (or search relevance order).
+A valid hover shows **Board sorted by Updated**, **Created**, **Viewed**,
+**Status**, **Priority**, or the active due-date sort label. The drop does not choose a pointer insertion slot:
+its card takes its place in the current sort (or existing text-search order).
 Same-column moves and column reordering remain disabled.
 Layout, primary sort, sort direction, and grouping are reflected in `tasks.layout`,
 `tasks.sort`, `tasks.sortReversed`, and `tasks.groupBy` search parameters.
@@ -376,9 +541,10 @@ a drop target.
 
 An icon-only status pill appears before the task title, and an icon-only assignee
 pill appears to its right in every grouping. The lower row omits status, assignee,
-and the grouping property. The remaining properties use standard pill controls
-and icons. Priority uses a compact icon-only pill; due date and project appear
-when set. Metadata properties stay read-only, and pending writes disable editing.
+and the grouping property, except that the exact due-date pill stays visible in
+Due date grouping. The remaining properties use standard pill controls and icons.
+Priority uses a compact icon-only pill; due date and project appear when set.
+Metadata properties stay read-only, and pending writes disable editing.
 A task assigned to multiple people appears in each person's column. Moving it
 from Alice to Bob replaces Alice while keeping the other assignees. Moving to
 **Unassigned** clears all assignees. Project moves change the task's Project
@@ -407,7 +573,15 @@ Filters remain active: completing a task or removing yourself as assignee can
 hide the card from the current view. Click its title to open the task; modified
 clicks can open a separate split.
 
-Due-date columns and priority/due-date sorting are not in this version.
+Due-date drops reschedule the task: Today and Tomorrow assign those dates;
+No due date clears the value. Overdue, Next 7 days, and Later open a date picker
+restricted to that bucket, with explicit Apply and Cancel. The source placement
+stays unchanged until Apply; Cancel, Escape, dismissal, or a scope change makes no
+write. A failed save restores the prior placement and counts. Existing property
+permissions and pending states apply, and the destination uses the active sort.
+A due-date filter also hides buckets that cannot contain a matching date;
+**Reveal hidden columns** removes only that date filter.
+Priority and Status use the same sort choices as the task list.
 The shared board primitives remain independent of Tasks queries and mutations.
 
 ## Cached grouped lists
@@ -433,6 +607,14 @@ must not replace them with **Tasks couldn’t be loaded**. A cached empty result
 also usable. An initial cache miss still shows failure; HTTP and GraphQL errors
 remain visible even with cached rows. Change filters while retaining prior rows:
 those older results must not hide a failure for the new, uncached query.
+
+For project labels, warm the Projects list or a project detail, then scroll tasks
+referencing that project out of view and back. With GraphQL caching enabled,
+row remounts must reuse complete cached identities without new
+`InitiativeIdentity` requests; missing identity fields still fetch. Explicit
+permission refreshes remain separate. Hold a cold folder-preview or identity
+request while scrolling on desktop and phone: only the row metadata may show
+loading, and the list must remain mounted at the same scroll position.
 
 ## Reviews view
 
@@ -728,6 +910,12 @@ Search and filters apply before pagination. Scrolling or navigating near the
 end loads more projects; `Load more projects` also continues the list.
 Keyboard movement changes focus; Enter opens the focused project and
 Shift-selection opens it in a new split. Folders remain separate in Files.
+
+The Projects list's Tasks column shows a borderless progress pill: `3 of 8 done`,
+`All done`, or `No tasks`. Its 12px neutral ring fills clockwise in the accent
+color and stays empty when there are no tasks. Counts come from the
+permission-aware project summary in the list response, not by loading every
+task; they describe the project rather than the current task-list filters.
 
 On desktop, **Project layout** offers **List** and **Gantt**. Gantt shows one
 bar per visible project from Created at to Due date, using the same search,
@@ -1076,14 +1264,15 @@ above.
 
 ## Task status icons
 
-Task rows show a circular status icon: empty for Not started, partially filled
-for In progress or In review, checked for Completed, and crossed for Canceled.
-Task @mention pills and @mention menu rows use the same live status and update
-when a task changes. Pills show status only in their leading icon; the trailing
-badges carry priority and the first assignee.
+Task rows show the custom circular status icon: empty for Not started, partially
+filled for In progress or In review, checked for Completed, and crossed for
+Canceled. Status group headers, property pills, filters, and pickers use the same
+`TaskStatusIcon` renderer. Task @mention pills and @mention menu rows use the
+same live status and update when a task changes. Pills show status only in their
+leading icon; the trailing badges carry priority and the first assignee.
 Lightweight previews fall back to the task completion flag until status
 properties arrive; missing or unknown status without completion stays empty.
-The navigation and creation icons remain generic task icons.
+Navigation and creation keep the custom generic checked-square task icon.
 
 The backend-free browser fixture exercises the real row icon, document
 mention, and mention menu row, including completing and reopening without a reload:

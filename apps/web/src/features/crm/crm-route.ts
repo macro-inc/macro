@@ -51,6 +51,52 @@ export const crmRecordParams = z.object({
 
 export type CrmRecordParams = z.infer<typeof crmRecordParams>;
 
+/** A CRM-linked item keeps its source record trail and display name in history. */
+export const crmItemParams = z.object({
+  itemType: z.enum(['document', 'email', 'call', 'database']),
+  itemId: z.string().min(1),
+  itemFileType: z.string().optional(),
+  itemSubType: z.enum(['task', 'snippet', 'skill']).optional(),
+});
+
+export type CrmItemParams = z.infer<typeof crmItemParams>;
+
+const CRM_SECTION_ITEM_TYPES = {
+  tasks: { itemType: 'document', itemFileType: 'md', itemSubType: 'task' },
+  emails: { itemType: 'email' },
+  calls: { itemType: 'call' },
+  databases: { itemType: 'database' },
+} as const;
+
+/** Typed record sections supply all renderer metadata without extra URL segments. */
+export const crmRecordItemParams = crmRecordParams
+  .extend({
+    section: z.enum(['tasks', 'emails', 'calls', 'databases']),
+    itemId: crmItemParams.shape.itemId,
+  })
+  .transform((params) => ({
+    ...params,
+    ...CRM_SECTION_ITEM_TYPES[params.section],
+  }));
+
+/** Files and overview notes need document metadata, unlike typed sections. */
+export const crmRecordFileItemParams = crmRecordParams.extend({
+  ...crmItemParams.shape,
+  section: z.enum(['overview', 'files']).optional(),
+  itemType: z.literal('document'),
+});
+
+/** The canonical entity kind used by item claims, references, and fallback names. */
+export function crmItemBlockType({
+  itemType,
+  itemFileType,
+  itemSubType,
+}: CrmItemParams) {
+  return itemType === 'document'
+    ? (itemSubType ?? itemFileType ?? 'md')
+    : itemType;
+}
+
 /** Records opened on the way to the shown one, kept with its history entry. */
 export const crmRecordTrailSchema = z
   .array(
@@ -61,6 +107,11 @@ export const crmRecordTrailSchema = z
     })
   )
   .min(1);
+
+export const crmItemStateSchema = z.object({
+  trail: crmRecordTrailSchema.optional(),
+  name: z.string(),
+});
 
 export function crmRecordClaim({ recordType, recordId }: CrmRecordParams) {
   return { namespace: 'block', id: `${recordType}:${recordId}` };

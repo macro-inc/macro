@@ -56,19 +56,35 @@ async fn only_eligible_team_channels_can_be_assigned_or_moved_during_creation(po
         .unwrap(),
     );
     assert_eq!(private_label.channel_count, 2);
-    for invalid in [public, private, dm] {
+    for eligible in [public, private] {
         assert_eq!(
             repo.set_channel_label(
                 &private_scope,
-                invalid,
+                eligible,
                 Some(private_label.id),
                 &user(USER_A)
             )
             .await
             .unwrap(),
-            SetChannelLabelOutcome::ChannelNotLabelable
+            SetChannelLabelOutcome::Updated
         );
     }
+    assert_eq!(
+        repo.set_channel_label(&private_scope, dm, Some(private_label.id), &user(USER_A))
+            .await
+            .unwrap(),
+        SetChannelLabelOutcome::ChannelNotLabelable
+    );
+    let listed = repo
+        .list_labels(&private_scope, &user(USER_A))
+        .await
+        .unwrap();
+    assert_eq!(listed[0].channel_count, 4);
+    assert_eq!(listed[0].channel_ids.len(), 4);
+    assert_eq!(
+        repo.list_labels(&scope, &user(USER_A)).await.unwrap()[0],
+        original
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -165,8 +181,9 @@ async fn smart_preview_and_membership_include_only_eligible_team_channels(pool: 
     let channel = insert_team_channel(&pool, "Support", team_id, USER_A, &[USER_A]).await;
     let other_team =
         insert_team_channel(&pool, "Other support", other_team_id, USER_B, &[USER_A]).await;
-    insert_channel(&pool, Some("Public support"), "public", USER_A, &[USER_A]).await;
-    insert_channel(&pool, Some("Private support"), "private", USER_A, &[USER_A]).await;
+    let public = insert_channel(&pool, Some("Public support"), "public", USER_A, &[USER_A]).await;
+    let private =
+        insert_channel(&pool, Some("Private support"), "private", USER_A, &[USER_A]).await;
     insert_channel(&pool, None, "direct_message", USER_A, &[USER_A]).await;
     let repo = PgChannelLabelsRepo::new(pool.clone());
     let rule = ChannelLabelRule::Name {
@@ -177,7 +194,7 @@ async fn smart_preview_and_membership_include_only_eligible_team_channels(pool: 
         (scope.clone(), vec![channel]),
         (
             ChannelLabelsScope::User(user(USER_A).into_owned()),
-            vec![other_team, channel],
+            vec![other_team, private, public, channel],
         ),
     ] {
         let preview = repo

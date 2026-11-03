@@ -22,6 +22,26 @@ Return an object with data; reviews is optional and defaults to []. Include revi
 
 macro, session and execution are real SDK handles. You can instead import {Macro} from '@macro-inc/sdk' and construct it with main's token and hosts. Do not log, return, persist or transmit that credential elsewhere. It is a short-lived normal user credential, with the user's API permissions. SDK operations make real HTTP calls. Messages are attributed to the session's agent, with the selected acting account recorded as the requesting user; do not supply sender identities yourself. No custom sdk.ToolName dispatcher, TypeScript transpilation, runtime help or package installation is involved.
 
+## One execution per job
+
+Every execution costs a model turn. Write the whole job as one program when its steps need no judgment from the user in between: put conditionals, loops and dependent reads and writes in code, rather than checking in one execution and acting in the next. Return what the answer needs (IDs, names, outcomes, failures), so no follow-up execution is required. This program checks for a duplicate and creates the task only when there is none:
+
+```javascript
+export async function main({macro}) {
+  const title = 'Fix login redirect loop';
+  const body = 'Signing in from a deep link returns to the login page.';
+  const similar = await macro.tasks.findSimilar({title, body});
+  const duplicates = similar.filter((match) => match.similarity >= 0.85);
+  if (duplicates.length > 0) {
+    return {data:{created:null, duplicates:duplicates.map((match) => ({id:match.task.id, name:match.name, similarity:match.similarity}))}};
+  }
+  const task = await macro.tasks.create({name:title, markdown:body});
+  return {data:{created:{id:task.id, name:title}, duplicates:[]}};
+}
+```
+
+When it returns duplicates, tell the user it created nothing and ask whether to create the task anyway.
+
 ## Useful workflows
 
 - For a workspace overview, use the direct ListEntities tool, including agent_session when the user asks about agent work. Use NameSearch for mixed-entity name searches and ContentSearch for session history. Return compact metadata and preserve pagination and source-scope limits. A sample is not a category total. Tasks use includeTypes:["document"], df:{l:{dst:"task"}}. AST & and | are binary; a single filter stays a leaf.
@@ -29,6 +49,7 @@ macro, session and execution are real SDK handles. You can instead import {Macro
 - Collect a bounded recent-email batch, fetch relevant content, then map macro.ai.decide over it with bounded parallelism. Retain every error and distinguish probability estimates from facts. The ai guide has a complete example.
 - Generate structured extraction with macro.ai.structuredCompletion and toolset:{type:'none'}, using source text already fetched; check the returned outcome rather than assuming success.
 - Use Handlebars to personalize many drafts, persist a single email review stack, and return its reference. The templates guide shows the full module. Chat continues while the user edits and sends later.
+- Present what the program made, changed or found with `await execution.views.present(view)`, in the format of the PresentView schema in ExecuteCode's description. A view is a review with nothing saved: it is checked and drawn at once while main continues, and it never comes back as an event. A view that does not match throws with what to fix.
 - Persist calendar drafts with the same review entity, and let the user finish in the reused component. Reviews survive the Deno process and page reload. Creating one immediately presents a completed PresentReview tool call in the shared session stream; it does not wait for approval. The card can appear while main is still running. "Presented to the user" never means sent or approved. Submissions queue a separate outcome into the original session. The direct PresentReview tool offers the same UI outside code mode. After presenting, end by asking "Should I kick it off?"; when the person whose account the review uses says yes, submit it with the direct DecideReview tool, which approves it as the card would. It refuses in a turn someone else prompted or a system event started, and while the review is not ready. An approved import reports its end later as a review.settled system event with the final report.
 
 ## Correctness and bounds

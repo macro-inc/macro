@@ -1,6 +1,7 @@
 {
   "commands": [
     "ack_bundle_update_reload",
+    "allow_screen_capture",
     "check_for_update",
     "clear_shared_files",
     "close_linux_notification",
@@ -22,6 +23,7 @@
     "graphql_cache_delete_records",
     "graphql_cache_enqueue_optimistic_mutation",
     "graphql_cache_entity_filter",
+    "graphql_cache_entity_filter_resume",
     "graphql_cache_hydrate",
     "graphql_cache_init_with_schema",
     "graphql_cache_inspect_mutations",
@@ -36,6 +38,7 @@
     "graphql_cache_watch",
     "graphql_cache_write",
     "is_ipad",
+    "list_screen_capture_sources",
     "macrod_detect_agents",
     "macrod_inspect",
     "macrod_start",
@@ -108,6 +111,7 @@
     "read_shared_file_text",
     "record_frontend_diagnostic",
     "request_macos_notification_permission",
+    "request_screen_capture_access",
     "restart_native_update",
     "send_linux_notification",
     "send_macos_notification",

@@ -12,6 +12,7 @@ fn signed_execution_token_preserves_owner_agent_and_lifetime() {
         private_key: tests::PRIVATE_KEY.into(),
         expiry_seconds: 60,
         agent_id: Some(agent),
+        agent_via: Some("Claude Code".into()),
     })
     .unwrap();
     let args = JwtValidationArgs {
@@ -27,6 +28,7 @@ fn signed_execution_token_preserves_owner_agent_and_lifetime() {
         panic!("expected Macro API token");
     };
     assert_eq!(claims.agent_id, Some(agent));
+    assert_eq!(claims.agent_via.as_deref(), Some("Claude Code"));
     assert_eq!(claims.macro_user_id, "macro|owner@example.com");
     assert_eq!(claims.macro_organization_id, Some(42));
     let now = std::time::SystemTime::now()
@@ -58,4 +60,5 @@ fn legacy_user_token_has_no_agent_attribution() {
     }))
     .unwrap();
     assert_eq!(claims.agent_id, None);
+    assert_eq!(claims.agent_via, None);
 }

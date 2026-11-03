@@ -11,14 +11,15 @@ import {
   aiUsageErrorResponseHandler,
 } from '../ai-usage-limit';
 import type {
+  ActionConfiguration,
+  ActionConfigurationUpdate,
   ActionExecutionRecord,
-  CreateScheduledAction,
   InProgressExecution,
   RoutineTemplate,
   ScheduledAction,
+  ScheduledActionResponse,
   SetScheduledActionEnabled,
   ShareRoutineTemplate,
-  UpdateScheduledAction,
 } from './generated/schemas';
 
 const scheduledActionHost: string = SERVER_HOSTS['scheduled-action'];
@@ -47,14 +48,14 @@ export const scheduledActionClient = {
     }),
   // Include every trigger type in the routine list.
   listSchedules: async () =>
-    scheduledActionFetch<ScheduledAction[]>(
+    scheduledActionFetch<ScheduledActionResponse[]>(
       '/scheduled-actions?include_events=true',
       {
         method: 'GET',
       }
     ),
 
-  createSchedule: async (body: CreateScheduledAction) =>
+  createSchedule: async (body: ActionConfiguration) =>
     scheduledActionFetch<ScheduledAction>('/scheduled-actions', {
       method: 'POST',
       body: JSON.stringify(body),
@@ -62,7 +63,7 @@ export const scheduledActionClient = {
 
   updateSchedule: async (args: {
     scheduleId: string;
-    body: UpdateScheduledAction;
+    body: ActionConfigurationUpdate;
   }) =>
     scheduledActionFetch<ScheduledAction>(
       `/scheduled-actions/${args.scheduleId}`,
@@ -120,10 +121,7 @@ export const scheduledActionClient = {
       method: 'DELETE',
     }),
 
-  activateTemplate: (args: {
-    templateId: string;
-    body: CreateScheduledAction;
-  }) =>
+  activateTemplate: (args: { templateId: string; body: ActionConfiguration }) =>
     scheduledActionFetch<ScheduledAction>(
       `/scheduled-actions/${args.templateId}/template/activate`,
       { method: 'POST', body: JSON.stringify(args.body) }
