@@ -799,9 +799,10 @@ raise `min-native-build.json` to the first build with it, or handle
 Keep `nix/tauri-desktop.nix` in sync with generated WASM dependencies: desktop
 releases run Vite directly and do not call `just build-tauri` or `build-wasm`.
 Build and copy the agent-fold and database-sql JavaScript glue and WASM before
-Vite runs, and check that each appears in the output; without database-sql,
-every database and CRM board shows "This board could not be loaded". Without them, Vite leaves the worker's
-relative imports unchanged and Tauri can serve HTML for the missing module.
+Vite runs, and check that each appears in the output. Without them, Vite
+leaves their relative imports unchanged and Tauri can serve HTML for the
+missing module; a missing database-sql engine shows "This board could not be
+loaded" on every database and CRM board.
 
 ## macOS desktop runtime: Chromium (CEF)
 `tauri/desktop-cef` builds the shipped macOS app with Chromium in its own Cargo
