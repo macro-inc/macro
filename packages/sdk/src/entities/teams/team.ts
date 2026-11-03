@@ -111,8 +111,8 @@ export class Team extends MacroEntity<TeamRecord> {
   }
 
   /**
-   * The team's pending invites. Requires a team admin or owner of the
-   * caller's current team.
+   * Pending invites to this team; only a team admin or owner may list them.
+   * Only the caller's current team lists invites (see `Team.current`).
    */
   async invites(): Promise<TeamInvite[]> {
     await this.requireCurrent('invites');

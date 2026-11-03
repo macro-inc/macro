@@ -46,8 +46,8 @@ export class TeamInvite extends MacroEntity<TeamInviteDetails> {
   readonly lastSentAt = this.field('last_sent_at');
 
   /**
-   * Revoke this invite so it can no longer be accepted. Requires a team admin
-   * or owner.
+   * Revoke this invite so it can no longer be accepted; only a team admin or
+   * owner may revoke.
    */
   async revoke(): Promise<void> {
     await this.mutate((client) =>
