@@ -209,6 +209,19 @@ last sent, for owners and admins, who can **Resend**, copy the invite link,
 or cancel it. Resend unlocks an hour after the last email, the email's rate
 limit; re-inviting the address from **Invite** follows the same rule.
 
+With the `enable-team-agents` flag (on in dev), team admins and owners see
+**People** / **Agent** tabs at the top of the invite dialog. **Agent** creates
+a team agent: an AI teammate with its own Macro account, email address, and
+API key. The form takes an optional picture, **Name**, **Job description**,
+**Personality**, **Runs on** (a macrod runtime shared with the team; offline
+ones are listed but block creation), and **Model** (that runtime's catalog).
+**Create agent** adds the agent to the team as a member, closes the dialog,
+and starts its brain on the runtime in the background; the brain builds its
+own daemon from `crates/agent_brain` and DMs the creator when it is ready.
+Agents show the **Agent** chip beside their name in messages and in
+**Team → Members**. With no team runtime the tab explains how to share one
+from **Settings → Agents → Runtimes**.
+
 Under **Team → Members** (**Invite settings**), owners/admins can turn
 **Auto-join on domain** off and can restrict invitations to admins with
 **Members can invite**. These controls still apply.

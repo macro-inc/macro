@@ -25,7 +25,8 @@ key issuance, and account merge/link flows.
   allowlisting, OAuth/OAuth2 account linking, GTM invite links, the platform
   status banner API (`crates/system_status`), shared-mailbox
   relocation signup, Cursor/Codex API key endpoints, introductory trial
-  eligibility and subscription checkout.
+  eligibility and subscription checkout, and the `/team_agents` routes
+  (`crates/team_agents`; optional `AGENTMAIL_API_KEY` / `AGENTMAIL_DOMAIN`).
 - Not here: authorization/permission decisions on other entities →
   `crates/macro_authorization`; metered AI credits → `crates/ai_billing`;
   team lifecycle and seats → `crates/teams`; a person's interface language
