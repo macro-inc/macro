@@ -182,10 +182,25 @@ where
                 .map_err(provider_error)?,
         };
         match outcome {
-            ProviderSeriesMutationOutcome::Applied(upsert) => self
-                .persist_echo(target.actor.as_ref(), *upsert)
-                .await
-                .map(|_| ()),
+            ProviderSeriesMutationOutcome::Applied(upsert) => {
+                // Google answers a recurrence change to a series split off
+                // another (an `_R…` id) with a new event under a new id and
+                // UID. The echo lands on a new entity, so the source of the
+                // id that no longer exists has to go with it, or the old
+                // entity stays on the calendar until its tombstone syncs.
+                let replacement = upsert.source.details().provider_event_id.clone();
+                self.persist_echo(target.actor.as_ref(), *upsert).await?;
+                if replacement != target.master_provider_event_id() {
+                    tracing::info!(
+                        event_id = %target.event_id,
+                        provider_event_id = target.master_provider_event_id(),
+                        replacement,
+                        "the provider replaced the series, retiring its old source"
+                    );
+                    self.retire_gone_source(target).await;
+                }
+                Ok(())
+            }
             // Either the deletion removed the series or it was already
             // gone; retiring the local source converges both.
             ProviderSeriesMutationOutcome::SeriesDeleted | ProviderSeriesMutationOutcome::Gone => {
