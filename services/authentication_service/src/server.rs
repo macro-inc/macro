@@ -777,25 +777,11 @@ pub async fn run() -> anyhow::Result<()> {
             team_agent_launches.clone(),
         )
         .map_err(|error| anyhow::anyhow!("{error:?}"))?,
-        // The brain runs on its own machine, so it gets the public addresses,
-        // never this container's in-network overrides.
+        // The brain runs on its own machine, so it reaches Macro through the
+        // public gateway, never this container's in-network addresses.
         team_agents::domain::service::BrainEnvironment {
             environment: config.environment.to_string(),
-            storage_url: DocumentStorageServiceUrl::default_for_environment(config.environment)
-                .to_string(),
-            auth_url: macro_service_urls::AuthServiceUrl::default_for_environment(
-                config.environment,
-            )
-            .to_string(),
-            cognition_url:
-                macro_service_urls::DocumentCognitionServiceUrl::default_for_environment(
-                    config.environment,
-                )
-                .to_string(),
-            harness_url: macro_service_urls::AgentHarnessServiceUrl::default_for_environment(
-                config.environment,
-            )
-            .to_string(),
+            gateway_url: macro_service_urls::ApiGatewayUrl::new()?.to_string(),
         },
     ));
 

@@ -203,10 +203,7 @@ fn service(bind_fails: bool) -> Service {
         },
         BrainEnvironment {
             environment: "dev".to_string(),
-            storage_url: "https://dev-gateway.macro.com/dss".to_string(),
-            auth_url: "https://dev-gateway.macro.com/auth".to_string(),
-            cognition_url: "https://dev-gateway.macro.com/cognition".to_string(),
-            harness_url: "https://dev-gateway.macro.com/agent-harness".to_string(),
+            gateway_url: "https://dev-gateway.macro.com".to_string(),
         },
     )
 }

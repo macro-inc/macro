@@ -7,9 +7,10 @@
 //!   <text|->`, `daemon context <channel_id>`: the commands the woken agent
 //!   uses to talk in Macro as itself.
 //!
-//! Environment: `MACRO_API_KEY` (required), `MACRO_ENV` (`prod`/`dev`/
-//! `local`), `BRAIN_HOME` (state directory; defaults to the current one),
-//! `RUST_LOG` (e.g. `info`).
+//! Environment: `MACRO_API_KEY` (required), `MACRO_GATEWAY` (the gateway
+//! origin from your setup) or `MACRO_ENV` (`prod`/`dev`/`local`),
+//! `BRAIN_HOME` (state directory; defaults to the current one), `RUST_LOG`
+//! (e.g. `info`).
 
 use std::io::Read as _;
 use std::path::PathBuf;

@@ -24,8 +24,8 @@ Your Macro API key is:
 It is you. Anyone who has it can act as you. Right now, before anything else:
 
 1. Create your home folder `~/team-agents/{{slug}}/` and inside it
-   `secrets.env` with mode 600, containing
-   `MACRO_API_KEY=<the key>` and `MACRO_ENV={{environment}}`.
+   `secrets.env` with mode 600, containing `MACRO_API_KEY=<the key>`,
+   `MACRO_ENV={{environment}}`, and `MACRO_GATEWAY={{gateway_url}}`.
 2. Never print the key, never paste it into a message, a document, a commit,
    or a log. Read it from `secrets.env` when you need it.
 
@@ -33,9 +33,9 @@ Put any other secret you collect later (accounts you sign up for, 2FA backup
 codes) in the same file. Nothing secret goes anywhere else.
 
 All Macro API calls send the header `x-macro-user-api-key: $MACRO_API_KEY`.
-Service hosts for `{{environment}}`: storage `{{storage_url}}`, auth
-`{{auth_url}}`, cognition `{{cognition_url}}`, agent sessions
-`{{harness_url}}`. Your own profile is `GET {{auth_url}}/team_agents/me`.
+Every Macro service is under the gateway `{{gateway_url}}`: storage at
+`/dss`, auth at `/auth`, cognition at `/cognition`, agent sessions at
+`/agent-harness`. Your own profile is `GET {{gateway_url}}/auth/team_agents/me`.
 {{email_section}}
 
 ## Build yourself a brain daemon

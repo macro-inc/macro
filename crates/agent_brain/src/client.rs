@@ -74,21 +74,28 @@ pub struct Hosts {
 impl Hosts {
     /// The hosts of a deployment (mirrors `packages/sdk/src/config.ts`).
     pub fn for_env(env: Environment) -> Self {
-        let gateway = |base: &str| Self {
-            storage: format!("{base}/dss"),
-            auth: format!("{base}/auth"),
-            cognition: format!("{base}/cognition"),
-            agent_harness: format!("{base}/agent-harness"),
-        };
         match env {
-            Environment::Prod => gateway("https://gateway.macro.com"),
-            Environment::Dev => gateway("https://dev-gateway.macro.com"),
+            Environment::Prod => Self::gateway("https://gateway.macro.com"),
+            Environment::Dev => Self::gateway("https://dev-gateway.macro.com"),
             Environment::Local => Self {
                 storage: "http://localhost:8086".to_owned(),
                 auth: "http://localhost:8080".to_owned(),
                 cognition: "http://localhost:8101/cognition".to_owned(),
                 agent_harness: "http://localhost:8101".to_owned(),
             },
+        }
+    }
+
+    /// Every service under a gateway origin, at the gateway's path prefixes
+    /// (`/dss`, `/auth`, `/cognition`, `/agent-harness`). A local stack's
+    /// proxy serves the same prefixes.
+    pub fn gateway(base: &str) -> Self {
+        let base = base.trim_end_matches('/');
+        Self {
+            storage: format!("{base}/dss"),
+            auth: format!("{base}/auth"),
+            cognition: format!("{base}/cognition"),
+            agent_harness: format!("{base}/agent-harness"),
         }
     }
 
@@ -147,11 +154,15 @@ impl MacroClient {
         })
     }
 
-    /// A client from the environment: `MACRO_API_KEY` (required) and
-    /// `MACRO_ENV` (`prod` (default), `dev`, or `local`).
+    /// A client from the environment: `MACRO_API_KEY` (required), and either
+    /// `MACRO_GATEWAY` (a gateway origin, which wins) or `MACRO_ENV` (`prod`
+    /// (default), `dev`, or `local`).
     pub fn from_env() -> Result<Self> {
         let key = env_string("MACRO_API_KEY")?
             .ok_or_else(|| Error::Config("MACRO_API_KEY is not set".to_owned()))?;
+        if let Some(gateway) = env_string("MACRO_GATEWAY")? {
+            return Self::new(key, Hosts::gateway(&gateway));
+        }
         let env = match env_string("MACRO_ENV")? {
             Some(value) => value.parse()?,
             None => Environment::Prod,

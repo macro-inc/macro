@@ -23,14 +23,8 @@ const BOOTSTRAP_PROMPT: &str = include_str!("bootstrap_prompt.md");
 pub struct BrainEnvironment {
     /// `local`, `dev`, or `prod`.
     pub environment: String,
-    /// Storage (DSS) base URL.
-    pub storage_url: String,
-    /// Auth service base URL.
-    pub auth_url: String,
-    /// Cognition base URL.
-    pub cognition_url: String,
-    /// Agent harness base URL.
-    pub harness_url: String,
+    /// Public API gateway origin; each service is under its path prefix.
+    pub gateway_url: String,
 }
 
 /// Team agent service backed by its ports.
@@ -116,6 +110,8 @@ pub fn render_bootstrap_prompt(
     api_key: &str,
     environment: &BrainEnvironment,
 ) -> String {
+    let gateway = environment.gateway_url.trim_end_matches('/');
+
     let email_section = if agent.email.ends_with(".invalid") {
         "\nYou have no working email inbox yet; your address is a placeholder.".to_string()
     } else {
@@ -128,7 +124,7 @@ pub fn render_bootstrap_prompt(
              person would: signing up for things, 2FA codes, writing to people \
              outside the team.",
             email = agent.email,
-            auth = environment.auth_url,
+            auth = format!("{gateway}/auth"),
         )
     };
 
@@ -149,10 +145,7 @@ pub fn render_bootstrap_prompt(
         .replace("{{creator}}", &created_by)
         .replace("{{api_key}}", api_key)
         .replace("{{environment}}", &environment.environment)
-        .replace("{{storage_url}}", &environment.storage_url)
-        .replace("{{auth_url}}", &environment.auth_url)
-        .replace("{{cognition_url}}", &environment.cognition_url)
-        .replace("{{harness_url}}", &environment.harness_url)
+        .replace("{{gateway_url}}", gateway)
         .replace("{{email_section}}", &email_section)
 }
 
