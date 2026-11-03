@@ -49,7 +49,7 @@ Status: proposal. Nothing here is built yet.
   Tools are eager (27, mostly core search, read and edit) or deferred, and
   the deferred ones are listed one line each in the prompt.
 
-Sizes below are rendered characters on #9396, which this builds on.
+Sizes below are rendered characters on `main` after #9396 (`ca2a06a297`).
 Excluding the deferred-tool catalog, the tool prompt is:
 
 | Host | Characters |
