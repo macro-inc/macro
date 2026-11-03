@@ -115,6 +115,7 @@ impl ConnectionStore for Store {
             server_name: "Linear".into(),
             account_id: "account".into(),
             enabled,
+            provider: crate::domain::models::ConnectionProvider::Pipedream,
         }))
     }
 }

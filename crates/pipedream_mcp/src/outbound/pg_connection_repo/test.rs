@@ -10,6 +10,7 @@ fn connection(app_slug: &str) -> PipedreamConnection {
         server_name: app_slug.to_owned(),
         account_id: format!("apn_{app_slug}"),
         enabled: true,
+        provider: crate::domain::models::ConnectionProvider::Pipedream,
     }
 }
 
@@ -98,4 +99,37 @@ async fn connections_follow_a_renamed_user(pool: PgPool) {
 async fn connections_require_an_existing_user(pool: PgPool) {
     let repo = PgConnectionRepo::new(pool);
     assert!(repo.save(&connection("granola")).await.is_err());
+}
+
+/// Rows written before the provider column, and by services that predate
+/// it, are Pipedream's; a Connect row round-trips its provider.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("users"))
+)]
+async fn provider_defaults_to_pipedream_and_round_trips_connect(pool: PgPool) {
+    sqlx::query(
+        "INSERT INTO pipedream_mcp_connections (user_id, app_slug, server_name, account_id)
+         VALUES ($1, 'linear', 'Linear', 'apn_linear')",
+    )
+    .bind(USER)
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repo = PgConnectionRepo::new(pool);
+    let user = connection("linear").user_id;
+
+    let legacy = repo.load(&user, "linear").await.unwrap().unwrap();
+    assert_eq!(legacy.provider, ConnectionProvider::Pipedream);
+
+    let connect = PipedreamConnection {
+        account_id: "google_sheets".into(),
+        provider: ConnectionProvider::Connect,
+        ..connection("google_sheets")
+    };
+    repo.save(&connect).await.unwrap();
+    assert_eq!(
+        repo.load(&user, "google_sheets").await.unwrap(),
+        Some(connect)
+    );
 }
