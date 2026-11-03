@@ -1,10 +1,10 @@
-import type { DocumentOp } from './editor';
 import { $getId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
 import type { Span } from '@macro-inc/observability';
 import { $getRoot, $isElementNode, type LexicalNode } from 'lexical';
 import type { LexicalSession } from './ai-toolkit/session';
 import type { AwarenessSource } from './awareness';
 import type { Doc } from './doc';
+import type { DocumentOp } from './editor';
 import { describeEffect, diffNodes, snapshotNodes } from './effect-report';
 import {
   type DocumentOpQueueParams,

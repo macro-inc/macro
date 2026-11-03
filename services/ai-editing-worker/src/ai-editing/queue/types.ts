@@ -3,12 +3,7 @@
  * list of `DocumentOpStep`s the executor replays in order: pump an `Awareness`
  * into the AwarenessSource, apply a `DocumentOp` via the DocWriter, or sleep.
  */
-import type {
-  DocumentOp,
-  NodeRef,
-  Offset,
-  Span,
-} from '../editor';
+import type { DocumentOp, NodeRef, Offset, Span } from '../editor';
 
 /** Awareness payload. */
 export type Awareness =

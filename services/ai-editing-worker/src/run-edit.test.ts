@@ -1,7 +1,6 @@
 import type { LanguageModelV3Usage } from '@ai-sdk/provider';
 import { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import { createNoopLiveSyncSource } from '@macro-inc/collaboration/collab/source';
-import type { DocumentOp } from './ai-editing/editor';
 import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
 import { markdownToLoroSnapshot } from '@macro-inc/lexical-core/markdown-loro-snapshot';
 import { MockLanguageModelV3 } from 'ai/test';
@@ -10,6 +9,7 @@ import { LoroDoc, VersionVector } from 'loro-crdt';
 import { okAsync } from 'neverthrow';
 import { describe, expect, it } from 'vitest';
 import { createEditingSession, loadSnapshot } from './ai-editing/ai-toolkit';
+import type { DocumentOp } from './ai-editing/editor';
 import { serializeWithXml } from './ai-editing/utils';
 import { runEditSession } from './run-edit';
 

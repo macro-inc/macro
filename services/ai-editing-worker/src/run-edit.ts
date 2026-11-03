@@ -9,12 +9,12 @@ import {
   WALSyncer,
 } from '@macro-inc/collaboration/collab/wal';
 import type { SyncServiceSource } from '@macro-inc/collaboration/sync-service/source';
-import type { DocumentOp } from './ai-editing/editor';
 import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
 import { Telemetry } from '@macro-inc/observability';
 import type { LanguageModel } from 'ai';
 import { fastEditor, supervisor } from './ai-editing/agents';
 import { PeerPool } from './ai-editing/awareness';
+import type { DocumentOp } from './ai-editing/editor';
 import type { CodeRunner } from './ai-editing/runtime';
 import type { UsageEntry } from './ai-editing/token-tracker';
 import type { CoderRunCode, DispatchEditTrace } from './ai-editing/tools';

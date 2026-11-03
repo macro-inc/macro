@@ -1,6 +1,6 @@
-import type { DocumentOp } from '../editor';
 import { describe, expect, it, vi } from 'vitest';
 import type { DocReader, DocWriter } from '../doc/interfaces';
+import type { DocumentOp } from '../editor';
 import { recordingAwareness, recordingWriter } from './_testUtils';
 import { mockRandomSource } from './random-source';
 import { type OpResult, runQueue, summarize } from './runner';
