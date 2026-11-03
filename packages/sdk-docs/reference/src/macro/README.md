@@ -46,6 +46,12 @@ Re-exports [ApplyOpsOptions](../entities/databases/database/type-aliases/ApplyOp
 
 ***
 
+### ArchiveCause
+
+Re-exports [ArchiveCause](../../generated/agent-harness/types.gen/type-aliases/ArchiveCause.md)
+
+***
+
 ### AutoArchiveOverrides
 
 Re-exports [AutoArchiveOverrides](../entities/agent-sessions/agent-session/type-aliases/AutoArchiveOverrides.md)

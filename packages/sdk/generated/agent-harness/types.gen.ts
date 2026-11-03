@@ -539,6 +539,11 @@ export type AgentSessionResponse = {
      */
     acpSessionId?: string | null;
     /**
+     * When the session was archived, or `None` while it is active.
+     */
+    archivedAt?: string | null;
+    archivedBy?: null | ArchiveCause;
+    /**
      * The bot running the agent.
      */
     botId: string;
@@ -566,10 +571,6 @@ export type AgentSessionResponse = {
      * at creation. Absent otherwise, so existing payloads are unchanged.
      */
     instructions?: string | null;
-    /**
-     * Whether the session is archived and read-only.
-     */
-    isArchived: boolean;
     /**
      * Model slug.
      */
@@ -704,6 +705,11 @@ export type AppConnectedRequest = {
 };
 
 /**
+ * Who or what archived a session.
+ */
+export type ArchiveCause = 'user' | 'pull_request_merged' | 'runtime_closed';
+
+/**
  * One session's choices over its owner's defaults. `null` follows the owner.
  */
 export type AutoArchiveOverridesBody = {
@@ -730,29 +736,6 @@ export type AutoArchivePreferencesBody = {
      * Archive a session once the runtime session backing it is deliberately closed.
      */
     onRuntimeClosed: boolean;
-};
-
-/**
- * What finished a session's work.
- */
-export type AutoArchiveReason = 'pull_request_merged' | 'runtime_closed';
-
-/**
- * The time a session archived itself.
- */
-export type AutoArchivedBody = {
-    /**
-     * When it archived.
-     */
-    archivedAt: string;
-    /**
-     * What finished the session's work.
-     */
-    reason: AutoArchiveReason;
-    /**
-     * When a person restored it, after which the archive no longer stands.
-     */
-    restoredAt?: string | null;
 };
 
 export type BotId = string;
@@ -2261,7 +2244,11 @@ export type SearchType = 'all' | 'channels' | 'document-or-file' | 'task' | 'ema
  * A session's auto-archive settings and history.
  */
 export type SessionAutoArchiveResponse = {
-    archived?: null | AutoArchivedBody;
+    /**
+     * When a trigger first archived the session. Kept when a person restores it: a session
+     * archives itself at most once.
+     */
+    autoArchivedAt?: string | null;
     /**
      * The owner's defaults, which apply where the session has no choice of its own.
      */
@@ -2351,9 +2338,9 @@ export type SessionStatusDto = {
  */
 export type SetAgentSessionArchivedRequest = {
     /**
-     * The requested archive state.
+     * Archive the session, or restore it.
      */
-    isArchived: boolean;
+    archived: boolean;
 };
 
 export type SharePermissionV2 = {

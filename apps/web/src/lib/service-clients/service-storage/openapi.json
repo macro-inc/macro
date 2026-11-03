@@ -20178,6 +20178,11 @@
         "description": "Last synchronized state of a session's linked GitHub pull request.",
         "enum": ["open", "draft", "closed", "merged"]
       },
+      "AgentSessionArchiveCause": {
+        "type": "string",
+        "description": "Who or what archived an agent session.",
+        "enum": ["user", "pull_request_merged", "runtime_closed"]
+      },
       "AgentSessionFilters": {
         "type": "object",
         "description": "Filters for agent sessions.",
@@ -40239,7 +40244,6 @@
             "required": [
               "id",
               "name",
-              "isArchived",
               "ownerId",
               "botId",
               "harness",
@@ -40248,6 +40252,22 @@
               "updatedAt"
             ],
             "properties": {
+              "archivedAt": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When the session was archived, or `None` while it is active."
+              },
+              "archivedBy": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AgentSessionArchiveCause",
+                    "description": "Who or what archived the session, or `None` while it is active. An archived session is\nread-only."
+                  }
+                ]
+              },
               "botId": {
                 "type": "string",
                 "format": "uuid",
@@ -40266,10 +40286,6 @@
                 "type": "string",
                 "format": "uuid",
                 "description": "The agent session uuid"
-              },
-              "isArchived": {
-                "type": "boolean",
-                "description": "Whether the session is archived and read-only."
               },
               "name": {
                 "type": "string",

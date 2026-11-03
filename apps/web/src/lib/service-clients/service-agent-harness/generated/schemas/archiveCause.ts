@@ -6,13 +6,13 @@
  */
 
 /**
- * What finished a session's work.
+ * Who or what archived a session.
  */
-export type AutoArchiveReason =
-  (typeof AutoArchiveReason)[keyof typeof AutoArchiveReason];
+export type ArchiveCause = (typeof ArchiveCause)[keyof typeof ArchiveCause];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const AutoArchiveReason = {
+export const ArchiveCause = {
+  user: 'user',
   pull_request_merged: 'pull_request_merged',
   runtime_closed: 'runtime_closed',
 } as const;

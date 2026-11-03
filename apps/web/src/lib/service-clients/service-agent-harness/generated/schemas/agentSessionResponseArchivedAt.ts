@@ -6,6 +6,6 @@
  */
 
 /**
- * When a person restored it, after which the archive no longer stands.
+ * When the session was archived, or `None` while it is active.
  */
-export type AutoArchivedBodyRestoredAt = string | null;
+export type AgentSessionResponseArchivedAt = string | null;

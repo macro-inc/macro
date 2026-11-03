@@ -7,13 +7,15 @@
 
 import type { AutoArchiveOverridesBody } from './autoArchiveOverridesBody';
 import type { AutoArchivePreferencesBody } from './autoArchivePreferencesBody';
-import type { SessionAutoArchiveResponseArchived } from './sessionAutoArchiveResponseArchived';
+import type { SessionAutoArchiveResponseAutoArchivedAt } from './sessionAutoArchiveResponseAutoArchivedAt';
 
 /**
  * A session's auto-archive settings and history.
  */
 export interface SessionAutoArchiveResponse {
-  archived?: SessionAutoArchiveResponseArchived;
+  /** When a trigger first archived the session. Kept when a person restores it: a session
+archives itself at most once. */
+  autoArchivedAt?: SessionAutoArchiveResponseAutoArchivedAt;
   /** The owner's defaults, which apply where the session has no choice of its own. */
   defaults: AutoArchivePreferencesBody;
   /** The session's own choices. */

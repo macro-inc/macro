@@ -31433,6 +31433,24 @@ export const getItemsSoupResponse = zod
                 )
                 .and(
                   zod.object({
+                    archivedAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'When the session was archived, or `None` while it is active.'
+                      ),
+                    archivedBy: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'user',
+                            'pull_request_merged',
+                            'runtime_closed',
+                          ])
+                          .describe('Who or what archived an agent session.'),
+                      ])
+                      .optional(),
                     botId: zod.uuid().describe('The bot running this session'),
                     createdAt: zod.iso
                       .datetime({})
@@ -31443,11 +31461,6 @@ export const getItemsSoupResponse = zod
                         'The runtime snapshotted when the session was created.'
                       ),
                     id: zod.uuid().describe('The agent session uuid'),
-                    isArchived: zod
-                      .boolean()
-                      .describe(
-                        'Whether the session is archived and read-only.'
-                      ),
                     name: zod
                       .string()
                       .describe('The user-facing name of the session'),
@@ -36383,6 +36396,24 @@ export const postItemsSoupResponse = zod
                 )
                 .and(
                   zod.object({
+                    archivedAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'When the session was archived, or `None` while it is active.'
+                      ),
+                    archivedBy: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'user',
+                            'pull_request_merged',
+                            'runtime_closed',
+                          ])
+                          .describe('Who or what archived an agent session.'),
+                      ])
+                      .optional(),
                     botId: zod.uuid().describe('The bot running this session'),
                     createdAt: zod.iso
                       .datetime({})
@@ -36393,11 +36424,6 @@ export const postItemsSoupResponse = zod
                         'The runtime snapshotted when the session was created.'
                       ),
                     id: zod.uuid().describe('The agent session uuid'),
-                    isArchived: zod
-                      .boolean()
-                      .describe(
-                        'Whether the session is archived and read-only.'
-                      ),
                     name: zod
                       .string()
                       .describe('The user-facing name of the session'),
@@ -40774,6 +40800,24 @@ export const postItemsSoupAstResponse = zod
                 )
                 .and(
                   zod.object({
+                    archivedAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'When the session was archived, or `None` while it is active.'
+                      ),
+                    archivedBy: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'user',
+                            'pull_request_merged',
+                            'runtime_closed',
+                          ])
+                          .describe('Who or what archived an agent session.'),
+                      ])
+                      .optional(),
                     botId: zod.uuid().describe('The bot running this session'),
                     createdAt: zod.iso
                       .datetime({})
@@ -40784,11 +40828,6 @@ export const postItemsSoupAstResponse = zod
                         'The runtime snapshotted when the session was created.'
                       ),
                     id: zod.uuid().describe('The agent session uuid'),
-                    isArchived: zod
-                      .boolean()
-                      .describe(
-                        'Whether the session is archived and read-only.'
-                      ),
                     name: zod
                       .string()
                       .describe('The user-facing name of the session'),
@@ -45742,6 +45781,26 @@ export const postItemsSoupAstGroupedResponse = zod
                       )
                       .and(
                         zod.object({
+                          archivedAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe(
+                              'When the session was archived, or `None` while it is active.'
+                            ),
+                          archivedBy: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum([
+                                  'user',
+                                  'pull_request_merged',
+                                  'runtime_closed',
+                                ])
+                                .describe(
+                                  'Who or what archived an agent session.'
+                                ),
+                            ])
+                            .optional(),
                           botId: zod
                             .uuid()
                             .describe('The bot running this session'),
@@ -45754,11 +45813,6 @@ export const postItemsSoupAstGroupedResponse = zod
                               'The runtime snapshotted when the session was created.'
                             ),
                           id: zod.uuid().describe('The agent session uuid'),
-                          isArchived: zod
-                            .boolean()
-                            .describe(
-                              'Whether the session is archived and read-only.'
-                            ),
                           name: zod
                             .string()
                             .describe('The user-facing name of the session'),
@@ -50098,6 +50152,26 @@ export const postItemsSoupAstGroupedResponse = zod
                       )
                       .and(
                         zod.object({
+                          archivedAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe(
+                              'When the session was archived, or `None` while it is active.'
+                            ),
+                          archivedBy: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum([
+                                  'user',
+                                  'pull_request_merged',
+                                  'runtime_closed',
+                                ])
+                                .describe(
+                                  'Who or what archived an agent session.'
+                                ),
+                            ])
+                            .optional(),
                           botId: zod
                             .uuid()
                             .describe('The bot running this session'),
@@ -50110,11 +50184,6 @@ export const postItemsSoupAstGroupedResponse = zod
                               'The runtime snapshotted when the session was created.'
                             ),
                           id: zod.uuid().describe('The agent session uuid'),
-                          isArchived: zod
-                            .boolean()
-                            .describe(
-                              'Whether the session is archived and read-only.'
-                            ),
                           name: zod
                             .string()
                             .describe('The user-facing name of the session'),

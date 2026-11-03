@@ -322,6 +322,11 @@ export type AgentMcpServers = {
 export type AgentPullRequestState = 'open' | 'draft' | 'closed' | 'merged';
 
 /**
+ * Who or what archived an agent session.
+ */
+export type AgentSessionArchiveCause = 'user' | 'pull_request_merged' | 'runtime_closed';
+
+/**
  * Filters for agent sessions.
  */
 export type AgentSessionFilters = {
@@ -13040,6 +13045,11 @@ export type SoupAgentSessionSoupPropertiesField = {
     properties: Array<SoupProperty>;
 } & {
     /**
+     * When the session was archived, or `None` while it is active.
+     */
+    archivedAt?: string | null;
+    archivedBy?: null | AgentSessionArchiveCause;
+    /**
      * The bot running this session
      */
     botId: string;
@@ -13055,10 +13065,6 @@ export type SoupAgentSessionSoupPropertiesField = {
      * The agent session uuid
      */
     id: string;
-    /**
-     * Whether the session is archived and read-only.
-     */
-    isArchived: boolean;
     /**
      * The user-facing name of the session
      */

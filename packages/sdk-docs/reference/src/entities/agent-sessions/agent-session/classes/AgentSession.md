@@ -11,13 +11,14 @@ A managed or externally hosted coding-agent session.
 | Property | Modifier | Type | Description | Inherited from |
 | ------ | ------ | ------ | ------ | ------ |
 | <a id="property-access"></a> `access` | `readonly` | [`EntityAccess`](../../../sharing/access/classes/EntityAccess.md) | Access requests and direct user grants. | - |
+| <a id="property-archivedat"></a> `archivedAt` | `readonly` | () => `Promise`\<`string` \| `undefined`\> | When the session was archived (RFC 3339), or `undefined` while it is not. | - |
+| <a id="property-archivedby"></a> `archivedBy` | `readonly` | () => `Promise`\<`NonNullable`\<ArchiveCause \| null \| undefined\> \| `undefined`\> | Who archived the session, making it read-only: `'user'`, `'pull_request_merged'` or `'runtime_closed'`. `undefined` while it is not archived. | - |
 | <a id="property-codeexecutions"></a> `codeExecutions` | `readonly` | \{ `byId`: (`id`) => [`CodeExecution`](../../code-execution/classes/CodeExecution.md); \} | Saved code executions scoped to this session. Handle construction makes no request. | - |
 | `codeExecutions.byId` | `public` | (`id`) => [`CodeExecution`](../../code-execution/classes/CodeExecution.md) | - | - |
 | <a id="property-createdat"></a> `createdAt` | `readonly` | () => `Promise`\<`string`\> | When the session was created. | - |
 | <a id="property-harness"></a> `harness` | `readonly` | () => `Promise`\<`string`\> | The agent harness implementation serving the session. | - |
 | <a id="property-id"></a> `id` | `public readonly` | `string` | - | [`MacroEntity`](../../../entity/classes/MacroEntity.md).[`id`](../../../entity/classes/MacroEntity.md#property-id) |
 | <a id="property-instructions"></a> `instructions` | `readonly` | () => `Promise`\<`string` \| `undefined`\> | Instructions the session's runtime works under, when any were stated at creation. Fixed for the session's life. | - |
-| <a id="property-isarchived"></a> `isArchived` | `readonly` | () => `Promise`\<`boolean`\> | Whether the session is archived and read-only. | - |
 | <a id="property-model"></a> `model` | `readonly` | () => `Promise`\<`string`\> | The model currently configured for the session. | - |
 | <a id="property-modifiedat"></a> `modifiedAt` | `readonly` | () => `Promise`\<`string`\> | When the session was last modified. | - |
 | <a id="property-name"></a> `name` | `readonly` | () => `Promise`\<`string`\> | The session's user-facing display name. | - |
@@ -47,7 +48,7 @@ Archive this session, making it read-only until unarchived.
 
 > **autoArchive**(): `Promise`\<[`SessionAutoArchive`](../type-aliases/SessionAutoArchive.md)\>
 
-This session's auto-archive settings, and the archive a trigger made.
+This session's auto-archive settings, and when a trigger archived it.
 
 #### Returns
 
