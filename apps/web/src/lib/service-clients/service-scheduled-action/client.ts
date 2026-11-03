@@ -17,6 +17,7 @@ import type {
   InProgressExecution,
   RoutineTemplate,
   ScheduledAction,
+  ScheduledActionResponse,
   SetScheduledActionEnabled,
   ShareRoutineTemplate,
 } from './generated/schemas';
@@ -47,7 +48,7 @@ export const scheduledActionClient = {
     }),
   // Include every trigger type in the routine list.
   listSchedules: async () =>
-    scheduledActionFetch<ScheduledAction[]>(
+    scheduledActionFetch<ScheduledActionResponse[]>(
       '/scheduled-actions?include_events=true',
       {
         method: 'GET',

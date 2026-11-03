@@ -3,6 +3,7 @@ import { SidePanel } from '@components/app/side-panel';
 import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
 import { CrmListSkeleton } from '../components/list-state';
 import { RecordOverview } from '../components/record-overview';
+import { RecordVisibilityAction } from '../components/record-visibility-action';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmContact as CompanyContact } from '../core/contact';
 import {
@@ -23,7 +24,11 @@ import {
   RecordFilesSection,
   RecordReferencesSection,
 } from './record-associations';
-import { useCompanyQuery } from './use-crm';
+import {
+  useCompanyQuery,
+  useIsTeamAdmin,
+  useSetCompanyHiddenMutation,
+} from './use-crm';
 
 /**
  * Root of the company detail view, laid out like a project: the host's top
@@ -68,6 +73,8 @@ function CompanyContent(props: CompanyProps) {
   const pipelinesEnabled = context.pipelinesEnabled();
   const { company, contacts, query } = useCompanyQuery(() => props.companyId);
   usePending('crm.record', () => query.isLoading);
+  const isTeamAdmin = useIsTeamAdmin();
+  const hiddenMutation = useSetCompanyHiddenMutation();
   const section = () => props.section ?? 'overview';
   const scope = createMemo(
     (): CrmRecordScope | undefined => {
@@ -95,6 +102,37 @@ function CompanyContent(props: CompanyProps) {
             <Match when={section() === 'overview'}>
               <RecordOverview>
                 <CompanyHeader company={company()} />
+                <Show when={company()}>
+                  {(current) => (
+                    <RecordVisibilityAction
+                      recordId={current().id}
+                      kind="company"
+                      name={current().name}
+                      hidden={current().hidden}
+                      canManage={isTeamAdmin()}
+                      pending={hiddenMutation.isPending}
+                      onChange={(hidden, onSuccess) =>
+                        hiddenMutation.mutate(
+                          { companyId: current().id, hidden },
+                          {
+                            onSuccess: () => {
+                              onSuccess();
+                              context.feedback.success(
+                                hidden
+                                  ? 'Company removed from CRM'
+                                  : 'Company restored to CRM'
+                              );
+                            },
+                            onError: () =>
+                              context.feedback.failure(
+                                'Could not update company visibility'
+                              ),
+                          }
+                        )
+                      }
+                    />
+                  )}
+                </Show>
                 <Show when={pipelinesEnabled()}>
                   <context.PipelineEntries
                     record={{ type: 'company', id: props.companyId }}
