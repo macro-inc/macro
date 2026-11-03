@@ -57,6 +57,7 @@
         "@corvu/dialog": "^0.2.4",
         "@corvu/drawer": "^0.2.4",
         "@date-fns/tz": "^1.4.1",
+        "@date-fns/utc": "^2.1.1",
         "@effect/platform-browser": "4.0.0-rc.111",
         "@floating-ui/dom": "^1.7.4",
         "@fontsource-variable/inter": "^5.2.8",
@@ -896,6 +897,8 @@
     "@datadog/datadog-ci-plugin-synthetics": ["@datadog/datadog-ci-plugin-synthetics@3.22.2", "", { "dependencies": { "axios": "^1.12.1", "chalk": "3.0.0", "debug": "^4.4.1", "deep-extend": "0.6.0", "fast-levenshtein": "^3.0.0", "get-value": "^4.0.1", "ora": "5.4.1", "set-value": "^4.1.0", "ssh2": "^1.16.0", "sshpk": "1.16.1", "upath": "^2.0.1", "ws": "^7.5.10", "xml2js": "0.5.0", "yamux-js": "0.1.2" }, "peerDependencies": { "@datadog/datadog-ci-base": "3.22.2" } }, "sha512-7JuGnnw1GGdsw3OUjJTjCPDaRNdFROB199CNWOsu9psLDCOLfb3zKVVEpIno+u+2HGL0/PIRQz8F6dM499Nb+g=="],
 
     "@date-fns/tz": ["@date-fns/tz@1.5.0", "", {}, "sha512-lwYN/vDPeNRULcepoE/LO2Pgx+7/RV+S9ARfbc9lr2DtGkOD7pAiruHvbR1RX3Qyf6ja47EWJDMsNK5vK08DJg=="],
+
+    "@date-fns/utc": ["@date-fns/utc@2.1.1", "", {}, "sha512-SlJDfG6RPeEX8wEVv6ZB3kak4MmbtyiI2qX/5zuKdordbrhB/iaJ58GVMZgJ6P1sJaM1gMgENFYYeg1JWrCFrA=="],
 
     "@effect/platform-browser": ["@effect/platform-browser@4.0.0-rc.111", "", { "peerDependencies": { "effect": "^4.0.0-rc.111" } }, "sha512-4SmaYB4zWsmuM82V8Dgida2yupzEWlv6/QoDL2Ogj1jOPq65KUx3VjQKcNn2NenOR6SFRWaWsUWrnxwA2IPFzg=="],
 
