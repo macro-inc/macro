@@ -450,6 +450,8 @@
   "storage.getContact": "Get Contact",
   "storage.setContactHidden": "Set Contact Hidden",
   "storage.setCrmContactName": "Set Crm Contact Name",
+  "storage.getCrmContactPhones": "Get Crm Contact Phones",
+  "storage.setCrmContactPhones": "Set Crm Contact Phones",
   "storage.listCrmPipelines": "List Crm Pipelines",
   "storage.createCrmPipeline": "Create Crm Pipeline",
   "storage.getCrmPipeline": "Get Crm Pipeline",
