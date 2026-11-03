@@ -809,7 +809,10 @@ fn system_skill_tools_are_deferred_session_tools() {
                 skill.slug
             );
             assert!(
-                session.deferred.iter().any(|deferred| deferred.name == *tool),
+                session
+                    .deferred
+                    .iter()
+                    .any(|deferred| deferred.name == *tool),
                 "{} names {tool}, which is eager; skills cover deferred tools",
                 skill.slug
             );
