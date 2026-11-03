@@ -91,10 +91,34 @@ async function changeCommentMark(options: CommentMarkChange): Promise<boolean> {
     if (snapshot.isErr()) return refuse('snapshot_failed');
     const loaded = await staged.initializeFromSnapshot(snapshot.value);
     if (loaded.isErr() || !staged.state) return refuse('snapshot_invalid');
-    if (liveVersion) {
+    if (manager && liveVersion) {
       const compared = staged.doc.oplogVersion().compare(liveVersion);
       if (compared === undefined || compared < 0)
         return refuse('local_changes_pending');
+      if (compared > 0) {
+        // A shallow snapshot cannot supply an existing peer's missing history.
+        // Catch up before publishing, including retries of an accepted mark.
+        span.setAttr('comment.catchup_required', true);
+        const updates = await source.requestUpdatesSince(
+          manager.doc.oplogVersion()
+        );
+        if (!active()) return refuse('cancelled');
+        if (updates.isErr()) return refuse('catchup_failed');
+        if (manager.importUpdate(updates.value).isErr())
+          return refuse('catchup_merge_failed');
+        const merged = manager.doc
+          .oplogVersion()
+          .compare(staged.doc.oplogVersion());
+        if (merged === undefined || merged < 0)
+          return refuse('catchup_incomplete');
+      }
+      // Draft cursors can refer to text containers replaced by a remote edit.
+      // Keep the live peer's history so they resolve after snapshot compaction.
+      const restored = await staged.reset(
+        manager.doc.export({ mode: 'snapshot' })
+      );
+      if (restored.isErr() || !staged.state)
+        return refuse('history_snapshot_invalid');
     }
     if (!active()) return refuse('cancelled');
     editor.setEditorState(
@@ -162,10 +186,7 @@ async function changeCommentMark(options: CommentMarkChange): Promise<boolean> {
     const acked = await source.pushUpdate([update], { commentOnly: true });
     span.setAttr('comment.outcome', acked ? 'accepted' : 'not_acked');
     if (!acked) return refuse('not_acked');
-    // The snapshot is also needed when this is a retry of an already accepted mark.
     if (manager && active()) {
-      if (manager.importUpdate(snapshot.value).isErr())
-        return refuse('snapshot_merge_failed');
       if (manager.importUpdate(update).isErr())
         return refuse('update_merge_failed');
     }

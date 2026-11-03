@@ -1,16 +1,14 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { hasPostedComment } from './messageCommentsResource';
+import { hasPostedComment } from './posted-comment';
 
 const list = vi.hoisted(() => vi.fn());
 vi.mock('@service-storage/messages', () => ({
   entityMessagesClient: { list },
 }));
-vi.mock('@queries/messages/document-messages', () => ({
-  useMessageActions: vi.fn(),
-}));
-vi.mock('../context/markdown-document-context', () => ({
-  useMarkdownDocument: vi.fn(),
-}));
+vi.mock('../client', async () => {
+  const { QueryClient } = await import('@tanstack/solid-query');
+  return { queryClient: new QueryClient() };
+});
 afterEach(() => list.mockReset());
 
 it('preserves an anchor owned by a root on a later page', async () => {
@@ -33,4 +31,14 @@ it('does not infer an orphan when a page fails', async () => {
   await expect(hasPostedComment('document', 'saved')).rejects.toThrow(
     'unavailable'
   );
+});
+
+it('checks the server again after an earlier lookup found no posted comment', async () => {
+  list.mockResolvedValueOnce({ items: [], next_cursor: null });
+  expect(await hasPostedComment('document', 'new-mark')).toBe(false);
+  list.mockResolvedValueOnce({
+    items: [{ state: { anchor: { type: 'markdown', mark_id: 'new-mark' } } }],
+    next_cursor: null,
+  });
+  expect(await hasPostedComment('document', 'new-mark')).toBe(true);
 });

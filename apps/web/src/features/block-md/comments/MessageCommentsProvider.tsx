@@ -29,6 +29,7 @@ import {
   useMessageRootsQuery,
 } from '@queries/messages/document-messages';
 import { usePatchThreadMutation } from '@queries/messages/mutations';
+import { hasPostedComment } from '@queries/messages/posted-comment';
 import { onThreadStateUpdated } from '@queries/messages/sync';
 import type { MessageThread } from '@service-storage/messages';
 import {
@@ -52,7 +53,6 @@ import { useMarkdownDocument } from '../context/markdown-document-context';
 import { useDeleteNewComments } from './commentOperations';
 import type { Mark, ThreadStore } from './commentType';
 import { createLocalCommentDraft } from './LocalCommentDraft';
-import { hasPostedComment } from './messageCommentsResource';
 
 function getHighlightThread(
   highlight: Mark

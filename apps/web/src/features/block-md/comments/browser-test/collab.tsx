@@ -71,13 +71,22 @@ function Fixture() {
     },
     pushUpdate: async (updates) => {
       if (new URLSearchParams(location.search).has('reject')) return false;
-      for (const update of updates) server.importUpdate(update);
+      for (const update of updates) {
+        if (server.importUpdate(update).isErr()) return false;
+      }
       return true;
     },
     pushAwareness: () => {},
     registerPeerId: () => {},
-    requestUpdatesSince: () => okAsync(new Uint8Array()),
-    requestSnapshot: () => okAsync(server.doc.export({ mode: 'snapshot' })),
+    requestUpdatesSince: (from) =>
+      okAsync(server.doc.export({ mode: 'update', from })),
+    requestSnapshot: () =>
+      okAsync(
+        server.doc.export({
+          mode: 'shallow-snapshot',
+          frontiers: server.doc.oplogFrontiers(),
+        })
+      ),
     reconnect: () => {},
     cleanup: () => {},
   };
@@ -105,9 +114,11 @@ function Fixture() {
         node.text?.includes('notes')
       );
       if (!text) throw new Error('Missing remote text');
-      text.text = text.text.replace('notes', 'notes!');
+      const missed = new URLSearchParams(location.search).has('missed-update');
+      text.text = text.text.replace('notes', missed ? 'notes!!' : 'notes!');
       const result = await server.syncToLoro(state);
       if (result.isErr()) throw new Error('Remote edit failed');
+      if (missed) return;
       const update = server.doc.export({ mode: 'update', from: version });
       for (const listener of listeners) listener({ type: 'update', update });
     },
@@ -232,6 +243,7 @@ function Editor(props: {
         />
         <button
           onClick={async () => {
+            setResult('');
             const id = draft();
             const accepted = await publication()?.publish();
             setResult(accepted ? 'accepted' : 'rejected');

@@ -1052,7 +1052,8 @@ Use `MessageLoadError` for compact discussion/thread failures; missing resources
 show an unavailable state without a retry action or composer.
 
 Keep collaborative drafts as cursor-based overlays outside the shared editor tree.
-Flush pending text, publish the mark from an isolated peer with `PeerCommentUpdate`,
+Flush pending text, catch up missing server history before publication, then
+publish the mark from an isolated peer with `PeerCommentUpdate`,
 and post the message only after acknowledgement. Refused operations never enter
 the editor's WAL. Preserve input on failure. Cancelled publications retry mark
 cleanup from the user/document-scoped IndexedDB queue; preserve marks when a

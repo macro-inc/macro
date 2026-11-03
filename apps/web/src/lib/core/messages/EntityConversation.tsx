@@ -110,7 +110,14 @@ export function EntityConversation(props: {
     () => new Map(messages().map((message) => [message.id, message]))
   );
   return (
-    <Show when={!props.hideWhenEmpty || messages().length > 0}>
+    <Show
+      when={
+        !props.hideWhenEmpty ||
+        messages().length > 0 ||
+        query.isError ||
+        unavailable()
+      }
+    >
       <section class="mt-3 pb-12" data-entity-conversation>
         <button
           type="button"

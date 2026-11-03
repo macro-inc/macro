@@ -62,8 +62,10 @@ vi.mock('@core/component/LexicalMarkdown/component/core/Highlights', () => ({
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
 }));
-vi.mock('./messageCommentsResource', () => ({
+vi.mock('@queries/messages/posted-comment', () => ({
   hasPostedComment: async () => false,
+}));
+vi.mock('./messageCommentsResource', () => ({
   useCreateMarkedMessageResource: () => mocks.post,
   useCreateMessageReplyResource: () => mocks.post,
 }));

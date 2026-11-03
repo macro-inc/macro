@@ -1,8 +1,10 @@
 import { expect, test } from '@playwright/test';
 
 for (const readonly of [false, true]) {
-  for (const reject of [false, true]) {
-    test(`repeated comments preserve collaborative text (${readonly ? 'commenter' : 'editor'}, ${reject ? 'rejected' : 'acked'})`, async ({
+  for (const mode of ['acked', 'rejected', 'catchup']) {
+    const reject = mode === 'rejected';
+    const catchup = mode === 'catchup';
+    test(`repeated comments preserve collaborative text (${readonly ? 'commenter' : 'editor'}, ${mode})`, async ({
       page,
     }) => {
       await page.route('**/*', (route) =>
@@ -12,7 +14,7 @@ for (const readonly of [false, true]) {
       );
       await page.routeWebSocket('**/*', (socket) => socket.close());
       await page.goto(
-        `/src/features/block-md/comments/browser-test/collab.html?${readonly ? 'readonly&' : ''}${reject ? 'reject' : ''}`
+        `/src/features/block-md/comments/browser-test/collab.html?${readonly ? 'readonly&' : ''}${reject ? 'reject' : ''}${catchup ? 'missed-update' : ''}`
       );
       await page.waitForFunction(() => window.commentCollab?.ready());
       const editor = page.getByRole('textbox', { name: 'Document' });
@@ -58,13 +60,11 @@ for (const readonly of [false, true]) {
           version
         );
         await page.evaluate(() => window.commentCollab!.remoteEdit());
-        await expect(editor.locator('p').first()).toContainText(
-          'notes' + '!'.repeat(attempt + 1)
-        );
+        const visibleEdits = catchup ? attempt * 2 : attempt + 1;
         await expect(page.getByTestId('draft')).not.toBeEmpty();
         await expect
           .poll(() => editor.locator('p').first().innerText())
-          .toBe(original.replace('notes', 'notes' + '!'.repeat(attempt + 1)));
+          .toBe(original.replace('notes', 'notes' + '!'.repeat(visibleEdits)));
         await page
           .getByRole('button', { name: 'Post comment', exact: true })
           .click();
@@ -78,7 +78,12 @@ for (const readonly of [false, true]) {
         await expect(page.getByTestId('draft')).toBeEmpty();
         await expect
           .poll(() => editor.locator('p').first().innerText())
-          .toBe(original.replace('notes', 'notes' + '!'.repeat(attempt + 1)));
+          .toBe(
+            original.replace(
+              'notes',
+              'notes' + '!'.repeat((attempt + 1) * (catchup ? 2 : 1))
+            )
+          );
       }
     });
   }
