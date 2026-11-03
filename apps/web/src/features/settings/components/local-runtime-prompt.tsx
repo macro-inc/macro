@@ -1,6 +1,7 @@
-import { useSettingsState } from '@core/constant/SettingsState';
+import { LocalRuntimeSetupDialog } from '@app/features/local-runtime/views/local-runtime-setup-dialog';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { lazyNamed } from '@core/util/lazyNamed';
 import { isDesktopPlatform } from '@core/util/platform';
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
 import {
@@ -14,18 +15,27 @@ import XIcon from '@phosphor/x.svg';
 import type { UnlistenFn } from '@tauri-apps/api/event';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 
+const LocalRuntimeSetup = lazyNamed(
+  () => import('@app/features/local-runtime/local-runtime-setup'),
+  'LocalRuntimeSetup'
+);
+
 const dismissal = createUserScopedStorage(
   'macro:local-runtime-prompt:dismissed'
 );
 const dismissalEvent = 'macro:local-runtime-prompt:dismissed';
 
-/** Invite each desktop installation to set up its own bundled local runtime. */
+/**
+ * Invite each desktop installation to set up its own bundled local runtime,
+ * and run that setup in place.
+ */
 export function LocalRuntimePrompt() {
   if (!isDesktopPlatform()) return null;
 
   const userId = useUserId();
-  const { openSettings } = useSettingsState();
   const [available, setAvailable] = createSignal(false);
+  const [setupOpen, setSetupOpen] = createSignal(false);
+  const [defaultWorkspace, setDefaultWorkspace] = createSignal<string>();
   const [dismissalVersion, setDismissalVersion] = createSignal(0);
 
   const refreshDismissal = () => {
@@ -69,6 +79,7 @@ export function LocalRuntimePrompt() {
       try {
         const support = await macrodSupport();
         if (!support.supported || disposed) return;
+        setDefaultWorkspace(support.defaultWorkspace ?? undefined);
         fireAndForget(refresh(), 'local-runtime-prompt.refresh');
         fireAndForget(
           (async () => {
@@ -112,33 +123,51 @@ export function LocalRuntimePrompt() {
   };
 
   return (
-    <Show when={available() && !dismissed()}>
-      <div class="mb-3 flex items-center gap-1 rounded-xl border border-edge-muted bg-surface p-1.5 text-ink">
-        <button
-          type="button"
-          class="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          onClick={() => openSettings('Harness')}
-        >
-          <LaptopIcon class="size-5 shrink-0 text-accent" aria-hidden="true" />
-          <span class="min-w-0 flex-1">
-            <span class="block text-sm font-medium">
-              Run agents on this computer
+    <>
+      <Show when={available() && !dismissed()}>
+        <div class="mb-3 flex items-center gap-1 rounded-xl border border-edge-muted bg-surface p-1.5 text-ink">
+          <button
+            type="button"
+            class="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            onClick={() => setSetupOpen(true)}
+          >
+            <LaptopIcon
+              class="size-5 shrink-0 text-accent"
+              aria-hidden="true"
+            />
+            <span class="min-w-0 flex-1">
+              <span class="block text-sm font-medium">
+                Run agents on this computer
+              </span>
+              <span class="block text-xs text-ink-muted">
+                Use your installed agents and local files in Macro.
+              </span>
             </span>
-            <span class="block text-xs text-ink-muted">
-              Use your installed agents and local files in Macro.
-            </span>
-          </span>
-          <span class="shrink-0 text-xs font-medium text-accent">Set up</span>
-        </button>
-        <button
-          type="button"
-          class="flex size-8 shrink-0 items-center justify-center rounded-lg text-ink-muted hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          aria-label="Dismiss Run agents on this computer"
-          onClick={dismiss}
-        >
-          <XIcon class="size-4" aria-hidden="true" />
-        </button>
-      </div>
-    </Show>
+            <span class="shrink-0 text-xs font-medium text-accent">Set up</span>
+          </button>
+          <button
+            type="button"
+            class="flex size-8 shrink-0 items-center justify-center rounded-lg text-ink-muted hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            aria-label="Dismiss Run agents on this computer"
+            onClick={dismiss}
+          >
+            <XIcon class="size-4" aria-hidden="true" />
+          </button>
+        </div>
+      </Show>
+      {/* Outside the invitation, which hides once the runtime starts mid-setup. */}
+      <LocalRuntimeSetupDialog
+        open={setupOpen()}
+        onClose={() => setSetupOpen(false)}
+      >
+        <Show when={setupOpen()}>
+          <LocalRuntimeSetup
+            defaultWorkspace={defaultWorkspace()}
+            autoStart
+            onClose={() => setSetupOpen(false)}
+          />
+        </Show>
+      </LocalRuntimeSetupDialog>
+    </>
   );
 }
