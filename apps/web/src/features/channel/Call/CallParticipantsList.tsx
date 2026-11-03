@@ -6,6 +6,7 @@ import Microphone from '@icon/system/regular/microphone.svg';
 import MicrophoneSlash from '@icon/system/regular/microphone-slash.svg';
 import VideoCamera from '@icon/system/regular/video-camera.svg';
 import VideoCameraSlash from '@icon/system/regular/video-camera-slash.svg';
+import { Avatar, cn } from '@ui';
 import type { RemoteParticipant } from 'livekit-client';
 import { createMemo, For, Show } from 'solid-js';
 import { useCallContext } from './CallContext';
@@ -21,11 +22,18 @@ function ParticipantRow(props: {
 }) {
   return (
     <li class="flex min-h-14 items-center gap-3 px-3 py-2">
-      <div class="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-hover text-sm font-medium">
-        <Show when={props.userId} fallback={props.name.charAt(0).toUpperCase()}>
-          {(id) => (
-            <UserIcon id={id()} size="fill" suppressClick showTooltip={false} />
-          )}
+      <div class="size-8 shrink-0">
+        <Show
+          when={props.userId}
+          fallback={
+            <Avatar size="fill">
+              <Avatar.Fallback>
+                {props.name.charAt(0).toUpperCase()}
+              </Avatar.Fallback>
+            </Avatar>
+          }
+        >
+          {(id) => <UserIcon id={id()} size="fill" suppressClick />}
         </Show>
       </div>
       <div class="min-w-0 flex-1">
@@ -39,7 +47,7 @@ function ParticipantRow(props: {
         </Show>
       </div>
       <span
-        class="shrink-0 text-ink-muted"
+        class={cn('shrink-0', props.muted ? 'text-failure' : 'text-ink-muted')}
         role="img"
         aria-label={
           props.muted ? t('calls.microphoneOff') : t('calls.microphoneOn')
@@ -50,7 +58,10 @@ function ParticipantRow(props: {
         </Show>
       </span>
       <span
-        class="shrink-0 text-ink-muted"
+        class={cn(
+          'shrink-0',
+          props.videoEnabled ? 'text-ink-muted' : 'text-failure'
+        )}
         role="img"
         aria-label={
           props.videoEnabled ? t('calls.cameraOn') : t('calls.cameraOff')

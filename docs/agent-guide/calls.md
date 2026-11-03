@@ -217,10 +217,10 @@ read-only name.
 Join-preview and in-call controls use the standard Macro icon buttons. In a
 call, a fully rounded toolbar contains the controls. The microphone and camera
 are split buttons (`ButtonGroup`): the left half
-toggles the device, with its state shown by the icon, and the caret opens a settings menu above
-the toolbar on click only; hovering opens nothing. **Audio settings** lists
-microphones, speakers (when the browser can choose one), and a noise suppression
-switch with its label on the left.
+toggles the device, with a failure-colored slashed icon when off, and the caret
+opens a settings menu above the toolbar on click only; hovering opens nothing.
+**Audio settings** lists microphones, speakers (when the browser can choose one),
+and a noise suppression switch with its label on the left.
 **Video settings** lists cameras and the background effects as tiles: None,
 Light blur, Strong blur, a selected custom image, and Upload. Screen share and
 Leave call are separate buttons. Live channel calls also include **Call sharing**
@@ -252,9 +252,12 @@ Open **Chat** and **Participants** from the button beside the media controls.
 The sidebar and phone drawer share two tabs at the top. **Participants** shows
 the live attendee count and a scrollable roster, including you and connected
 guests but excluding recording agents. Rows show names, avatars, microphone and
-camera state, and a speaking indicator. This is the current call roster, not the
-channel member list. Participant controls remain read-only. The roster remains
-available when chat is unavailable, without starting message queries.
+camera state, and a speaking indicator. Off microphones and cameras use the
+failure color. Known users use the shared user icon: hover it on desktop or tap
+it on touch to open the profile card; guests use the shared avatar fallback.
+This is the current call roster, not the channel member list. Participant media
+controls remain read-only. The roster remains available when chat is unavailable,
+without starting message queries.
 
 On phones, the fully rounded control bar fits its buttons instead of filling the
 available width, with small gaps between controls when space allows. The sidebar
@@ -274,11 +277,15 @@ leaving at least 320px for the call. It starts at 360px and retains its resized
 width when closed and reopened. Narrow desktop panes overlay the sidebar;
 phones use the shared bottom sheet instead of a resize handle.
 
-Dismiss the sheet with its handle, backdrop, or Escape; desktop closes with
-**Close chat and participants** or Escape. Closing returns focus to the footer
-button. Switching tabs, closing, and resizing preserve the message draft and
-scroll position. Tab changes keep keyboard focus on the selected tab instead of
-moving it into the composer; reopening retains the existing autofocus behavior.
+Both presentations have a **Close chat and participants** button beside the tabs.
+Dismiss the sheet with that button, its handle, backdrop, or Escape; desktop also
+closes with Escape. Opening and closing animate unless reduced motion is enabled.
+Closing returns focus to the footer button. Switching tabs, closing, and resizing
+preserve the message draft and scroll position. Tab changes keep keyboard focus
+on the selected tab instead of moving it into the composer; reopening retains
+the existing autofocus behavior.
+Message hover actions stay within the chat's scroll viewport, wrapping when the
+sidebar is narrow. Check the first and last visible messages while scrolling.
 Check both signed-in and guest calls.
 
 ### Browser call diagnostics

@@ -479,6 +479,14 @@ export function CallOverlay(props: {
           gutter={12}
           showDividers={false}
           captureResizeCtx={setResizeContext}
+          class={cn(
+            !isMobile() &&
+              panelMounted() && [
+                '[&>[data-resize-panel]]:transition-[width,left] [&>[data-resize-panel]]:duration-200 [&>[data-resize-panel]]:ease-out [&>[data-resize-panel]]:motion-reduce:transition-none',
+                '[&>[role=separator]]:transition-[left] [&>[role=separator]]:duration-200 [&>[role=separator]]:ease-out [&>[role=separator]]:motion-reduce:transition-none',
+                '[&:has(>[role=separator]:active)>*]:transition-none',
+              ]
+          )}
         >
           <Resize.Panel id="call-stage" minSize={widePanel() ? 320 : 0}>
             <div class="flex h-full min-h-0 min-w-0 flex-col @container/call-stage">

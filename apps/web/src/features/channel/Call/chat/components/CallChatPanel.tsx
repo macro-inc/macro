@@ -1,7 +1,8 @@
 import { formatLocale, t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isMobile } from '@core/mobile/isMobile';
-import { cn, TabSelector } from '@ui';
+import XIcon from '@icon/system/regular/x.svg';
+import { Button, cn, TabSelector } from '@ui';
 import { createEffect, createSignal, type JSX, on, onCleanup } from 'solid-js';
 
 export type CallPanelTab = 'chat' | 'participants';
@@ -72,8 +73,12 @@ export function CallChatPanel(props: {
         id={isMobile() ? undefined : props.id}
         aria-label={t('calls.panel')}
         hidden={isMobile() || !props.open}
-        class="absolute top-2 right-0 bottom-2 z-20 w-full max-w-90 min-h-0 flex-col overflow-hidden rounded-lg border border-edge-muted bg-surface-2 @min-[800px]/call:static @min-[800px]/call:h-full @min-[800px]/call:max-w-none"
-        classList={{ flex: !isMobile() && props.open }}
+        inert={isMobile() || !props.open}
+        class="absolute top-2 right-0 bottom-2 z-20 w-full max-w-90 min-h-0 flex-col overflow-hidden rounded-lg border border-edge-muted bg-surface-2 transition-[opacity,translate,display] transition-discrete duration-200 ease-out starting:opacity-0 starting:translate-x-3 motion-reduce:transition-none @min-[800px]/call:static @min-[800px]/call:h-full @min-[800px]/call:max-w-none"
+        classList={{
+          flex: !isMobile() && props.open,
+          'opacity-0 translate-x-3 pointer-events-none': !props.open,
+        }}
       >
         <div ref={setSidebarBody} class="flex min-h-0 flex-1 flex-col" />
       </aside>
@@ -84,8 +89,7 @@ export function CallChatPanel(props: {
           aria-hidden={!sheetOpen()}
           inert={!sheetOpen()}
           targetHeight={80}
-          class="data-closed:hidden"
-          classList={{ 'duration-0!': !sheetOpen() }}
+          class="data-closed:hidden motion-reduce:duration-0!"
         >
           <MobileDrawer.Handle />
           <MobileDrawer.Title class="sr-only">
@@ -107,7 +111,7 @@ export function CallChatPanel(props: {
           }}
           class="flex min-h-0 flex-1 flex-col"
         >
-          <div class="flex h-14 shrink-0 items-center px-3">
+          <div class="flex h-14 shrink-0 items-center justify-between gap-2 px-3">
             <TabSelector>
               <TabSelector.List
                 aria-label={t('calls.panel')}
@@ -124,6 +128,15 @@ export function CallChatPanel(props: {
                 </TabSelector.Tab>
               </TabSelector.List>
             </TabSelector>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t('calls.closePanel')}
+              tooltip={t('calls.closePanel')}
+              onClick={props.onClose}
+            >
+              <XIcon class="size-4" />
+            </Button>
           </div>
           <TabSelector.Panel
             value="chat"

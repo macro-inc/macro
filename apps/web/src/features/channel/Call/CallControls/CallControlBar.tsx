@@ -13,7 +13,7 @@ import { CallSettingsMenu } from './CallSettingsMenu';
 /**
  * A media toggle split from its settings menu: the left half turns the device
  * on or off, the caret opens its menu on click. The toggle keeps one fill and
- * shows its state through the icon.
+ * shows its state through the icon, with failure color when the device is off.
  */
 function MediaSplitButton(props: {
   label: string;
@@ -120,7 +120,7 @@ export function CallControlBar(props: {
               when={props.audioMuted}
               fallback={<Microphone class="size-5" />}
             >
-              <MicrophoneSlash class="size-5" />
+              <MicrophoneSlash class="size-5 text-failure" />
             </Show>
           }
         >
@@ -142,7 +142,7 @@ export function CallControlBar(props: {
               when={props.videoMuted}
               fallback={<VideoCamera class="size-5" />}
             >
-              <VideoCameraSlash class="size-5" />
+              <VideoCameraSlash class="size-5 text-failure" />
             </Show>
           }
         >
