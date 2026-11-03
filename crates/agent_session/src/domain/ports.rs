@@ -320,10 +320,11 @@ pub struct OpenManagedSession {
     /// idle session its owner prompts from the session's own surface.
     pub prompt: Option<FirstPrompt>,
     /// A selected persona's authoritative runtime profile. `None` uses the
-    /// deployment's default managed coding persona.
+    /// deployment's default managed coding persona, or Cursor when a
+    /// repository is selected — the only managed persona that honors one.
     pub profile: Option<SelectedManagedPersona>,
-    /// Ad-hoc instructions for the default managed persona. Ignored when a
-    /// persisted persona profile is selected.
+    /// Instructions the session's runtime works under. Outranks a persisted
+    /// persona's when both are set.
     pub instructions: Option<String>,
     /// Model to run on instead of the persona's own. The session's model from
     /// creation, so its runtime starts on it and nothing is sent to change it.

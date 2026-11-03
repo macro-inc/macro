@@ -143,6 +143,7 @@ fn preserves_access_token_organization_id() {
 fn maps_macro_api_token_claims() {
     let credential = identity_from_token(JwtToken::MacroApiToken(MacroApiToken {
         agent_id: None,
+        agent_via: None,
         exp: unix_timestamp() + 3_600,
         iss: String::new(),
         fusion_user_id: FUSION_USER_ID.to_string(),
@@ -164,6 +165,7 @@ fn maps_signed_agent_without_changing_owner_identity() {
     let agent = bot_id::MACRO_NEW_BOT_ID;
     let credential = identity_from_token(JwtToken::MacroApiToken(MacroApiToken {
         agent_id: Some(agent.as_uuid()),
+        agent_via: Some("Claude Code".into()),
         exp: unix_timestamp() + 60,
         iss: String::new(),
         fusion_user_id: FUSION_USER_ID.into(),
@@ -173,6 +175,22 @@ fn maps_signed_agent_without_changing_owner_identity() {
     assert_eq!(credential.origin, CredentialOrigin::MacroApiJwt);
     let identity = credential.identity;
     assert_eq!(identity.agent_id, Some(agent));
+    assert_eq!(identity.agent_via.as_deref(), Some("Claude Code"));
     assert_eq!(identity.user_id, MACRO_USER_ID);
     assert_eq!(identity.organization_id, Some(42));
+}
+
+#[test]
+fn ignores_a_client_label_without_a_signed_agent() {
+    let credential = identity_from_token(JwtToken::MacroApiToken(MacroApiToken {
+        agent_id: None,
+        agent_via: Some("Claude Code".into()),
+        exp: unix_timestamp() + 60,
+        iss: String::new(),
+        fusion_user_id: FUSION_USER_ID.into(),
+        macro_user_id: MACRO_USER_ID.into(),
+        macro_organization_id: None,
+    }));
+    assert_eq!(credential.identity.agent_id, None);
+    assert_eq!(credential.identity.agent_via, None);
 }

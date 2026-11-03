@@ -158,7 +158,10 @@ rows stay.
 ## Finding forms
 
 Drive lists forms you can open (type facet **Form**) and opens them inline at
-`/app/drive/form/<uuid>`, and Quick Access has a
+`/app/drive/form/<uuid>`. The owner can file a form in a folder by dragging its
+row onto the folder or with **Move to folder** in the form's title menu; it
+then appears in that folder's contents and inherits the folder's sharing, while
+its database stays where it was. Quick Access has a
 Forms bucket. Both come from `/forms/accessible`, so a form shared with you
 appears without access to its database. Deleting a database table warns which
 forms it deletes; deleting a column warns which forms ask it (both say so
@@ -289,3 +292,14 @@ includes the target form ID; inspect it and make targeted repairs.
 Forms tool UI follows the existing `enable-forms` feature flag; server execution
 uses the same authenticated user/delegated-agent permissions as the rest of Forms.
 Owners can still close a form or remove access when its draft needs repair.
+
+For timing Build → Responses → Settings, inspect `form.tab` and its panel phase
+in the same trace. Response counts and the database grid have separate waits.
+Switch back to Build and verify that its editing state/layout session survives.
+
+On the respondent route (spans in the
+[observability guide](observability.md#navigation-and-view-phases)), failed
+`form.submit` saves record an error outcome and retain answers;
+retry after restoring transport and verify there is still one saved response.
+Leaving the respondent view cancels its UI measurement; an in-flight save
+still finishes without scrolling or measuring a different view.

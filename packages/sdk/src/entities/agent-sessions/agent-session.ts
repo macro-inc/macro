@@ -16,6 +16,7 @@ import type {
 } from '../../../generated/agent-harness/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import type { Agent } from '../agents/agent';
 import { MacroEntity } from '../entity';
 import { EntityAccess } from '../sharing/access';
 import {
@@ -27,6 +28,7 @@ import { CodeExecution } from './code-execution';
 import { QueuedAction } from './queued-action';
 import { type CreateReviewOptions, SessionReview } from './review';
 import { ToolApproval } from './tool-approval';
+import { presentView, type SessionView } from './view';
 
 export type { ArchiveCause };
 
@@ -92,9 +94,20 @@ export type SelectableRepository = {
 
 /** What a managed session is created with. */
 export type CreateManagedSessionOptions = {
+  /**
+   * Persona the session runs as, from {@link AgentNamespace.list} or
+   * {@link Agent.byId}. The caller must be able to use it. Omitted, the
+   * deployment's default coding persona, or Cursor when `repoUrl` is set.
+   * Its harness, instructions and model apply unless `instructions` or
+   * `model` override them.
+   */
+  agent?: Agent;
   /** First prompt to deliver once the session is running. */
   prompt?: string;
-  /** Instructions the session's runtime works under, fixed for its life. */
+  /**
+   * Instructions the session's runtime works under, fixed for its life.
+   * Outranks the persona's when both are set.
+   */
   instructions?: string;
   /**
    * The model the session runs on, instead of its persona's. The session's
@@ -104,7 +117,8 @@ export type CreateManagedSessionOptions = {
   /**
    * The repository the session works on, as one of the URLs
    * {@link AgentSession.repositories} lists for the caller. Omitted, the
-   * runtime chooses from the prompt. Honored for Cursor sessions.
+   * runtime chooses from the prompt. Honored for Cursor sessions; omit
+   * `agent` and the session starts as Cursor.
    */
   repoUrl?: string;
   /**
@@ -148,7 +162,14 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     return new AgentSession(client, id);
   }
 
-  /** Create a managed session, optionally delivering its first prompt. */
+  /**
+   * Create a managed session as `agent` when one is named, otherwise the
+   * deployment's default coding persona. List personas with
+   * {@link AgentNamespace.list} and construct one with {@link Agent.byId}.
+   * Unknown or inaccessible personas fail. `model` and `instructions`
+   * outrank the persona's. `repoUrl` is honored for Cursor; omit `agent`
+   * and it starts as Cursor.
+   */
   static async createManaged(
     client: MacroClient,
     opts?: CreateManagedSessionOptions,
@@ -156,6 +177,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     const { session } = unwrap(
       await client.agentHarness.createAgentSession({
         body: {
+          botId: opts?.agent?.id,
           prompt: opts?.prompt,
           instructions: opts?.instructions,
           model: opts?.model,
@@ -569,6 +591,11 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     create: (input: CreateReviewOptions) =>
       SessionReview.createForSession(this.client, this, input),
     byId: (id: string) => SessionReview.byId(this.client, this, id),
+  };
+
+  /** Views shown in this session at once, with nothing saved. */
+  readonly views = {
+    present: (view: SessionView) => presentView(this.client, this, view),
   };
 
   /** Saved code executions scoped to this session. Handle construction makes no request. */

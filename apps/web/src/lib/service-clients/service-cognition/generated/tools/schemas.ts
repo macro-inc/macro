@@ -3558,6 +3558,7 @@ export const MutationResult = z.object({
           }),
           createdAt: z.string().datetime({ offset: true }),
           updatedAt: z.string().datetime({ offset: true }),
+          projectId: z.union([z.string(), z.null()]).optional(),
           isHiddenInDrive: z.boolean(),
         }),
         layout: z.object({
@@ -4876,10 +4877,6 @@ export const DiscoverConnectorsResponse = z.object({
 export const DispatchCodingAgent = z
   .object({ agent_id: z.string().uuid(), prompt: z.string() })
   .strict();
-
-export const DisplayResults = z.object({ view: z.any() });
-
-export const DisplayResultsResponse = z.object({ message: z.string() });
 
 export const DuplicateItem = z.object({
   entityType: z.any().superRefine((x, ctx) => {
@@ -11088,6 +11085,7 @@ export const ListResult = z.object({
         }),
         createdAt: z.string().datetime({ offset: true }),
         updatedAt: z.string().datetime({ offset: true }),
+        projectId: z.union([z.string(), z.null()]).optional(),
         isHiddenInDrive: z.boolean(),
       }),
       access: z.any().superRefine((x, ctx) => {
@@ -13867,6 +13865,7 @@ export const ReadResult = z.any().superRefine((x, ctx) => {
           }),
           createdAt: z.string().datetime({ offset: true }),
           updatedAt: z.string().datetime({ offset: true }),
+          projectId: z.union([z.string(), z.null()]).optional(),
           isHiddenInDrive: z.boolean(),
         }),
         layout: z.object({
@@ -14485,6 +14484,7 @@ export const ReadResult = z.any().superRefine((x, ctx) => {
           }),
           createdAt: z.string().datetime({ offset: true }),
           updatedAt: z.string().datetime({ offset: true }),
+          projectId: z.union([z.string(), z.null()]).optional(),
           isHiddenInDrive: z.boolean(),
         }),
         access: z.any().superRefine((x, ctx) => {
@@ -17662,6 +17662,10 @@ export const WebSearchResponse = z.object({
   ]),
   tool_use_id: z.string(),
 });
+
+export const DisplayResults = z.object({ view: z.any() });
+
+export const DisplayResultsResponse = z.object({ message: z.string() });
 
 export const DescribeCodeTools = z
   .object({

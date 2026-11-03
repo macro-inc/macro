@@ -27,6 +27,7 @@ describe('query schema', () => {
         owner_id: 'owner',
         created_at: '',
         trashed_at: null,
+        project_id: null,
       },
       grant: 'owner',
       tables: [
@@ -208,6 +209,7 @@ const workspace: DatabaseDetail = {
     owner_id: 'owner',
     created_at: '',
     trashed_at: null,
+    project_id: null,
   },
   grant: 'edit',
   tables: [

@@ -5085,6 +5085,10 @@ export type Database = {
      */
     owner_id: string;
     /**
+     * The folder it is filed in; `null` at the root.
+     */
+    project_id: string | null;
+    /**
      * Set when trashed.
      */
     trashed_at: string | null;
@@ -7803,6 +7807,10 @@ export type Form = {
      * Its owner.
      */
     ownerId: string;
+    /**
+     * The folder it is filed in; `null` at the root.
+     */
+    projectId: string | null;
     /**
      * The person column each signed-in submission names its respondent in;
      * `null` once deleted.

@@ -46,6 +46,10 @@ export default {
   markDoneCommand: 'Mark done',
   markReadCommand: 'Mark read',
   markUnreadCommand: 'Mark unread',
+  discardDraftCommand: {
+    one: 'Discard draft',
+    other: 'Discard drafts',
+  },
   copyLinkCommand: 'Copy link',
   copyBranchNameCommand: 'Copy branch name',
   copyId: 'Copy ID',
@@ -109,6 +113,11 @@ export default {
     other: 'Deleted {{count}} items',
   },
   toastDeleteFailed: 'Failed to delete',
+  toastDiscardedDrafts: {
+    one: 'Draft discarded',
+    other: '{{count}} drafts discarded',
+  },
+  toastDiscardDraftFailed: 'Failed to discard draft',
   toastAddedToFavorites: 'Added to favorites',
   toastAddedCountToFavorites: {
     one: 'Added {{count}} item to favorites',
