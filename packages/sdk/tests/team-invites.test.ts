@@ -50,7 +50,7 @@ const currentTeam = () =>
     members: [],
   });
 
-const invite = {
+const INVITE = {
   id: INVITE_ID,
   email: 'new.person@example.com',
   team_id: TEAM_ID,
@@ -174,7 +174,7 @@ describe('Team.invites', () => {
   test('lists pending invites as seeded handles', async () => {
     const requests = serve({
       'GET /team': currentTeam,
-      'GET /team/invites': () => Response.json({ invites: [invite] }),
+      'GET /team/invites': () => Response.json({ invites: [INVITE] }),
     });
     const [pending, ...rest] = await macro().teams.byId(TEAM_ID).invites();
     expect(rest).toHaveLength(0);
@@ -192,7 +192,7 @@ describe('Team.invites', () => {
     const requests = serve({
       'GET /team': currentTeam,
       'GET /team/invites': () =>
-        Response.json({ invites: revoked ? [] : [invite] }),
+        Response.json({ invites: revoked ? [] : [INVITE] }),
       [`DELETE /team/invite/${INVITE_ID}`]: () => {
         revoked = true;
         return new Response(null, { status: 200 });
