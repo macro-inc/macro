@@ -11,38 +11,29 @@ fn database_workflow_reaches_every_agent_host_without_unrelated_scoped_tools() {
         &TOOL_USE_PROMPT,
     ] {
         let text = prompt.to_string();
-        for capability in [
-            "ListDatabases",
-            "tables[].name",
-            "DescribeDatabase",
-            "sqlName",
-            "SaveDatabaseView",
-            "insertedRowIds",
-            "cannot save charts",
-            "CREATE DATABASE",
-            "ALTER TABLE",
-            "RENAME COLUMN",
-            "DROP COLUMN",
-            "REORDER COLUMNS",
-            "REORDER TABLES",
-            "SaveDatabaseQuery",
-            "<m-db-query>",
-            "verbatim",
-            "databaseId",
-            "macro.people",
+        for rule in [
+            "check every database's tables",
             "entity(USER)",
-            "ListTeamMembers",
-            "single-select or single-person column",
-            "DeleteDatabaseView",
+            "Never use text for people",
+            "Never invent a person or an id",
+            "never fake it with text",
+            "explicit delete or clear",
+            "authorizes that operation",
+            "read back the affected schema or rows",
+            "saved live query block",
         ] {
-            assert!(
-                text.contains(capability),
-                "missing database guidance: {capability}"
-            );
+            assert!(text.contains(rule), "missing database rule: {rule}");
+        }
+        // How to call the database tools is in their descriptions, not here.
+        for tool in [
+            "SaveDatabaseQuery",
+            "DescribeDatabase",
+            "ALTER TABLE",
+            "macro.people",
+        ] {
+            assert!(!text.contains(tool), "tool how-to in the prompt: {tool}");
         }
     }
-    let text = TOOL_USE_PROMPT.to_string();
-    assert!(!text.contains("clearInvalid"), "casts never clear values");
     let scoped = DATABASE_TOOL_USE_PROMPT.to_string();
     assert_eq!(scoped, format!("{}{}", crate::BASE_PROMPT, super::PROMPT));
     // BASE_PROMPT's Markdown formatting note mentions email bodies without

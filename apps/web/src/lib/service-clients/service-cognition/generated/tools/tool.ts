@@ -152,9 +152,9 @@ type ToolParserMap = {
     call: types.DiscoverConnectors;
     response: types.DiscoverConnectorsResponse;
   };
-  DisplayResults: {
-    call: types.DisplayResults;
-    response: types.DisplayResultsResponse;
+  DispatchCodingAgent: {
+    call: types.DispatchCodingAgent;
+    response: types.DispatchedCodingAgent;
   };
   DuplicateItem: {
     call: types.DuplicateItem;
@@ -281,6 +281,10 @@ type ToolParserMap = {
   ListCalendars: {
     call: types.ListCalendars;
     response: types.ListCalendarsToolResponse;
+  };
+  ListCodingAgents: {
+    call: types.ListCodingAgents;
+    response: types.ListCodingAgentsResponse;
   };
   ListCompanies: {
     call: types.ListCompanies;
@@ -706,9 +710,9 @@ const toolParserMap = {
     call: schemas.DiscoverConnectors,
     response: schemas.DiscoverConnectorsResponse,
   },
-  DisplayResults: {
-    call: schemas.DisplayResults,
-    response: schemas.DisplayResultsResponse,
+  DispatchCodingAgent: {
+    call: schemas.DispatchCodingAgent,
+    response: schemas.DispatchedCodingAgent,
   },
   DuplicateItem: {
     call: schemas.DuplicateItem,
@@ -850,6 +854,10 @@ const toolParserMap = {
   ListCalendars: {
     call: schemas.ListCalendars,
     response: schemas.ListCalendarsToolResponse,
+  },
+  ListCodingAgents: {
+    call: schemas.ListCodingAgents,
+    response: schemas.ListCodingAgentsResponse,
   },
   ListCompanies: {
     call: schemas.ListCompanies,
@@ -1322,9 +1330,9 @@ type ToolDataMap = {
     call: types.DiscoverConnectors;
     response: types.DiscoverConnectorsResponse;
   };
-  DisplayResults: {
-    call: types.DisplayResults;
-    response: types.DisplayResultsResponse;
+  DispatchCodingAgent: {
+    call: types.DispatchCodingAgent;
+    response: types.DispatchedCodingAgent;
   };
   DuplicateItem: {
     call: types.DuplicateItem;
@@ -1451,6 +1459,10 @@ type ToolDataMap = {
   ListCalendars: {
     call: types.ListCalendars;
     response: types.ListCalendarsToolResponse;
+  };
+  ListCodingAgents: {
+    call: types.ListCodingAgents;
+    response: types.ListCodingAgentsResponse;
   };
   ListCompanies: {
     call: types.ListCompanies;

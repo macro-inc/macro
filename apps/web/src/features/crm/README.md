@@ -48,6 +48,15 @@ CRM supplies row/header/empty state slots, filter choices, grouping policy, and
 its own collection state to the shared collection renderer. Shared collection code must not acquire CRM hooks or
 CRM-specific state again.
 
+Company and contact Overview pages expose `RecordVisibilityAction` for removal
+and restoration through the existing hidden mutations. Keep admin/owner checks,
+confirmation of the company-wide contact cascade, and the restore action on the
+open record. The information panel's visibility checkbox uses the same state.
+Both hidden mutations emit `crm.visibility_change` through request and cache
+refresh completion, with the opaque record ID, record type, requested hidden
+state, and outcome. `crm.visibility_change.refresh` times cache invalidation and
+the dependent query refreshes before the mutation stops being pending.
+
 `task-composer.ts` owns the CRM task preset: Companies/Contacts are visible,
 Status remains a task default but is not initially shown. CRM registers live
 `{ task: TaskComposerContext }` values with the provider in

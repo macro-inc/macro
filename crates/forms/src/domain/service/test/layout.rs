@@ -29,6 +29,8 @@ fn respondent_details_withhold_the_booking_destination() {
         updated_at: start_of_tests(),
         project_id: None,
         is_hidden_in_drive: false,
+        responses_visible: false,
+        anonymous: false,
     };
     let layout = FormLayout {
         sections: vec![FormSection::Booking {

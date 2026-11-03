@@ -26,7 +26,7 @@ use crate::domain::events::{
 };
 use crate::domain::models::{
     Audience, ForbiddenWidget, Form, FormAccess, FormError, FormId, FormUpdate, ListedForm,
-    UpdateForm, Widget,
+    SharingRefusal, UpdateForm, Widget,
 };
 use crate::domain::ports::{
     Clock, FormAccessDirectory, FormEventPublisher, FormImageFiles, FormsRepo,
@@ -129,6 +129,7 @@ where
             }
             FormUpdate::FormGone => Err(FormError::NotFound),
             FormUpdate::WidgetInUse => Err(FormError::FileUploadNeedsSignIn),
+            FormUpdate::AnonymityLocked => Err(SharingRefusal::AnonymityLocked.into()),
         }
     }
 

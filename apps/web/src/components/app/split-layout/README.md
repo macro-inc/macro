@@ -1,4 +1,35 @@
-Split layout should support an arbitrary number of vertical splits.
+Splits tile like a window manager: any split can be split again beside
+(left/right) or stacked (above/below), nested to any depth.
+
+## Tiling
+
+The split router owns the tiling as a tree (`lib/split-router/panes/layout-tree.ts`):
+row and column splits whose leaves, depth-first, are the open panes in order.
+`TiledSplits` renders desktop panes from it. Every pane stays in one keyed
+list and is positioned absolutely at the rectangle `split-geometry.ts` solves,
+so splitting or closing a neighbour never moves a pane's content to another
+parent and remounts it. Keep it that way: don't nest a `Resize.Zone` per
+split. Gutters reuse `Resize`'s `Gutter` and `moveHandleShares`; sizes live in
+the tree but not in the URL. A split is at least `DEFAULT_SPLIT_MIN_WIDTH` wide
+and, stacked, `DEFAULT_SPLIT_MIN_HEIGHT` tall (`splitContentSizing.ts`).
+With desktop tabs, `SplitLayout` renders one `TiledSplits` per tab layer: the
+live layer tiles as `router.layout()`, and a parked one keeps the tiles its
+panes were parked in (`router.layoutOf`), so a background tab comes back
+stacked as it was. Only the live layer reports its area or resizes.
+
+Open beside a split with `beside: { split, side }` on `openWithSplit` or
+`createNewSplit`; without it a new split is a full-height column at the end.
+The new-split keys (`\`, `|`) and title-bar buttons open beside the active split.
+`canAppendSplit()` checks room for that column and `canSplit(id, side)` for a
+split along `side`'s axis, both against the area `TiledSplits` measured.
+A Shift-click that also holds Option (Alt) opens below the split it came from:
+`split-below-intent.ts` remembers the click, as `tab-layout/open-in-tab-intent.ts`
+does for Cmd-click. Moving panes (swap left/right, mobile bring-to-front)
+keeps the tiles and their sizes and changes which split shows where.
+
+`browser-test/` is a backend-free Playwright regression over the real router
+and `TiledSplits`:
+`bunx playwright test --config src/components/app/split-layout/browser-test/playwright.config.ts`.
 
 ## Opt-in view restoration
 

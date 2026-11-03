@@ -7,6 +7,7 @@ import {
 } from '@urql/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { empty, makeSubject, mergeMap, pipe, type Subject } from 'wonka';
+import { createQueryAuthorization } from '../../queries/authorization';
 import { networkRevalidationExchange } from './network-revalidation-exchange';
 
 const LIST = gql`query List { items { id tags } }`;
@@ -86,6 +87,30 @@ describe('networkRevalidationExchange', () => {
     expect(events).toEqual(['list', 'detail', 'saved']);
     list.unsubscribe();
     detail.unsubscribe();
+  });
+
+  it('captures fresh authorization for mutation-triggered revalidation', async () => {
+    const { client, requests, respond, flush } = setup();
+    const authorization = createQueryAuthorization(
+      () => 'viewer:project',
+      client
+    );
+    const list = client
+      .query(LIST, {}, authorization.requestContext())
+      .subscribe(authorization.onResult);
+    respond(0);
+    const denied = new CombinedError({ graphQLErrors: ['Forbidden'] });
+    respond(0, { data: undefined, error: denied });
+    expect(authorization.error()).toBe(denied);
+
+    const saved = client.mutation(SAVE, {}).toPromise();
+    respond(1);
+    await flush();
+    expect(requests).toHaveLength(3);
+    respond(2);
+    await saved;
+    expect(authorization.error()).toBeUndefined();
+    list.unsubscribe();
   });
 
   it('does not refetch on the healthy normalized-cache path', async () => {

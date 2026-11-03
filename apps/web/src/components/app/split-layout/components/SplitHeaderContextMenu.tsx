@@ -15,6 +15,7 @@ import CollapseIcon from '@icon/system/regular/arrows-in.svg';
 import ExpandIcon from '@icon/system/regular/arrows-out.svg';
 import SplitIcon from '@icon/system/regular/columns.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
+import StackIcon from '@icon/system/regular/rows.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import {
@@ -23,7 +24,7 @@ import {
 } from '@kobalte/core/primitives/create-dom-collection';
 import { createMemo, type ParentProps, useContext } from 'solid-js';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
-import type { SplitContent } from '../layoutManager';
+import type { SplitContent, SplitPlacement } from '../layoutManager';
 import { shouldShowSplitCloseButton } from '../layoutUtils';
 import { canSpotlight } from '../utils/canSpotlight';
 
@@ -51,6 +52,8 @@ export function SplitHeaderContextMenu(props: ParentProps) {
   const canToggleSpotlight = createMemo(() => canSpotlight(layout.manager));
   const canSwapWith = (direction: 'left' | 'right') =>
     layout.manager.canSwapSplit(panel.handle.id, direction);
+  const canSplitToward = (side: SplitPlacement['side']) =>
+    layout.manager.canSplit(panel.handle.id, side);
 
   const newSplitContent = () => ({
     type: 'component' as const,
@@ -59,17 +62,15 @@ export function SplitHeaderContextMenu(props: ParentProps) {
 
   const duplicateContent = (): SplitContent => ({ ...panel.handle.content() });
 
-  const insertSplitBeside = (side: 'left' | 'right', content: SplitContent) => {
-    const index = splitIndex();
-    if (index < 0) return;
-
-    const insertIndex = side === 'left' ? index : index + 1;
-
+  const insertSplitBeside = (
+    side: SplitPlacement['side'],
+    content: SplitContent
+  ) => {
     layout.manager.createNewSplit({
       content,
       activate: true,
       allowDuplicate: true,
-      insertIndex,
+      beside: { split: panel.handle.id, side },
       referredFrom: null,
     });
   };
@@ -116,19 +117,32 @@ export function SplitHeaderContextMenu(props: ParentProps) {
             icon={SplitIcon}
             iconClass="rotate-180"
             text={t('splitMenu.newSplitLeft')}
-            disabled={!layout.manager.canAppendSplit()}
+            disabled={!canSplitToward('left')}
             onClick={() => insertSplitBeside('left', newSplitContent())}
           />
           <MenuItem
             icon={SplitIcon}
             text={t('splitMenu.newSplitRight')}
-            disabled={!layout.manager.canAppendSplit()}
+            disabled={!canSplitToward('right')}
             onClick={() => insertSplitBeside('right', newSplitContent())}
+          />
+          <MenuItem
+            icon={StackIcon}
+            text={t('splitMenu.newSplitAbove')}
+            disabled={!canSplitToward('above')}
+            onClick={() => insertSplitBeside('above', newSplitContent())}
+          />
+          <MenuItem
+            icon={StackIcon}
+            hotkeyToken={TOKENS.global.createNewSplitBelow}
+            text={t('splitMenu.newSplitBelow')}
+            disabled={!canSplitToward('below')}
+            onClick={() => insertSplitBeside('below', newSplitContent())}
           />
           <MenuItem
             icon={CopyIcon}
             text={t('splitMenu.duplicateSplit')}
-            disabled={!layout.manager.canAppendSplit() || !canDuplicateSplit()}
+            disabled={!canSplitToward('right') || !canDuplicateSplit()}
             onClick={() => insertSplitBeside('right', duplicateContent())}
           />
           <MenuSeparator />
@@ -186,7 +200,7 @@ export function SplitHeaderContextMenu(props: ParentProps) {
             icon={ArrowClockwise}
             text={t('splitMenu.resetSizes')}
             disabled={!hasOtherSplits()}
-            onClick={() => layout.manager.resizeContext()?.reset()}
+            onClick={() => layout.manager.resetSizes()}
           />
           <MenuSeparator />
           <MenuItem
