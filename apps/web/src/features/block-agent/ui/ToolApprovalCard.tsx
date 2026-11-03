@@ -68,7 +68,7 @@ export function ToolApprovalCard(props: ToolApprovalCardProps) {
               <Button
                 type="button"
                 size="md"
-                variant="outline"
+                variant="secondary"
                 disabled={props.disabled}
                 onClick={() => props.onCancel()}
               >
@@ -91,7 +91,7 @@ export function ToolApprovalCard(props: ToolApprovalCardProps) {
             <Button
               type="button"
               size="md"
-              variant="outline"
+              variant="secondary"
               disabled={props.disabled}
               onClick={() => props.onApproveAlways()}
             >
@@ -101,7 +101,7 @@ export function ToolApprovalCard(props: ToolApprovalCardProps) {
           <Button
             type="button"
             size="md"
-            variant="strong"
+            variant="primary"
             disabled={props.disabled}
             onClick={() => props.onApprove()}
           >

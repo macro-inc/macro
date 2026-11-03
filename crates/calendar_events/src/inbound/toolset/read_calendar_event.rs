@@ -11,9 +11,10 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::{CalendarToolContext, description_preview, time_fields};
+use super::{CalendarLabels, CalendarToolContext, description_preview, time_fields};
 use crate::domain::{
     join_requests::CalendarJoinRequestStatus,
+    labels::off_schedule_summary,
     models::{
         CalendarMentionEvent, CalendarMentionPreview, CalendarMentionRequestItem,
         CalendarMentionViewerCopy,
@@ -25,9 +26,13 @@ use crate::domain::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum CalendarEventAccess {
-    /// The meeting is on one of the user's calendars as their own: they
-    /// organize it, or it sits in a delegated inbox. `eventId` is that copy.
+    /// The meeting is on a calendar of the user's own schedule, as theirs:
+    /// they organize it. `eventId` is that copy.
     OnYourCalendar,
+    /// The meeting is on a calendar the user can see that is not part of
+    /// their schedule (`calendarName`): someone else's, a delegated inbox's,
+    /// or one of their own they left out. `eventId` is that copy.
+    OnVisibleCalendar,
     /// The user is a guest on the meeting; `eventId` is their copy.
     Invited,
     /// The user added a snapshot of a shared meeting: a private copy that
@@ -41,12 +46,15 @@ pub enum CalendarEventAccess {
 }
 
 impl CalendarEventAccess {
-    fn of(event: &CalendarMentionEvent) -> Self {
+    fn of(event: &CalendarMentionEvent, on_own_schedule: bool) -> Self {
         match (event.viewer_event_id, event.viewer_copy) {
             (None, _) => Self::SharedWithYou,
             (Some(_), Some(CalendarMentionViewerCopy::Snapshot)) => Self::Snapshot,
             (Some(_), Some(CalendarMentionViewerCopy::Invitation)) => Self::Invited,
-            (Some(_), Some(CalendarMentionViewerCopy::Event) | None) => Self::OnYourCalendar,
+            (Some(_), Some(CalendarMentionViewerCopy::Event) | None) if on_own_schedule => {
+                Self::OnYourCalendar
+            }
+            (Some(_), Some(CalendarMentionViewerCopy::Event) | None) => Self::OnVisibleCalendar,
         }
     }
 }
@@ -55,9 +63,12 @@ impl CalendarEventAccess {
 #[derive(Debug, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadCalendarEventResponse {
-    /// How the user holds the event: on their calendar, invited, as a
-    /// snapshot, or only shared with them.
+    /// How the user holds the event: on their calendar, on another calendar
+    /// they can see, invited, as a snapshot, or only shared with them.
     pub access: CalendarEventAccess,
+    /// Display name of the calendar holding `eventId`, the canonical copy's
+    /// when several do, when known. It often says whose calendar it is.
+    pub calendar_name: Option<String>,
     /// The user's own copy of the meeting, for UpdateCalendarEvent and
     /// DeleteCalendarEvent. It can differ from the id that was read, and is
     /// absent for an event that is only shared with the user.
@@ -101,12 +112,21 @@ pub struct ReadCalendarEventResponse {
 }
 
 impl ReadCalendarEventResponse {
-    fn from_preview(event: CalendarMentionEvent) -> Self {
-        let access = CalendarEventAccess::of(&event);
+    fn from_preview(event: CalendarMentionEvent, labels: &CalendarLabels) -> Self {
+        let on_schedule = labels.on_schedule(event.viewer_calendar_ids.iter().copied());
+        let access = CalendarEventAccess::of(&event, on_schedule == Some(true));
+        let calendar_name = labels.calendar_name(event.viewer_calendar_ids.first().copied());
         let (start, end, is_all_day, time_zone) = time_fields(&event.time);
         let summary = match access {
             CalendarEventAccess::OnYourCalendar => {
                 format!("{} is on the user's calendar.", event.title)
+            }
+            CalendarEventAccess::OnVisibleCalendar if on_schedule.is_none() => format!(
+                "{} is on a calendar the user can see; whether it is theirs could not be checked.",
+                event.title
+            ),
+            CalendarEventAccess::OnVisibleCalendar => {
+                off_schedule_summary(&event.title, calendar_name.as_deref())
             }
             CalendarEventAccess::Invited => {
                 format!(
@@ -126,6 +146,7 @@ impl ReadCalendarEventResponse {
         };
         Self {
             access,
+            calendar_name,
             event_id: event.viewer_event_id,
             title: event.title,
             start,
@@ -159,9 +180,12 @@ Returns what the mention's preview card shows: title, time, location, descriptio
 read documents only; use this tool for calendar events.\n\
 \n\
 `access` says how the user holds the meeting, as the card does. `on_your_calendar`: their own \
-event (they organize it, or a delegated inbox holds it). `invited`: they are a guest. \
+event, on a calendar of their schedule. `on_visible_calendar`: it is on a calendar they can see \
+that is not part of their schedule, named by `calendarName`, which may be a colleague's: never \
+call it theirs, say whose it is when the name shows that, and otherwise say you cannot tell. \
+`invited`: they are a guest. \
 `snapshot`: a private copy they added of a shared meeting, which doesn't follow the organizer's \
-changes and where an answer or a new guest would never reach the meeting. In these three, \
+changes and where an answer or a new guest would never reach the meeting. In these four, \
 `eventId` is the user's copy for UpdateCalendarEvent and DeleteCalendarEvent. \
 `shared_with_you`: someone shared their copy with a channel the user belongs to and the meeting \
 is on none of the user's calendars. The event is then read-only for the user; \
@@ -219,7 +243,8 @@ where
             })?;
         match previews.into_iter().next() {
             Some(CalendarMentionPreview::Accessible(event)) => {
-                Ok(ReadCalendarEventResponse::from_preview(*event))
+                let labels = CalendarLabels::load(&*service_context.mutations, &requester_id).await;
+                Ok(ReadCalendarEventResponse::from_preview(*event, &labels))
             }
             Some(CalendarMentionPreview::NoAccess) => Err(not_readable(
                 "The calendar event is not on any of the user's calendars and was not shared \

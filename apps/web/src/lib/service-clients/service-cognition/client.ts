@@ -17,6 +17,8 @@ import {
 } from '../ai-usage-limit';
 import type { AddServerRequest } from './generated/schemas/addServerRequest';
 import type { CreateChatRequest } from './generated/schemas/createChatRequest';
+import type { DatabaseQueryAnswer } from './generated/schemas/databaseQueryAnswer';
+import type { DatabaseQueryRequest } from './generated/schemas/databaseQueryRequest';
 import type { GetBatchPreviewRequest } from './generated/schemas/getBatchPreviewRequest';
 import type { GetBatchPreviewResponse } from './generated/schemas/getBatchPreviewResponse';
 import type { GetChatPermissionsResponse } from './generated/schemas/getChatPermissionsResponse';
@@ -25,6 +27,7 @@ import type { GetChatsForAttachmentResponse } from './generated/schemas/getChats
 import type { HttpSendChatMessageRequest } from './generated/schemas/httpSendChatMessageRequest';
 import type { PatchChatRequest } from './generated/schemas/patchChatRequest';
 import type { PipedreamCatalogResponse } from './generated/schemas/pipedreamCatalogResponse';
+import type { PipedreamOverlayResponse } from './generated/schemas/pipedreamOverlayResponse';
 import type { ProjectionStateResponse } from './generated/schemas/projectionStateResponse';
 import type { SendChatMessageResponse } from './generated/schemas/sendChatMessageResponse';
 import type { ServerResponse } from './generated/schemas/serverResponse';
@@ -100,6 +103,7 @@ export type PipedreamRecoverRequest = {
 };
 export type { PipedreamCatalogEntryResponse } from './generated/schemas/pipedreamCatalogEntryResponse';
 export type { PipedreamCatalogResponse } from './generated/schemas/pipedreamCatalogResponse';
+export type { PipedreamOverlayResponse } from './generated/schemas/pipedreamOverlayResponse';
 
 /** Error code for deployments where Pipedream MCP connect is not configured. */
 export const PIPEDREAM_DISABLED = 'PIPEDREAM_DISABLED' as const;
@@ -504,6 +508,29 @@ export const cognitionApiServiceClient = {
         }
       )
     ).map((result) => result);
+  },
+
+  /**
+   * Catalog apps that connect through their own MCP server instead of
+   * Pipedream; connect them with `startMcpAuth` against `server_url`.
+   */
+  async listPipedreamOverlays() {
+    return (
+      await dcsFetch<PipedreamOverlayResponse[]>(`/pipedream/mcp/overlays`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async databaseQuery(args: DatabaseQueryRequest) {
+    return fetchWithToken<DatabaseQueryAnswer, typeof AI_USAGE_LIMIT_ERROR>(
+      `${dcsHost}/database-query`,
+      {
+        method: 'POST',
+        body: JSON.stringify(args),
+        errorResponseHandler: aiUsageErrorResponseHandler,
+      }
+    );
   },
 
   async structuredCompletion(args: StructuredCompletionRequest) {

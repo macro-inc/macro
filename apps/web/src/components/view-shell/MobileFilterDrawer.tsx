@@ -64,14 +64,13 @@ function Root(props: MobileFilterDrawerProps) {
         as={Button}
         aria-label={props.triggerLabel ?? 'Open filters'}
         variant="ghost"
-        size="sm"
-        depth={3}
+        size="icon-md"
         class={cn(
-          'island bg-chrome pointer-events-auto relative z-10 size-10 shrink-0 rounded-full [&_svg]:size-6',
+          'island bg-chrome pointer-events-auto relative z-10 size-10 shrink-0 rounded-full',
           props.class
         )}
       >
-        <SlidersHorizontalIcon />
+        <SlidersHorizontalIcon class="size-6 shrink-0" />
         <Show when={props.activeCount > 0}>
           <span class="pointer-events-none absolute -top-0.5 right-0 z-10 flex size-4 translate-x-1/2 items-center justify-center rounded-full bg-accent text-xxs font-medium leading-none text-surface">
             {props.activeCount}
@@ -236,8 +235,14 @@ function Option(props: {
     <MobileDrawer.Item
       role={props.selectionMode === 'single' ? 'radio' : 'checkbox'}
       aria-checked={props.checked}
+      // Neighbouring checked boxes join through their own attribute: a sibling
+      // rule keyed on `role` restyles every element with a role inserted
+      // anywhere, such as each row a scrolling database grid mounts.
+      data-checked-checkbox={
+        props.selectionMode !== 'single' && props.checked ? '' : undefined
+      }
       class={cn(
-        '[&[role=checkbox][aria-checked=true]:has(+[role=checkbox][aria-checked=true])]:rounded-b-none [&[role=checkbox][aria-checked=true]+[role=checkbox][aria-checked=true]]:rounded-t-none',
+        '[&[data-checked-checkbox]:has(+[data-checked-checkbox])]:rounded-b-none [&[data-checked-checkbox]+[data-checked-checkbox]]:rounded-t-none',
         props.class
       )}
       onClick={() => props.onChange(!props.checked)}
@@ -252,7 +257,7 @@ function Option(props: {
       <span class="min-w-0 flex-1 truncate">{props.children}</span>
       <span class="flex size-5 shrink-0 items-center justify-center">
         <Show when={props.checked}>
-          <CheckIcon class="size-4 text-accent" />
+          <CheckIcon class="size-4 text-ink" />
         </Show>
       </span>
     </MobileDrawer.Item>

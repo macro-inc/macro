@@ -152,6 +152,7 @@ use macro_service_urls::{
     StaticFilePublicUrl, StaticFileServiceUrl,
 };
 use mcp_client::domain::models::AesKey;
+use mcp_client::outbound::NativeServerStore;
 use mcp_client::outbound::pg_server_repo::PgServerRepo;
 use model_providers::{CursorModels, InMemoryModels, MacrodModels, VisibleHarnessAccess};
 use permission_policy::PgPermissionPolicySource;
@@ -376,8 +377,19 @@ async fn run() -> anyhow::Result<()> {
             ),
             redis.clone(),
         ),
+        // After each finished turn Jev decides whether a generated name has
+        // stopped fitting; only then does Haiku propose a new one. Without a
+        // TypeSafe key, names stay as first generated.
         agent_session::domain::name_generation::AdmittedAgentSessionNameGenerator::new(
-            HaikuAgentSessionNameGenerator::new(recorder.clone()),
+            agent_session::domain::name_generation::ClassifiedRetitle::new(
+                HaikuAgentSessionNameGenerator::new(recorder.clone()),
+                config
+                    .typesafe_api_key
+                    .value()
+                    .map(jev::outbound::SystemOneJev::typesafe)
+                    .transpose()?
+                    .map(|provider| jev::domain::JevClassifier::new(provider, recorder.clone())),
+            ),
             admission.clone(),
         ),
         turn_observer.clone(),
@@ -456,10 +468,15 @@ async fn run() -> anyhow::Result<()> {
     let mcp_connections = Arc::new(PgConnectionRepo::new(pool.clone()));
     // Custom MCP servers - the ones a person added by URL - in the same rows
     // agent_harness_service::cognition manages, under the same encryption key, so
-    // the proxy can refresh a stored grant and persist what comes back.
+    // the proxy can refresh a stored grant and persist what comes back. GitHub
+    // is authorized by the account link instead.
     let mcp_credentials_key = AesKey::try_from(config.mcp_credentials_key_secret_name.as_ref())
         .context("invalid MCP credentials encryption key")?;
-    let mcp_servers = Arc::new(PgServerRepo::new(pool.clone(), mcp_credentials_key));
+    let linked_github = config.linked_github_tokens()?;
+    let mcp_servers = Arc::new(NativeServerStore::new(
+        PgServerRepo::new(pool.clone(), mcp_credentials_key),
+        linked_github.clone(),
+    ));
 
     // The client that addresses Pipedream's remote MCP server, built from the
     // same credentials `agent_harness_service::cognition` uses.
@@ -563,6 +580,7 @@ async fn run() -> anyhow::Result<()> {
         config.enable_ai_usage_enforcement,
         config.ai_pricing(),
         recorder.clone(),
+        linked_github,
     )
     .await
     .context("failed to build the in-memory agent tool context")?;
@@ -625,8 +643,8 @@ async fn run() -> anyhow::Result<()> {
         }
         None => None,
     };
-    // `ai-code-mode` decides, per user, whether agent sessions and the public
-    // MCP present the SDK in place of the tools it covers.
+    // `ai-code-mode` decides, per user, whether agent sessions hide
+    // SDK-covered tools and whether the public MCP lists only code mode.
     let code_mode_selector: Option<Arc<dyn agent_inmem::domain::tool_mode::ToolModeSelector>> =
         match (&code_runner, config.posthog_api_key.value()) {
             (Some(_), Some(key)) => {
@@ -667,6 +685,7 @@ async fn run() -> anyhow::Result<()> {
         &secrets,
         tool_context.clone(),
         pool.clone(),
+        aws_sdk_kms::Client::new(&aws_config),
         macro_auth::middleware::decode_jwt::JwtValidationArgs::new_with_secret_manager(
             config.environment,
             &secrets,
@@ -757,6 +776,7 @@ async fn run() -> anyhow::Result<()> {
             cognition: tool_context.cognition_tool_context.service.clone(),
             reviews: reviews_cell.clone(),
             gate: owner_tool_gate.clone(),
+            app_url: macro_service_urls::AppServiceUrl::new()?.as_str().into(),
         },
     );
     // One connector for the agent and the telemetry catalog. It pools each
@@ -1062,8 +1082,14 @@ async fn run() -> anyhow::Result<()> {
         channels::domain::message_delivery::ChannelMessageDelivery::new(
             PgChannelsRepo::new(pool.clone()),
             SpawnedChannelEventDispatcher::new(side_effects),
-            channels::domain::service::NoopChannelReferenceSharePermissions,
+            channels::outbound::pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions::new(
+                pool.clone(),
+                entity_access.clone(),
+            ),
             message_realtime.clone(),
+            channels::outbound::pg_agent_creations::PgAgentCreations::new(
+                pool.clone(),
+            ),
         ),
         messages::domain::delivery::DiscussionDelivery::new(
             messages::outbound::pg_discussion_context::PgDiscussionContext(pool.clone())
@@ -1483,6 +1509,7 @@ async fn run() -> anyhow::Result<()> {
             (*harness).clone(),
             routine_sessions::PipedreamConnectedApps(PgConnectionRepo::new(pool.clone())),
         ),
+        session_repo.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     let gateway_state = RuntimeGatewayState::new(
@@ -1591,6 +1618,9 @@ async fn run() -> anyhow::Result<()> {
                     Arc::new(
                         agent_harness::outbound::connected_apps::PipedreamConnectedApps::new(
                             Arc::clone(&mcp_connections),
+                            Arc::new(mcp_select::NativeOverlayConnections::new(Some(Arc::clone(
+                                &mcp_servers,
+                            )))),
                         ),
                     ),
                     Arc::clone(&notification_service),
@@ -1751,6 +1781,14 @@ async fn run() -> anyhow::Result<()> {
         }
     });
 
+    let trigger_classifier = config
+        .typesafe_api_key
+        .value()
+        .map(jev::outbound::SystemOneJev::typesafe)
+        .transpose()
+        .context("invalid TYPESAFE_API_KEY")?
+        .map(|provider| Arc::new(jev::domain::JevClassifier::new(provider, recorder.clone())));
+
     // Keep trigger generation in this deployment while retaining Kafka as the
     // boundary between channel events and harness commands.
     let mut trigger = tokio::spawn(trigger::supervise(
@@ -1759,6 +1797,7 @@ async fn run() -> anyhow::Result<()> {
         config.internal_api_key.clone(),
         config.document_storage_service_auth_key.clone(),
         trigger::TriggerServices {
+            classifier: trigger_classifier,
             recorder,
             admission,
             messages: message_service,

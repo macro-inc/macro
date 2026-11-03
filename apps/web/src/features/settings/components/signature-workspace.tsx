@@ -50,7 +50,7 @@ export function SignatureWorkspace(props: {
         <p class="px-4 py-8 text-center text-sm text-ink-muted">
           {props.mobile
             ? 'No signature saved.'
-            : 'Import from Gmail, write in Rich text, or paste your HTML.'}
+            : 'Write in Rich text or paste your HTML.'}
         </p>
       }
     >

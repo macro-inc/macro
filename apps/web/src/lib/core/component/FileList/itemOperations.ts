@@ -390,9 +390,17 @@ export async function bulkMoveToFolder(
   };
 }
 
-/** NOTE: Currently we do not support copying projects */
+/**
+ * Whether an item type can be duplicated. Folders copy with their contents
+ * only through the GraphQL entity mutation, which has no REST counterpart.
+ */
+export function canDuplicateItemType(itemType: ItemType): boolean {
+  if (itemType === 'document' || itemType === 'chat') return true;
+  return itemType === 'project' && isFeatureEnabled(enableGraphqlSoup);
+}
+
 export async function copyItem(args: {
-  itemType: Exclude<ItemType, 'project'>;
+  itemType: ItemType;
   id: string;
   name: string;
 }): Promise<string | null> {
@@ -405,13 +413,13 @@ export async function copyItem(args: {
   let newId = '';
   if (
     isFeatureEnabled(enableGraphqlSoup) &&
-    (itemType === 'document' || itemType === 'chat')
+    (itemType === 'document' || itemType === 'chat' || itemType === 'project')
   ) {
     const result = await catchToResult(() =>
       duplicateEntity(
         { type: ENTITY_TYPES[itemType], id },
         // The REST chat endpoint also ignores the supplied name and names the copy itself.
-        itemType === 'document' ? createCopyName(name) : undefined
+        itemType === 'chat' ? undefined : createCopyName(name)
       )
     );
     if (itemType === 'chat' && isPaymentError(result)) showPaywall();
@@ -470,7 +478,7 @@ export async function bulkCopy(
     const results = await Promise.allSettled(
       chunk.map((item) =>
         copyItem({
-          itemType: item.type as Exclude<ItemType, 'project'>,
+          itemType: item.type,
           id: item.id,
           name: item.name,
         })

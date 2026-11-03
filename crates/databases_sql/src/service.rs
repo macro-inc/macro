@@ -3,7 +3,7 @@
 
 mod schema;
 #[cfg(test)]
-mod test;
+pub(crate) mod test;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -230,7 +230,7 @@ where
         };
         if let Some(chart) = chart {
             check_chart(
-                &database_sql::result_columns(catalog.catalog(), &select),
+                &database_sql::result_columns(catalog.catalog(), &select)?,
                 chart,
             )?;
         }

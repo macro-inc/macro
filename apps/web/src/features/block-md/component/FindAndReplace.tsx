@@ -35,7 +35,7 @@ function FindBarButton(props: {
         onMouseDown={keepInputFocus}
         onClick={() => props.onClick()}
       >
-        <props.icon />
+        <props.icon class="size-3.5" />
       </Button>
     </Tooltip>
   );

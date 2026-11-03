@@ -1,5 +1,6 @@
 import { useCrmContactMentionSource } from '@app/features/crm/record-adapter';
-import { whatsappGroupApi } from '@app/features/whatsapp-group/queries/production-api';
+import { externalChatApi } from '@app/features/external-chat/queries/production-api';
+import { useRoutineMentionSource } from '@app/features/routines/routine-mentions';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import type { BlockName } from '@core/block';
@@ -26,9 +27,9 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import type { EmailEntity } from '@entity';
 import { Telemetry } from '@macro-inc/observability';
+import { useExternalChatsQuery } from '@queries/external-chats';
 import { queryReadyGate } from '@queries/gate';
 import type { HistoryItem as Item } from '@queries/history/history';
-import { useWhatsappGroupsQuery } from '@queries/whatsapp-groups';
 import { Key } from '@solid-primitives/keyed';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { createVirtualizer } from '@tanstack/solid-virtual';
@@ -53,9 +54,9 @@ import type { MenuOperations } from '../../../shared/inlineMenu';
 import type {
   AgentSessionMentionItem,
   DateMentionItem,
+  ExternalChatMentionItem,
   MentionItem,
   UserMentionRecord,
-  WhatsAppGroupMentionItem,
 } from '../../../utils/mentionsUtils';
 import { useMenuKeyboardNavigation } from '../useMenuKeyboardNavigation';
 import { ItemBin } from './components/ItemBin';
@@ -266,32 +267,42 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
   // A WhatsApp chat mentioned in a channel is shared with its members; only
   // its owner can do that, so only the viewer's own chats are offered.
-  const whatsappGroupsEnabled = () =>
+  const externalChatsEnabled = () =>
     !hasCustomEntities() &&
     props.block === 'channel' &&
     props.menu.isOpen() &&
     isFeatureEnabled(enableWhatsappLinked) &&
-    (!props.sources || props.sources.includes('whatsappGroups'));
+    (!props.sources || props.sources.includes('externalChats'));
   const userId = useUserId();
-  const whatsappGroupsQuery = useWhatsappGroupsQuery(whatsappGroupApi, () =>
-    whatsappGroupsEnabled() ? (userId() ?? '') : ''
+  const externalChatsQuery = useExternalChatsQuery(externalChatApi, () =>
+    externalChatsEnabled() ? (userId() ?? '') : ''
   );
-  const whatsappGroups = createLazyMemo((): WhatsAppGroupMentionItem[] => {
-    if (!whatsappGroupsEnabled() || !queryReadyGate(whatsappGroupsQuery))
+  const externalChats = createLazyMemo((): ExternalChatMentionItem[] => {
+    if (!externalChatsEnabled() || !queryReadyGate(externalChatsQuery))
       return [];
     const term = searchTerm().trim().toLocaleLowerCase();
-    return whatsappGroupsQuery.data
+    return externalChatsQuery.data
       .filter(
-        (group) =>
-          group.ownerId === userId() &&
-          group.name.toLocaleLowerCase().includes(term)
+        (chat) =>
+          chat.ownerId === userId() &&
+          chat.name.toLocaleLowerCase().includes(term)
       )
-      .map((group) => ({
-        kind: 'whatsappGroup',
-        id: group.id,
-        data: { id: group.id, name: group.name },
+      .map((chat) => ({
+        kind: 'externalChat',
+        id: chat.id,
+        data: { id: chat.id, name: chat.name, provider: chat.provider },
       }));
   });
+
+  // Mentioning a routine in a channel shares it with the channel's members.
+  const routines = useRoutineMentionSource(
+    searchTerm,
+    () =>
+      !hasCustomEntities() &&
+      props.block === 'channel' &&
+      props.menu.isOpen() &&
+      (!props.sources || props.sources.includes('routines'))
+  );
 
   const dateOptions = useDateSearch({ query: searchTerm });
   const dates = createLazyMemo((): DateMentionItem[] => {
@@ -381,14 +392,15 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       ...users,
       ...(sourceEnabled('documents') ? (docs() ?? []) : []),
       ...(sourceEnabled('channels') ? (channels() ?? []) : []),
-      ...whatsappGroups(),
+      ...externalChats(),
+      ...routines(),
       ...(sourceEnabled('agentSessions') ? agentSessions() : []),
       ...(sourceEnabled('companies') ? (companies() ?? []) : []),
       ...(sourceEnabled('emails') ? (emails() ?? []) : []),
       ...(sourceEnabled('calendarEvents') ? calendarEvents() : []),
       ...(sourceEnabled('dates') ? (dates() ?? []) : []),
     ];
-    return sortMobileMentions(combined, searchTerm(), users);
+    return sortMobileMentions(combined, searchTerm(), users, true);
   });
 
   const bucketConfigs = createLazyMemo((): BucketConfig[] => {
@@ -408,7 +420,8 @@ function MentionsMenuInner(props: MentionsMenuProps) {
             (sourceEnabled('documents') ? docsMention.totalCount() : 0) +
             (sourceEnabled('agentSessions') ? agentSessions().length : 0) +
             (sourceEnabled('channels') ? channelsMention.totalCount() : 0) +
-            whatsappGroups().length +
+            externalChats().length +
+            routines().length +
             (sourceEnabled('companies')
               ? (companyMention?.totalCount() ?? 0)
               : 0) +
@@ -490,10 +503,16 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         loadMore: channelsMention.loadMore,
       },
       {
-        id: 'whatsappGroups',
+        id: 'externalChats',
         label: 'WhatsApp chats',
-        getData: whatsappGroups,
-        getFullCount: () => whatsappGroups().length,
+        getData: externalChats,
+        getFullCount: () => externalChats().length,
+      },
+      {
+        id: 'routines',
+        label: 'Routines',
+        getData: routines,
+        getFullCount: () => routines().length,
       },
       {
         id: 'agentSessions',
@@ -578,7 +597,17 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       })
     : undefined;
 
+  /**
+   * Agents whose runtime is away are listed but not pickable: a mention
+   * inserted here would sit in the message unanswered until the machine comes
+   * back, which reads as the agent ignoring you. The flag rides on the user
+   * entry so this menu needs no view of runtimes.
+   */
+  const isOffline = (item: MentionItem) =>
+    item.kind === 'user' && item.data.offline === true;
+
   const itemAction = async (item: MentionItem) => {
+    if (isOffline(item)) return;
     analytics.track('mentions_menu_use', { itemType: item.kind });
     if (props.onPick) props.onPick(item);
     else await itemActionHandler?.(item);
@@ -634,6 +663,9 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     },
     onSelect: () => {
       const selectedItem = controller.selectedItem();
+      // Keep the menu open on an offline agent so Enter reads as "not that
+      // one" rather than silently dismissing with nothing inserted.
+      if (selectedItem && isOffline(selectedItem)) return;
       if (selectedItem) {
         itemAction(selectedItem).catch((error) =>
           Telemetry.error(error, {
@@ -854,6 +886,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                                   itemAction={itemAction}
                                   setIndex={setSelectedIndexFromMouse}
                                   setOpen={setMenuOpen}
+                                  offline={isOffline(item())}
                                 />
                               )}
                             </Key>
@@ -899,6 +932,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                 items={controller.combinedItems()}
                 selectedIndex={controller.selectedIndex()}
                 itemAction={itemAction}
+                offline={isOffline}
                 setIndex={setSelectedIndexFromMouse}
                 setOpen={setMenuOpen}
                 maxHeight={contentMaxHeight()}
@@ -925,6 +959,8 @@ function VirtualizedItemList(props: {
   items: MentionItem[];
   selectedIndex: number;
   itemAction: (item: MentionItem) => void;
+  /** Whether an item's agent runtime is away; such rows are not pickable. */
+  offline: (item: MentionItem) => boolean;
   setIndex: (index: number) => void;
   setOpen: (open: boolean) => void;
   maxHeight?: number;
@@ -999,6 +1035,7 @@ function VirtualizedItemList(props: {
                       itemAction={props.itemAction}
                       setIndex={props.setIndex}
                       setOpen={props.setOpen}
+                      offline={props.offline(currentItem())}
                       disableScrollIntoView
                     />
                   </div>

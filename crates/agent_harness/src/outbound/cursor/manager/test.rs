@@ -221,6 +221,19 @@ impl AgentSessionRepo for StubSessions {
         unimplemented!("naming sessions is the session actor's job")
     }
 
+    async fn generated_name(&self, _id: AgentSessionId) -> SessionResult<Option<String>> {
+        unimplemented!("naming sessions is the session actor's job")
+    }
+
+    async fn replace_generated_name(
+        &self,
+        _id: AgentSessionId,
+        _current: &str,
+        _name: &str,
+    ) -> SessionResult<bool> {
+        unimplemented!("naming sessions is the session actor's job")
+    }
+
     async fn set_sandbox_size(&self, _id: AgentSessionId, _size: SandboxSize) -> SessionResult<()> {
         unimplemented!("resizing is the harness service's job")
     }

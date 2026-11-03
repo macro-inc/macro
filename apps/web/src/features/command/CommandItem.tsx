@@ -3,10 +3,10 @@ import { t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
 import { hasValidHotkey } from '@core/hotkey/utils';
 import { type CrmContactEntity, Entity, type EntityData } from '@entity';
+import ProjectIcon from '@icon/system/regular/cube.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import WideStar from '@icon/system/regular/sparkle.svg';
-import ProjectIcon from '@icon/system/regular/stack.svg';
 import Terminal from '@icon/system/regular/terminal.svg?component-solid';
 import {
   BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
@@ -225,11 +225,17 @@ function AskAiDisplay(props: { item: AskAiItem }) {
 export function ItemDisplay(props: { item: CommandMenuItem }) {
   return (
     <Switch>
-      <Match when={props.item.kind === 'initiative' && props.item}>
-        {(item) => (
+      <Match
+        when={
+          isEntityItem(props.item) &&
+          props.item.data.type === 'initiative' &&
+          props.item.data
+        }
+      >
+        {(project) => (
           <div class="flex items-center gap-2 flex-1 min-w-0">
             <ProjectIcon class="size-4 mobile:scale-150 text-ink-muted shrink-0" />
-            <span class="truncate">{item().name}</span>
+            <span class="truncate">{project().name}</span>
             <span class="ml-auto text-xs text-ink-muted">
               {t('commandMenu.projectBadge')}
             </span>

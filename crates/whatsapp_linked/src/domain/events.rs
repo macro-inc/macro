@@ -1,9 +1,17 @@
 //! Types exchanged in-process with the WhatsApp session service. They carry no
 //! whatsmeow types: the session service maps protocol events onto them.
 
-use super::models::{BackfillState, ChatKind, Identity, MediaPresentation, PairingState};
-pub use super::rich::RichContent;
+use super::{
+    jid::PhoneNumber,
+    models::{Identity, PairingState},
+};
 use chrono::{DateTime, Utc};
+use external_chat::domain::{
+    models::{
+        AttachmentRef, BackfillState, ExternalChatKind, MediaKind, MediaPresentation, MediaShape,
+    },
+    rich::RichContent,
+};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -303,7 +311,7 @@ pub enum OutgoingContent {
     /// One attachment; fetch its bytes with `outbound_media`.
     Media {
         /// Category.
-        kind: super::models::MediaKind,
+        kind: MediaKind,
         /// MIME type.
         mime: String,
         /// Display filename.
@@ -315,30 +323,6 @@ pub enum OutgoingContent {
         /// Pixel size and length, read from the file when it was staged.
         shape: MediaShape,
     },
-}
-
-/// Pixel size and length of an attachment, where known.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct MediaShape {
-    /// Width in pixels (images and videos).
-    pub width: Option<u32>,
-    /// Height in pixels.
-    pub height: Option<u32>,
-    /// Length in whole seconds (audio and video).
-    pub duration_seconds: Option<u32>,
-}
-
-/// One attachment of one source message.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AttachmentRef {
-    /// Binding the message belongs to.
-    pub binding_id: Uuid,
-    /// Verified author.
-    pub person_id: Uuid,
-    /// WhatsApp message id.
-    pub source_id: String,
-    /// Position within the message.
-    pub ordinal: i16,
 }
 
 /// An attachment this replica should download.
@@ -371,7 +355,7 @@ pub enum MediaFailure {
 #[derive(Clone)]
 pub struct OutboundMedia {
     /// Category.
-    pub kind: super::models::MediaKind,
+    pub kind: MediaKind,
     /// MIME type.
     pub mime: String,
     /// Display filename.
@@ -390,7 +374,7 @@ pub struct ClaimedSend {
     /// Group to send to.
     pub group_jid: String,
     /// Commit order within the group, across all accounts.
-    pub group_sequence: i64,
+    pub chat_sequence: i64,
     /// Content.
     pub content: OutgoingContent,
     /// The group's disappearing-messages timer in seconds, as the sending
@@ -440,7 +424,7 @@ pub struct ChatUpdate {
     /// Chat JID (groups; direct chats by phone-number JID when known).
     pub jid: String,
     /// Group or direct.
-    pub kind: ChatKind,
+    pub kind: ExternalChatKind,
     /// Group subject, or the contact or WhatsApp name of a direct chat.
     pub name: Option<String>,
     /// Activity; only ever moves forward.
@@ -460,7 +444,7 @@ pub struct ChatUpdate {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BackfillWork {
     /// Group entity.
-    pub group_id: Uuid,
+    pub chat_id: Uuid,
     /// WhatsApp group.
     pub group_jid: String,
     /// Progress.
@@ -488,4 +472,30 @@ pub struct HistoryPage {
     pub oldest: Option<MessageAnchor>,
     /// The phone says there is nothing older.
     pub complete: bool,
+}
+
+/// A phone-number lookup the account's session should answer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LookupWork {
+    /// The lookup.
+    pub id: Uuid,
+    /// The number to ask WhatsApp about.
+    pub phone_number: PhoneNumber,
+}
+
+/// What WhatsApp answered about a number.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LookupAnswer {
+    /// Registered as this phone-number JID, with the name WhatsApp or the
+    /// address book gives it.
+    Found {
+        /// Phone-number JID.
+        jid: String,
+        /// Business, address-book or WhatsApp name, when known.
+        name: Option<String>,
+    },
+    /// No WhatsApp account has this number.
+    NotOnWhatsApp,
+    /// The question could not be asked or was not answered.
+    Failed,
 }

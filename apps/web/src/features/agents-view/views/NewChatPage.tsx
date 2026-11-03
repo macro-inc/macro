@@ -1,5 +1,6 @@
 import { promptActionOf } from '@app/features/block-agent/component/prompt-action';
 import { createRecentAgentSelections } from '@app/features/block-agent/context/recent-agent-selections';
+import { LocalRuntimePrompt } from '@app/features/settings/components/local-runtime-prompt';
 import {
   createInputAttachmentTracker,
   type InputAttachmentData,
@@ -7,20 +8,23 @@ import {
 } from '@channel/Input';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { SpeedToggle } from '@core/component/AI/component/input/SpeedToggle';
+import { modelLabel } from '@core/component/AI/constant/model-label';
 import {
   acceleratedSpeed,
   speedForModel,
 } from '@core/component/AI/constant/speed';
 import { fastModeEnabled } from '@core/component/AI/signal/speed';
+import { chatAttachmentMentionToMarkdown } from '@core/component/AI/util/chatAttachmentMention';
 import { ComposerGreeting } from '@core/component/ComposerGreeting';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { uploadFile } from '@core/util/upload';
+import type { AgentSessionEntity } from '@entity';
 import ChatIcon from '@icon/system/regular/chat-circle.svg';
 import CodeIcon from '@icon/system/regular/code.svg';
-import AutoIcon from '@icon/system/regular/magic-wand.svg';
+import AutoIcon from '@icon/system/regular/sparkle.svg';
 import { useAgentCapabilitiesQuery } from '@queries/agents/capabilities';
 import { chooseAgentMode } from '@queries/agents/mode-choice';
 import { useAiBillingSummaryQuery } from '@queries/auth/ai-billing';
@@ -28,6 +32,7 @@ import type { PromptAttachment } from '@service-agent-harness/generated/schemas'
 import { Tabs } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createMemo, createSignal, Show } from 'solid-js';
+import { AgentUpdatesStack } from '../../agent-updates/views/AgentUpdatesStack';
 import { EffortSelector } from '../../block-agent/component/EffortSelector';
 import {
   type EffortChoice,
@@ -41,13 +46,14 @@ import {
   agentsModeLabel,
   type ComposerMode,
 } from '../core/mode';
-import { defaultBranchFor } from '../core/repository';
+import { defaultBranchFor, sameRepository } from '../core/repository';
 import { MACRO_PERSONA_ID, type RosterAgent } from '../core/roster';
 import {
   createPersistedComposerDraft,
   NEW_CONVERSATION_ATTACHMENTS_KEY,
 } from '../primitives/composer-draft';
 import { createPreferredInmemModel } from '../primitives/preferred-inmem-model';
+import { createPreferredRepository } from '../primitives/preferred-repository';
 import { createRecentRepositories } from '../primitives/recent-repositories';
 import { createWorkspaceMode } from '../primitives/workspace-mode';
 import { createComposerModels } from '../queries/composer-models';
@@ -86,7 +92,7 @@ export function NewChatPage(props: {
   roster: RosterAgent[];
   /**
    * Auto, Chat, or Code; Chat and Code also limit the agents offered.
-   * Uncontrolled callers get the signed-in user's last choice.
+   * Uncontrolled callers start in Auto.
    */
   mode?: ComposerMode;
   onModeChange?: (mode: ComposerMode) => void;
@@ -96,6 +102,9 @@ export function NewChatPage(props: {
   onStart: (start: StartConversation) => void;
   /** Opens the roster page on the given kind's tab. */
   onOpenRoster: (kind: AgentKind) => void;
+  updateSessions?: readonly AgentSessionEntity[];
+  onOpenUpdateSession?: (sessionId: string) => void;
+  showUpdates?: boolean;
 }) {
   const userId = useUserId();
   const billing = useAiBillingSummaryQuery();
@@ -103,7 +112,7 @@ export function NewChatPage(props: {
   const recentAgents = createRecentAgentSelections(userId());
   const repositories = createRecentRepositories(userId());
   const preferredInmem = createPreferredInmemModel(userId());
-  const ownMode = createWorkspaceMode(userId());
+  const ownMode = createWorkspaceMode();
   const mode = () => props.mode ?? ownMode.mode();
   const auto = () => mode() === 'auto';
   /** Auto shows and prepares the chat agent; a prompt it sends to Code starts the coding agent. */
@@ -116,15 +125,21 @@ export function NewChatPage(props: {
   const [modelOverride, setModelOverride] = createSignal<string>();
   const [effortPickerOpen, setEffortPickerOpen] = createSignal(false);
   const [repositoryPickerOpen, setRepositoryPickerOpen] = createSignal(false);
-  // A new conversation starts on Automatic until the caller picks a repository.
-  const [repoUrl, setRepoUrl] = createSignal<string | undefined>();
+  const preferredRepository = createPreferredRepository(userId());
+  // An explicit Auto-detect pick must override a saved repository, too.
+  const [repositoryOverride, setRepositoryOverride] = createSignal<{
+    url?: string;
+  }>();
   const persistedDraft = createPersistedComposerDraft(undefined, userId);
   const draft = () => props.draft ?? persistedDraft.draft();
   const setDraft = (text: string) =>
     props.onDraftChange
       ? props.onDraftChange(text)
       : persistedDraft.setDraft(text);
-  const [branchOverride, setBranchOverride] = createSignal<string>();
+  const [branchOverride, setBranchOverride] = createSignal<{
+    repository: string;
+    branch: string;
+  }>();
   /** The picked agent, else the last one used, else Macro, else any that can start. */
   const preferredAgent = (kind: AgentsMode, picked?: string) => {
     const options = optionsFor(kind);
@@ -216,24 +231,47 @@ export function NewChatPage(props: {
   const blocked = () => {
     if (choosingMode()) return 'Choosing Chat or Code…';
     const agent = selected();
-    return agent ? agent.unavailableReason : 'Choose an agent to start';
+    if (!agent) return 'Choose an agent to start';
+    if (agent.unavailableReason) return agent.unavailableReason;
+    if (canSelectRepository() && repoUrl()) {
+      if (reachable.loading()) return 'Loading repositories';
+      if (reachable.error()) return 'Retry loading repositories before sending';
+    }
+    return undefined;
   };
   // Listed only while the drawer can show them: chat agents never ask.
   const reachable = createReachableRepositories(coding);
+  const repoUrl = () => {
+    const override = repositoryOverride();
+    if (override) return override.url;
+    const preferred = preferredRepository.repository();
+    if (!preferred) return undefined;
+    // Keep the saved label while loading; never submit a stale default.
+    if (reachable.loading() || reachable.error()) return preferred;
+    return reachable
+      .repositories()
+      .find((repo) => sameRepository(repo.url, preferred))?.url;
+  };
   // Listed only while a repository is chosen: listing costs a GitHub call.
   const reachableBranches = createRepositoryBranches(() =>
     coding() && !localRuntime() ? repoUrl() : undefined
   );
   // A chosen branch, or where the selected repository's own clones start.
-  const repoBranch = () =>
-    localRuntime()
-      ? 'main'
-      : (branchOverride() ??
-        defaultBranchFor(reachable.repositories(), repoUrl()));
+  const repoBranch = () => {
+    if (localRuntime()) return 'main';
+    const override = branchOverride();
+    return override && override.repository === repoUrl()
+      ? override.branch
+      : defaultBranchFor(reachable.repositories(), repoUrl());
+  };
+  const selectBranch = (branch: string) => {
+    const repository = repoUrl();
+    if (repository) setBranchOverride({ repository, branch });
+  };
   const selectRepository = (url: string | undefined) => {
     // Another repository starts on its own default branch, not the last one's.
     if (url !== repoUrl()) setBranchOverride(undefined);
-    setRepoUrl(url);
+    setRepositoryOverride({ url });
     if (url) repositories.remember(url);
   };
 
@@ -379,6 +417,17 @@ export function NewChatPage(props: {
   };
 
   let focusInput: (() => void) | undefined;
+  const chatAboutUpdate = (sessionId: string, sessionName: string) => {
+    const mention = chatAttachmentMentionToMarkdown({
+      documentId: sessionId,
+      documentName: sessionName,
+      blockName: 'agent',
+    });
+    setDraft(
+      `${draft().trim()}${draft().trim() ? '\n\n' : ''}${mention}\nAbout this update: `
+    );
+    focusInput?.();
+  };
   const restoreInputFocus = (event: Event) => {
     event.preventDefault();
     focusInput?.();
@@ -454,7 +503,7 @@ export function NewChatPage(props: {
       onRetryBranches={reachableBranches.retry}
       onConnectGitHub={() => openSettings('Connected')}
       onSelectRepository={selectRepository}
-      onSelectBranch={setBranchOverride}
+      onSelectBranch={selectBranch}
     />
   );
 
@@ -509,6 +558,12 @@ export function NewChatPage(props: {
       drawerOpen
       placeholder={coding() ? 'Describe what you want to build' : undefined}
       onSend={send}
+      modelName={modelLabel(
+        composerModelOverride(),
+        selectedCatalog
+          .models()
+          .find((model) => model.id === composerModelOverride())?.name
+      )}
       supportsImages={
         selectedCatalog
           .models()
@@ -547,9 +602,24 @@ export function NewChatPage(props: {
               data-agent-new-composer={props.workspaceId}
               class="agents-view-portal touch:px-(--mobile-chrome-gutter) pointer-events-auto min-w-0"
             >
+              <LocalRuntimePrompt />
               {composer()}
             </div>
           </FloatRegionOrInline>
+          <Show
+            when={
+              props.showUpdates &&
+              props.updateSessions &&
+              props.onOpenUpdateSession
+            }
+          >
+            <AgentUpdatesStack
+              home
+              sessions={props.updateSessions ?? []}
+              onOpenSession={(id) => props.onOpenUpdateSession?.(id)}
+              onChatAbout={chatAboutUpdate}
+            />
+          </Show>
         </div>
       </section>
     </Show>

@@ -20,7 +20,7 @@ interface SoupActiveFiltersBarProps {
  */
 const AddFilterButton = () => (
   <Dropdown.Trigger variant="ghost" size="icon-sm" tooltip="Add filters">
-    <Plus />
+    <Plus class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
   </Dropdown.Trigger>
 );
 
@@ -48,11 +48,11 @@ export function SoupActiveFiltersBar(props: SoupActiveFiltersBarProps) {
             <div class="flex items-center shrink-0">
               <Button
                 onClick={() => props.onClearAll()}
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 tooltip="Clear active filters"
               >
-                <XIcon />
+                <XIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
                 <span class="hidden @min-[300px]/split:inline">Clear all</span>
               </Button>
             </div>

@@ -10,9 +10,12 @@ test-support = []
 [dependencies]
 import_linear = { path = "../import_linear" }
 import_jira = { path = "../import_jira" }
+
+macro_entrypoint = { path = "../macro_entrypoint" }
+memory = { path = "../memory" }
 clap = { workspace = true, features = ["derive"] }
 favorites = { path = "../favorites", features = ["ai_tools", "postgres"] }
-forms = { path = "../forms", features = ["ai_tools", "gateway", "postgres", "scheduling"] }
+forms = { path = "../forms", features = ["ai_tools", "gateway", "postgres", "scheduling", "static_files"] }
 routines = { path = "../routines" }
 macro_auth = { path = "../macro_auth" }
 agent_code_mode = { path = "../agent_code_mode" }
@@ -118,6 +121,7 @@ thiserror.workspace = true
 tokio.workspace = true
 tokio-util = { workspace = true, features = ["rt"] }
 tracing.workspace = true
+unicode-segmentation.workspace = true
 utoipa.workspace = true
 uuid.workspace = true
 remote_env_var = { path = "../remote_env_var" }

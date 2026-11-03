@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_send s SET dispatch_started_at = clock_timestamp(), allocated_source_id = $4, updated_at = now()\n            FROM whatsapp_linked_account a, whatsapp_chat_membership m, external_chat b\n            WHERE s.id = $1 AND s.account_id = $2 AND s.claimed_epoch = $3 AND s.state = 'sending' AND s.dispatch_started_at IS NULL\n              AND a.id = s.account_id AND a.user_id = s.user_id AND a.generation = s.generation AND a.state = 'connected'\n              AND b.id = s.chat_id AND b.state = 'active'\n              AND m.chat_id = s.chat_id AND m.account_id = s.account_id AND m.generation = s.generation\n              AND m.consent_ended_at IS NULL AND m.reconciled AND m.remote_member AND m.can_post\n              AND external_chat_can_view(s.chat_id, s.user_id)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8df8c9fe97ec58f6a9d86b6353d98cff3dd1fb5e5901a506b35767659998987e"
+}

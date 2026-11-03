@@ -9,8 +9,9 @@ import type {
   WhatsAppLinkedCapabilities,
 } from '../context/whatsapp-linked-context';
 import type { WhatsAppAccount } from '../core/account';
-import type { AdoptFailure } from '../core/adopt';
+import type { AddFailure } from '../core/add';
 import type { WhatsAppChat } from '../core/chat';
+import type { NewChatFailure } from '../core/new-chat';
 import type { PairingStep } from '../core/pairing';
 import { createOpenSections } from '../primitives/open-sections';
 
@@ -113,13 +114,19 @@ export function createFakeWhatsApp(initial: {
       ): ResultAsync<{ remoteUnlinkRequested: boolean }, RequestFailure> =>
         okAsync({ remoteUnlinkRequested: false })
     ),
-    adopt: vi.fn(
-      (_groupJid: string): ResultAsync<{ groupId: string }, AdoptFailure> =>
-        okAsync({ groupId: 'group-new' })
+    add: vi.fn(
+      (
+        _chat: Pick<WhatsAppChat, 'jid' | 'kind'>
+      ): ResultAsync<{ chatId: string }, AddFailure> =>
+        okAsync({ chatId: 'chat-new' })
+    ),
+    startChat: vi.fn(
+      (_phoneNumber: string): ResultAsync<{ chatId: string }, NewChatFailure> =>
+        okAsync({ chatId: 'chat-started' })
     ),
     isConnecting: () => false,
     isDisconnecting: () => false,
-    openGroup: vi.fn(),
+    openChat: vi.fn(),
     sections: createOpenSections('test:whatsapp-sections', () => undefined),
   } satisfies WhatsAppLinkedCapabilities;
   return {

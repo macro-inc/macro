@@ -62,6 +62,32 @@ Denies the can_use_full_screen_intent command without any pre-configured scope.
 <tr>
 <td>
 
+`call-kit:allow-configure-tracing`
+
+</td>
+<td>
+
+Enables the configure_tracing command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:deny-configure-tracing`
+
+</td>
+<td>
+
+Denies the configure_tracing command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `call-kit:allow-end-active-call`
 
 </td>

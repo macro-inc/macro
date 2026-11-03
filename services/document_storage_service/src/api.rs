@@ -61,7 +61,12 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
                     },
                     validate_api_version,
                 ))
-                .layer(macro_cors::cors_layer().expose_headers([axum::http::header::RETRY_AFTER]))
+                .layer(
+                    macro_cors::cors_layer_with_headers(vec![axum::http::HeaderName::from_static(
+                        complete_graph::MAIL_CACHE_PROFILE_HEADER,
+                    )])
+                    .expose_headers([axum::http::header::RETRY_AFTER]),
+                )
                 .layer(CompressionLayer::new().gzip(true)),
         )
         // The health router is attached here so we don't attach the logging middleware to it
@@ -289,8 +294,16 @@ fn api_router(state: ApiContext) -> Router {
             slack_integration::inbound::axum_router::slack_router(state.slack_state.clone()),
         )
         .nest(
-            "/meta/linked",
-            whatsapp_linked::inbound::router::router(state.whatsapp_linked_state.clone()),
+            "/external-chats",
+            external_chat::inbound::router::external_chats_router(
+                state.external_chat_state.chats.clone(),
+            ),
+        )
+        .nest(
+            "/whatsapp",
+            whatsapp_linked::inbound::router::whatsapp_router(
+                state.external_chat_state.whatsapp.clone(),
+            ),
         )
         .nest(
             "/reminders",

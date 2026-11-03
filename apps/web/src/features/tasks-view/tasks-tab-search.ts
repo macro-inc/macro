@@ -1,5 +1,6 @@
 import { createSearchParamsCodec } from '@app/lib/split-router';
 import { z } from 'zod';
+import { TASK_TAB_IDS } from './core/task-navigation';
 import type {
   TaskGroupBy,
   TaskSortId,
@@ -10,18 +11,51 @@ import type {
 export const tasksTabSearch = {
   namespace: 'tasks',
   schema: z.object({
-    tab: z.enum(['my-tasks', 'created-by-me', 'team-tasks', 'projects']),
+    tab: z.enum(TASK_TAB_IDS),
     savedView: z
       .string()
       .uuid()
       .transform((id) => id.toLowerCase())
       .optional(),
     layout: z.enum(['list', 'board', 'gantt']).optional(),
-    sort: z.enum(['updated_at', 'created_at', 'viewed_at']).optional(),
+    sort: z
+      .enum([
+        'updated_at',
+        'created_at',
+        'viewed_at',
+        'status',
+        'priority',
+        'due_date_earliest',
+        'due_date_latest',
+      ])
+      .optional(),
     sortReversed: z.enum(['true', 'false']).optional(),
     groupBy: z
-      .enum(['none', 'status', 'priority', 'assignee', 'project', 'date'])
+      .enum([
+        'none',
+        'status',
+        'priority',
+        'assignee',
+        'project',
+        'date',
+        'due_date',
+      ])
       .optional(),
+    dueDate: z
+      .enum([
+        'any',
+        'overdue',
+        'today',
+        'tomorrow',
+        'next_7_days',
+        'later',
+        'has_due_date',
+        'no_due_date',
+        'range',
+      ])
+      .optional(),
+    dueStart: z.iso.date().optional(),
+    dueEnd: z.iso.date().optional(),
   }),
   defaults: {
     tab: 'my-tasks' as TasksTab,
@@ -30,6 +64,9 @@ export const tasksTabSearch = {
     sort: undefined as TaskSortId | undefined,
     sortReversed: undefined as 'true' | 'false' | undefined,
     groupBy: undefined as TaskGroupBy | undefined,
+    dueDate: undefined,
+    dueStart: undefined,
+    dueEnd: undefined,
   },
 };
 

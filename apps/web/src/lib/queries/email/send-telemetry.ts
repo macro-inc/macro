@@ -1,3 +1,4 @@
+import { analytics } from '@app/lib/analytics';
 import { Telemetry } from '@macro-inc/observability';
 import type { EmailSendAttemptFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import { CombinedError } from '@urql/core';
@@ -87,5 +88,14 @@ export function recordEmailSend(
     }
   } catch {
     // Exporter failures cannot change send authority or draft persistence.
+  }
+}
+
+/** Product analytics for one accepted send: flags only, never content or addresses. */
+export function trackEmailMessageSent(properties: { isReply: boolean }): void {
+  try {
+    analytics.track('email_message_sent', properties);
+  } catch (error) {
+    Telemetry.error(error);
   }
 }

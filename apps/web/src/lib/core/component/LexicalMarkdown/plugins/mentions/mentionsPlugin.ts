@@ -165,7 +165,7 @@ export type ItemMention = {
     | 'crm_contact'
     | 'crm_pipeline'
     | 'skill'
-    | 'whatsapp_group';
+    | 'external_chat';
   itemId: string;
   fileType?: string;
   documentName?: string;
@@ -263,10 +263,10 @@ function $mentionItemFromNode(node: MentionNode): ItemMention {
     } else if (blockName === 'pipeline') {
       fileType = 'pipeline';
       itemType = 'crm_pipeline';
-    } else if (blockName === 'whatsapp_group') {
+    } else if (blockName === 'external_chat') {
       // Posting it shares the group with the channel's members.
-      fileType = 'whatsapp_group';
-      itemType = 'whatsapp_group';
+      fileType = 'external_chat';
+      itemType = 'external_chat';
     } else if (blockName === 'unknown') {
       fileType = 'unknown';
     }

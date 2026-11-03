@@ -11,7 +11,7 @@ fn at(minute: u32) -> chrono::DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 10, 1, 12, minute, 0).unwrap()
 }
 
-fn chat(jid: &str, kind: ChatKind, name: Option<&str>, minute: Option<u32>) -> ChatUpdate {
+fn chat(jid: &str, kind: ExternalChatKind, name: Option<&str>, minute: Option<u32>) -> ChatUpdate {
     ChatUpdate {
         jid: jid.to_owned(),
         kind,
@@ -36,14 +36,19 @@ async fn the_chat_list_merges_history_activity_and_the_roster(pool: PgPool) {
         .update_chats(
             alice,
             &[
-                chat(DIRECT, ChatKind::Direct, Some("Customer"), Some(30)),
+                chat(DIRECT, ExternalChatKind::Direct, Some("Customer"), Some(30)),
                 chat(
                     GROUP,
-                    ChatKind::Group,
+                    ExternalChatKind::Group,
                     Some("ignored: roster wins"),
                     Some(10),
                 ),
-                chat(OTHER_GROUP, ChatKind::Group, Some("Old group"), Some(20)),
+                chat(
+                    OTHER_GROUP,
+                    ExternalChatKind::Group,
+                    Some("Old group"),
+                    Some(20),
+                ),
             ],
         )
         .await
@@ -53,16 +58,16 @@ async fn the_chat_list_merges_history_activity_and_the_roster(pool: PgPool) {
         .update_chats(
             alice,
             &[
-                chat(DIRECT, ChatKind::Direct, None, Some(5)),
+                chat(DIRECT, ExternalChatKind::Direct, None, Some(5)),
                 ChatUpdate {
                     archived: Some(true),
-                    ..chat(OTHER_GROUP, ChatKind::Group, None, None)
+                    ..chat(OTHER_GROUP, ExternalChatKind::Group, None, None)
                 },
                 ChatUpdate {
                     create: false,
                     ..chat(
                         "15559990000@s.whatsapp.net",
-                        ChatKind::Direct,
+                        ExternalChatKind::Direct,
                         Some("Stranger"),
                         None,
                     )
@@ -72,7 +77,7 @@ async fn the_chat_list_merges_history_activity_and_the_roster(pool: PgPool) {
         .await
         .unwrap();
 
-    let chats = linked.chats(&person(ALICE)).await.unwrap().chats;
+    let chats = linked.whatsapp.chats(&person(ALICE)).await.unwrap().chats;
     let summary: Vec<_> = chats
         .iter()
         .map(|chat| {
@@ -83,7 +88,7 @@ async fn the_chat_list_merges_history_activity_and_the_roster(pool: PgPool) {
                 chat.archived,
                 chat.can_add,
                 chat.cannot_add_reason,
-                chat.group.as_ref().map(|group| group.id),
+                chat.added.as_ref().map(|group| group.id),
             )
         })
         .collect();
@@ -92,7 +97,7 @@ async fn the_chat_list_merges_history_activity_and_the_roster(pool: PgPool) {
         [
             (
                 DIRECT,
-                ChatKind::Direct,
+                ExternalChatKind::Direct,
                 "Customer",
                 false,
                 true,
@@ -101,7 +106,7 @@ async fn the_chat_list_merges_history_activity_and_the_roster(pool: PgPool) {
             ),
             (
                 OTHER_GROUP,
-                ChatKind::Group,
+                ExternalChatKind::Group,
                 "Old group",
                 true,
                 false,
@@ -110,7 +115,7 @@ async fn the_chat_list_merges_history_activity_and_the_roster(pool: PgPool) {
             ),
             (
                 GROUP,
-                ChatKind::Group,
+                ExternalChatKind::Group,
                 "Customer escalations",
                 false,
                 false,
@@ -136,34 +141,63 @@ async fn the_chat_list_merges_history_activity_and_the_roster(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_new_adoption_backfills_from_the_chat_anchor_page_by_page(pool: PgPool) {
-    let (_, session, _, binding, alice, _) = adopted(&pool).await;
-    let work = session.backfill_work(alice).await.unwrap();
-    assert_eq!(work.len(), 1);
+    let (linked, session, _, binding, alice, _) = adopted(&pool).await;
+    let state = || async {
+        sqlx::query_scalar!(
+            "SELECT backfill_state FROM external_chat WHERE id = $1",
+            binding.id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+    };
     assert_eq!(
-        (
-            work[0].state,
-            work[0].anchor.clone(),
-            work[0].cursor.clone()
-        ),
-        (BackfillState::WaitingForMessage, None, None),
+        state().await.as_deref(),
+        Some("waiting_for_message"),
         "no message known yet: waits for one"
     );
-    assert!(
-        !session
-            .update_chats(
-                alice,
-                &[chat(GROUP, ChatKind::Group, Some("Renamed"), None)]
-            )
-            .await
-            .unwrap(),
+    session
+        .update_chats(
+            alice,
+            &[chat(GROUP, ExternalChatKind::Group, Some("Renamed"), None)],
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        state().await.as_deref(),
+        Some("waiting_for_message"),
         "a rename is no message to start from"
     );
-    assert!(
-        session
-            .update_chats(alice, &[chat(GROUP, ChatKind::Group, None, Some(40))])
+    session
+        .update_chats(
+            alice,
+            &[chat(GROUP, ExternalChatKind::Group, None, Some(40))],
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        state().await.as_deref(),
+        Some("waiting_for_phone"),
+        "the chat's first message makes it importable, but the phone is only asked on the owner's Import"
+    );
+    assert!(session.backfill_work(alice).await.unwrap().is_empty());
+    assert_eq!(
+        linked
+            .whatsapp
+            .import_history(&person(ALICE), SendAuthority::UserApiToken)
             .await
-            .unwrap(),
-        "the chat's first message makes it ready"
+            .unwrap_err()
+            .current_context(),
+        &ExternalChatError::Forbidden
+    );
+    assert_eq!(
+        linked
+            .whatsapp
+            .import_history(&person(ALICE), SendAuthority::Human)
+            .await
+            .unwrap()
+            .started,
+        1
     );
     let work = session.backfill_work(alice).await.unwrap();
     assert_eq!(
@@ -179,8 +213,17 @@ async fn a_new_adoption_backfills_from_the_chat_anchor_page_by_page(pool: PgPool
         .backfill_unanswered(alice, binding.id)
         .await
         .unwrap();
-    let work = session.backfill_work(alice).await.unwrap();
-    assert_eq!(work[0].state, BackfillState::WaitingForPhone);
+    assert_eq!(
+        state().await.as_deref(),
+        Some("waiting_for_phone"),
+        "an unanswered request waits for the owner, not a timer"
+    );
+    assert!(session.backfill_work(alice).await.unwrap().is_empty());
+    linked
+        .whatsapp
+        .import_history(&person(ALICE), SendAuthority::Human)
+        .await
+        .unwrap();
 
     let page = |messages, oldest: u32, complete| HistoryPage {
         chat_jid: GROUP.to_owned(),
@@ -222,14 +265,19 @@ async fn a_new_adoption_backfills_from_the_chat_anchor_page_by_page(pool: PgPool
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_chat_without_a_listed_message_starts_from_its_newest_stored_one(pool: PgPool) {
-    let (_, session, _, binding, alice, _) = adopted(&pool).await;
+    let (linked, session, _, binding, alice, _) = adopted(&pool).await;
     // Stored live, but the chat list never heard of it.
     session
         .ingest_event(alice, &text(1, CUSTOMER_JID, "3EB0CAFE", "hello"))
         .await
         .unwrap();
+    linked
+        .whatsapp
+        .import_history(&person(ALICE), SendAuthority::Human)
+        .await
+        .unwrap();
     let work = session.backfill_work(alice).await.unwrap();
-    assert_eq!(work[0].state, BackfillState::WaitingForMessage);
+    assert_eq!(work[0].state, BackfillState::Pending);
     let anchor = work[0]
         .anchor
         .clone()
@@ -255,14 +303,19 @@ async fn ending_consent_forgets_the_old_numbers_chat_list(pool: PgPool) {
     session
         .update_chats(
             alice,
-            &[chat(DIRECT, ChatKind::Direct, Some("Customer"), Some(30))],
+            &[chat(
+                DIRECT,
+                ExternalChatKind::Direct,
+                Some("Customer"),
+                Some(30),
+            )],
         )
         .await
         .unwrap();
     let stored = |pool: PgPool| async move {
         sqlx::query_scalar!(
             r#"SELECT (SELECT count(*) FROM whatsapp_chat WHERE account_id = $1)
-                + (SELECT count(*) FROM whatsapp_group_roster WHERE account_id = $1) AS "count!""#,
+                + (SELECT count(*) FROM whatsapp_roster WHERE account_id = $1) AS "count!""#,
             alice.account_id
         )
         .fetch_one(&pool)
@@ -270,8 +323,14 @@ async fn ending_consent_forgets_the_old_numbers_chat_list(pool: PgPool) {
         .unwrap()
     };
     assert!(stored(pool.clone()).await > 0);
-    let account = linked.account(&person(ALICE)).await.unwrap().unwrap();
+    let account = linked
+        .whatsapp
+        .account(&person(ALICE))
+        .await
+        .unwrap()
+        .unwrap();
     linked
+        .whatsapp
         .disconnect(
             &person(ALICE),
             account.authorization_generation,
@@ -285,20 +344,25 @@ async fn ending_consent_forgets_the_old_numbers_chat_list(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn one_batch_may_name_a_chat_twice(pool: PgPool) {
     let (linked, session, _, _, alice, _) = adopted(&pool).await;
-    let mut renamed = chat(DIRECT, ChatKind::Direct, Some("Customer (work)"), Some(10));
+    let mut renamed = chat(
+        DIRECT,
+        ExternalChatKind::Direct,
+        Some("Customer (work)"),
+        Some(10),
+    );
     renamed.create = false;
     session
         .update_chats(
             alice,
             &[
-                chat(DIRECT, ChatKind::Direct, Some("Customer"), Some(40)),
+                chat(DIRECT, ExternalChatKind::Direct, Some("Customer"), Some(40)),
                 renamed,
-                chat(DIRECT, ChatKind::Direct, None, Some(20)),
+                chat(DIRECT, ExternalChatKind::Direct, None, Some(20)),
             ],
         )
         .await
         .unwrap();
-    let listed = linked.chats(&person(ALICE)).await.unwrap().chats;
+    let listed = linked.whatsapp.chats(&person(ALICE)).await.unwrap().chats;
     let direct = listed.iter().find(|chat| chat.jid == DIRECT).unwrap();
     assert_eq!(
         (direct.name.as_str(), direct.last_activity_at),

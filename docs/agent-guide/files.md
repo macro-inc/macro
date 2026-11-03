@@ -16,6 +16,12 @@ viewer identity is available, document inserts into Shared are rejected.
 Files opens **Drive** using the same shell as Tasks, on desktop and touch
 devices alike.
 
+The document header's **Copy Share Link** and the Share dialog's **Copy Link**
+copy a standalone link to the selected file, not the current browser URL.
+Folder paths, list filters, and other open splits are not included.
+PDF location links retain the selected page or annotation without unrelated
+query parameters from the surrounding view.
+
 With `enable-graphql-soup` enabled, supported file/folder/chat moves, trash,
 restore, permanent deletion, duplication, and share-policy changes use GraphQL
 mutations. Verify moving into a folder and back to root, opening the returned
@@ -26,7 +32,9 @@ retain successful siblings. A plan-refused chat duplicate still opens the paywal
 with either transport; it must not create a copy or retry through REST. Restore immediately after trash and confirm the row
 returns without waiting for retained deletion markers to expire, even if the
 trash's background refresh failed. A delete started after the restore request
-must still hide its row. With the flag off, the existing REST paths remain.
+must still hide its row. Deletion and restore overlays distinguish entity type as
+well as ID, so an unrelated conversation with the same ID remains visible.
+With the flag off, the existing REST paths remain.
 Deleting a non-owned item still only removes it from history. Forking a markdown
 history version still uses REST because GraphQL duplication copies current content.
 
@@ -37,8 +45,10 @@ database names and **Filter → Type → Database** narrows the list. **New →
 Database** creates and opens a database from file tabs or the folder overview;
 it is absent inside a folder because databases have no folder membership yet.
 Database rows open their database block, including Enter and Open in new split.
-Use the database block's own actions to rename, share or trash it. The list
-omits unsupported duplicate, delete and move-to-folder actions for databases.
+Right-click (or long-press) a database for the same entity actions as other
+Drive rows: Open in new split, Rename (edit or owner), Favorite, Copy Link,
+Copy ID, Share, and Delete (owner). Duplicate and Move to folder stay omitted
+because databases have no folder membership and no duplicate API.
 Databases have no view history and do not appear in **Recent**, folder contents,
 or **Email attachments**. Creation time orders them when the selected sort has
 no corresponding database timestamp.
@@ -127,8 +137,14 @@ search remains available. Right-click any Drive view, the Drive folder overview,
 or a folder at any depth for **Open in new split**, **Open in current split**, and
 **Open fullscreen** (when multiple splits are open). Opening a location in a new
 split clears search and filters in the destination, leaving the original split
-unchanged. Folder menus also offer Favorite/Unfavorite, Move to folder, Copy Link,
-and owner-only Rename and Delete.
+unchanged. Folder menus also offer Favorite/Unfavorite, Snooze notifications…,
+Mute/Unmute notifications, Duplicate, Copy Link, Copy ID, Share, and
+owner-only Rename, Move to folder, and Delete, matching the folder's row menu in the Drive list.
+**Duplicate** on a folder (also in its "…" menu and row menu) makes "<name> copy"
+beside it (or at the top level without edit access to its parent), copying its
+subfolders, documents, tasks, and chats; email threads filed in it stay with the
+original. Folders with more than 100 subfolders, documents, and chats can't be
+duplicated, and a failed copy leaves nothing behind.
 A folder's Share dialog, when the owner belongs to a team, has Team access
 (None, View, Comment, or Edit) without a Link sharing card or Link tab.
 Favorites use the same open actions and **Remove from favorites** menu as Tasks.
@@ -190,6 +206,37 @@ switch via the header pills; on narrow desktop layouts the header keeps a plain
 title and navigation goes through the hamburger overlay. Location, search,
 filters, expanded folders, list focus, and scroll position are restored when
 returning from an opened file.
+
+## Zooming opened images
+
+On a touch device, open an image file (an SVG, PNG, or JPEG) in Drive or as its
+own split. It rests at the size it always had: no larger than its own pixels,
+and an SVG with only a viewBox fills the pane. Pinch anywhere in the pane, on
+the image or beside it: the image grows until it fills the pane, then crops and
+pans with one finger, with a glide on release. A zoomed SVG stays sharp, because
+the image is laid out at its zoomed size rather than scaled up. One finger on an
+unzoomed image does nothing, so taps and the left-edge swipe back still work.
+Desktop keeps the plain image. The backend-free phone and tablet regression is
+`bunx playwright test --config src/features/block-image/browser-test/playwright.config.ts`
+from `apps/web`.
+
+## Reading unrecognized files
+
+A file Macro has no viewer for reads in place when its content is text: one whose
+name has no recognized extension, or a text type such as `.env`, `.ics`, `.vcf`,
+or `.dot`. Both `/app/unknown/<id>` (channel attachments, mentions) and the Drive
+detail show it read-only through the static Lexical renderer, one literal line
+per file line, never as Markdown.
+
+- Upload a file named `notes` containing `# heading` and an indented line. Open
+  it from a channel and from Drive: the heading stays literal, the indentation
+  stays, and the header keeps Download and Share. Select several lines and copy:
+  the copy has no extra blank lines.
+- Binary content, empty files, text that is not UTF-8, and files over 1 MB or
+  20,000 lines keep **No preview available** with Share and Download. Known
+  binary types such as `.zip` never download for this check; legacy Office files
+  keep their conversion message.
+- `.txt` and other code types open in the code editor instead.
 
 ## Downloading files
 

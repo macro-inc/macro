@@ -383,9 +383,13 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
                           </Button>
                           <Show when={editable()}>
                             <Button
+                              variant="ghost"
+                              aria-label={`Remove ${name(id)}`}
+                              tooltip={{
+                                content: `Remove ${name(id)}`,
+                                disabled: true,
+                              }}
                               size="icon-xs"
-                              label={`Remove ${name(id)}`}
-                              tooltipDisabled
                               onClick={() => toggle(id)}
                             >
                               <XIcon class="size-3" />
@@ -450,6 +454,7 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
                         'Related records could not be loaded.'}
                     </p>
                     <Button
+                      variant="ghost"
                       size="xs"
                       class="mt-1"
                       onClick={() => fireAndForget(refresh(), 'database')}
@@ -469,6 +474,7 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
                   {saving() ? 'Saving…' : props.source.name()}
                 </span>
                 <Button
+                  variant="primary"
                   size="xs"
                   onClick={() => fireAndForget(finish(), 'database')}
                 >

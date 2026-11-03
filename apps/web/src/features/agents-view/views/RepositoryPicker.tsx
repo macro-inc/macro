@@ -115,7 +115,7 @@ export function RepositoryPicker(props: {
       : !!props.repoUrl && sameRepository(props.repoUrl, choice.url);
   const rowLabel = (choice: RepositoryChoice) =>
     match(choice)
-      .with({ kind: 'automatic' }, () => 'Choose automatically')
+      .with({ kind: 'automatic' }, () => 'Auto-detect')
       .with({ kind: 'listed' }, ({ url }) => repositoryLabel(url))
       .exhaustive();
   const nothingReachable = () =>
@@ -199,9 +199,7 @@ export function RepositoryPicker(props: {
           <>
             <GithubIcon class="size-4 shrink-0" />
             <span class="truncate">
-              {props.repoUrl
-                ? repositoryLabel(props.repoUrl)
-                : 'Choose automatically'}
+              {props.repoUrl ? repositoryLabel(props.repoUrl) : 'Auto-detect'}
             </span>
             <CaretDownIcon class="size-3 shrink-0" />
           </>
@@ -280,9 +278,8 @@ export function RepositoryPicker(props: {
               <div class="flex items-center justify-between gap-2 px-2 py-2 text-xs text-ink-muted">
                 Couldn't load your repositories.
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
-                  depth={3}
                   onClick={() => props.onRetryRepositories()}
                 >
                   Retry
@@ -300,9 +297,8 @@ export function RepositoryPicker(props: {
                 repositories your coders should work on.
                 <Show when={props.onConnectGitHub}>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
-                    depth={3}
                     class="self-start"
                     onClick={() => props.onConnectGitHub?.()}
                   >
@@ -432,9 +428,8 @@ export function RepositoryPicker(props: {
                 <div class="flex items-center justify-between gap-2 px-2 py-2 text-xs text-ink-muted">
                   Couldn't load this repository's branches.
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
-                    depth={3}
                     onClick={() => props.onRetryBranches()}
                   >
                     Retry

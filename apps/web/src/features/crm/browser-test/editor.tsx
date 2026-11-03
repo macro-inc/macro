@@ -96,7 +96,7 @@ function selectColumn(
   result.definition.definition.data_type = 'SELECT_STRING';
   result.column.protections = ['delete', 'change_type'];
   result.definition.property_options = labels.map((label, index) => ({
-    id: `${columnId.slice(0, -3)}${String(index + 100).padStart(3, '0')}`,
+    id: `${columnId.slice(0, -4)}${columnId.slice(-2)}${String(index).padStart(2, '0')}`,
     property_definition_id: columnId,
     display_order: index,
     created_at: pipeline.createdAt,

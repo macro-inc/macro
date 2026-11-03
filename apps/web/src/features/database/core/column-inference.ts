@@ -31,7 +31,10 @@ export function parseMonetaryInput(
 ): number | undefined {
   const canonical = inferDatabaseNumber(value);
   if (canonical !== undefined) return canonical;
-  const format = new Intl.NumberFormat(locale, { maximumFractionDigits: 20 });
+  const format = new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 20,
+    useGrouping: 'always',
+  });
   const parts = format.formatToParts(-12345.6);
   const decimal = parts.find((part) => part.type === 'decimal')?.value ?? '.';
   const group = parts.find((part) => part.type === 'group')?.value;

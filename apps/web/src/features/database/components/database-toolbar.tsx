@@ -91,9 +91,6 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
   let viewRail: HTMLDivElement | undefined;
   /** Viewers change only what All records shows them; stored views are everyone's. */
   const canChangeView = () => !props.selectedViewId || props.canEdit;
-  const layout = () => props.view.layout;
-  /** Boards and timelines add records from the toolbar; a table has its blank row. */
-  const addsRecords = () => layout().kind !== 'table';
   const viewRename = createInlineRename({
     name: (view: DatabaseView) => view.name,
     rename: (view, name) => props.onRenameView(view, name),
@@ -167,7 +164,9 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
         canChangeView={canChangeView()}
         search={props.search}
         actions={props.actions}
-        onCreateRecord={addsRecords() ? props.onCreateRecord : undefined}
+        // Every layout adds records here: a paged table's blank row only
+        // follows its last page.
+        onCreateRecord={props.onCreateRecord}
         canCreateRecord={props.canCreateRecord}
         creating={props.creating}
         selection={
@@ -180,7 +179,7 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
               <Button
                 ref={allRecordsButton}
                 type="button"
-                variant="outline"
+                variant="secondary"
                 size="md"
                 aria-pressed={!props.selectedViewId}
                 onClick={() => props.onSelectView()}
@@ -246,9 +245,10 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
             <Show when={props.canEdit}>
               <Dropdown placement="bottom-start">
                 <Dropdown.Trigger
+                  aria-label="New view"
+                  tooltip="New view"
                   size="icon-md"
                   variant="ghost"
-                  label="New view"
                   class="ml-1.5 shrink-0"
                   disabled={creating()}
                 >
@@ -388,10 +388,10 @@ function ViewTab(props: {
         <ContextMenu>
           <Tooltip label={props.view.name}>
             <ContextMenu.Trigger
+              tooltip={{ content: undefined, disabled: true }}
               as={Button}
-              variant="outline"
+              variant="secondary"
               size="md"
-              tooltipDisabled
               type="button"
               {...(props.canReorder ? sortable.dragActivators : {})}
               data-view-id={props.view.id}

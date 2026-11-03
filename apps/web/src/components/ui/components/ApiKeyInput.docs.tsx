@@ -15,7 +15,7 @@ function NewKeyDemo() {
         onValueChange={setKey}
         aria-label="Anthropic API key"
       />
-      <Button variant="outline" size="sm" disabled={key().trim() === ''}>
+      <Button variant="secondary" size="sm" disabled={key().trim() === ''}>
         Save
       </Button>
     </div>
@@ -36,7 +36,7 @@ function SavedKeyDemo() {
         onValueChange={setKey}
         aria-label="Anthropic API key"
       />
-      <Button variant="outline" size="sm" disabled={key().trim() === ''}>
+      <Button variant="secondary" size="sm" disabled={key().trim() === ''}>
         Replace
       </Button>
     </div>

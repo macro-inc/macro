@@ -30,12 +30,16 @@ decides who may respond.
   card in the message and sends it. Closing the dialog while it posts sends
   nothing and trashes the poll. With results hidden, respondents answer
   without counts and editors review votes in the Responses tab.
+- Asked for a poll, or for a form for a channel, the Macro agent makes a poll
+  and posts it as its card in one message (its channel reply), the same card
+  `/poll` posts.
 
 ## The form page
 
 Editors see **Build**, **Responses** (with its count), and **Settings** in the
 shared pill tab selector beside the form title in the top bar, kept per split (a split opened with
-`params.view` `responses` or `share` starts there). Viewers (respondents) land on the respond page
+`params.view` `responses` or `share` starts there). On touch devices the tabs sit at the top
+of the page, below the floating header. Viewers (respondents) land on the respond page
 instead. The header's primary button, for owners, is **Publish** (opens sharing)
 until someone responds or the form is shared (public, a channel, the team),
 then **Open form** (respond view in a new split); other editors always see
@@ -54,7 +58,8 @@ question or existing database field to that section, regardless of the current
 selection. Three visible actions sit below the canvas: **Add section** adds a
 question section directly, **Add gate** adds a gate with its inline rule editor
 open, and **Add meeting link** opens the booking-link picker (when scheduling is
-available). Hover a question boundary to reveal a plus that inserts a question
+available). On touch devices these three float above the dock as an **Add**
+menu (Section, Gate, Meeting link) in place of New. Hover a question boundary to reveal a plus that inserts a question
 at that position. Hover between sections to insert a **Section** or **Gate**.
 These controls also appear on keyboard focus and stay visible while their menus
 are open. Meeting links can only be added at the end; adding other sections later
@@ -133,8 +138,14 @@ submitting are not recorded; answers stay in the browser until Submit.
 **Who can respond**: Invited people (sign in, one response each, editable
 while open) or Anyone with the link (anonymous; no file questions). The
 respond link with Copy, Accepting responses, Close automatically, Show results
-to respondents, Confirmation message, and **Manage access** (the share dialog,
-which also shows the audience panel). Anyone with the link: visitors who aren't signed in respond anonymously;
+to respondents, Confirmation message, **Branding**, and **Manage access** (the
+share dialog, which also shows the audience panel). Branding (editors) sets a
+logo (**Upload**/**Replace**/**Remove**, shown above the title), a cover image
+(a banner across the top of the respond page) and an accent color (color
+swatch or `#rrggbb` field, **Reset** for Macro's accent) that colors the
+respond page's buttons and selected answers. Images must be PNG, JPEG,
+WebP or GIF uploaded by the person setting them; nothing set keeps Macro's
+look, and inline form cards in channels never show branding. Anyone with the link: visitors who aren't signed in respond anonymously;
 people signed in to Macro respond as themselves. Roles: View can respond; Edit can change
 questions and also edits the linked database (its response rows and columns)
 through derived access; Owner can also change the audience, close and trash.
@@ -160,7 +171,8 @@ it inside the app shell (sidebar, command menu); anonymous visitors get a
 focused page, so a public form never hits login. Signed in, a respondent
 keeps their identity on either audience and can edit their response while the
 form is open; anonymous visitors cannot. The response page has no top bar:
-it uses the builder’s centered 768px content column, plain title and description,
+it uses the builder’s centered 768px content column, the form's cover image and
+logo when set, plain title and description,
 and questions grouped within a single section card. Public sign-in guidance
 sits below the form. One section per screen with
 **Back / Next**, **Submit** on the last. Required fields keep their asterisks;

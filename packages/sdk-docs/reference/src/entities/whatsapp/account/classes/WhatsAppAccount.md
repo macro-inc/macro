@@ -4,7 +4,7 @@ The current user's WhatsApp account, connected through the Macro app.
 
 ## Extends
 
-- [`MacroEntity`](../../../entity/classes/MacroEntity.md)\<[`LinkedAccount`](../../../../../generated/storage/types.gen/type-aliases/LinkedAccount.md)\>
+- [`MacroEntity`](../../../entity/classes/MacroEntity.md)\<[`WhatsAppAccount`](../../../../../generated/storage/types.gen/type-aliases/WhatsAppAccount.md)\>
 
 ## Properties
 
@@ -13,7 +13,7 @@ The current user's WhatsApp account, connected through the Macro app.
 | <a id="property-id"></a> `id` | `public readonly` | `string` | - | [`MacroEntity`](../../../entity/classes/MacroEntity.md).[`id`](../../../entity/classes/MacroEntity.md#property-id) |
 | <a id="property-identity"></a> `identity` | `readonly` | () => `Promise`\<`string` \| `undefined`\> | Verified remote identity, absent until pairing succeeds. | - |
 | <a id="property-owner"></a> `owner` | `readonly` | () => `Promise`\<[`User`](../../../users/user/classes/User.md)\> | The Macro user who owns this account. | - |
-| <a id="property-state"></a> `state` | `readonly` | () => `Promise`\<[`LinkedAccountState`](../../../../../generated/storage/types.gen/type-aliases/LinkedAccountState.md)\> | Account connection state; call refresh before polling it again. | - |
+| <a id="property-state"></a> `state` | `readonly` | () => `Promise`\<[`WhatsAppAccountState`](../../../../../generated/storage/types.gen/type-aliases/WhatsAppAccountState.md)\> | Account connection state; call refresh before polling it again. | - |
 
 ## Methods
 
@@ -31,15 +31,15 @@ Discard cached connection state and load its current value.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`LinkedAccount`](../../../../../generated/storage/types.gen/type-aliases/LinkedAccount.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`WhatsAppAccount`](../../../../../generated/storage/types.gen/type-aliases/WhatsAppAccount.md); `id`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`LinkedAccount`](../../../../../generated/storage/types.gen/type-aliases/LinkedAccount.md); `id`: `string`; \}
+\{ `detail?`: [`WhatsAppAccount`](../../../../../generated/storage/types.gen/type-aliases/WhatsAppAccount.md); `id`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
-| `detail?` | [`LinkedAccount`](../../../../../generated/storage/types.gen/type-aliases/LinkedAccount.md) |
+| `detail?` | [`WhatsAppAccount`](../../../../../generated/storage/types.gen/type-aliases/WhatsAppAccount.md) |
 | `id` | `string` |
 
 #### Inherited from
@@ -78,7 +78,7 @@ Seed an account handle from an API record.
 | Parameter | Type |
 | ------ | ------ |
 | `client` | `MacroClient` |
-| `record` | [`LinkedAccount`](../../../../../generated/storage/types.gen/type-aliases/LinkedAccount.md) |
+| `record` | [`WhatsAppAccount`](../../../../../generated/storage/types.gen/type-aliases/WhatsAppAccount.md) |
 
 #### Returns
 

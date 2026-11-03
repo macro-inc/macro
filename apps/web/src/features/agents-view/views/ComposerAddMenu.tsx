@@ -8,12 +8,12 @@ import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { isMobile } from '@core/mobile/isMobile';
 import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
 import LightningIcon from '@icon/system/regular/lightning.svg';
-import PaperclipIcon from '@icon/system/regular/paperclip.svg';
 import PlugsIcon from '@icon/system/regular/plugs.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import BooksIcon from '@phosphor/books.svg';
 import { Button, Dialog } from '@ui';
 import { createSignal, lazy, Show, Suspense } from 'solid-js';
+import { agentAttachmentItems } from '../../block-agent/ui/attachment-menu';
 import type { ProviderId } from '../../settings/connections/model';
 import { providerIcon } from '../../settings/connections/provider-meta';
 import { useConnectionsModel } from '../../settings/connections/use-connections-model';
@@ -35,6 +35,8 @@ type Target =
 /** Shared composer actions plus the owner's existing connection settings. */
 export function AgentComposerAddMenu(props: {
   openFiles: () => void;
+  openImages: () => void;
+  imageUnsupportedReason?: string;
   openLibrary: () => void;
   openSkills: () => void;
   getEditor: () => HTMLElement | null | undefined;
@@ -54,13 +56,11 @@ export function AgentComposerAddMenu(props: {
   const groups = (): ComposerAddMenuGroup[] => [
     {
       items: [
-        {
-          id: 'upload',
-          label: 'Add photos & files',
-          description: 'Upload from your device',
-          icon: <PaperclipIcon />,
-          onSelect: props.openFiles,
-        },
+        ...agentAttachmentItems(
+          props.openFiles,
+          props.openImages,
+          props.imageUnsupportedReason
+        ),
         {
           id: 'library',
           label: 'Add from library',
@@ -222,6 +222,10 @@ export function AgentComposerAddMenu(props: {
                     onOpenMacroMcp={() => {
                       setTarget(undefined);
                       settings.openSettings('Agent');
+                    }}
+                    onOpenEmailSettings={() => {
+                      setTarget(undefined);
+                      settings.openSettings('Email');
                     }}
                   />
                 }

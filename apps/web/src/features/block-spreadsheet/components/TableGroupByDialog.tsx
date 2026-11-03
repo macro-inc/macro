@@ -230,7 +230,11 @@ export function TableGroupByDialog(props: {
                     Show all rows
                   </Button>
                 </Show>
-                <Button variant="strong" type="button" onClick={props.onClose}>
+                <Button
+                  variant="secondary"
+                  type="button"
+                  onClick={props.onClose}
+                >
                   Close
                 </Button>
               </div>

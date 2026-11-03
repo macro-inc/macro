@@ -114,4 +114,16 @@ pub(super) fn render_footer(frame: &mut Frame, app: &App, area: Rect) {
         Line::from(spans)
     };
     frame.render_widget(Paragraph::new(line), area);
+    // Bottom right, under everything else: Windows installs an update for
+    // the next launch rather than restarting into it.
+    if let Some(tag) = &app.update_ready {
+        frame.render_widget(
+            Paragraph::new(Line::styled(
+                format!("Update {tag} ready — restart macrod to use it "),
+                Style::new().fg(OK),
+            ))
+            .alignment(ratatui::layout::Alignment::Right),
+            area,
+        );
+    }
 }

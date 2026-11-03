@@ -6,22 +6,21 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { queryReadyGate } from '@queries/gate';
 import {
   refreshWhatsappLinkedAccount,
-  useAdoptWhatsappGroupMutation,
+  useAddWhatsappChatMutation,
   useCancelWhatsappPairingMutation,
   useConnectWhatsappMutation,
   useDisconnectWhatsappMutation,
+  useLookUpWhatsappNumberMutation,
   useSubmitWhatsappPasskeyMutation,
   useWhatsappLinkedAccountQuery,
   useWhatsappLinkedChatsQuery,
   useWhatsappLinkedPairingQuery,
 } from '@queries/whatsapp-linked';
-import {
-  traceWhatsappLoad,
-  type WhatsappLoadResult,
-} from '@queries/whatsapp-linked/operation';
+import { type LoadResult, traceLoad } from '@queries/whatsapp-linked/operation';
 import type { UseQueryResult } from '@tanstack/solid-query';
-import { ResultAsync } from 'neverthrow';
+import { err, ok, type Result, ResultAsync } from 'neverthrow';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
+import { match, P } from 'ts-pattern';
 import type {
   OpenSections,
   PasskeyCapability,
@@ -30,8 +29,9 @@ import type {
   WhatsAppLinkedCapabilities,
 } from '../context/whatsapp-linked-context';
 import { accountStatus, type WhatsAppAccount } from '../core/account';
-import type { AdoptFailure } from '../core/adopt';
+import type { AddFailure } from '../core/add';
 import type { WhatsAppChat } from '../core/chat';
+import type { NewChatFailure } from '../core/new-chat';
 import {
   authenticateWhatsAppPasskey,
   canAuthenticatePasskey,
@@ -39,7 +39,7 @@ import {
 } from './authenticator';
 import {
   decodeAccount,
-  decodeAdoptRefusal,
+  decodeAddRefusal,
   decodeChats,
   decodePairing,
 } from './decode';
@@ -71,7 +71,7 @@ function sourceRead<Wire, Value>(
 function pageLoad(
   account: SourceRead<WhatsAppAccount | null>,
   chats: SourceRead<WhatsAppChat[]> | undefined
-): WhatsappLoadResult | undefined {
+): LoadResult | undefined {
   if (account.isError) return { outcome: 'error' };
   if (account.data === undefined) return;
   if (accountStatus(account.data).kind !== 'connected')
@@ -93,7 +93,7 @@ function pageLoad(
 
 /** The WhatsApp page's capabilities, from the shared linked-device queries. */
 export function createWhatsAppLinkedCapabilities(host: {
-  openGroup: (groupId: string) => void;
+  openChat: (chatId: string) => void;
   sections: OpenSections;
 }): WhatsAppLinkedCapabilities {
   const user = useUserId();
@@ -101,7 +101,8 @@ export function createWhatsAppLinkedCapabilities(host: {
   const connect = useConnectWhatsappMutation();
   const disconnect = useDisconnectWhatsappMutation();
   const cancel = useCancelWhatsappPairingMutation();
-  const adopt = useAdoptWhatsappGroupMutation();
+  const add = useAddWhatsappChatMutation();
+  const lookUp = useLookUpWhatsappNumberMutation();
   const submitPasskey = useSubmitWhatsappPasskeyMutation();
   const passkey: PasskeyCapability = canAuthenticatePasskey()
     ? {
@@ -127,7 +128,7 @@ export function createWhatsAppLinkedCapabilities(host: {
     (view) => decodeAccount(view.account)
   );
   const [chatsRead, setChatsRead] = createSignal<SourceRead<WhatsAppChat[]>>();
-  traceWhatsappLoad('page.load', () => pageLoad(account, chatsRead()));
+  traceLoad('whatsapp.page.load', () => pageLoad(account, chatsRead()));
   return {
     sections: host.sections,
     account,
@@ -165,16 +166,45 @@ export function createWhatsAppLinkedCapabilities(host: {
           remoteUnlinkRequested: result.remoteUnlinkRequested,
         })
       ),
-    adopt: (groupJid) =>
+    add: (chat) =>
       ResultAsync.fromPromise(
-        adopt.mutateAsync({ groupJid }),
-        (error): AdoptFailure => ({
-          kind: 'adopt-failed',
-          ...decodeAdoptRefusal(error),
+        add.mutateAsync({ jid: chat.jid, kind: chat.kind }),
+        (error): AddFailure => ({
+          kind: 'add-failed',
+          ...decodeAddRefusal(error),
         })
-      ).map((binding) => ({ groupId: binding.groupId })),
+      ).map((added) => ({ chatId: added.chatId })),
+    startChat: (phoneNumber) =>
+      ResultAsync.fromPromise(
+        lookUp.mutateAsync(phoneNumber),
+        (error): NewChatFailure => ({
+          reason: 'lookup-refused',
+          refusal: decodeAddRefusal(error),
+        })
+      )
+        .andThen((lookup) =>
+          match(lookup)
+            .returnType<Result<string, NewChatFailure>>()
+            .with({ state: 'found', chatJid: P.string }, ({ chatJid }) =>
+              ok(chatJid)
+            )
+            .with({ state: 'not_on_whatsapp' }, () =>
+              err({ reason: 'not-on-whatsapp', phoneNumber })
+            )
+            .otherwise(() => err({ reason: 'no-answer' }))
+        )
+        .andThen((jid) =>
+          ResultAsync.fromPromise(
+            add.mutateAsync({ jid, kind: 'direct' }),
+            (error): NewChatFailure => ({
+              reason: 'add-refused',
+              refusal: decodeAddRefusal(error),
+            })
+          )
+        )
+        .map((added) => ({ chatId: added.chatId })),
     isConnecting: () => connect.isPending,
     isDisconnecting: () => disconnect.isPending,
-    openGroup: host.openGroup,
+    openChat: host.openChat,
   };
 }

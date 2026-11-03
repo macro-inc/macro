@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::models::sort::DynamicSortValue;
 use crate::outbound::pg_soup_repo::expanded::dynamic::{
     ExpandedDynamicCursorArgs, GroupedDynamicCursorArgs, expanded_dynamic_cursor_soup,
     expanded_dynamic_cursor_soup_grouped,
@@ -16,7 +17,7 @@ use item_filters::ast::{
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_grouping::{GroupByField, GroupingConfig};
-use models_pagination::{Identify, Query, SimpleSortMethod};
+use models_pagination::{Cursor, CursorVal, Identify, Query, SimpleSortMethod};
 use models_properties::service::property_value::PropertyValue;
 use models_soup::database_row::SoupDatabaseRow;
 use std::sync::Arc;
@@ -64,7 +65,7 @@ async fn page(
         ExpandedDynamicCursorArgs {
             user_id,
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filter),
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filter),
             exclude_frecency: false,
         },
     )
@@ -80,7 +81,7 @@ async fn a_viewer_reads_the_won_deals_of_one_table(pool: PgPool) {
             user_id: MacroUserIdStr::parse_from_str("macro|viewer@databases.test").unwrap(),
             limit: 20,
             cursor: Query::Sort(
-                SimpleSortMethod::CreatedAt,
+                SimpleSortMethod::CreatedAt.into(),
                 EntityFilterAst {
                     database_row_filter: Some(Arc::new(Expr::val(DatabaseRowLiteral::TableId(
                         DEALS,
@@ -163,12 +164,62 @@ async fn rows_stay_out_of_queries_that_name_no_table(pool: PgPool) {
         page(
             &pool,
             viewer(),
+            rows_of(Some(Expr::is_not(Expr::val(DatabaseRowLiteral::Include))))
+        )
+        .await
+        .is_empty()
+    );
+    assert!(
+        page(
+            &pool,
+            viewer(),
             rows_of(Some(Expr::is_not(Expr::val(DatabaseRowLiteral::TableId(
                 CONTACTS
             ))))),
         )
         .await
         .is_empty()
+    );
+}
+
+#[sqlx::test(fixtures("test/database_rows.sql"), migrator = "MACRO_DB_MIGRATIONS")]
+async fn include_reads_all_accessible_tables_but_not_private_rows(pool: PgPool) {
+    let include = Some(Expr::val(DatabaseRowLiteral::Include));
+    assert_eq!(
+        page(&pool, viewer(), rows_of(include.clone()))
+            .await
+            .iter()
+            .map(Identify::id)
+            .collect::<Vec<_>>(),
+        vec![
+            Uuid::from_u128(0x70000000_0000_0000_0000_000000000004),
+            DEAL_3,
+            DEAL_2,
+            DEAL_1,
+        ]
+    );
+    assert_eq!(
+        page(&pool, stranger(), rows_of(include))
+            .await
+            .iter()
+            .map(Identify::id)
+            .collect::<Vec<_>>(),
+        vec![NOTE]
+    );
+    assert_eq!(
+        page(
+            &pool,
+            viewer(),
+            rows_of(Some(Expr::and(
+                Expr::val(DatabaseRowLiteral::Include),
+                Expr::is_not(Expr::val(DatabaseRowLiteral::TableId(CONTACTS))),
+            ))),
+        )
+        .await
+        .iter()
+        .map(Identify::id)
+        .collect::<Vec<_>>(),
+        vec![DEAL_3, DEAL_2, DEAL_1]
     );
 }
 
@@ -205,7 +256,7 @@ async fn deals_grouped_by_stage_count_each_option(pool: PgPool) {
             user_id: viewer(),
             limit: 20,
             cursor: Query::Sort(
-                SimpleSortMethod::CreatedAt,
+                SimpleSortMethod::CreatedAt.into(),
                 rows_of(Some(Expr::val(DatabaseRowLiteral::TableId(DEALS)))),
             ),
             exclude_frecency: false,
@@ -213,6 +264,7 @@ async fn deals_grouped_by_stage_count_each_option(pool: PgPool) {
                 field: GroupByField::Property {
                     property_definition_id: STAGE,
                     entity_type: Some("DATABASE_ROW".into()),
+                    bucketing: None,
                 },
                 group_key: None,
                 per_group_limit: None,
@@ -282,6 +334,78 @@ async fn a_row_carries_every_cell_as_a_property(pool: PgPool) {
     assert_eq!(
         cells,
         vec![(STAGE, Some(PropertyValue::SelectOption(vec![WON])))]
+    );
+}
+
+#[sqlx::test(fixtures("test/database_rows.sql"), migrator = "MACRO_DB_MIGRATIONS")]
+async fn detail_joins_accept_mixed_soup_ids(pool: PgPool) {
+    for detail in [
+        include_str!("../expanded/dynamic/database_row_detail.sql"),
+        include_str!("../expanded/dynamic/database_row_grouped_detail.sql"),
+    ] {
+        // Exercise the production fragments; SQLx cannot expand include_str! inside SQL.
+        let query = format!(
+            "WITH TopItems(item_type, id, sort_ts, sort_key, group_key, group_order, group_total_count, row_in_group) AS (
+                VALUES
+                    ('chat', 'legacy-chat-id', now(), 0::double precision, 'group', NULL::text, 3::bigint, 1::bigint),
+                    ('project', '70000000-0000-0000-0000-000000000001', now(), 0, 'group', NULL, 3, 2),
+                    ('database_row', '70000000-0000-0000-0000-000000000003', now(), 0, 'group', NULL, 3, 3)
+            ), GroupedItems AS (SELECT * FROM TopItems), details AS ({detail})
+            SELECT id FROM details"
+        );
+        let ids: Vec<String> = sqlx::query_scalar(&query).fetch_all(&pool).await.unwrap();
+        assert_eq!(ids, vec!["70000000-0000-0000-0000-000000000003"]);
+    }
+}
+
+#[sqlx::test(fixtures("test/database_rows.sql"), migrator = "MACRO_DB_MIGRATIONS")]
+async fn created_cursor_pages_equal_timestamps_without_skipping_rows(pool: PgPool) {
+    sqlx::query!(
+        "UPDATE database_rows SET created_at = '2026-01-03T00:00:00Z' WHERE table_id = $1",
+        DEALS
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let filter = rows_of(Some(Expr::val(DatabaseRowLiteral::TableId(DEALS))));
+    let first = expanded_dynamic_cursor_soup(
+        &pool,
+        ExpandedDynamicCursorArgs {
+            user_id: viewer(),
+            limit: 2,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filter.clone()),
+            exclude_frecency: false,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        first.iter().map(Identify::id).collect::<Vec<_>>(),
+        vec![DEAL_3, DEAL_2]
+    );
+
+    let second = expanded_dynamic_cursor_soup(
+        &pool,
+        ExpandedDynamicCursorArgs {
+            user_id: viewer(),
+            limit: 2,
+            cursor: Query::Cursor(Cursor {
+                id: DEAL_2,
+                limit: 2,
+                val: CursorVal {
+                    sort_type: SimpleSortMethod::CreatedAt.into(),
+                    last_val: DynamicSortValue::Timestamp("2026-01-03T00:00:00Z".parse().unwrap()),
+                },
+                filter,
+            }),
+            exclude_frecency: false,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        second.iter().map(Identify::id).collect::<Vec<_>>(),
+        vec![DEAL_1]
     );
 }
 

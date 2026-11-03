@@ -14,9 +14,10 @@ export function AvailabilityTopBar(props: {
     <div class="flex min-w-0 items-center gap-2">
       <Show when={props.editing}>
         <Button
+          aria-label="Back to availability"
+          tooltip="Back to availability"
           variant="ghost"
           size="icon-sm"
-          label="Back to availability"
           disabled={props.disabled}
           onClick={props.onBack}
         >
@@ -33,9 +34,9 @@ export function AvailabilityTopBar(props: {
         </ViewSidebar.Title>
         <Show when={!props.editing}>
           <Button
+            aria-label="About availability"
             variant="ghost"
             size="icon-sm"
-            label="About availability"
             tooltip="Set your available hours and make exceptions for specific dates."
           >
             <Info class="size-4 text-ink-muted" />

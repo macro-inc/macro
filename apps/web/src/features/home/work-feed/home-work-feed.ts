@@ -39,8 +39,8 @@ import type {
   HomeDataSourceItem,
 } from '../queries/use-home-query';
 import type { HomeViewState } from '../types';
-import type { WorkFeedScope } from './core/work-feed';
-import { homeWorkFeedScope } from './home-scope';
+import { type WorkFeedScope, workFeedEntityKey } from './core/work-feed';
+import { homeWorkFeedPageState, homeWorkFeedScope } from './home-scope';
 import { createWorkFeed } from './primitives/work-feed';
 
 /** Scope sent when the type filters leave nothing to show; never fetched. */
@@ -58,8 +58,9 @@ export type WorkFeedHomeDataSource = HomeDataSource & {
 /**
  * Desktop Home Signal backed by the server work feed: one cursor over
  * attention and own work, server-stacked notifications, live changes
- * written into the cached pages, and item-level done. Facets narrow server-side by type; the read
- * filter keeps Home's admission behavior client-side.
+ * written into the cached pages, and item-level done. The type and read
+ * facets narrow pages server-side; the read facet also runs client-side,
+ * where Home's admission keeps a row that turns read while shown.
  */
 export function useWorkFeedHomeDataSource(
   state: Pick<HomeViewState, 'tab' | 'groupBy' | 'facets'>,
@@ -82,6 +83,7 @@ export function useWorkFeedHomeDataSource(
     client: () => getGraphqlSoupClient(),
     cacheHost: getGraphqlCacheHost,
     scope: () => scope() ?? EMPTY_SCOPE,
+    state: () => homeWorkFeedPageState(state.facets.read),
     enabled,
     onReconnected: subscribeGraphqlSoupReconnected,
     revalidateNotifications: revalidateNotificationReaders,
@@ -94,6 +96,18 @@ export function useWorkFeedHomeDataSource(
   });
 
   const facetContext = (): HomeFacetContext => ({ notificationSource });
+  // The server filtered pages by this state; admitting by the same state
+  // keeps the read facet from dropping rows the server and the
+  // notifications disagree on, such as an unseen channel invite.
+  const unseen = createMemo(
+    () =>
+      new Set(
+        feed
+          .entries()
+          .filter((entry) => entry.state === 'unseen')
+          .map((entry) => workFeedEntityKey(entry.entity))
+      )
+  );
   const entities = createMemo<HomeAdmission>(
     (previous) =>
       admitHomeEntities(previous, {
@@ -109,6 +123,7 @@ export function useWorkFeedHomeDataSource(
         tab: state.tab,
         facets: state.facets,
         facetContext: facetContext(),
+        isUnread: (entity) => unseen().has(workFeedEntityKey(entity)),
       }),
     emptyHomeAdmission()
   );
@@ -127,8 +142,11 @@ export function useWorkFeedHomeDataSource(
 
   return {
     items,
+    // A filter change keeps the previous pages until the new ones arrive;
+    // while none of their rows pass the new filter, the list is loading,
+    // not empty.
     isLoading: () =>
-      enabled() && feed.query.isLoading && entities().items.length === 0,
+      enabled() && feed.query.isFetching && entities().items.length === 0,
     isFetching: () => enabled() && feed.query.isFetching,
     isLoadingMore: () => enabled() && feed.query.isFetchingNextPage,
     hasMore,

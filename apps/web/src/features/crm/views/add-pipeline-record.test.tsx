@@ -11,7 +11,7 @@ import type { DatabaseViewColumn } from '../../database/core/database-view';
 import { AddPipelineRecordDialog } from './add-pipeline-record';
 
 const crm = vi.hoisted(() => ({
-  createCompany: vi.fn(async (_input: { name: string; domain: string }) => ({
+  createCompany: vi.fn(async (_input: { name: string; domain?: string }) => ({
     id: 'new-company',
   })),
   createContact: vi.fn(),
@@ -213,6 +213,9 @@ describe('AddPipelineRecordDialog', () => {
     await userEvent.click(
       await screen.findByRole('option', { name: 'Add company “Initech”' })
     );
+    fireEvent.input(screen.getByRole('textbox', { name: 'Domain' }), {
+      target: { value: 'https://invalid' },
+    });
     fireEvent.click(screen.getByRole('button', { name: /^Add deal/ }));
     expect(screen.getByRole('alert').textContent).toBe(
       'Enter a valid domain like acme.com'

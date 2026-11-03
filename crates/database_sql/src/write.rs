@@ -30,9 +30,9 @@ pub(crate) enum Sent {
 }
 
 /// `INSERT`: every row in one op. Labels name options the column has.
-pub(crate) fn insert(catalog: &Catalog, query: &InsertQuery) -> DatabaseOp {
-    let table = table(catalog, query.table);
-    DatabaseOp::Rows {
+pub(crate) fn insert(catalog: &Catalog, query: &InsertQuery) -> Result<DatabaseOp, RunError> {
+    let table = table(catalog, query.table)?;
+    Ok(DatabaseOp::Rows {
         table: query.table,
         change: RowsChange::Insert {
             rows: query
@@ -42,17 +42,17 @@ pub(crate) fn insert(catalog: &Catalog, query: &InsertQuery) -> DatabaseOp {
                     cells
                         .iter()
                         .map(|(definition, value)| {
-                            let column = column(table, *definition);
-                            CellWrite {
+                            let column = column(table, *definition)?;
+                            Ok(CellWrite {
                                 column: column.placement,
-                                value: cell_value(column, Some(value)),
-                            }
+                                value: cell_value(column, Some(value))?,
+                            })
                         })
                         .collect()
                 })
-                .collect(),
+                .collect::<Result<_, RunError>>()?,
         },
-    }
+    })
 }
 
 /// `UPDATE` of the rows its read found: the same cells for every row when
@@ -62,46 +62,49 @@ pub(crate) fn update(
     catalog: &Catalog,
     query: &UpdateQuery,
     found: &Outcome,
-) -> Option<DatabaseOp> {
+) -> Result<Option<DatabaseOp>, RunError> {
     if found.row_ids.is_empty() {
-        return None;
+        return Ok(None);
     }
-    let table = table(catalog, query.table);
+    let table = table(catalog, query.table)?;
     let uniform = query
         .assignments
         .iter()
         .all(|assignment| matches!(assignment.value, Assigned::Value(_)));
-    let cells = |row: &[Option<Cell>]| -> Vec<CellWrite> {
+    let cells = |row: &[Option<Cell>]| -> Result<Vec<CellWrite>, RunError> {
         query
             .assignments
             .iter()
             .map(|assignment| {
-                let target = column(table, assignment.column);
+                let target = column(table, assignment.column)?;
                 let value = match &assignment.value {
-                    Assigned::Value(value) => cell_value(target, value.as_ref()),
+                    Assigned::Value(value) => cell_value(target, value.as_ref())?,
                     Assigned::Column(definition) => {
-                        let item = query
+                        let copied = query
                             .read
                             .items
                             .iter()
                             .position(|item| {
                                 *item == SelectItem::Column(column_key(0, *definition))
                             })
-                            .expect("the read selects every copied column");
-                        copied_value(target, column(table, *definition), row[item].as_ref())
+                            .and_then(|item| row.get(item))
+                            .ok_or(RunError::Internal {
+                                invariant: "an update's read selects every copied column",
+                            })?;
+                        copied_value(target, column(table, *definition)?, copied.as_ref())?
                     }
                 };
-                CellWrite {
+                Ok(CellWrite {
                     column: target.placement,
                     value,
-                }
+                })
             })
             .collect()
     };
     let changes = if uniform {
         RowChanges::Uniform {
             rows: found.row_ids.clone(),
-            cells: cells(&[]),
+            cells: cells(&[])?,
         }
     } else {
         RowChanges::PerRow {
@@ -109,17 +112,19 @@ pub(crate) fn update(
                 .row_ids
                 .iter()
                 .zip(&found.rows)
-                .map(|(row, values)| RowChange {
-                    row: *row,
-                    cells: cells(values),
+                .map(|(row, values)| {
+                    Ok(RowChange {
+                        row: *row,
+                        cells: cells(values)?,
+                    })
                 })
-                .collect(),
+                .collect::<Result<_, RunError>>()?,
         }
     };
-    Some(DatabaseOp::Rows {
+    Ok(Some(DatabaseOp::Rows {
         table: query.table,
         change: RowsChange::Update { changes },
-    })
+    }))
 }
 
 /// `DELETE` of the rows its read found; `None` when it found nothing.
@@ -133,12 +138,15 @@ pub(crate) fn delete(table: TableId, found: &Outcome) -> Option<DatabaseOp> {
 }
 
 /// `ALTER COLUMN … TYPE`.
-pub(crate) fn alter(catalog: &Catalog, query: &AlterColumnTypeQuery) -> DatabaseOp {
-    DatabaseOp::Column {
+pub(crate) fn alter(
+    catalog: &Catalog,
+    query: &AlterColumnTypeQuery,
+) -> Result<DatabaseOp, RunError> {
+    Ok(DatabaseOp::Column {
         table: query.table,
-        column: column(table(catalog, query.table), query.column).placement,
+        column: column(table(catalog, query.table)?, query.column)?.placement,
         change: ColumnChange::ChangeType { to: query.to },
-    }
+    })
 }
 
 /// The outcome the results of what was sent make.
@@ -194,48 +202,55 @@ pub(crate) fn outcome(sent: &Sent, results: &[OpResult]) -> Result<Outcome, RunE
     }
 }
 
-fn table(catalog: &Catalog, id: TableId) -> &Table {
+fn table(catalog: &Catalog, id: TableId) -> Result<&Table, RunError> {
     catalog
         .tables
         .iter()
         .find(|table| table.id == id)
-        .expect("the statement was resolved against this catalog")
+        .ok_or(RunError::TableNotInCatalog { table: id })
 }
 
-fn column(table: &Table, definition: Uuid) -> &Column {
+fn column(table: &Table, definition: Uuid) -> Result<&Column, RunError> {
     table
         .columns
         .iter()
         .find(|column| column.id == definition)
-        .expect("the statement was resolved against this catalog")
+        .ok_or(RunError::ColumnNotInTable {
+            table: table.id,
+            column: definition,
+        })
 }
 
 /// A typed literal as the cell value it writes; `None` clears the cell.
-fn cell_value(column: &Column, value: Option<&Value>) -> CellValue {
+fn cell_value(column: &Column, value: Option<&Value>) -> Result<CellValue, RunError> {
     let Some(value) = value else {
-        return CellValue::Clear;
+        return Ok(CellValue::Clear);
     };
-    match value {
+    Ok(match value {
         Value::Text(text) if column.kind == ColumnKind::Link => CellValue::Link(vec![text.clone()]),
         Value::Text(text) => CellValue::Text(text.clone()),
         Value::Number(number) => CellValue::Number(*number),
         Value::Bool(checked) => CellValue::Boolean(*checked),
         Value::Date(date) => CellValue::Date(*date),
         Value::DateRange(range) => CellValue::DateRange(*range),
-        Value::Option(id) => options(column, std::slice::from_ref(id)),
-        Value::Options(ids) => options(column, ids),
-        Value::Entity(id) => references(column, std::slice::from_ref(id)),
-        Value::Entities(ids) => references(column, ids),
-    }
+        Value::Option(id) => options(column, std::slice::from_ref(id))?,
+        Value::Options(ids) => options(column, ids)?,
+        Value::Entity(id) => references(column, std::slice::from_ref(id))?,
+        Value::Entities(ids) => references(column, ids)?,
+    })
 }
 
 /// Another column's cell, as the value it writes into `target`; the resolver
 /// allows only columns of the same kind.
-fn copied_value(target: &Column, source: &Column, cell: Option<&Cell>) -> CellValue {
+fn copied_value(
+    target: &Column,
+    source: &Column,
+    cell: Option<&Cell>,
+) -> Result<CellValue, RunError> {
     let Some(cell) = cell else {
-        return CellValue::Clear;
+        return Ok(CellValue::Clear);
     };
-    match cell {
+    Ok(match cell {
         Cell::Text(text) if target.kind == ColumnKind::Link => {
             CellValue::Link(text.split_whitespace().map(str::to_owned).collect())
         }
@@ -244,21 +259,23 @@ fn copied_value(target: &Column, source: &Column, cell: Option<&Cell>) -> CellVa
         Cell::Bool(checked) => CellValue::Boolean(*checked),
         Cell::Date(date) => CellValue::Date(*date),
         Cell::DateRange(range) => CellValue::DateRange(*range),
-        Cell::Options(ids) => options(source, ids),
-        Cell::Entities(ids) => references(target, ids),
-        Cell::Row(id) => references(target, &[id.to_string()]),
-    }
+        Cell::Options(ids) => options(source, ids)?,
+        Cell::Entities(ids) => references(target, ids)?,
+        Cell::Row(id) => references(target, &[id.to_string()])?,
+    })
 }
 
 /// Options by label, the way a statement names them.
-fn options(column: &Column, ids: &[OptionId]) -> CellValue {
+fn options(column: &Column, ids: &[OptionId]) -> Result<CellValue, RunError> {
     let ColumnKind::Select {
         options: labels, ..
     } = &column.kind
     else {
-        unreachable!("only select columns hold options")
+        return Err(RunError::MismatchedValue {
+            column: column.name.clone(),
+        });
     };
-    CellValue::Options(
+    Ok(CellValue::Options(
         ids.iter()
             .map(|id| {
                 labels
@@ -269,15 +286,17 @@ fn options(column: &Column, ids: &[OptionId]) -> CellValue {
                     })
             })
             .collect(),
-    )
+    ))
 }
 
 /// Entity references, or related rows for a relation.
-fn references(column: &Column, ids: &[String]) -> CellValue {
+fn references(column: &Column, ids: &[String]) -> Result<CellValue, RunError> {
     let ColumnKind::Entity { target, .. } = column.kind else {
-        unreachable!("only entity columns hold references")
+        return Err(RunError::MismatchedValue {
+            column: column.name.clone(),
+        });
     };
-    match OpEntityKind::try_from(target) {
+    Ok(match OpEntityKind::try_from(target) {
         Ok(entity_type) => CellValue::Entities(
             ids.iter()
                 .map(|id| EntityRef {
@@ -291,5 +310,5 @@ fn references(column: &Column, ids: &[String]) -> CellValue {
                 .filter_map(|id| id.parse::<RowId>().ok())
                 .collect(),
         ),
-    }
+    })
 }

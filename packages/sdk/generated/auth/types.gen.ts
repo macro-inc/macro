@@ -57,8 +57,9 @@ export type AutoReloadDefaults = {
  */
 export type AutoReloadMonthlyBudget = {
     /**
-     * Reloads paid, pending, or failed with an invoice that can still collect.
-     * Customer cents; manual credit purchases do not count.
+     * Reloads and one-time card purchases paid, pending, or failed with an
+     * invoice that can still collect. Customer cents; Checkout purchases do
+     * not count.
      */
     committed_cents: number;
     /**
@@ -334,6 +335,11 @@ export type CreatePortalSessionRequest = {
  */
 export type CreateTeamRequest = {
     /**
+     * Whether colleagues who sign up with the owner's work email domain join
+     * the team automatically. Ignored for generic email providers.
+     */
+    allow_domain_join?: boolean;
+    /**
      * The name of the team
      */
     name: string;
@@ -376,6 +382,68 @@ export type CreditCheckoutResponse = {
      * The hosted Checkout URL to redirect to.
      */
     url: string;
+};
+
+/**
+ * Request body for [`purchase_credits_handler`].
+ */
+export type CreditPurchaseRequestBody = {
+    /**
+     * One of the catalog's credit packs, cents.
+     */
+    amountCents: number;
+};
+
+/**
+ * Response for [`purchase_credits_handler`].
+ */
+export type CreditPurchaseResponse = {
+    /**
+     * Amount charged, cents: the requested pack, unless an earlier declined
+     * purchase that Stripe collected in the meantime was booked instead.
+     */
+    amountCents: number;
+    snapshot?: null | UsageSnapshot;
+    /**
+     * Whether the card on file paid.
+     */
+    status: CreditPurchaseStatus;
+};
+
+/**
+ * The monthly credit limit that applies to this user's one-time purchases.
+ */
+export type CreditPurchaseSnapshot = {
+    /**
+     * Charged this month so far, including charges that may still collect.
+     */
+    committed_cents: number;
+    /**
+     * Most credits charged to the card on file per UTC calendar month, from
+     * automatic reloads and one-time purchases together, in customer cents.
+     * `null` when the payer set no limit; team members always have one.
+     */
+    monthly_limit_cents?: number | null;
+    /**
+     * Start of the next UTC calendar month.
+     */
+    resets_at: string;
+};
+
+/**
+ * How a one-time credit purchase charged to the card on file ended.
+ */
+export type CreditPurchaseStatus = 'paid' | 'declined' | 'payment_method_required' | 'authentication_required';
+
+/**
+ * The status every user sees, without who set it.
+ */
+export type CurrentSystemStatus = SystemStatus & {
+    /**
+     * When it was set; absent when no status was ever set. Clients keep the
+     * newest status they have seen, whether fetched or pushed.
+     */
+    updatedAt?: string | null;
 };
 
 /**
@@ -446,10 +514,14 @@ export type CursorModelsResponse = {
 export type DenyReason = 'allowance_exhausted' | 'free_allowance_exhausted' | 'overage_limit_reached' | 'overage_payment_failed';
 
 /**
- * Actual deployment availability for the provider selector.
+ * What the provider selector offers the requesting user.
  */
 export type EmailConnectionProviders = {
     gmail: boolean;
+    /**
+     * Whether this user may start a new Outlook connection: the deployment
+     * switch and their `enable-outlook` flag.
+     */
     outlook: boolean;
     /**
      * Where a Microsoft 365 administrator approves Macro for their whole
@@ -924,6 +996,13 @@ export type GithubPullRequestReview = {
 export type GithubPullRequestReviewState = 'approved' | 'changes_requested' | 'commented' | 'dismissed';
 
 /**
+ * Whether a pull request is open or closed, as a user sets it. Merging is a
+ * separate action, so unlike `GithubPullRequestStatus` there is no merged
+ * state.
+ */
+export type GithubPullRequestState = 'open' | 'closed';
+
+/**
  * The normalized lifecycle status for a GitHub pull request.
  */
 export type GithubPullRequestStatus = 'open' | 'closed' | 'merged';
@@ -1363,6 +1442,11 @@ export type Permission = {
  */
 export type PlanCatalogEntry = {
     /**
+     * Monthly automatic reload limit a payer on this plan starts from,
+     * cents. Absent for plans that cannot reload.
+     */
+    auto_reload_default_monthly_limit_cents?: number | null;
+    /**
      * Included AI per seat per period, in cents at provider cost. For the
      * free plan this is its monthly hard cap.
      */
@@ -1543,6 +1627,16 @@ export type ScheduledSeatPlan = {
 export type SeatPlan = 'premium' | 'max';
 
 /**
+ * Response for the domain notice endpoint.
+ */
+export type SendDomainNoticeResponse = {
+    /**
+     * How many colleagues were emailed by this call.
+     */
+    sent: number;
+};
+
+/**
  * The body which is used to describe the recipient email
  */
 export type SendInviteBody = {
@@ -1600,11 +1694,62 @@ export type SetGithubPullRequestDraftResponse = {
     pullRequest?: null | EnrichedGithubPullRequest;
 };
 
+/**
+ * A request to close one pull request, or reopen it, on the user's behalf.
+ */
+export type SetGithubPullRequestStateRequest = {
+    /**
+     * The GitHub pull request number.
+     */
+    number: number;
+    /**
+     * The GitHub repository owner or organization.
+     */
+    owner: string;
+    /**
+     * The GitHub repository name.
+     */
+    repo: string;
+    /**
+     * `closed` closes the pull request; `open` reopens it.
+     */
+    state: GithubPullRequestState;
+};
+
+/**
+ * Response body for a pull request that was closed or reopened.
+ */
+export type SetGithubPullRequestStateResponse = {
+    pullRequest?: null | EnrichedGithubPullRequest;
+    /**
+     * Whether the pull request is now open or closed.
+     */
+    state: GithubPullRequestState;
+};
+
 export type SsoRequiredResponse = {
     /**
      * The idp_id you need to perform sso login with.
      */
     idp_id: string;
+};
+
+/**
+ * One status a staff member set. The newest is the current status.
+ */
+export type StatusUpdate = SystemStatus & {
+    /**
+     * When it was set.
+     */
+    createdAt: string;
+    /**
+     * UUIDv7, so ids sort by creation.
+     */
+    id: string;
+    /**
+     * The staff member who set it.
+     */
+    userId: string;
 };
 
 /**
@@ -1626,6 +1771,35 @@ export type SubscriptionStatus = {
      */
     renewalDate?: string | null;
     scheduledChange?: null | ScheduledSeatPlan;
+};
+
+/**
+ * The platform status. Only the non-operational statuses carry a message.
+ */
+export type SystemStatus = {
+    status: 'operational';
+} | {
+    /**
+     * What users should know.
+     */
+    message: string;
+    status: 'degraded';
+} | {
+    /**
+     * What users should know.
+     */
+    message: string;
+    status: 'major_outage';
+};
+
+/**
+ * Recent status updates, newest first.
+ */
+export type SystemStatusHistory = {
+    /**
+     * The updates.
+     */
+    updates: Array<StatusUpdate>;
 };
 
 /**
@@ -1875,6 +2049,26 @@ export type UpdateOverageRequest = {
 };
 
 /**
+ * What kind of upstream failure a 502 or 503 reports, for clients that
+ * branch on it.
+ */
+export type UpstreamErrorCode = 'upstream_unavailable' | 'upstream_rate_limited' | 'upstream_invalid_response';
+
+/**
+ * The body of a 502 or 503 caused by a third-party service.
+ */
+export type UpstreamErrorResponse = {
+    /**
+     * The kind of failure.
+     */
+    code: UpstreamErrorCode;
+    /**
+     * What failed and what to do about it, written for the user.
+     */
+    message: string;
+};
+
+/**
  * The payer's current-period position, as shown in Billing settings and used
  * by the gate.
  */
@@ -1893,6 +2087,7 @@ export type UsageSnapshot = {
      * Shared prepaid credit balance, in customer cents.
      */
     credit_balance_cents: number;
+    credit_purchase?: null | CreditPurchaseSnapshot;
     /**
      * Shared payer credits already applied to this period, in customer cents.
      */
@@ -2189,6 +2384,47 @@ export type CreateAiCreditCheckoutResponses = {
 };
 
 export type CreateAiCreditCheckoutResponse = CreateAiCreditCheckoutResponses[keyof CreateAiCreditCheckoutResponses];
+
+export type PurchaseAiCreditsData = {
+    body: CreditPurchaseRequestBody;
+    path?: never;
+    query?: never;
+    url: '/ai-billing/credits/purchase';
+};
+
+export type PurchaseAiCreditsErrors = {
+    /**
+     * Invalid pack or no payment account
+     */
+    400: AiBillingErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * A paid plan is required
+     */
+    402: AiBillingErrorBody;
+    /**
+     * Over the monthly credit limit, or an earlier purchase is still processing
+     */
+    409: AiBillingErrorBody;
+    /**
+     * Internal server error
+     */
+    500: AiBillingErrorBody;
+};
+
+export type PurchaseAiCreditsError = PurchaseAiCreditsErrors[keyof PurchaseAiCreditsErrors];
+
+export type PurchaseAiCreditsResponses = {
+    /**
+     * Purchase outcome and updated position
+     */
+    200: CreditPurchaseResponse;
+};
+
+export type PurchaseAiCreditsResponse = PurchaseAiCreditsResponses[keyof PurchaseAiCreditsResponses];
 
 export type UpdateAiBillingOverageData = {
     body: UpdateOverageRequest;
@@ -2585,6 +2821,8 @@ export type SetGithubPullRequestDraftErrors = {
     422: ErrorResponse;
     428: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type SetGithubPullRequestDraftError = SetGithubPullRequestDraftErrors[keyof SetGithubPullRequestDraftErrors];
@@ -2607,6 +2845,8 @@ export type EnrichGithubPullRequestsErrors = {
     404: ErrorResponse;
     428: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type EnrichGithubPullRequestsError = EnrichGithubPullRequestsErrors[keyof EnrichGithubPullRequestsErrors];
@@ -2641,6 +2881,8 @@ export type MergeGithubPullRequestErrors = {
     422: ErrorResponse;
     428: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type MergeGithubPullRequestError = MergeGithubPullRequestErrors[keyof MergeGithubPullRequestErrors];
@@ -2670,6 +2912,8 @@ export type GetGithubPullRequestMergeabilityErrors = {
     422: ErrorResponse;
     428: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type GetGithubPullRequestMergeabilityError = GetGithubPullRequestMergeabilityErrors[keyof GetGithubPullRequestMergeabilityErrors];
@@ -2679,6 +2923,41 @@ export type GetGithubPullRequestMergeabilityResponses = {
 };
 
 export type GetGithubPullRequestMergeabilityResponse = GetGithubPullRequestMergeabilityResponses[keyof GetGithubPullRequestMergeabilityResponses];
+
+export type SetGithubPullRequestStateData = {
+    body: SetGithubPullRequestStateRequest;
+    path?: never;
+    query?: never;
+    url: '/github_pull_requests/state';
+};
+
+export type SetGithubPullRequestStateErrors = {
+    401: ErrorResponse;
+    /**
+     * The user cannot change the pull request
+     */
+    403: ErrorResponse;
+    /**
+     * No GitHub link, or the pull request is not visible to the user
+     */
+    404: ErrorResponse;
+    /**
+     * GitHub declined the change
+     */
+    422: ErrorResponse;
+    428: ErrorResponse;
+    500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
+};
+
+export type SetGithubPullRequestStateError = SetGithubPullRequestStateErrors[keyof SetGithubPullRequestStateErrors];
+
+export type SetGithubPullRequestStateResponses = {
+    200: SetGithubPullRequestStateResponse;
+};
+
+export type SetGithubPullRequestStateResponse2 = SetGithubPullRequestStateResponses[keyof SetGithubPullRequestStateResponses];
 
 export type ListGtmInviteLinksData = {
     body?: never;
@@ -2879,7 +3158,7 @@ export type RefreshErrors = {
     400: string;
     401: string;
     /**
-     * Refresh already in progress for this user
+     * Refresh already in progress for this user, or the access token lacks the Macro claims and was issued too recently to refresh
      */
     429: string;
     500: string;
@@ -2929,6 +3208,7 @@ export type EmailConnectionProvidersData = {
 
 export type EmailConnectionProvidersErrors = {
     400: ErrorResponse;
+    401: ErrorResponse;
 };
 
 export type EmailConnectionProvidersError = EmailConnectionProvidersErrors[keyof EmailConnectionProvidersErrors];
@@ -2950,6 +3230,8 @@ export type DeleteGithubLinkErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type DeleteGithubLinkError = DeleteGithubLinkErrors[keyof DeleteGithubLinkErrors];
@@ -2977,6 +3259,8 @@ export type InitGithubLinkErrors = {
     401: ErrorResponse;
     429: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type InitGithubLinkError = InitGithubLinkErrors[keyof InitGithubLinkErrors];
@@ -2999,6 +3283,8 @@ export type CheckGithubLinkStatusErrors = {
     404: ErrorResponse;
     428: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type CheckGithubLinkStatusError = CheckGithubLinkStatusErrors[keyof CheckGithubLinkStatusErrors];
@@ -3492,6 +3778,71 @@ export type SessionLoginResponses = {
 
 export type SessionLoginResponse = SessionLoginResponses[keyof SessionLoginResponses];
 
+export type GetSystemStatusData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/system-status';
+};
+
+export type GetSystemStatusErrors = {
+    500: ErrorResponse;
+};
+
+export type GetSystemStatusError = GetSystemStatusErrors[keyof GetSystemStatusErrors];
+
+export type GetSystemStatusResponses = {
+    200: CurrentSystemStatus;
+};
+
+export type GetSystemStatusResponse = GetSystemStatusResponses[keyof GetSystemStatusResponses];
+
+export type SetSystemStatusData = {
+    body: SystemStatus;
+    path?: never;
+    query?: never;
+    url: '/system-status';
+};
+
+export type SetSystemStatusErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    /**
+     * The body is not a valid status
+     */
+    422: unknown;
+    500: ErrorResponse;
+};
+
+export type SetSystemStatusError = SetSystemStatusErrors[keyof SetSystemStatusErrors];
+
+export type SetSystemStatusResponses = {
+    200: StatusUpdate;
+};
+
+export type SetSystemStatusResponse = SetSystemStatusResponses[keyof SetSystemStatusResponses];
+
+export type ListSystemStatusHistoryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/system-status/history';
+};
+
+export type ListSystemStatusHistoryErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListSystemStatusHistoryError = ListSystemStatusHistoryErrors[keyof ListSystemStatusHistoryErrors];
+
+export type ListSystemStatusHistoryResponses = {
+    200: SystemStatusHistory;
+};
+
+export type ListSystemStatusHistoryResponse = ListSystemStatusHistoryResponses[keyof ListSystemStatusHistoryResponses];
+
 export type DeleteTeamData = {
     body?: never;
     path?: never;
@@ -3620,6 +3971,27 @@ export type PatchTeamCrmSettingsResponses = {
 };
 
 export type PatchTeamCrmSettingsResponse2 = PatchTeamCrmSettingsResponses[keyof PatchTeamCrmSettingsResponses];
+
+export type SendTeamDomainNoticeData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/domain-notice';
+};
+
+export type SendTeamDomainNoticeErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SendTeamDomainNoticeError = SendTeamDomainNoticeErrors[keyof SendTeamDomainNoticeErrors];
+
+export type SendTeamDomainNoticeResponses = {
+    200: SendDomainNoticeResponse;
+};
+
+export type SendTeamDomainNoticeResponse = SendTeamDomainNoticeResponses[keyof SendTeamDomainNoticeResponses];
 
 export type InviteToTeamData = {
     body: InviteToTeamRequest;

@@ -26,7 +26,7 @@ Reusable named view definitions. The first consumer is main Tasks; the generic f
 - Mount picker menus inside the drawer portal scope, close menus before opening dialogs, then close the drawer and restore focus before opening another dialog.
 - Render the mobile picker trigger with the shared pill button and preserve the selected state supplied by its consumer.
 - Compose unsaved list entries with the draft row; keep draft lifecycle and confirmed-record reconciliation in the consumer.
-- Let consumers omit the header create action when an expanded empty state already offers creation.
+- Keep header creation consumer-owned and forward its control ref so the host can isolate its keyboard scope.
 - Bind deferred picker actions to the opening account and discard them after an account change.
 - Validate the response viewer before exposing cached reads after an account change.
 - Keep list and detail hooks independent; pass mutation dialogs a refresh callback, not an aggregate read source.

@@ -24,11 +24,15 @@ git clone https://github.com/macro-inc/macro.git
 cd macro
 ```
 
-The Nix shell provides `just`, Cargo, the Rust toolchain, Bun, `wasm-pack`, sqlx, zig, and cargo-zigbuild. You do not need to install these tools separately.
+The Nix shell provides `just`, Cargo, the Rust toolchain, Bun, `wasm-pack`, sqlx, zig, cargo-zigbuild, `prek`, and `gitleaks`. You do not need to install these tools separately.
 
 ```bash
 nix develop
 ```
+
+Entering the shell installs git hooks (`prek install`). A pre-commit hook
+scans staged added lines for customer emails, phones, addresses, and secrets.
+See `tooling/pii/exceptions` and the `git` skill.
 
 If `nix develop` fails, enable the experimental features:
 
@@ -180,6 +184,13 @@ survive. Keep its generated env/Compose files and existing named volumes; start
 stopped containers with `docker start`, or recreate only the affected services
 with the same Compose project/files and `up -d --no-deps --no-build <service>`.
 Never use `down -v`, `reset_local`, or `destroy_local` for this recovery.
+
+If a local debug service aborts with `tokio-rt-worker` stack overflow, give only
+that service `RUST_MIN_STACK=16777216` in an additional local Compose override,
+then recreate it with the same project, generated environment, and volumes.
+Keep this runtime override outside feature commits. Verify the request that
+triggered the crash, not just the health endpoint: document storage can start
+successfully and then exhaust the default worker stack on a Soup request.
 
 On SELinux hosts, FusionAuth can become healthy while silently skipping an
 unreadable kickstart. The generated per-instance kickstart directory uses

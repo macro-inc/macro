@@ -1,5 +1,7 @@
+import { file } from 'bun';
 import { beforeAll, expect, mock, test } from 'bun:test';
 import * as pulumi from '@pulumi/pulumi';
+import { parse } from 'yaml';
 
 const resources: pulumi.runtime.MockResourceArgs[] = [];
 const secretArn =
@@ -70,8 +72,11 @@ beforeAll(async () => {
   await pulumi.runtime.waitForRPCs();
 });
 
-function resource(type: string): pulumi.runtime.MockResourceArgs {
-  const value = resources.find((r) => r.type === type);
+function resource(
+  type: string,
+  registered = resources
+): pulumi.runtime.MockResourceArgs {
+  const value = registered.find((r) => r.type === type);
   if (!value) throw new Error(`Missing ${type}`);
   return value;
 }
@@ -105,6 +110,85 @@ test('extension access is scoped to the existing Datadog key, not all secrets', 
       Resource: secretArn,
     },
   ]);
+});
+
+test.each(['dev', 'prod'])('%s uses hourly retention', async (stack) => {
+  const parsed: unknown = parse(
+    await file(new URL(`./Pulumi.${stack}.yaml`, import.meta.url)).text()
+  );
+  if (
+    !parsed ||
+    typeof parsed !== 'object' ||
+    !('config' in parsed) ||
+    !parsed.config ||
+    typeof parsed.config !== 'object'
+  ) {
+    throw new Error('Missing stack config');
+  }
+  pulumi.runtime.setAllConfig({
+    'aws:region': 'us-east-1',
+    ...Object.fromEntries(
+      Object.entries(parsed.config)
+        .filter(([, value]) => typeof value === 'boolean')
+        .map(([key, value]) => [key, String(value)])
+    ),
+  });
+  const config = new pulumi.Config('notification-service');
+  const start = resources.length;
+  const { NotificationRetention } = await import('./retention');
+  new NotificationRetention(`retention-${stack}`, {
+    databaseUrl: pulumi.secret('test-database'),
+    enabled: config.getBoolean('notification_retention_enabled') ?? false,
+    dryRun: config.getBoolean('notification_retention_dry_run') ?? true,
+    vpc: {
+      vpcId: 'vpc-test',
+      publicSubnetIds: [],
+      privateSubnetIds: ['subnet-test'],
+    },
+    tags: { environment: stack },
+  });
+  await pulumi.runtime.waitForRPCs();
+  const registered = resources.slice(start);
+  expect(
+    resource('aws:cloudwatch/eventRule:EventRule', registered).inputs
+  ).toMatchObject({ state: 'ENABLED', scheduleExpression: 'rate(1 hour)' });
+  expect(
+    JSON.parse(
+      resource('aws:cloudwatch/eventTarget:EventTarget', registered).inputs
+        .input
+    )
+  ).toEqual({ dry_run: false });
+  expect(
+    registered.find(
+      (r) =>
+        r.type === 'aws:cloudwatch/metricAlarm:MetricAlarm' &&
+        r.name === 'notification_retention_handler-missing-invocations'
+    )?.inputs
+  ).toMatchObject({
+    metricQueries: [
+      {
+        id: 'invocations',
+        metric: {
+          namespace: 'AWS/Lambda',
+          metricName: 'Invocations',
+          period: 3600,
+          stat: 'Sum',
+        },
+        returnData: false,
+      },
+      {
+        id: 'hourly_invocations',
+        expression: 'FILL(invocations, 0)',
+        returnData: true,
+      },
+    ],
+    evaluationPeriods: 3,
+    datapointsToAlarm: 3,
+    threshold: 1,
+    comparisonOperator: 'LessThanThreshold',
+    actionsEnabled: true,
+    treatMissingData: 'breaching',
+  });
 });
 
 test('telemetry does not enable cleanup or duplicate the existing log path', () => {

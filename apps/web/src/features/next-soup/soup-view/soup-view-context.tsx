@@ -199,6 +199,7 @@ export interface SoupViewContextValues {
   fetchNextGroupPage: (groupKey: string) => Promise<void>;
   isFetchingGroupPage: (groupKey: string) => boolean;
   hasNextGroupPage: (groupKey: string) => boolean;
+  groupPageError: (groupKey: string) => unknown;
 }
 
 const SoupViewContext = createContext<SoupViewContextValues>();
@@ -1178,6 +1179,9 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   const hasNextGroupPage = (groupKey: string) =>
     groupQueryFor(groupKey)?.hasNextPage() ?? false;
 
+  const groupPageError = (groupKey: string) =>
+    groupQueryFor(groupKey)?.error() ?? null;
+
   const resolveGroupLabel = (key: string): string | undefined => {
     const field = groupByField();
     const definitionId =
@@ -1592,6 +1596,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     fetchNextGroupPage,
     isFetchingGroupPage,
     hasNextGroupPage,
+    groupPageError,
   };
 
   return { context, rows: builtRows };

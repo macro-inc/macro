@@ -5,17 +5,17 @@
 
 use std::sync::Mutex;
 
-use whatsapp_fake_server::GroupChange;
-use whatsapp_linked::domain::effects::EffectsService;
-use whatsapp_linked::domain::models::MediaPresentation;
-use whatsapp_linked::domain::ports::{GroupEffect, GroupPublisher};
-use whatsapp_linked::domain::rich::{
+use external_chat::domain::effects::EffectsService;
+use external_chat::domain::models::MediaPresentation;
+use external_chat::domain::ports::{ChatEffect, ChatPublisher};
+use external_chat::domain::rich::{
     Call, CallOutcome, ContactCard, Contacts, Event, Location, SystemAction,
 };
-use whatsapp_linked::domain::timeline::{
-    WhatsAppGroupMessage, WhatsAppMention, WhatsAppMessageKind, WhatsAppPersonRef, WhatsAppPoll,
-    WhatsAppPollOption, WhatsAppRichContent, WhatsAppSystemLine,
+use external_chat::domain::timeline::{
+    ExternalChatMention, ExternalChatMessage, ExternalChatMessageKind, ExternalChatPersonRef,
+    ExternalChatPoll, ExternalChatPollOption, ExternalChatRichContent, ExternalChatSystemLine,
 };
+use whatsapp_fake_server::GroupChange;
 use whatsmeow::download::MediaType;
 use whatsmeow::proto::wa_common::MessageKey;
 use whatsmeow::proto::wa_e2e::{
@@ -27,9 +27,9 @@ use whatsmeow::proto::wa_e2e::{
 use super::*;
 
 /// The timeline entry for WhatsApp message `source`, as Alice reads it.
-async fn shown(world: &World, binding: &Binding, source: &str) -> WhatsAppGroupMessage {
+async fn shown(world: &World, binding: &ChatRef, source: &str) -> ExternalChatMessage {
     let id = sqlx::query_scalar!(
-        "SELECT id FROM whatsapp_group_message WHERE binding_id = $1 AND source_id = $2",
+        "SELECT id FROM external_chat_message WHERE chat_id = $1 AND source_id = $2",
         binding.id,
         source
     )
@@ -37,7 +37,7 @@ async fn shown(world: &World, binding: &Binding, source: &str) -> WhatsAppGroupM
     .await
     .unwrap();
     world
-        .linked
+        .external
         .messages(
             &receipt::<ViewAccessLevel>(ALICE, binding.id),
             None,
@@ -65,8 +65,8 @@ async fn attachment_shapes(
     Option<String>,
 )> {
     sqlx::query!(
-        "SELECT mime, width, height, duration_seconds, presentation FROM whatsapp_group_attachment
-         WHERE binding_id = $1 AND source_id = $2 ORDER BY ordinal",
+        "SELECT mime, width, height, duration_seconds, presentation FROM external_chat_attachment
+         WHERE chat_id = $1 AND source_id = $2 ORDER BY ordinal",
         binding,
         source
     )
@@ -355,9 +355,9 @@ async fn media_keeps_its_shape_and_a_media_reply_keeps_its_quote(pool: PgPool) {
     );
     let downloaded = wait_for_rows(&world.pool, TIMEOUT, || async {
         sqlx::query_scalar!(
-            "SELECT b.bytes FROM whatsapp_group_attachment a
-             JOIN whatsapp_media_blob b ON b.id = a.blob_id
-             WHERE a.binding_id = $1 AND a.source_id = $2 AND a.state = 'downloaded'",
+            "SELECT b.bytes FROM external_chat_attachment a
+             JOIN external_chat_media_blob b ON b.id = a.blob_id
+             WHERE a.chat_id = $1 AND a.source_id = $2 AND a.state = 'downloaded'",
             binding.id,
             &view_once
         )
@@ -454,9 +454,9 @@ async fn polls_places_cards_events_mentions_pins_and_calls_arrive_structured(poo
     assert!(forwarded_shown.forwarded);
     assert_eq!(
         forwarded_shown.mentions,
-        [WhatsAppMention {
+        [ExternalChatMention {
             token: world.customer.lid().user,
-            person: WhatsAppPersonRef {
+            person: ExternalChatPersonRef {
                 name: "Customer".to_owned(),
                 user_id: None,
             },
@@ -481,19 +481,19 @@ async fn polls_places_cards_events_mentions_pins_and_calls_arrive_structured(poo
         .unwrap();
     assert_eq!(world.timeline(&binding, &poll_id).await, [""]);
     let unvoted = shown(&world, &binding, &poll_id).await;
-    assert_eq!(unvoted.kind, WhatsAppMessageKind::Message);
+    assert_eq!(unvoted.kind, ExternalChatMessageKind::Message);
     assert_eq!(
         unvoted.rich,
-        Some(WhatsAppRichContent::Poll(WhatsAppPoll {
+        Some(ExternalChatRichContent::Poll(ExternalChatPoll {
             question: "Which day?".to_owned(),
             options: vec![
-                WhatsAppPollOption {
+                ExternalChatPollOption {
                     name: "Tuesday".to_owned(),
                     votes: 0,
                     mine: false,
                     voters: vec![],
                 },
-                WhatsAppPollOption {
+                ExternalChatPollOption {
                     name: "Wednesday".to_owned(),
                     votes: 0,
                     mine: false,
@@ -516,13 +516,13 @@ async fn polls_places_cards_events_mentions_pins_and_calls_arrive_structured(poo
         )
         .await
         .unwrap();
-    let bob = WhatsAppPersonRef {
+    let bob = ExternalChatPersonRef {
         name: "Bob".to_owned(),
         user_id: None,
     };
     let voted = wait_for_rows(&world.pool, TIMEOUT, || async {
         let shown = shown(&world, &binding, &poll_id).await;
-        let Some(WhatsAppRichContent::Poll(poll)) = shown.rich else {
+        let Some(ExternalChatRichContent::Poll(poll)) = shown.rich else {
             return None;
         };
         (poll.voters == 1).then_some(poll)
@@ -532,13 +532,13 @@ async fn polls_places_cards_events_mentions_pins_and_calls_arrive_structured(poo
     assert_eq!(
         voted.options,
         [
-            WhatsAppPollOption {
+            ExternalChatPollOption {
                 name: "Tuesday".to_owned(),
                 votes: 1,
                 mine: false,
                 voters: vec![bob.clone()],
             },
-            WhatsAppPollOption {
+            ExternalChatPollOption {
                 name: "Wednesday".to_owned(),
                 votes: 0,
                 mine: false,
@@ -560,7 +560,7 @@ async fn polls_places_cards_events_mentions_pins_and_calls_arrive_structured(poo
         .unwrap();
     let moved = wait_for_rows(&world.pool, TIMEOUT, || async {
         let shown = shown(&world, &binding, &poll_id).await;
-        let Some(WhatsAppRichContent::Poll(poll)) = shown.rich else {
+        let Some(ExternalChatRichContent::Poll(poll)) = shown.rich else {
             return None;
         };
         (poll.options[1].votes == 1).then_some(poll)
@@ -569,16 +569,16 @@ async fn polls_places_cards_events_mentions_pins_and_calls_arrive_structured(poo
     let moved = world.expect(moved, "Bob's changed vote moves").await;
     assert_eq!(
         moved,
-        WhatsAppPoll {
+        ExternalChatPoll {
             question: "Which day?".to_owned(),
             options: vec![
-                WhatsAppPollOption {
+                ExternalChatPollOption {
                     name: "Tuesday".to_owned(),
                     votes: 0,
                     mine: false,
                     voters: vec![],
                 },
-                WhatsAppPollOption {
+                ExternalChatPollOption {
                     name: "Wednesday".to_owned(),
                     votes: 1,
                     mine: false,
@@ -590,7 +590,7 @@ async fn polls_places_cards_events_mentions_pins_and_calls_arrive_structured(poo
         }
     );
     let stored_votes =
-        sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM whatsapp_group_poll_vote"#)
+        sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM external_chat_poll_vote"#)
             .fetch_one(&world.pool)
             .await
             .unwrap();
@@ -657,7 +657,7 @@ async fn polls_places_cards_events_mentions_pins_and_calls_arrive_structured(poo
     }
     assert_eq!(
         shown(&world, &binding, &place).await.rich,
-        Some(WhatsAppRichContent::Location(Location {
+        Some(ExternalChatRichContent::Location(Location {
             latitude: 52.52,
             longitude: 13.405,
             name: Some("Warehouse".to_owned()),
@@ -669,7 +669,7 @@ async fn polls_places_cards_events_mentions_pins_and_calls_arrive_structured(poo
     );
     assert_eq!(
         shown(&world, &binding, &card).await.rich,
-        Some(WhatsAppRichContent::Contacts(Contacts {
+        Some(ExternalChatRichContent::Contacts(Contacts {
             contacts: vec![ContactCard {
                 name: "Support line".to_owned(),
                 phones: vec!["+1 555 0100".to_owned()],
@@ -678,7 +678,7 @@ async fn polls_places_cards_events_mentions_pins_and_calls_arrive_structured(poo
     );
     assert_eq!(
         shown(&world, &binding, &event).await.rich,
-        Some(WhatsAppRichContent::Event(Event {
+        Some(ExternalChatRichContent::Event(Event {
             name: "Pickup".to_owned(),
             description: Some("Bring the label".to_owned()),
             start_at: chrono::DateTime::from_timestamp(1_798_790_400, 0),
@@ -729,11 +729,11 @@ async fn polls_places_cards_events_mentions_pins_and_calls_arrive_structured(poo
     assert_eq!(world.timeline(&binding, &call).await, [""]);
     let opener_shown = shown(&world, &binding, &opener).await;
     let pin_shown = shown(&world, &binding, &pin).await;
-    assert_eq!(pin_shown.kind, WhatsAppMessageKind::System);
+    assert_eq!(pin_shown.kind, ExternalChatMessageKind::System);
     assert_eq!(pin_shown.reply_to, Some(opener_shown.id));
     assert_eq!(
         pin_shown.rich,
-        Some(WhatsAppRichContent::System(WhatsAppSystemLine {
+        Some(ExternalChatRichContent::System(ExternalChatSystemLine {
             action: SystemAction::MessagePinned,
             actor: Some(bob.clone()),
             participants: vec![],
@@ -742,12 +742,12 @@ async fn polls_places_cards_events_mentions_pins_and_calls_arrive_structured(poo
         }))
     );
     let call_shown = shown(&world, &binding, &call).await;
-    assert_eq!(call_shown.kind, WhatsAppMessageKind::System);
+    assert_eq!(call_shown.kind, ExternalChatMessageKind::System);
     assert_eq!(
         call_shown.rich,
-        Some(WhatsAppRichContent::System(WhatsAppSystemLine {
+        Some(ExternalChatRichContent::System(ExternalChatSystemLine {
             action: SystemAction::Call,
-            actor: Some(WhatsAppPersonRef {
+            actor: Some(ExternalChatPersonRef {
                 name: "Customer".to_owned(),
                 user_id: None,
             }),
@@ -761,7 +761,7 @@ async fn polls_places_cards_events_mentions_pins_and_calls_arrive_structured(poo
         }))
     );
     let kinds = sqlx::query!(
-        "SELECT source_id, kind FROM whatsapp_group_message WHERE binding_id = $1 AND source_id = ANY($2)",
+        "SELECT source_id, kind FROM external_chat_message WHERE chat_id = $1 AND source_id = ANY($2)",
         binding.id,
         &[pin.clone(), call.clone(), poll_id.clone()]
     )
@@ -781,7 +781,7 @@ async fn polls_places_cards_events_mentions_pins_and_calls_arrive_structured(poo
     // Alice mentions the customer from Macro.
     let text = format!("@{} on it", world.customer.lid().user);
     let send = world
-        .linked
+        .external
         .send_reply(
             &receipt::<ViewAccessLevel>(ALICE, binding.id),
             &SendReply {
@@ -821,8 +821,8 @@ async fn polls_places_cards_events_mentions_pins_and_calls_arrive_structured(poo
 struct Published(Mutex<Vec<Uuid>>);
 
 #[async_trait]
-impl GroupPublisher for Published {
-    async fn publish(&self, effect: &GroupEffect) -> LinkedResult<()> {
+impl ChatPublisher for Published {
+    async fn publish(&self, effect: &ChatEffect) -> ExternalChatResult<()> {
         self.0
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -881,8 +881,8 @@ async fn group_changes_land_once_as_system_lines_that_never_notify(pool: PgPool)
 
     let lines = wait_for_rows(&world.pool, TIMEOUT, || async {
         let lines = sqlx::query!(
-            r#"SELECT message_id AS "message_id!", source_id, rich->>'action' AS "action!" FROM whatsapp_group_message
-            WHERE binding_id = $1 AND kind = 'system' AND message_id IS NOT NULL ORDER BY source_at, rich->>'action'"#,
+            r#"SELECT message_id AS "message_id!", source_id, rich->>'action' AS "action!" FROM external_chat_message
+            WHERE chat_id = $1 AND kind = 'system' AND message_id IS NOT NULL ORDER BY source_at, rich->>'action'"#,
             binding.id
         )
         .fetch_all(&world.pool)
@@ -907,7 +907,7 @@ async fn group_changes_land_once_as_system_lines_that_never_notify(pool: PgPool)
     );
 
     let page = world
-        .linked
+        .external
         .messages(
             &receipt::<ViewAccessLevel>(ALICE, binding.id),
             None,
@@ -916,19 +916,19 @@ async fn group_changes_land_once_as_system_lines_that_never_notify(pool: PgPool)
         .await
         .unwrap()
         .messages;
-    let customer = WhatsAppPersonRef {
+    let customer = ExternalChatPersonRef {
         name: "Customer".to_owned(),
         user_id: None,
     };
-    let dana_ref = WhatsAppPersonRef {
+    let dana_ref = ExternalChatPersonRef {
         name: "Dana".to_owned(),
         user_id: None,
     };
-    let system: Vec<WhatsAppSystemLine> = page
+    let system: Vec<ExternalChatSystemLine> = page
         .iter()
-        .filter(|message| message.kind == WhatsAppMessageKind::System)
+        .filter(|message| message.kind == ExternalChatMessageKind::System)
         .filter_map(|message| match &message.rich {
-            Some(WhatsAppRichContent::System(line)) => Some(line.clone()),
+            Some(ExternalChatRichContent::System(line)) => Some(line.clone()),
             _ => None,
         })
         .collect();
@@ -941,7 +941,7 @@ async fn group_changes_land_once_as_system_lines_that_never_notify(pool: PgPool)
     };
     assert_eq!(
         line(SystemAction::ParticipantsAdded),
-        WhatsAppSystemLine {
+        ExternalChatSystemLine {
             action: SystemAction::ParticipantsAdded,
             actor: Some(customer.clone()),
             participants: vec![dana_ref.clone()],
@@ -951,7 +951,7 @@ async fn group_changes_land_once_as_system_lines_that_never_notify(pool: PgPool)
     );
     assert_eq!(
         line(SystemAction::ParticipantsLeft),
-        WhatsAppSystemLine {
+        ExternalChatSystemLine {
             action: SystemAction::ParticipantsLeft,
             actor: Some(dana_ref.clone()),
             participants: vec![dana_ref.clone()],
@@ -961,7 +961,7 @@ async fn group_changes_land_once_as_system_lines_that_never_notify(pool: PgPool)
     );
     assert_eq!(
         line(SystemAction::SubjectChanged),
-        WhatsAppSystemLine {
+        ExternalChatSystemLine {
             action: SystemAction::SubjectChanged,
             actor: Some(customer.clone()),
             participants: vec![],
@@ -972,8 +972,8 @@ async fn group_changes_land_once_as_system_lines_that_never_notify(pool: PgPool)
 
     // Only the three texts are unread, and only they notify.
     let summary = world
-        .linked
-        .adopted_groups(&person(ALICE))
+        .external
+        .list(&person(ALICE))
         .await
         .unwrap()
         .into_iter()
@@ -982,7 +982,7 @@ async fn group_changes_land_once_as_system_lines_that_never_notify(pool: PgPool)
     assert_eq!(summary.unread_count, 3, "system lines are never unread");
     let published = Arc::new(Published::default());
     let effects = EffectsService::new(
-        Arc::new(PgLinkedRepository::new(world.pool.clone())),
+        Arc::new(PgExternalChatRepository::new(world.pool.clone())),
         published.clone(),
     );
     while effects.publish_pending().await.unwrap() > 0 {}
@@ -993,8 +993,8 @@ async fn group_changes_land_once_as_system_lines_that_never_notify(pool: PgPool)
         .clone();
     notified.sort_unstable();
     let texts = sqlx::query_scalar!(
-        r#"SELECT message_id AS "message_id!" FROM whatsapp_group_message
-        WHERE binding_id = $1 AND source_id = ANY($2) ORDER BY message_id"#,
+        r#"SELECT message_id AS "message_id!" FROM external_chat_message
+        WHERE chat_id = $1 AND source_id = ANY($2) ORDER BY message_id"#,
         binding.id,
         &[announce.clone(), hello.clone(), last.clone()]
     )

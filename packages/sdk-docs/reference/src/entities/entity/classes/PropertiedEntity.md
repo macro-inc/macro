@@ -30,7 +30,7 @@ A favoritable entity that also carries user-defined properties.
 
 | Property | Modifier | Type | Description | Inherited from |
 | ------ | ------ | ------ | ------ | ------ |
-| <a id="property-entitytype"></a> `entityType` | `abstract readonly` | `"project"` \| `"user"` \| `"team"` \| `"chat"` \| `"channel"` \| `"channel_message"` \| `"document"` \| `"email_thread"` \| `"calendar_event"` \| `"call"` \| `"foreign_entity"` \| `"static_file"` \| `"crm_company"` \| `"crm_contact"` \| `"crm_pipeline"` \| `"reminder"` \| `"skill"` \| `"agent_session"` \| `"scheduled_action"` \| `"initiative"` \| `"database"` \| `"database_row"` \| `"form"` \| `"whatsapp_group"` | How the entity-addressed APIs (favorites) identify this entity's type. | [`FavoritableEntity`](FavoritableEntity.md).[`entityType`](FavoritableEntity.md#property-entitytype) |
+| <a id="property-entitytype"></a> `entityType` | `abstract readonly` | `"project"` \| `"user"` \| `"team"` \| `"chat"` \| `"channel"` \| `"channel_message"` \| `"document"` \| `"email_thread"` \| `"calendar_event"` \| `"call"` \| `"foreign_entity"` \| `"static_file"` \| `"crm_company"` \| `"crm_contact"` \| `"crm_pipeline"` \| `"reminder"` \| `"skill"` \| `"agent_session"` \| `"scheduled_action"` \| `"initiative"` \| `"database"` \| `"database_row"` \| `"form"` \| `"external_chat"` | How the entity-addressed APIs (favorites) identify this entity's type. | [`FavoritableEntity`](FavoritableEntity.md).[`entityType`](FavoritableEntity.md#property-entitytype) |
 | <a id="property-id"></a> `id` | `public readonly` | `string` | - | [`FavoritableEntity`](FavoritableEntity.md).[`id`](FavoritableEntity.md#property-id) |
 
 ## Methods

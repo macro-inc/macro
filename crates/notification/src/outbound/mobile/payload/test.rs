@@ -127,3 +127,57 @@ fn android_call_push_is_short_lived_data_only_and_recipient_scoped() {
     assert_eq!(offer["livekitToken"], "recipient-token");
     assert_eq!(offer["callId"], payload.call_id);
 }
+
+#[test]
+fn android_call_push_carries_the_producing_span_context() {
+    use opentelemetry::baggage::BaggageExt;
+    use opentelemetry::trace::{TraceContextExt, TracerProvider};
+    use tracing_subscriber::prelude::*;
+
+    opentelemetry::global::set_text_map_propagator(
+        opentelemetry::propagation::TextMapCompositePropagator::new(vec![
+            Box::new(opentelemetry_sdk::propagation::TraceContextPropagator::new()),
+            Box::new(opentelemetry_sdk::propagation::BaggagePropagator::new()),
+        ]),
+    );
+    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
+    let subscriber = tracing_subscriber::registry()
+        .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("call-test")));
+    tracing::subscriber::with_default(subscriber, || {
+        let span = tracing::info_span!("call.push.send");
+        span.set_parent(opentelemetry::Context::new().with_baggage([
+            opentelemetry::KeyValue::new("private", "private-context-marker"),
+        ]))
+        .unwrap();
+        let _guard = span.enter();
+        let payload = VoipPushPayload {
+            aps: Default::default(),
+            call_id: Uuid::now_v7().to_string(),
+            channel_id: "test-channel".into(),
+            channel_name: "Test channel".into(),
+            caller_name: "Test caller".into(),
+            livekit_server_url: None,
+            livekit_token: None,
+            ring_status_url: None,
+        };
+        let target: SnsTarget<'_, ()> = SnsTarget::AndroidCall(&payload, "test-recipient");
+        let sns: Value = serde_json::from_str(&target.as_json().unwrap()).unwrap();
+        let fcm: Value = serde_json::from_str(sns["GCM"].as_str().unwrap()).unwrap();
+        let offer: Value = serde_json::from_str(
+            fcm["fcmV1Message"]["message"]["data"]["payload"]
+                .as_str()
+                .unwrap(),
+        )
+        .unwrap();
+        let context = span.context();
+        let source = context.span();
+        let expected = source.span_context();
+        assert!(expected.is_valid());
+        assert_eq!(
+            offer["traceparent"],
+            format!("00-{}-{}-01", expected.trace_id(), expected.span_id())
+        );
+        assert!(offer.get("baggage").is_none());
+        assert!(!offer.to_string().contains("private-context-marker"));
+    });
+}

@@ -4,21 +4,30 @@
 use super::*;
 use crate::domain::{
     events::{InboundEvent, InboundKind, Message, MessageKind, PairingUpdate},
-    ports::{LinkedResult, SendRateLimiter},
+    provider::WhatsAppProvider,
     session::SessionService,
 };
-use crate::outbound::pg::PgLinkedRepository;
+use crate::outbound::pg::PgWhatsAppRepository;
 use async_trait::async_trait;
 use axum::body::Body;
-use axum::http::{Method, Request};
+use axum::http::{Method, Request, header};
 use entity_access::{
     domain::{models::EntityType, service::EntityAccessServiceImpl},
     outbound::PgAccessRepository,
 };
+use external_chat::{
+    domain::{
+        models::*,
+        ports::{ExternalChatResult, SendRateLimiter},
+        service::ExternalChatService,
+    },
+    inbound::router::{ExternalChatRouterState, external_chats_router},
+    outbound::pg::PgExternalChatRepository,
+};
 use macro_authorization::{
-    BotActingUserClaims, BotAuthentication, BotScope, HarnessAuthentication,
+    BotActingUserClaims, BotAuthentication, BotScope, CredentialOrigin, HarnessAuthentication,
     HarnessAuthorizationOwner, InternalIdentityClaims, MacroAuthorizationError,
-    ValidatedCredential, ValidatedIdentity,
+    MacroUserAuthentication, ValidatedCredential, ValidatedIdentity,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use model_user::UserContext;
@@ -160,7 +169,10 @@ struct Unlimited;
 
 #[async_trait]
 impl SendRateLimiter for Unlimited {
-    async fn check(&self, _: &macro_user_id::user_id::MacroUserIdStr<'_>) -> LinkedResult<()> {
+    async fn check(
+        &self,
+        _: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> ExternalChatResult<()> {
         Ok(())
     }
 }
@@ -238,8 +250,13 @@ async fn every_route_enforces_its_credential_rules(pool: PgPool) {
     for id in [ALICE, BOB] {
         user(&pool, id).await;
     }
-    let repository = Arc::new(PgLinkedRepository::new(pool.clone()));
-    let service = Arc::new(LinkedService::new(repository.clone(), Arc::new(Unlimited)));
+    let repository = Arc::new(PgWhatsAppRepository::new(pool.clone()));
+    let service = Arc::new(WhatsAppService::new(repository.clone()));
+    let chats = Arc::new(ExternalChatService::new(
+        Arc::new(WhatsAppProvider::new(repository.clone())),
+        Arc::new(PgExternalChatRepository::new(pool.clone())),
+        Arc::new(Unlimited),
+    ));
     let session = SessionService::new(repository);
     let pairing = service
         .connect(&person(ALICE), false, SendAuthority::Human)
@@ -282,11 +299,13 @@ async fn every_route_enforces_its_credential_rules(pool: PgPool) {
         )
         .await
         .unwrap();
-    let binding = service
-        .adopt(
+    let binding = chats
+        .add(
             &person(ALICE),
-            &AdoptGroup {
-                group_jid: GROUP.into(),
+            &AddChat {
+                provider: ExternalChatProvider::WhatsApp,
+                remote_id: GROUP.into(),
+                kind: ExternalChatKind::Group,
             },
             SendAuthority::Human,
         )
@@ -296,7 +315,7 @@ async fn every_route_enforces_its_credential_rules(pool: PgPool) {
     entity_access_db_utils::direct_share::set(
         &mut tx,
         &binding.id,
-        EntityType::WhatsAppGroup,
+        EntityType::ExternalChat,
         &BOB.to_owned().try_into().unwrap(),
         Some(models_permissions::share_permission::access_level::AccessLevel::View),
         false,
@@ -337,13 +356,25 @@ async fn every_route_enforces_its_credential_rules(pool: PgPool) {
         .await
         .unwrap();
 
-    let app: Router = router(LinkedRouterState {
-        service: service.clone(),
-        entity_access_service: Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
-            pool.clone(),
-        ))),
-        authorization_state: MacroAuthorizationState::new(Arc::new(Credentials)),
-    });
+    let authorization_state = MacroAuthorizationState::new(Arc::new(Credentials));
+    let app: Router = Router::new()
+        .nest(
+            "/external-chats",
+            external_chats_router(ExternalChatRouterState {
+                service: chats,
+                entity_access_service: Arc::new(EntityAccessServiceImpl::new(
+                    PgAccessRepository::new(pool.clone()),
+                )),
+                authorization_state: authorization_state.clone(),
+            }),
+        )
+        .nest(
+            "/whatsapp",
+            whatsapp_router(WhatsAppRouterState {
+                service: service.clone(),
+                authorization_state,
+            }),
+        );
     let group = binding.id;
     let generation = service
         .account(&person(ALICE))
@@ -362,7 +393,7 @@ async fn every_route_enforces_its_credential_rules(pool: PgPool) {
     };
     let page = app
         .clone()
-        .oneshot(viewer(format!("/whatsapp-groups/{group}/messages")))
+        .oneshot(viewer(format!("/external-chats/{group}/messages")))
         .await
         .unwrap();
     assert_eq!(page.status(), StatusCode::OK);
@@ -376,7 +407,7 @@ async fn every_route_enforces_its_credential_rules(pool: PgPool) {
     let one = app
         .clone()
         .oneshot(viewer(format!(
-            "/whatsapp-groups/{group}/messages/{message}"
+            "/external-chats/{group}/messages/{message}"
         )))
         .await
         .unwrap();
@@ -405,11 +436,11 @@ async fn every_route_enforces_its_credential_rules(pool: PgPool) {
     use StatusCode as S;
     // (principal, method, path, body, expected). Detach and disconnect change
     // state, so the owner's session runs them last.
-    let sends = format!("/whatsapp-groups/{group}/sends");
-    let attachments = format!("/whatsapp-groups/{group}/attachments");
-    let pairing_path = format!("/pairing/{}", pairing.id);
-    let permissions = format!("/whatsapp-groups/{group}/permissions");
-    let detach = format!("/whatsapp-groups/{group}");
+    let sends = format!("/external-chats/{group}/sends");
+    let attachments = format!("/external-chats/{group}/attachments");
+    let pairing_path = format!("/whatsapp/pairing/{}", pairing.id);
+    let permissions = format!("/external-chats/{group}/permissions");
+    let detach = format!("/external-chats/{group}");
     let mut outcomes = vec![];
     for (principal, method, path, expected) in [
         (Session, Method::POST, sends.as_str(), S::OK),
@@ -424,21 +455,21 @@ async fn every_route_enforces_its_credential_rules(pool: PgPool) {
         (Harness, Method::POST, &attachments, S::FORBIDDEN),
         // Already connected: the session reaches the domain, which refuses a
         // second pairing without `replace`.
-        (Session, Method::POST, "/connect", S::CONFLICT),
-        (ApiJwt, Method::POST, "/connect", S::FORBIDDEN),
-        (ApiKey, Method::POST, "/connect", S::FORBIDDEN),
-        (Bot, Method::POST, "/connect", S::FORBIDDEN),
-        (Harness, Method::POST, "/connect", S::FORBIDDEN),
+        (Session, Method::POST, "/whatsapp/connect", S::CONFLICT),
+        (ApiJwt, Method::POST, "/whatsapp/connect", S::FORBIDDEN),
+        (ApiKey, Method::POST, "/whatsapp/connect", S::FORBIDDEN),
+        (Bot, Method::POST, "/whatsapp/connect", S::FORBIDDEN),
+        (Harness, Method::POST, "/whatsapp/connect", S::FORBIDDEN),
         (Session, Method::GET, &pairing_path, S::OK),
         (ApiJwt, Method::GET, &pairing_path, S::FORBIDDEN),
         (ApiKey, Method::GET, &pairing_path, S::FORBIDDEN),
         (Bot, Method::GET, &pairing_path, S::FORBIDDEN),
         (Harness, Method::GET, &pairing_path, S::FORBIDDEN),
-        (Session, Method::POST, "/groups/adopt", S::OK),
-        (ApiJwt, Method::POST, "/groups/adopt", S::FORBIDDEN),
-        (ApiKey, Method::POST, "/groups/adopt", S::FORBIDDEN),
-        (Bot, Method::POST, "/groups/adopt", S::FORBIDDEN),
-        (Harness, Method::POST, "/groups/adopt", S::FORBIDDEN),
+        (Session, Method::POST, "/external-chats", S::OK),
+        (ApiJwt, Method::POST, "/external-chats", S::FORBIDDEN),
+        (ApiKey, Method::POST, "/external-chats", S::FORBIDDEN),
+        (Bot, Method::POST, "/external-chats", S::FORBIDDEN),
+        (Harness, Method::POST, "/external-chats", S::FORBIDDEN),
         (Session, Method::PATCH, &permissions, S::NO_CONTENT),
         (ApiJwt, Method::PATCH, &permissions, S::FORBIDDEN),
         (ApiKey, Method::PATCH, &permissions, S::FORBIDDEN),
@@ -449,25 +480,28 @@ async fn every_route_enforces_its_credential_rules(pool: PgPool) {
         (Bot, Method::DELETE, &detach, S::FORBIDDEN),
         (Harness, Method::DELETE, &detach, S::FORBIDDEN),
         (Session, Method::DELETE, &detach, S::NO_CONTENT),
-        (ApiJwt, Method::POST, "/disconnect", S::FORBIDDEN),
-        (ApiKey, Method::POST, "/disconnect", S::FORBIDDEN),
-        (Bot, Method::POST, "/disconnect", S::FORBIDDEN),
-        (Harness, Method::POST, "/disconnect", S::FORBIDDEN),
-        (Session, Method::POST, "/disconnect", S::OK),
+        (ApiJwt, Method::POST, "/whatsapp/disconnect", S::FORBIDDEN),
+        (ApiKey, Method::POST, "/whatsapp/disconnect", S::FORBIDDEN),
+        (Bot, Method::POST, "/whatsapp/disconnect", S::FORBIDDEN),
+        (Harness, Method::POST, "/whatsapp/disconnect", S::FORBIDDEN),
+        (Session, Method::POST, "/whatsapp/disconnect", S::OK),
     ] {
         let (content_type, body) = match path {
             path if path == sends => ("application/json".to_owned(), reply()),
             path if path == attachments => upload_body(),
-            "/connect" => (
+            "/whatsapp/connect" => (
                 "application/json".to_owned(),
                 Body::from(r#"{"replace":false}"#),
             ),
-            "/groups/adopt" => (
+            "/external-chats" => (
                 "application/json".to_owned(),
-                Body::from(serde_json::json!({ "groupJid": GROUP }).to_string()),
+                Body::from(
+                    serde_json::json!({ "provider": "whatsapp", "remoteId": GROUP, "kind": "group" })
+                        .to_string(),
+                ),
             ),
             path if path == permissions => ("application/json".to_owned(), Body::from("{}")),
-            "/disconnect" => (
+            "/whatsapp/disconnect" => (
                 "application/json".to_owned(),
                 Body::from(
                     serde_json::json!({ "authorizationGeneration": generation }).to_string(),

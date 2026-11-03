@@ -54,7 +54,7 @@ export function NoticeBanner(props: {
         </div>
         <Show when={props.readOnlyReason && props.onConvert}>
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             data-testid="psd-notice-convert"
             onClick={() => props.onConvert?.()}

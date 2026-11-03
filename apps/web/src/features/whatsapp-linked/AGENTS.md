@@ -4,7 +4,8 @@
 
 Personal WhatsApp accounts linked as devices (External tab → WhatsApp): link an
 account by QR, list its WhatsApp chats, and add a group or direct chat as its
-own shareable Macro entity. Each person sends from their own account. Behind the `enable-whatsapp-linked` flag.
+own shareable external chat (`POST /external-chats` with `provider:
+'whatsapp'`). Each person sends from their own account. Behind the `enable-whatsapp-linked` flag.
 
 ## Start here
 
@@ -20,21 +21,34 @@ own shareable Macro entity. Each person sends from their own account. Behind the
   `primitives/open-sections.ts`, per user.
 - `components/chat-list.tsx`: one-line chat rows styled like Macro's list rows
   (`bg-list-hover`, actions on hover/focus, always on touch).
+- Starting chats: `core/chat.ts` `chatSections` puts saved contacts nobody
+  wrote to (direct, no `lastActivityAt`) in `contacts`, shown as the page's
+  Contacts section. `components/new-chat-dialog.tsx` takes a number
+  (`core/new-chat.ts` normalises it to E.164 and words each
+  `NewChatFailure`); the `startChat` capability looks it up
+  (`useLookUpWhatsappNumberMutation` polls `GET /whatsapp/lookups/{id}`),
+  then adds and opens the chat.
+- `components/history-import-prompt.tsx`: the bottom-right prompt (mounted
+  lazily in `Layout.tsx`; not on phones, where it covers the composer) to
+  import earlier messages of the owner's chats waiting for their phone
+  (`core/history-import.ts`). It and the chat view's import bar
+  (`features/external-chat`) are the only things that ask the phone
+  (`POST /whatsapp/history-import`).
 - `core/chat.ts`: chat sections, search matching and row wording.
 
 ## Scope
 
-- Owns: the WhatsApp account page, pairing dialog and one-click adoption
-  (no dialog; DSS names the group after WhatsApp).
-- Chat timeline and sending: `features/whatsapp-group`; channels only reach a
+- Owns: the WhatsApp account page, pairing dialog, one-click add (no
+  dialog; DSS names the chat after WhatsApp) and the New chat dialog.
+- Chat timeline and sending: `features/external-chat`; channels only reach a
   chat through a mention, which shares it (`MentionsMenu`).
 - One account at a time: there is no replace flow; switching means
   Disconnect, then Connect.
-- Not here: the External tab shell, the groups nested under WhatsApp in its
-  sidebar and the
-  `/external/whatsapp/:groupId` route → `features/external-view`;
-  HTTP → `lib/service-clients/service-storage/whatsapp-linked.ts`; shared
-  queries → `lib/queries/whatsapp-linked`; DSS routes → `crates/whatsapp_linked`.
+- Not here: the External tab shell, the chats nested under each provider in
+  its sidebar and the `/external/chat/:chatId` route →
+  `features/external-view`; HTTP → `lib/service-clients/service-storage/whatsapp-linked.ts`
+  (DSS `/whatsapp/*`) and `external-chats.ts` (adding); shared queries →
+  `lib/queries/whatsapp-linked`; DSS routes → `crates/whatsapp_linked`.
 
 ## Gotchas
 
@@ -53,24 +67,25 @@ own shareable Macro entity. Each person sends from their own account. Behind the
   cancelled at once.
 - Disconnect results are toasts, not page state.
 - Wire types come from DSS's generated `@service-storage/generated/schemas`
-  (`Linked*`); change `crates/whatsapp_linked` and regenerate, never hand-type.
-- Adoption failures carry DSS's `LinkedError` code (`whatsappErrorResponse`);
-  `core/adopt.ts` words each one. Never show a catch-all message.
-- The chat list (`GET /meta/linked/chats`) arrives sorted by recent activity;
-  keep DSS's order. Sections follow its `group`/`shared`/`canAdd`/
+  (`WhatsApp*`, `ExternalChat*`); change `crates/whatsapp_linked` and
+  regenerate, never hand-type.
+- Add failures carry DSS's `LinkedError` code (`whatsappErrorResponse`);
+  `core/add.ts` words each one. Never show a catch-all message.
+- The chat list (`GET /whatsapp/chats`) arrives sorted by recent activity;
+  keep DSS's order. Sections follow its `added`/`shared`/`canAdd`/
   `cannotAddReason` fields; direct chats are addable, except the chat with
   yourself. DSS sends reason codes (`cannotAddReason`, and
   `cannot_add_<reason>` on a refused add); `core/chat.ts` words them.
   User-facing copy says "chat", not "group". Community groups show as "Community · Group"
   (`communityTitle`); disappearing and community groups are addable, a
   community itself is not.
-- Adoption grants access only to its owner; the generic Share dialog manages
+- Adding grants access only to its owner; the generic Share dialog manages
   later access. Viewing never requires WhatsApp membership.
 
 ## Checks
 
 - `bunx vitest run --project app src/features/whatsapp-linked`
-- `bun run test:functional -- 'whatsapp-linked.spec.ts$'` (mocked `/meta/linked` routes)
+- `bun run test:functional -- 'whatsapp-linked.spec.ts$'` (mocked `/whatsapp` and `/external-chats` routes)
 
 ## Related
 

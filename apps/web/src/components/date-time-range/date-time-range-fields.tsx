@@ -8,7 +8,14 @@ import { Calendar } from '@ui/components/Calendar';
 import { Layer } from '@ui/components/Layer';
 import { ToggleSwitch } from '@ui/components/ToggleSwitch';
 import { cn } from '@ui/utils/classname';
-import { createSignal, createUniqueId, type JSX, Show } from 'solid-js';
+import {
+  createContext,
+  createSignal,
+  createUniqueId,
+  type JSX,
+  Show,
+  useContext,
+} from 'solid-js';
 import { dateLabelFormatter, TimeInput } from './time-input';
 import {
   DAY_TIME_OPTIONS,
@@ -57,15 +64,16 @@ function DateField(props: DateFieldProps) {
         aria-invalid={props.invalid || undefined}
         aria-describedby={props.describedBy}
         class={buttonClasses({
-          variant: 'outline',
-          size: 'sm',
+          variant: 'secondary',
+          size: 'xs',
           class: cn(
-            'max-w-40 justify-start',
+            // A touch more room after the date than the icon has before it.
+            'max-w-40 justify-start pr-2.5',
             props.invalid && 'border-failure text-failure'
           ),
         })}
       >
-        <CalendarBlankIcon />
+        <CalendarBlankIcon class="size-3.5 shrink-0" />
         <span class="truncate">
           {selectedDate()
             ? dateLabelFormatter.format(selectedDate())
@@ -104,7 +112,7 @@ function DateField(props: DateFieldProps) {
   );
 }
 
-export interface DateTimeRangeFieldsProps {
+export interface DateTimeRangeProps {
   /** What the range belongs to, named in the fields' labels: `event`, a column's name. */
   subject: string;
   /** The start field's id, for a label to name or a caller to focus. */
@@ -115,33 +123,82 @@ export interface DateTimeRangeFieldsProps {
   allDay: boolean;
   onStartChange: (value: string) => void;
   onEndChange: (value: string) => void;
-  /** Omit to hide the All day control for hosts that only support timed ranges. */
-  onAllDayChange?: (allDay: boolean) => void;
   startDisabled?: boolean;
   endDisabled?: boolean;
-  allDayDisabled?: boolean;
   invalid?: boolean;
   describedBy?: string;
-  /** A control after All day, e.g. a host's Clear. */
-  trailing?: JSX.Element;
+}
+
+const DateTimeRangeContext = createContext<DateTimeRangeProps>();
+
+function useDateTimeRange() {
+  const range = useContext(DateTimeRangeContext);
+  if (!range)
+    throw new Error('DateTimeRange parts must be rendered inside Root');
+  return range;
+}
+
+function Root(props: DateTimeRangeProps & { children: JSX.Element }) {
+  return (
+    <DateTimeRangeContext.Provider value={props}>
+      {props.children}
+    </DateTimeRangeContext.Provider>
+  );
+}
+
+/** The start's date and, unless all day, its time. */
+function Start() {
+  const range = useDateTimeRange();
+  const fieldId = createUniqueId();
+  const parts = () => splitLocalDateTime(range.start);
+  return (
+    <span class="flex items-center gap-1">
+      <DateField
+        id={range.id}
+        subject={range.subject}
+        label="Start"
+        date={parts().date}
+        onChange={(date) =>
+          range.onStartChange(
+            range.allDay ? date : withLocalDate(range.start, date)
+          )
+        }
+        disabled={range.startDisabled}
+        invalid={range.invalid}
+        describedBy={range.describedBy}
+        placement="bottom-start"
+      />
+      <Show when={!range.allDay}>
+        <TimeInput
+          id={`range-start-time-${fieldId}`}
+          label={`${range.subject} start time`}
+          value={parts().time}
+          onChange={(option) =>
+            range.onStartChange(withLocalTime(range.start, option.value))
+          }
+          disabled={range.startDisabled}
+          invalid={range.invalid}
+          describedBy={range.describedBy}
+        />
+      </Show>
+    </span>
+  );
 }
 
 /**
- * Each end's date and, unless all day, its time, joined by an arrow, then an
- * All day switch, as Google Calendar edits an event's time. Times are typed
- * or picked; the end's list counts from the start and rolls past midnight.
- * An all-day end is the last day, included.
+ * The end's date and, unless all day, its time. The end's list counts from
+ * the start and rolls past midnight.
  */
-export function DateTimeRangeFields(props: DateTimeRangeFieldsProps) {
+function End() {
+  const range = useDateTimeRange();
   const fieldId = createUniqueId();
-  const startParts = () => splitLocalDateTime(props.start);
-  const endParts = () => splitLocalDateTime(props.end);
+  const parts = () => splitLocalDateTime(range.end);
 
   /** The start the end's times count from, while the end is within a day of it. */
   const endAnchor = () => {
-    if (props.allDay || !props.start) return undefined;
-    return withinEndTimeWindow(props.start, props.end)
-      ? props.start
+    if (range.allDay || !range.start) return undefined;
+    return withinEndTimeWindow(range.start, range.end)
+      ? range.start
       : undefined;
   };
   const endOptions = () => {
@@ -153,107 +210,105 @@ export function DateTimeRangeFields(props: DateTimeRangeFieldsProps) {
   const endSelectedId = () => {
     const start = endAnchor();
     return selectedTimeOptionId(
-      endParts().time,
-      start ? dayOffsetBetween(start, props.end) : 0
+      parts().time,
+      start ? dayOffsetBetween(start, range.end) : 0
     );
   };
   const changeEndTime = (option: TimeOption) => {
     const start = endAnchor();
-    props.onEndChange(
+    range.onEndChange(
       start
         ? endValueFor(start, option)
-        : withLocalTime(props.end, option.value)
+        : withLocalTime(range.end, option.value)
     );
   };
 
   return (
-    <div class="flex w-full flex-wrap items-center gap-x-3 gap-y-2">
-      <div class="flex min-w-0 flex-wrap items-center gap-1.5">
-        <span class="flex items-center gap-1">
-          <DateField
-            id={props.id}
-            subject={props.subject}
-            label="Start"
-            date={startParts().date}
-            onChange={(date) =>
-              props.onStartChange(
-                props.allDay ? date : withLocalDate(props.start, date)
-              )
-            }
-            disabled={props.startDisabled}
-            invalid={props.invalid}
-            describedBy={props.describedBy}
-            placement="bottom-start"
-          />
-          <Show when={!props.allDay}>
-            <TimeInput
-              id={`range-start-time-${fieldId}`}
-              label={`${props.subject} start time`}
-              value={startParts().time}
-              onChange={(option) =>
-                props.onStartChange(withLocalTime(props.start, option.value))
-              }
-              disabled={props.startDisabled}
-              invalid={props.invalid}
-              describedBy={props.describedBy}
-            />
-          </Show>
-        </span>
-        <ArrowRightIcon
-          aria-hidden={false}
-          aria-label="to"
-          class={cn(
-            'size-3.5 shrink-0 text-ink-extra-muted',
-            props.invalid && 'text-failure'
-          )}
+    <span class="flex items-center gap-1">
+      <DateField
+        subject={range.subject}
+        label="End"
+        date={parts().date}
+        onChange={(date) =>
+          range.onEndChange(
+            range.allDay ? date : withLocalDate(range.end, date)
+          )
+        }
+        disabled={range.endDisabled}
+        invalid={range.invalid}
+        describedBy={range.describedBy}
+        placement="bottom-end"
+      />
+      <Show when={!range.allDay}>
+        <TimeInput
+          id={`range-end-time-${fieldId}`}
+          label={`${range.subject} end time`}
+          value={parts().time}
+          options={endOptions()}
+          selectedId={endSelectedId()}
+          onChange={changeEndTime}
+          disabled={range.endDisabled}
+          invalid={range.invalid}
+          describedBy={range.describedBy}
         />
-        <span class="flex items-center gap-1">
-          <DateField
-            subject={props.subject}
-            label="End"
-            date={endParts().date}
-            onChange={(date) =>
-              props.onEndChange(
-                props.allDay ? date : withLocalDate(props.end, date)
-              )
-            }
-            disabled={props.endDisabled}
-            invalid={props.invalid}
-            describedBy={props.describedBy}
-            placement="bottom-end"
-          />
-          <Show when={!props.allDay}>
-            <TimeInput
-              id={`range-end-time-${fieldId}`}
-              label={`${props.subject} end time`}
-              value={endParts().time}
-              options={endOptions()}
-              selectedId={endSelectedId()}
-              onChange={changeEndTime}
-              disabled={props.endDisabled}
-              invalid={props.invalid}
-              describedBy={props.describedBy}
-            />
-          </Show>
-        </span>
-      </div>
-      <Show when={props.onAllDayChange || props.trailing}>
-        <div class="ml-auto flex shrink-0 items-center gap-2">
-          <Show when={props.onAllDayChange}>
-            {(onChange) => (
-              <ToggleSwitch
-                checked={props.allDay}
-                disabled={props.allDayDisabled}
-                onChange={onChange()}
-                size="sm"
-                label="All day"
-                labelClass="whitespace-nowrap text-xs text-ink-muted"
-              />
-            )}
-          </Show>
-          {props.trailing}
-        </div>
       </Show>
-    </div>
+    </span>
+  );
+}
+
+/**
+ * Parts of a date/time range, for hosts that lay out its start and end
+ * themselves; `DateTimeRangeFields` is the inline layout.
+ */
+export const DateTimeRange = { Root, Start, End };
+
+export interface DateTimeRangeFieldsProps extends DateTimeRangeProps {
+  /** Omit to hide the All day control for hosts that only support timed ranges. */
+  onAllDayChange?: (allDay: boolean) => void;
+  allDayDisabled?: boolean;
+  /** A control after All day, e.g. a host's Clear. */
+  trailing?: JSX.Element;
+}
+
+/**
+ * Each end's date and, unless all day, its time, joined by an arrow, then an
+ * All day switch, as Google Calendar edits an event's time. Times are typed
+ * or picked. An all-day end is the last day, included.
+ */
+export function DateTimeRangeFields(props: DateTimeRangeFieldsProps) {
+  return (
+    <DateTimeRange.Root {...props}>
+      <div class="flex w-full flex-wrap items-center gap-x-3 gap-y-2">
+        <div class="flex min-w-0 flex-wrap items-center gap-1.5">
+          <DateTimeRange.Start />
+          <ArrowRightIcon
+            aria-hidden={false}
+            aria-label="to"
+            class={cn(
+              'size-3.5 shrink-0 text-ink-extra-muted',
+              props.invalid && 'text-failure'
+            )}
+          />
+          <DateTimeRange.End />
+        </div>
+        <Show when={props.onAllDayChange || props.trailing}>
+          <div class="ml-auto flex shrink-0 items-center gap-2">
+            <Show when={props.onAllDayChange}>
+              {(onChange) => (
+                <ToggleSwitch
+                  checked={props.allDay}
+                  disabled={props.allDayDisabled}
+                  onChange={onChange()}
+                  size="sm"
+                  label="All day"
+                  labelClass="whitespace-nowrap text-xs text-ink-muted"
+                />
+              )}
+            </Show>
+            {props.trailing}
+          </div>
+        </Show>
+      </div>
+    </DateTimeRange.Root>
   );
 }

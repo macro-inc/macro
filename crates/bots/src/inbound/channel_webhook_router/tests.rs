@@ -577,6 +577,7 @@ impl messages::domain::api::MessageCommands for TestChannelPoster {
                 imported_author: None,
                 bot_profile: None,
                 mentions: Vec::new(),
+                triggered_via: None,
                 triggered_by,
                 content: input.content,
                 created_at: chrono::Utc::now(),

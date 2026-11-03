@@ -85,10 +85,6 @@ async fn turn(
     instructions: &str,
     prompt: &str,
 ) -> Vec<(u64, u64, u64)> {
-    let tools: Arc<dyn AiToolSet<InMemToolContext> + Send + Sync> = Arc::new(DeferredToolSet::new(
-        native.for_turn(false),
-        Arc::clone(&native.deferred),
-    ));
     let identity = AgentIdentity {
         bot: bot_id::BotId::TEST_A,
         // Unique per run, so every run starts from a cold cache.
@@ -97,16 +93,40 @@ async fn turn(
     };
     let system_prompt = system_prompt(
         &native.prompt,
+        "",
         agent_session::domain::model::AgentSessionId::new(),
+        ReplyDelivery::Streamed,
         Some(&identity),
         Some(instructions),
         None,
     );
+    let messages = vec![agent::types::ChatMessage {
+        content: agent::types::ChatMessageContent::Text(prompt.to_owned()),
+        role: agent::types::Role::User,
+        attachments: None,
+    }];
+    send(native, system_prompt, &messages).await.0
+}
+
+/// Sends `messages` as one turn, returning each model call's (input, cache
+/// read, cache write) and the parts the turn persists.
+async fn send(
+    native: &NativeTools,
+    system_prompt: SystemPrompt,
+    messages: &[agent::types::ChatMessage],
+) -> (
+    Vec<(u64, u64, u64)>,
+    Vec<agent::types::AssistantMessagePart>,
+) {
+    let tools: Arc<dyn AiToolSet<InMemToolContext> + Send + Sync> = Arc::new(DeferredToolSet::new(
+        native.for_turn(false),
+        Arc::clone(&native.deferred),
+    ));
     let user = MacroUserIdStr::try_from_email("cache-measure@macro.com").unwrap();
     let usage = UsageContext::new(AiFeature::AgentSession, user);
     let recorded = Arc::new(RecordedUsage::default());
     let metering = agent::MeteringContext::tracking_only(recorded.clone(), usage.clone());
-    metering
+    let parts = metering
         .scope(async {
             let mut session = AgentLoop::new(Arc::new(ai_usage::NoOpUsageRecorder))
                 .with_model(MODEL)
@@ -118,15 +138,17 @@ async fn turn(
                 )
                 .await;
             let mut stream = session
-                .send_message(vec![agent::Message::user(prompt)])
+                .send_message(agent::to_rig_messages(messages))
                 .await
                 .unwrap();
+            let mut accumulator = agent::StreamAccumulator::new();
             while let Some(part) = stream.next().await {
-                part.unwrap();
+                accumulator.push(part.unwrap());
             }
+            accumulator.into_parts()
         })
         .await;
-    recorded
+    let calls = recorded
         .0
         .lock()
         .unwrap()
@@ -137,7 +159,8 @@ async fn turn(
             }
             other => panic!("unreported usage: {other:?}"),
         })
-        .collect()
+        .collect();
+    (calls, parts)
 }
 
 fn print(label: &str, calls: &[(u64, u64, u64)]) {
@@ -191,4 +214,69 @@ async fn measure_prompt_cache() {
     .await;
     print("session 1", &first);
     print("session 2", &second);
+}
+
+/// Three turns of one code-mode session, each replaying the persisted
+/// history the way production does, with SDK documentation that differs per
+/// turn. Turns 2 and 3 should read most of their input from the cache.
+#[tokio::test]
+#[ignore = "calls the Anthropic API; run under doppler with --nocapture"]
+async fn measure_prompt_cache_turns() {
+    let native = NativeTools::from_factory(ai_tools::tools_for_agent_code_mode, true);
+    let run = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos()
+        .to_string();
+    let identity = AgentIdentity {
+        bot: bot_id::BotId::TEST_A,
+        name: format!("Macro {run}-turns"),
+        handle: "macro".to_owned(),
+    };
+    let session_id = agent_session::domain::model::AgentSessionId::new();
+    let prompts = [
+        "Call ExecuteCode once with source `export async function main() { return {data: 1}; }`. \
+         After it answers, reply with the single word done.",
+        "Reply with the single word hi. Do not call any tool.",
+        "Reply with the single word bye. Do not call any tool.",
+    ];
+    let mut messages: Vec<agent::types::ChatMessage> = Vec::new();
+    for (index, prompt) in prompts.iter().enumerate() {
+        // Stands in for `select_documentation`, which picks different SDK
+        // references for each request.
+        let sdk_docs = format!(
+            "\n<macro_sdk>\nTurn {index} reference.\n{}</macro_sdk>",
+            "documents.search(query) returns an async iterator of documents.\n"
+                .repeat(60 * (index + 1))
+        );
+        let system_prompt = system_prompt(
+            &native.prompt,
+            &sdk_docs,
+            session_id,
+            ReplyDelivery::Streamed,
+            Some(&identity),
+            None,
+            None,
+        );
+        messages.push(agent::types::ChatMessage {
+            content: agent::types::ChatMessageContent::Text((*prompt).to_owned()),
+            role: agent::types::Role::User,
+            attachments: None,
+        });
+        let (calls, parts) = send(&native, system_prompt, &messages).await;
+        print(&format!("turn {}", index + 1), &calls);
+        if index > 0 {
+            let (input, read, write) = calls[0];
+            println!(
+                "turn {} first call: {}% of input read from cache",
+                index + 1,
+                read * 100 / (input + read + write)
+            );
+        }
+        messages.push(agent::types::ChatMessage {
+            content: agent::types::ChatMessageContent::AssistantMessageParts(parts),
+            role: agent::types::Role::Assistant,
+            attachments: None,
+        });
+    }
 }

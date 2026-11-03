@@ -4,6 +4,7 @@ import { Button, Input, ToggleSwitch } from '@ui';
 import { ResultAsync } from 'neverthrow';
 import { createSignal, Show } from 'solid-js';
 import { AudiencePanel } from '../components/share/audience-panel';
+import { BrandingPanel } from '../components/share/branding-panel';
 import {
   type FormMetadataPatch,
   type FormWriteFailure,
@@ -19,8 +20,8 @@ import type { Preview } from '../primitives/create-preview';
 
 /**
  * The Share tab (RFC 02 §2, §6): who can respond, the respond link, whether
- * the form takes responses and until when, and the people it is shared with
- * through the share dialog.
+ * the form takes responses and until when, how the respond page is branded,
+ * and the people it is shared with through the share dialog.
  */
 export function ShareTabView(props: {
   detail: FormDetail;
@@ -198,6 +199,12 @@ export function ShareTabView(props: {
             </p>
           </Show>
         </div>
+        <BrandingPanel
+          branding={form().branding}
+          canEdit={canEdit()}
+          pending={pending()}
+          onChange={update}
+        />
         <div class="flex items-center gap-3 rounded-xl border border-edge bg-surface p-4">
           <UsersThree
             class="size-5 shrink-0 text-ink-muted"
@@ -211,7 +218,7 @@ export function ShareTabView(props: {
               Posting the form in a channel lets its members respond.
             </span>
           </div>
-          <Button variant="outline" size="sm" onClick={props.onOpenShare}>
+          <Button variant="secondary" size="sm" onClick={props.onOpenShare}>
             Manage access
           </Button>
         </div>

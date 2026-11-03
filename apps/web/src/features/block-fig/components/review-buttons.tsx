@@ -17,6 +17,7 @@ export function CommentButton(props: {
       {(c) => (
         <div class="relative">
           <Button
+            aria-label="Comment (C)"
             variant="ghost"
             size="icon-md"
             aria-pressed={c().active}
@@ -25,12 +26,11 @@ export function CommentButton(props: {
                 ? 'rounded-lg bg-accent text-accent-contrast'
                 : 'rounded-lg'
             }
-            label="Comment (C)"
             tooltip="Comment · C"
             data-testid="fig-tool-comment"
             onClick={() => c().onToggle()}
           >
-            <ChatCircle />
+            <ChatCircle class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
           <Show when={c().unread > 0}>
             <span
@@ -49,14 +49,14 @@ export function CommentButton(props: {
 export function PresentButton(props: { mac: boolean; onPresent: () => void }) {
   return (
     <Button
+      aria-label="Present"
       variant="ghost"
       size="icon-md"
-      label="Present"
       tooltip={`Present · ${props.mac ? '⌥⌘↵' : 'Ctrl+Alt+Enter'}`}
       data-testid="fig-present-button"
       onClick={() => props.onPresent()}
     >
-      <Play />
+      <Play class="size-4 touch:size-6 shrink-0 pointer-events-none" />
     </Button>
   );
 }

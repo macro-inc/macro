@@ -2,7 +2,7 @@ import { focusInput } from '@core/directive/focusInput';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import PaperclipIcon from '@icon/system/regular/paperclip.svg';
-import { type Accessor, type JSX, Show } from 'solid-js';
+import { type Accessor, children, type JSX, Show } from 'solid-js';
 import { cn } from '../utils/classname';
 import { Button } from './Button';
 import { ComposerSurface } from './ComposerSurface';
@@ -19,6 +19,11 @@ export type CollapsedInputProps = {
   renderDraft?: (draft: Accessor<string>) => JSX.Element;
   placeholder?: string;
   attachmentCount?: number;
+  /**
+   * Shows the draft's attachments before the draft, in place of the
+   * trailing attachment count.
+   */
+  attachmentPreview?: JSX.Element;
   /** Renders the send button with a spinner and disables it. */
   pending?: boolean;
   /**
@@ -27,8 +32,6 @@ export type CollapsedInputProps = {
    */
   disabled?: boolean;
   class?: string;
-  /** Extra composer action placed immediately before Send. */
-  trailingAction?: JSX.Element;
   /** Replaces the attach button at the start of the input. */
   leadingAction?: JSX.Element;
   /**
@@ -52,6 +55,7 @@ export function CollapsedInput(props: CollapsedInputProps) {
   const hasText = () => text().length > 0;
   const attachmentCount = () => props.attachmentCount ?? 0;
   const hasAttachments = () => attachmentCount() > 0;
+  const attachmentPreview = children(() => props.attachmentPreview);
 
   return (
     <Layer depth={3} data-collapsed-input>
@@ -67,14 +71,14 @@ export function CollapsedInput(props: CollapsedInputProps) {
           when={props.leadingAction}
           fallback={
             <Button
+              tooltip="Attach files"
               variant="ghost"
-              size="icon-composer"
+              size="icon-md"
               class="not-touch:light-mode:text-composer-ink"
               aria-label="Attach files"
-              label="Attach files"
               onClick={() => props.onAttach?.()}
             >
-              <PaperclipIcon />
+              <PaperclipIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           }
         >
@@ -84,12 +88,13 @@ export function CollapsedInput(props: CollapsedInputProps) {
           type="button"
           class={cn(
             'min-w-0 flex-1 overflow-hidden rounded-sm px-1.5 text-left text-base outline-none',
-            'flex h-8 items-center text-ink focus-visible:bg-active not-touch:h-[30px] not-touch:px-[5.625px] not-touch:leading-[24.375px]'
+            'flex h-8 items-center gap-2 text-ink focus-visible:bg-active not-touch:h-[30px] not-touch:px-[5.625px] not-touch:leading-[24.375px]'
           )}
           ref={attachFocusInput}
           onClick={() => props.onOpen?.()}
           data-collapsed-input-preview
         >
+          {attachmentPreview()}
           <Show
             when={hasText()}
             fallback={
@@ -105,29 +110,25 @@ export function CollapsedInput(props: CollapsedInputProps) {
             </div>
           </Show>
         </button>
-        <Show when={hasAttachments() && !hasText()}>
+        <Show when={hasAttachments() && !hasText() && !attachmentPreview()}>
           <Button
+            tooltip={`${attachmentCount()} attachment${
+              attachmentCount() === 1 ? '' : 's'
+            }`}
             variant="ghost"
             size="sm"
             class="h-8 px-1.5 gap-1"
             aria-label={`${attachmentCount()} attachment${
               attachmentCount() === 1 ? '' : 's'
             }`}
-            label={`${attachmentCount()} attachment${
-              attachmentCount() === 1 ? '' : 's'
-            }`}
             ref={attachFocusInput}
             onClick={() => props.onOpen?.()}
             data-collapsed-input-attachments
           >
-            <PaperclipIcon />
+            <PaperclipIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
             <span>{attachmentCount()}</span>
           </Button>
         </Show>
-        {props.trailingAction}
-        {/* Fades out rather than unmounting, the way the expanded composer's
-            send action does: dropping it would slide the trailing action
-            across as soon as the draft emptied. */}
         <SendButton
           appearance="composer"
           pending={props.pending}

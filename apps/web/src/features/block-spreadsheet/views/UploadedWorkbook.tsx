@@ -56,6 +56,7 @@ export default function UploadedWorkbook() {
                 : 'Unable to open this workbook.'}
             </span>
             <Button
+              variant="ghost"
               size="sm"
               onClick={() =>
                 fireAndForget(query.refetch(), 'uploaded-workbook')
@@ -167,7 +168,7 @@ function UploadedWorkbookPreview(props: {
         </span>
         <Button
           size="sm"
-          variant="accent"
+          variant="primary"
           disabled={!!actions.pending()}
           onClick={() => fireAndForget(actions.edit(), 'uploaded-workbook')}
         >

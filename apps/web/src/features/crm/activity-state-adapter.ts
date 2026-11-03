@@ -8,7 +8,7 @@ import { createStore } from 'solid-js/store';
 import { z } from 'zod';
 import { normalizeFacetSelection } from '../soup';
 import type { CrmActivityViewState } from './core/activity-view';
-import type { CrmActivityTab } from './core/navigation';
+import type { CrmSoupActivityTab } from './core/navigation';
 
 const stateSchema = z.object({
   search: z.string(),
@@ -19,7 +19,7 @@ const stateSchema = z.object({
 });
 
 /** Per-entry, per-activity controls never modify the ordinary app views. */
-export function createCrmActivityState(tab: CrmActivityTab) {
+export function createCrmActivityState(tab: CrmSoupActivityTab) {
   const panel = useSplitPanelOrThrow();
   const key = `crm.activity.${tab}`;
   const [state, setState] = withSplitPanelOwner(key, () =>

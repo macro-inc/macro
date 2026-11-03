@@ -4,7 +4,7 @@ mod increment_count;
 #[cfg(test)]
 mod test;
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, time::Duration};
 
 use model::document::SaveBomPart;
 
@@ -16,6 +16,13 @@ pub struct Redis {
 // Key prefixes
 static SHA_COUNT_KEY_PREFIX: &str = "sha:";
 static SHA_DELETE_BUCKET: &str = "bucket:sha-delete";
+
+/// How long a `sha:` counter lives after the last save that referenced it.
+/// The counter only lets an upload skip parts that are already in S3, so an
+/// expired one costs a re-upload; `sha_cleanup_worker` recounts `"BomPart"`
+/// before deleting anything. The expiry also lets volatile-lru evict counters
+/// when the shared cache is full.
+pub const SHA_REFERENCE_TTL: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 
 impl Redis {
     pub fn new(inner: redis::Client) -> Self {

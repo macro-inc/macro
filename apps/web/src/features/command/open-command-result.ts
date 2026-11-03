@@ -3,6 +3,7 @@ import { createGlobalSearchOpener } from '@app/features/next-soup/open-search';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { ReferredFrom } from '@components/app/split-layout/layoutManager';
 import { toast } from '@core/component/Toast/Toast';
@@ -50,6 +51,7 @@ export function createCommandResultOpener(
           reopen: 'latest',
         }
       );
+      globalSplitManager()?.returnFocus();
     } catch {
       toast.failure(t('commandMenu.unableToOpenConversation'));
     }
@@ -115,14 +117,15 @@ export function createCommandResultOpener(
   };
 
   return (item: CommandMenuItem, openInNewSplit = false): boolean => {
-    if (item.kind === 'initiative' && !projectsFlag().enabled) return false;
-    if (item.kind === 'initiative') {
+    const isProject = isEntityItem(item) && item.bucket === 'initiative';
+    if (isProject && !projectsFlag().enabled) return false;
+    if (isProject) {
       openWithSplit(
         {
           type: 'component',
           id: projectRouteId({ id: item.id, section: 'overview' }),
         },
-        { preferNewSplit: openInNewSplit }
+        { referredFrom, preferNewSplit: openInNewSplit }
       );
       return true;
     }

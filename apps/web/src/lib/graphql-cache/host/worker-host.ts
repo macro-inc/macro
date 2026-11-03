@@ -33,6 +33,7 @@ import {
   type MutationClaim,
   type MutationSettlement,
   OWNER_EPOCH_LOST_ERROR_CODE,
+  OWNER_HANDOFF_BLOCKED_ERROR_CODE,
   OWNER_LOCK_UNAVAILABLE_ERROR_CODE,
   parseStorageGeneration,
   type QueryUpdate,
@@ -475,8 +476,9 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   function onOwnerHandoffBlocked(): void {
     if (state === 'failed' || state === 'suspended' || state === 'disposed')
       return;
-    const error = new Error(
-      'cache reads unavailable after owner handoff timeout'
+    const error = new CacheResponseError(
+      'cache reads unavailable after owner handoff timeout',
+      OWNER_HANDOFF_BLOCKED_ERROR_CODE
     );
     beginRecoveryGeneration();
     for (const key of activeOpKeys) lostRegisteredOpKeys.add(key);

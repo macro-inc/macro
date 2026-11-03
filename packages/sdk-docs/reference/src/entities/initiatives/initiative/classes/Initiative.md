@@ -17,7 +17,7 @@ A group of tasks and members working toward an outcome.
 | <a id="property-name"></a> `name` | `readonly` | () => `Promise`\<`string`\> | Display name. | - |
 | <a id="property-owner"></a> `owner` | `readonly` | () => `Promise`\<[`User`](../../../users/user/classes/User.md)\> | Owner. | - |
 | <a id="property-sharepermissions"></a> `sharePermissions` | `readonly` | () => `Promise`\<[`SharePermissionV2`](../../../../../generated/storage/types.gen/type-aliases/SharePermissionV2.md)\> | Sharing configuration. | - |
-| <a id="property-tasks"></a> `tasks` | `readonly` | () => `Promise`\<[`Task`](../../../tasks/task/classes/Task.md)[]\> | Tasks in this initiative. | - |
+| <a id="property-tasks"></a> `tasks` | `readonly` | () => `Promise`\<[`Task`](../../../tasks/task/classes/Task.md)[]\> | Tasks in this initiative. For their names, pass them to `macro.tasks.summaries` (one request) instead of calling `name()` on each. | - |
 
 ## Methods
 

@@ -279,6 +279,10 @@ impl CrmService for FakeCrmService {
         panic!("unexpected depopulate_contact call")
     }
 
+    async fn has_depopulate_target(&self, _team_id: &Uuid, _email: &str) -> Result<bool, CrmError> {
+        panic!("unexpected has_depopulate_target call")
+    }
+
     async fn link_contact_pairs_with_sources(
         &self,
         _pairs: &[(Uuid, String)],
@@ -302,7 +306,7 @@ impl CrmService for FakeCrmService {
         &self,
         _access: &CrmTeamReceipt<MemberTeamRole>,
         _name: &str,
-        _domain: &str,
+        _domain: Option<&str>,
     ) -> Result<CrmCompanyWithContacts, CrmError> {
         panic!("unexpected create_company call")
     }

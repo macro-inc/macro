@@ -1,4 +1,4 @@
-use loro::{LoroMap, LoroMovableList, LoroText};
+use loro::{LoroList, LoroMap, LoroMovableList, LoroText};
 
 use super::*;
 
@@ -60,6 +60,203 @@ fn imported_updates_report_the_lexical_nodes_they_touch() {
     let unblocking = state.import(&first).unwrap();
     assert!(unblocking.changed);
     assert_eq!(unblocking.touched_nodes, ["body", "heading"]);
+}
+
+/// One user writes a paragraph next to another's. The second user comments
+/// on the author's text and later deletes the comment. The client's mirror
+/// rewrites the author's text node each time, but the commenter wrote none of
+/// it, so blame must not move.
+#[test]
+fn comment_marks_keep_the_text_authors_blame() {
+    const AUTHOR: u64 = 1;
+    const COMMENTER: u64 = 2;
+    let state = DocumentState::new();
+    let client = LoroDoc::new();
+    client.set_peer_id(AUTHOR).unwrap();
+    let root_children = client
+        .get_map("root")
+        .insert_container("children", LoroMovableList::new())
+        .unwrap();
+    let author_paragraph = root_children.push_container(LoroMap::new()).unwrap();
+    author_paragraph.insert("type", "paragraph").unwrap();
+    author_paragraph
+        .insert_container("$", LoroMap::new())
+        .unwrap()
+        .insert("id", "p-author")
+        .unwrap();
+    let author_children = author_paragraph
+        .insert_container("children", LoroMovableList::new())
+        .unwrap();
+    let author_text = author_children.push_container(LoroMap::new()).unwrap();
+    author_text.insert("type", "text").unwrap();
+    author_text
+        .insert_container("$", LoroMap::new())
+        .unwrap()
+        .insert("id", "t-author")
+        .unwrap();
+    author_text
+        .insert_container("text", LoroText::new())
+        .unwrap()
+        .insert(0, "author wrote this")
+        .unwrap();
+    client.commit();
+    client.set_peer_id(COMMENTER).unwrap();
+    let commenter_paragraph = root_children.push_container(LoroMap::new()).unwrap();
+    commenter_paragraph.insert("type", "paragraph").unwrap();
+    commenter_paragraph
+        .insert_container("$", LoroMap::new())
+        .unwrap()
+        .insert("id", "p-commenter")
+        .unwrap();
+    let commenter_text = commenter_paragraph
+        .insert_container("children", LoroMovableList::new())
+        .unwrap()
+        .push_container(LoroMap::new())
+        .unwrap();
+    commenter_text.insert("type", "text").unwrap();
+    commenter_text
+        .insert_container("$", LoroMap::new())
+        .unwrap()
+        .insert("id", "t-commenter")
+        .unwrap();
+    commenter_text
+        .insert_container("text", LoroText::new())
+        .unwrap()
+        .insert(0, "commenter wrote this")
+        .unwrap();
+    client.commit();
+    let written = state
+        .import(&client.export(ExportMode::all_updates()).unwrap())
+        .unwrap();
+    assert_eq!(
+        written.touched_nodes,
+        ["p-author", "p-commenter", "t-author", "t-commenter"]
+    );
+
+    // The commenter marks all of the author's text: the mirror deletes the
+    // text node and recreates it, same id and text, inside a comment node.
+    let seen = client.oplog_vv();
+    author_children.delete(0, 1).unwrap();
+    let comment = author_children.insert_container(0, LoroMap::new()).unwrap();
+    comment.insert("type", "comment").unwrap();
+    comment
+        .insert_container("$", LoroMap::new())
+        .unwrap()
+        .insert("id", "c-whole")
+        .unwrap();
+    comment
+        .insert_container("ids", LoroList::new())
+        .unwrap()
+        .push("mark-1")
+        .unwrap();
+    let wrapped = comment
+        .insert_container("children", LoroMovableList::new())
+        .unwrap()
+        .push_container(LoroMap::new())
+        .unwrap();
+    wrapped.insert("type", "text").unwrap();
+    wrapped
+        .insert_container("$", LoroMap::new())
+        .unwrap()
+        .insert("id", "t-author")
+        .unwrap();
+    wrapped
+        .insert_container("text", LoroText::new())
+        .unwrap()
+        .insert(0, "author wrote this")
+        .unwrap();
+    client.commit();
+    let commented = state
+        .import(&client.export(ExportMode::updates(&seen)).unwrap())
+        .unwrap();
+    assert!(commented.changed);
+    assert!(commented.touched_nodes.is_empty());
+
+    // The commenter deletes the comment: the comment node goes and the text
+    // node is recreated directly in the paragraph again.
+    let seen = client.oplog_vv();
+    author_children.delete(0, 1).unwrap();
+    let unwrapped = author_children.insert_container(0, LoroMap::new()).unwrap();
+    unwrapped.insert("type", "text").unwrap();
+    unwrapped
+        .insert_container("$", LoroMap::new())
+        .unwrap()
+        .insert("id", "t-author")
+        .unwrap();
+    let unwrapped_text = unwrapped.insert_container("text", LoroText::new()).unwrap();
+    unwrapped_text.insert(0, "author wrote this").unwrap();
+    client.commit();
+    let uncommented = state
+        .import(&client.export(ExportMode::updates(&seen)).unwrap())
+        .unwrap();
+    assert!(uncommented.changed);
+    assert!(uncommented.touched_nodes.is_empty());
+
+    // The commenter marks "wrote": Lexical splits the author's text node,
+    // keeping "author " in it and moving the rest into new nodes.
+    let seen = client.oplog_vv();
+    let comment = author_children.push_container(LoroMap::new()).unwrap();
+    comment.insert("type", "comment").unwrap();
+    comment
+        .insert_container("$", LoroMap::new())
+        .unwrap()
+        .insert("id", "c-part")
+        .unwrap();
+    let marked = comment
+        .insert_container("children", LoroMovableList::new())
+        .unwrap()
+        .push_container(LoroMap::new())
+        .unwrap();
+    marked.insert("type", "text").unwrap();
+    marked
+        .insert_container("$", LoroMap::new())
+        .unwrap()
+        .insert("id", "t-marked")
+        .unwrap();
+    marked
+        .insert_container("text", LoroText::new())
+        .unwrap()
+        .insert(0, "wrote")
+        .unwrap();
+    let tail = author_children.push_container(LoroMap::new()).unwrap();
+    tail.insert("type", "text").unwrap();
+    tail.insert_container("$", LoroMap::new())
+        .unwrap()
+        .insert("id", "t-tail")
+        .unwrap();
+    tail.insert_container("text", LoroText::new())
+        .unwrap()
+        .insert(0, " this")
+        .unwrap();
+    unwrapped_text.delete(7, 10).unwrap();
+    client.commit();
+    let split = state
+        .import(&client.export(ExportMode::updates(&seen)).unwrap())
+        .unwrap();
+    assert!(split.changed);
+    assert!(split.touched_nodes.is_empty());
+
+    // The commenter deletes that comment: Lexical merges the pieces back
+    // into the author's text node and removes the comment and tail nodes.
+    let seen = client.oplog_vv();
+    author_children.delete(1, 2).unwrap();
+    unwrapped_text.insert(7, "wrote this").unwrap();
+    client.commit();
+    let merged = state
+        .import(&client.export(ExportMode::updates(&seen)).unwrap())
+        .unwrap();
+    assert!(merged.changed);
+    assert!(merged.touched_nodes.is_empty());
+    assert_eq!(unwrapped_text.to_string(), "author wrote this");
+
+    // Typing into the author's text is still the commenter's edit.
+    let seen = client.oplog_vv();
+    unwrapped_text.insert(17, "!").unwrap();
+    client.commit();
+    let typed = state
+        .import(&client.export(ExportMode::updates(&seen)).unwrap())
+        .unwrap();
+    assert_eq!(typed.touched_nodes, ["t-author"]);
 }
 
 #[test]

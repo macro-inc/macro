@@ -348,6 +348,38 @@ describe('favorites transport', () => {
     mocks.getSoupEntity.mockReset();
   });
 
+  it.each(['add', 'remove'] as const)(
+    'settles an offline REST favorite %s instead of waiting for the network',
+    async (kind) => {
+      mocks.graphqlSoupEnabled.mockReturnValue(false);
+      onlineManager.setOnline(false);
+      const networkDown = new TypeError('Failed to fetch');
+      mocks.addFavoriteRest.mockRejectedValue(networkDown);
+      mocks.removeFavoriteRest.mockRejectedValue(networkDown);
+      const starred = { favorites: [favorite('document-1', 0)] };
+      testQueryClient.setQueryData<FavoritesList>(
+        favoriteKeys.list().queryKey,
+        kind === 'add' ? { favorites: [] } : starred
+      );
+      const mutations = renderHook(() => ({
+        add: useAddFavoriteMutation(),
+        remove: useRemoveFavoriteMutation(),
+      }));
+
+      await expect(
+        mutations[kind].mutateAsync({
+          entityType: 'document',
+          entityId: 'document-1',
+        })
+      ).rejects.toBe(networkDown);
+      expect(
+        testQueryClient
+          .getQueryData<FavoritesList>(favoriteKeys.list().queryKey)
+          ?.favorites.map((item) => item.entityId)
+      ).toEqual(kind === 'add' ? [] : ['document-1']);
+    }
+  );
+
   it('keeps REST reorder optimism while GraphQL Soup is disabled', async () => {
     mocks.graphqlSoupEnabled.mockReturnValue(false);
     testQueryClient.setQueryData<FavoritesList>(favoriteKeys.list().queryKey, {

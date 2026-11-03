@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
 use chrono::{TimeZone, Utc};
@@ -238,6 +238,8 @@ impl PipelineWorkflowService for Workflows {
 struct Records {
     domains: HashMap<String, Uuid>,
     contacts: HashMap<String, Uuid>,
+    ambiguous_contacts: HashSet<String>,
+    unavailable_contacts: HashSet<String>,
     companies_created: Mutex<Vec<String>>,
     contacts_created: Mutex<Vec<(Uuid, String)>>,
 }
@@ -270,6 +272,15 @@ impl TransferRecords for Records {
     }
 
     async fn contact(&self, _: &Viewer, email: &str) -> Result<Option<Uuid>, TransferError> {
+        if self.ambiguous_contacts.contains(email) {
+            return Err(CrmError::InvalidRequest(
+                "Multiple contacts use this email. Select a contact by ID instead.".into(),
+            )
+            .into());
+        }
+        if self.unavailable_contacts.contains(email) {
+            return Err(CrmError::StorageLayerError(anyhow::anyhow!("lookup unavailable")).into());
+        }
         Ok(self.contacts.get(email).copied())
     }
 
@@ -473,6 +484,95 @@ async fn new_contacts_at_one_new_domain_share_one_new_company() {
             (id_of("beta.io"), "raj@beta.io".to_owned()),
         ]
     );
+}
+
+#[tokio::test]
+async fn ambiguous_contacts_are_unresolved_without_blocking_other_csv_rows() {
+    let mut contacts = overview(PipelineRecordType::Contact);
+    contacts.fields[0].name = "Contact".into();
+    let pipeline = contacts.pipeline.pipeline.id;
+    let known = Uuid::now_v7();
+    let service = CrmTransferServiceImpl::new(
+        Arc::new(Workflows::new(contacts)),
+        Records {
+            contacts: HashMap::from([("existing@example.com".into(), known)]),
+            ambiguous_contacts: HashSet::from(["shared@ambiguous.example.com".into()]),
+            ..Records::default()
+        },
+        Files::default(),
+    );
+    let outcome = service
+        .import_to_pipeline(
+            &viewer(),
+            pipeline,
+            CsvInput::Text(
+                "Contact,Email\n\
+                 Shared,shared@ambiguous.example.com\n\
+                 Existing,existing@example.com\n\
+                 New,new@new.example.com\n\
+                 Shared again,shared@ambiguous.example.com\n"
+                    .into(),
+            ),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!((outcome.added, outcome.created_records), (2, 1));
+    assert_eq!(
+        outcome.unresolved,
+        [SkippedRecord {
+            key: "shared@ambiguous.example.com".into(),
+            reason: "Multiple contacts use this email. Select a contact by ID instead.".into(),
+        }]
+    );
+    assert_eq!(
+        *service.records.companies_created.lock().unwrap(),
+        ["new.example.com"]
+    );
+    assert_eq!(
+        *service.records.contacts_created.lock().unwrap(),
+        [(id_of("new.example.com"), "new@new.example.com".into())]
+    );
+    let added = service.workflows.added.lock().unwrap();
+    assert_eq!(added[0].record, RecordTarget::Id(known));
+    assert_eq!(
+        added[1].record,
+        RecordTarget::Id(Uuid::new_v5(&Uuid::NAMESPACE_OID, b"new@new.example.com"))
+    );
+}
+
+#[tokio::test]
+async fn contact_lookup_storage_failure_stops_import_before_creating_records() {
+    let mut contacts = overview(PipelineRecordType::Contact);
+    contacts.fields[0].name = "Contact".into();
+    let pipeline = contacts.pipeline.pipeline.id;
+    let service = CrmTransferServiceImpl::new(
+        Arc::new(Workflows::new(contacts)),
+        Records {
+            unavailable_contacts: HashSet::from(["unavailable@example.com".into()]),
+            ..Records::default()
+        },
+        Files::default(),
+    );
+    let error = service
+        .import_to_pipeline(
+            &viewer(),
+            pipeline,
+            CsvInput::Text(
+                "Contact,Email\nNew,new@new.example.com\nUnavailable,unavailable@example.com\n"
+                    .into(),
+            ),
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        error,
+        TransferError::Crm(CrmError::StorageLayerError(_))
+    ));
+    assert!(service.records.companies_created.lock().unwrap().is_empty());
+    assert!(service.records.contacts_created.lock().unwrap().is_empty());
+    assert!(service.workflows.added.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

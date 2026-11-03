@@ -32,4 +32,4 @@ export type CollabSurfaceResponseParentEntityType =
   | 'database'
   | 'database_row'
   | 'form'
-  | 'whatsapp_group';
+  | 'external_chat';

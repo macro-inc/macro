@@ -33,7 +33,6 @@ mod test;
 /// is many small updates per message, so this is sized in updates, not turns.
 const BACKLOG_LIMIT: usize = 20_000;
 const TITLE_LIMIT: usize = 48;
-const DISPLAY_AGENT: &str = "Macro agent";
 
 type Owner = MacroUserIdStr<'static>;
 
@@ -83,7 +82,7 @@ impl Hub {
             web_url: web_url.trim_end_matches('/').to_owned(),
         });
         let launcher = Launcher {
-            cli: HerdrCli::new(&herdr.bin, herdr.workspace_id.clone()),
+            cli: herdr.cli(),
             workspace: workspace.to_owned(),
             pane_command: pane_command(&socket),
             windows: HashMap::new(),
@@ -389,18 +388,9 @@ impl Launcher {
     async fn handle(&mut self, work: Work) -> Result<(), super::cli::HerdrError> {
         match work {
             Work::Open { session } => {
-                let window = self
-                    .cli
-                    .open_window(&self.workspace, "macro", false)
-                    .await?;
                 let mut command = self.pane_command.clone();
                 command.extend(["--session".to_owned(), session.clone()]);
-                self.cli
-                    .run_in_pane(&window.pane_id, &shell_words::join(&command))
-                    .await?;
-                self.cli
-                    .report_title(&window.pane_id, DISPLAY_AGENT, None)
-                    .await?;
+                let window = self.cli.open_viewer(&self.workspace, &command).await?;
                 tracing::info!(
                     %session,
                     tab = %window.tab_id,
@@ -419,17 +409,14 @@ impl Launcher {
                 };
                 self.seq += 1;
                 self.cli
-                    .report_state(&window.pane_id, state, message.as_deref(), self.seq)
+                    .report_state(window, state, message.as_deref(), self.seq)
                     .await?;
             }
             Work::Title { session, title } => {
                 let Some(window) = self.windows.get(&session) else {
                     return Ok(());
                 };
-                self.cli.rename_tab(&window.tab_id, &title).await?;
-                self.cli
-                    .report_title(&window.pane_id, DISPLAY_AGENT, Some(&title))
-                    .await?;
+                self.cli.name_viewer(window, &title).await?;
             }
         }
         Ok(())

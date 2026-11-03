@@ -17,9 +17,10 @@ export function ScheduleEditorForm(props: {
       <Show when={!props.topBarOwned}>
         <header class="flex shrink-0 items-center gap-3">
           <Button
+            aria-label="Back to availability"
+            tooltip="Back to availability"
             variant="ghost"
             size="icon-md"
-            label="Back to availability"
             disabled={props.saving}
             onClick={props.onCancel}
           >
@@ -47,7 +48,7 @@ export function ScheduleEditorForm(props: {
         <Button
           data-save-schedule
           type="submit"
-          variant="cta"
+          variant="primary"
           disabled={props.saving || props.editingRange}
         >
           {props.saving ? 'Saving…' : 'Save schedule'}

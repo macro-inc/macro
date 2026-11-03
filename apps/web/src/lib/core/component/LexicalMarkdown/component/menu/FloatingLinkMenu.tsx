@@ -450,11 +450,11 @@ export function FloatingLinkMenu(props: {
               <div class="flex items-center gap-0.5 ease-in-out">
                 <Button
                   onClick={openInNewTab}
-                  variant="accent"
+                  variant="primary"
                   size="icon-sm"
                   tooltip="Open in new tab"
                 >
-                  <NewTab />
+                  <NewTab class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
                 <Button
                   onClick={handleEditClick}
@@ -462,7 +462,7 @@ export function FloatingLinkMenu(props: {
                   size="icon-sm"
                   tooltip="Edit link"
                 >
-                  <Pencil />
+                  <Pencil class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
                 <Button
                   onClick={copyLink}
@@ -470,7 +470,7 @@ export function FloatingLinkMenu(props: {
                   size="icon-sm"
                   tooltip="Copy link"
                 >
-                  <Copy />
+                  <Copy class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
                 <Button
                   onClick={handleUnlink}
@@ -478,7 +478,7 @@ export function FloatingLinkMenu(props: {
                   size="icon-sm"
                   tooltip="Remove link"
                 >
-                  <Trash />
+                  <Trash class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
               </div>
             </div>
@@ -518,12 +518,13 @@ export function FloatingLinkMenu(props: {
           >
             <Button
               onClick={handleSubmit}
-              variant="cta"
+              variant="primary"
               size="sm"
               tooltip="Apply link changes"
               disabled={!pendingLinkInfo()?.url && !pendingLinkInfo()?.linkText}
             >
-              <Check /> Apply
+              <Check class="size-3 touch:size-6 shrink-0 pointer-events-none" />{' '}
+              Apply
             </Button>
           </div>
         </MenuWrapper>

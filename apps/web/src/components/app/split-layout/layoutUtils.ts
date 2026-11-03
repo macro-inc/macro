@@ -1,15 +1,18 @@
-import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
+import { isListViewID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { createCallback } from '@solid-primitives/rootless';
 import {
   type Accessor,
   createEffect,
   createMemo,
-  createSignal,
   onCleanup,
   untrack,
   useContext,
 } from 'solid-js';
+import {
+  type CollapsibleItemInput,
+  useRegisterPriorityCollapseItem,
+} from '../../priority-collapse/createPriorityCollapser';
 import { SplitLayoutContext, SplitPanelContext } from './context';
 import type {
   SplitContent,
@@ -17,10 +20,7 @@ import type {
   SplitHandle,
   SplitManager,
 } from './layoutManager';
-import type {
-  CollapsibleItemInput,
-  PriorityCollapser,
-} from './utils/createPriorityCollapser';
+import { shouldAutofocusNavigation } from './should-autofocus-navigation';
 
 const _isInSplit = createCallback(() => {
   return !!useContext(SplitPanelContext);
@@ -114,32 +114,16 @@ export function shouldShowSplitCloseButton(manager: SplitManager) {
   return manager.getVisibleSplitCount() > 1;
 }
 
-/** Close a visible panel, or return the last one to its most recent list. */
-export function closeSplitOrReturnToList(
-  manager: SplitManager,
-  handle: SplitHandle
-) {
-  if (shouldShowSplitCloseButton(manager)) {
-    handle.close();
-    return;
-  }
-  const content = handle.content();
-  if (content.type === 'component' && isListViewID(content.id)) return;
-  if (
-    handle.goBackTo(
-      (entry) => entry.type === 'component' && isListViewID(entry.id)
-    )
-  )
-    return;
-  handle.replace({
-    next: { type: 'component', id: LIST_VIEW_ID.home },
-    mergeHistory: true,
-  });
-}
-
 /** Inline previews stay passive until the user focuses them. */
 export function useCanAutofocusSplitContent() {
-  return !useSplitPanel()?.isInlinePreview;
+  const panel = useSplitPanel();
+  if (panel?.isInlinePreview) return false;
+  return panel
+    ? shouldAutofocusNavigation(
+        panel.handle.lastNavigationSource(),
+        panel.handle.lastNavigationCause()
+      )
+    : true;
 }
 
 /**
@@ -216,30 +200,6 @@ function _createIsActiveSplitContentMemo(
     const content = activeSplit()?.content();
     return content?.type === contentType && content.id === id;
   });
-}
-
-/**
- * Register a collapsible item with an explicit collapser for the lifetime of
- * the calling owner. Rows outside the split header (a ViewShell top bar with
- * its own overflow sensor) hand their controller's collapser in directly.
- */
-export function useRegisterPriorityCollapseItem(
-  collapser: PriorityCollapser,
-  input: CollapsibleItemInput
-): Accessor<boolean> {
-  const [collapsed, setCollapsedInner] = createSignal(false);
-  const setCollapsed = (value: boolean, opts?: { silent?: boolean }) => {
-    setCollapsedInner(value);
-    if (!opts?.silent) input.onCollapsedChange?.(value);
-  };
-  input.onCollapsedChange?.(false);
-  const cleanup = collapser.register({
-    ...input,
-    collapsed,
-    setCollapsed,
-  });
-  onCleanup(cleanup);
-  return collapsed;
 }
 
 function useRegisterCollapsibleItem(

@@ -6,8 +6,9 @@ import {
   useContext,
 } from 'solid-js';
 import type { WhatsAppAccount } from '../core/account';
-import type { AdoptFailure } from '../core/adopt';
+import type { AddFailure } from '../core/add';
 import type { WhatsAppChat } from '../core/chat';
+import type { NewChatFailure } from '../core/new-chat';
 import type { PairingStep, PasskeyChallenge } from '../core/pairing';
 
 /** Which collapsible sections of a list are open; unknown ones start open. */
@@ -93,12 +94,21 @@ export type WhatsAppLinkedCapabilities = {
   disconnect: (
     generation: number
   ) => ResultAsync<{ remoteUnlinkRequested: boolean }, RequestFailure>;
-  /** One click: the Macro group takes the WhatsApp group's name and follows it. */
-  adopt: (groupJid: string) => ResultAsync<{ groupId: string }, AdoptFailure>;
+  /** One click: the Macro chat takes the WhatsApp chat's name and follows it. */
+  add: (
+    chat: Pick<WhatsAppChat, 'jid' | 'kind'>
+  ) => ResultAsync<{ chatId: string }, AddFailure>;
+  /**
+   * Start a direct chat with someone not in the chat list: ask WhatsApp
+   * whether the number (E.164) has an account, then add that chat.
+   */
+  startChat: (
+    phoneNumber: string
+  ) => ResultAsync<{ chatId: string }, NewChatFailure>;
   isConnecting: Accessor<boolean>;
   isDisconnecting: Accessor<boolean>;
-  /** Host action: open a group in Macro. */
-  openGroup: (groupId: string) => void;
+  /** Host action: open a chat in Macro. */
+  openChat: (chatId: string) => void;
   /** The chat list's folded sections, remembered per person. */
   sections: OpenSections;
 };

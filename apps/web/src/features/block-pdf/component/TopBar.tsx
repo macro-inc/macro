@@ -143,8 +143,9 @@ export function TopBar() {
           name: fileName(),
           fileType,
         }),
-      buttonComponent: () => (
+      buttonComponent: (control) => (
         <ChatWithAgentButton
+          grouped={control.grouped}
           entity={{
             type: 'document',
             id: documentId,

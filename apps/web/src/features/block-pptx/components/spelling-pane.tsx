@@ -26,12 +26,13 @@ export function SpellingPane(props: {
       <div class="flex h-9 items-center justify-between border-edge-muted border-b px-3">
         <span class="font-semibold text-ink text-sm">Spelling</span>
         <Button
+          aria-label="Close"
+          tooltip="Close"
           size="icon-sm"
           variant="ghost"
-          label="Close"
           onClick={props.onClose}
         >
-          <X />
+          <X class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
       <Show
@@ -45,7 +46,7 @@ export function SpellingPane(props: {
             <span>Spell check complete. You're good to go!</span>
             <Button
               size="sm"
-              variant="accent"
+              variant="primary"
               data-testid="pptx-spelling-ok"
               onClick={props.onClose}
             >
@@ -65,7 +66,7 @@ export function SpellingPane(props: {
           <div class="flex flex-wrap gap-1">
             <Button
               size="sm"
-              variant="outline"
+              variant="secondary"
               disabled={noAction()}
               data-testid="pptx-spelling-ignore-once"
               onClick={() => fireAndForget(p.ignoreOnce(), 'pptx-spelling')}
@@ -74,7 +75,7 @@ export function SpellingPane(props: {
             </Button>
             <Button
               size="sm"
-              variant="outline"
+              variant="secondary"
               disabled={noAction()}
               data-testid="pptx-spelling-ignore-all"
               onClick={() => fireAndForget(p.ignoreAll(), 'pptx-spelling')}
@@ -83,7 +84,7 @@ export function SpellingPane(props: {
             </Button>
             <Button
               size="sm"
-              variant="outline"
+              variant="secondary"
               disabled={noAction()}
               data-testid="pptx-spelling-add"
               onClick={() => fireAndForget(p.add(), 'pptx-spelling')}
@@ -133,7 +134,7 @@ export function SpellingPane(props: {
           <div class="flex gap-1">
             <Button
               size="sm"
-              variant="accent"
+              variant="primary"
               disabled={noAction() || !p.choice()}
               data-testid="pptx-spelling-change"
               onClick={() => fireAndForget(p.change(), 'pptx-spelling')}
@@ -142,7 +143,7 @@ export function SpellingPane(props: {
             </Button>
             <Button
               size="sm"
-              variant="outline"
+              variant="secondary"
               disabled={noAction() || !p.choice()}
               data-testid="pptx-spelling-change-all"
               onClick={() => fireAndForget(p.changeAll(), 'pptx-spelling')}

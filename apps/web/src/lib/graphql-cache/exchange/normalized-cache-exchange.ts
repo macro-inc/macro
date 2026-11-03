@@ -36,7 +36,7 @@
  */
 
 import { fireAndForget } from '@core/util/fireAndForget';
-import { Telemetry } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   type Client,
   CombinedError,
@@ -110,6 +110,7 @@ import {
   withOptimisticMutationDisposition,
 } from './optimistic';
 import { queryShape } from './query-shape';
+import { runSubscriptionCacheEffects } from './subscription-cache-trace';
 
 /** Server writes acknowledged since this query left for the network. */
 const QUERY_MUTATION_VERSION_CONTEXT_KEY =
@@ -120,6 +121,14 @@ const AFFECTED_READ_CONTEXT_KEY = 'normalizedCacheAffectedRead';
 const REPLACEMENT_REGISTRATION_ONLY_CONTEXT_KEY =
   'normalizedCacheReplacementRegistrationOnly';
 /** Marks a query as network-to-cache hydration with a projected result. */
+
+declare module '@urql/core' {
+  interface OperationContext {
+    /** Publish the network result without storing it in the cache. */
+    persistResult?: false;
+  }
+}
+
 export const HYDRATE_ONLY_CONTEXT_KEY = 'normalizedCacheHydrateOnly';
 /** Retains the client-annotated document while the transport uses a stripped copy. */
 const HYDRATION_DOCUMENT_CONTEXT_KEY = 'normalizedCacheHydrationDocument';
@@ -1234,7 +1243,8 @@ export function normalizedCacheExchange(
       async function applyOperationCacheEffects(
         op: Operation,
         effects: CacheEffect[],
-        isCurrent: () => boolean = () => true
+        isCurrent: () => boolean = () => true,
+        span?: Span
       ): Promise<boolean> {
         let applied = true;
         for (const effect of effects) {
@@ -1252,6 +1262,7 @@ export function normalizedCacheExchange(
             }
           } catch (error) {
             applied = false;
+            span?.error('Subscription cache effect failed');
             // One failed cache effect must neither skip later effects nor
             // prevent delivery of the original operation result.
             options.onCacheError?.(error, op);
@@ -1412,14 +1423,18 @@ export function normalizedCacheExchange(
           const previousEffects =
             subscriptionEffectChains.get(op.key) ?? Promise.resolve(true);
           const generation = subscriptionGenerations.get(op.key);
-          const effects = previousEffects.then(() =>
-            applyOperationCacheEffects(
-              op,
-              operationCacheEffects(result.data),
-              () =>
-                generation !== undefined &&
-                subscriptionGenerations.get(op.key) === generation
-            )
+          const effects = runSubscriptionCacheEffects(
+            result,
+            previousEffects,
+            (span) =>
+              applyOperationCacheEffects(
+                op,
+                operationCacheEffects(result.data),
+                () =>
+                  generation !== undefined &&
+                  subscriptionGenerations.get(op.key) === generation,
+                span
+              )
           );
           subscriptionEffectChains.set(op.key, effects);
           try {
@@ -1498,7 +1513,10 @@ export function normalizedCacheExchange(
           // Publication, not persistence, supersedes an older cache snapshot.
           // A failed network request still permits a slower offline cache hit.
           if (result.data != null && !result.error) state.cacheReadVersion += 1;
-          const persistence = persistQueryResult(result, state, version);
+          const persistence =
+            op.context.persistResult === false
+              ? Promise.resolve(undefined)
+              : persistQueryResult(result, state, version);
           return withResultMetadata(result, {
             source: 'live-network',
             persistence,

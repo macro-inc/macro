@@ -1,6 +1,7 @@
 /**
- * One-time decisions stay close at hand. Additional choices retain the
- * agent's full wording in a menu so remembered rules can be read before use.
+ * Deny, Always allow, and Allow once stay close at hand. Additional choices
+ * retain the agent's full wording in a menu so remembered rules can be read
+ * before use; Always allow shows its wording as a tooltip.
  */
 
 import CaretDown from '@icon/system/regular/caret-down.svg';
@@ -35,10 +36,14 @@ export function PermissionOptions(props: PermissionOptionsProps) {
     return options.length === 1 ? options[0] : undefined;
   };
   const allow = () => unique('allow_once');
+  const always = () => unique('allow_always');
   const deny = () => unique('reject_once');
   const more = () =>
     props.options.filter(
-      (option) => option.id !== allow()?.id && option.id !== deny()?.id
+      (option) =>
+        option.id !== allow()?.id &&
+        option.id !== always()?.id &&
+        option.id !== deny()?.id
     );
 
   return (
@@ -62,11 +67,11 @@ export function PermissionOptions(props: PermissionOptionsProps) {
         <Dropdown placement="top-end">
           <Dropdown.Trigger
             size="md"
-            variant="outline"
+            variant="secondary"
             disabled={props.disabled}
           >
             More options
-            <CaretDown />
+            <CaretDown class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Dropdown.Trigger>
           <Dropdown.Content class="w-80 max-w-[calc(100vw-2rem)]">
             <Dropdown.Group class="max-h-64 overflow-y-auto">
@@ -91,12 +96,26 @@ export function PermissionOptions(props: PermissionOptionsProps) {
           </Dropdown.Content>
         </Dropdown>
       </Show>
+      <Show when={always()}>
+        {(option) => (
+          <Button
+            type="button"
+            size="md"
+            variant="outline"
+            tooltip={option().name}
+            disabled={props.disabled}
+            onClick={() => props.onSelect(option().id)}
+          >
+            Always allow
+          </Button>
+        )}
+      </Show>
       <Show when={allow()}>
         {(option) => (
           <Button
             type="button"
             size="md"
-            variant="strong"
+            variant="primary"
             tooltip={option().name}
             disabled={props.disabled}
             onClick={() => props.onSelect(option().id)}
@@ -112,7 +131,7 @@ export function PermissionOptions(props: PermissionOptionsProps) {
 function permissionOptionLabel(kind: PermissionOptionKind): string {
   return match(kind)
     .with('allow_once', () => 'Allow once')
-    .with('allow_always', () => 'Remember approval')
+    .with('allow_always', () => 'Always allow')
     .with('reject_once', () => 'Deny')
     .with('reject_always', () => 'Remember denial')
     .exhaustive();

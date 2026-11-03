@@ -4,12 +4,22 @@ pub(crate) mod test;
 use crate::attachments::provider;
 use crate::messages::replying_to_id;
 use crate::parse::service_to_db::addresses_from_message;
-use crate::{contacts, labels, parse, threads};
+use crate::{contacts, labels, messages, parse, threads};
 
 use models_email::email::db::address::UpsertedRecipients;
+use models_email::email::service::label::system_labels;
 use models_email::email::service::message;
 use sqlx::PgPool;
 use sqlx::types::Uuid;
+
+/// What a re-sync of a stored message read before fetching it from Gmail.
+#[derive(Debug, Clone, Default)]
+pub struct ResyncSnapshot {
+    /// The message's provider labels before the fetch.
+    pub stored_labels: Vec<String>,
+    /// Labels with a pending Macro write just before or just after the fetch.
+    pub pending_labels: Vec<String>,
+}
 
 /// inserts a message (and all its related parts) into the database using the passed transaction.
 pub async fn insert_message_with_tx(
@@ -24,9 +34,17 @@ pub async fn insert_message_with_tx(
     // 1. inserting thread simultaneously (thread already has latest values)
     // 2. backfilling messages (metadata gets updated once after all messages complete)
     update_thread_metadata: bool,
+    // Set when re-syncing a stored message: Gmail's answer may predate a local
+    // write made while it was fetched, so labels change only where Gmail
+    // disagrees with what was stored before the fetch.
+    resync: Option<&ResyncSnapshot>,
 ) -> anyhow::Result<()> {
     if let Some(provider_thread_id) = message.provider_thread_id.as_deref() {
         threads::provider_identity::lock_provider_thread(tx, link_id, provider_thread_id).await?;
+    }
+    if resync.is_some() {
+        // Before the row upsert, in the same order as label writes take it.
+        labels::pending_writes::lock_thread_label_writes(tx, &[thread_db_id]).await?;
     }
     let message_db_id = insert_db_message(
         tx,
@@ -39,20 +57,57 @@ pub async fn insert_message_with_tx(
 
     contacts::upsert_message::upsert_message_recipients(tx, message_db_id, &recipents).await?;
 
-    if !message.labels.is_empty() {
-        let provider_label_ids: Vec<String> = message
-            .labels
-            .iter()
-            .map(|label| label.provider_label_id.clone())
-            .collect();
-        labels::insert::insert_message_labels(
-            tx,
-            link_id,
+    // Also when Gmail reports no labels, so a re-sync removes the stored ones.
+    let provider_label_ids: Vec<String> = message
+        .labels
+        .iter()
+        .map(|label| label.provider_label_id.clone())
+        .collect();
+
+    // A re-sync must not undo a Macro label write Gmail has not confirmed yet,
+    // including the read and starred flags those labels drive.
+    let mut kept_label_ids =
+        labels::pending_writes::pending_provider_label_ids(&mut *tx, message_db_id).await?;
+    if let Some(snapshot) = resync {
+        kept_label_ids.extend(snapshot.pending_labels.iter().cloned());
+        let stored_now = sqlx::query_scalar!(
+            r#"
+            SELECT l.provider_label_id
+            FROM email_message_labels ml
+            JOIN email_labels l ON l.id = ml.label_id
+            WHERE ml.message_id = $1
+            "#,
             message_db_id,
-            &provider_label_ids,
-            true,
         )
+        .fetch_all(&mut *tx)
         .await?;
+        kept_label_ids.extend(
+            stored_now
+                .into_iter()
+                .chain(provider_label_ids.iter().cloned())
+                .chain(snapshot.stored_labels.iter().cloned())
+                .filter(|label| {
+                    provider_label_ids.contains(label) == snapshot.stored_labels.contains(label)
+                }),
+        );
+    }
+    kept_label_ids.sort_unstable();
+    kept_label_ids.dedup();
+
+    labels::insert::insert_message_labels(
+        tx,
+        link_id,
+        message_db_id,
+        &provider_label_ids,
+        true,
+        &kept_label_ids,
+    )
+    .await?;
+
+    let kept_read = kept_label_ids.iter().any(|id| id == system_labels::UNREAD);
+    let kept_starred = kept_label_ids.iter().any(|id| id == system_labels::STARRED);
+    if kept_read || kept_starred {
+        messages::update::set_flags_from_labels(tx, message_db_id, kept_read, kept_starred).await?;
     }
 
     provider::insert_attachments(tx, message_db_id, &mut message.attachments).await?;
@@ -265,6 +320,7 @@ impl<U: Fn(&anyhow::Error) -> bool> BackfillMessageWriter<'_, U> {
                 self.link_id,
                 recipients,
                 false,
+                None,
             )
             .await
             {
@@ -314,6 +370,7 @@ pub async fn insert_message(
     message: &mut message::Message,
     link_id: Uuid,
     update_thread_metadata: bool,
+    resync: Option<&ResyncSnapshot>,
 ) -> anyhow::Result<()> {
     // we have to insert addresses before inserting the message. these values are shared
     // across messages, so inserting them in the txn can cause deadlocks.
@@ -332,6 +389,7 @@ pub async fn insert_message(
         link_id,
         recipients,
         update_thread_metadata,
+        resync,
     )
     .await
     {

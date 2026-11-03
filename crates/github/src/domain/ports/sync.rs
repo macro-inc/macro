@@ -343,3 +343,14 @@ pub trait GithubRepositoryClient: Send + Sync + 'static {
         installation_id: u64,
     ) -> impl Future<Output = Result<Vec<GithubRepository>, GithubError>> + Send;
 }
+
+/// Publishes every verified delivery for other domains to act on.
+///
+/// Object-safe so read-only service instances can go without one.
+pub trait GithubWebhookPublisher: Send + Sync + 'static {
+    /// Await publication of one delivery.
+    fn publish_received(
+        &self,
+        delivery: crate::domain::models::GithubWebhookReceived,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<(), GithubError>> + Send + '_>>;
+}

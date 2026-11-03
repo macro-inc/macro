@@ -20,13 +20,10 @@ else
   fi
   echo "PR head moved to ${head_sha:0:10} but its Android native code is unchanged (${built:0:10})."
 fi
-merge=$(pr_merge_commit)
-gh_fetch "$merge"
-merged=$(bun scripts/android-native.mjs hash "$merge")
-if [[ "$merged" != "$built" ]]; then
-  echo "Android native code landed on main while this release was building: the merge result" \
-    "(${merge:0:10}) hashes ${merged:0:10}, the bundle ${built:0:10}. Not uploading a bundle the merge gate could never accept." >&2
-  echo "Merge main into the PR, bump (cd apps/web && just android-bump), commit, and re-add the android-update label." >&2
+if ! merge_result_native_check "bun scripts/android-native.mjs hash" "bun scripts/android-native.mjs listing" gh_fetch; then
+  echo "Android native code landed on ${BASE_BRANCH} while this release was building. Not uploading the bundle" \
+    "(native hash ${built:0:10}): the merge gate could never accept it." >&2
+  echo "Merge ${BASE_BRANCH} into the PR, bump (cd apps/web && just android-bump), commit, and re-add the android-update label." >&2
   exit 1
 fi
-echo "Merge result ${merge:0:10} matches the built native code (${built:0:10}); uploading."
+echo "Uploading the bundle (native hash ${built:0:10})."

@@ -18,7 +18,8 @@ else the team's, else the browser's when offered, else English.
 
 - Owns: the `"User".language` column.
 - Not here: the team default → `crates/teams` (`PatchTeamRequest.language`);
-  translations and language resolution → `apps/web/src/lib/i18n`.
+  translations and language resolution → `apps/web/src/lib/i18n`. The web app
+  reports the resolved language to PostHog as `interface_language`.
 
 ## Recipes
 

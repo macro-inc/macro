@@ -97,7 +97,7 @@ export default function ChangesGallery() {
             </p>
             <div class="flex flex-wrap gap-2">
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 class="self-start"
                 onClick={() =>
@@ -109,7 +109,7 @@ export default function ChangesGallery() {
                 Simulate the agent linking PR #1482
               </Button>
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 class="self-start"
                 aria-pressed={queued()}

@@ -76,7 +76,7 @@ pub async fn delete_user_entity_access_bulk(
         | EntityType::CrmPipeline
         | EntityType::Database
         | EntityType::Form
-        | EntityType::WhatsAppGroup => {
+        | EntityType::ExternalChat => {
             sqlx::query!(
                 r#"
         DELETE FROM "entity_access"

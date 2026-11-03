@@ -2,7 +2,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   enableCalendarAddSharedEvent,
   enableCalendarGuestInvites,
-  enableCalendarMeetingNotes,
+  enableCalendarInvitationForward,
   enableCalendarPromptMobile,
   enableCalendarPromptWeb,
   enableCalendarSearchUi,
@@ -15,11 +15,6 @@ import type { Accessor } from 'solid-js';
 
 export function useCalendarUiFlag(): Accessor<boolean> {
   const flag = useFeatureFlag(enableCalendarUi);
-  return () => flag().enabled;
-}
-
-export function useCalendarMeetingNotesFlag(): Accessor<boolean> {
-  const flag = useFeatureFlag(enableCalendarMeetingNotes);
   return () => flag().enabled;
 }
 
@@ -60,6 +55,12 @@ export function useCalendarTeamOooFlag(): Accessor<boolean> {
 /** Whether a guest the organizer allows to invite may add guests. */
 export function useCalendarGuestInvitesFlag(): Accessor<boolean> {
   const flag = useFeatureFlag(enableCalendarGuestInvites);
+  return () => flag().enabled;
+}
+
+/** Whether a guest who cannot add guests may forward the invitation instead. */
+export function useCalendarInvitationForwardFlag(): Accessor<boolean> {
+  const flag = useFeatureFlag(enableCalendarInvitationForward);
   return () => flag().enabled;
 }
 
