@@ -50,7 +50,9 @@ Socket write policy allows viewers to read, document commenters to change only
 comment marks, and editors to write full updates. Surface commenters cannot
 write. `PeerCommentUpdate` requires comment-only validation even on an editor's
 connection, so a staged annotation cannot alter document text. Deploy support
-for this message before deploying clients that send it; older workers refuse
+for this message before deploying clients that send it; the dev push and
+production release workflows enforce this order while building the web app in
+parallel. Manual deployments must preserve the same order. Older workers refuse
 the unknown variant without acknowledging or applying it. The HTTP API schema
 is generated with `just openapi`; WebSocket messages
 continue to use the Bebop schema. Regenerate the HTTP types from

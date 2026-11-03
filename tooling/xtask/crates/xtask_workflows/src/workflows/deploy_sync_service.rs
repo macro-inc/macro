@@ -3,7 +3,7 @@
 //! Unlike [`crate::workflows::deploy_ai_editing_worker`] this worker is Rust, so
 //! the job needs a toolchain and the wasm target. Call/dispatch-only: push
 //! deploys to dev come through [`crate::workflows::deploy_on_push`] (which owns
-//! the path gating) and prod deploys through `release-production`. Generated
+//! deployment ordering) and prod deploys through `release-production`. Generated
 //! into `deploy_sync_service.yml`.
 
 use anyhow::Result;
