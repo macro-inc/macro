@@ -960,7 +960,9 @@ refreshes in the background to include the new row. If creation fails, the
 composer reopens as a popover with the draft and the error.
 Closing the popover without submitting keeps the underlying view open.
 
-Opening a project keeps the Tasks workspace and its navigation. The top bar
+Opening a project from Tasks keeps the Tasks workspace and its navigation.
+Home rows instead preview it inline with a Home return breadcrumb; touch and
+explicit split activation still use this full Tasks workspace. The top bar
 shows the Projects return breadcrumb and the project name, with the same Share
 and side-panel controls as task detail. `Project actions` (the dots button
 after the name) opens the row context menu's entries for this project,

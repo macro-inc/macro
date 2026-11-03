@@ -501,7 +501,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   for checkbox, row, Only, keyboard, and touch behavior.
 - Keep added external chats (WhatsApp today) in External at `/external/chat/:chatId` with their own queries (`features/external-chat`); sharing controls viewing and the viewer's own provider membership controls sending. Never route them through channel context or services.
 - All API/network calls live in service-clients.
-- Open projects through `openProject` (`features/projects/open-project.ts`): it
+- Preview Home project rows with the shared `ProjectDetail`; preserve its project
+  search namespace, comment target, and Home breadcrumb. Touch and explicit split
+  activation use the full project route. Open other projects through `openProject` (`features/projects/open-project.ts`): it
   retargets an already-open project split to the section or comment in place.
   Shared open paths (unified list rows) use its `projectHostedContent`, whose
   identity is the project itself, so the router focuses the split already
