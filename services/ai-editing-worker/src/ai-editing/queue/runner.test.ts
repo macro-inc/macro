@@ -1,6 +1,6 @@
+import type { DocumentOp } from '../editor';
 import { describe, expect, it, vi } from 'vitest';
 import type { DocReader, DocWriter } from '../doc/interfaces';
-import type { DocumentOp } from '../editor/ops';
 import { recordingAwareness, recordingWriter } from './_testUtils';
 import { mockRandomSource } from './random-source';
 import { type OpResult, runQueue, summarize } from './runner';
@@ -11,7 +11,7 @@ const reader = (over: Partial<DocReader> = {}): DocReader => ({
   locate: () => [{ node: 't1', start: 0, end: 3 }],
   textLength: () => 4,
   cellNode: () => 'cell',
-    blockRef: (node: string) => node,
+  blockRef: (node: string) => node,
   ...over,
 });
 
@@ -370,5 +370,39 @@ describe('runQueue -- empty queue short-circuit', () => {
     expect(results).toEqual([]);
     expect(edits).toEqual([]);
     expect(apply).not.toHaveBeenCalled();
+  });
+});
+
+describe('runQueue -- abort', () => {
+  it('applies no edit after the signal aborts and fails the ops it skipped', async () => {
+    const { w, edits } = recordingWriter();
+    const controller = new AbortController();
+    const results = await runQueue({
+      ops: [
+        { kind: 'setText', node: 'b1', text: 'Hello there' },
+        { kind: 'removeNode', node: 'b2' },
+      ],
+      params: DEFAULT_QUEUE_PARAMS,
+      randomSource: mockRandomSource(),
+      docReader: reader({ textLength: () => 4 }),
+      docWriter: w,
+      awarenessSource: recordingAwareness().source,
+      // The request goes away on the first typing pause.
+      sleep: async () => {
+        controller.abort();
+      },
+      signal: controller.signal,
+    });
+    expect(results).toEqual([
+      { ok: false, op: expect.anything(), error: 'edit aborted' },
+      { ok: false, op: expect.anything(), error: 'edit aborted' },
+    ]);
+    // Typing stopped mid-op: not every chunk, nor the closing setText, ran.
+    const kinds = edits.map((e) => e.kind);
+    expect(kinds).not.toContain('removeNode');
+    expect(kinds).not.toContain('setText');
+    expect(kinds.filter((kind) => kind === 'insertText').length).toBeLessThan(
+      4
+    );
   });
 });

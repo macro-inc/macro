@@ -208,47 +208,53 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
         setTimeout(resolve, ms / presence.multiplier())
       );
 
-    const { usage, ops, session, clarification } = await Telemetry.span(
-      'edit.session',
-      async (span) => {
-        span.setAttr('document.id', documentId);
-        span.setAttr('edit.mode', mode);
-        span.setAttr('edit.interpret', interpret);
-        span.setAttr('edit.propagate', propagate);
-        span.setAttr('edit.editor_named', editor !== undefined);
-        let modelFallbacks = 0;
-        try {
-          const result = await runEditSession({
-            source,
-            documentId,
-            prompt,
-            models: buildModels(env, models, mode, () => modelFallbacks++),
-            mode,
-            editor,
-            typingAnimations,
-            sleep,
-            interpret,
-            debug,
-            propagate,
-            runner: runInSandbox,
-            signal,
-          }).finally(presence.stop);
-          span.setAttr(
-            'edit.dispatch_count',
-            result.session.dispatchEditTraces?.length ?? 0
-          );
-          span.setAttr('edit.ops_total', result.ops.length);
-          span.setAttr('edit.blocked', result.clarification !== undefined);
-          return result;
-        } catch (err) {
-          span.setAttr('edit.aborted', signal.aborted);
-          span.error(err);
-          throw err;
-        } finally {
-          span.setAttr('model.fallbacks', modelFallbacks);
-        }
+    const {
+      usage,
+      ops,
+      session,
+      clarification,
+      changedBlockIds,
+      revision,
+      summary,
+    } = await Telemetry.span('edit.session', async (span) => {
+      span.setAttr('document.id', documentId);
+      span.setAttr('edit.mode', mode);
+      span.setAttr('edit.interpret', interpret);
+      span.setAttr('edit.propagate', propagate);
+      span.setAttr('edit.editor_named', editor !== undefined);
+      let modelFallbacks = 0;
+      try {
+        const result = await runEditSession({
+          source,
+          documentId,
+          prompt,
+          models: buildModels(env, models, mode, () => modelFallbacks++),
+          mode,
+          editor,
+          typingAnimations,
+          sleep,
+          interpret,
+          debug,
+          propagate,
+          runner: runInSandbox,
+          signal,
+        }).finally(presence.stop);
+        span.setAttr(
+          'edit.dispatch_count',
+          result.session.dispatchEditTraces?.length ?? 0
+        );
+        span.setAttr('edit.ops_total', result.ops.length);
+        span.setAttr('edit.blocks_changed', result.changedBlockIds.length);
+        span.setAttr('edit.blocked', result.clarification !== undefined);
+        return result;
+      } catch (err) {
+        span.setAttr('edit.aborted', signal.aborted);
+        span.error(err);
+        throw err;
+      } finally {
+        span.setAttr('model.fallbacks', modelFallbacks);
       }
-    );
+    });
 
     const db = c.env.TRACES_DB;
     if (db) {
@@ -270,6 +276,9 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
       ops,
       trace: debug ? renderTraceMarkdown(session) : undefined,
       clarification,
+      changedBlockIds,
+      revision,
+      summary,
     });
   } catch (err) {
     if (!(err instanceof Error)) throw new Error(String(err));
