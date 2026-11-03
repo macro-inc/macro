@@ -1131,3 +1131,130 @@ it.each(['Delete', 'Backspace'])(
     );
   }
 );
+
+describe('keyboard ranges', () => {
+  const cell = (rowId: string, column: number) =>
+    document.querySelector<HTMLElement>(
+      `[data-grid-row-id="${rowId}"] [data-grid-column="${column}"]`
+    )!;
+  const press = (key: string, init: KeyboardEventInit = {}) =>
+    fireEvent.keyDown(document.activeElement!, { key, ...init });
+  const selected = () =>
+    [...document.querySelectorAll<HTMLElement>('[aria-selected="true"]')].map(
+      (element) =>
+        `${element.closest<HTMLElement>('[data-grid-row-id]')!.dataset.gridRowId}:${element.dataset.gridColumn}`
+    );
+
+  it('grows and shrinks with Shift+Arrow, sharing the range as it changes, and clears it with Delete', async () => {
+    const { onClearCells, onCellFocus, onWrite } = setup();
+    cell('one', 1).focus();
+
+    press('ArrowRight', { shiftKey: true });
+    expect(selected()).toEqual(['one:1', 'one:2']);
+    expect(onCellFocus).toHaveBeenLastCalledWith({
+      rowId: 'one',
+      columnId: 'name',
+      endRowId: 'one',
+      endColumnId: 'computed',
+      editing: false,
+    });
+    expect(cell('one', 2).contains(document.activeElement)).toBe(true);
+
+    press('ArrowDown', { shiftKey: true });
+    expect(selected()).toEqual(['one:1', 'one:2', 'two:1', 'two:2']);
+    expect(onCellFocus).toHaveBeenLastCalledWith({
+      rowId: 'one',
+      columnId: 'name',
+      endRowId: 'two',
+      endColumnId: 'computed',
+      editing: false,
+    });
+
+    press('ArrowLeft', { shiftKey: true });
+    expect(selected()).toEqual(['one:1', 'two:1']);
+
+    press('Delete');
+    await waitFor(() =>
+      expect(onClearCells).toHaveBeenCalledExactlyOnceWith(
+        ['one', 'two'],
+        ['name']
+      )
+    );
+    expect(onWrite).not.toHaveBeenCalled();
+  });
+
+  it('collapses to one cell on a plain arrow', () => {
+    const { onCellFocus } = setup();
+    cell('one', 1).focus();
+    press('ArrowDown', { shiftKey: true });
+    expect(selected()).toEqual(['one:1', 'two:1']);
+
+    press('ArrowRight');
+
+    expect(selected()).toEqual([]);
+    expect(onCellFocus).toHaveBeenLastCalledWith({
+      rowId: 'two',
+      columnId: 'computed',
+      editing: false,
+    });
+  });
+
+  it('jumps to the data edge with Shift+Cmd/Ctrl+Arrow and the row ends with Shift+Home/End, never into the blank new-record row', () => {
+    const { setRecords, setUnsavedRow } = setup();
+    setRecords([...rows, { rowId: 'draft', cells: {} }]);
+    setUnsavedRow('draft');
+    cell('one', 2).focus();
+
+    press('ArrowDown', { shiftKey: true, ctrlKey: true });
+    expect(selected()).toEqual(['one:2', 'two:2']);
+    press('ArrowDown', { shiftKey: true });
+    expect(selected()).toEqual(['one:2', 'two:2']);
+
+    press('End', { shiftKey: true });
+    expect(selected()).toEqual(['one:2', 'one:3', 'two:2', 'two:3']);
+    press('Home', { shiftKey: true });
+    expect(selected()).toEqual(['one:1', 'one:2', 'two:1', 'two:2']);
+    press('ArrowUp', { shiftKey: true, metaKey: true });
+    expect(selected()).toEqual(['one:1', 'one:2']);
+  });
+
+  it('selects every loaded cell with Cmd/Ctrl+A', () => {
+    const { onCellFocus } = setup();
+    cell('two', 2).focus();
+
+    press('a', { metaKey: true });
+
+    expect(selected()).toEqual([
+      'one:1',
+      'one:2',
+      'one:3',
+      'two:1',
+      'two:2',
+      'two:3',
+    ]);
+    expect(onCellFocus).toHaveBeenLastCalledWith({
+      rowId: 'one',
+      columnId: 'name',
+      endRowId: 'two',
+      endColumnId: 'notes',
+      editing: false,
+    });
+  });
+
+  it('leaves Shift+Arrow to an open cell editor', async () => {
+    setup();
+    fireEvent.click(
+      within(cell('one', 1)).getByRole('button', { name: /Name: First/ })
+    );
+    const editor = await screen.findByRole('textbox', { name: 'Edit Name' });
+
+    const handled = !fireEvent.keyDown(editor, {
+      key: 'ArrowRight',
+      shiftKey: true,
+    });
+
+    expect(handled).toBe(false);
+    expect(selected()).toEqual([]);
+    expect(document.activeElement).toBe(editor);
+  });
+});

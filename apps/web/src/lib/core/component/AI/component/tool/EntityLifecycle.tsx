@@ -26,6 +26,7 @@ const ITEM_TYPES: Record<LifecycleEntityType, ItemType> = {
   document: 'document',
   chat: 'chat',
   project: 'project',
+  database: 'database',
 };
 
 function EntityPreview(props: { id: string; type: LifecycleEntityType }) {

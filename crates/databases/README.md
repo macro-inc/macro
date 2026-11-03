@@ -117,6 +117,21 @@ and cells. The core storage adapter purges its journal in the same transaction.
    values, at the conversion's table version.
 6. Successful commits publish their versions and change notifications.
 
+7. A duplicate (`POST /databases/{id}/duplicate`,
+   `DatabaseDuplicateService::duplicate_database`, and the `DuplicateEntity`
+   capability) needs view access. It reads the source whole, gives every table,
+   column, database-owned definition and option, row and view a new id, and
+   writes the copy as one batch through `DatabaseDuplicateRepo`, in the same
+   transaction that creates the database and its owner's grant. Relations into
+   another database stay when the duplicator can see it and are dropped, with
+   their view references, when they cannot. A column bound to a property shared
+   beyond the database stays bound to it when the duplicator may bind it, and
+   otherwise gets a property of the copy's own with the same options and
+   values. Relation cells naming rows that are gone are left out, and formula values
+   are computed again in the copy from its own columns. Grants, the team share, forms,
+   webhooks, saved queries, column protections and the journal stay behind; the
+   copy's history starts empty.
+
 SQL lives outside this crate. The browser compiles statements with the
 `database_sql` engine and posts the ops it emits; agents run the same engine
 through the `databases_sql` adapter, which reads through Soup and writes
@@ -134,6 +149,7 @@ through `apply_ops`.
 | Column casts and inference | `src/domain/service/casts.rs`, `column_types.rs`, `infer_column_type.rs` |
 | Typed views and a board's card places | `models_databases::views`, `src/domain/service/ops/views.rs`, `src/outbound/pg_databases_repo/views.rs` |
 | Saved queries, sharing, imports, starter data | Corresponding modules under `src/domain/` |
+| Duplicates | `src/domain/duplicate.rs`, `src/domain/service/duplicate.rs`, `src/outbound/pg_cell_store/duplicate.rs` |
 | HTTP transport | `src/inbound/axum_router.rs`, `starter_router.rs` |
 | Service construction and notifications | `src/outbound/build.rs`, `gateway_event_publisher.rs` |
 
@@ -143,7 +159,7 @@ domain ports, including transaction and locking requirements.
 
 The document storage service mounts the routes. Writes inside a database go
 through `POST /databases/{id}/ops`; the other routes are the database list and
-detail, create, starter, CSV import, a board's card positions, a column's casts
+detail, create, duplicate, starter, CSV import, a board's card positions, a column's casts
 and type inference, awareness, permissions and saved queries.
 
 ## Validation

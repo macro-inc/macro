@@ -73,6 +73,7 @@ export {
   type FormSectionPlacement,
   type FormSubmissionOutcome,
   type MyFormResponse,
+  type SavedFormResponse,
 } from './entities/forms/form';
 export { FormOption, FormQuestion } from './entities/forms/question';
 export { FormResponse } from './entities/forms/response';
@@ -244,7 +245,12 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   }
 }
 
-export type { FoldedAgentSessionLog } from './entities/agent-sessions/agent-session';
+export type {
+  ArchiveCause,
+  AutoArchiveOverrides,
+  FoldedAgentSessionLog,
+  SessionAutoArchive,
+} from './entities/agent-sessions/agent-session';
 export type { CodeResult } from './entities/agent-sessions/code-execution';
 export {
   AgentConversation,
@@ -257,6 +263,7 @@ export type {
 } from './entities/agent-sessions/review';
 export { ReviewItem, SessionReview } from './entities/agent-sessions/review';
 export { ToolApproval } from './entities/agent-sessions/tool-approval';
+export type { SessionView } from './entities/agent-sessions/view';
 export { Agent, type AgentOptions } from './entities/agents/agent';
 export { UserApiKey } from './entities/api-keys/api-key';
 export { ChannelActivity } from './entities/channels/activity';

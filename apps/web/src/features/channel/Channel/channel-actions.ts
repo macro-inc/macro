@@ -10,4 +10,6 @@ export const CHANNEL_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
   supportsMarkDone: false,
   supportsOpenInNewSplit: true,
   senderBucket: undefined,
+  channelNavigation: 'latest',
+  channelReadScope: 'top-level',
 };

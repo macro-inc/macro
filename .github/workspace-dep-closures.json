@@ -330,6 +330,7 @@
       "crates/database_sql",
       "crates/databases",
       "crates/document_sub_type",
+      "crates/dynamic_ui",
       "crates/email",
       "crates/email_api_client",
       "crates/email_db_client",
@@ -757,6 +758,7 @@
       "crates/document_sub_type",
       "crates/documents",
       "crates/docx_engine",
+      "crates/dynamic_ui",
       "crates/dynamodb_client",
       "crates/email",
       "crates/email_api_client",
@@ -953,6 +955,7 @@
       "crates/document_sub_type",
       "crates/documents",
       "crates/docx_engine",
+      "crates/dynamic_ui",
       "crates/dynamodb_client",
       "crates/email",
       "crates/email_api_client",
@@ -1824,6 +1827,7 @@
       "crates/document_sub_type",
       "crates/documents",
       "crates/docx_engine",
+      "crates/dynamic_ui",
       "crates/dynamodb_client",
       "crates/email",
       "crates/email_api_client",
@@ -2003,6 +2007,7 @@
       "crates/document_sub_type",
       "crates/documents",
       "crates/docx_engine",
+      "crates/dynamic_ui",
       "crates/dynamodb_client",
       "crates/email",
       "crates/email_api_client",
@@ -3124,6 +3129,7 @@
       "crates/document_sub_type",
       "crates/documents",
       "crates/docx_engine",
+      "crates/dynamic_ui",
       "crates/dynamodb_client",
       "crates/email",
       "crates/email_api_client",
@@ -4232,39 +4238,6 @@
       "crates/work_feed",
       "crates/workspace-hack"
     ],
-    "connect_api": [
-      "connect/crates/connect_client",
-      "connect/crates/connect_platform",
-      "connect/crates/connect_registry",
-      "connect/services/connect_api",
-      "crates/workspace-hack"
-    ],
-    "connect_client": [
-      "connect/crates/connect_client",
-      "connect/crates/connect_platform",
-      "crates/workspace-hack"
-    ],
-    "connect_demo": [
-      "connect/crates/connect_client",
-      "connect/crates/connect_platform",
-      "connect/services/connect_demo",
-      "crates/workspace-hack"
-    ],
-    "connect_integration": [
-      "connect/crates/connect_client",
-      "connect/crates/connect_platform",
-      "connect/crates/connect_registry",
-      "connect/tests/connect_integration",
-      "crates/workspace-hack"
-    ],
-    "connect_platform": [
-      "connect/crates/connect_platform",
-      "crates/workspace-hack"
-    ],
-    "connect_registry": [
-      "connect/crates/connect_registry",
-      "crates/workspace-hack"
-    ],
     "connection": [
       "crates/agent",
       "crates/ai_toolset",
@@ -5267,6 +5240,7 @@
       "crates/document_sub_type",
       "crates/documents",
       "crates/docx_engine",
+      "crates/dynamic_ui",
       "crates/dynamodb_client",
       "crates/email",
       "crates/email_api_client",
@@ -5886,6 +5860,10 @@
       "crates/user_quota",
       "crates/workspace-hack",
       "services/docx_unzip_handler"
+    ],
+    "dynamic_ui": [
+      "crates/dynamic_ui",
+      "crates/workspace-hack"
     ],
     "dynamodb_client": [
       "crates/bot_id",
@@ -12042,6 +12020,7 @@
       "crates/macro_authorization",
       "crates/macro_env",
       "crates/macro_env_var",
+      "crates/macro_tower_layers",
       "crates/macro_user_id",
       "crates/model-error-response",
       "crates/model_user",

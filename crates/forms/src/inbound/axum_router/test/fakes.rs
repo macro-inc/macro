@@ -57,6 +57,7 @@ impl JwtValidator for Tokens {
             origin: macro_authorization::CredentialOrigin::MacroApiJwt,
             identity: ValidatedIdentity {
                 agent_id,
+                agent_via: None,
                 user_id: user_id.to_string(),
                 fusion_user_id: format!("fusion-{jwt}"),
                 organization_id: None,
@@ -259,6 +260,8 @@ pub(super) fn form() -> Form {
         updated_at: at,
         project_id: None,
         is_hidden_in_drive: false,
+        responses_visible: false,
+        anonymous: false,
     }
 }
 

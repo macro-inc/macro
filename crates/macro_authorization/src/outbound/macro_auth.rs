@@ -49,11 +49,12 @@ fn identity_from_token(token: JwtToken) -> ValidatedCredential {
         JwtToken::MacroAccessToken(_) => CredentialOrigin::Session,
         JwtToken::MacroApiToken(_) => CredentialOrigin::MacroApiJwt,
     };
-    let (user_id, fusion_user_id, organization_id, agent_id) = match token {
+    let (user_id, fusion_user_id, organization_id, agent_id, agent_via) = match token {
         JwtToken::MacroAccessToken(token) => (
             token.macro_user_id,
             token.root_macro_id.unwrap_or(token.fusion_user_id),
             token.macro_organization_id,
+            None,
             None,
         ),
         JwtToken::MacroApiToken(token) => (
@@ -61,6 +62,7 @@ fn identity_from_token(token: JwtToken) -> ValidatedCredential {
             token.fusion_user_id,
             token.macro_organization_id,
             token.agent_id.map(bot_id::BotId::new_from_uuid),
+            token.agent_id.and(token.agent_via),
         ),
     };
 
@@ -68,6 +70,7 @@ fn identity_from_token(token: JwtToken) -> ValidatedCredential {
         origin,
         identity: ValidatedIdentity {
             agent_id,
+            agent_via,
             user_id,
             fusion_user_id,
             organization_id,

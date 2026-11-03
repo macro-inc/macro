@@ -1,5 +1,6 @@
 import { changeSessionArchiveState } from '@app/features/block-agent/queries/change-session-archive-state';
 import type { EntityData } from '@entity';
+import { isSessionArchived } from '@service-agent-harness/session-archive';
 
 type MakeArchiveSessionOptions = {
   userId: () => string | undefined;
@@ -13,7 +14,7 @@ export const makeArchiveSessionAction = (
     entity.type === 'agent_session' && entity.ownerId === options.userId();
 
   const isArchived = (entity: EntityData): boolean =>
-    entity.type === 'agent_session' && entity.isArchived === true;
+    entity.type === 'agent_session' && isSessionArchived(entity);
 
   const execute = async (entities: EntityData[]) => {
     const entity = entities[0];

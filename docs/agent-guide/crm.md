@@ -504,3 +504,10 @@ columns. Changing scope requires preparing again. Cancel stops preparation. CSV 
 quoted fields, original date timestamps and spreadsheet formula escaping.
 
 The existing CRM New menus use icons and muted descriptions for Company, Contact, and Pipeline. Pipeline availability and permissions are unchanged.
+
+For loading diagnostics (span names in the
+[observability guide](observability.md#navigation-and-view-phases)), switch
+sections and reopen a record: each restarts the `crm.company` / `crm.contact`
+flow, and disabled sources must not leave it waiting once metadata is ready.
+Traces hold opaque record ids and section categories, never names or addresses.
+Metadata errors may cancel the detail flow when the outer error panel replaces it.

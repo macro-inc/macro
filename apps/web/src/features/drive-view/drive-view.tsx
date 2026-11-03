@@ -6,6 +6,7 @@ import {
 } from '@app/features/soup';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { usePending } from '@app/observability/flow';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   useSplitPanelOrThrow,
@@ -88,6 +89,7 @@ function DriveComposition(props: { route: DriveRouteState }) {
       notificationSource,
     })
   );
+  usePending('drive.items', source.isLoading);
   const actions = createDriveHostActions({
     projectId: () => state.projectId(),
     selectFolder: (id) => state.selectFolder(id),

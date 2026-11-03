@@ -1,4 +1,5 @@
 //! Persistent session interactions; completing an execution never closes a review.
+//! A view (`views`) is the stateless kind: presented the same way, never saved.
 use super::{CodeModeError, ExecutionId, ExecutionStore};
 use agent_runtime_protocol::domain::notification::{
     DecisionOutcome, DecisionVia, ItemStatus, NotificationEvent, ReviewItemOutcome, ReviewOutcome,
@@ -17,6 +18,9 @@ use serde_json::Value;
 use std::sync::Arc;
 use tracing::Instrument as _;
 use utoipa::ToSchema;
+
+mod views;
+pub use views::{PresentView, PresentedView};
 
 #[cfg(test)]
 mod test;
@@ -252,6 +256,14 @@ pub trait ReviewActions: Send + Sync + 'static {
         owner: &MacroUserIdStr<'static>,
         record: &ReviewRecord,
     ) -> Result<(), CodeModeError>;
+    /// Stream a checked view as a completed `PresentView` call. Nothing is
+    /// saved: the presented call is the view's only record.
+    async fn present_view(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        session: AgentSessionId,
+        view: &PresentedView,
+    ) -> Result<(), CodeModeError>;
 }
 
 /// Session-owned interaction service. User decisions outlive the Deno process.
@@ -321,6 +333,16 @@ impl ReviewService {
         actor: &MacroUserIdStr<'static>,
         input: CreateReview,
     ) -> Result<ReviewRecord, CodeModeError> {
+        self.authorize_session(session, actor).await?;
+        self.create_owned(session.id, actor, input).await
+    }
+    /// An authenticated agent session may present for its current owner, or
+    /// for the person who prompted the turn it acts for.
+    async fn authorize_session(
+        &self,
+        session: &agent_session::domain::model::AgentSession,
+        actor: &MacroUserIdStr<'static>,
+    ) -> Result<(), CodeModeError> {
         let state = self.actions.session(session.id).await?;
         if session.owner_user().map_err(|_| CodeModeError::Forbidden)? != &state.owner {
             return Err(CodeModeError::Forbidden);
@@ -331,7 +353,7 @@ impl ReviewService {
         {
             return Err(CodeModeError::Forbidden);
         }
-        self.create_owned(session.id, actor, input).await
+        Ok(())
     }
     async fn create_owned(
         &self,

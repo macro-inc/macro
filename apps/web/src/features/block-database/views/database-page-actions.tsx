@@ -4,6 +4,7 @@ import { downloadFile } from '@filesystem/download';
 import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
+import DuplicateIcon from '@icon/system/regular/copy-simple.svg';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import DownloadIcon from '@icon/system/regular/download-simple.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
@@ -48,6 +49,10 @@ export type DatabaseEntityActions = {
   onToggleFavorite: () => void;
   onCopyLink: () => void;
   onCopyId: () => void;
+  /** Whether a copy is being made; Duplicate waits for it. */
+  duplicating: boolean;
+  /** Copy the database into a new one the viewer owns, and open it. */
+  onDuplicate: () => void;
   /** Present for the owner, who alone may file it in a folder. */
   onMoveToFolder?: () => void;
 };
@@ -213,12 +218,25 @@ export function DatabasePageActions(props: {
               </>
             )}
           </Show>
-          <Show when={editable()}>
+          <Show when={editable() || props.entityActions}>
             <Dropdown.Group>
-              <Dropdown.Item onSelect={() => (focusTitleAfterClose = true)}>
-                <PencilIcon class="size-4 shrink-0" />
-                Rename
-              </Dropdown.Item>
+              <Show when={editable()}>
+                <Dropdown.Item onSelect={() => (focusTitleAfterClose = true)}>
+                  <PencilIcon class="size-4 shrink-0" />
+                  Rename
+                </Dropdown.Item>
+              </Show>
+              <Show when={props.entityActions}>
+                {(actions) => (
+                  <Dropdown.Item
+                    disabled={actions().duplicating}
+                    onSelect={actions().onDuplicate}
+                  >
+                    <DuplicateIcon class="size-4 shrink-0" />
+                    {t('entityActions.duplicate')}
+                  </Dropdown.Item>
+                )}
+              </Show>
             </Dropdown.Group>
           </Show>
           <Dropdown.Group>

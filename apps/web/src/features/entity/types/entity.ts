@@ -1,4 +1,5 @@
 import type { DateValue } from '@core/util/date';
+import type { ArchiveCause } from '@service-agent-harness/generated/schemas';
 import type { ApiLabel } from '@service-email/generated/schemas';
 import type {
   GithubPullRequestCheckRun,
@@ -138,6 +139,7 @@ export type ChannelEntity = EntityBase & {
     createdAt: DateValue;
   }[];
   channelType: 'direct_message' | 'private' | 'public' | 'team';
+  teamId?: string;
   interactedAt?: DateValue | null;
   participantIds?: string[];
   /**
@@ -196,7 +198,9 @@ export type ChatEntity = EntityBase & {
 
 export type AgentSessionEntity = EntityBase & {
   type: 'agent_session';
-  isArchived?: boolean;
+  /** Who archived the session; null while it is not archived. */
+  archivedBy?: ArchiveCause | null;
+  archivedAt?: string | null;
   botId: string;
   harness?: string;
   repoUrl?: string | null;
