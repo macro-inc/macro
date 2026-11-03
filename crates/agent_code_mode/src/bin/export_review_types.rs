@@ -12,13 +12,15 @@ use specta_typescript::Typescript;
 use std::fs;
 use std::path::Path;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), rootcause::Report> {
     let types = Types::default()
         .register::<CreateReview>()
         .register::<ReviewDecision>()
         .register::<ReviewRecord>();
     // Defaulted fields are optional on input and always present on output.
-    let generated = Typescript::default().export(&types, specta_serde::PhasesFormat)?;
+    let generated = Typescript::default()
+        .export(&types, specta_serde::PhasesFormat)
+        .map_err(|error| rootcause::report!("could not export the review types: {error}"))?;
     let generated = generated
         .lines()
         .map(str::trim_end)

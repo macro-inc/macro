@@ -609,6 +609,62 @@ async fn read_and_list_never_cross_session_scope_and_creation_is_bounded() {
             .await
             .is_err()
     );
+    let one_oversized_draft = f.input(
+        "email",
+        vec![json!({"subject":"x".repeat(MAX_DRAFT_BYTES), "body":"Hello", "to":[{"email":"ada@example.com"}]})],
+    );
+    assert!(
+        f.service
+            .create(&f.edit(), &f.actions.owner, one_oversized_draft)
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn an_import_review_keeps_the_source_it_was_presented_with() {
+    let f = Fixture::new();
+    let row = f
+        .service
+        .create(
+            &f.edit(),
+            &f.actions.owner,
+            f.input("import", vec![json!({"source":"notion"})]),
+        )
+        .await
+        .unwrap();
+    let item = row.items.states()[0].id;
+    let edit = |source| ReviewDecision::Edit {
+        revision: row.revision,
+        item,
+        draft: Box::new(ReviewDraft::Import(ImportDraft {
+            source,
+            excluded: vec![],
+            shared: vec![],
+            personal: vec![],
+        })),
+    };
+
+    assert!(matches!(
+        f.service
+            .decide(
+                &f.edit(),
+                &f.actions.owner,
+                row.id,
+                edit(ImportReviewSource::Jira)
+            )
+            .await,
+        Err(CodeModeError::Invalid(_))
+    ));
+    f.service
+        .decide(
+            &f.edit(),
+            &f.actions.owner,
+            row.id,
+            edit(ImportReviewSource::Notion),
+        )
+        .await
+        .unwrap();
 }
 
 #[test]

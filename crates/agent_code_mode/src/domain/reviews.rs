@@ -394,7 +394,9 @@ impl ReviewService {
         if let Some(execution) = input.execution_id {
             self.executions.get(session, execution).await?;
         }
-        if serde_json::to_vec(&input).map_err(|_| invalid())?.len() > MAX_INPUT_BYTES {
+        if serde_json::to_vec(&input).map_err(|_| invalid())?.len() > MAX_INPUT_BYTES
+            || !input.drafts.each_within(MAX_DRAFT_BYTES)
+        {
             return Err(invalid());
         }
         let record = ReviewRecord {

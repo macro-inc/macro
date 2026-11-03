@@ -187,6 +187,20 @@ impl From<ReviewDrafts> for ReviewItems {
 }
 
 impl ReviewDrafts {
+    /// Whether every draft serializes within `limit` bytes.
+    pub fn each_within(&self, limit: usize) -> bool {
+        fn fits<Draft: Serialize>(drafts: &[Draft], limit: usize) -> bool {
+            drafts
+                .iter()
+                .all(|draft| serde_json::to_vec(draft).is_ok_and(|bytes| bytes.len() <= limit))
+        }
+        match self {
+            Self::Email(drafts) => fits(drafts.as_ref(), limit),
+            Self::Calendar(drafts) => fits(drafts.as_ref(), limit),
+            Self::Import(drafts) => fits(drafts, limit),
+        }
+    }
+
     /// The kind of review these drafts present.
     pub fn kind(&self) -> ReviewKind {
         match self {
@@ -246,6 +260,12 @@ impl ReviewItems {
             (Self::Email(items), ReviewDraft::Email(draft)) => replace(items, item, draft),
             (Self::Calendar(items), ReviewDraft::Calendar(draft)) => replace(items, item, draft),
             (Self::Import(items), ReviewDraft::Import(draft)) => {
+                let [saved] = &**items;
+                if saved.draft.source != draft.source {
+                    return Err(CodeModeError::Invalid(
+                        "An import review's source cannot change after presentation.".into(),
+                    ));
+                }
                 replace(&mut items[..], item, draft)
             }
             _ => Err(CodeModeError::Invalid(
