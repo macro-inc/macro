@@ -1,5 +1,6 @@
 import { isListViewID } from '@app/constants/list-views';
 import { markAgentSessionNotificationsSeenOnOpen } from '@app/features/block-agent/mark-session-notifications-seen';
+import { markPrNotificationsSeenOnOpen } from '@app/features/block-pr/mark-pr-notifications-seen';
 import { getPreferredCalendarPeriodView } from '@app/features/calendar/calendar-preferences';
 import { markCalendarNotificationSeenOnOpen } from '@app/features/calendar/mark-event-notifications-seen';
 import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
@@ -914,8 +915,8 @@ export function markChannelNotificationsSeenOnOpen(
 }
 
 /**
- * Clear the dots of rows whose opened view has no block that marks the row's
- * loaded notifications read: calendar events, agent sessions, and CRM records.
+ * Clear loaded row notifications immediately, before the opened view's read
+ * marker runs: calendar events, agent sessions, CRM records, and pull requests.
  */
 export function markRowNotificationsSeenOnOpen(
   entity: EntityWithRawNotifications<EntityData>,
@@ -924,6 +925,7 @@ export function markRowNotificationsSeenOnOpen(
   markCalendarNotificationSeenOnOpen(entity, notificationSource);
   markAgentSessionNotificationsSeenOnOpen(entity, notificationSource);
   markCrmNotificationsSeenOnOpen(entity, notificationSource);
+  markPrNotificationsSeenOnOpen(entity, notificationSource);
 }
 
 /**

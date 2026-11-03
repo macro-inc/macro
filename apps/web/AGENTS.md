@@ -519,7 +519,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Add Google Meet account hints only to join actions using the displayed calendar's
   connected email; keep stored and copied conference links unchanged. See the
   [calendar walkthrough](../../docs/agent-guide/calendar.md).
-- Mark loaded calendar, agent-session, and CRM company/contact row notifications
+- Mark loaded calendar, agent-session, CRM company/contact, and pull request row notifications
   through the notification source (`markRowNotificationsSeenOnOpen`) so read dots update
   immediately and failed writes roll back; calendar grid selections and links
   to an event also mark the canonical event read, excluding team projections.
