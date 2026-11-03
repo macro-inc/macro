@@ -75,7 +75,7 @@ def _shoulder(p, xl, counter, top=None):
 def _flush(p, xl, obox):
     """Run the flat x-height top of the stem at xl on into the arch whose
     outer box is obox (parts.flush_end), so no notch forms where they meet."""
-    return flush_end(xl, P.XH, P.XH - p.hair * 0.1, obox)
+    return flush_end(xl, P.XH, P.XH - p.hair * 0.1, obox, p.sq)
 
 
 def _arch_through(p, xl, xr, yc, out_pt, join_in, x_from):

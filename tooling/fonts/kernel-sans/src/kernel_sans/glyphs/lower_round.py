@@ -22,11 +22,11 @@ from ..geom import (
     below,
     diag,
     left_of,
+    poly,
     rect,
     right_of,
     ring,
     squircle,
-    stroke,
 )
 from . import G, glyph, ref
 from .parts import flush_end, outer_x, solve_cx
@@ -100,9 +100,9 @@ def _bowl_on_stem(p, xl, xr, y0, y1, ws, wt, wb, out_top, in_top, out_bot, in_bo
         # Run a flat stem end (at y_top or y_bot) on into the bowl.
         fill = Shape()
         if y_top is not None:
-            fill = fill + flush_end(xl, y_top, out_top, ot)
+            fill = fill + flush_end(xl, y_top, out_top, ot, n)
         if y_bot is not None:
-            fill = fill + flush_end(xl, y_bot, out_bot, ob)
+            fill = fill + flush_end(xl, y_bot, out_bot, ob, n)
         return fill
 
     return SimpleNamespace(shape=shape, out=out, cnt=cnt, out_bot_box=ob, flush=flush)
@@ -218,7 +218,9 @@ def g(p):
     shape, xr = _mirror(_b_body(p, yc_t, P.XH))
     # Tail: the lower half of a ring whose right side continues the stem,
     # ending on the left in a vertical cut (like j and t) just where the
-    # stroke starts to turn up, at 1.2 times its thickness.
+    # stroke starts to turn up: at 1.2 times its thickness, and no further
+    # out than where the tail's inner edge falls 40 degrees, so the cut's
+    # upper corner never thins to a wedge (the heavy counter turns steeply).
     y0_t = P.DESC - P.OS
     y1_t = 2 * yc_t - y0_t
     x0_t = xr * 0.07
@@ -230,6 +232,15 @@ def g(p):
         x_cut = (lo + hi) / 2
         th = _oy(*ibox, p.sq_in, x_cut, "bottom") - _oy(*obox, p.sq, x_cut, "bottom")
         lo, hi = (lo, x_cut) if th < 1.2 * wb else (x_cut, hi)
+    steep = math.tan(math.radians(40))
+    lo, hi = ibox[0] + 0.01, (x0_t + xr) / 2
+    for _ in range(40):
+        xa = (lo + hi) / 2
+        fall = _oy(*ibox, p.sq_in, xa - 0.5, "bottom") - _oy(
+            *ibox, p.sq_in, xa + 0.5, "bottom"
+        )
+        lo, hi = (xa, hi) if fall > steep else (lo, xa)
+    x_cut = max(x_cut, xa)
     ring = squircle(*obox, p.sq) - squircle(*ibox, p.sq_in)
     tail = ring & below(yc_t) & right_of(x_cut)
     return G(shape + tail, l=p.sbr, r=p.sb, anchors={"top": _counter_cx(p, xr)})
@@ -501,7 +512,11 @@ def eth(p):
     c, s_ = math.cos(ang), math.sin(ang)
     left = ws * 0.35 + w * 0.15
     right = min(ws * 0.5 + w * 0.07, (w - 6 - xm) / c)
-    bar = stroke((xm - left * c, yb - left * s_), (xm + right * c, yb + right * s_), hb)
+    # Its ends are cut vertically (not square to the tilt).
+    x0, y0 = xm - left * c, yb - left * s_
+    x1, y1 = xm + right * c, yb + right * s_
+    hv = hb / 2 / c  # vertical half-thickness of the tilted stroke
+    bar = poly([(x0, y0 - hv), (x1, y1 - hv), (x1, y1 + hv), (x0, y0 + hv)])
     return G(bowl + R + bar, l=p.sbr, r=p.sbr)
 
 

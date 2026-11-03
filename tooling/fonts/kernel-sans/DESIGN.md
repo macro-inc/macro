@@ -2,8 +2,9 @@
 
 Kernel Sans is a neo-grotesque close to SF Pro, a shade squarer: large
 x-height, flat horizontal terminals, near-monolinear strokes, plus three
-details that set it subtly apart. Every glyph follows these rules. When a rule and a glyph's legibility conflict, legibility
-wins; note the exception in a comment.
+details that set it subtly apart. Every glyph follows these rules. When a
+rule and a glyph's legibility conflict, legibility wins; note the exception
+in a comment.
 
 ## Skeleton (Inter / SF Pro)
 
@@ -54,6 +55,12 @@ wins; note the exception in a comment.
      reshape the curve instead of bevelling the corner (see `r`).
    - Free ends of arms and bars (E, F, T, Z, t and f bars) stay square;
      diagonals end in horizontal cuts at the baseline, x-height or cap height.
+     Tilted strokes that end in open space are cut vertically (the 1's flag,
+     the ð bar); a slanted glyph (ƒ) is cut after slanting, so its ends stand
+     upright.
+   - Free 45° strokes that end in open space (× arms, ¤ spokes, asterisk
+     arms, arrow barbs, the shafts of ↗ ↘) end square to the stroke: a
+     horizontal or vertical cut there would leave a sharp point.
 3. **Rounded dots.** Dots of i, j and punctuation are squircles of side
    `p.dot` (0.8 × stem + 44) and exponent `geom.DOT_N` (2.6) (`geom.dot`).
    Accent dots use the same side or very nearly. The i dot's top sits at the
@@ -78,7 +85,9 @@ wins; note the exception in a comment.
 - Joins are clean: no ink traps, notches or steps. Where an arch or bowl
   overshoots a stem that ends flat at x-height or the baseline (n m r u p q b
   d g a @), the stem end runs straight on into the curve (`parts.flush_end`)
-  instead of dipping into a V-notch. Proof every join large (`--zoom` at
+  instead of dipping into a V-notch, and a small fillet takes the 12-14°
+  corner off where the flat end meets the overshoot. Where two curves meet
+  at different slopes (the tilde's S), bridge them along their tangents. Proof every join large (`--zoom` at
   cell 500 or more); a defect a few units wide is invisible on a glyph sheet
   but obvious at display sizes.
 

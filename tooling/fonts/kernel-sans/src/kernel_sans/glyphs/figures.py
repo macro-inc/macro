@@ -28,6 +28,7 @@ from ..geom import (
     below,
     diag,
     dot,
+    half_plane,
     left_of,
     poly,
     rect,
@@ -218,8 +219,9 @@ def _zero_slash(p):
 
 
 def _one(p, longer=0.0):
-    """1 without a base: a stem and a flag at 35 degrees. `longer` extends
-    the flag (the tabular form, which has more room)."""
+    """1 without a base: a stem and a flag at 35 degrees whose free end is
+    cut vertically. `longer` extends the flag (the tabular form, which has
+    more room)."""
     s = p.fstem
     t = _fh(p) * 1.04
     a = math.radians(35)
@@ -231,6 +233,14 @@ def _one(p, longer=0.0):
     e_bot = (e_top[0] + nrm[0] * t, e_top[1] + nrm[1] * t)
     i_top = (s, P.CAP + s * math.tan(a))
     i_bot = (i_top[0] + nrm[0] * t, i_top[1] + nrm[1] * t)
+    # The free end is cut vertically, through the middle of the square end,
+    # so the flag keeps its reach and mass.
+    x_cut = e_top[0] + nrm[0] * t / 2
+
+    def at_x(pt):
+        return (x_cut, pt[1] + (x_cut - pt[0]) * math.tan(a))
+
+    e_top, e_bot = at_x(e_top), at_x(e_bot)
     flag = poly([e_top, i_top, i_bot, e_bot]) & below(P.CAP) & left_of(s * 0.5)
     # The flag covers the stem's top-left corner; the top-right stays square.
     stem = rect(0, 0, s, P.CAP)
@@ -438,12 +448,15 @@ def _seven(p):
     h = _fh(p)
     t = p.fstem * 0.95
     xb = w * 0.30
+    # The diagonal's outer edge leaves the bar at its bottom-right corner, so
+    # the bar's end runs straight down into the diagonal with no ledge.
+    yj = P.CAP - h
     xt = w
-    for _ in range(6):
+    for _ in range(12):
         hw = t * math.hypot(xt - xb, P.CAP) / P.CAP / 2
-        xt = w - hw
-    bar = rect(0, P.CAP - h, w, P.CAP)
-    return bar + diag(xb, 0, xt, P.CAP, t)
+        xt = xb + (w - hw - xb) * P.CAP / yj
+    bar = rect(0, yj, w, P.CAP)
+    return bar + (diag(xb, 0, xt, P.CAP, t) & left_of(w))
 
 
 def _eight(p):
@@ -1019,12 +1032,20 @@ def Euro(p):
         n=n,
         n_in=ni,
     )
-    c_ = c_.move(p.w(92, -0.15), 0)
+    dx = p.w(92, -0.15)
+    c_ = c_.move(dx, 0)
     bt = h * 0.8
     off = bt / 2 + p.w(34, 0.25)
+    # The bars end in the counter, well clear of the terminals: at heavy
+    # weights they rise level with the terminals, and a bar ending just short
+    # of one would leave a hairline slot.
+    x_in = dx + _ox(
+        (ws, -P.COS + h, w - ws, P.CAP + P.COS - h), ni, P.CAP * 0.69, "right"
+    )
+    xe = min(p.w(350, 0.6), x_in - 0.6 * bt - 12)
     sh = c_
     for yb in (P.CAP / 2 + off, P.CAP / 2 - off):
-        sh = sh + rect(0, yb - bt / 2, p.w(350, 0.6), yb + bt / 2)
+        sh = sh + rect(0, yb - bt / 2, xe, yb + bt / 2)
     return _fit(p, sh)
 
 
@@ -1046,32 +1067,46 @@ def currency(p):
     return _fit(p, sh)
 
 
+SLANT = 11  # degrees the florin leans
+
+
 @glyph("florin", 0x0192)
 def florin(p):
     n, ni = _n(p), _ni(p)
     s = p.fstem * 0.96
     h = _fh(p) * 0.95
     top, bot = P.CAP + P.COS, -170 - P.COS
+    cy = (top + bot) / 2
+    tn = math.tan(math.radians(SLANT))
     hw = p.w(150, 0.8)  # half the hook box width
     xs = 0.0
     # Upper hook: the stem turns right over the top and ends cut vertically.
-    ub = (xs, top - p.w(196, 0.6), xs + hw * 2, top)
+    # The box grows with the stroke so the hook keeps a round counter at
+    # ExtraBold (at a fixed height it closed into a square notch).
+    reg_h = _fh(P.params(400)) * 0.95
+    ub = (xs, top - (2 * h + p.w(196 - 2 * reg_h, -0.2)), xs + hw * 2, top)
     ui = (xs + s, ub[1] + h, ub[2] - s, top - h)
     ucx, ucy = (ub[0] + ub[2]) / 2, (ub[1] + ub[3]) / 2
     xt = ucx + 0.62 * (ui[2] - ucx)
-    upper = (squircle(*ub, n=n) - squircle(*ui, n=ni)) & above(ucy) & left_of(xt)
+    # The cut leans back by the slant here, so it stands vertical once the
+    # glyph is slanted.
+    cut = half_plane((xt - (ucy - cy) * tn, ucy), (xt - (top - cy) * tn, top))
+    upper = (squircle(*ub, n=n) - squircle(*ui, n=ni)) & above(ucy) & cut
     # Lower hook: the same turned half a turn.
-    lower = upper.rotate180(xs + s / 2, (top + bot) / 2)
+    lower = upper.rotate180(xs + s / 2, cy)
     # The stem meets both hooks edge to edge at their cuts. Its ends come
     # from the hooks' own (float32) bounds: computed in float64, the lower
     # end missed the rotated cut by 2e-5 and pathops kept the hook as a
     # separate contour at some weights.
     stem = rect(xs, lower.bounds()[3], xs + s, upper.bounds()[1])
-    bar_y = P.XH - h / 2
-    bar = rect(xs - p.w(118, 0.3), bar_y - h / 2, xs + s + p.w(118, 0.3), bar_y + h / 2)
     # Stem first: unioning the two disjoint hooks first made pathops drop
     # most of the stem at some weights.
-    sh = (stem + bar + upper + lower).skew(11, cy=(top + bot) / 2)
+    sh = (stem + upper + lower).skew(SLANT, cy=cy)
+    # The bar goes on after the slant, so its ends are vertical.
+    bar_y = P.XH - h / 2
+    bx = xs + (bar_y - cy) * tn
+    ext = p.w(118, 0.3)
+    sh = sh + rect(bx - ext, bar_y - h / 2, bx + s + ext, bar_y + h / 2)
     return _fit(p, sh)
 
 

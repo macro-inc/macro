@@ -5,8 +5,13 @@ construction (squircle curves, flat arch tops, asymmetric grotesque joins), so
 use them instead of re-deriving the geometry in each glyph.
 """
 
+import math
+
+import pathops
+
 from .. import params as P
 from ..geom import (
+    Shape,
     above,
     band,
     below,
@@ -15,6 +20,7 @@ from ..geom import (
     rect,
     right_of,
     squircle,
+    superness,
 )
 
 
@@ -83,7 +89,7 @@ def n_shape(p, x0, counter, top=None, height=None):
     join_out = h - p.hair * 0.1
     cx_o = solve_cx(xr, xl, join_out, yc, top - yc, p.sq)
     obox = (2 * cx_o - xr, 2 * yc - top, xr, top)
-    fill = flush_end(xl, h, join_out, obox)
+    fill = flush_end(xl, h, join_out, obox, p.sq)
     return stem_l + a + stem_r + fill, xr
 
 
@@ -108,24 +114,94 @@ def outer_x(x0, x1, y0, y1, n, y, side="right"):
     return cx + dx if side == "right" else cx - dx
 
 
-def flush_end(xl, y_end, y_join, box, side="right"):
+def flush_end(xl, y_end, y_join, box, n, side="right"):
     """Ink that runs a stem's flat end (top or bottom at y_end) straight on
     until it meets a curve leaving the stem edge xl at y_join, just inside
     that end (an arch or bowl that overshoots the stem). Without it the
     outline dips down the stem edge and back up the curve, a small V-notch
-    next to the stem end. box: the curve's squircle; side: which side of
+    next to the stem end. box, n: the curve's squircle; side: which side of
     the stem the curve lies on. Add the result to the glyph.
 
     The fill runs from inside the stem to the curve's crown (the box's
     centre line) and reaches 6 units into the ink below the join: the drawn
     cubic sits a unit or two off the analytic superellipse, so stopping at
-    the exact crossing would leave slivers."""
+    the exact crossing would leave slivers. Where the flat end meets the
+    overshooting curve (at 12-14 degrees) a fillet rounds the corner off, so
+    the end flows into the curve without a step."""
     x0, _, x1, _ = box
     xm = (x0 + x1) / 2
     lo, hi = sorted((y_end, y_join + (6 if y_join > y_end else -6)))
     if side == "right":
-        return rect(xl - 1, lo, xm, hi)
-    return rect(xm, lo, xl + 1, hi)
+        fill = rect(xl - 1, lo, xm, hi)
+    else:
+        fill = rect(xm, lo, xl + 1, hi)
+    return fill + _flush_fillet(xl, y_end, y_join, box, n, side)
+
+
+def _flush_fillet(xl, y_end, y_join, box, n, side):
+    """The fillet for flush_end. Works in a local frame where the stem edge
+    is u = 0 with the curve at u > 0, the stem end is v = 0 and the curve
+    overshoots it at v > 0. The quadrant of the drawn cubic (geom.squircle)
+    facing the stem is followed from its crown (t = 0) down to its side
+    (t = 1)."""
+    sx = 1 if side == "right" else -1
+    sy = 1 if y_join < y_end else -1
+    bx0, by0, bx1, by1 = box
+    us = sorted((sx * (bx0 - xl), sx * (bx1 - xl)))
+    vs = sorted((sy * (by0 - y_end), sy * (by1 - y_end)))
+    cu, ru = (us[0] + us[1]) / 2, (us[1] - us[0]) / 2
+    cv, rv = (vs[0] + vs[1]) / 2, (vs[1] - vs[0]) / 2
+    k = superness(n)
+    q = [(cu, cv + rv), (cu - k * ru, cv + rv), (cu - ru, cv + k * rv), (cu - ru, cv)]
+
+    def pt(t):
+        m = 1 - t
+        w = (m**3, 3 * m * m * t, 3 * m * t * t, t**3)
+        return (
+            sum(wi * c[0] for wi, c in zip(w, q)),
+            sum(wi * c[1] for wi, c in zip(w, q)),
+        )
+
+    def slope(t):
+        m = 1 - t
+        w = (-3 * m * m, 3 * m * m - 6 * m * t, 6 * m * t - 3 * t * t, 3 * t * t)
+        du = sum(wi * c[0] for wi, c in zip(w, q))
+        dv = sum(wi * c[1] for wi, c in zip(w, q))
+        return dv / du
+
+    def solve(f, target):
+        lo, hi = 0.0, 1.0  # f rises with t
+        for _ in range(60):
+            mid = (lo + hi) / 2
+            lo, hi = (mid, hi) if f(mid) < target else (lo, mid)
+        return (lo + hi) / 2
+
+    if pt(0)[1] <= 0 or pt(1)[1] >= 0:
+        return Shape()  # the curve does not overshoot the end here
+    t_c = solve(lambda t: -pt(t)[1], 0.0)  # where the curve crosses v = 0
+    t_b = solve(slope, math.tan(math.atan(slope(t_c)) / 2))
+    ub, vb = pt(t_b)
+    mb = slope(t_b)
+    ut = ub - vb / mb  # the tangent at B meets the stem end's line
+    ua = ut - math.hypot(ub - ut, vb)
+    pts = [
+        (ua, 0.0),
+        (ua + 2 / 3 * (ut - ua), 0.0),
+        (ub + 2 / 3 * (ut - ub), vb + 2 / 3 * (0.0 - vb)),
+        (ub, vb),
+        (ub, -6.0),
+        (ua, -6.0),
+    ]
+    w = [(xl + sx * u, y_end + sy * v) for u, v in pts]
+    path = pathops.Path()
+    pen = path.getPen()
+    pen.moveTo(w[0])
+    pen.curveTo(w[1], w[2], w[3])
+    pen.lineTo(w[4])
+    pen.lineTo(w[5])
+    pen.closePath()
+    path.simplify(fix_winding=True)
+    return Shape(path)
 
 
 def open_bowl(

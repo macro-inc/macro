@@ -433,15 +433,37 @@ def _tilde_shape(p, case):
     def rot(seg):
         return [_rot(pt, ym) for pt in seg]
 
-    segs = (
-        outer
-        + [inner[0][0]]
-        + inner
-        + [rot(s) for s in outer]
-        + [rot(inner[0])[0]]
-        + [rot(s) for s in inner]
-    )
-    return _contour(ao, segs)
+    # Where a cap's counter meets the other cap's outer arc (the S middle),
+    # the two squircles cross the cut at different slopes. Trim both within
+    # `dl` of the cut and bridge them with a cubic along their tangents, so
+    # the S runs through smoothly. The other join is this one turned.
+    dl = 0.5 * (h2 - wt)
+    inc = _split(inner[-1], _solve(inner[-1], 1, ym + dl))[0]
+    og = rot(outer[0])
+    og = _split(og, _solve(og, 1, ym - dl))[1]
+    p0, q0 = inc[3], og[0]
+    span = 0.4 * math.hypot(q0[0] - p0[0], q0[1] - p0[1])
+
+    def unit(a, b):
+        d = math.hypot(b[0] - a[0], b[1] - a[1])
+        return ((b[0] - a[0]) / d, (b[1] - a[1]) / d)
+
+    u1, u2 = unit(inc[2], inc[3]), unit(og[0], og[1])
+    bridge = [
+        p0,
+        (p0[0] + u1[0] * span, p0[1] + u1[1] * span),
+        (q0[0] - u2[0] * span, q0[1] - u2[1] * span),
+        q0,
+    ]
+    half = [outer[1], inner[0][0], *inner[:-1], inc, bridge, og]
+    start = rot(og)[0]
+    segs = [
+        rot(og),
+        *half[:-1],
+        og,
+        *[rot(s) if len(s) == 4 else _rot(s, ym) for s in half[:-1]],
+    ]
+    return _contour(start, segs)
 
 
 # ---------------------------------------------------------------------------

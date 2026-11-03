@@ -288,11 +288,16 @@ def _question(p):
     (an S), so the stem grows out of the curve instead of sitting under it."""
     s = p.dot
     w = p.stem * 1.05  # stem, as in exclam
-    W = p.w(410, 1.2)
+    heavy = max(0.0, p.grow)
+    W = p.w(410, 1.2) + 0.2 * heavy
     ws, wt = p.stem * 1.04, p.hair * 1.04
     top = P.CAP + P.COS
     n, n_in = p.sq, p.sq_in
-    xs_c = W * 0.46  # stem centre, a little left as in Inter and SF
+    # Stem centre, a little left as in Inter and SF. Above Regular it moves
+    # further left (and the hook widens a little), so the S between the
+    # hook's right side and the stem keeps real curves: left in place, the
+    # stem crowded the hook and the S's counters shrank to corners.
+    xs_c = W * 0.46 - 0.45 * heavy
     xs0, xs1 = xs_c - w / 2, xs_c + w / 2
     xa = (xs1 + W - ws) / 2  # where the lower curve turns from one quadrant to the next
     y_sb = s + _gap(p)  # stem bottom
@@ -830,8 +835,8 @@ def at(p):
     cxb, rxb, ryb = (xa0 + ix1 + wsb) / 2, (ix1 + wsb - xa0) / 2, (oy1 - oy0) / 2
     dy = ryb * (1 - min(1.0, abs(xs - cxb) / rxb) ** n) ** (1 / n)
     cyb = (oy0 + oy1) / 2
-    fill = flush_end(xs, oy1, cyb + dy, box, side="left") + flush_end(
-        xs, oy0, cyb - dy, box, side="left"
+    fill = flush_end(xs, oy1, cyb + dy, box, n, side="left") + flush_end(
+        xs, oy0, cyb - dy, box, n, side="left"
     )
     sh = ringsh + side + hook + bowl + stem + fill
     return G(sh, l=p.sbr, r=p.sbr)
@@ -953,7 +958,12 @@ def section(p):
     e = 2.0
     tb = m1 - wt + e
     upper = ring(0, tb, W, top, ws, wt, n=n, n_in=n_in, wy_bottom=wt - 2 * e)
-    y_cut = tb + (top - tb) * 0.66
+    # The terminal is cut a fixed way up the counter's right side (not the
+    # outer box's), so it crosses that side where it runs steeply down at
+    # every weight; at ExtraBold, where the counter is short, a cut placed by
+    # the outer box landed just under the counter's top and left a ledge.
+    i0, i1 = tb + wt - 2 * e, top - wt
+    y_cut = (i0 + i1) / 2 + 0.55 * (i1 - i0) / 2
     upper = upper - (right_of(W / 2) & below(y_cut))
     return G(middle + upper + upper.rotate180(W / 2, mid), l=p.sbr, r=p.sbr)
 
