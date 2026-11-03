@@ -1,8 +1,0 @@
-{
-  "name": "environments-cluster-stack",
-  "version": "0.0.0",
-  "private": true,
-  "dependencies": {
-    "@pulumi/kubernetes": "^4.23.0"
-  }
-}

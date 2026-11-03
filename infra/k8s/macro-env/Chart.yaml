@@ -1,6 +1,0 @@
-apiVersion: v2
-name: macro-env
-description: One complete Macro environment (infra, services, workers, proxy, frontend) in one namespace.
-type: application
-version: 0.1.0
-appVersion: "0.1.0"

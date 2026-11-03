@@ -1,4 +1,0 @@
-config:
-  aws:region: us-east-1
-  environments-cluster:domain: env.macro-internal.com
-  environments-cluster:zone_id: Z0855468EHU8R1T85FQF

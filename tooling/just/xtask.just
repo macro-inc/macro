@@ -63,11 +63,3 @@ local-e2e-all *ARGS:
 # Start and seed the stack, then open Playwright UI mode.
 local-e2e-ui *ARGS:
   tooling/scripts/run-local-e2e.sh --suite web --ui -- "$@"
-
-# Full environments on Kubernetes (docs/development/environments.md).
-#   just env up demo                   # local kind cluster: https://demo.localhost:9443/app/
-#   just env up demo --target eks      # shared EKS cluster, for demos
-#   just env list [--target eks]
-#   just env down demo [--target eks]
-env *ARGS:
-  {{ xtask }} env "$@"

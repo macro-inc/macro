@@ -25,9 +25,7 @@ and the traps. To add a whole service, follow the
 
 Stacks are `macro-inc/dev` and `macro-inc/prod`; a few are prod-only
 (`monitoring`, `doppler-projects`) or dev-only (`github-runners`,
-`web-app-preview`, `environments-cluster`). `environments-cluster` is the EKS
-cluster for [Kubernetes environments](environments.md); the chart those
-environments install is `infra/k8s/macro-env`. The project name is usually the directory name. It matters:
+`web-app-preview`). The project name is usually the directory name. It matters:
 Doppler, `services-config.json`, and the nix `serviceName` all key on it.
 
 ### Stack references

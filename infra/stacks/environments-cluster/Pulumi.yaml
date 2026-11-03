@@ -1,3 +1,0 @@
-name: environments-cluster
-runtime: nodejs
-description: EKS cluster that runs full Macro environments (one namespace each) for demos and previews
