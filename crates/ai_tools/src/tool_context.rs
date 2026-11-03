@@ -1970,11 +1970,11 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
     }
 }
 
-/// Type alias for the import service implementation used by AI tools.
-/// The MCP connection to Pipedream's remote server: `None` on deployments
-/// where Pipedream isn't configured (its toolsets then come up empty).
+/// The connector backends (Pipedream, plus Macro Connect when configured):
+/// `None` on deployments where Pipedream isn't configured (its toolsets then
+/// come up empty).
 pub type ToolPipedreamConnection =
-    Option<std::sync::Arc<pipedream_mcp::outbound::api::PipedreamClient>>;
+    Option<std::sync::Arc<pipedream_mcp::outbound::dispatch::ConnectorBackends>>;
 
 /// The MCP stack selector wired to the concrete DCS stores: the native
 /// server store and the Pipedream connection store. Picks which stack
@@ -1993,7 +1993,7 @@ pub type ToolImportService = import::domain::service::ImportServiceImpl<
     import::outbound::mcp_slack_source::McpSlackSource<ToolMcpSelector>,
     import_notion::outbound::pipedream::PipedreamNotionConnections<
         pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
-        pipedream_mcp::outbound::api::PipedreamClient,
+        pipedream_mcp::outbound::dispatch::ConnectorBackends,
     >,
 >;
 
@@ -2127,7 +2127,7 @@ pub struct ToolServiceContext {
 
 /// Pipedream discovery dependencies shared by chat tools.
 pub type ToolConnectorToolContext = pipedream_mcp::inbound::toolset::ConnectorToolContext<
-    pipedream_mcp::outbound::api::PipedreamClient,
+    pipedream_mcp::outbound::dispatch::ConnectorBackends,
     pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
     mcp_select::NativeOverlayConnections<mcp_client::outbound::NativeServerStore>,
 >;
@@ -2138,7 +2138,7 @@ pub type ToolConnectorToolContext = pipedream_mcp::inbound::toolset::ConnectorTo
 /// native MCP stack; `None` where that stack has no encryption key.
 pub fn build_connector_tool_context(
     pool: sqlx::PgPool,
-    client: Option<Arc<pipedream_mcp::outbound::api::PipedreamClient>>,
+    client: Option<Arc<pipedream_mcp::outbound::dispatch::ConnectorBackends>>,
     native_servers: Option<Arc<mcp_client::outbound::NativeServerStore>>,
 ) -> ToolConnectorToolContext {
     pipedream_mcp::inbound::toolset::ConnectorToolContext {

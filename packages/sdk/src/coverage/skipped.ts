@@ -164,6 +164,7 @@ export const cognitionExcluded = [
   'addMcpServer',
   'browsePipedreamMcpCatalog',
   'callTool',
+  'completePipedreamMcpConnect',
   'completePipedreamMcpConnection',
   'createPipedreamMcpToken',
   'deletePipedreamMcpConnection',
