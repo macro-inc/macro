@@ -23,6 +23,11 @@ before its backend. Memory-backed hosts keep their original behavior.
   coherent `pose` register: local matrix, geometry, coordinate
   parent ID, and a captured world matrix. Fill and stroke are separate registers,
   so moving and restyling the same shape can merge independently.
+- Node kinds are open. A client skips a kind it does not know (with its subtree)
+  when projecting, and writes it back untouched after the sibling that preceded
+  it, so a new kind can ship without breaking or deleting through older clients.
+  Geometry is validated per known kind at projection, not by the schema. Deleting
+  or ungrouping a group in an older client still removes unknown children.
 - Ordered Loro children project to unique core sort keys. These keys are derived,
   not CRDT fields; concurrent key collisions are handled by Loro's ordered tree.
   Core commands become moves of affected tree nodes, not full-list replacements.
