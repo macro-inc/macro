@@ -105,7 +105,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-
+    
     /**
      * Atomically mute or snooze items for the authenticated user.
      */
@@ -119,7 +119,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-
+    
     /**
      * Unmutes all notifications.
      * Existing notifications that were muted manually will remain muted.
