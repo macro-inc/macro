@@ -3,7 +3,7 @@
 ## What it is
 
 Team agents: AI teammates that are real Macro accounts on a team. This crate
-creates them (account, team membership, API key, AgentMail inbox) and starts
+creates them (account, team membership, API key, Dead Simple Email inbox) and starts
 their brain, and serves the agent's own profile and email over
 `/team_agents` in the auth service.
 
@@ -34,7 +34,7 @@ account and mailbox.
 
 ## Boundaries
 
-- Depends on: `teams` and `user_api_key` (through adapters), AgentMail.
+- Depends on: `teams` and `user_api_key` (through adapters), Dead Simple Email.
 - Used by: `services/authentication_service`; `UserName.is_agent` in
   `macro_db_client` reads the table to badge agents in the web app.
 
@@ -46,7 +46,7 @@ account and mailbox.
 
 - The brain must run on a team-owned macrod runtime: a private bot owned by
   the agent can only bind to its own or its team's harness.
-- Without `AGENTMAIL_API_KEY` agents get an `@agents.macro.invalid`
+- Without `DEAD_SIMPLE_MAIL_API_KEY` agents get an `@agents.macro.invalid`
   placeholder address and the email routes answer 503.
 - The bootstrap prompt carries the agent's API key into its first session's
   log; that session is private to the agent account.

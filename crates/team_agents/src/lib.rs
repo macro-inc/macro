@@ -10,7 +10,7 @@
 //!
 //! - **domain**: models, ports, and the service.
 //! - **inbound**: the Axum router (feature `inbound`).
-//! - **outbound**: Postgres, AgentMail, and Macro API adapters (feature
+//! - **outbound**: Postgres, Dead Simple Email, and Macro API adapters (feature
 //!   `outbound`).
 
 pub mod domain;

@@ -128,7 +128,7 @@ pub(crate) type TeamAgentsServiceType = team_agents::domain::service::TeamAgentS
             user_api_key::outbound::pg_user_api_keys_repo::PgUserApiKeysRepo,
         >,
     >,
-    team_agents::outbound::agentmail::AgentMail,
+    team_agents::outbound::dead_simple_email::DeadSimpleEmail,
     team_agents::outbound::macro_brain_launcher::MacroBrainLauncher,
 >;
 

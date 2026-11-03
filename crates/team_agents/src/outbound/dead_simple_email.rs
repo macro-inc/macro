@@ -1,6 +1,7 @@
-//! AgentMail adapter: one inbox per team agent.
+//! Dead Simple Email adapter: one inbox per team agent.
 //!
-//! API reference: <https://docs.agentmail.to/api-reference>.
+//! API reference: <https://deadsimple.email/openapi.yaml>. Every response is
+//! wrapped as `{"data": ..., "meta": ...}`.
 
 use std::time::Duration;
 
@@ -12,46 +13,30 @@ use crate::domain::models::{
 };
 use crate::domain::ports::Mailboxes;
 
-const AGENTMAIL_API: &str = "https://api.agentmail.to/v0";
+const DEAD_SIMPLE_EMAIL_API: &str = "https://api.deadsimple.email/v1";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// Domain for agent addresses when no email provider is configured. Reserved
 /// by RFC 2606, so nothing can ever deliver to it.
 const PLACEHOLDER_DOMAIN: &str = "agents.macro.invalid";
 
-/// AgentMail credentials.
+/// Agents' mailboxes at Dead Simple Email. Without an API key, agents get a
+/// placeholder address and no inbox, and every mailbox call answers
+/// `EmailUnavailable`.
 #[derive(Clone)]
-pub struct AgentMailConfig {
-    /// API key.
-    pub api_key: String,
-    /// Verified custom domain for addresses; AgentMail's own when `None`.
-    pub domain: Option<String>,
-}
-
-impl std::fmt::Debug for AgentMailConfig {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("AgentMailConfig")
-            .field("domain", &self.domain)
-            .finish_non_exhaustive()
-    }
-}
-
-/// Agents' mailboxes at AgentMail. Without a config, agents get a placeholder
-/// address and no inbox, and every mailbox call answers `EmailUnavailable`.
-#[derive(Clone)]
-pub struct AgentMail {
+pub struct DeadSimpleEmail {
     client: reqwest::Client,
-    config: Option<AgentMailConfig>,
+    api_key: Option<String>,
 }
 
-/// Errors talking to AgentMail.
+/// Errors talking to Dead Simple Email.
 #[derive(Debug, thiserror::Error)]
-pub enum AgentMailError {
+pub enum DeadSimpleEmailError {
     /// The request failed to send or decode.
     #[error(transparent)]
     Http(#[from] reqwest::Error),
-    /// AgentMail answered with an error status.
-    #[error("agentmail answered {status}: {body}")]
+    /// Dead Simple Email answered with an error status.
+    #[error("dead simple email answered {status}: {body}")]
     Status {
         /// HTTP status.
         status: reqwest::StatusCode,
@@ -60,17 +45,20 @@ pub enum AgentMailError {
     },
 }
 
-impl From<AgentMailError> for TeamAgentError {
-    fn from(error: AgentMailError) -> Self {
+impl From<DeadSimpleEmailError> for TeamAgentError {
+    fn from(error: DeadSimpleEmailError) -> Self {
         TeamAgentError::EmailProvider(rootcause::Report::new(error).into_dynamic())
     }
 }
 
+#[derive(Deserialize)]
+struct Envelope<T> {
+    data: T,
+}
+
 #[derive(Serialize)]
 struct CreateInbox<'a> {
-    username: &'a str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    domain: Option<&'a str>,
+    local_part: &'a str,
     display_name: &'a str,
 }
 
@@ -84,27 +72,33 @@ struct Inbox {
 struct Message {
     message_id: String,
     thread_id: String,
-    from: String,
+    from_email: String,
+    from_name: Option<String>,
     #[serde(default)]
     to: Vec<String>,
     subject: Option<String>,
-    preview: Option<String>,
-    extracted_text: Option<String>,
-    text: Option<String>,
-    timestamp: DateTime<Utc>,
+    snippet: Option<String>,
+    text_body: Option<String>,
+    received_at: Option<DateTime<Utc>>,
+    created_at: DateTime<Utc>,
 }
 
 impl From<Message> for EmailMessage {
     fn from(message: Message) -> Self {
+        let from = match message.from_name {
+            Some(name) if !name.is_empty() => format!("{name} <{}>", message.from_email),
+            _ => message.from_email,
+        };
+
         EmailMessage {
             message_id: message.message_id,
             thread_id: message.thread_id,
-            from: message.from,
+            from,
             to: message.to,
             subject: message.subject,
-            preview: message.preview,
-            text: message.extracted_text.or(message.text),
-            received_at: message.timestamp,
+            preview: message.snippet,
+            text: message.text_body,
+            received_at: message.received_at.unwrap_or(message.created_at),
         }
     }
 }
@@ -114,63 +108,73 @@ struct MessageList {
     messages: Vec<Message>,
 }
 
+#[derive(Serialize)]
+struct Send<'a> {
+    to: &'a [String],
+    subject: &'a str,
+    text_body: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    html_body: Option<&'a str>,
+}
+
 #[derive(Deserialize)]
 struct Sent {
     message_id: String,
 }
 
-impl AgentMail {
-    /// Builds the adapter; `None` turns email off.
-    pub fn new(config: Option<AgentMailConfig>) -> Result<Self, AgentMailError> {
+impl DeadSimpleEmail {
+    /// Builds the adapter; no API key turns email off.
+    pub fn new(api_key: Option<String>) -> Result<Self, DeadSimpleEmailError> {
         let client = reqwest::Client::builder()
             .timeout(REQUEST_TIMEOUT)
             .build()?;
 
-        Ok(Self { client, config })
+        Ok(Self { client, api_key })
     }
 
-    fn config(&self) -> Result<&AgentMailConfig, TeamAgentError> {
-        self.config.as_ref().ok_or(TeamAgentError::EmailUnavailable)
+    fn api_key(&self) -> Result<&str, TeamAgentError> {
+        self.api_key
+            .as_deref()
+            .ok_or(TeamAgentError::EmailUnavailable)
     }
 
     async fn call<T: DeserializeOwned>(
         &self,
         request: reqwest::RequestBuilder,
     ) -> Result<T, TeamAgentError> {
-        let config = self.config()?;
         let response = request
-            .bearer_auth(&config.api_key)
+            .bearer_auth(self.api_key()?)
             .send()
             .await
-            .map_err(AgentMailError::from)?;
+            .map_err(DeadSimpleEmailError::from)?;
         let status = response.status();
 
         if !status.is_success() {
             let body = response.text().await.unwrap_or_default();
-            return Err(AgentMailError::Status { status, body }.into());
+            return Err(DeadSimpleEmailError::Status { status, body }.into());
         }
 
-        Ok(response.json().await.map_err(AgentMailError::from)?)
+        let envelope: Envelope<T> = response.json().await.map_err(DeadSimpleEmailError::from)?;
+        Ok(envelope.data)
     }
 }
 
-impl Mailboxes for AgentMail {
+impl Mailboxes for DeadSimpleEmail {
     #[tracing::instrument(name = "team_agents.mailbox.create", skip_all, err)]
     async fn create(&self, username: &str, display_name: &str) -> Result<Mailbox, TeamAgentError> {
-        let Some(config) = &self.config else {
+        if self.api_key.is_none() {
             return Ok(Mailbox {
                 mailbox_id: None,
                 email: format!("{username}@{PLACEHOLDER_DOMAIN}"),
             });
-        };
+        }
 
         let inbox: Inbox = self
             .call(
                 self.client
-                    .post(format!("{AGENTMAIL_API}/inboxes"))
+                    .post(format!("{DEAD_SIMPLE_EMAIL_API}/inboxes"))
                     .json(&CreateInbox {
-                        username,
-                        domain: config.domain.as_deref(),
+                        local_part: username,
                         display_name,
                     }),
             )
@@ -184,19 +188,18 @@ impl Mailboxes for AgentMail {
 
     #[tracing::instrument(name = "team_agents.mailbox.delete", skip_all, err)]
     async fn delete(&self, mailbox_id: &str) -> Result<(), TeamAgentError> {
-        let config = self.config()?;
         let response = self
             .client
-            .delete(format!("{AGENTMAIL_API}/inboxes/{mailbox_id}"))
-            .bearer_auth(&config.api_key)
+            .delete(format!("{DEAD_SIMPLE_EMAIL_API}/inboxes/{mailbox_id}"))
+            .bearer_auth(self.api_key()?)
             .send()
             .await
-            .map_err(AgentMailError::from)?;
+            .map_err(DeadSimpleEmailError::from)?;
         let status = response.status();
 
         if !status.is_success() && status != reqwest::StatusCode::NOT_FOUND {
             let body = response.text().await.unwrap_or_default();
-            return Err(AgentMailError::Status { status, body }.into());
+            return Err(DeadSimpleEmailError::Status { status, body }.into());
         }
 
         Ok(())
@@ -207,7 +210,7 @@ impl Mailboxes for AgentMail {
         let list: MessageList = self
             .call(
                 self.client
-                    .get(format!("{AGENTMAIL_API}/inboxes/{mailbox_id}/messages"))
+                    .get(format!("{DEAD_SIMPLE_EMAIL_API}/inboxes/{mailbox_id}/messages"))
                     .query(&[("limit", limit)]),
             )
             .await?;
@@ -218,14 +221,10 @@ impl Mailboxes for AgentMail {
     }
 
     #[tracing::instrument(name = "team_agents.mailbox.get", skip(self), err)]
-    async fn get(
-        &self,
-        mailbox_id: &str,
-        message_id: &str,
-    ) -> Result<EmailMessage, TeamAgentError> {
+    async fn get(&self, mailbox_id: &str, message_id: &str) -> Result<EmailMessage, TeamAgentError> {
         let message: Message = self
             .call(self.client.get(format!(
-                "{AGENTMAIL_API}/inboxes/{mailbox_id}/messages/{message_id}"
+                "{DEAD_SIMPLE_EMAIL_API}/inboxes/{mailbox_id}/messages/{message_id}"
             )))
             .await?;
 
@@ -237,15 +236,13 @@ impl Mailboxes for AgentMail {
         let sent: Sent = self
             .call(
                 self.client
-                    .post(format!(
-                        "{AGENTMAIL_API}/inboxes/{mailbox_id}/messages/send"
-                    ))
-                    .json(&serde_json::json!({
-                        "to": email.to,
-                        "subject": email.subject,
-                        "text": email.text,
-                        "html": email.html,
-                    })),
+                    .post(format!("{DEAD_SIMPLE_EMAIL_API}/inboxes/{mailbox_id}/messages"))
+                    .json(&Send {
+                        to: &email.to,
+                        subject: &email.subject,
+                        text_body: &email.text,
+                        html_body: email.html.as_deref(),
+                    }),
             )
             .await?;
 

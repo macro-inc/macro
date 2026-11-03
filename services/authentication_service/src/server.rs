@@ -764,12 +764,12 @@ pub async fn run() -> anyhow::Result<()> {
                 user_api_key::outbound::pg_user_api_keys_repo::PgUserApiKeysRepo::new(db.clone()),
             ),
         )),
-        team_agents::outbound::agentmail::AgentMail::new(config.agentmail_api_key.value().map(
-            |api_key| team_agents::outbound::agentmail::AgentMailConfig {
-                api_key: api_key.to_string(),
-                domain: config.agentmail_domain.value().map(str::to_string),
-            },
-        ))
+        team_agents::outbound::dead_simple_email::DeadSimpleEmail::new(
+            config
+                .dead_simple_mail_api_key
+                .value()
+                .map(str::to_string),
+        )
         .map_err(|error| anyhow::anyhow!("{error:?}"))?,
         team_agents::outbound::macro_brain_launcher::MacroBrainLauncher::new(
             DocumentStorageServiceUrl::new()?.to_string(),
