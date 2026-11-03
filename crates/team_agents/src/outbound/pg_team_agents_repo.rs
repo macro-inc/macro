@@ -8,6 +8,9 @@ use uuid::Uuid;
 use crate::domain::models::{NewAgentAccount, TeamAgent};
 use crate::domain::ports::TeamAgentRepository;
 
+#[cfg(test)]
+mod test;
+
 /// Role every self-serve account starts with, as at signup.
 const SELF_SERVE_ROLE: &str = "self_serve";
 

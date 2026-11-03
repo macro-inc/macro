@@ -124,7 +124,7 @@ impl Mailboxes for FakeMailboxes {
     async fn create(&self, username: &str, _display_name: &str) -> Result<Mailbox, TeamAgentError> {
         Ok(Mailbox {
             mailbox_id: Some(format!("inbox-{username}")),
-            email: format!("{username}@AgentMail.to"),
+            email: format!("{username}@Example.com"),
         })
     }
 
@@ -240,7 +240,7 @@ async fn create_makes_an_account_and_starts_the_brain() {
         .unwrap_or_else(|error| panic!("create failed: {error}"));
 
     assert!(agent.email.starts_with("sam-rivera-"));
-    assert!(agent.email.ends_with("@agentmail.to"));
+    assert!(agent.email.ends_with("@example.com"));
     assert_eq!(agent.user_id.as_ref(), format!("macro|{}", agent.email));
     assert_eq!(agent.team_id.to_string(), TEAM_ID);
     assert_eq!(agent.brain_bot_id, Some(Uuid::nil()));
