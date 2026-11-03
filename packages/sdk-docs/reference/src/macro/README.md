@@ -172,24 +172,6 @@ Re-exports [DocumentAnchor](../entities/documents/anchor/classes/DocumentAnchor.
 
 ***
 
-### DocumentEditOptions
-
-Re-exports [DocumentEditOptions](../entities/documents/ai-edit/interfaces/DocumentEditOptions.md)
-
-***
-
-### DocumentEditRefusedError
-
-Re-exports [DocumentEditRefusedError](../entities/documents/ai-edit/classes/DocumentEditRefusedError.md)
-
-***
-
-### DocumentEditResult
-
-Re-exports [DocumentEditResult](../entities/documents/ai-edit/interfaces/DocumentEditResult.md)
-
-***
-
 ### DocumentVersion
 
 Re-exports [DocumentVersion](../entities/documents/version/classes/DocumentVersion.md)
@@ -205,12 +187,6 @@ Re-exports [DraftAttachment](../entities/email/draft/classes/DraftAttachment.md)
 ### DraftOptions
 
 Re-exports [DraftOptions](../entities/email/draft/type-aliases/DraftOptions.md)
-
-***
-
-### EditOutcomeUnknownError
-
-Re-exports [EditOutcomeUnknownError](../entities/documents/ai-edit/classes/EditOutcomeUnknownError.md)
 
 ***
 
@@ -646,9 +622,9 @@ Re-exports [RoutineTriggerOptions](../entities/routines/routine/type-aliases/Rou
 
 ***
 
-### SavedQueryBlock
+### SavedFormResponse
 
-Re-exports [SavedQueryBlock](../entities/documents/ai-edit/interfaces/SavedQueryBlock.md)
+Re-exports [SavedFormResponse](../entities/forms/form/type-aliases/SavedFormResponse.md)
 
 ***
 
