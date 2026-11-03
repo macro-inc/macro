@@ -138,35 +138,40 @@ const result = await doc.edit(
 
 #### Aborting
 
-AI edits can be aborted:
+AI edits can be aborted. Code mode has no timers, so a program aborts on its
+own conditions, for example the other edits once one fails:
 
 ```js
 const controller = new AbortController();
-const timer = setTimeout(() => controller.abort(), 20_000);
-try {
-  await doc.edit('Shorten every paragraph in "Background" to one sentence.', {
-    signal: controller.signal,
-  });
-} catch (error) {
-  if (error.name !== 'AbortError') throw error;
-  const structure = await doc.structure(); // see what landed before the abort
-} finally {
-  clearTimeout(timer);
-}
+await Promise.allSettled(
+  tasks.map((task) =>
+    task
+      .edit('Replace "Q3" with "Q4" in the "Timeline" section.', {
+        signal: controller.signal,
+      })
+      .catch((error) => {
+        controller.abort();
+        throw error;
+      }),
+  ),
+);
 ```
 
 - **What cancels.** The SDK aborts its request to DSS; DSS drops its call to
   the worker; the worker's request signal (`enable_request_signal`) stops the
   models, the op queue and the sync session, as `EditDocument`'s turn Stop does
   today. The promise rejects with a `DOMException` named `AbortError`. A signal
-  already aborted rejects before anything is sent.
+  already aborted rejects before anything is sent. A sandbox killed at its
+  deadline cancels the same way.
 - **What the document keeps.** The worker applies an edit op by op as the models
-  produce them, and each op lands whole or not at all. Ops whose updates
-  sync-service acknowledged before the abort stay, and collaborators see them;
-  ops not yet applied, or applied but not yet synced, are discarded. So the
-  document is always consistent, but an aborted multi-step edit can be left part
-  done (for example, a section rewritten and its list not yet added). Read
-  `structure()` to see what landed; never replay the instructions blindly.
+  produce them and pushes each op, or each typing step when it animates, to
+  sync-service as it lands. There is no rollback: what was sent before the
+  abort stays and collaborators see it; nothing is applied after it, because
+  the queue checks the signal before each op and typing step. So an aborted
+  edit can be left part done (a section rewritten and its list not yet added),
+  and the op being typed at that moment can be left partway, since `setText`
+  removes the old text before typing the new. Read the document to see what
+  landed; never replay the instructions blindly.
 - **Structured batches** (`applyEdits`) also take `signal`: aborted before DSS
   forwards the batch, nothing applies; once the worker has started the all-or-
   nothing commit, the batch either lands whole or not at all, and the outcome
@@ -177,7 +182,7 @@ summary, what changed, the new revision and `webUrl`):
 
 | Type | Method | Server pipeline | What changed | Abort |
 | --- | --- | --- | --- | --- |
-| Markdown, tasks | `doc.edit` | `EditDocument`'s (exists) | block ids | Yes, op by op (above) |
+| Markdown, tasks | `doc.edit` | `EditDocument`'s (exists) | block ids | Yes, op by op; no rollback (above) |
 | Canvas | `canvas.edit` | `EditCanvas`'s (exists) | item ids | Yes; one commit, so all or nothing |
 | Spreadsheet | `sheet.edit` | New: one writer model | ranges | Yes until the commit; one commit |
 | Word | `wordDoc.edit` | New: one writer model | paragraph ids | Yes until the commit; one commit |

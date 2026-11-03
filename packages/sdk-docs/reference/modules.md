@@ -63,6 +63,7 @@
 - [src/entities/databases/table](src/entities/databases/table/README.md)
 - [src/entities/databases/view](src/entities/databases/view/README.md)
 - [src/entities/databases/webhook](src/entities/databases/webhook/README.md)
+- [src/entities/documents/ai-edit](src/entities/documents/ai-edit/README.md)
 - [src/entities/documents/anchor](src/entities/documents/anchor/README.md)
 - [src/entities/documents/comment](src/entities/documents/comment/README.md)
 - [src/entities/documents/document](src/entities/documents/document/README.md)

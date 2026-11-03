@@ -509,6 +509,7 @@
   "storage.getDocument": "Read document",
   "storage.editDocument": "Edit Document",
   "storage.saveDocumentHandler": "Save Document",
+  "storage.editDocumentWithAi": "Edit Document With Ai",
   "storage.getDocumentBranchName": "Get Document Branch Name",
   "storage.copyDocument": "Copy Document",
   "storage.exportDocument": "Export Document",
