@@ -136,13 +136,16 @@ const emailLocalStateSchema = emailLocalStateSchemaWithDefaults.catch(
   DEFAULT_EMAIL_LOCAL_STATE
 );
 
+// A saved view's filters come from its definition, so while one is open the
+// next visit restores the tab it was opened from instead.
 function selectLocalState(state: EmailViewState): EmailLocalState {
+  const scope = state.beforeSavedView ?? state;
   return {
     version: 1,
-    tab: state.tab,
-    inboxIds: normalizeInboxSelection(state.inboxIds),
-    aliasFilter: state.aliasFilter,
-    facets: normalizeFacetSelection(state.facets),
+    tab: scope.tab,
+    inboxIds: normalizeInboxSelection(scope.inboxIds),
+    aliasFilter: scope.aliasFilter,
+    facets: state.beforeSavedView ? {} : normalizeFacetSelection(state.facets),
     focusSort: state.focusSort,
   };
 }

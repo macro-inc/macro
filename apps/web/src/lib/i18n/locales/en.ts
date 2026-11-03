@@ -6,6 +6,7 @@ import commandMenu from './en/command-menu';
 import commands from './en/commands';
 import common from './en/common';
 import create from './en/create';
+import emailViews from './en/email-views';
 import entityActions from './en/entity-actions';
 import localRuntime from './en/local-runtime';
 import mobile from './en/mobile';
@@ -30,6 +31,7 @@ export default {
   commands,
   common,
   create,
+  emailViews,
   entityActions,
   localRuntime,
   mobile,

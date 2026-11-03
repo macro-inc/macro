@@ -38,6 +38,7 @@ import { useEmailView } from '../email-view-context';
 import { EMAIL_TOUR } from '../tour';
 import type { EmailTab } from '../types';
 import { useVisibleEmailTab } from '../use-visible-email-tab';
+import { EmailSavedViewsSection } from '../views/email-saved-views';
 import { EmailInboxList } from './EmailInboxSelector';
 
 // Email is personal, so the sidebar lists only the user's own tags.
@@ -76,11 +77,11 @@ const TAB_ICONS: Record<EmailTab, Component<{ class?: string }>> = {
 };
 
 function Tab(props: { id: EmailTab; label?: string; onNavigate?: () => void }) {
-  const { state, setTab } = useEmailView();
+  const { state, setTab, savedViewActive } = useEmailView();
 
   return (
     <ViewSidebar.Item
-      active={state.tab === props.id}
+      active={!savedViewActive() && state.tab === props.id}
       {...pressHandlers(() => {
         setTab(props.id);
         props.onNavigate?.();
@@ -95,7 +96,7 @@ function Tab(props: { id: EmailTab; label?: string; onNavigate?: () => void }) {
 }
 
 export function EmailNavigation(props: { onNavigate?: () => void }) {
-  const { state, setTab } = useEmailView();
+  const { state, setTab, savedViewActive } = useEmailView();
   const isVisible = useVisibleEmailTab();
   return (
     <Show
@@ -126,10 +127,14 @@ export function EmailNavigation(props: { onNavigate?: () => void }) {
       <ViewSidebar.Nav aria-label="Email tabs">
         <ViewSidebar.Item
           ref={tourTarget(EMAIL_TOUR.inbox)}
-          active={isEmailInboxTab(state.tab)}
+          active={!savedViewActive() && isEmailInboxTab(state.tab)}
           {...pressHandlers(() => {
             // Reopen the Inbox view that was last open: Focus, Signal or Noise.
-            setTab(isEmailInboxTab(state.tab) ? state.tab : 'important');
+            setTab(
+              !savedViewActive() && isEmailInboxTab(state.tab)
+                ? state.tab
+                : 'important'
+            );
             props.onNavigate?.();
           })}
         >
@@ -239,6 +244,8 @@ export function EmailSidebar() {
         </Show>
 
         <EmailNavigation />
+
+        <EmailSavedViewsSection />
 
         <div ref={tourTarget(EMAIL_TOUR.tags)}>
           <SidebarTagsSection

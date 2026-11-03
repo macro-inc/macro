@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   /** Whether the remote flag with this PostHog key is on. */
   flag: (_key: string): boolean => true,
   tab: (): string => 'important',
+  savedView: (): string | undefined => undefined,
   tagSets: (): TagSetResponse[] => [],
 }));
 
@@ -28,10 +29,10 @@ vi.mock('@app/components/list', () => ({
   listOwnedSlotName: (name: string) => name,
 }));
 vi.mock('@app/components/view-shell', () => ({}));
-vi.mock(
-  '@app/features/soup',
-  async () => import('../soup/filters/facets/selection')
-);
+vi.mock('@app/features/soup', async () => ({
+  ...(await import('../soup/filters/facets/selection')),
+  ...(await import('../soup/filters/facets/tag-facet')),
+}));
 vi.mock('@app/features/soup/collection/list-navigation-source', () => ({
   registerListNavigationSource: () => {},
 }));
@@ -46,6 +47,9 @@ vi.mock('@app/lib/split-router', async (importOriginal) => ({
     {
       get tab() {
         return mocks.tab();
+      },
+      get savedView() {
+        return mocks.savedView();
       },
     },
   ],
@@ -96,6 +100,7 @@ afterEach(() => {
   vi.clearAllMocks();
   mocks.flag = () => true;
   mocks.tab = () => 'important';
+  mocks.savedView = () => undefined;
   mocks.tagSets = () => [];
 });
 
@@ -241,4 +246,129 @@ it('leaves a restored Focus tab when Focus or GraphQL Soup turns off', () => {
     expect(view.state.tab).toBe('important');
     cleanup();
   }
+});
+
+describe('saved views', () => {
+  const VIEW_ID = '0199a1b2-0000-7000-8000-0000000000f1';
+  const OTHER_INBOX = '0199a1b2-0000-7000-8000-0000000000e1';
+  const record = {
+    id: VIEW_ID,
+    ownerId: 'user',
+    name: 'Principals',
+    sharedTeamId: null,
+    revision: 1,
+    config: {
+      kind: 'email',
+      version: 1,
+      filters: {
+        inboxIds: [OTHER_INBOX],
+        participants: [{ type: 'domain', domain: 'example.com' }],
+        participantFields: ['from', 'to', 'cc'],
+        subject: [],
+        starred: false,
+        read: 'unread',
+        attachments: [],
+        calendarInvite: false,
+        tags: [],
+      },
+    },
+  };
+
+  /** The URL follows navigation; the detail source knows one view. */
+  function mountSavedViews(options: { known: boolean }) {
+    const [search, setSearch] = createStore<{
+      tab: string;
+      savedView?: string;
+    }>({ tab: 'important' });
+    mocks.tab = () => search.tab;
+    mocks.savedView = () => search.savedView;
+    mocks.useEmailLinksQuery.mockReturnValue({
+      isSuccess: true,
+      data: { links: [{ id: 'saved-inbox', email_address: 'me@example.com' }] },
+    });
+    mocks.useRouteParams.mockReturnValue({});
+    mocks.navigate.mockImplementation(
+      (
+        _target: unknown,
+        navigation: { search: { mail: { tab: string; savedView?: string } } }
+      ) => setSearch({ ...navigation.search.mail })
+    );
+    let view!: EmailViewContext;
+    function ReadContext() {
+      view = useEmailView();
+      return null;
+    }
+    render(() => (
+      <EmailViewProvider
+        initialState={{ inboxIds: ['saved-inbox'] }}
+        savedViewsEnabled={() => true}
+        savedViewSource={(id) => ({
+          data: () => {
+            if (!id()) return undefined;
+            return options.known && id() === VIEW_ID ? record : null;
+          },
+          viewerId: () => 'user',
+          error: () => undefined,
+          loading: () => false,
+          refresh: async () => {},
+        })}
+      >
+        <ReadContext />
+      </EmailViewProvider>
+    ));
+    return view;
+  }
+
+  it('opens a view on All with its filters, tracks edits, and returns to the prior tab', () => {
+    const view = mountSavedViews({ known: true });
+
+    view.selectSavedView(VIEW_ID);
+
+    expect(view.savedViewActive()).toBe(true);
+    expect(view.state.tab).toBe('all');
+    expect(view.state.inboxIds).toEqual([OTHER_INBOX]);
+    expect(view.state.facets.read).toEqual(['unread']);
+    expect(view.state.conditions?.participants).toEqual([
+      { type: 'domain', domain: 'example.com' },
+    ]);
+    expect(view.savedViews?.view()).toMatchObject({
+      kind: 'saved',
+      dirty: false,
+    });
+
+    view.setFacets({ read: [] });
+    expect(view.savedViews?.view()).toMatchObject({ dirty: true });
+    view.savedViews?.reset();
+    expect(view.state.facets.read).toEqual(['unread']);
+    expect(view.savedViews?.view()).toMatchObject({ dirty: false });
+
+    view.setTab('noise');
+
+    expect(view.savedViewActive()).toBe(false);
+    expect(view.state.tab).toBe('noise');
+    expect(view.state.conditions).toBeUndefined();
+    expect(view.state.inboxIds).toEqual(['saved-inbox']);
+    expect(view.state.facets).toEqual({});
+  });
+
+  it('keeps a view scoped to an inbox that is no longer linked', () => {
+    const view = mountSavedViews({ known: true });
+
+    view.selectSavedView(VIEW_ID);
+
+    expect(view.state.inboxIds).toEqual([OTHER_INBOX]);
+  });
+
+  it('shows a missing view as unavailable instead of listing all mail', () => {
+    const view = mountSavedViews({ known: false });
+
+    view.selectSavedView(VIEW_ID);
+
+    expect(view.savedViews?.view().kind).toBe('unavailable');
+    expect(view.state.conditions).toBeUndefined();
+
+    view.leaveSavedView();
+    expect(view.state.tab).toBe('important');
+    expect(view.savedViewActive()).toBe(false);
+  });
 });

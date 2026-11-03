@@ -1,20 +1,76 @@
 import { MobileFilterDrawer } from '@app/components/view-shell/MobileFilterDrawer';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Accordion } from '@kobalte/core/accordion';
-import { batch, For, Show } from 'solid-js';
+import type { DialogHandle } from '@ui';
+import { batch, createSignal, For, getOwner, onCleanup, Show } from 'solid-js';
 import { useEmailView } from '../email-view-context';
 import { useEmailFilters } from '../filters/use-email-filters';
+import {
+  EmailSavedViewActions,
+  EmailSavedViewCreateBanner,
+} from '../views/email-saved-views';
 import { EmailInboxDrawerSection } from './EmailInboxSelector';
 
 const INBOX_SECTION_ID = 'inbox';
 
 export function EmailFilterDrawer() {
-  const { state, setInboxIds } = useEmailView();
+  const { state, setInboxIds, savedViews, savedViewScope } = useEmailView();
   const filters = useEmailFilters();
   const showFacetFilters = () => state.tab !== 'scheduled';
+  const [open, setOpen] = createSignal(false);
+  const owner = getOwner();
+  let disposed = false;
+  let pending:
+    | {
+        create: () => DialogHandle | undefined;
+        scope: ReturnType<typeof savedViewScope>;
+      }
+    | undefined;
+  onCleanup(() => {
+    disposed = true;
+    pending = undefined;
+  });
+  // The drawer finishes closing before its dialog opens; cancelling reopens
+  // the filters only if the list is still where it was.
+  const onCreate = (create: () => DialogHandle | undefined) => {
+    pending = { create, scope: savedViewScope() };
+    setOpen(false);
+  };
+  const reopen = async (
+    dialog: DialogHandle,
+    scope: ReturnType<typeof savedViewScope>
+  ) => {
+    await dialog.closed;
+    if (!disposed && scope === savedViewScope()) setOpen(true);
+  };
+  const afterClose = (present: boolean) => {
+    if (present || open()) return;
+    const action = pending;
+    pending = undefined;
+    if (!action) return;
+    queueMicrotask(() =>
+      queueMicrotask(() => {
+        if (disposed || open() || action.scope !== savedViewScope()) return;
+        const dialog = action.create();
+        if (dialog) fireAndForget(reopen(dialog, action.scope), 'saved-views');
+      })
+    );
+  };
+  const editingSavedView = () => {
+    const view = savedViews?.view();
+    return view?.kind === 'saved' && view.dirty;
+  };
 
   return (
     <MobileFilterDrawer
+      open={open()}
+      onOpenChange={setOpen}
+      onContentPresentChange={afterClose}
+      contentOverlay={() => (
+        <EmailSavedViewCreateBanner dialogOwner={owner} onCreate={onCreate} />
+      )}
+      footerEnd={() => editingSavedView() && <EmailSavedViewActions />}
       triggerLabel="Open email filters"
       label="Email filters"
       activeCount={
