@@ -8,6 +8,7 @@ import type { ComposeTaskProps } from '@app/features/task-composer/core/types';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { useNavigate } from '@app/lib/split-router';
+import { usePending } from '@app/observability/flow';
 import {
   projectDetailRoute,
   projectTaskRoute,
@@ -107,8 +108,10 @@ export function ProjectBreadcrumb(props: ProjectBreadcrumbProps) {
 
 type ProjectDetailProps = {
   route: ProjectRoute;
+  navigationRequest?: number;
   breadcrumb?: ProjectBreadcrumbProps;
   onDelete?(): void;
+  onSectionChange?(section: ProjectSection): void;
 };
 
 function ProjectTitleMenu(props: {
@@ -230,17 +233,20 @@ function ProjectTitleMenu(props: {
 function ProjectDetailHost(props: ProjectDetailProps) {
   const context = useProjectsContext();
   const source = context.createProjectSource(() => props.route.id);
+  usePending('project.detail', source.loading);
   useSplitDisplayName(() => source.project()?.name ?? 'Project');
   const commands = context.createCommands();
   const openShare = useProjectShareModal(source.project, commands);
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
   const navigate = useNavigate();
-  const section = (section: ProjectSection) =>
-    navigate({
+  const section = (section: ProjectSection) => {
+    if (props.onSectionChange) return props.onSectionChange(section);
+    return navigate({
       route: projectDetailRoute,
       params: { projectId: props.route.id, section },
     });
+  };
   const createTask = (options?: TaskCreateOptions) => {
     const projectId = props.route.id;
     layout.popoverSplit({
@@ -371,6 +377,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
                       projectId={project().id}
                       canWrite={canDiscussProject(project())}
                       targetId={props.route.discussionId}
+                      targetRequestKey={props.navigationRequest}
                     />
                   }
                 />

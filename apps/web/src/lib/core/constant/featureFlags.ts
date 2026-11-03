@@ -157,6 +157,17 @@ export const enableEntityAppearance = defineFlag({
   default: onInDev,
 });
 
+/**
+ * Connect apps Macro Connect serves through it instead of Pipedream. The
+ * backend reads the same PostHog key and decides per app; this side only
+ * reserves the consent popup inside the click. Off in dev too: dev has no
+ * Connect customer key until one is added to Doppler.
+ */
+export const macroConnect = defineFlag({
+  key: 'macro-connect',
+  env: 'ENABLE_MACRO_CONNECT',
+});
+
 /** Browser-style tabs in the macOS desktop title bar; each tab holds a split layout. */
 export const enableDesktopTabs = defineFlag({
   key: 'enable-desktop-tabs',

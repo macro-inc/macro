@@ -47,7 +47,7 @@ export function ProjectBreadCrumb(props: {
         variant: 'ghost',
         size: 'xs',
         class: cn(
-          'min-w-0 max-w-full gap-1 border-0 font-normal text-link not-data-disabled:hover:text-link-hover not-data-disabled:active:text-link-hover popup-open:text-link-hover',
+          'min-w-0 max-w-full gap-1 border-0 font-normal',
           props.collapsed ? 'size-6 p-0 touch:size-9' : 'h-auto px-2 py-0.5'
         ),
       })}
@@ -56,7 +56,7 @@ export function ProjectBreadCrumb(props: {
       content={
         <div class="min-w-48 max-w-72">
           <div class="mb-1.5 flex items-center gap-2 border-b border-edge pb-1.5 text-ink-muted">
-            <FolderIcon class="size-3.5 shrink-0 text-link" />
+            <FolderIcon class="size-3.5 shrink-0" />
             <span class="text-xs">{t('create.folderLabel')}</span>
           </div>
           <div class="px-2 py-0.5 text-xs leading-5 text-ink-muted wrap-anywhere">

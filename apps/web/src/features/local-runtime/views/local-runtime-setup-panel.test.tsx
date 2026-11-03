@@ -100,6 +100,34 @@ describe('LocalRuntimeSetupPanel', () => {
     expect(await screen.findByText('@claude-code is ready')).toBeTruthy();
   });
 
+  it('does not start setup when closed while it is still looking for agents', async () => {
+    let finishScan: () => void = () => {};
+    const scanned = new Promise<void>((resolve) => {
+      finishScan = resolve;
+    });
+    const startDaemon = vi.fn(async () => RUNNING);
+    const base = capabilities({ startDaemon });
+    const view = render(() => (
+      <LocalRuntimeSetupPanel
+        capabilities={{
+          ...base,
+          detectAgents: async () => {
+            await scanned;
+            return base.detectAgents();
+          },
+        }}
+        onOpenSession={() => {}}
+        autoStart
+      />
+    ));
+
+    view.unmount();
+    finishScan();
+    await scanned;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(startDaemon).not.toHaveBeenCalled();
+  });
+
   it('asks to install an agent when none is found', async () => {
     render(() => (
       <LocalRuntimeSetupPanel

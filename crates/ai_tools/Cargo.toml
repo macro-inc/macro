@@ -8,6 +8,7 @@ version = "0.1.0"
 test-support = []
 
 [dependencies]
+feature_flags = { path = "../feature_flags" }
 import_linear = { path = "../import_linear" }
 import_jira = { path = "../import_jira" }
 
@@ -85,6 +86,7 @@ macro_user_id = { path = "../macro_user_id" }
 mcp_client = { path = "../mcp_client" }
 mcp_select = { path = "../mcp_select" }
 pipedream_mcp = { path = "../pipedream_mcp" }
+url = { workspace = true }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 model_notifications = { path = "../model_notifications" }
@@ -134,6 +136,7 @@ macro_service_urls = { path = "../macro_service_urls" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
 calendar_scheduling = { path = "../calendar_scheduling", features = ["inbound"] }
 macro_authorization = { path = "../macro_authorization", features = ["axum"] }
 model_user = { path = "../model_user" }
