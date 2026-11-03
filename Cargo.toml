@@ -4,12 +4,6 @@ resolver = "2"
 exclude = ["vendor"]
 
 members = [
-  "connect/crates/connect_registry",
-  "connect/crates/connect_platform",
-  "connect/crates/connect_client",
-  "connect/tests/connect_integration",
-  "connect/services/connect_api",
-  "connect/services/connect_demo",
   "crates/access_requests",
   "crates/agent_api_keys",
   "crates/routines",
@@ -339,8 +333,8 @@ lru = "0.16"
 md-5 = "0.10.6"
 miniz_oxide = { version = "0.8", features = ["with-alloc"] }
 mockall = "0.13"
+nutype = { version = "0.8.0", features = ["serde", "derive_unchecked"] }
 nom = "8"
-nutype = { version = "0.8", features = ["serde", "derive_unchecked"] }
 openssl-sys = "0.9"
 opus-pure = "0.2.1"
 opentelemetry = { version = "0.31.0", default-features = false }

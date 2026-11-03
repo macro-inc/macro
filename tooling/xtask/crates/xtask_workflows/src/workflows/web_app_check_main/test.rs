@@ -205,6 +205,7 @@ fn generated_code_checks_every_rust_generated_artifact_in_one_job() {
         "git status --porcelain -- apps/docs",
         "just gen-agent-fold-types",
         "just gen-database-sql-types",
+        "just gen-dynamic-ui-types",
         "just gen-agent-review-types",
     ];
     let positions: Vec<usize> = order

@@ -15,9 +15,11 @@ Its tooltip is “New Split” and displays the registered new-split shortcut (`
 ## Desktop tabs (macOS, `enable-desktop-tabs` flag)
 
 The title bar's center holds browser-style tabs; each tab is a whole split
-layout. Only the active tab's layout is mounted — switching tabs swaps every
-split through the router, preserving each split's back/forward history and
-running unsaved-changes guards. A tab holding more than one split shows a
+layout. Tabs you have visited stay mounted in the background: switching back
+is instant and keeps scroll, selection, and editor state, and each split keeps
+its back/forward history. Background tabs are hidden, inert, and skip
+rendering; past five, the least recently used unmount and reload when next
+opened. Closing the active tab runs its unsaved-changes guards. A tab holding more than one split shows a
 split icon with the count. The strip's `+` button (and `Cmd+T`) opens a tab on
 Home; the `X` or a middle click closes one (the last tab cannot close;
 `Shift+Cmd+W` closes the active tab); `Ctrl+Tab` / `Ctrl+Shift+Tab` cycle.

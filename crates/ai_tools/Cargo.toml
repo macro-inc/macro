@@ -19,6 +19,7 @@ forms = { path = "../forms", features = ["ai_tools", "gateway", "postgres", "sch
 routines = { path = "../routines" }
 macro_auth = { path = "../macro_auth" }
 agent_code_mode = { path = "../agent_code_mode" }
+dynamic_ui = { path = "../dynamic_ui" }
 ai_billing = { path = "../ai_billing", features = ["pg-admission"] }
 collab_surface = { path = "../collab_surface", features = ["postgres"] }
 initiative = { path = "../initiative", default-features = false, features = ["postgres", "resources", "toolset"] }

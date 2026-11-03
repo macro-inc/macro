@@ -1138,7 +1138,15 @@ async fn a_view_is_presented_to_the_session_and_nothing_is_saved() {
     let views = f.actions.views.lock().unwrap();
     assert_eq!(views.len(), 1);
     assert_eq!(views[0].0, f.session);
-    assert_eq!(views[0].1.view, a_view());
+    assert_eq!(
+        views[0].1.view,
+        dynamic_ui::View {
+            title: Some("Launch".to_owned()),
+            widgets: vec![dynamic_ui::Widget::Md {
+                markdown: "Shipped.".to_owned()
+            }],
+        }
+    );
     assert!(f.store.0.lock().unwrap().is_empty());
     assert!(f.store.2.lock().unwrap().is_empty());
 }
@@ -1163,15 +1171,9 @@ async fn a_view_the_renderer_would_not_draw_is_turned_back_with_what_to_fix() {
     else {
         panic!("the view is turned back");
     };
-    let types = r#""md", "timeline", "list", "channelMessage", "container""#;
-    let listed = (0..10)
-        .map(|index| format!("- view.widgets[{index}].type should be one of {types}\n"))
-        .collect::<String>();
     assert_eq!(
         message,
-        format!(
-            "The view was not presented: it does not match the PresentView schema.\n{listed}- and 2 more\nFix these and present the whole view again."
-        )
+        "The view was not presented: it does not match the PresentView schema. view.widgets[0].type should be one of `md`, `timeline`, `list`, `channelMessage`, `container`. Fix it and present the whole view again."
     );
     assert!(f.actions.views.lock().unwrap().is_empty());
 }

@@ -475,6 +475,13 @@ gen-agent-review-types:
     SQLX_OFFLINE=true cargo run -p agent_code_mode --bin export_review_types
     bunx biome format --write {{justfile_directory()}}/src/lib/service-clients/service-agent-reviews/generated/types.ts
 
+# Regenerate the dynamic-UI view types (src/features/dynamic-ui/generated/types.ts
+# and lexical-core's copy) from `crates/dynamic_ui` with specta. Run after
+# changing a widget; biome reformats specta's output as in gen-agent-fold-types.
+gen-dynamic-ui-types:
+    cargo run -p dynamic_ui --features cli --bin export_view_types
+    bunx biome format --write {{justfile_directory()}}/src/features/dynamic-ui/generated/types.ts {{justfile_directory()}}/../../packages/lexical-core/generated/dynamic-ui.ts
+
 # Regenerate src/lib/core/database-sql/generated/types.ts from the
 # database_sql engine's wire types with specta. Run after changing any type
 # that crosses the wasm boundary (see crates/database_sql/src/wasm.rs); biome

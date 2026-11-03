@@ -1,4 +1,5 @@
 import { DashboardToolView } from '@app/features/dynamic-ui/DashboardToolView.lazy';
+import type { View } from '@app/features/dynamic-ui/view';
 import { Telemetry } from '@macro-inc/observability';
 import { ErrorBoundary, Suspense } from 'solid-js';
 
@@ -7,7 +8,7 @@ import { ErrorBoundary, Suspense } from 'solid-js';
  * it. Its widgets name the items they show, and the reader loads those with
  * their own access.
  */
-export function PresentedView(props: { view: unknown }) {
+export function PresentedView(props: { view: View }) {
   return (
     <ErrorBoundary
       fallback={(err) => {

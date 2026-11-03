@@ -22,8 +22,8 @@ import {
 } from '@queries/soup/items';
 import { cn } from '@ui';
 import { createMemo, Show, Suspense } from 'solid-js';
-import type { EntityRef, WidgetOf } from '../schema';
 import { SURFACE, TEXT } from '../tokens';
+import type { EntityRef, WidgetOf } from '../view';
 
 /**
  * A list of workspace items, styled to match SoupView's grouped "card view":
