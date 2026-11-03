@@ -129,7 +129,7 @@ function toolActivity(
       label: failed ? `${label} failed` : label,
       busy,
     }))
-    .with({ kind: 'macro' }, () => ({
+    .with({ kind: 'macro' }, { kind: 'view' }, () => ({
       label: failed ? `${label} failed` : busy ? `Using ${label}` : label,
       busy,
     }))

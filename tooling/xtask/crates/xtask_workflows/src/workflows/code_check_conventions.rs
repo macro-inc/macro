@@ -90,7 +90,6 @@ fn paths_filter() -> Step<Use> {
                 should_run:
                   - 'crates/**'
                   - 'services/**'
-                  - 'connect/**'
                   - 'tooling/xtask/**'
                   - 'apps/web/**'
                   - 'packages/**'

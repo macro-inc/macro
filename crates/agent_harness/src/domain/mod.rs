@@ -18,6 +18,8 @@ pub mod ports;
 pub mod presenter;
 /// The per-session queue of turn-occupying actions awaiting their turn.
 pub mod queue;
+/// Archiving a session once its runtime session is deliberately closed.
+pub mod runtime_closed;
 /// Compute resources for a sandbox size.
 pub mod sandbox;
 /// The harness orchestrator: containers, announcements, and trigger commands.

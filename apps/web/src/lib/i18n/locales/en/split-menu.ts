@@ -2,6 +2,8 @@ export default {
   // Split header context menu.
   newSplitLeft: 'New split left',
   newSplitRight: 'New split right',
+  newSplitAbove: 'New split above',
+  newSplitBelow: 'New split below',
   duplicateSplit: 'Duplicate split',
   swapSplitLeft: 'Swap split left',
   swapSplitRight: 'Swap split right',
@@ -18,6 +20,8 @@ export default {
   goBack: 'Go Back',
   goForward: 'Go Forward',
   createNewSplit: 'Create new split',
+  createNewSplitBelow: 'Create new split below',
+  newSplit: 'New split',
   close: 'Close',
   previousItem: 'Previous item',
   nextItem: 'Next item',

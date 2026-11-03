@@ -18,7 +18,8 @@ const session: AgentSessionResponse = {
   model: 'claude-sonnet',
   modifiedAt: '2026-08-24T12:00:00Z',
   name: 'Agent Session',
-  isArchived: false,
+  archivedBy: null,
+  archivedAt: null,
   ownerId: 'macro|owner@example.com',
   sandboxSize: 'default',
   status: { kind: 'no_messages' },
@@ -215,8 +216,8 @@ describe('AgentSession', () => {
       `https://agent.example.test/agent-sessions/${sessionId}/archived`,
       `https://agent.example.test/agent-sessions/${sessionId}/archived`,
     ]);
-    await expect(requests[0]?.json()).resolves.toEqual({ isArchived: true });
-    await expect(requests[1]?.json()).resolves.toEqual({ isArchived: false });
+    await expect(requests[0]?.json()).resolves.toEqual({ archived: true });
+    await expect(requests[1]?.json()).resolves.toEqual({ archived: false });
   });
 
   test('resizes a session sandbox through the agent-harness service', async () => {

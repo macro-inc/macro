@@ -274,6 +274,27 @@ Delete one of the database's webhooks; its URL stops working.
 
 ***
 
+### duplicate()
+
+> **duplicate**(`options?`): `Promise`\<`Database`\>
+
+Copy the database into a new one the caller owns, with its tables,
+columns, views and rows. Its sharing, forms, webhooks and history stay
+with this one. Viewing it is enough.
+
+#### Parameters
+
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `options?` | \{ `name?`: `string`; \} | - |
+| `options.name?` | `string` | The copy's name; by default, "<name> copy". |
+
+#### Returns
+
+`Promise`\<`Database`\>
+
+***
+
 ### importTable()
 
 > **importTable**(`request`): `Promise`\<[`DatabaseTable`](../../table/classes/DatabaseTable.md)\>

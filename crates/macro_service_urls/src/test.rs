@@ -805,3 +805,8 @@ fn service_url_converts_to_string() {
 
     assert_eq!(url_string, "https://borrowed.macro.com");
 }
+
+#[test]
+fn connect_api_url_parses() {
+    assert_parses_for_all_environments(ConnectApiUrl::default_for_environment);
+}

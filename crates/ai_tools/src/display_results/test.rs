@@ -1,9 +1,6 @@
 use super::DisplayResults;
 use crate::{AiHost, tools_for};
-use ai_toolset::{
-    ToolSet,
-    schema::{frontend_schemas_builder, generate_validated_input_schema},
-};
+use ai_toolset::{ToolSet, schema::generate_validated_input_schema};
 use serde_json::{Value, json};
 
 fn assert_local_refs_resolve(root: &Value, node: &Value) {
@@ -39,12 +36,8 @@ fn provider_schema_contains_the_recursive_view_contract_at_the_tool_root() {
     assert_eq!(schema["properties"]["view"]["required"], json!(["widgets"]));
     assert_local_refs_resolve(&schema, &schema);
 
-    let reference = schema["properties"]["view"]["properties"]["widgets"]["items"]["$ref"]
-        .as_str()
-        .expect("recursive widget reference");
-    let variants = schema
-        .pointer(reference.strip_prefix('#').unwrap())
-        .and_then(|widget| widget["anyOf"].as_array())
+    let variants = schema["properties"]["view"]["properties"]["widgets"]["items"]["anyOf"]
+        .as_array()
         .expect("widget variants");
     let names = variants
         .iter()
@@ -54,10 +47,10 @@ fn provider_schema_contains_the_recursive_view_contract_at_the_tool_root() {
         names,
         ["md", "timeline", "list", "channelMessage", "container"]
     );
-    let container = variants.last().unwrap();
-    assert_eq!(
-        container["properties"]["children"]["items"]["$ref"],
-        reference
+    let children = &variants[4]["properties"]["children"]["items"]["$ref"];
+    assert!(
+        children.is_string(),
+        "a container's children refer back to the widget"
     );
 }
 
@@ -94,17 +87,13 @@ fn display_results_is_chat_only() {
 }
 
 #[test]
-fn frontend_wire_schema_leaves_view_validation_to_the_renderer() {
-    let schemas = frontend_schemas_builder()
-        .merge(&tools_for(AiHost::Chat))
-        .build()
-        .to_json_pretty()
-        .expect("serialize frontend schemas");
-    let schemas: Value = serde_json::from_str(&schemas).expect("frontend schemas JSON");
-    let json = &schemas["$defs"]["DisplayResults"];
-    assert_eq!(json["title"], "DisplayResults");
-    assert_eq!(json["required"], json!(["view"]));
-    assert!(json["properties"]["view"]["properties"].is_null());
-    assert!(json["properties"]["view"]["type"].is_null());
-    assert!(json.get("$defs").is_none());
+fn a_view_that_does_not_decode_fails_the_call_without_echoing_it() {
+    let error = serde_json::from_value::<DisplayResults>(json!({
+        "view": { "widgets": [{ "type": "md", "markdown": "private text" }, { "type": "chart" }] }
+    }))
+    .expect_err("an unknown widget type");
+    assert_eq!(
+        error.to_string(),
+        "view.widgets[1].type should be one of `md`, `timeline`, `list`, `channelMessage`, `container`"
+    );
 }

@@ -102,6 +102,7 @@ channels = { path = "../channels", default-features = false, features = ["outbou
 messages = { path = "../messages", features = ["test-utils"] }
 uuid = { workspace = true }
 agent_fold = { path = "../folds/agent_fold", features = ["test-utils"] }
+dynamic_ui = { path = "../dynamic_ui" }
 agent_session = { path = "../agent_session", features = ["test-utils"] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 harness_id = { path = "../harness_id", features = ["test-utils"] }

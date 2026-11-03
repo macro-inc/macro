@@ -300,7 +300,7 @@ export function CalendarInviteCard(props: {
         <Show when={!cancelled() && invite().description}>
           <div class="flex flex-col items-start gap-1.5">
             <div
-              class="break-words text-ink-muted [overflow-wrap:anywhere] [&_a]:text-accent [&_a]:underline [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6"
+              class="break-words text-ink-muted [overflow-wrap:anywhere] [&_a]:underline [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6"
               classList={{ 'line-clamp-2': !descriptionExpanded() }}
               innerHTML={descriptionHtml()}
               onClick={openDescriptionLink}

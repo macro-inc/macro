@@ -1,6 +1,7 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import type { AccountDeletionReason } from '@app/lib/analytics/app-events';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { usePending } from '@app/observability/flow';
 import { useHasPaidAccess } from '@core/auth';
 import { useLogout } from '@core/auth/logout';
 import { toast } from '@core/component/Toast/Toast';
@@ -320,6 +321,7 @@ function AccountPlanCard() {
   const { openSettings } = useSettingsState();
   const hasPaid = useHasPaidAccess();
   const summary = useAiBillingSummaryQuery();
+  usePending('settings.plan', () => summary.isLoading);
   // Wait for the summary before falling back to the license, so a Max plan
   // doesn't flash as Pro while it loads.
   const tier = () =>

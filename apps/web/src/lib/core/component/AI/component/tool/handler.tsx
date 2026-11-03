@@ -111,7 +111,6 @@ import {
   readPhotoshopDocumentHandler,
 } from './DesignDocument';
 import { discoverConnectorsHandler } from './DiscoverConnectors';
-import { displayResultsHandler } from './DisplayResults';
 import { editDocumentHandler } from './EditDocument';
 import { editTagHandler } from './EditTag';
 import {
@@ -309,7 +308,6 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   RenameItem: renameItemHandler,
   UpdateSharing: updateSharingHandler,
   BashCodeExecution: bashCodeExecutionHandler,
-  DisplayResults: displayResultsHandler,
   DiscoverConnectors: discoverConnectorsHandler,
   ContentSearch: contentSearchHandler,
   CreateDocument: createDocumentHandler,

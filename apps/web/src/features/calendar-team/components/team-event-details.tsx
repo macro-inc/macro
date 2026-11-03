@@ -80,7 +80,7 @@ export function TeamEventDetails(props: {
       <Show when={description()}>
         {(html) => (
           <div
-            class="select-text text-ink-muted [&_a]:text-accent [&_a]:underline"
+            class="select-text text-ink-muted [&_a]:underline"
             innerHTML={html()}
             onClick={(event) => {
               const anchor = (event.target as Element | null)?.closest(

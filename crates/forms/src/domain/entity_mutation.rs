@@ -27,6 +27,7 @@ impl From<FormError> for EntityMutationErrorCode {
             error @ (FormError::Conflict
             | FormError::TableAlreadyHasForm
             | FormError::AlreadyResponded
+            | FormError::AnonymousResponseFinal
             | FormError::Closed
             | FormError::TableGone) => Self::conflict(rootcause::report!(error)),
             error @ (FormError::SignInRequired

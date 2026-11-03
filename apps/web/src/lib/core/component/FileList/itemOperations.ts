@@ -7,6 +7,7 @@ import { usePaywallState } from '@core/constant/PaywallState';
 import { isPaymentError } from '@core/util/handlePaymentError';
 import { catchToResult } from '@core/util/result';
 import { removeHistoryItem } from '@queries/history/history';
+import { duplicateDatabase } from '@queries/storage/databases';
 import {
   getDeletedTree,
   optimisticallyRemoveDeletedItem,
@@ -415,7 +416,8 @@ export async function bulkMoveToFolder(
  * only through the GraphQL entity mutation, which has no REST counterpart.
  */
 export function canDuplicateItemType(itemType: ItemType): boolean {
-  if (itemType === 'document' || itemType === 'chat') return true;
+  if (itemType === 'document' || itemType === 'chat' || itemType === 'database')
+    return true;
   return itemType === 'project' && isFeatureEnabled(enableGraphqlSoup);
 }
 
@@ -431,7 +433,13 @@ export async function copyItem(args: {
   };
 
   let newId = '';
-  if (
+  // Databases are not Soup items, so the GraphQL mutation could not name
+  // the copy; their own route answers it.
+  if (itemType === 'database') {
+    const result = await duplicateDatabase({ id, name: createCopyName(name) });
+    if (result.isErr()) return null;
+    newId = result.value;
+  } else if (
     isFeatureEnabled(enableGraphqlSoup) &&
     (itemType === 'document' || itemType === 'chat' || itemType === 'project')
   ) {
