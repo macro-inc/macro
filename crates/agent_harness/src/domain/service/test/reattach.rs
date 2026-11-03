@@ -153,3 +153,124 @@ async fn a_live_session_on_a_runtime_that_is_gone_is_left_for_the_next_dial() {
         .is_none()
     );
 }
+
+/// A harness whose runtime registry lists each dial's sessions, as in
+/// production, with the reports the service would consume.
+fn listing_harness() -> (
+    TestHarness,
+    InMemoryAgentSessionRepo,
+    Arc<RuntimeRegistry<ContainerSender>>,
+    mpsc::UnboundedReceiver<crate::outbound::runtime_registry::LiveRuntimeSessions>,
+) {
+    let repo = InMemoryAgentSessionRepo::new();
+    let turn_observer = Arc::new(agent_session::domain::ports::LateBoundTurnObserver::new());
+    let (live_sessions, reports) = mpsc::unbounded_channel();
+    let runtimes = RuntimeRegistry::reporting_live_sessions(live_sessions);
+    let service = AgentHarnessService::new(
+        None,
+        AgentSessionServiceImpl::new(
+            repo.clone(),
+            FoldedMessageService::new(repo.clone()),
+            NoOpRealtime,
+            NoOpAgentSessionNameGenerator,
+            turn_observer.clone(),
+            Arc::new(RecordingLifecyclePublisher::new()),
+            ReplicaId::mint(),
+        ),
+        MockContainerManager::new(),
+        AnnouncerMock::new(),
+        TestConnections::new(MirrorBindings, Arc::clone(&runtimes)),
+        PromptContextMock::default(),
+        PromptComposerMock::default(),
+        EgressProvisionerMock::new(),
+        NoPeers,
+        KindDefaultPolicies,
+        HarnessDefaultCodingAgents,
+        HarnessDefaults::new(SessionDefaults {
+            bot_id: BotId::TEST_A,
+            model: "claude".to_owned(),
+            harness: "opencode".to_owned(),
+            repo_url: SessionRepository::parse("https://github.com/macro-inc/macro"),
+        }),
+        RecordingLifecyclePublisher::new(),
+        crate::domain::pending::PendingCommands::new(),
+        PromptMentionsMock::new(),
+        NotifierMock::new(),
+    );
+    turn_observer.bind(NoOpTurnObserver);
+    (service, repo, runtimes, reports)
+}
+
+/// An adapter that lists every session it has ever stored, the way
+/// `@agentclientprotocol/claude-agent-acp` 0.73.0 answers `session/list`:
+/// Macro's sessions on this harness, archived ones, another harness's, ones
+/// Macro never created, and ids that are not Macro's at all. Only the live,
+/// unarchived sessions bound to the dialing harness are restored.
+#[tokio::test]
+async fn a_dial_restores_only_this_harness_tracked_sessions_from_an_agent_that_lists_everything() {
+    let (service, repo, runtimes, mut reports) = listing_harness();
+    let bot_id = BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
+    let other_bot = BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
+    let tracked = native_session(&service, &repo, bot_id).await;
+    let archived = native_session(&service, &repo, bot_id).await;
+    agent_session::domain::ports::AgentSessionRepo::set_archived(&repo, archived, true)
+        .await
+        .unwrap();
+    let elsewhere = native_session(&service, &repo, other_bot).await;
+    let untracked = AgentSessionId::new();
+    let runtime = ContainerMock::default();
+    runtimes.attach(harness_for_bot(bot_id), runtime.clone());
+    runtime.sends_ready();
+
+    let agent = runtime.agent();
+    agent.wait_for_requests(1).await;
+    agent.completes_initialize(
+        InitializeResponse::new(PROTOCOL_VERSION).agent_capabilities(
+            AgentCapabilities::new()
+                .load_session(true)
+                .session_capabilities(
+                    SessionCapabilities::new()
+                        .resume(SessionResumeCapabilities::new())
+                        .list(agent_client_protocol::schema::v1::SessionListCapabilities::new()),
+                ),
+        ),
+    );
+    agent.wait_for_requests(2).await;
+    let Some(RawJsonRpcMessage::Request(list)) = agent.received_frames().into_iter().nth(1) else {
+        panic!("expected session/list after initialize");
+    };
+    assert_eq!(list.method.as_ref(), "session/list");
+    agent.sends_reply(
+        list.id,
+        serde_json::json!({"sessions": [
+            {"sessionId": tracked.to_string(), "cwd": "/srv/agent", "title": "Fix the build", "updatedAt": "2026-11-02T10:00:00Z"},
+            {"sessionId": archived.to_string(), "cwd": "/srv/agent", "title": "Old work", "updatedAt": "2026-10-01T10:00:00Z"},
+            {"sessionId": elsewhere.to_string(), "cwd": "/srv/agent", "title": "Other laptop", "updatedAt": "2026-11-01T10:00:00Z"},
+            {"sessionId": untracked.to_string(), "cwd": "/home/operator", "title": "Started in a terminal", "updatedAt": "2026-11-02T09:00:00Z"},
+            {"sessionId": "claude-local-7f3a", "cwd": "/home/operator/scratch", "title": "Not Macro's", "updatedAt": "2026-10-20T09:00:00Z"},
+        ]}),
+    );
+    let report = reports.recv().await.expect("the dial reports its listing");
+    assert_eq!(report.acp_sessions.len(), 5);
+
+    let drive = async {
+        agent.wait_for_requests(3).await;
+        agent.resumes_session(ResumeSessionResponse::new());
+    };
+    tokio::join!(
+        service.reattach_live_sessions(report.harness, report.acp_sessions, report.span),
+        drive
+    );
+
+    let requests = agent.received_requests();
+    assert_eq!(
+        requests.len(),
+        3,
+        "only one session is restored: {requests:?}"
+    );
+    assert!(matches!(
+        &requests[2],
+        ClientRequest::ResumeSessionRequest(request) if request.session_id.to_string() == tracked.to_string()
+    ));
+    assert!(prompts(&agent).is_empty(), "restoring never prompts");
+}
