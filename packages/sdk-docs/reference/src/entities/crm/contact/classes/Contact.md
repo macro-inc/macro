@@ -138,6 +138,18 @@ Read the caller's effective permission on this entity.
 
 ***
 
+### phones()
+
+> **phones**(): `Promise`\<[`ContactPhone`](../../../../../generated/storage/types.gen/type-aliases/ContactPhone.md)[]\>
+
+The contact's phone numbers (E.164), oldest first, with where each came from.
+
+#### Returns
+
+`Promise`\<[`ContactPhone`](../../../../../generated/storage/types.gen/type-aliases/ContactPhone.md)[]\>
+
+***
+
 ### rename()
 
 > **rename**(`name`): `Promise`\<`void`\>
@@ -153,6 +165,25 @@ Rename the contact for the caller's current team.
 #### Returns
 
 `Promise`\<`void`\>
+
+***
+
+### setPhones()
+
+> **setPhones**(`phones`): `Promise`\<[`ContactPhone`](../../../../../generated/storage/types.gen/type-aliases/ContactPhone.md)[]\>
+
+Replace the contact's phone numbers. Each must include its country code,
+starting with `+`; formatting is ignored. Returns the saved numbers.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `phones` | `string`[] |
+
+#### Returns
+
+`Promise`\<[`ContactPhone`](../../../../../generated/storage/types.gen/type-aliases/ContactPhone.md)[]\>
 
 ***
 
