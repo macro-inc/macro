@@ -12,6 +12,9 @@ import {
   ContactDirectoryPageDocument,
   type ContactDirectoryPageQuery,
   type ContactDirectoryPageQueryVariables,
+  ContactReferencePageDocument,
+  type ContactReferencePageQuery,
+  type ContactReferencePageQueryVariables,
 } from './graphql/generated/graphql';
 import {
   getGraphqlSoupNetworkClient,
@@ -62,6 +65,26 @@ export async function fetchContactDirectoryPage(
   signal.throwIfAborted();
   if (result.error) throw result.error;
   if (!result.data) throw new Error('Contact directory returned no data');
+  return result.data;
+}
+
+/** Exact reference predicates run on the server before its result limit. This
+ * fetch-only page still obeys the search work budget and may be empty with a cursor. */
+export async function fetchContactReferencePage(
+  variables: ContactReferencePageQueryVariables,
+  signal: AbortSignal
+): Promise<ContactReferencePageQuery> {
+  signal.throwIfAborted();
+  const result = await getGraphqlSoupNetworkClient()
+    .query(ContactReferencePageDocument, variables, {
+      requestPolicy: 'network-only',
+      fetchOptions: { signal },
+    })
+    .toPromise();
+  signal.throwIfAborted();
+  if (result.error) throw result.error;
+  if (!result.data)
+    throw new Error('Contact reference lookup returned no data');
   return result.data;
 }
 

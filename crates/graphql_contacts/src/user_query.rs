@@ -1,4 +1,4 @@
-use async_graphql::{Context, ErrorExtensions, ID, Object, SimpleObject};
+use async_graphql::{Context, Enum, ErrorExtensions, ID, Object, SimpleObject};
 use contacts::domain::models::{
     contact::Contact,
     page::{ContactCursor, ContactPageSize, MAX_CONTACT_PAGE_SIZE},
@@ -40,6 +40,28 @@ pub struct GraphqlContactPage {
     nodes: Vec<GraphqlContact>,
     /// Opaque continuation, or null only when the source is exhausted.
     next_cursor: Option<String>,
+}
+
+/// Optional exact matching stages for bounded reference-resolution fallback.
+/// Omission keeps ordinary subsequence search unchanged.
+#[derive(Enum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GraphqlContactMatching {
+    /// Whole name, address or user identity.
+    Exact,
+    /// First word of the resolved name (full address when no name exists).
+    FirstName,
+    /// Whole and first names, addresses and identities at the same priority.
+    AnyName,
+}
+
+impl GraphqlContactMatching {
+    fn search(self, query: &str) -> Option<ContactSearch> {
+        match self {
+            Self::Exact => ContactSearch::exact(query),
+            Self::FirstName => ContactSearch::first_name(query),
+            Self::AnyName => ContactSearch::any_name(query),
+        }
+    }
 }
 
 /// Flattenable directory fields of an already-authenticated GraphQL viewer.
@@ -124,7 +146,7 @@ impl GraphqlContactsQuery {
     }
 
     /// Read one page of the viewer's personal contacts with resolved names.
-    #[tracing::instrument(name = "contacts.graphql.page", skip_all, fields(limit, has_cursor = after.is_some()), err(Debug))]
+    #[tracing::instrument(name = "contacts.graphql.page", skip_all, fields(limit, has_cursor = after.is_some(), matching = ?matching), err(Debug))]
     async fn contacts(
         &self,
         ctx: &Context<'_>,
@@ -136,6 +158,10 @@ impl GraphqlContactsQuery {
             desc = "Optional name/email subsequence filter, at most 512 UTF-8 bytes. Results stay in source-ID order; a scan-budget-limited page may be empty with nextCursor."
         )]
         search: Option<String>,
+        #[graphql(
+            desc = "Optional exact reference-matching stage, applied before limiting. Requires a nonempty search; the same scan budget and continuation rules apply."
+        )]
+        matching: Option<GraphqlContactMatching>,
     ) -> async_graphql::Result<GraphqlContactPage> {
         let limit = match limit {
             None => ContactPageSize::DEFAULT,
@@ -152,9 +178,17 @@ impl GraphqlContactsQuery {
                 ContactCursor::from_position(position).ok_or_else(bad_input)
             })
             .transpose()?;
-        let search = search
-            .map(|query| ContactSearch::new(&query).ok_or_else(bad_input))
-            .transpose()?;
+        let search = match (search, matching) {
+            (Some(query), matching) => Some(
+                match matching {
+                    Some(matching) => matching.search(&query),
+                    None => ContactSearch::new(&query),
+                }
+                .ok_or_else(bad_input)?,
+            ),
+            (None, None) => None,
+            (None, Some(_)) => return Err(bad_input()),
+        };
         let reads = &ctx.data::<ContactsGraphqlContext>()?.reads;
         let page = match search {
             Some(search) => {

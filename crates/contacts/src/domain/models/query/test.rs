@@ -23,6 +23,55 @@ fn search_has_cache_matching_semantics_and_a_byte_bound() {
 }
 
 #[test]
+fn reference_predicates_match_before_limiting_without_inventing_local_part_names() {
+    let viewer = MacroUserIdStr::try_from_email("viewer@example.com").unwrap();
+    let user_id = MacroUserIdStr::try_from_email("person@example.com").unwrap();
+    let mut contact = Contact {
+        id: ContactId::for_viewer(&viewer, &user_id),
+        user_id,
+        name: Some("Sam Example".into()),
+    };
+    assert!(!ContactSearch::exact("Sam").unwrap().matches(&contact));
+    assert!(
+        ContactSearch::first_name(" SAM ")
+            .unwrap()
+            .matches(&contact)
+    );
+    assert!(ContactSearch::any_name("Sam").unwrap().matches(&contact));
+    assert!(
+        ContactSearch::exact("sam example")
+            .unwrap()
+            .matches(&contact)
+    );
+    assert!(
+        !ContactSearch::first_name("sam example")
+            .unwrap()
+            .matches(&contact)
+    );
+    assert!(!ContactSearch::any_name("Sm").unwrap().matches(&contact));
+    assert!(ContactSearch::new("Sm").unwrap().matches(&contact));
+    assert!(
+        ContactSearch::exact("macro|person@example.com")
+            .unwrap()
+            .matches(&contact)
+    );
+    contact.name = None;
+    assert!(
+        !ContactSearch::first_name("person")
+            .unwrap()
+            .matches(&contact)
+    );
+    assert!(
+        ContactSearch::exact("PERSON@example.com")
+            .unwrap()
+            .matches(&contact)
+    );
+    assert!(ContactSearch::exact("").is_none());
+    assert!(ContactSearch::first_name("  ").is_none());
+    assert!(ContactSearch::any_name(&"é".repeat(257)).is_none());
+}
+
+#[test]
 fn lookups_bound_raw_input_and_deduplicate_canonical_ids_in_order() {
     let first = MacroUserIdStr::try_from_email("FIRST@example.com").unwrap();
     let same = MacroUserIdStr::try_from_email("first@example.com").unwrap();

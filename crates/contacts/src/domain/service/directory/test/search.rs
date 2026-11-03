@@ -122,6 +122,63 @@ async fn scan_budget_returns_progress_instead_of_false_exhaustion() {
 }
 
 #[tokio::test]
+async fn exact_reference_matching_keeps_the_scan_budget_and_filters_before_limit() {
+    let mut rows: Vec<_> = (0..CONTACT_SEARCH_SCAN_BUDGET)
+        .map(|i| ContactIdEntry::parse(format!("macro|a{i:04}@example.com")).unwrap())
+        .collect();
+    rows.push(ContactIdEntry::parse("macro|known@example.com".into()).unwrap());
+    let names = Arc::new(Names::default());
+    let service = ContactsDirectoryService::new(Arc::new(ScanPages(rows)), names.clone());
+    let viewer = MacroUserIdStr::try_from_email("viewer@example.com").unwrap();
+    let query = ContactSearch::exact("SECOND").unwrap();
+    let page = service
+        .search_contacts(
+            viewer.clone(),
+            &query,
+            None,
+            ContactPageSize::new(1).unwrap(),
+        )
+        .await
+        .unwrap();
+    assert!(page.contacts.is_empty());
+    assert!(page.next_cursor.is_some());
+    assert_eq!(names.requests.lock().unwrap().len(), 4);
+    assert!(
+        names
+            .requests
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|(_, ids)| ids.len() == 500)
+    );
+    let page = service
+        .search_contacts(
+            viewer.clone(),
+            &query,
+            page.next_cursor.as_ref(),
+            ContactPageSize::new(1).unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(page.contacts.len(), 1);
+    assert_eq!(page.contacts[0].name.as_deref(), Some("Second"));
+    assert!(page.next_cursor.is_none());
+    let outside = service
+        .search_contacts(
+            viewer,
+            &ContactSearch::exact("Not in the directory").unwrap(),
+            None,
+            ContactPageSize::MAX,
+        )
+        .await
+        .unwrap();
+    assert!(
+        outside.contacts.is_empty(),
+        "names do not establish membership"
+    );
+}
+
+#[tokio::test]
 async fn lookup_never_enriches_unknown_members_and_keeps_requested_order() {
     let names = Arc::new(Names::default());
     let service = ContactsDirectoryService::new(

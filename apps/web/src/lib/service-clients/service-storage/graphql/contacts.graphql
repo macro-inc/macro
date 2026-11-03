@@ -42,6 +42,19 @@ query ContactDirectoryByEmails($emails: [String!]!) {
   }
 }
 
+# Reference lookup keeps matching server-side, before the bounded page limit.
+query ContactReferencePage($limit: Int, $after: String, $search: String!, $matching: GraphqlContactMatching!) {
+  user {
+    id
+    contacts(limit: $limit, after: $after, search: $search, matching: $matching) {
+      nodes {
+        ...ContactDirectoryFields
+      }
+      nextCursor
+    }
+  }
+}
+
 query ContactDirectoryPage($limit: Int, $after: String, $search: String) {
   user {
     id

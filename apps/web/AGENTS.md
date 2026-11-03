@@ -78,6 +78,9 @@ ambiguity evidence. It needs a bound viewer and ready context only for inbox
 exclusions; callers must also check directory completeness. Missing reference
 support must not disable existing search. The real wrapper/worker/OPFS regression
 is `worker/browser-test/people-references.browser.e2e.ts` under `lib/graphql-cache`.
+`ContactReferencePage` provides fetch-only server fallback stages with exact/first-name
+matching before the limit. Follow empty continuations and keep the existing search
+budget; never infer uniqueness from one incomplete suggestion page.
 
 ## Verifying a change in a real browser
 

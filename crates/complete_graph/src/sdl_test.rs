@@ -859,6 +859,19 @@ fn contacts_reads_have_viewer_scoped_entity_keys() {
         field
             .arguments
             .iter()
+            .any(|argument| argument.name == "matching"
+                && argument.ty.to_string() == "GraphqlContactMatching")
+    );
+    let ExtendedType::Enum(matching) = &schema.types["GraphqlContactMatching"] else {
+        panic!("matching enum")
+    };
+    for name in ["EXACT", "FIRST_NAME", "ANY_NAME"] {
+        assert!(matching.values.contains_key(name));
+    }
+    assert!(
+        field
+            .arguments
+            .iter()
             .any(|argument| argument.name == "limit" && argument.ty.to_string() == "Int")
     );
     assert!(

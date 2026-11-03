@@ -55,7 +55,7 @@ async fn contacts_are_read_from_request_data_only_for_the_authenticated_viewer()
     let harness = harness();
     let directory = Arc::new(Directory::default());
     let context = ContactsGraphqlContext::new(directory.clone());
-    let query = r#"{ user { id contacts(limit: 2, search: "person") { nodes { id userId email name } nextCursor }
+    let query = r#"{ user { id contacts(limit: 2, search: "person", matching: EXACT) { nodes { id userId email name } nextCursor }
         contactsByUserIds(userIds: ["macro|person@example.com"]) { id }
         contactsByEmails(emails: ["person@example.com"]) { id }
     } }"#;
