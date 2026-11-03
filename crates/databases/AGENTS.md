@@ -31,7 +31,7 @@ service with Axum, agent-tool and Postgres adapters.
   `share_permission_db_utils` (channel grants and the team share), `properties` (cell values),
   `macro_event_broker`/`macro_event_topics` (change notifications),
   `connection_gateway_client` (liveness), `entity_mutation`
-  (rename/duplicate/trash/restore).
+  (rename/move/duplicate/trash/restore).
 - Used by: `databases_sql` (agent SQL), `crm` and `forms` (own storage via
   `DatabaseStorage`, no `database_entities` row), `ai_tools`, `complete_graph`,
   `graphql_crm`. The document storage service mounts `src/inbound/axum_router.rs`.
@@ -62,6 +62,11 @@ service with Axum, agent-tool and Postgres adapters.
   other (see README "Storage and app entities").
 - Column type changes must convert every value or refuse with the misfit count;
   never silently drop data outside an explicit delete.
+- Filing in a folder (`database_entities.project_id`, `MoveEntity`): owner
+  only; the repository swaps the folder-inherited `entity_access` rows in the
+  same transaction (`entity_access_db_utils::project_grants`). Purging the
+  folder returns the database to the root; trashing it does not trash the
+  database, as with email threads.
 - Sharing (`src/domain/sharing.rs`): channel grants and a team share; no share
   link. The team share's state lives in a `SharePermission` row that
   `database_entities.share_permission_id` points at, made the first time the

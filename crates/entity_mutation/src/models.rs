@@ -1,5 +1,7 @@
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
+use std::collections::HashSet;
+
+use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 
 /// Authenticated actor performing an entity mutation.
@@ -136,6 +138,17 @@ impl EntityMutationEffect {
             Self::Updated(entity) | Self::Deleted(entity) => entity,
         }
     }
+}
+
+/// The folders (projects) named by optional container ids, once each; an
+/// empty id means the root and names none.
+pub fn project_refs(ids: impl IntoIterator<Item = Option<String>>) -> Vec<Entity<'static>> {
+    let mut seen = HashSet::new();
+    ids.into_iter()
+        .flatten()
+        .filter(|id| !id.is_empty() && seen.insert(id.clone()))
+        .map(|id| EntityType::Project.with_entity_string(id))
+        .collect()
 }
 
 /// Successful mutation outcome with effects in application order.

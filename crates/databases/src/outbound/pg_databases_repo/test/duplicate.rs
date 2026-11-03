@@ -309,6 +309,7 @@ async fn a_refused_duplicate_leaves_no_database_behind(pool: PgPool) {
         owner_id: DUPLICATOR.into(),
         created_at: chrono::Utc::now(),
         trashed_at: None,
+        project_id: None,
     };
     let table = TableId::new();
     let missing = RowId::new();

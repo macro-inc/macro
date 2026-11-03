@@ -19,7 +19,14 @@ export class AgentSessionNamespace {
     return AgentSession.byId(this.client, id);
   }
 
-  /** Create a managed agent session. */
+  /**
+   * Create a managed session as `agent` when one is named, otherwise the
+   * deployment's default coding persona. List personas with
+   * {@link AgentNamespace.list} and construct one with {@link Agent.byId}.
+   * Unknown or inaccessible personas fail. `model` and `instructions`
+   * outrank the persona's. `repoUrl` is honored for Cursor; omit `agent`
+   * and it starts as Cursor.
+   */
   createManaged(opts?: CreateManagedSessionOptions): Promise<AgentSession> {
     return AgentSession.createManaged(this.client, opts);
   }

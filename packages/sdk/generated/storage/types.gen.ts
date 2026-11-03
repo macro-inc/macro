@@ -1222,6 +1222,11 @@ export type Awareness = {
  */
 export type AwarenessRelay = {
     /**
+     * Whether the viewer's grant lets them edit; a viewer who cannot is
+     * shown as viewing.
+     */
+    canEdit: boolean;
+    /**
      * The database the viewer is in.
      */
     databaseId: string;
@@ -5075,6 +5080,10 @@ export type Database = {
      */
     owner_id: string;
     /**
+     * The folder it is filed in; `null` at the root.
+     */
+    project_id: string | null;
+    /**
      * Set when trashed.
      */
     trashed_at: string | null;
@@ -7803,6 +7812,10 @@ export type Form = {
      * Its owner.
      */
     ownerId: string;
+    /**
+     * The folder it is filed in; `null` at the root.
+     */
+    projectId: string | null;
     /**
      * The person column each signed-in submission names its respondent in;
      * `null` once deleted.

@@ -137,6 +137,29 @@ describe('flagged entity callers', () => {
     }
   );
 
+  it.each([
+    ['database', 'DATABASE'],
+    ['form', 'FORM'],
+  ] as const)(
+    'moves a %s through the entity mutation, its only route, with or without the GraphQL soup',
+    async (itemType, type) => {
+      for (const graphql of [true, false]) {
+        mocks.graphql = graphql;
+        for (const folderId of ['folder', null]) {
+          mocks.mutation.mockClear();
+          expect(await moveToFolder({ itemType, id: 'source', folderId })).toBe(
+            true
+          );
+          expect(variables()).toEqual({
+            inputs: [{ entity: { type, id: 'source' }, projectId: folderId }],
+          });
+        }
+      }
+      expect(mocks.edit).not.toHaveBeenCalled();
+      expect(mocks.metadata).not.toHaveBeenCalled();
+    }
+  );
+
   it.each(['document', 'chat', 'project'] as const)(
     'trashes/restores/permanently deletes %s through GraphQL',
     async (itemType) => {

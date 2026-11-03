@@ -33,6 +33,7 @@ const support: DatabaseDetail = {
     owner_id: 'owner',
     created_at: '2026-10-01T00:00:00Z',
     trashed_at: null,
+    project_id: null,
   },
   grant: 'owner',
   tables: [

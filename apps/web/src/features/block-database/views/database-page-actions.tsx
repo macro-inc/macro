@@ -1,6 +1,7 @@
 import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
+import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import DuplicateIcon from '@icon/system/regular/copy-simple.svg';
@@ -52,6 +53,8 @@ export type DatabaseEntityActions = {
   duplicating: boolean;
   /** Copy the database into a new one the viewer owns, and open it. */
   onDuplicate: () => void;
+  /** Present for the owner, who alone may file it in a folder. */
+  onMoveToFolder?: () => void;
 };
 
 export function DatabasePageActions(props: {
@@ -203,6 +206,14 @@ export function DatabasePageActions(props: {
                     <StarIcon class="size-4 shrink-0" />
                     {actions().favorited ? 'Unfavorite' : 'Favorite'}
                   </Dropdown.Item>
+                  <Show when={actions().onMoveToFolder}>
+                    {(moveToFolder) => (
+                      <Dropdown.Item onSelect={moveToFolder()}>
+                        <ArrowRightIcon class="size-4 shrink-0" />
+                        {t('entityActions.moveToFolder')}
+                      </Dropdown.Item>
+                    )}
+                  </Show>
                 </Dropdown.Group>
               </>
             )}

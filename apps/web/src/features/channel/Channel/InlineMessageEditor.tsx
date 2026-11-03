@@ -1,7 +1,9 @@
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isPlatform } from '@core/util/platform';
 import type { MessageParent } from '@service-storage/messages';
 import { cn } from '@ui';
+import { Show } from 'solid-js';
 import {
   ChannelInput,
   createInputAttachmentTracker,
@@ -74,6 +76,12 @@ export function MessageEditorContent(props: MessageEditorContentProps) {
           props.messageEditor.save(props.message, nextSnapshot)
         }
       >
+        <Input.Layout.ActionsLeft>
+          <Show when={isPlatform('ios')} fallback={<Input.AttachFilesAction />}>
+            <Input.AttachNativeMediaAction />
+          </Show>
+          <Input.DiscardDraftAction />
+        </Input.Layout.ActionsLeft>
         <Input.Layout.ActionsRight>
           <Input.SendAction />
         </Input.Layout.ActionsRight>

@@ -456,6 +456,7 @@ impl crate::domain::duplicate::DatabaseDuplicateService for RecordingService {
             owner_id: owner.to_string(),
             created_at: chrono::DateTime::UNIX_EPOCH,
             trashed_at: None,
+            project_id: None,
         })
     }
 }

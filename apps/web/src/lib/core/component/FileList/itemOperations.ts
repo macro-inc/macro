@@ -283,6 +283,19 @@ export async function moveToFolder(args: {
   folderId: string | null;
 }): Promise<boolean> {
   const { itemType, id, folderId } = args;
+  // Databases and forms move only through the entity mutation; there is no
+  // REST route for them.
+  if (itemType === 'database' || itemType === 'form') {
+    const result = await catchToResult(() =>
+      moveEntity(
+        { type: itemType === 'database' ? 'DATABASE' : 'FORM', id },
+        folderId
+      )
+    );
+    if (result.isErr()) return false;
+    trackMovedToFolder(itemType, id, folderId);
+    return true;
+  }
   const graphql = isFeatureEnabled(enableGraphqlSoup);
   if (!graphql) {
     const accessLevel = await getItemAccessLevel({ itemType, id });
@@ -342,15 +355,22 @@ export async function moveToFolder(args: {
     return false;
   }
 
+  trackMovedToFolder(itemType, id, folderId);
+  refetchResources();
+  return true;
+}
+
+function trackMovedToFolder(
+  itemType: ItemType,
+  id: string,
+  folderId: string | null
+) {
   analytics.track('update_entity', {
     entityType: itemType,
     entityId: id,
     property: 'parent_project',
     newProjectId: folderId,
   });
-
-  refetchResources();
-  return true;
 }
 
 export async function bulkMoveToFolder(

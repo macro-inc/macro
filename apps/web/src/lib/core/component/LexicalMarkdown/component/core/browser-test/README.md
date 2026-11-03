@@ -33,6 +33,13 @@ the local fixture are intercepted. Run just this case by adding
 Screenshots: [desktop](proof/autolinks-desktop.png) and
 [phone](proof/autolinks-mobile.png).
 
+## Ordered list start
+
+`lists.browser.e2e.ts` types `6.` then Enter in the production channel
+composer. The list must start at 6 in the draft and after save.
+
+Screenshot: [desktop](proof/ordered-list-start.png).
+
 ## Message quotes
 
 `quotes.browser.e2e.ts` selects three paragraphs backward and applies Quote

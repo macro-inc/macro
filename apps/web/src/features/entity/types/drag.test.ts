@@ -15,6 +15,13 @@ describe('isEntityDragData', () => {
     expect(isEntityDragData(validDragData)).toBe(true);
   });
 
+  it.each(['database', 'form'] as const)(
+    'accepts a dragged %s, which can be filed in a folder',
+    (type) => {
+      expect(isEntityDragData({ ...validDragData, type })).toBe(true);
+    }
+  );
+
   it.each(['id', 'name', 'ownerId', 'type', 'operation'] as const)(
     'rejects a payload without %s',
     (field) => {

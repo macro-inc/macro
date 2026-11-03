@@ -646,6 +646,9 @@ where
             owner_id: owner.to_string(),
             created_at: Utc::now(),
             trashed_at: None,
+            // Copies start outside any folder: filing one shares it with the
+            // folder's members, which takes its own permission.
+            project_id: None,
         };
         let writes = plan(&source, &copy, owner.clone())?;
         span.record("copy_id", tracing::field::display(copy.id));

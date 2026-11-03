@@ -7897,6 +7897,10 @@ export interface Form {
    */
   updatedAt: string;
   /**
+   * The folder it is filed in; `null` at the root.
+   */
+  projectId?: string | null;
+  /**
    * Whether Drive leaves it, and the database behind it, out of its
    * listings, as for a channel poll.
    */
@@ -16422,7 +16426,7 @@ export interface CodeGuide {
  *
  * For editable email/calendar drafts, persist them with execution.reviews.create({kind, title, drafts}), then return reviews: [await review.reference()]. This does not send emails or create calendar events. Creation immediately presents a completed PresentReview ACP tool call, even while main continues. "Presented to the user" means saved in the conversation, not approved or sent. The saved cards remain usable after this execution and chat continues. User decisions arrive as typed system events referring to the same review ID. Use GetReview to read final drafts and confirmed outcomes; notifications never authorize repeating an action. Use the direct EditDocument tool for AI document edits. Direct human-interactive tools, subagents and unsupported SDK operations remain available.
  *
- * Use nested SDK entities, e.g. macro.documents.search(query) is an async iterator and document.content() is a promise. Use for await...of, break, conditions and ordinary JavaScript freely. Batch useful independent work with Promise.all or Promise.allSettled; inspect partial failures and await every started operation. Use bounded concurrency for large inputs. Preserve user source scope on every search and retry: macro.documents.search searches documents; macro.email.search searches emails. Read names in batches: macro.initiatives.summaries() and macro.tasks.summaries(tasks) each take one request, while name() on every handle loads each entity separately. Create a task with its initiative, assignees and dueDate in one macro.tasks.create call. Return compact evidence with source IDs, explicit failures and coverage limits; do not return SDK objects, raw large batches, or claim a stopped iterator is exhaustive.
+ * Do the whole job in as few executions as possible, ideally one: every execution costs a model turn. Put control flow in the program instead of checking in one execution and acting in the next, e.g. if macro.tasks.findSimilar finds no likely duplicate, create the task and return it, else return the matches without creating. Use nested SDK entities, e.g. macro.documents.search(query) is an async iterator and document.content() is a promise. Use for await...of, break, conditions and ordinary JavaScript freely. Batch useful independent work with Promise.all or Promise.allSettled; inspect partial failures and await every started operation. Use bounded concurrency for large inputs. Preserve user source scope on every search and retry: macro.documents.search searches documents; macro.email.search searches emails. Read names in batches: macro.initiatives.summaries() and macro.tasks.summaries(tasks) each take one request, while name() on every handle loads each entity separately. Create a task with its initiative, assignees and dueDate in one macro.tasks.create call. Return compact evidence with source IDs, URLs, explicit failures and coverage limits, enough to answer without a follow-up execution; do not return SDK objects, raw large batches, or claim a stopped iterator is exhaustive.
  *
  * For a workspace overview, fetch small pages for the relevant categories concurrently in one execution with macro.workspace.page({includeTypes:[type], limit:3}). A single mixed page can be dominated by one category; each page is a sample, not a category total. Return selected metadata and hasMore per category, not whole items or snapshots. Exact workspace types include calendar_event, ai_chat and channel_thread. Tasks are documents: use includeTypes:["document"], df:{l:{dst:"task"}}. AST & and | combine exactly two expressions; do not wrap a single filter.
  *

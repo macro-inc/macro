@@ -254,6 +254,50 @@ describe('createFreshSearch with comma-separated channel matching', () => {
     expect(results2.length).toBe(1);
     expect(results2[0].item.id).toBe('1');
   });
+
+  it('keeps the fuzzy score of a channel typed in order, and adds channels typed out of order', () => {
+    const now = new Date();
+    const items: MockItem[] = [
+      { id: '1', name: 'Avery Morgan, Blair Chen', type: 'channel' },
+      { id: '2', name: 'Blair Chen, Avery Morgan', type: 'channel' },
+      { id: '3', name: 'Blair notes for Avery', type: 'item', viewedAt: now },
+    ];
+
+    const results = createCommaSeparatedSearch()(items, 'avery blair');
+
+    expect(results.map((result) => result.item.id)).toEqual(['1', '2']);
+    expect(results[0].fuzzyScore).toBe(1);
+    expect(results[1].fuzzyScore).toBeLessThan(1);
+  });
+
+  it('adds no channels for a query of separators alone', () => {
+    const items: MockItem[] = [
+      { id: '1', name: 'Avery Morgan, Blair Chen', type: 'channel' },
+    ];
+
+    expect(createCommaSeparatedSearch()(items, ' , ')).toEqual([]);
+  });
+
+  it('ranks the exact participants above a newer larger group without name ranking', () => {
+    const items: MockItem[] = [
+      {
+        id: 'group',
+        name: 'Avery Morgan, Blair Chen, Casey Reed',
+        type: 'channel',
+        viewedAt: new Date(),
+      },
+      {
+        id: 'pair',
+        name: 'Avery Morgan, Blair Chen',
+        type: 'channel',
+        viewedAt: applyDurationToDate(new Date(), { value: -20, unit: 'd' }),
+      },
+    ];
+
+    const results = createCommaSeparatedSearch()(items, 'blair, avery');
+
+    expect(results.map((result) => result.item.id)).toEqual(['pair', 'group']);
+  });
 });
 
 describe('normalizeFuzzyScore', () => {

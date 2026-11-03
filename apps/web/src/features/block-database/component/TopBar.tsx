@@ -1,9 +1,12 @@
+import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
+import { toastMovedToFolder } from '@app/features/entity/bulk-edit/moved-to-folder-toast';
 import {
   makeCopyEntityIdAction,
   makeCopyLinkAction,
   makeFavoriteAction,
 } from '@app/features/next-soup/actions';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { ResponsivePermissionsBadge } from '@components/app/ResponsiveBlockToolbar';
 import {
@@ -114,6 +117,7 @@ export function TopBar(props: {
     name: detail.database.name,
     ownerId: detail.database.owner_id,
     grant: detail.grant,
+    projectId: detail.database.project_id ?? undefined,
   });
   const entityActions = (detail: DatabaseDetail): DatabaseEntityActions => ({
     favorited: favoriteAction.isFavorited(entity(detail)),
@@ -134,6 +138,17 @@ export function TopBar(props: {
       ),
     duplicating: duplicating(),
     onDuplicate: () => fireAndForget(duplicate(detail), 'database-actions'),
+    onMoveToFolder:
+      detail.grant === 'owner'
+        ? () =>
+            openBulkEditModal({
+              view: 'moveToProject',
+              entities: [entity(detail)],
+              onMoved: (folder) => toastMovedToFolder(1, folder.id),
+              onError: () =>
+                toast.failure(t('entityActions.toastMoveToFolderFailed')),
+            })
+        : undefined,
   });
   const rename = (next: string) => {
     renameDatabase(getEntityGraphqlClient(), databaseId, next).mapErr(

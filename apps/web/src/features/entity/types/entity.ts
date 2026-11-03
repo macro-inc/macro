@@ -441,6 +441,8 @@ export type DatabaseEntity = EntityBase & {
   type: 'database';
   /** What the viewer may do with the database. */
   grant: AccessLevel;
+  /** The folder it is filed in. */
+  projectId?: string;
 };
 
 /** A Macro Form. Like a database, not a Soup entity: `createdAt` is its only timestamp. */
@@ -448,6 +450,8 @@ export type FormEntity = EntityBase & {
   type: 'form';
   /** What the viewer may do: view responds, edit builds and reads responses. */
   access: 'view' | 'edit' | 'owner';
+  /** The folder it is filed in. */
+  projectId?: string;
 };
 
 /** Normalized time shape of a calendar event soup row. */
