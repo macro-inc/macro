@@ -553,12 +553,12 @@ CRM on for the team, the section and its links behave the same way.
   Skipped people (no email, unsubscribed, already enrolled) are listed with why.
 - **Statuses:** a sequence is Draft, Active or Paused. A person is Active, Paused,
   Needs attention, Stopped or Completed, with a reason (replied, bounced,
-  unsubscribed, send failed, …). Rows offer Pause, Resume (**Retry** after a
-  failed or removed email; also after a stop for a reply, bounce or lost
-  access), Stop and Unsubscribe (team-wide, confirmed first); opening a row
-  shows that person's emails and when each sent. An active sequence whose
-  inbox was disconnected says so: pause it, choose an inbox, resume it, then
-  resume its people.
+  unsubscribed, removed from Customers, send failed, …). Rows offer Pause,
+  Resume (**Retry** after a failed or removed email; also after a stop for a
+  reply, bounce or lost access), Stop and Unsubscribe (team-wide, confirmed
+  first); opening a row shows that person's emails and when each sent. An
+  active sequence whose inbox was disconnected says so: pause it, choose an
+  inbox, resume it, then resume its people.
 - **Contact card:** a contact's Overview lists its sequences for every teammate:
   sequence, owner, status, last and next send, never the emails. The owner's
   sequence name opens it.

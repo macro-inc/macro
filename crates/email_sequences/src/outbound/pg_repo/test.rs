@@ -406,6 +406,27 @@ async fn i2_every_check_stops_or_flags_instead_of_sending(pool: PgPool) {
         ("stopped".into(), Some("replied".into()), 1)
     );
 
+    // Deleting the CRM person withdraws a queued step and stops for good.
+    let sequence = active_sequence(&svc, OWNER, OWNER_LINK, two_steps()).await;
+    let removed = enroll(&svc, OWNER, sequence, BOB).await;
+    make_due(&pool, removed).await;
+    svc.sweep(Utc::now()).await;
+    assert!(in_flight(&pool, removed).await.is_some());
+    sqlx::query!("DELETE FROM crm_contacts WHERE id = $1", BOB)
+        .execute(&pool)
+        .await
+        .unwrap();
+    svc.sweep(Utc::now()).await;
+    assert_eq!(in_flight(&pool, removed).await, None);
+    assert_eq!(
+        status(&pool, removed).await,
+        ("stopped".into(), Some("contact_removed".into()), 0)
+    );
+    assert!(matches!(
+        svc.act(OWNER, removed, EnrollmentAction::Resume).await,
+        Err(SequenceError::ActionUnavailable)
+    ));
+
     // An unsubscribed address gets nothing more from any sequence.
     let sequence = active_sequence(&svc, OWNER, OWNER_LINK, two_steps()).await;
     let unsubscribed = enroll(&svc, OWNER, sequence, ADA).await;

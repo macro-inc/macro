@@ -92,6 +92,8 @@ pub enum EnrollmentReason {
     Unsubscribed,
     /// The owner left the team or the team turned CRM off.
     AccessLost,
+    /// The person was deleted from the CRM.
+    ContactRemoved,
     /// The sending inbox is disconnected or needs reauthorization.
     InboxUnavailable,
     /// Gmail refused a step and automatic retries ran out.
@@ -334,6 +336,8 @@ pub struct EnrollmentRow {
     pub link_id: Option<Uuid>,
     /// Enrolled address, normalized.
     pub email: String,
+    /// The CRM person enrolled; `None` once they are deleted from the CRM.
+    pub crm_contact_id: Option<Uuid>,
     /// Name at enrollment.
     pub contact_name: Option<String>,
     /// Rendered steps.

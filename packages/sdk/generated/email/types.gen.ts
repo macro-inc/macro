@@ -1214,7 +1214,7 @@ export type EnrollmentDetail = EnrollmentSummary & {
 /**
  * Why an enrollment stopped or needs attention.
  */
-export type EnrollmentReason = 'manual' | 'replied' | 'bounced' | 'unsubscribed' | 'access_lost' | 'inbox_unavailable' | 'step_failed' | 'step_withdrawn' | 'step_unknown' | 'step_stuck';
+export type EnrollmentReason = 'manual' | 'replied' | 'bounced' | 'unsubscribed' | 'access_lost' | 'contact_removed' | 'inbox_unavailable' | 'step_failed' | 'step_withdrawn' | 'step_unknown' | 'step_stuck';
 
 /**
  * Where one contact is in a sequence.

@@ -6561,6 +6561,7 @@
           "bounced",
           "unsubscribed",
           "access_lost",
+          "contact_removed",
           "inbox_unavailable",
           "step_failed",
           "step_withdrawn",

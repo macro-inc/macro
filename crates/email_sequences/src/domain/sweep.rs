@@ -354,14 +354,19 @@ where
         Ok(true)
     }
 
-    /// Why the enrollment must stop before sending: an unsubscribe, or an
-    /// answer to its emails found by reading the inbox.
+    /// Why the enrollment must stop before sending: the person was deleted
+    /// from the CRM, an unsubscribe, or an answer to its emails found by
+    /// reading the inbox.
     async fn stop_check(
         &self,
         tx: &mut R::Tx,
         row: &EnrollmentRow,
         history: &[HistoryRow],
     ) -> Result<Option<EnrollmentReason>, SequenceError> {
+        // Deleting the CRM person clears the reference.
+        if row.crm_contact_id.is_none() {
+            return Ok(Some(EnrollmentReason::ContactRemoved));
+        }
         if self
             .repo
             .recipient(tx, row.team_id, &row.email)

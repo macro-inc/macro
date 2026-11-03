@@ -18,6 +18,7 @@ export const EnrollmentReason = {
   bounced: 'bounced',
   unsubscribed: 'unsubscribed',
   access_lost: 'access_lost',
+  contact_removed: 'contact_removed',
   inbox_unavailable: 'inbox_unavailable',
   step_failed: 'step_failed',
   step_withdrawn: 'step_withdrawn',

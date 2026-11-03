@@ -11,7 +11,8 @@ people. The server owns all state; the browser only calls the API.
 - An enrollment has at most one unsent step (a partial unique index). The sweep
   (`domain/sweep.rs`, run every ~30 s by every `pubsub_workers` process) creates
   it about a minute before it sends, under the enrollment's row lock, after
-  checking access, the sending inbox, the unsubscribe list and replies.
+  checking access, the sending inbox, that the CRM person still exists, the
+  unsubscribe list and replies. A deleted person stops the enrollment for good.
 - Steps are ordinary scheduled sends (`source = 'sequence'`), created and
   withdrawn through the email crate's `SequenceStepStore` port on the
   sweep's own connection.

@@ -109,6 +109,7 @@ struct EnrollmentRecord {
     sequence_link_id: Option<Uuid>,
     link_id: Option<Uuid>,
     email: String,
+    crm_contact_id: Option<Uuid>,
     contact_name: Option<String>,
     steps: Json<Vec<Step>>,
     status: String,
@@ -132,6 +133,7 @@ impl TryFrom<EnrollmentRecord> for EnrollmentRow {
             sequence_link_id: record.sequence_link_id,
             link_id: record.link_id,
             email: record.email,
+            crm_contact_id: record.crm_contact_id,
             contact_name: record.contact_name,
             steps: record.steps.0,
             status: parse(&record.status, "enrollment status")?,
@@ -431,7 +433,7 @@ impl SequenceRepo for PgSequenceRepo {
         let records = sqlx::query_as!(
             EnrollmentRecord,
             r#"SELECT e.id, s.user_id AS owner_id, e.team_id, s.status AS sequence_status,
-                      s.link_id AS sequence_link_id, e.link_id, e.email, e.contact_name,
+                      s.link_id AS sequence_link_id, e.link_id, e.email, e.crm_contact_id, e.contact_name,
                       '[]'::jsonb AS "steps!: Json<Vec<Step>>", e.status, e.reason, e.next_step, e.due_at,
                       e.attempts, e.timezone, e.send_time, e.replies_after
                FROM email_sequence_enrollments e JOIN email_sequences s ON s.id = e.sequence_id
@@ -508,7 +510,7 @@ impl SequenceRepo for PgSequenceRepo {
             sqlx::query_as!(
                 EnrollmentRecord,
                 r#"SELECT e.id, s.user_id AS owner_id, e.team_id, s.status AS sequence_status,
-                          s.link_id AS sequence_link_id, e.link_id, e.email, e.contact_name,
+                          s.link_id AS sequence_link_id, e.link_id, e.email, e.crm_contact_id, e.contact_name,
                           e.steps AS "steps: Json<Vec<Step>>", e.status, e.reason, e.next_step, e.due_at,
                           e.attempts, e.timezone, e.send_time, e.replies_after
                    FROM email_sequence_enrollments e JOIN email_sequences s ON s.id = e.sequence_id
@@ -522,7 +524,7 @@ impl SequenceRepo for PgSequenceRepo {
             sqlx::query_as!(
                 EnrollmentRecord,
                 r#"SELECT e.id, s.user_id AS owner_id, e.team_id, s.status AS sequence_status,
-                          s.link_id AS sequence_link_id, e.link_id, e.email, e.contact_name,
+                          s.link_id AS sequence_link_id, e.link_id, e.email, e.crm_contact_id, e.contact_name,
                           e.steps AS "steps: Json<Vec<Step>>", e.status, e.reason, e.next_step, e.due_at,
                           e.attempts, e.timezone, e.send_time, e.replies_after
                    FROM email_sequence_enrollments e JOIN email_sequences s ON s.id = e.sequence_id

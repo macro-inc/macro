@@ -95,6 +95,7 @@ export default {
   reasonBounced: 'Bounced',
   reasonUnsubscribed: 'Unsubscribed',
   reasonAccessLost: 'Access lost',
+  reasonContactRemoved: 'Removed from Customers',
   reasonInboxUnavailable: 'Inbox unavailable',
   reasonStepFailed: 'Send failed',
   reasonStepWithdrawn: 'Email removed',
@@ -109,6 +110,8 @@ export default {
     'They unsubscribed from your team’s sequences, so no more emails go out.',
   reasonAccessLostDetail:
     'Access to this person was lost when the team or Customers changed. Resume once access is back.',
+  reasonContactRemovedDetail:
+    'This person was deleted from Customers, so no more emails go out.',
   reasonInboxUnavailableDetail:
     'The sending inbox is disconnected or needs to be reconnected. Reconnect it or choose another inbox for the sequence, then resume.',
   reasonStepFailedDetail:
