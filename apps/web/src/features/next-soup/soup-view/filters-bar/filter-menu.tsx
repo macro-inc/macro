@@ -1,5 +1,5 @@
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import { Key } from '@solid-primitives/keyed';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn, Dropdown } from '@ui';

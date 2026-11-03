@@ -1,23 +1,25 @@
-import CaretUp from '@phosphor/caret-up.svg';
-import Microphone from '@phosphor/microphone.svg';
-import MicrophoneSlash from '@phosphor/microphone-slash.svg';
-import PhoneDisconnect from '@phosphor/phone-disconnect.svg';
-import Screencast from '@phosphor/screencast.svg';
-import VideoCamera from '@phosphor/video-camera.svg';
-import VideoCameraSlash from '@phosphor/video-camera-slash.svg';
+import CaretUp from '@icon/system/regular/caret-up.svg';
+import Microphone from '@icon/system/regular/microphone.svg';
+import MicrophoneSlash from '@icon/system/regular/microphone-slash.svg';
+import PhoneDisconnect from '@icon/system/regular/phone-disconnect.svg';
+import Screencast from '@icon/system/regular/screencast.svg';
+import VideoCamera from '@icon/system/regular/video-camera.svg';
+import VideoCameraSlash from '@icon/system/regular/video-camera-slash.svg';
 import { Button, ButtonGroup, Dropdown } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
 
 /**
  * A media toggle split from its settings menu: the left half turns the device
- * on or off, the caret opens its menu on click.
+ * on or off, the caret opens its menu on click. The toggle keeps one fill and
+ * shows its state through the icon.
  */
 function MediaSplitButton(props: {
   label: string;
   toggleLabel: string;
   menuLabel: string;
-  on: boolean;
   disabled?: boolean;
+  /** Set for a toggle whose icon stays the same in both states. */
+  pressed?: boolean;
   onToggle: () => void;
   icon: JSX.Element;
   children: JSX.Element;
@@ -25,23 +27,27 @@ function MediaSplitButton(props: {
   const [open, setOpen] = createSignal(false);
   return (
     <Dropdown placement="top-start" open={open()} onOpenChange={setOpen}>
-      <ButtonGroup size="icon-lg" label={props.label}>
-        <Button
-          label={props.toggleLabel}
-          tooltipPlacement="top"
-          aria-pressed={props.on}
+      <ButtonGroup size="icon-lg" aria-label={props.label}>
+        <ButtonGroup.Button
+          aria-label={props.toggleLabel}
+          tooltip={{ content: props.toggleLabel, placement: 'top' }}
+          aria-pressed={props.pressed}
           disabled={props.disabled}
           onClick={props.onToggle}
         >
           {props.icon}
-        </Button>
+        </ButtonGroup.Button>
         <ButtonGroup.Divider />
         <Dropdown.Trigger
+          as={ButtonGroup.Button}
           variant="ghost"
           size="icon-lg"
-          label={props.menuLabel}
-          tooltipPlacement="top"
-          tooltipDisabled={open()}
+          aria-label={props.menuLabel}
+          tooltip={{
+            content: props.menuLabel,
+            placement: 'top',
+            disabled: open(),
+          }}
           class="w-6"
         >
           <CaretUp
@@ -70,6 +76,8 @@ export function CallControlBar(props: {
   audioMenu: JSX.Element;
   /** Dropdown items for the camera and its background effect. */
   videoMenu: JSX.Element;
+  /** Dropdown items for what a screen share captures. */
+  screenMenu: JSX.Element;
   error?: string;
 }) {
   return (
@@ -81,12 +89,14 @@ export function CallControlBar(props: {
             props.audioMuted ? 'Unmute microphone' : 'Mute microphone'
           }
           menuLabel="Audio settings"
-          on={!props.audioMuted}
           disabled={props.disabled}
           onToggle={props.onToggleAudio}
           icon={
-            <Show when={props.audioMuted} fallback={<Microphone />}>
-              <MicrophoneSlash />
+            <Show
+              when={props.audioMuted}
+              fallback={<Microphone class="size-5" />}
+            >
+              <MicrophoneSlash class="size-5" />
             </Show>
           }
         >
@@ -96,36 +106,40 @@ export function CallControlBar(props: {
           label="Camera"
           toggleLabel={props.videoMuted ? 'Turn on camera' : 'Turn off camera'}
           menuLabel="Video settings"
-          on={!props.videoMuted}
           disabled={props.disabled}
           onToggle={props.onToggleVideo}
           icon={
-            <Show when={props.videoMuted} fallback={<VideoCamera />}>
-              <VideoCameraSlash />
+            <Show
+              when={props.videoMuted}
+              fallback={<VideoCamera class="size-5" />}
+            >
+              <VideoCameraSlash class="size-5" />
             </Show>
           }
         >
           {props.videoMenu}
         </MediaSplitButton>
-        <Button
-          size="icon-lg"
-          variant="outline"
-          label={props.screenSharing ? 'Stop sharing screen' : 'Share screen'}
-          tooltipPlacement="top"
-          aria-pressed={props.screenSharing}
+        <MediaSplitButton
+          label="Screen share"
+          toggleLabel={
+            props.screenSharing ? 'Stop sharing screen' : 'Share screen'
+          }
+          menuLabel="Screen share settings"
+          pressed={props.screenSharing}
           disabled={props.disabled}
-          onClick={props.onToggleScreen}
+          onToggle={props.onToggleScreen}
+          icon={<Screencast class="size-5" />}
         >
-          <Screencast />
-        </Button>
+          {props.screenMenu}
+        </MediaSplitButton>
         <Button
           size="icon-lg"
           variant="danger"
-          label="Leave call"
-          tooltipPlacement="top"
+          aria-label="Leave call"
+          tooltip={{ content: 'Leave call', placement: 'top' }}
           onClick={props.onLeave}
         >
-          <PhoneDisconnect />
+          <PhoneDisconnect class="size-5" />
         </Button>
       </div>
       <Show when={props.error}>

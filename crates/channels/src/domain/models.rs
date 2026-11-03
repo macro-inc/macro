@@ -685,6 +685,8 @@ pub enum ReferencedShareItemType {
     CalendarEvent,
     /// Form entity: posting one lets the channel respond to it.
     Form,
+    /// External chat added to Macro: mentioning one lets the channel read it.
+    ExternalChat,
 }
 
 impl ReferencedShareItemType {
@@ -700,6 +702,7 @@ impl ReferencedShareItemType {
             "call" => Some(Self::Call),
             "calendar_event" => Some(Self::CalendarEvent),
             "form" => Some(Self::Form),
+            "external_chat" => Some(Self::ExternalChat),
             _ => None,
         }
     }
@@ -716,6 +719,7 @@ impl ReferencedShareItemType {
             Self::Call => "call",
             Self::CalendarEvent => "calendar_event",
             Self::Form => "form",
+            Self::ExternalChat => "external_chat",
         }
     }
 
@@ -829,6 +833,8 @@ pub struct MutatedMessage {
     pub sender_id: ChannelSender<'static>,
     /// For an agent (bot) message, the id of the user who triggered it.
     pub triggered_by: Option<String>,
+    /// The client the user triggered it through, such as "Claude Code".
+    pub triggered_via: Option<String>,
     /// Message body.
     pub content: String,
     /// Created timestamp.

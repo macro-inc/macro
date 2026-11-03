@@ -1,6 +1,6 @@
+import ChatTeardrop from '@icon/system/regular/chat-teardrop.svg';
+import CheckCircle from '@icon/system/regular/check-circle.svg';
 import { Popover } from '@kobalte/core/popover';
-import ChatTeardrop from '@phosphor/chat-teardrop.svg';
-import CheckCircle from '@phosphor/check-circle.svg';
 import { cn, Layer } from '@ui';
 import type { EditorThemeClasses } from 'lexical';
 import { createEffect, createSignal, on, Show, useContext } from 'solid-js';

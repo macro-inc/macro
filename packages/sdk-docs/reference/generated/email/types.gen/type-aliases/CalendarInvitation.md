@@ -1,6 +1,6 @@
 # Type Alias: CalendarInvitation
 
-> **CalendarInvitation** = \{ `attendees`: [`InvitationParticipant`](InvitationParticipant.md)[]; `comment?`: `string` \| `null`; `conference_url?`: `string` \| `null`; `description?`: `string` \| `null`; `dtstamp?`: `string` \| `null`; `end?`: `null` \| [`InvitationDateTime`](InvitationDateTime.md); `id`: `string`; `last_modified?`: `string` \| `null`; `location?`: `string` \| `null`; `method`: [`InvitationMethod`](InvitationMethod.md); `organizer?`: `null` \| [`InvitationParticipant`](InvitationParticipant.md); `recurrence_id?`: `null` \| [`InvitationDateTime`](InvitationDateTime.md); `recurrence_id_raw?`: `string` \| `null`; `sequence`: `number`; `start?`: `null` \| [`InvitationDateTime`](InvitationDateTime.md); `status?`: `string` \| `null`; `title?`: `string` \| `null`; `uid`: `string`; \}
+> **CalendarInvitation** = \{ `attendees`: [`InvitationParticipant`](InvitationParticipant.md)[]; `comment?`: `string` \| `null`; `conference_url?`: `string` \| `null`; `description?`: `string` \| `null`; `dtstamp?`: `string` \| `null`; `end?`: `null` \| [`InvitationDateTime`](InvitationDateTime.md); `id`: `string`; `last_modified?`: `string` \| `null`; `location?`: `string` \| `null`; `method`: [`InvitationMethod`](InvitationMethod.md); `organizer?`: `null` \| [`InvitationParticipant`](InvitationParticipant.md); `recurrence?`: `string`[] \| `null`; `recurrence_id?`: `null` \| [`InvitationDateTime`](InvitationDateTime.md); `recurrence_id_raw?`: `string` \| `null`; `sequence`: `number`; `start?`: `null` \| [`InvitationDateTime`](InvitationDateTime.md); `status?`: `string` \| `null`; `title?`: `string` \| `null`; `uid`: `string`; \}
 
 Display snapshot of one meaningful VEVENT, owned by the email domain.
 
@@ -19,6 +19,7 @@ Display snapshot of one meaningful VEVENT, owned by the email domain.
 | <a id="property-location"></a> `location?` | `string` \| `null` | Plaintext event location. |
 | <a id="property-method"></a> `method` | [`InvitationMethod`](InvitationMethod.md) | Original scheduling method. |
 | <a id="property-organizer"></a> `organizer?` | `null` \| [`InvitationParticipant`](InvitationParticipant.md) | - |
+| <a id="property-recurrence"></a> `recurrence?` | `string`[] \| `null` | Raw `RRULE`, `RDATE` and `EXDATE` lines, empty for a single event. `None` on snapshots saved before recurrence was recorded, where a series cannot be told apart from a single event. |
 | <a id="property-recurrence_id"></a> `recurrence_id?` | `null` \| [`InvitationDateTime`](InvitationDateTime.md) | - |
 | <a id="property-recurrence_id_raw"></a> `recurrence_id_raw?` | `string` \| `null` | Original recurrence identifier spelling and parameters. |
 | <a id="property-sequence"></a> `sequence` | `number` | Scheduling revision, distinct from delivery order. |

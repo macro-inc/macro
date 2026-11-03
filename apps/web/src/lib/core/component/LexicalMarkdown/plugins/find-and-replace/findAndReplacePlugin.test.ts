@@ -1,6 +1,8 @@
 import { $createListItemNode, $createListNode } from '@lexical/list';
 import {
+  $createContactMentionNode,
   $createDocumentMentionNode,
+  $createGroupMentionNode,
   $createUserMentionNode,
 } from '@macro-inc/lexical-core';
 import {
@@ -15,9 +17,11 @@ import {
   $getRoot,
   createEditor,
   type LexicalEditor,
+  type LexicalNode,
 } from 'lexical';
 import { describe, expect, it } from 'vitest';
 import {
+  DO_REPLACE_COMMAND,
   DO_SEARCH_COMMAND,
   findAndReplacePlugin,
   type NodekeyOffset,
@@ -49,7 +53,29 @@ function createSearchEditor(): {
   };
 }
 
-describe('findAndReplacePlugin document mentions', () => {
+function searchMention(createMention: () => LexicalNode, query: string) {
+  const { editor, getListOffset } = createSearchEditor();
+  let mentionKey = '';
+
+  editor.update(
+    () => {
+      const mention = createMention();
+      mentionKey = mention.getKey();
+      const paragraph = $createParagraphNode();
+      paragraph.append($createTextNode('Hello '), mention);
+      $getRoot().clear().append(paragraph);
+    },
+    { discrete: true }
+  );
+
+  editor.getEditorState().read(() => {
+    editor.dispatchCommand(DO_SEARCH_COMMAND, query);
+  });
+
+  return { offsets: getListOffset(), mentionKey };
+}
+
+describe('findAndReplacePlugin mention chips', () => {
   it('finds a substring in an inline task chip title', () => {
     const { editor, getListOffset } = createSearchEditor();
     let mentionKey = '';
@@ -112,28 +138,87 @@ describe('findAndReplacePlugin document mentions', () => {
     expect(offsets.every((offset) => offset.key === textKey)).toBe(true);
   });
 
-  it('does not match ignored user-mention display names', () => {
+  it('finds a user mention display name', () => {
+    const { offsets, mentionKey } = searchMention(
+      () =>
+        $createUserMentionNode({
+          userId: 'user-1',
+          email: 'wolf@macro.com',
+          displayName: 'refs',
+        }),
+      '@refs'
+    );
+
+    expect(offsets.some((offset) => offset.key === mentionKey)).toBe(true);
+    expect(offsets[0]?.offset.start).toBe(0);
+    expect(offsets[0]?.offset.end).toBe(5);
+  });
+
+  it('finds a group mention alias', () => {
+    const { offsets, mentionKey } = searchMention(
+      () => $createGroupMentionNode({ groupAlias: 'refs' }),
+      '@refs'
+    );
+
+    expect(offsets.some((offset) => offset.key === mentionKey)).toBe(true);
+    expect(offsets[0]?.offset.start).toBe(0);
+    expect(offsets[0]?.offset.end).toBe(5);
+  });
+
+  it('finds a contact mention name', () => {
+    const { offsets, mentionKey } = searchMention(
+      () =>
+        $createContactMentionNode({
+          contactId: 'contact-1',
+          name: 'Ada Lovelace',
+          emailOrDomain: 'ada@example.com',
+          isCompany: false,
+        }),
+      'Lovelace'
+    );
+
+    expect(offsets.some((offset) => offset.key === mentionKey)).toBe(true);
+    expect(offsets[0]?.offset.start).toBe(4);
+    expect(offsets[0]?.offset.end).toBe(12);
+  });
+
+  it('does not delete text beside a mention when replace spans both', () => {
     const { editor, getListOffset } = createSearchEditor();
 
     editor.update(
       () => {
-        const mention = $createUserMentionNode({
-          userId: 'user-1',
-          email: 'wolf@macro.com',
-          displayName: 'Wolf UniqueHandle',
-        });
         const paragraph = $createParagraphNode();
-        paragraph.append($createTextNode('Hello '), mention);
+        paragraph.append(
+          $createUserMentionNode({
+            userId: 'user-1',
+            email: 'wolf@macro.com',
+            displayName: 'refs',
+          }),
+          $createTextNode(' today')
+        );
         $getRoot().clear().append(paragraph);
       },
       { discrete: true }
     );
 
     editor.getEditorState().read(() => {
-      editor.dispatchCommand(DO_SEARCH_COMMAND, 'UniqueHandle');
+      editor.dispatchCommand(DO_SEARCH_COMMAND, '@refs to');
     });
+    expect(getListOffset().length).toBeGreaterThan(1);
 
-    expect(getListOffset()).toEqual([]);
+    editor.update(
+      () => {
+        editor.dispatchCommand(DO_REPLACE_COMMAND, {
+          replaceString: 'x',
+          nodeKeyOffsetList: getListOffset(),
+        });
+      },
+      { discrete: true }
+    );
+
+    expect(
+      editor.getEditorState().read(() => $getRoot().getTextContent())
+    ).toBe('@refs today');
   });
 });
 

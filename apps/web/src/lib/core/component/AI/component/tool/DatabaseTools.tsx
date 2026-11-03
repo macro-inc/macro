@@ -15,9 +15,9 @@ import {
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { isFeatureEnabled, showDatabaseSql } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
+import DatabaseIcon from '@icon/system/regular/database.svg';
+import TableIcon from '@icon/system/regular/table.svg';
 import { decodeHtmlEntities } from '@macro-inc/lexical-core/utils/html-entities';
-import DatabaseIcon from '@phosphor/database.svg';
-import TableIcon from '@phosphor/table.svg';
 import {
   invalidateDatabase,
   useDatabaseDetailQuery,

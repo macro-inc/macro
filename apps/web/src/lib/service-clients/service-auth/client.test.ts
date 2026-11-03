@@ -51,53 +51,68 @@ describe('passwordless code check', () => {
   });
 });
 
-describe('credit checkout', () => {
-  const args = {
-    amountCents: 2_500,
-    successUrl:
-      'https://localhost:3000/app/settings/usage?aiCreditsSuccess=true',
-    cancelUrl: 'https://localhost:3000/app/settings/usage?aiCreditsCancel=true',
-  };
-
-  test('sends the selected pack and return URLs and resolves to the hosted checkout URL', async () => {
-    fetchCheckout.mockResolvedValueOnce(
-      ok({ url: 'https://checkout.stripe.com/test' })
-    );
-    const result = await authServiceClient.createAiCreditCheckout(args);
-    expect(result._unsafeUnwrap()).toBe('https://checkout.stripe.com/test');
+describe('credit purchase', () => {
+  test('sends the selected pack and resolves to the outcome and new position', async () => {
+    const outcome = {
+      status: 'paid',
+      amountCents: 2_500,
+      snapshot: { remaining_cents: 100 },
+    };
+    fetchCheckout.mockResolvedValueOnce(ok(outcome));
+    const result = await authServiceClient.purchaseAiCredits({
+      amountCents: 2_500,
+    });
+    expect(result._unsafeUnwrap()).toEqual(outcome);
     expect(fetchCheckout).toHaveBeenCalledWith(
-      expect.stringMatching(/\/ai-billing\/credits\/checkout$/),
+      expect.stringMatching(/\/ai-billing\/credits\/purchase$/),
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify(args),
+        body: JSON.stringify({ amountCents: 2_500 }),
       })
     );
   });
 
   test.each([
-    [402, 'PAID_PLAN_REQUIRED'],
-    [401, 'UNAUTHORIZED'],
-    [403, 'FORBIDDEN'],
-    [500, 'SERVER_ERROR'],
+    [
+      402,
+      '{"error":"a paid plan is required"}',
+      'PAID_PLAN_REQUIRED',
+      'A paid plan is required',
+    ],
+    [
+      409,
+      '{"error":"this purchase would exceed the monthly credit limit"}',
+      'CREDIT_PURCHASE_REJECTED',
+      'this purchase would exceed the monthly credit limit',
+    ],
+    [409, 'not json', 'CREDIT_PURCHASE_REJECTED', 'Credit purchase rejected'],
+    [
+      500,
+      '{"error":"internal error"}',
+      'SERVER_ERROR',
+      'Internal server error',
+    ],
   ])(
-    'preserves a %i response as %s for the checkout view',
-    async (status, code) => {
+    'reports a %i response for the purchase views',
+    async (status, body, code, message) => {
       fetchCheckout.mockImplementationOnce(
         async (
           _input: RequestInfo,
-          init: FetchWithTokenInit<'PAID_PLAN_REQUIRED'>
+          init: FetchWithTokenInit<
+            'PAID_PLAN_REQUIRED' | 'CREDIT_PURCHASE_REJECTED'
+          >
         ) => {
           const error = await init.errorResponseHandler?.(
-            new Response(JSON.stringify({ error: 'a paid plan is required' }), {
-              status,
-            })
+            new Response(body, { status })
           );
-          if (!error) throw new Error('Expected a checkout error handler');
+          if (!error) throw new Error('Expected a purchase error handler');
           return err([error]);
         }
       );
-      const result = await authServiceClient.createAiCreditCheckout(args);
-      expect(result._unsafeUnwrapErr()[0].code).toBe(code);
+      const result = await authServiceClient.purchaseAiCredits({
+        amountCents: 2_500,
+      });
+      expect(result._unsafeUnwrapErr()[0]).toEqual({ code, message });
     }
   );
 });
@@ -139,5 +154,75 @@ describe('GitHub reconnect', () => {
       expect.stringContaining('/link/github'),
       expect.objectContaining({ method: 'POST' })
     );
+  });
+});
+
+describe('GitHub outages', () => {
+  function answerWith(status: number, body: string) {
+    fetchCheckout.mockImplementationOnce(
+      async (_input: RequestInfo, init: FetchWithTokenInit) => {
+        const error = await init.errorResponseHandler?.(
+          new Response(body, { status })
+        );
+        if (!error) throw new Error('Expected a GitHub error handler');
+        return err([error]);
+      }
+    );
+  }
+  const upstream = (message: string) =>
+    JSON.stringify({ message, code: 'upstream_rate_limited' });
+  const pullRequest = { owner: 'acme', repo: 'app', number: 7 };
+
+  test.each([
+    [503, 'GitHub is limiting requests right now. Try again shortly.'],
+    [
+      502,
+      'GitHub returned an unexpected response. Try again in a few minutes.',
+    ],
+  ])(
+    'shows the %i explanation when a merge fails upstream',
+    async (status, message) => {
+      answerWith(status, upstream(message));
+      const result =
+        await authServiceClient.mergeGithubPullRequest(pullRequest);
+      expect(result._unsafeUnwrapErr()[0]).toEqual({
+        code: 'HTTP_ERROR',
+        message,
+      });
+    }
+  );
+
+  test('shows the explanation when a state change or link check fails upstream', async () => {
+    const message =
+      'The sign-in service is temporarily unavailable. Try again in a few minutes.';
+    answerWith(503, upstream(message));
+    const state = await authServiceClient.setGithubPullRequestState({
+      ...pullRequest,
+      state: 'closed',
+    });
+    expect(state._unsafeUnwrapErr()[0]).toEqual({
+      code: 'HTTP_ERROR',
+      message,
+    });
+
+    answerWith(503, upstream(message));
+    const link = await authServiceClient.checkGithubLinkStatus();
+    expect(link._unsafeUnwrapErr()[0]).toEqual({ code: 'HTTP_ERROR', message });
+  });
+
+  test('falls back to the status for an unreadable outage body and keeps 500s', async () => {
+    answerWith(503, '<html>maintenance</html>');
+    const outage = await authServiceClient.mergeGithubPullRequest(pullRequest);
+    expect(outage._unsafeUnwrapErr()[0]).toEqual({
+      code: 'HTTP_ERROR',
+      message: 'HTTP error! status: 503',
+    });
+
+    answerWith(500, JSON.stringify({ message: 'internal error' }));
+    const bug = await authServiceClient.mergeGithubPullRequest(pullRequest);
+    expect(bug._unsafeUnwrapErr()[0]).toEqual({
+      code: 'SERVER_ERROR',
+      message: 'Internal server error',
+    });
   });
 });

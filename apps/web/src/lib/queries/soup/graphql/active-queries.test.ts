@@ -1,12 +1,22 @@
 import type { QueryRevalidation } from '@graphql-cache/exchange/optimistic';
+import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
+import { queryClient } from '@queries/client';
 import { type Client, gql } from '@urql/core';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
+import { soupKeys } from '../keys';
+import { refreshPropertyQueries } from '../property-queries';
+
 import {
   getActiveGraphqlSoupRevalidations,
   refreshActiveGraphqlSoupQueries,
   registerActiveGraphqlSoupQuery,
   registerGraphqlSoupRevalidations,
 } from './active-queries';
+
+vi.mock('@queries/client', async () => {
+  const { QueryClient } = await import('@tanstack/solid-query');
+  return { queryClient: new QueryClient() };
+});
 
 function register(query: Parameters<typeof registerActiveGraphqlSoupQuery>[0]) {
   const unregister = registerActiveGraphqlSoupQuery(query);
@@ -292,4 +302,143 @@ describe('active GraphQL Soup queries', () => {
     expect(other).not.toHaveBeenCalled();
     expect(unbodied).not.toHaveBeenCalled();
   });
+
+  it('skips lists the cache maintains when only the others need a read', async () => {
+    const maintained = vi.fn(async () => {});
+    const grouped = vi.fn(async () => {});
+    let current = true;
+    register({
+      isEnabled: () => true,
+      refresh: maintained,
+      cacheMaintained: () => current,
+    });
+    register({ isEnabled: () => true, refresh: grouped });
+
+    await refreshActiveGraphqlSoupQueries({ unmaintainedOnly: true });
+    expect(maintained).not.toHaveBeenCalled();
+    expect(grouped).toHaveBeenCalledOnce();
+
+    // A list whose local evaluation stopped working reads the server again.
+    current = false;
+    await refreshActiveGraphqlSoupQueries({ unmaintainedOnly: true });
+    expect(maintained).toHaveBeenCalledOnce();
+
+    // Without the option every list is read, as for writes the cache lacks.
+    current = true;
+    await refreshActiveGraphqlSoupQueries();
+    expect(maintained).toHaveBeenCalledTimes(2);
+  });
+
+  it('leaves maintained pages out of the revalidations a write carries', () => {
+    const document = gql`query Soup($input: SoupInput!) { soup(input: $input) { nextCursor } }`;
+    const mail = { document, variables: { input: { initial: { mail: 1 } } } };
+    const grouped = { document, variables: { input: { initial: { g: 1 } } } };
+    onTestFinished(
+      registerGraphqlSoupRevalidations(
+        () => [mail],
+        undefined,
+        () => true
+      )
+    );
+    onTestFinished(registerGraphqlSoupRevalidations(() => [grouped]));
+
+    expect(
+      getActiveGraphqlSoupRevalidations(undefined, { unmaintainedOnly: true })
+    ).toEqual([grouped]);
+    expect(getActiveGraphqlSoupRevalidations()).toEqual([mail, grouped]);
+  });
+});
+
+it.each([undefined, SYSTEM_PROPERTY_IDS.DUE_DATE])(
+  'refreshes due-date sorting without a property filter after a date edit (%s)',
+  async (definitionId) => {
+    onTestFinished(() => queryClient.clear());
+    const dueKey = soupKeys.astItems({
+      params: {
+        sort_method: 'property',
+        sort_property_definition_id: SYSTEM_PROPERTY_IDS.DUE_DATE,
+      },
+      body: { df: { l: { dst: 'task' } } },
+    }).queryKey;
+    const ordinaryKey = soupKeys.astItems({
+      params: { sort_method: 'updated_at' },
+      body: { df: { l: { dst: 'task' } } },
+    }).queryKey;
+    queryClient.setQueryData(dueKey, []);
+    queryClient.setQueryData(ordinaryKey, []);
+    const dueRefresh = vi.fn(async () => {});
+    const ordinaryRefresh = vi.fn(async () => {});
+    register({
+      isEnabled: () => true,
+      refresh: dueRefresh,
+      body: () => ({
+        params: {
+          sort_method: 'property',
+          sort_property_definition_id: SYSTEM_PROPERTY_IDS.DUE_DATE,
+        },
+      }),
+    });
+    register({
+      isEnabled: () => true,
+      refresh: ordinaryRefresh,
+      body: () => ({ params: { sort_method: 'updated_at' } }),
+    });
+
+    await refreshPropertyQueries(definitionId);
+
+    expect(queryClient.getQueryState(dueKey)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(ordinaryKey)?.isInvalidated).toBe(false);
+    expect(dueRefresh).toHaveBeenCalledOnce();
+    expect(ordinaryRefresh).not.toHaveBeenCalled();
+  }
+);
+
+it('matches selected sort/group definitions and date predicates, not ordinary option filters', async () => {
+  onTestFinished(() => queryClient.clear());
+  const id = SYSTEM_PROPERTY_IDS.STATUS;
+  const matching = [
+    { params: { sort_method: 'property', sort_property_definition_id: id } },
+    { initial: { sortMethod: 'PROPERTY', sortPropertyDefinitionId: id } },
+    { groupBy: { type: 'property', propertyDefinitionId: id } },
+    { initial: { groupBy: { field: 'PROPERTY', propertyDefinitionId: id } } },
+    { params: { group_by: { property: { property_definition_id: id } } } },
+    { propf: { '!': { l: { pd: id, v: { dr: {} } } } } },
+    { propf: { l: { pd: id, v: { dr: { start: '2026-01-01T00:00:00Z' } } } } },
+    {
+      filters: {
+        propertiesFilter: {
+          not: {
+            literal: { propertyDefinitionId: id, value: { dateRange: {} } },
+          },
+        },
+      },
+    },
+  ].map((body) => {
+    const refresh = vi.fn(async () => {});
+    register({ isEnabled: () => true, refresh, body: () => body });
+    return refresh;
+  });
+  const unrelated = [
+    { propf: { l: { pd: id, v: { so: 'option' } } } },
+    { propf: { l: { pd: id, v: { er: 'user' } } } },
+    {
+      params: {
+        sort_method: 'property',
+        sort_property_definition_id: `${id}-other`,
+      },
+    },
+    { groupBy: { type: 'property', propertyDefinitionId: `${id}-other` } },
+  ].map((body) => {
+    const refresh = vi.fn(async () => {});
+    register({ isEnabled: () => true, refresh, body: () => body });
+    return refresh;
+  });
+  await refreshPropertyQueries(id);
+  for (const refresh of matching) expect(refresh).toHaveBeenCalledOnce();
+  for (const refresh of unrelated) expect(refresh).not.toHaveBeenCalled();
+  await refreshPropertyQueries();
+  expect(unrelated[2]).toHaveBeenCalledOnce();
+  expect(unrelated[3]).toHaveBeenCalledOnce();
+  expect(unrelated[0]).not.toHaveBeenCalled();
+  expect(unrelated[1]).not.toHaveBeenCalled();
 });

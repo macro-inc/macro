@@ -1,4 +1,5 @@
 import type { ImportEntity, NotionImportReport } from '@queries/import';
+import { match } from 'ts-pattern';
 import { z } from 'zod';
 import type {
   ImportDraft,
@@ -7,7 +8,7 @@ import type {
 } from '../core/import-plan';
 
 const importDraftSchema = z.object({
-  source: z.literal('notion'),
+  source: z.enum(['notion', 'linear', 'jira']),
   excluded: z.array(z.string()).optional(),
   shared: z.array(z.string()).optional(),
   personal: z.array(z.string()).optional(),
@@ -18,7 +19,7 @@ export function decodeImportDraft(draft: unknown): ImportDraft | undefined {
   const parsed = importDraftSchema.safeParse(draft);
   if (!parsed.success) return undefined;
   return {
-    source: 'notion',
+    source: parsed.data.source,
     excluded: parsed.data.excluded ?? [],
     shared: parsed.data.shared ?? [],
     personal: parsed.data.personal ?? [],
@@ -54,13 +55,17 @@ const planMetadataSchema = z.object({
   }),
 });
 
-/** The Notion plan rows presented by one review, in ledger order. */
+/** The workspace plan rows presented by one review, in ledger order. */
 export function decodePlanEntries(
   entities: ImportEntity[],
   reviewId: string
 ): ImportPlanEntry[] {
   return entities.flatMap((entity): ImportPlanEntry[] => {
-    if (entity.source !== 'notion' || entity.review_id !== reviewId) return [];
+    if (
+      !['notion', 'linear', 'jira'].includes(entity.source) ||
+      entity.review_id !== reviewId
+    )
+      return [];
     const metadata = planMetadataSchema.safeParse(entity.metadata);
     if (!metadata.success) return [];
     const plan = metadata.data.plan;
@@ -68,7 +73,16 @@ export function decodePlanEntries(
       {
         id: entity.id,
         parentId: entity.parent_id ?? null,
-        kind: entity.kind === 'data_source' ? 'database' : 'page',
+        kind: match(entity.kind)
+          .with('data_source', () => 'database' as const)
+          .with('issue', 'jira_issue', () => 'task' as const)
+          .with(
+            'project',
+            'jira_project',
+            'jira_epic',
+            () => 'project' as const
+          )
+          .otherwise(() => 'page' as const),
         title: metadata.data.title,
         decision: plan.decision ?? null,
         reason: plan.reason ?? null,
@@ -94,9 +108,11 @@ export function decodePlanEntries(
 }
 
 export function decodeImportProgress(
-  report: NotionImportReport
+  report: NotionImportReport,
+  source: ImportDraft['source'] = 'notion'
 ): ImportProgress {
   return {
+    warnings: report.warnings ?? [],
     reviewId: report.reviewId ?? null,
     status: report.status ?? null,
     error: report.error ?? null,
@@ -108,8 +124,9 @@ export function decodeImportProgress(
       : null,
     onTeam: report.onTeam ?? false,
     counts: {
-      pages: report.pages,
-      databases: report.dataSources,
+      pages: source === 'notion' ? report.pages : (report.issues ?? 0),
+      databases:
+        source === 'notion' ? report.dataSources : (report.projects ?? 0),
       copy: report.copy,
       tasks: report.tasks,
       skip: report.skip,

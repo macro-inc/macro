@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO whatsapp_inbound_event (account_id, event_id, generation, payload, state, retry_at)\n        VALUES ($1, $2, $3, $4, $5, now() + interval '10 seconds')\n        ON CONFLICT (account_id, event_id) DO UPDATE SET state = excluded.state, attempts = whatsapp_inbound_event.attempts + 1,\n            retry_at = now() + least(interval '10 seconds' * power(2, whatsapp_inbound_event.attempts), interval '1 hour')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Jsonb",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "38e0d2ec0db800b5070cd9e40ce022cf16e7f41294bc15951a7da3ba04422bcf"
+}

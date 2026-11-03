@@ -1,4 +1,4 @@
-import Calendar from '@phosphor/calendar-blank.svg';
+import Calendar from '@icon/system/regular/calendar-blank.svg';
 import { Button, Tabs } from '@ui';
 import { For, Show } from 'solid-js';
 import type { BookingDateGroup, BookingTab } from '../core/booking-list';

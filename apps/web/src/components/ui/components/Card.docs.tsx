@@ -1,6 +1,6 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
-import FileText from '@phosphor/file-text.svg';
-import Terminal from '@phosphor/terminal.svg';
+import FileText from '@icon/system/regular/file-text.svg';
+import Terminal from '@icon/system/regular/terminal.svg';
 import { createSignal, For, Show } from 'solid-js';
 import { Button } from './Button';
 import { Card } from './Card';

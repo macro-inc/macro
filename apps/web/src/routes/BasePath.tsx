@@ -63,7 +63,7 @@ function SessionVerificationFallback(props: {
         class="mt-2"
         disabled={retrying()}
         onClick={handleRetry}
-        variant="outline"
+        variant="secondary"
       >
         {retrying() ? 'Retrying…' : 'Retry'}
       </Button>

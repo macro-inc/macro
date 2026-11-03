@@ -13,6 +13,7 @@ import { EventGuests } from './EventGuests';
 
 const mocks = vi.hoisted(() => ({
   invite: vi.fn(),
+  forward: vi.fn(),
   success: vi.fn(),
   failure: vi.fn(),
   alert: vi.fn(),
@@ -51,6 +52,11 @@ vi.mock('@queries/calendar/mutations', () => ({
     (error as { code?: string }).code === 'guests_cannot_invite',
   isGuestListHiddenRefusal: (error: unknown) =>
     (error as { code?: string }).code === 'guest_list_hidden',
+}));
+vi.mock('@queries/calendar/forward', () => ({
+  useForwardCalendarEventMutation: () => ({ mutateAsync: mocks.forward }),
+  isForwardRecipientRefusal: (error: unknown) =>
+    (error as { code?: string }).code === 'invalid_recipients',
 }));
 // The picker itself is the composer's and is tested there; this stand-in
 // offers every pool member it is not told to exclude.
@@ -156,11 +162,16 @@ function event(overrides: Partial<CalendarEvent> = {}): CalendarEvent {
   };
 }
 
-function renderGuests(current: CalendarEvent, invitesEnabled = true) {
+function renderGuests(
+  current: CalendarEvent,
+  invitesEnabled = true,
+  forwardEnabled = true
+) {
   render(() => {
     const invites = createGuestInviteController(
       () => current,
-      () => invitesEnabled
+      () => invitesEnabled,
+      () => forwardEnabled
     );
     return (
       <EventGuests event={current} invites={invites} closeDetails={vi.fn()} />
@@ -168,9 +179,19 @@ function renderGuests(current: CalendarEvent, invitesEnabled = true) {
   });
 }
 
+const RESTRICTED = 'Only the organizer can invite guests.';
+const HIDDEN =
+  'Guests cannot be added while the organizer hides the guest list.';
+const FORWARD_INSTEAD =
+  "You can forward the invitation instead. The people you send it to get the event by email but won't be on the guest list.";
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.invite.mockResolvedValue('sent');
+  mocks.forward.mockResolvedValue({
+    messageId: 'message-1',
+    threadId: 'thread-1',
+  });
   Element.prototype.scrollIntoView = vi.fn();
   vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 });
@@ -301,19 +322,24 @@ describe('adding guests from event details', () => {
     expect(mocks.success).not.toHaveBeenCalled();
   });
 
-  it('explains instead of offering the action when the organizer does not let guests invite', () => {
+  it('explains and offers to forward instead when the organizer does not let guests invite', () => {
     renderGuests(event({ viewerCan: { ...MAY_INVITE, inviteGuests: false } }));
 
     expect(screen.queryByRole('button', { name: 'Add guests' })).toBeNull();
+    expect(screen.getByText(`${RESTRICTED} ${FORWARD_INSTEAD}`)).toBeTruthy();
     expect(
-      screen.getByText('Only the organizer can invite guests.')
+      screen.getByRole('button', { name: 'Forward invitation' })
     ).toBeTruthy();
   });
 
   it('switches to the explanation once the organizer turns inviting off', () => {
     const [current, setCurrent] = createSignal(event());
     render(() => {
-      const invites = createGuestInviteController(current, () => true);
+      const invites = createGuestInviteController(
+        current,
+        () => true,
+        () => true
+      );
       return (
         <EventGuests
           event={current()}
@@ -338,9 +364,7 @@ describe('adding guests from event details', () => {
     );
 
     expect(screen.queryByRole('button', { name: 'Add guests' })).toBeNull();
-    expect(
-      screen.getByText('Only the organizer can invite guests.')
-    ).toBeTruthy();
+    expect(screen.getByText(`${RESTRICTED} ${FORWARD_INSTEAD}`)).toBeTruthy();
   });
 
   it('switches to the explanation when the organizer refuses the invitation', async () => {
@@ -354,14 +378,11 @@ describe('adding guests from event details', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Send invitations' }));
 
-    await waitFor(() =>
-      expect(mocks.failure).toHaveBeenCalledWith(
-        'Only the organizer can invite guests.'
-      )
-    );
+    await waitFor(() => expect(mocks.failure).toHaveBeenCalledWith(RESTRICTED));
     expect(screen.queryByRole('button', { name: 'Add guests' })).toBeNull();
+    expect(screen.getByText(`${RESTRICTED} ${FORWARD_INSTEAD}`)).toBeTruthy();
     expect(
-      screen.getByText('Only the organizer can invite guests.')
+      screen.getByRole('button', { name: 'Forward invitation' })
     ).toBeTruthy();
     expect(mocks.success).not.toHaveBeenCalled();
   });
@@ -382,14 +403,11 @@ describe('adding guests from event details', () => {
     expect(screen.getByText('Guest list hidden')).toBeTruthy();
     expect(screen.queryByText('1 attendee')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Add guests' })).toBeNull();
+    expect(screen.getByText(`${HIDDEN} ${FORWARD_INSTEAD}`)).toBeTruthy();
+    expect(screen.queryByText(RESTRICTED, { exact: false })).toBeNull();
     expect(
-      screen.getByText(
-        'Guests cannot be added while the organizer hides the guest list.'
-      )
+      screen.getByRole('button', { name: 'Forward invitation' })
     ).toBeTruthy();
-    expect(
-      screen.queryByText('Only the organizer can invite guests.')
-    ).toBeNull();
   });
 
   it('offers no guest addresses to copy while the organizer hides the guest list', () => {
@@ -422,11 +440,9 @@ describe('adding guests from event details', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Send invitations' }));
 
-    const reason =
-      'Guests cannot be added while the organizer hides the guest list.';
-    await waitFor(() => expect(mocks.failure).toHaveBeenCalledWith(reason));
+    await waitFor(() => expect(mocks.failure).toHaveBeenCalledWith(HIDDEN));
     expect(screen.queryByRole('button', { name: 'Add guests' })).toBeNull();
-    expect(screen.getByText(reason)).toBeTruthy();
+    expect(screen.getByText(`${HIDDEN} ${FORWARD_INSTEAD}`)).toBeTruthy();
   });
 
   it('offers no guest addresses to copy or email when the viewer is the only guest', () => {
@@ -445,14 +461,194 @@ describe('adding guests from event details', () => {
   });
 
   it('keeps today’s guest actions while guest invites are off', () => {
-    renderGuests(event(), false);
+    renderGuests(event(), false, false);
 
     expect(
       screen.getByRole('button', { name: 'Copy guest emails' })
     ).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Add guests' })).toBeNull();
+    expect(screen.queryByText(RESTRICTED, { exact: false })).toBeNull();
+  });
+});
+
+const CANNOT_INVITE = { ...MAY_INVITE, inviteGuests: false };
+
+describe('forwarding the invitation from event details', () => {
+  it('sends the picked people the event from the viewer’s copy, as Add guests picks them', async () => {
+    const user = userEvent.setup();
+    renderGuests(
+      event({
+        viewerCan: CANNOT_INVITE,
+        recurrenceLines: ['RRULE:FREQ=WEEKLY'],
+      })
+    );
+
+    await user.click(
+      screen.getByRole('button', { name: 'Forward invitation' })
+    );
+    const invited = screen.getByRole('list', { name: 'Invited guests' });
+    expect(invited.textContent).toContain('host@example.com');
+    // A forward sends the series file, so there is no occurrence to pick.
+    expect(screen.queryByRole('radio', { name: 'This event' })).toBeNull();
     expect(
-      screen.queryByText('Only the organizer can invite guests.')
+      screen.getByText(
+        "They'll get the event by email but won't appear in the guest list."
+      )
+    ).toBeTruthy();
+    await user.click(
+      screen.getByRole('button', { name: 'Suggest Ada Lovelace' })
+    );
+    expect(
+      screen.getByRole('list', { name: 'Forward to' }).textContent
+    ).toContain('Ada Lovelace');
+    await user.click(screen.getByRole('button', { name: 'Forward' }));
+
+    expect(mocks.forward).toHaveBeenCalledTimes(1);
+    const [args] = mocks.forward.mock.calls[0];
+    expect(args.eventId).toBe('event-1');
+    expect(args.recipients).toEqual([
+      { email: 'ada@example.com', name: 'Ada Lovelace' },
+    ]);
+    // The summary alone: the server adds the note for the kind it sends.
+    expect(args.bodyText).toMatch(/^Planning\n/);
+    expect(args.bodyText).not.toContain('forwarded to you');
+    expect(
+      screen
+        .getByRole('button', { name: 'Forward invitation' })
+        .getAttribute('aria-expanded')
+    ).toBe('false');
+    await waitFor(() =>
+      expect(mocks.success).toHaveBeenCalledWith(
+        'Invitation forwarded to Ada Lovelace'
+      )
+    );
+    expect(mocks.invite).not.toHaveBeenCalled();
+  });
+
+  it('sends with Cmd+Enter and names how many people it reached', async () => {
+    const user = userEvent.setup();
+    renderGuests(event({ viewerCan: CANNOT_INVITE }));
+
+    await user.click(
+      screen.getByRole('button', { name: 'Forward invitation' })
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Suggest Ada Lovelace' })
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Suggest Grace Hopper' })
+    );
+    screen.getByRole('textbox', { name: 'Search for guests' }).focus();
+    await user.keyboard('{Meta>}{Enter}{/Meta}');
+
+    await waitFor(() =>
+      expect(mocks.success).toHaveBeenCalledWith(
+        'Invitation forwarded to 2 people'
+      )
+    );
+  });
+
+  it('offers Retry when the email could not be sent, and Retry sends it again', async () => {
+    mocks.forward.mockRejectedValueOnce({ code: 'send_failed' });
+    const user = userEvent.setup();
+    renderGuests(event({ viewerCan: CANNOT_INVITE }));
+
+    await user.click(
+      screen.getByRole('button', { name: 'Forward invitation' })
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Suggest Ada Lovelace' })
+    );
+    await user.click(screen.getByRole('button', { name: 'Forward' }));
+
+    await waitFor(() => expect(mocks.failure).toHaveBeenCalledTimes(1));
+    const [message, options] = mocks.failure.mock.calls[0];
+    expect(message).toBe('Could not forward the invitation');
+    expect(
+      options.actions.map((action: { label: string }) => action.label)
+    ).toEqual(['Retry']);
+    options.actions[0].onClick();
+    await waitFor(() =>
+      expect(mocks.success).toHaveBeenCalledWith(
+        'Invitation forwarded to Ada Lovelace'
+      )
+    );
+    expect(mocks.forward).toHaveBeenCalledTimes(2);
+    expect(mocks.forward.mock.calls[1][0]).toEqual(
+      mocks.forward.mock.calls[0][0]
+    );
+  });
+
+  it('shows why the recipients were refused, without a retry that cannot help', async () => {
+    mocks.forward.mockRejectedValueOnce({ code: 'invalid_recipients' });
+    const user = userEvent.setup();
+    renderGuests(event({ viewerCan: CANNOT_INVITE }));
+
+    await user.click(
+      screen.getByRole('button', { name: 'Forward invitation' })
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Suggest Ada Lovelace' })
+    );
+    await user.click(screen.getByRole('button', { name: 'Forward' }));
+
+    await waitFor(() => expect(mocks.failure).toHaveBeenCalledTimes(1));
+    const [message, options] = mocks.failure.mock.calls[0];
+    expect(message).toBe('Could not forward the invitation');
+    expect(options.actions).toBeUndefined();
+  });
+
+  it('offers nothing on a snapshot, a cancelled event, or while forwarding is off', () => {
+    renderGuests(
+      event({
+        isSnapshot: true,
+        viewerCan: { ...CANNOT_INVITE, rsvp: false },
+      })
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Forward invitation' })
+    ).toBeNull();
+    cleanup();
+
+    renderGuests(event({ viewerCan: CANNOT_INVITE, isCancelled: true }));
+    expect(
+      screen.queryByRole('button', { name: 'Forward invitation' })
+    ).toBeNull();
+    cleanup();
+
+    renderGuests(event({ viewerCan: CANNOT_INVITE }), true, false);
+    expect(
+      screen.queryByRole('button', { name: 'Forward invitation' })
+    ).toBeNull();
+    expect(screen.getByText(RESTRICTED)).toBeTruthy();
+  });
+
+  it('forwards whether or not guest invites are on, since it adds no guests', () => {
+    renderGuests(event({ viewerCan: CANNOT_INVITE }), false, true);
+    expect(
+      screen.getByRole('button', { name: 'Forward invitation' })
+    ).toBeTruthy();
+    expect(screen.getByText(`${RESTRICTED} ${FORWARD_INSTEAD}`)).toBeTruthy();
+  });
+
+  it('offers nothing on a team projection or a read-only copy', () => {
+    renderGuests(
+      event({
+        viewerCan: CANNOT_INVITE,
+        teamProjection: {
+          ownerId: 'macro|teammate@example.com',
+          kind: 'details',
+        },
+      })
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Forward invitation' })
+    ).toBeNull();
+    cleanup();
+
+    renderGuests(event({ viewerCan: CANNOT_INVITE, isReadOnly: true }));
+    expect(
+      screen.queryByRole('button', { name: 'Forward invitation' })
     ).toBeNull();
   });
 });

@@ -31,8 +31,11 @@ import {
   useInfiniteQuery,
 } from '@tanstack/solid-query';
 import { type Accessor, onCleanup } from 'solid-js';
+import type { QueryRevalidation } from '../../graphql-cache/exchange/optimistic';
 import { queryClient } from '../client';
 import { registerActiveGraphqlSoupQuery } from './graphql/active-queries';
+import type { PredicateQueryStatus } from './graphql/create-predicate-query';
+import type { SoupEntityRef } from './graphql/entity-input';
 import { createGraphqlGroupedSoupAstItemsQuery } from './graphql/grouped-items';
 import { createGraphqlSoupAstItemsQuery } from './graphql/items';
 import { soupPageTimestamp } from './page-timestamp';
@@ -72,6 +75,8 @@ interface SoupItemsQueryOptions {
   staleTime?: StaleTime;
   /** Channel navigation reads bounded unread evidence, not notification history. */
   graphqlProjection?: 'channel-list';
+  /** Known entity identities for cache-first lookups. */
+  graphqlCacheFirstEntities?: readonly SoupEntityRef[];
   /** Seed mixed lists from indexed non-email members; keep the full server query. */
   graphqlLocalReconciliation?: 'without-email';
   meta?: {
@@ -186,6 +191,8 @@ async function fetchRestSoupAstItemsPage(
             group_by: serializeGroupByField(groupBy),
             per_group_limit: params.limit,
             sort_method,
+            sort_property_definition_id: params.sort_property_definition_id,
+            sort_direction: params.sort_direction,
           },
           body,
           signal,
@@ -351,6 +358,7 @@ export type SoupAstItemsQuery = {
   readonly groupedPaging?: import('./graphql/create-grouped-soup-live-query').GroupedSoupPaging;
   readonly data: SoupAstItemsData | undefined;
   readonly error: Error | null;
+  readonly fetchError?: Error | null;
   /** Includes paused initial requests, whose data resource is not readable yet. */
   readonly isPending: boolean;
   readonly isLoading: boolean;
@@ -365,6 +373,9 @@ export type SoupAstItemsQuery = {
   readonly isEnabled: boolean;
   readonly hasNextPage: boolean;
   readonly transport: SoupAstItemsQueryTransport;
+  readonly cacheStatus?: PredicateQueryStatus;
+  /** GraphQL reads used by transport-specific revalidation subscribers. */
+  readonly revalidationQueries?: readonly QueryRevalidation[];
   fetchNextPage(): Promise<void>;
   refetch(): Promise<void>;
   /** Discards continuation pages while retaining the initial page. */
@@ -401,6 +412,7 @@ export function useSoupAstItemsQuery(
       networkPaused: options?.().networkPaused,
       keepPreviousData: options?.().keepPreviousData,
       projection: options?.().graphqlProjection,
+      cacheFirstEntities: options?.().graphqlCacheFirstEntities,
       localReconciliation: options?.().graphqlLocalReconciliation,
       showSupportedForeignEntities: options?.().showSupportedForeignEntities,
     })
@@ -439,14 +451,21 @@ export function useSoupAstItemsQuery(
         usesGraphql() &&
         activeGraphqlQuery().isEnabled() &&
         !options?.().networkPaused,
+      // The refresh refetches every loaded page in cursor order and keeps the
+      // old pages on screen until their replacements arrive, so a mutation
+      // never collapses a scrolled list to its first page.
       refresh: async () => {
-        if (args().groupBy === undefined) {
-          activeGraphqlQuery().resetToInitialPage();
+        if (args().groupBy === undefined)
           options?.().onBeforeGraphqlRefresh?.();
-        }
         await activeGraphqlQuery().refresh();
       },
-      body: () => args().body,
+      body: () => ({
+        ...args().body,
+        params: args().params,
+        groupBy: args().groupBy,
+      }),
+      // Grouped lists don't report it yet, so writes still read them again.
+      cacheMaintained: () => activeGraphqlQuery().cacheMaintained?.() ?? false,
     })
   );
 
@@ -476,6 +495,11 @@ export function useSoupAstItemsQuery(
       return usesGraphql()
         ? (activeGraphqlQuery().error() ?? null)
         : (restQuery.error ?? null);
+    },
+    get fetchError() {
+      if (!usesGraphql()) return restQuery.error ?? null;
+      const query = activeGraphqlQuery();
+      return query.fetchError?.() ?? query.error() ?? null;
     },
     get isPending() {
       if (!usesGraphql()) return restQuery.isPending;
@@ -522,6 +546,16 @@ export function useSoupAstItemsQuery(
     },
     get transport() {
       return usesGraphql() ? 'graphql' : 'rest';
+    },
+    get cacheStatus() {
+      return usesGraphql()
+        ? (activeGraphqlQuery().cacheStatus?.() ?? 'unsupported')
+        : 'unsupported';
+    },
+    get revalidationQueries() {
+      return usesGraphql()
+        ? (activeGraphqlQuery().revalidationQueries?.() ?? [])
+        : [];
     },
     async fetchNextPage() {
       if (usesGraphql()) {

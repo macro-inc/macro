@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_graphql::{Context, ID, Object, dataloader::DataLoader};
-use graphql_common::GraphqlSoupEntityType;
+use graphql_common::{GraphqlEntityType, GraphqlSoupEntityType};
 use model_notifications::NotifEvent;
 use notification::domain::models::UserNotificationRow;
 
@@ -56,7 +56,7 @@ impl TryFrom<UserNotificationRow<serde_json::Value>> for GraphqlNotification {
     }
 }
 
-/// A notification associated with a Soup entity.
+/// A notification associated with a shared entity, including entities outside Soup.
 #[Object]
 impl GraphqlNotification {
     /// The notification identifier.
@@ -69,9 +69,17 @@ impl GraphqlNotification {
         &self.as_ref().notification_event_type
     }
 
-    /// The type of the associated entity.
+    /// The Soup type of the associated entity.
+    #[graphql(
+        deprecation = "Use targetEntityType, which also covers entities outside Soup. Remove after 2026-12-01."
+    )]
     async fn entity_type(&self) -> GraphqlSoupEntityType {
         GraphqlSoupEntityType::new(self.as_ref().entity.entity_type)
+    }
+
+    /// The type of the associated entity, including entities outside Soup.
+    async fn target_entity_type(&self) -> GraphqlEntityType {
+        GraphqlEntityType::new(self.as_ref().entity.entity_type)
     }
 
     /// The identifier of the associated entity.

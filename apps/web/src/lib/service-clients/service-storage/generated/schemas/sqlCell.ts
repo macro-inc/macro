@@ -7,6 +7,7 @@
 import type { SqlCellOneOf } from './sqlCellOneOf';
 import type { SqlCellOneOfFive } from './sqlCellOneOfFive';
 import type { SqlCellOneOfNine } from './sqlCellOneOfNine';
+import type { SqlCellOneOfOnefive } from './sqlCellOneOfOnefive';
 import type { SqlCellOneOfOneone } from './sqlCellOneOfOneone';
 import type { SqlCellOneOfOnethree } from './sqlCellOneOfOnethree';
 import type { SqlCellOneOfSeven } from './sqlCellOneOfSeven';
@@ -23,4 +24,5 @@ export type SqlCell =
   | SqlCellOneOfSeven
   | SqlCellOneOfNine
   | SqlCellOneOfOneone
-  | SqlCellOneOfOnethree;
+  | SqlCellOneOfOnethree
+  | SqlCellOneOfOnefive;

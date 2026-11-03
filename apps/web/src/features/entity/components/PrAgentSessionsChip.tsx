@@ -1,4 +1,4 @@
-import SparkleIcon from '@phosphor/sparkle.svg';
+import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import { Button, cn, Dropdown } from '@ui';
 import type { ParentProps } from 'solid-js';
 import { rowPillTriggerClasses } from './row-pill';
@@ -22,12 +22,12 @@ export function PrAgentSessionChip(props: {
 }) {
   return (
     <Button
+      aria-label={`Open agent session: ${props.label}`}
+      tooltip={`Open agent session: ${props.label}`}
       variant="ghost"
       size="xs"
-      noTouchResize
       class={cn(rowPillTriggerClasses('max-w-48'), props.class)}
       title={props.label}
-      label={`Open agent session: ${props.label}`}
       disabled={props.disabled}
       onClick={(event) => {
         event.stopPropagation();
@@ -54,12 +54,12 @@ export function PrAgentSessionsCountChip(
   return (
     <Dropdown open={props.open} onOpenChange={props.onOpenChange}>
       <Dropdown.Trigger
+        aria-label={`Show ${label()}`}
+        tooltip={`Show ${label()}`}
         variant="ghost"
         size="xs"
-        noTouchResize
         class={cn(rowPillTriggerClasses('max-w-48'), props.class)}
         title={label()}
-        label={`Show ${label()}`}
         onClick={(event: MouseEvent) => event.stopPropagation()}
         onKeyDown={(event: KeyboardEvent) => {
           if (event.key === 'Enter' || event.key === ' ')

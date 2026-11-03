@@ -76,6 +76,7 @@ function mount() {
       search: '',
       inboxIds: undefined,
       facets: {},
+      focusSort: 'importance',
       collapsedSidebarSectionIds: [],
     });
     return useScheduledEmailSource(state);

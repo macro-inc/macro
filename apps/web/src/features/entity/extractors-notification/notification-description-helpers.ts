@@ -108,7 +108,11 @@ export function getActionVerb(type: NotificationType): string {
       .with('entity_access_granted', () => 'granted access')
       .with('commented_on_document', 'crm_discussion', () => 'commented')
       .with('channel_message_reply', () => 'replied')
-      .with('channel_message_send', () => 'sent a message')
+      .with(
+        'channel_message_send',
+        'external_chat_message',
+        () => 'sent a message'
+      )
       .with('channel_message_reaction', () => 'reacted to your message')
       .with('ai_response', () => 'AI responded')
       .with('new_email', () => 'sent an email')
@@ -130,6 +134,7 @@ export function getActionVerb(type: NotificationType): string {
       .with('agent_session_settled', () => 'finished')
       .with('agent_session_waiting_for_input', () => 'needs your answer')
       .with('agent_session_mentioned', () => 'mentioned you')
+      .with('routine_run_finished', () => 'ran')
       .exhaustive(() => 'updated')
   );
 }
@@ -141,7 +146,9 @@ export function getActionVerb(type: NotificationType): string {
 export function getTypeNoun(type: NotificationType, count: number): string {
   return match(type)
     .with('channel_message_reply', () => (count === 1 ? 'reply' : 'replies'))
-    .with('channel_message_send', () => (count === 1 ? 'message' : 'messages'))
+    .with('channel_message_send', 'external_chat_message', () =>
+      count === 1 ? 'message' : 'messages'
+    )
     .with('channel_message_reaction', () =>
       count === 1 ? 'reaction' : 'reactions'
     )
@@ -195,6 +202,9 @@ export function getTypeNoun(type: NotificationType, count: number): string {
     )
     .with('agent_session_mentioned', () =>
       count === 1 ? 'mention' : 'mentions'
+    )
+    .with('routine_run_finished', () =>
+      count === 1 ? 'routine run' : 'routine runs'
     )
     .exhaustive(() => (count === 1 ? 'notification' : 'notifications'));
 }

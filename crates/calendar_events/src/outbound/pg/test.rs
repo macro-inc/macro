@@ -1112,8 +1112,7 @@ async fn expired_google_worker_cannot_resurrect_reconciled_provider_data(pool: P
         upsert: google.clone(),
     })
     .await
-    .unwrap()
-    .event_id;
+    .unwrap();
 
     sqlx::query!(
         r#"
@@ -2509,6 +2508,146 @@ async fn sync_status_reflects_visible_account_ingestion_state(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn only_a_first_google_import_reports_syncing(pool: PgPool) {
+    let owner_id = "macro|calendar-routine-sync@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let enabled = repo
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
+        .await
+        .unwrap();
+    let (account_id, _) = provider_ids(&repo, link_id).await;
+    let google_job = enabled
+        .jobs
+        .into_iter()
+        .find(|job| job.kind == CalendarBackfillKind::GoogleCalendar)
+        .unwrap();
+    let key = CalendarBackfillJobKey {
+        job_id: google_job.id,
+        email_link_id: link_id,
+    };
+
+    let CalendarBackfillClaim::Claimed { lease_token, .. } =
+        repo.claim_google_backfill(key).await.unwrap()
+    else {
+        panic!("the first import should be claimable");
+    };
+    repo.mark_google_account_syncing(key, lease_token)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.sync_status(owner_id).await.unwrap(),
+        CalendarSyncStatus::Syncing
+    );
+    repo.reconcile_google_calendar_list(key, lease_token, account_id, Vec::new())
+        .await
+        .unwrap();
+    repo.complete_google_backfill(key, lease_token)
+        .await
+        .unwrap();
+
+    assert!(repo.schedule_google_sync_for_link(link_id).await.unwrap());
+    let CalendarBackfillClaim::Claimed { lease_token, .. } =
+        repo.claim_google_backfill(key).await.unwrap()
+    else {
+        panic!("the routine run should be claimable");
+    };
+    repo.mark_google_account_syncing(key, lease_token)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.sync_status(owner_id).await.unwrap(),
+        CalendarSyncStatus::Ready
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn retiring_sources_raises_the_team_hint_only_for_out_of_office_ones(pool: PgPool) {
+    let owner_id = "macro|calendar-retired-hint@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let enabled = repo
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
+        .await
+        .unwrap();
+    let (account_id, calendar_id) = provider_ids(&repo, link_id).await;
+    let provider = (account_id, calendar_id);
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+    let out_of_office = repo
+        .upsert_event_fixture(member_primary_upsert(
+            owner_id,
+            link_id,
+            provider,
+            "retired-ooo@example.com",
+            starts_at,
+        ))
+        .await
+        .unwrap();
+    let meeting = repo
+        .upsert_event_fixture(timed_upsert(
+            owner_id,
+            link_id,
+            provider,
+            "retired-meeting@example.com",
+            "Weekly sync",
+            1,
+        ))
+        .await
+        .unwrap();
+    let google_job = enabled
+        .jobs
+        .into_iter()
+        .find(|job| job.kind == CalendarBackfillKind::GoogleCalendar)
+        .unwrap();
+    let key = CalendarBackfillJobKey {
+        job_id: google_job.id,
+        email_link_id: link_id,
+    };
+    let CalendarBackfillClaim::Claimed { lease_token, .. } =
+        repo.claim_google_backfill(key).await.unwrap()
+    else {
+        panic!("Google job should be claimable");
+    };
+
+    let retired = repo
+        .commit_google_calendar_sync(
+            key,
+            lease_token,
+            account_id,
+            GoogleCalendarSyncSnapshot {
+                calendar_id,
+                next_sync_token: "next".to_string(),
+                observed_provider_event_ids: None,
+                materialized_range: None,
+                cancelled_provider_event_ids: vec![
+                    "provider-retired-ooo@example.com".to_string(),
+                    "provider-retired-meeting@example.com".to_string(),
+                ],
+            },
+            0,
+        )
+        .await
+        .unwrap();
+
+    let hint_of = |event_id: Uuid| {
+        retired
+            .iter()
+            .find(|outcome| outcome.event_id == event_id)
+            .map(|outcome| outcome.team_ooo_changed)
+    };
+    assert_eq!(hint_of(out_of_office), Some(true));
+    assert_eq!(hint_of(meeting), Some(false));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn unchanged_google_projection_skips_the_write_path(pool: PgPool) {
     let owner_id = "macro|calendar-idempotent@example.com";
     let link_id = insert_link(&pool, owner_id).await;
@@ -3656,8 +3795,7 @@ async fn removing_a_google_source_restores_the_surviving_calendar_copy(pool: PgP
     });
     repo.upsert_event(CalendarEventWrite::UserMutation(team_copy))
         .await
-        .unwrap()
-        .event_id;
+        .unwrap();
 
     repo.remove_provider_source(account_id, primary_id, "provider-shared-remove@example.com")
         .await
@@ -4353,8 +4491,7 @@ async fn conference_provider_round_trips_through_persistence(pool: PgPool) {
     upsert.event.conference_provider = Some(ConferenceProvider::GoogleMeet);
     repo.upsert_event(CalendarEventWrite::UserMutation(upsert))
         .await
-        .unwrap()
-        .event_id;
+        .unwrap();
 
     let starts_at = Utc.with_ymd_and_hms(2026, 7, 24, 0, 0, 0).unwrap();
     let ends_at = starts_at + Duration::days(2);
@@ -4774,14 +4911,14 @@ async fn mention_previews_resolve_through_the_shared_uid(pool: PgPool) {
 }
 
 async fn share_with_channel(pool: &PgPool, event_id: Uuid, channel_id: Uuid) {
-    sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
         VALUES ($1, 'calendar_event', $2::uuid::text, 'channel', 'view')
         "#,
+        event_id,
+        channel_id,
     )
-    .bind(event_id)
-    .bind(channel_id)
     .execute(pool)
     .await
     .unwrap();
@@ -4789,20 +4926,20 @@ async fn share_with_channel(pool: &PgPool, event_id: Uuid, channel_id: Uuid) {
 
 async fn insert_channel(pool: &PgPool, owner_id: &str, members: &[&str]) -> Uuid {
     let channel_id = Uuid::now_v7();
-    sqlx::query(
+    sqlx::query!(
         "INSERT INTO comms_channels (id, channel_type, owner_id) VALUES ($1, 'private', $2)",
+        channel_id,
+        owner_id,
     )
-    .bind(channel_id)
-    .bind(owner_id)
     .execute(pool)
     .await
     .unwrap();
     for member in members {
-        sqlx::query(
+        sqlx::query!(
             "INSERT INTO comms_channel_participants (channel_id, user_id, role) VALUES ($1, $2, 'member')",
+            channel_id,
+            *member,
         )
-        .bind(channel_id)
-        .bind(*member)
         .execute(pool)
         .await
         .unwrap();
@@ -4872,11 +5009,11 @@ async fn mention_previews_fall_back_to_a_channel_shared_projection(pool: PgPool)
         &[author_id, attendee_id, member_id, former_id],
     )
     .await;
-    sqlx::query(
+    sqlx::query!(
         "UPDATE comms_channel_participants SET left_at = now() WHERE channel_id = $1 AND user_id = $2",
+        channel_id,
+        former_id,
     )
-    .bind(channel_id)
-    .bind(former_id)
     .execute(&pool)
     .await
     .unwrap();
@@ -4944,11 +5081,13 @@ async fn mention_previews_fall_back_to_a_channel_shared_projection(pool: PgPool)
     }
 
     // A cancelled event no longer previews for anyone.
-    sqlx::query("UPDATE calendar_events SET status = 'cancelled' WHERE id = $1")
-        .bind(shared_event_id)
-        .execute(&pool)
-        .await
-        .unwrap();
+    sqlx::query!(
+        "UPDATE calendar_events SET status = 'cancelled' WHERE id = $1",
+        shared_event_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     let previews = repo
         .mention_previews(member_id, vec![request(shared_event_id)], now)
         .await
@@ -6159,6 +6298,7 @@ async fn retiring_the_primary_copy_promotes_the_shared_copy(pool: PgPool) {
             event_id,
             owner_id: member.to_string(),
             deleted: false,
+            team_ooo_changed: true,
         }]
     );
     let content = entity_content(&pool, event_id).await;
@@ -6373,6 +6513,7 @@ async fn canonical_selection_skips_copies_on_deleted_calendars(pool: PgPool) {
             event_id,
             owner_id: member.to_string(),
             deleted: true,
+            team_ooo_changed: false,
         }]
     );
 }
@@ -7259,23 +7400,27 @@ async fn retiring_an_unrelated_copy_keeps_a_fresher_schedule_written_through_ano
 mod changes;
 mod channel_grants;
 mod details;
+mod event_labels;
 mod export;
+mod guest_policy;
 mod invitations;
 mod join_requests;
 mod meeting_copies;
 mod meeting_uid;
-#[cfg(feature = "notes")]
-mod notes;
+mod mention_join_link;
+mod organizer_calendar;
 mod source_access;
 
 mod replacement;
 
 async fn link_email(pool: &PgPool, link_id: Uuid) -> String {
-    sqlx::query_scalar("SELECT email_address FROM email_links WHERE id = $1")
-        .bind(link_id)
-        .fetch_one(pool)
-        .await
-        .unwrap()
+    sqlx::query_scalar!(
+        r#"SELECT email_address::text AS "email_address!" FROM email_links WHERE id = $1"#,
+        link_id,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
 }
 
 fn attendee(email: &str, is_organizer: bool) -> CalendarAttendee {

@@ -20,9 +20,35 @@ import { LK_DISCONNECT_REASON } from './livekit-loader';
 
 export const JOIN_TIMEOUT_MS = 15_000;
 export const LEAVE_TIMEOUT_MS = 10_000;
+/**
+ * How many times a native session still reporting a call the user left is
+ * ended before the lifecycle stops trying, so a native layer that never
+ * reports the end cannot spin the leave loop.
+ */
+const MAX_ENDED_CALL_RELEASES = 2;
 const ALREADY_IN_CALL_MESSAGE =
   "You're already in another call. Leave your current call before joining a new one.";
 export type CallIdentity = { channelId: string; callId: string | null };
+/** What started a join, recorded with the joined event. */
+export type JoinSource =
+  /** A Join control the user pressed. */
+  | 'user'
+  /** A `join_call` deep link: an answered ring or a notification tap. */
+  | 'deep_link'
+  /** A native session restored while its old leave was settling. */
+  | 'restore'
+  /** Recovery after the transport dropped. */
+  | 'auto_rejoin';
+/** Why a leave ran, recorded with the left event. */
+export type LeaveReason =
+  /** The user pressed Leave in the app. */
+  | 'user_initiated'
+  /** The native call ended: its End button, CallKit, or the server. */
+  | 'native_ended'
+  /** Cleanup for a join that native cancelled before it connected. */
+  | 'join_cancelled'
+  /** A native session still reporting a call the user already left. */
+  | 'stale_native_session';
 
 function sameCall(first: CallIdentity | undefined, second: CallIdentity) {
   return (
@@ -42,12 +68,16 @@ function deferred<T = void>() {
 }
 type Join = ReturnType<typeof deferred<void>> & {
   channelId: string;
+  source: JoinSource;
   onJoin?: () => void;
   restoredCall?: CallIdentity;
 };
 type LeaveResult = { callEnded: boolean } | void;
 type Leave = ReturnType<typeof deferred<LeaveResult>> & {
   channelId: string;
+  /** The call being left, captured when the leave was requested. */
+  call: CallIdentity;
+  reason: LeaveReason;
   startedAt: number;
   options?: CallSessionDisconnectOptions;
   skipServerLeave?: boolean;
@@ -180,12 +210,28 @@ export function createCallLifecycle(options: {
     disconnected: (reason?: DisconnectReason) => void,
     nativeEnded: () => void
   ) => Cleanup;
-  onJoined: (call: CallIdentity) => void;
-  onLeft: (channelId: string) => void;
+  onJoined: (call: CallIdentity, source: JoinSource) => void;
+  onLeft: (call: CallIdentity, reason: LeaveReason) => void;
   reportError: (error: unknown) => void;
 }) {
   let disposed = false;
   const pendingServerLeaves = new Set<Promise<unknown>>();
+  // Calls this user left, by lowercase call id. A native session that still
+  // reports one is a leftover to end, never a session to adopt or restore;
+  // only an explicit join of the channel lets its call back in.
+  const endedCalls = new Map<string, { channelId: string; releases: number }>();
+  function markEnded(call: CallIdentity | undefined) {
+    const key = call?.callId?.toLowerCase();
+    if (!call || !key || endedCalls.has(key)) return;
+    endedCalls.set(key, { channelId: call.channelId, releases: 0 });
+  }
+  function forgetEndedCalls(channelId: string) {
+    for (const [key, ended] of endedCalls) {
+      if (ended.channelId === channelId) endedCalls.delete(key);
+    }
+  }
+  const endedCall = (call: CallIdentity) =>
+    call.callId ? endedCalls.get(call.callId.toLowerCase()) : undefined;
   async function leaveServer(channelId: string) {
     const pending = options.leave(channelId);
     pendingServerLeaves.add(pending);
@@ -330,7 +376,7 @@ export function createCallLifecycle(options: {
             try {
               const current = machine.getState();
               if (current.t === 'active' && sameCall(current.call, connected))
-                options.onJoined(connected);
+                options.onJoined(connected, request.source);
             } catch (error) {
               options.reportError(error);
             }
@@ -363,10 +409,7 @@ export function createCallLifecycle(options: {
           },
           () => {
             if (active)
-              fireAndForget(
-                leaveEndedNativeSession(call.channelId),
-                'channel-call'
-              );
+              fireAndForget(leaveEndedNativeCall(call), 'channel-call');
           }
         );
         return () => {
@@ -418,7 +461,7 @@ export function createCallLifecycle(options: {
             return;
           }
           try {
-            await join(attempt.channelId);
+            await startJoin(attempt.channelId, 'auto_rejoin');
           } catch (error) {
             options.reportError(error);
           }
@@ -469,20 +512,36 @@ export function createCallLifecycle(options: {
           else request.resolve(result);
           dispatch({ t: 'finish' });
         };
-        const timeout = setTimeout(
-          () => finish(new Error('Leaving call timed out')),
-          LEAVE_TIMEOUT_MS
-        );
+        let serverLeave: Promise<LeaveResult> | undefined;
+        const leaveServerOnce = () =>
+          (serverLeave ??= leaveServer(request.channelId));
+        const timeout = setTimeout(() => {
+          // Media teardown hung, but the user still left: release the
+          // membership now, so the server stops holding them in the call and
+          // a later join waits for this leave instead of racing it.
+          if (!request.skipServerLeave)
+            fireAndForget(leaveServerOnce(), 'channel-call');
+          finish(new Error('Leaving call timed out'));
+        }, LEAVE_TIMEOUT_MS);
         async function disconnect() {
+          // A hangup reaches the server before media teardown: the last
+          // participant's RTC departure archives the call, and a later leave
+          // could no longer report that it ended. Native-end cleanup may yield
+          // to a restored session or rejoin, so its leave waits.
+          const releasing =
+            !request.skipServerLeave && request.options?.endNativeCall !== false
+              ? leaveServerOnce()
+              : undefined;
           let result: LeaveResult = undefined;
           try {
             try {
               await options.disconnect(request.options);
               if (!active) return;
-              options.onLeft(request.channelId);
+              options.onLeft(request.call, request.reason);
             } finally {
-              if (active && !request.skipServerLeave)
-                result = await leaveServer(request.channelId);
+              if (releasing) result = await releasing;
+              else if (active && !request.skipServerLeave)
+                result = await leaveServerOnce();
             }
             finish(undefined, result);
           } catch (error) {
@@ -504,7 +563,21 @@ export function createCallLifecycle(options: {
     },
   });
 
-  function join(channelId: string, onJoin?: () => void): Promise<void> {
+  /** Joins at the user's request, which lets a call they left back in. */
+  function join(
+    channelId: string,
+    onJoin?: () => void,
+    source: JoinSource = 'user'
+  ): Promise<void> {
+    return startJoin(channelId, source, onJoin, true);
+  }
+
+  function startJoin(
+    channelId: string,
+    source: JoinSource,
+    onJoin?: () => void,
+    explicit = false
+  ): Promise<void> {
     if (disposed) return Promise.reject(new Error('Call lifecycle disposed'));
     const state = machine.getState();
     if (state.t === 'joining')
@@ -530,13 +603,40 @@ export function createCallLifecycle(options: {
         return Promise.reject(error);
       }
     }
-    const request: Join = { ...deferred(), channelId, onJoin };
+    // Only an accepted join lets a left call back in: a refused one (still
+    // leaving, joining elsewhere) must keep it out once the leave settles.
+    if (explicit) forgetEndedCalls(channelId);
+    const request: Join = { ...deferred(), channelId, source, onJoin };
     machine.dispatch({ t: 'join', request });
     return request.promise;
   }
 
+  /** The call a leave of this channel ends, as far as the lifecycle knows. */
+  function callInChannel(channelId: string): CallIdentity {
+    const call = match(machine.getState())
+      .with({ t: 'active' }, ({ call }) => call)
+      .with({ t: 'retry-wait' }, { t: 'checking' }, ({ attempt }) => attempt)
+      .with({ t: 'leaving' }, ({ request }) => request.call)
+      .otherwise(() => options.currentCall());
+    return {
+      channelId,
+      callId: call?.channelId === channelId ? call.callId : null,
+    };
+  }
+
+  /** Leaves at the user's request: the call is over for this user. */
   function leave(
     channelId: string,
+    leaveOptions?: CallSessionDisconnectOptions
+  ): Promise<LeaveResult> {
+    const call = callInChannel(channelId);
+    markEnded(call);
+    return requestLeave(call, 'user_initiated', leaveOptions);
+  }
+
+  function requestLeave(
+    call: CallIdentity,
+    reason: LeaveReason,
     leaveOptions?: CallSessionDisconnectOptions
   ): Promise<LeaveResult> {
     if (disposed) return Promise.reject(new Error('Call lifecycle disposed'));
@@ -549,17 +649,20 @@ export function createCallLifecycle(options: {
         return state.request.promise;
       machine.dispatch({ t: 'finish' });
     }
-    return startLeave(channelId, leaveOptions);
+    return startLeave(call, reason, leaveOptions);
   }
 
   function startLeave(
-    channelId: string,
+    call: CallIdentity,
+    reason: LeaveReason,
     leaveOptions?: CallSessionDisconnectOptions,
     skipServerLeave = false
   ) {
     const request: Leave = {
       ...deferred<LeaveResult>(),
-      channelId,
+      channelId: call.channelId,
+      call,
+      reason,
       startedAt: Date.now(),
       options: leaveOptions,
       skipServerLeave,
@@ -568,12 +671,25 @@ export function createCallLifecycle(options: {
     return request.promise;
   }
 
-  async function leaveEndedNativeSession(channelId: string) {
+  async function leaveEndedNativeSession(
+    channelId: string,
+    reason: LeaveReason
+  ) {
     try {
-      await leave(channelId, { endNativeCall: false });
+      await requestLeave(callInChannel(channelId), reason, {
+        endNativeCall: false,
+      });
     } catch (error) {
       options.reportError(error);
     }
+  }
+
+  async function leaveEndedNativeCall(call: CallIdentity) {
+    // Native ended this call (its End button, CallKit, or the server), so it
+    // is over for this user: a snapshot that still reports it afterwards is a
+    // leftover to end, not a session to restore.
+    markEnded(call);
+    await leaveEndedNativeSession(call.channelId, 'native_ended');
   }
 
   async function releaseStaleNativeSession(
@@ -588,7 +704,8 @@ export function createCallLifecycle(options: {
     }
     try {
       await startLeave(
-        call.channelId,
+        call,
+        'stale_native_session',
         {
           endNativeCall: sameCall(current, call),
         },
@@ -599,10 +716,38 @@ export function createCallLifecycle(options: {
     }
   }
 
+  function releaseEndedNativeSession(call: CallIdentity) {
+    const ended = endedCall(call);
+    // A join or leave in flight owns the session, and a failed join's cleanup
+    // must finish; the native binding re-reads the snapshot when they settle.
+    if (!ended || machine.getState().t !== 'idle') return;
+    if (ended.releases >= MAX_ENDED_CALL_RELEASES) return;
+    ended.releases += 1;
+    options.reportError(
+      new Error(`Native call ${call.callId} still active after it ended`)
+    );
+    // The server membership is already gone, so only the native call ends.
+    fireAndForget(endLeftoverNativeSession(call), 'channel-call');
+  }
+
+  async function endLeftoverNativeSession(call: CallIdentity) {
+    try {
+      await startLeave(
+        call,
+        'stale_native_session',
+        { endNativeCall: true },
+        true
+      );
+    } catch (error) {
+      options.reportError(error);
+    }
+  }
+
   async function restoreAfterLeave(call: CallIdentity) {
     const request: Join = {
       ...deferred(),
       channelId: call.channelId,
+      source: 'restore',
       restoredCall: call,
     };
     machine.dispatch({ t: 'join', request });
@@ -621,6 +766,10 @@ export function createCallLifecycle(options: {
     syncSession: (call: CallIdentity | undefined) => {
       if (disposed) return;
       if (call) {
+        if (endedCall(call)) {
+          releaseEndedNativeSession(call);
+          return;
+        }
         const state = machine.getState();
         if (
           state.t === 'leaving' &&
@@ -641,7 +790,7 @@ export function createCallLifecycle(options: {
         // Requesting a token can register a server participant before media
         // connects. Clean up unless a new session supersedes this attempt.
         fireAndForget(
-          leaveEndedNativeSession(state.request.channelId),
+          leaveEndedNativeSession(state.request.channelId, 'join_cancelled'),
           'channel-call'
         );
         return;

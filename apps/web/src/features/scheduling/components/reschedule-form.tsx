@@ -134,7 +134,7 @@ export function RescheduleForm(props: {
       </Show>
       <div class="flex gap-2">
         <Button
-          variant="strong"
+          variant="primary"
           type="submit"
           disabled={!selected() || saving() || loading()}
         >

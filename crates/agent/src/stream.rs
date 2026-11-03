@@ -15,6 +15,21 @@ pub enum StreamPart {
     Content(String),
     /// A thinking/reasoning text delta from the assistant.
     Thinking(String),
+    /// The assistant began a tool call whose arguments are still streaming.
+    /// Only sent by a loop built with
+    /// [`AgentLoop::with_streamed_tool_calls`](crate::AgentLoop::with_streamed_tool_calls);
+    /// the finished call follows as a [`StreamPart::ToolCall`] under the
+    /// same id, unless the turn ends first.
+    ToolCallStarted(ToolCallStart),
+    /// A fragment of a started call's JSON arguments, in arrival order.
+    /// Concatenated they are the arguments as the model wrote them, which
+    /// need not parse until the call finishes.
+    ToolCallArgs {
+        /// The [`ToolCallStart::id`] the fragment belongs to.
+        id: String,
+        /// The newly received text.
+        delta: String,
+    },
     /// A complete tool invocation by the assistant.
     ToolCall(ToolCall),
     /// The result of executing a tool.
@@ -32,6 +47,17 @@ pub struct McpInfo {
     pub tool_name: String,
     /// Human-readable display name, if the server provides one.
     pub display_name: Option<String>,
+}
+
+/// A tool call the assistant has named but not finished writing.
+#[derive(Debug, Clone, Serialize)]
+pub struct ToolCallStart {
+    /// The id the finished [`ToolCall`] and its [`ToolResponse`] carry.
+    pub id: String,
+    /// Tool name (mangled for MCP tools).
+    pub name: String,
+    /// Present when this is an MCP tool call.
+    pub mcp: Option<McpInfo>,
 }
 
 /// A tool call made by the assistant.

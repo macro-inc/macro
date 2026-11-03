@@ -31,11 +31,12 @@
  *   through the standard write path so dependent cached queries update.
  *
  * Cache failures normally degrade to the network. An admitted optimistic
- * enqueue with an unfenced transport outcome emits an error instead, because
- * forwarding could duplicate a side effect already durable in the old scope.
+ * enqueue with an unknown durable outcome emits an error instead, because
+ * forwarding could duplicate a side effect already in the persistent queue.
  */
 
 import { fireAndForget } from '@core/util/fireAndForget';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   type Client,
   CombinedError,
@@ -77,7 +78,9 @@ import {
   isOwnerEpochLostError,
   isOwnerLockUnavailableError,
   type QueryRevalidationWire,
+  type ReadResult,
 } from '../protocol';
+import { classifyCacheError } from '../telemetry';
 import { createDeferredQueryRereads } from './deferred-query-rereads';
 import {
   createDocumentQueryReader,
@@ -108,6 +111,7 @@ import {
   withOptimisticMutationDisposition,
 } from './optimistic';
 import { queryShape } from './query-shape';
+import { runSubscriptionCacheEffects } from './subscription-cache-trace';
 
 /** Server writes acknowledged since this query left for the network. */
 const QUERY_MUTATION_VERSION_CONTEXT_KEY =
@@ -118,6 +122,14 @@ const AFFECTED_READ_CONTEXT_KEY = 'normalizedCacheAffectedRead';
 const REPLACEMENT_REGISTRATION_ONLY_CONTEXT_KEY =
   'normalizedCacheReplacementRegistrationOnly';
 /** Marks a query as network-to-cache hydration with a projected result. */
+
+declare module '@urql/core' {
+  interface OperationContext {
+    /** Publish the network result without storing it in the cache. */
+    persistResult?: false;
+  }
+}
+
 export const HYDRATE_ONLY_CONTEXT_KEY = 'normalizedCacheHydrateOnly';
 /** Retains the client-annotated document while the transport uses a stripped copy. */
 const HYDRATION_DOCUMENT_CONTEXT_KEY = 'normalizedCacheHydrationDocument';
@@ -499,15 +511,18 @@ export function normalizedCacheExchange(
 
     // Async reads must not resurrect a torn-down operation, overwrite a newer
     // network result, or undo a subsequent optimistic/affected cache reread.
-    const beginCacheRead = (key: number): (() => boolean) => {
+    const beginCacheRead = (key: number) => {
       const state = queryState(key);
       const version = ++state.cacheReadVersion;
       const generation = cacheGeneration;
-      return () =>
-        generation === cacheGeneration &&
+      const isLatest = () =>
         activeOps.has(key) &&
         queryStates.get(key) === state &&
         state.cacheReadVersion === version;
+      return {
+        isCurrent: () => generation === cacheGeneration && isLatest(),
+        isLatest,
+      };
     };
 
     const acquireQueryResultTurn = async (key: number): Promise<() => void> => {
@@ -696,12 +711,16 @@ export function normalizedCacheExchange(
     // Deliver cache changes directly. Reexecuting through urql first replays
     // the previous network result as stale, which can reset collection sources
     // and replay their persistence acknowledgements during an optimistic edit.
-    const emitWatchedQuery = async (key: number): Promise<void> => {
+    const emitWatchedQuery = async (
+      key: number,
+      retrying = false
+    ): Promise<void> => {
       const operation = activeOps.get(key);
       if (!operation) return;
-      const isCurrent = beginCacheRead(key);
+      const readVersion = beginCacheRead(key);
+      let read: ReadResult | undefined;
       try {
-        const read = await documentReader.read({
+        read = await documentReader.read({
           opKey: key,
           query: queryText(operation),
           operationName: operationName(operation),
@@ -709,16 +728,28 @@ export function normalizedCacheExchange(
           priority: 'user-visible',
           entityResolvers,
         });
-        if (!isCurrent()) return;
-        if (read.kind === 'hit') {
-          emitAffectedResult(
-            cacheResult(operation, read.data, false, 'affected-cache-reread')
+      } catch (error) {
+        reportReadError(error, operation);
+      }
+      if (!readVersion.isCurrent()) {
+        if (!readVersion.isLatest()) return;
+        if (!retrying) {
+          await Telemetry.anonymousSpan(
+            'graphql_cache.read_retry',
+            async (span) => {
+              span.setAttr('cache.retry.reason', 'generation-change');
+              span.setAttr('cache.retry.count', 1);
+              span.setAttr('cache.retry.read_type', 'affected');
+              await emitWatchedQuery(key, true);
+            }
           );
           return;
         }
-      } catch (error) {
-        reportReadError(error, operation);
-        if (!isCurrent()) return;
+      } else if (read?.kind === 'hit') {
+        emitAffectedResult(
+          cacheResult(operation, read.data, false, 'affected-cache-reread')
+        );
+        return;
       }
       reexecuteAffected(key);
     };
@@ -968,14 +999,15 @@ export function normalizedCacheExchange(
       }
 
       async function readThenRoute(
-        op: Operation
+        op: Operation,
+        previousAttempt?: { networkForwarded: boolean }
       ): Promise<OperationResult | undefined> {
         if (isHydrateOnly(op)) {
           enqueueHydrationForward(op);
           return undefined;
         }
         const readState = queryState(op.key);
-        const isCurrentRead = beginCacheRead(op.key);
+        const readVersion = beginCacheRead(op.key);
         const policy = op.context.requestPolicy;
         if (policy === 'network-only') {
           enqueueQueryForward(op);
@@ -983,7 +1015,8 @@ export function normalizedCacheExchange(
         }
         const registrationOnly =
           op.context[REPLACEMENT_REGISTRATION_ONLY_CONTEXT_KEY] === true;
-        let networkForwarded = false;
+        let networkForwarded = previousAttempt?.networkForwarded ?? false;
+        let read: ReadResult | undefined;
         try {
           const pendingRead = documentReader.read({
             opKey: op.key,
@@ -998,41 +1031,63 @@ export function normalizedCacheExchange(
           });
           // Admit the cache read first, but never wait for the worker's queue
           // before starting a request that needs the network regardless.
-          if (policy === 'cache-and-network' && !registrationOnly) {
+          if (
+            policy === 'cache-and-network' &&
+            !registrationOnly &&
+            !networkForwarded
+          ) {
             networkForwarded = true;
             enqueueQueryForward(op);
           }
-          const read = await pendingRead;
-          if (!isCurrentRead()) return undefined;
-          if (read.kind === 'hit') {
-            const state = queryState(op.key);
-            const stale = networkForwarded && state.networkRequestsInFlight > 0;
-            return {
-              ...cacheResult(op, read.data, stale),
-              // A fast offline failure must not discard a slower usable cache
-              // hit, nor may that hit erase the failed revalidation's error.
-              error: networkForwarded ? state.networkError : undefined,
-            };
-          }
-          if (policy === 'cache-only') {
-            return cacheResult(op, undefined, false);
-          }
+          read = await pendingRead;
         } catch (error) {
           reportReadError(error, op);
           if (
             isOwnerEpochLostError(error) &&
             queryStates.get(op.key) === readState &&
-            (isCurrentRead() || readState.networkBoundQueries > 0)
+            (readVersion.isCurrent() || readState.networkBoundQueries > 0)
           ) {
             readState.replacementFallback = true;
           }
-          if (!isCurrentRead()) return undefined;
-          // `cache-only` must never touch the network, even when the cache
-          // itself fails — degrade to an empty result instead.
-          if (policy === 'cache-only') {
-            return cacheResult(op, undefined, false);
-          }
         }
+        if (!readVersion.isCurrent()) {
+          // Teardown, remount, or a newer result still fences this attempt.
+          if (!readVersion.isLatest()) return undefined;
+          if (!previousAttempt) {
+            // Only the generation changed. The host may have routed this read
+            // to the replacement without emitting another affected-key push.
+            // Retry here: urql deduplicates reexecutions of a pending query.
+            return await Telemetry.anonymousSpan(
+              'graphql_cache.read_retry',
+              async (span) => {
+                span.setAttr('cache.retry.reason', 'generation-change');
+                span.setAttr('cache.retry.count', 1);
+                span.setAttr('cache.retry.read_type', 'operation');
+                span.setAttr('cache.request_policy', policy);
+                const result = await readThenRoute(op, { networkForwarded });
+                span.setAttr('cache.retry.cache_result', result !== undefined);
+                span.setAttr(
+                  'cache.retry.has_data',
+                  result?.data !== undefined
+                );
+                return result;
+              }
+            );
+          }
+          // Bound churn to one fresh read, then use the normal policy fallback.
+          // Never publish a snapshot from the invalidated generation.
+        } else if (read?.kind === 'hit') {
+          const state = queryState(op.key);
+          const stale = networkForwarded && state.networkRequestsInFlight > 0;
+          return {
+            ...cacheResult(op, read.data, stale),
+            // A fast offline failure must not discard a slower usable cache
+            // hit, nor may that hit erase the failed revalidation's error.
+            error: networkForwarded ? state.networkError : undefined,
+          };
+        }
+        // `cache-only` must never touch the network, including after churn.
+        if (policy === 'cache-only') return cacheResult(op, undefined, false);
         if (!networkForwarded && !registrationOnly) enqueueQueryForward(op);
         return undefined;
       }
@@ -1096,8 +1151,8 @@ export function normalizedCacheExchange(
           if (isAdmittedEnqueueUncertainError(error)) {
             enqueueTelemetry.failed('uncertain');
             options.onCacheError?.(error, op);
-            // The old-scope queue may already contain the side effect. It is
-            // unsafe to forward or retry without a coordinator fence.
+            // Fencing the old engine does not remove a committed queue entry.
+            // Never forward or retry an enqueue whose reply was lost.
             return uncertainEnqueueResult(op, error);
           }
           // Another context holds the database, so the enqueue never reached
@@ -1189,11 +1244,18 @@ export function normalizedCacheExchange(
       async function applyOperationCacheEffects(
         op: Operation,
         effects: CacheEffect[],
-        isCurrent: () => boolean = () => true
+        isCurrent: () => boolean = () => true,
+        span?: Span
       ): Promise<boolean> {
         let applied = true;
+        span?.setAttr('cache.effect_count', effects.length);
         for (const effect of effects) {
           if (!isCurrent()) return false;
+          const effectSpan = span?.span(
+            effect.kind === 'write'
+              ? 'graphql.subscription.cache_write'
+              : 'graphql.subscription.cache_delete'
+          );
           try {
             if (effect.kind === 'write') {
               await host.writeQuery({
@@ -1207,9 +1269,15 @@ export function normalizedCacheExchange(
             }
           } catch (error) {
             applied = false;
+            span?.error('Subscription cache effect failed');
+            span?.setAttr('cache.failure', classifyCacheError(error));
+            effectSpan?.setAttr('cache.failure', classifyCacheError(error));
             // One failed cache effect must neither skip later effects nor
             // prevent delivery of the original operation result.
+            effectSpan?.error('Subscription cache effect failed');
             options.onCacheError?.(error, op);
+          } finally {
+            effectSpan?.end();
           }
         }
         return applied && isCurrent();
@@ -1367,14 +1435,18 @@ export function normalizedCacheExchange(
           const previousEffects =
             subscriptionEffectChains.get(op.key) ?? Promise.resolve(true);
           const generation = subscriptionGenerations.get(op.key);
-          const effects = previousEffects.then(() =>
-            applyOperationCacheEffects(
-              op,
-              operationCacheEffects(result.data),
-              () =>
-                generation !== undefined &&
-                subscriptionGenerations.get(op.key) === generation
-            )
+          const effects = runSubscriptionCacheEffects(
+            result,
+            previousEffects,
+            (span) =>
+              applyOperationCacheEffects(
+                op,
+                operationCacheEffects(result.data),
+                () =>
+                  generation !== undefined &&
+                  subscriptionGenerations.get(op.key) === generation,
+                span
+              )
           );
           subscriptionEffectChains.set(op.key, effects);
           try {
@@ -1453,7 +1525,10 @@ export function normalizedCacheExchange(
           // Publication, not persistence, supersedes an older cache snapshot.
           // A failed network request still permits a slower offline cache hit.
           if (result.data != null && !result.error) state.cacheReadVersion += 1;
-          const persistence = persistQueryResult(result, state, version);
+          const persistence =
+            op.context.persistResult === false
+              ? Promise.resolve(undefined)
+              : persistQueryResult(result, state, version);
           return withResultMetadata(result, {
             source: 'live-network',
             persistence,

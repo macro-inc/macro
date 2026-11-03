@@ -1,7 +1,51 @@
+use models_email::email::service::label::system_labels;
 use sqlx::types::Uuid;
 
 #[cfg(test)]
 mod test;
+
+/// Sets a message's read flag from its UNREAD label when `read` is set, and its
+/// starred flag from its STARRED label when `starred` is set. A message whose
+/// flags already match is not written, as a re-sync usually changes nothing.
+#[tracing::instrument(skip(tx), err)]
+pub async fn set_flags_from_labels(
+    tx: &mut sqlx::PgConnection,
+    message_id: Uuid,
+    read: bool,
+    starred: bool,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        r#"
+        WITH flags AS (
+            SELECT
+                CASE WHEN $2 THEN NOT EXISTS (
+                    SELECT 1 FROM email_message_labels ml JOIN email_labels l ON l.id = ml.label_id
+                    WHERE ml.message_id = m.id AND l.provider_label_id = $4
+                ) ELSE m.is_read END AS is_read,
+                CASE WHEN $3 THEN EXISTS (
+                    SELECT 1 FROM email_message_labels ml JOIN email_labels l ON l.id = ml.label_id
+                    WHERE ml.message_id = m.id AND l.provider_label_id = $5
+                ) ELSE m.is_starred END AS is_starred
+            FROM email_messages m
+            WHERE m.id = $1
+        )
+        UPDATE email_messages m
+        SET is_read = flags.is_read, is_starred = flags.is_starred
+        FROM flags
+        WHERE m.id = $1
+            AND (m.is_read, m.is_starred) IS DISTINCT FROM (flags.is_read, flags.is_starred)
+        "#,
+        message_id,
+        read,
+        starred,
+        system_labels::UNREAD,
+        system_labels::STARRED,
+    )
+    .execute(tx)
+    .await?;
+
+    Ok(())
+}
 
 /// Update the read status of a single message, scoped to the inbox that owns it.
 #[tracing::instrument(skip(tx), err)]

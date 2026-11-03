@@ -5,6 +5,8 @@
 /// What a column's values would do under each type (`GET …/casts`), and
 /// what they become under one (`POST …/conversion`).
 pub mod casts;
+/// Database duplication transport.
+pub mod duplicate;
 /// The change journal: a row's history
 /// (`GET /{id}/tables/{table_id}/rows/{row_id}/history`) and undoing a change
 /// (`POST /{id}/changes/{change}/undo`).
@@ -21,11 +23,13 @@ mod test;
 pub mod transfer;
 /// A board's card places: `GET /{id}/views/{view_id}/positions`.
 pub mod views;
+use crate::domain::duplicate::DatabaseDuplicateService;
 use crate::domain::sharing::DatabaseSharingService;
 use crate::domain::transfer::DatabaseTransferService;
 use casts::{column_casts_handler, column_conversion_handler};
 use models_databases::{DatabaseId, TableId};
 use std::sync::Arc;
+use tracing::Level;
 
 use axum::{
     Json, Router,
@@ -116,7 +120,10 @@ pub fn databases_router<Service, EntityAccess, Authorization, RouterState>(
     state: DatabasesRouterState<Service, EntityAccess, Authorization>,
 ) -> Router<RouterState>
 where
-    Service: DatabasesService + DatabaseSharingService + DatabaseTransferService,
+    Service: DatabasesService
+        + DatabaseSharingService
+        + DatabaseTransferService
+        + DatabaseDuplicateService,
     EntityAccess: EntityAccessService,
     Authorization: MacroAuthorizationService,
     RouterState: Send + Sync + 'static,
@@ -147,6 +154,10 @@ where
         .route(
             "/{id}",
             get(get_database_handler::<Service, EntityAccess, Authorization>),
+        )
+        .route(
+            "/{id}/duplicate",
+            post(duplicate::duplicate_database_handler::<Service, EntityAccess, Authorization>),
         )
         .route(
             "/{id}/awareness",
@@ -298,7 +309,7 @@ where
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(err, skip_all)]
+#[tracing::instrument(err(level = Level::INFO), skip_all)]
 pub async fn get_database_handler<Service, EntityAccess, Authorization>(
     access: DatabaseAccessLevelExtractor<ViewAccessLevel, EntityAccess, Authorization>,
     State(state): State<DatabasesRouterState<Service, EntityAccess, Authorization>>,

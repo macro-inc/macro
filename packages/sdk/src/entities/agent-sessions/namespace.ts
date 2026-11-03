@@ -1,4 +1,6 @@
 import type {
+  AgentMode,
+  AutoArchivePreferencesBody,
   CodingPreferencesBody,
   SandboxSize,
 } from '../../../generated/agent-harness/types.gen';
@@ -18,9 +20,24 @@ export class AgentSessionNamespace {
     return AgentSession.byId(this.client, id);
   }
 
-  /** Create a managed agent session. */
+  /**
+   * Create a managed session as `agent` when one is named, otherwise the
+   * deployment's default coding persona. List personas with
+   * {@link AgentNamespace.list} and construct one with {@link Agent.byId}.
+   * Unknown or inaccessible personas fail. `model` and `instructions`
+   * outrank the persona's. `repoUrl` is honored for Cursor; omit `agent`
+   * and it starts as Cursor.
+   */
   createManaged(opts?: CreateManagedSessionOptions): Promise<AgentSession> {
     return AgentSession.createManaged(this.client, opts);
+  }
+
+  /**
+   * Whether `prompt` needs a chat agent (`'chat'`) or a coding agent
+   * (`'code'`), as the app's Auto mode decides before starting a session.
+   */
+  chooseMode(prompt: string): Promise<AgentMode> {
+    return AgentSession.chooseMode(this.client, prompt);
   }
 
   /**
@@ -61,6 +78,18 @@ export class AgentSessionNamespace {
   /** What the caller's new coding sessions are told to do beyond their assignment. */
   codingPreferences(): Promise<CodingPreferencesBody> {
     return AgentSession.codingPreferences(this.client);
+  }
+
+  /** Which triggers archive the caller's sessions by default; each is off unless chosen. */
+  autoArchivePreferences(): Promise<AutoArchivePreferencesBody> {
+    return AgentSession.autoArchivePreferences(this.client);
+  }
+
+  /** Replace which triggers archive the caller's sessions by default. */
+  setAutoArchivePreferences(
+    preferences: AutoArchivePreferencesBody,
+  ): Promise<AutoArchivePreferencesBody> {
+    return AgentSession.setAutoArchivePreferences(this.client, preferences);
   }
 
   /** Replace the caller's coding preferences. */

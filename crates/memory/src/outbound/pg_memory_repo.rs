@@ -8,7 +8,7 @@ use sqlx::PgPool;
 
 #[derive(Clone)]
 pub struct PgMemoryRepo {
-    inner: PgPool,
+    pub(super) inner: PgPool,
 }
 
 impl PgMemoryRepo {
@@ -85,3 +85,6 @@ impl From<sqlx::Error> for crate::domain::MemoryError {
         Self::Db(rootcause::report!(e).into_dynamic())
     }
 }
+
+#[cfg(test)]
+mod composed_test;

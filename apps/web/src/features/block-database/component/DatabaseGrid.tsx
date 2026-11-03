@@ -1,3 +1,4 @@
+import { usePending } from '@app/observability/flow';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { refreshInBackground } from '@queries/database-sql/create-database-sql-query';
@@ -52,6 +53,11 @@ import {
   DatabaseTextEditor,
   DatabaseTextValue,
 } from '../database-mentions';
+import { createDatabaseDocumentNavigation } from '../navigation-adapter';
+import {
+  type DatabaseGridHost,
+  trackQueryRuns,
+} from '../primitives/track-query-runs';
 import { createColumnCasts } from '../queries/column-casts';
 import {
   addDatabaseColumnOptions,
@@ -76,6 +82,8 @@ export type DatabaseGridProps = {
   /** Host framing for the records area, below the toolbar. */
   contentClass?: string;
   databaseId: string;
+  /** Where the grid is shown, for analytics. */
+  host: DatabaseGridHost;
   table: TableDetail;
   canEdit: boolean;
   /** The view on screen: a stored one, or the table's own All records. */
@@ -156,7 +164,10 @@ function RelatedDatabaseSync(props: {
 }
 
 function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
+  const canEdit = createMemo(() => props.canEdit);
+
   const queryClient = useQueryClient();
+  const openDocumentMention = createDatabaseDocumentNavigation();
   // Keep the final schema for this table available to already-queued writes
   // after its tab is closed; a new selected table must never redirect them.
   let ownedTable = props.table;
@@ -188,6 +199,12 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
     targets: linkTargets,
     onTableChanged: (listener) =>
       useDatabaseTableChanges((change) => listener(change.tableId)),
+  });
+  trackQueryRuns({
+    databaseId,
+    tableId: props.tableId,
+    host: props.host,
+    view: () => props.view,
   });
   const source = withRelationLabels(
     createDatabaseRowsSource({
@@ -243,6 +260,7 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
     }),
     relations
   );
+  usePending('database.rows', source.loading);
   // Embedded grids have no database BlockContainer to subscribe for them.
   // Tracking is reference-counted across grids and full database blocks.
   useDatabaseSubscription(databaseId, () => refreshInBackground(source));
@@ -317,15 +335,15 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
       <StaticMarkdownContext>
         <ColumnUsageContext.Provider value={formsAsking}>
           <OptionEditingContext.Provider
-            value={props.canEdit ? optionEditing : undefined}
+            value={canEdit() ? optionEditing : undefined}
           >
             <DatabaseProvider
               api={createMacroDatabaseApi(databaseId, queryClient)}
               tableId={props.tableId}
               view={props.view}
               capabilities={{
-                editRows: props.canEdit,
-                editColumns: props.canEdit,
+                editRows: canEdit(),
+                editColumns: canEdit(),
               }}
               data={{ table: () => editorTable(table()), rows: source }}
               inferNewColumns
@@ -347,6 +365,7 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
                 renderTextValue={renderTextValue}
                 renderMentionPicker={renderMentionPicker}
                 renderMentionValue={renderMentionValue}
+                onOpenDocumentMention={openDocumentMention}
                 renderRelationCell={(cell) => (
                   <DatabaseRelationCell
                     {...cell}

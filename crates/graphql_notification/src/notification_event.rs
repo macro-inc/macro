@@ -1,5 +1,12 @@
 //! Typed GraphQL output models for realtime notification event metadata.
 
+mod external_chat;
+use external_chat::GraphqlExternalChatMessageMetadata;
+
+/// Schema-only stub for released clients; remove after 2026-11-30.
+mod whatsapp_group_stub;
+use whatsapp_group_stub::GraphqlWhatsappGroupMessageMetadata;
+
 /// Project discussion notification metadata.
 mod initiative_discussion;
 pub use initiative_discussion::GraphqlInitiativeDiscussionMetadata;
@@ -24,7 +31,7 @@ use model_notifications::{
     GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
     InviteToTeamMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata, NotifEvent,
     NotificationDocumentSubType, ReminderMetadata, RepliedToDocumentCommentThreadMetadata,
-    TaskAssignedMetadata,
+    RoutineRunFinishedMetadata, RoutineRunOutcome, TaskAssignedMetadata,
 };
 
 /// GraphQL channel type used by notification metadata.
@@ -742,6 +749,28 @@ impl GraphqlInboxReauthRequiredMetadata {
     }
 }
 
+/// GraphQL wrapper for routine run metadata.
+pub struct GraphqlRoutineRunFinishedMetadata(RoutineRunFinishedMetadata);
+
+/// Metadata for a finished routine run.
+#[Object]
+impl GraphqlRoutineRunFinishedMetadata {
+    /// Routine id.
+    async fn routine_id(&self) -> ID {
+        ID(self.0.routine_id.to_string())
+    }
+
+    /// Routine name when it ran.
+    async fn routine_name(&self) -> &str {
+        &self.0.routine_name
+    }
+
+    /// Whether the run succeeded.
+    async fn succeeded(&self) -> bool {
+        self.0.outcome == RoutineRunOutcome::Succeeded
+    }
+}
+
 /// GraphQL wrapper for team invitation metadata.
 pub struct GraphqlInviteToTeamMetadata(InviteToTeamMetadata);
 
@@ -1253,6 +1282,8 @@ impl GraphqlAgentSessionMentionedMetadata {
 /// Typed GraphQL union containing every supported notification event payload.
 #[derive(Union)]
 pub enum GraphqlNotifEvent {
+    /// A new live external chat message.
+    ExternalChatMessage(GraphqlExternalChatMessageMetadata),
     /// Shared access workflow.
     EntityAccessGranted(GraphqlEntityAccessGrantedMetadata),
     /// Shared access workflow.
@@ -1315,11 +1346,18 @@ pub enum GraphqlNotifEvent {
     AgentSessionMentioned(GraphqlAgentSessionMentionedMetadata),
     /// Calendar event join request metadata.
     CalendarEventJoinRequest(GraphqlCalendarEventJoinRequestMetadata),
+    /// Finished routine run metadata.
+    RoutineRunFinished(GraphqlRoutineRunFinishedMetadata),
+    /// Schema-only stub for released clients. Never returned.
+    WhatsappGroupMessage(GraphqlWhatsappGroupMessageMetadata),
 }
 
 impl From<NotifEvent> for GraphqlNotifEvent {
     fn from(value: NotifEvent) -> Self {
         match value {
+            NotifEvent::ExternalChatMessage(metadata) => {
+                Self::ExternalChatMessage(GraphqlExternalChatMessageMetadata(metadata))
+            }
             NotifEvent::ChannelMention(metadata) => {
                 Self::ChannelMention(GraphqlChannelMentionMetadata(metadata))
             }
@@ -1366,6 +1404,9 @@ impl From<NotifEvent> for GraphqlNotifEvent {
                 Self::CallStarted(GraphqlCallStartedMetadata(metadata))
             }
             NotifEvent::NewEmail(metadata) => Self::NewEmail(GraphqlNewEmailMetadata(metadata)),
+            NotifEvent::RoutineRunFinished(metadata) => {
+                Self::RoutineRunFinished(GraphqlRoutineRunFinishedMetadata(metadata))
+            }
             NotifEvent::InboxReauthRequired(metadata) => {
                 Self::InboxReauthRequired(GraphqlInboxReauthRequiredMetadata(metadata))
             }

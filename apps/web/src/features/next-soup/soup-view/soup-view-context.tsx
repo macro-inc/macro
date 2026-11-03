@@ -199,6 +199,7 @@ export interface SoupViewContextValues {
   fetchNextGroupPage: (groupKey: string) => Promise<void>;
   isFetchingGroupPage: (groupKey: string) => boolean;
   hasNextGroupPage: (groupKey: string) => boolean;
+  groupPageError: (groupKey: string) => unknown;
 }
 
 const SoupViewContext = createContext<SoupViewContextValues>();
@@ -789,12 +790,16 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   const soupBody = createMemo(() =>
     compileToAst(applyViewFilters(queryFilters.state))
   );
+  // Server-side filters change the result set without touching the client
+  // predicates or sort, so they release held row positions too.
+  soup.positions.scopeTo(soupBody);
 
   const [searchText, setSearchText] = useEntryState<string>('search.text', {
     default: props.initialSearchText ?? '',
   });
 
   const search = createSearchState({
+    surface: () => activeListView() ?? 'soup',
     soup,
     filters: () => applyViewFilters(queryFilters.state),
     assignees: assigneeFilter,
@@ -1114,7 +1119,8 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
       });
     }
 
-    return transformed;
+    if (search.isSearching()) return transformed;
+    return soup.positions.apply(transformed);
   };
 
   const entities = () => {
@@ -1176,6 +1182,9 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
 
   const hasNextGroupPage = (groupKey: string) =>
     groupQueryFor(groupKey)?.hasNextPage() ?? false;
+
+  const groupPageError = (groupKey: string) =>
+    groupQueryFor(groupKey)?.error() ?? null;
 
   const resolveGroupLabel = (key: string): string | undefined => {
     const field = groupByField();
@@ -1322,6 +1331,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
       for (const entity of all) {
         const ts =
           (bucketOnNotification ? entity.notifiedAt : undefined) ??
+          soup.positions.sortTs(entity.id) ??
           entity.sortTs ??
           entity.updatedAt ??
           entity.createdAt;
@@ -1591,6 +1601,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     fetchNextGroupPage,
     isFetchingGroupPage,
     hasNextGroupPage,
+    groupPageError,
   };
 
   return { context, rows: builtRows };

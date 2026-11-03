@@ -8,7 +8,7 @@ mod test;
 
 use chrono::{DateTime, NaiveDate, Utc};
 use models_databases::{
-    CellValue, CellWrite, ColumnId, ColumnKind, EntityKind, EntityRef, OptionRef, RowId,
+    CellValue, CellWrite, ColumnId, ColumnKind, DateRange, EntityKind, EntityRef, OptionRef, RowId,
 };
 use serde_json::{Map, Value};
 
@@ -177,6 +177,10 @@ fn cell(column: &WebhookColumn, value: &Value) -> Result<Option<CellValue>, &'st
             date(value)
                 .ok_or("expected an ISO 8601 date, like 2026-10-09 or 2026-10-09T15:00:00Z")?,
         ),
+        ColumnKind::DateRange => CellValue::DateRange(date_range(value).ok_or(
+            "expected a date range, like {\"start\": \"2026-10-09\", \"end\": \"2026-10-12\"} \
+             or \"2026-10-09/2026-10-12\", ending no earlier than it starts",
+        )?),
         ColumnKind::Link => CellValue::Link(each(value, string).ok_or("expected URLs")?),
         ColumnKind::Select { .. } | ColumnKind::SelectNumber { .. } | ColumnKind::Tag => {
             CellValue::Options(
@@ -242,12 +246,31 @@ fn boolean(value: &Value) -> Option<bool> {
 
 /// A date-time with an offset, or a bare date as its midnight in UTC.
 fn date(value: &Value) -> Option<DateTime<Utc>> {
-    let text = value.as_str()?.trim();
+    date_text(value.as_str()?)
+}
+
+/// [`date`] of text.
+fn date_text(text: &str) -> Option<DateTime<Utc>> {
+    let text = text.trim();
     if let Ok(at) = DateTime::parse_from_rfc3339(text) {
         return Some(at.with_timezone(&Utc));
     }
     let day = NaiveDate::parse_from_str(text, "%Y-%m-%d").ok()?;
     Some(day.and_hms_opt(0, 0, 0)?.and_utc())
+}
+
+/// `{"start": …, "end": …}` or an ISO interval `start/end`, each end a
+/// date as [`date`] reads it, ending no earlier than it starts.
+fn date_range(value: &Value) -> Option<DateRange> {
+    let range = match value {
+        Value::Object(ends) => DateRange {
+            start: date(ends.get("start")?)?,
+            end: date(ends.get("end")?)?,
+        },
+        Value::String(text) => return DateRange::parse_interval(text, date_text),
+        _ => return None,
+    };
+    range.is_ordered().then_some(range)
 }
 
 fn entity(target: EntityKind, value: &Value) -> Option<EntityRef> {

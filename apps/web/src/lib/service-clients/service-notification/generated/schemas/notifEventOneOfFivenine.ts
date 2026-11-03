@@ -4,14 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ChannelMessageReactionMetadata } from './channelMessageReactionMetadata';
+import type { AgentSessionMentionedMetadata } from './agentSessionMentionedMetadata';
 import type { NotifEventOneOfFivenineTag } from './notifEventOneOfFivenineTag';
 
 /**
- * Someone reacted to one of the user's channel messages.
+ * The user was named in a prompt to an agent session.
  */
 export type NotifEventOneOfFivenine = {
-  /** Someone reacted to one of the user's channel messages. */
-  content: ChannelMessageReactionMetadata;
+  /** The user was named in a prompt to an agent session. */
+  content: AgentSessionMentionedMetadata;
   tag: NotifEventOneOfFivenineTag;
 };

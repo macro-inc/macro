@@ -1,5 +1,5 @@
 import { SERVER_HOSTS, SYNC_SERVICE_HOSTS } from '@core/constant/servers';
-import { Telemetry } from '@macro-inc/observability';
+import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import { err, ok, type Result } from 'neverthrow';
 import { match } from 'ts-pattern';
 import { platformFetch } from './platformFetch';
@@ -46,7 +46,11 @@ function tracedFetch(
   if (!url) return platformFetch(input, init);
   const method = (init.method ?? 'GET').toUpperCase();
   const path = redactLinkTokens(url.pathname);
-  const span = Telemetry.clientSpan(`http ${method} ${path}`);
+  const span = traceOptions?.parentSpan
+    ? traceOptions.parentSpan.run(() =>
+        Telemetry.span(`http ${method} ${path}`, { kind: 'client' })
+      )
+    : Telemetry.span(`http ${method} ${path}`, { kind: 'client' });
   const started = performance.now();
   span.setAttr('http.method', method);
   // Path only: query strings can carry tokens.
@@ -170,8 +174,10 @@ export interface RetryConfig {
   delay?: 'exponential' | number;
 }
 
-/** Trace-only classification for responses that are expected by the caller. */
+/** Trace context and response classification, never forwarded to fetch. */
 export interface SafeFetchTraceOptions {
+  /** Restore the action's parent after async auth or mutation scheduling. */
+  parentSpan?: TraceContext;
   /** Non-OK responses that should not mark the HTTP span as failed. */
   expectedStatusCodes?: readonly number[];
 }
@@ -276,7 +282,11 @@ export async function safeFetch<
   init?: SafeFetchInit,
   errorResponseHandler?: ErrorResponseHandler<CustomErrorCode>
 ): Promise<Result<T, ResultError<BaseFetchErrorCode | CustomErrorCode>[]>> {
-  const { retry, trace, ...fetchInit } = init || {};
+  const { retry, trace: suppliedTrace, ...fetchInit } = init || {};
+  const trace = {
+    ...suppliedTrace,
+    parentSpan: suppliedTrace?.parentSpan ?? Telemetry.captureContext(),
+  };
   const maxTries = retry?.maxTries ?? 1;
   const delay = retry?.delay ?? 0;
   type ErrorCode = BaseFetchErrorCode | CustomErrorCode;
@@ -327,7 +337,8 @@ export async function safeFetch<
 
         if (
           contentType.includes('application/octet-stream') ||
-          contentType.includes('text/calendar')
+          contentType.includes('text/calendar') ||
+          contentType.includes('message/rfc822')
         ) {
           return ok(new Uint8Array(await response.arrayBuffer()) as T);
         }

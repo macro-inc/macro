@@ -1,4 +1,4 @@
-import KeyIcon from '@phosphor/key.svg';
+import KeyIcon from '@icon/system/regular/key.svg';
 import { splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
 import type { InputSize } from './Input';

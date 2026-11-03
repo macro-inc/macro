@@ -38,13 +38,15 @@ use databases::inbound::toolset::DatabasesToolContext;
 use databases_sql::toolset::DatabasesSqlToolContext;
 use databases_sql::{DatabasesSql, ViewOnlyAccess};
 use documents::{
-    domain::ports::{TaskPropertiesPort, task_property_edit_receipt},
+    domain::ports::{TaskPropertiesPort, credited_task_edit_receipt, task_property_edit_receipt},
     inbound::toolset::DocumentToolContext,
 };
 use email::{
     domain::service::EmailServiceImpl, inbound::toolset::EmailToolContext, outbound::EmailPgRepo,
 };
-use entity_access::domain::models::EditAccessLevel;
+use entity_access::domain::models::{
+    EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, ViewAccessLevel,
+};
 use entity_access::domain::ports::EntityAccessService as _;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
@@ -62,6 +64,8 @@ use macro_event_broker::{
     NoopMacroEventBroker,
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use models_properties::service::property_change_source::PropertyChangeSource;
+use models_properties::service::property_value::PropertyValue;
 use notification::domain::service::SqsNotificationIngress;
 use notification::inbound::ai_tool::NotificationToolContext;
 use projects::inbound::toolset::ProjectToolContext;
@@ -96,7 +100,9 @@ mod forms;
 pub use forms::{FormsToolConfig, ToolFormsToolContext, build_forms_tool_context};
 
 mod initiatives;
-pub use initiatives::{ToolInitiativeToolContext, build_initiative_tool_context};
+pub use initiatives::{
+    ToolInitiativeService, ToolInitiativeToolContext, build_initiative_tool_context,
+};
 
 use activity_metadata::ToolActivityMetadataResolver;
 pub use ai_toolset::RequestContext;
@@ -398,6 +404,9 @@ fn message_service_with_side_effects(
                     Arc::new(access.clone()),
                 ),
                 realtime.clone(),
+                channels::outbound::pg_agent_creations::PgAgentCreations::new(
+                    pool.clone(),
+                ),
             ),
             messages::domain::delivery::DiscussionDelivery::new(
                 messages::outbound::pg_discussion_context::PgDiscussionContext(pool.clone())
@@ -763,7 +772,13 @@ pub fn build_team_tool_context(pool: sqlx::PgPool) -> ToolTeamToolContext {
 pub struct NoOpTaskProperties;
 
 impl TaskPropertiesPort for NoOpTaskProperties {
-    async fn update_task_status(&self, _entity_id: &str, _status: &str) -> anyhow::Result<()> {
+    async fn update_task_status(
+        &self,
+        _access: &EntityAccessReceipt<EditAccessLevel>,
+        _credited_user: Option<&MacroUserIdStr<'static>>,
+        _source: Option<&PropertyChangeSource>,
+        _status: &str,
+    ) -> anyhow::Result<()> {
         Ok(())
     }
     async fn attach_task_properties(&self, _entity_ids: Vec<String>) -> anyhow::Result<()> {
@@ -806,14 +821,59 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
             .map_err(Into::into)
     }
 
-    async fn update_task_status(&self, task_id: &str, status: &str) -> anyhow::Result<()> {
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            task_id = %access.entity().entity_id,
+            status,
+            unchanged = tracing::field::Empty,
+            credited = tracing::field::Empty
+        ),
+        err
+    )]
+    async fn update_task_status(
+        &self,
+        access: &EntityAccessReceipt<EditAccessLevel>,
+        credited_user: Option<&MacroUserIdStr<'static>>,
+        source: Option<&PropertyChangeSource>,
+        status: &str,
+    ) -> anyhow::Result<()> {
+        use properties::PropertiesService as _;
+
         let status_option = StatusOption::try_from(status).map_err(|e| anyhow::anyhow!(e))?;
-
-        self.system_properties
-            .update_task_status(task_id, status_option)
+        let current = self
+            .properties
+            .get_system_property_value(
+                &access.clone().try_into_requirement::<ViewAccessLevel>()?,
+                system_properties::SystemPropertyKey::Status,
+            )
             .await?;
-
-        Ok(())
+        // PR edits and comments re-send In Review; an unchanged status publishes nothing.
+        if current == Some(PropertyValue::SelectOption(vec![status_option.uuid()])) {
+            tracing::Span::current().record("unchanged", true);
+            return Ok(());
+        }
+        let access =
+            credited_task_edit_receipt(self.entity_access_service.as_ref(), access, credited_user)
+                .await;
+        tracing::Span::current().record(
+            "credited",
+            matches!(access.auth(), EntityAccessAuth::Authenticated(_)),
+        );
+        self.properties
+            .set_entity_property_with_source(
+                &access,
+                system_properties::SystemPropertyKey::STATUS_UUID,
+                Some(
+                    models_properties::api::requests::SetPropertyValue::SelectOption {
+                        option_id: status_option.uuid(),
+                    },
+                ),
+                source.cloned(),
+            )
+            .await
+            .map(|_| ())
+            .map_err(Into::into)
     }
 
     async fn set_entity_property(
@@ -901,6 +961,10 @@ impl CallRtcClient for NoOpCallRtcClient {
 
     async fn delete_room(&self, _room_name: &str) -> anyhow::Result<()> {
         Ok(())
+    }
+
+    async fn list_rooms(&self) -> anyhow::Result<Vec<call::domain::models::RtcRoom>> {
+        Ok(Vec::new())
     }
 
     async fn generate_token<'a>(
@@ -1403,17 +1467,19 @@ pub type ToolProjectToolContext = ProjectToolContext<
     ToolEntityAccessService,
     ToolDocumentService,
     ToolUserEmailService,
+    ToolDatabasesService,
 >;
 
 /// Build the project tool context from shared domain and access services.
-/// The move services must be the same instances the document and
-/// email tool contexts run on so moves share their side-effect wiring.
+/// The move services must be the same instances the document, email and
+/// databases tool contexts run on so mutations share their side-effect wiring.
 pub fn build_project_tool_context(
     pool: sqlx::PgPool,
     macro_event_broker: ToolEventBroker,
     entity_access_service: Arc<ToolEntityAccessService>,
     document_service: Arc<ToolDocumentService>,
     email_service: Arc<ToolUserEmailService>,
+    databases_service: Arc<ToolDatabasesService>,
 ) -> ToolProjectToolContext {
     let project_service = projects::domain::service::ProjectServiceImpl::new(
         projects::outbound::PgProjectRepo::new(
@@ -1435,6 +1501,7 @@ pub fn build_project_tool_context(
         entity_access_service,
         document_service,
         email_service,
+        databases_service,
     )
 }
 
@@ -1505,6 +1572,8 @@ pub struct ToolEntityCreator {
     pub document_properties: ToolDocumentPropertiesApplicator,
     /// Team roster lookups, to resolve source-tool emails to teammates.
     pub team_repository: Arc<ToolTeamService>,
+    /// Project lifecycle for reviewed issue tracker imports.
+    pub initiative_service: Arc<ToolInitiativeService>,
     /// Folder creation for workspace imports (shared with project tools).
     pub project_service: Arc<ToolProjectService>,
     /// Database creation and writes for workspace imports (shared with
@@ -1553,11 +1622,17 @@ impl ToolEntityCreator {
         content: ImportedContent,
         subtype: documents::domain::create::MarkdownSubtype,
         folder: Option<uuid::Uuid>,
+        dates: Option<import::domain::ports::SourceDates>,
     ) -> anyhow::Result<String> {
         use std::str::FromStr as _;
         let mut metadata = documents::domain::create::NewDocumentMetadata::builder(name);
         if let Some(id) = id {
             metadata = metadata.id(id);
+        }
+        if let Some(dates) = dates {
+            metadata = metadata
+                .created_at(dates.created)
+                .updated_at(dates.last_edited);
         }
         if let Some(folder) = folder {
             self.authorize_folder(user, folder).await?;
@@ -1637,7 +1712,7 @@ impl ToolEntityCreator {
     /// `share_with_team`, then apply its properties best-effort.
     #[expect(
         clippy::too_many_arguments,
-        reason = "a task carries its id, content, properties, folder and sharing"
+        reason = "a task carries its id, content, properties, folder, dates and sharing"
     )]
     pub(crate) async fn create_imported_task(
         &self,
@@ -1647,6 +1722,7 @@ impl ToolEntityCreator {
         content: ImportedContent,
         properties: &import::domain::ports::ImportedTaskProperties,
         folder: Option<uuid::Uuid>,
+        dates: Option<import::domain::ports::SourceDates>,
         share_with_team: bool,
     ) -> anyhow::Result<String> {
         // Same team resolution as the CreateDocument tool, so imported tasks
@@ -1659,15 +1735,19 @@ impl ToolEntityCreator {
             team_id,
         };
         let task_id = self
-            .create_doc(user, id, name, content, subtype, folder)
+            .create_doc(user, id, name, content, subtype, folder, dates)
             .await?;
         self.apply_task_properties(user, &task_id, properties, &roster)
             .await;
         Ok(task_id)
     }
 
-    /// Create an imported markdown document, in `folder` when given, then
-    /// apply its properties best-effort.
+    /// Create an imported markdown document, in `folder` when given and with
+    /// its source's `dates` when known, then apply its properties best-effort.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "an imported document carries its id, name, content, properties, folder and dates"
+    )]
     pub(crate) async fn create_imported_document(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -1676,6 +1756,7 @@ impl ToolEntityCreator {
         notion: documents::domain::notion_markdown::NotionMarkdown,
         properties: &import::domain::ports::ImportedDocumentProperties,
         folder: Option<uuid::Uuid>,
+        dates: Option<import::domain::ports::SourceDates>,
     ) -> anyhow::Result<String> {
         let document_id = self
             .create_doc(
@@ -1685,6 +1766,7 @@ impl ToolEntityCreator {
                 ImportedContent::Notion(notion),
                 documents::domain::create::MarkdownSubtype::Note,
                 folder,
+                dates,
             )
             .await?;
         let access = match self
@@ -1716,7 +1798,7 @@ impl ToolEntityCreator {
     /// Apply imported task properties best-effort: each one logs and is
     /// skipped on failure so a bad label or unknown assignee never sinks
     /// the import.
-    async fn apply_task_properties(
+    pub(crate) async fn apply_task_properties(
         &self,
         user: &MacroUserIdStr<'static>,
         task_id: &str,
@@ -1729,10 +1811,15 @@ impl ToolEntityCreator {
         let principal = Self::creation_principal(user);
 
         if let Some(status) = properties.status.as_deref()
-            && let Err(e) = self
-                .task_properties
-                .update_task_status(task_id, status)
-                .await
+            && let Err(e) = match StatusOption::try_from(status) {
+                Ok(option) => self
+                    .task_properties
+                    .system_properties
+                    .update_task_status(task_id, option)
+                    .await
+                    .map_err(anyhow::Error::from),
+                Err(e) => Err(anyhow::anyhow!(e)),
+            }
         {
             tracing::warn!(task_id, status, error = ?e, "failed to set imported task status");
         }
@@ -1835,6 +1922,7 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
             ImportedContent::Markdown(markdown.to_string()),
             properties,
             None,
+            None,
             // Single tracked tasks (Linear) are shared with the team, as
             // tasks the user makes are.
             true,
@@ -1856,6 +1944,7 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
             name,
             crate::import_workspace::notion_markdown(notion_markdown, links),
             properties,
+            None,
             None,
         )
         .await
@@ -1891,7 +1980,7 @@ pub type ToolPipedreamConnection =
 /// server store and the Pipedream connection store. Picks which stack
 /// serves a user's tools (Pipedream connectors win; see `mcp_select`).
 pub type ToolMcpSelector = mcp_select::McpToolSelector<
-    mcp_client::outbound::pg_server_repo::PgServerRepo,
+    mcp_client::outbound::NativeServerStore,
     pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
     ToolPipedreamConnection,
 >;
@@ -1907,6 +1996,11 @@ pub type ToolImportService = import::domain::service::ImportServiceImpl<
         pipedream_mcp::outbound::api::PipedreamClient,
     >,
 >;
+
+/// The custom MCP server tools, wired by hosts holding the MCP credentials
+/// key.
+pub type ToolMcpServerToolContext =
+    mcp_client::inbound::toolset::McpServerToolContext<mcp_client::outbound::NativeServerStore>;
 
 /// Type alias for the import tool context, wired by hosts with connector access.
 pub type ToolImportToolContext = import::inbound::toolset::ImportToolContext<ToolImportService>;
@@ -1956,6 +2050,8 @@ pub fn no_op_schedule_context() -> RoutineToolContext {
 /// Individual tools should extract only the clients they need via `FromRef`.
 #[derive(Clone, FromRef)]
 pub struct ToolServiceContext {
+    /// Private explicit memory edits and current-team activity reads.
+    pub memory_tool_context: crate::memory::ToolMemoryContext,
     /// Read-only discovery of connectors the caller has not yet authorized.
     pub connector_tool_context: ToolConnectorToolContext,
     pub search_service_client: Arc<search_service_client::SearchServiceClient>,
@@ -1985,6 +2081,9 @@ pub struct ToolServiceContext {
     /// Import staging/tracking tools. `unwired` in hosts that can't build
     /// the import service — calls there fail with a clear error.
     pub import_tool_context: ToolImportToolContext,
+    /// Custom MCP server tools. `unwired` in hosts without the MCP
+    /// credentials key — calls there fail with a clear error.
+    pub mcp_server_tool_context: ToolMcpServerToolContext,
     /// Built per-request via a manual `FromRef` below so it can carry the
     /// running chat's id — the derive's field-clone would freeze it at
     /// startup with no chat id set.
@@ -2030,18 +2129,24 @@ pub struct ToolServiceContext {
 pub type ToolConnectorToolContext = pipedream_mcp::inbound::toolset::ConnectorToolContext<
     pipedream_mcp::outbound::api::PipedreamClient,
     pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
+    mcp_select::NativeOverlayConnections<mcp_client::outbound::NativeServerStore>,
 >;
 
 /// Wire connector discovery at the composition boundary.
+///
+/// `native_servers` answers for overlaid apps, which connect through the
+/// native MCP stack; `None` where that stack has no encryption key.
 pub fn build_connector_tool_context(
     pool: sqlx::PgPool,
     client: Option<Arc<pipedream_mcp::outbound::api::PipedreamClient>>,
+    native_servers: Option<Arc<mcp_client::outbound::NativeServerStore>>,
 ) -> ToolConnectorToolContext {
     pipedream_mcp::inbound::toolset::ConnectorToolContext {
         service: Arc::new(
             pipedream_mcp::domain::service::discovery::ConnectorDiscovery::new(
                 client,
                 Arc::new(pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool)),
+                Arc::new(mcp_select::NativeOverlayConnections::new(native_servers)),
             ),
         ),
     }
@@ -2084,6 +2189,31 @@ impl ToolServiceContext {
         self.pipeline_tool_context.actor = actor;
         self.crm_transfer_tool_context.actor = actor;
         self.databases_sql_tool_context = self.databases_sql_tool_context.with_actor(actor);
+        self
+    }
+
+    /// Run the tools for `caller`, as the public MCP authenticated it: an
+    /// agent writes as itself; an MCP client writes as the Macro bot with its
+    /// name on the post, shown as the author ("Claude Code · Agent"); a pasted
+    /// API key writes as the Macro bot.
+    pub fn for_caller(self, caller: &ai_toolset::ToolCaller) -> Self {
+        match caller {
+            ai_toolset::ToolCaller::Agent(agent) => self.with_actor(*agent),
+            ai_toolset::ToolCaller::McpClient { .. } | ai_toolset::ToolCaller::ApiKey => {
+                match caller.via() {
+                    Some(client) => self.with_via(client),
+                    None => self,
+                }
+            }
+        }
+    }
+
+    /// Label the posts the tools make with the client the user works
+    /// through.
+    fn with_via(mut self, client: &str) -> Self {
+        self.message_tool_context = self.message_tool_context.with_via(client.to_owned());
+        self.channel_tool_context = self.channel_tool_context.with_via(client.to_owned());
+        self.document_tool_context = self.document_tool_context.with_via(client.to_owned());
         self
     }
 

@@ -12,18 +12,19 @@ use model_entity::EntityType;
 use model_owner::Owner;
 use serde_json::Value;
 use sqlx::PgPool;
+use std::collections::HashMap;
 use std::str::FromStr;
 
 use crate::domain::event_runs::{ClaimToken, ConfigurationRevision};
 use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
-    ActionExecutionRecord, ActionKind, ActionPolicyError, AlreadyRunningError, MAX_ACTION_TIME,
-    Schedule, ScheduledAction,
+    ActionExecutionRecord, ActionKind, ActionPolicyError, AlreadyRunningError, LastRun,
+    MAX_ACTION_TIME, Schedule, ScheduledAction,
 };
 use crate::domain::ports::ScheduledActionRepo;
 
 #[cfg(test)]
-mod test;
+pub(crate) mod test;
 
 /// PostgreSQL scheduled-action store.
 ///
@@ -79,6 +80,7 @@ struct ActionRow {
     configuration_revision: i64,
     event_activated_at: Option<DateTime<Utc>>,
     run_visibility: String,
+    template_id: Option<Uuid>,
 }
 
 impl TryFrom<ActionRow> for ScheduledAction {
@@ -120,6 +122,7 @@ impl TryFrom<ActionRow> for ScheduledAction {
             })?,
             configuration_revision: ConfigurationRevision::try_from(row.configuration_revision)?,
             event_activated_at: row.event_activated_at,
+            template_id: row.template_id,
         })
     }
 }
@@ -179,11 +182,11 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             INSERT INTO scheduled_action
                 (id, owner, name, schedule, kind, timezone, task, next_run_at, enabled,
                  trigger_type, event_filters, configuration_revision, event_activated_at, trigger_config,
-                 run_visibility)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+                 run_visibility, template_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
             RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                       updated_at, next_run_at, enabled, trigger_type, event_filters,
-                      configuration_revision, event_activated_at, trigger_config, run_visibility
+                      configuration_revision, event_activated_at, trigger_config, run_visibility, template_id
             "#,
             id,
             owner,
@@ -200,6 +203,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             action.event_activated_at,
             trigger.trigger_config,
             <&str>::from(action.run_visibility),
+            action.template_id,
         )
         .fetch_one(&mut *tx)
         .await?;
@@ -235,7 +239,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             r#"
             SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                    updated_at, next_run_at, enabled, trigger_type, event_filters,
-                   configuration_revision, event_activated_at, trigger_config, run_visibility
+                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id
             FROM scheduled_action
             WHERE owner = $1
             "#,
@@ -252,7 +256,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             r#"
             SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                    updated_at, next_run_at, enabled, trigger_type, event_filters, trigger_config,
-                   configuration_revision, event_activated_at, run_visibility
+                   configuration_revision, event_activated_at, run_visibility, template_id
             FROM scheduled_action
             WHERE id = ANY($1)
             "#,
@@ -269,7 +273,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             r#"
             SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                    updated_at, next_run_at, enabled, trigger_type, event_filters,
-                   configuration_revision, event_activated_at, trigger_config, run_visibility
+                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id
             FROM scheduled_action
             WHERE id = $1
             "#,
@@ -288,7 +292,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             r#"
             SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                    updated_at, next_run_at, enabled, trigger_type, event_filters,
-                   configuration_revision, event_activated_at, trigger_config, run_visibility
+                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id
             FROM scheduled_action
             WHERE enabled AND trigger_type IN ('cron', 'multiple') AND next_run_at IS NOT NULL
               AND (claimed IS NULL OR claimed < $1)
@@ -343,7 +347,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
               )
             RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                       updated_at, next_run_at, enabled, trigger_type, event_filters,
-                      configuration_revision, event_activated_at, trigger_config, run_visibility
+                      configuration_revision, event_activated_at, trigger_config, run_visibility, template_id
             "#,
             action.name,
             trigger.schedule,
@@ -486,6 +490,31 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
                 is_success: row.is_success,
                 result: row.result,
                 created_at: row.created_at,
+            })
+            .collect())
+    }
+
+    async fn last_runs(&self, action_ids: &[Uuid]) -> Result<HashMap<Uuid, LastRun>> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT DISTINCT ON (action_id) action_id, end_time, is_success
+            FROM action_execution_record
+            WHERE action_id = ANY($1)
+            ORDER BY action_id, end_time DESC
+            "#,
+            action_ids,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| {
+                let last_run = LastRun {
+                    end_time: row.end_time,
+                    is_success: row.is_success,
+                };
+                (row.action_id, last_run)
             })
             .collect())
     }

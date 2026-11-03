@@ -16,6 +16,8 @@ export interface InviteToTeamMetadata {
   invitedBy: string;
   /** What the invitee gets by joining, as the team stood when the invite was sent. */
   inviteePlan?: InviteePlan;
+  /** Whether this email reminds the invitee of an invite they have not answered. */
+  reminder?: boolean;
   /** Role/permission level in the team */
   role?: InviteToTeamMetadataRole;
   /** The sender's profile picture URL, if available. */

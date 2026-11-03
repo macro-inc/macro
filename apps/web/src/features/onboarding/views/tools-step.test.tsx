@@ -1,9 +1,16 @@
 import { cleanup, fireEvent, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  readPendingConnectors,
+  savePendingConnectors,
+} from '../primitives/flow-storage';
 import { renderWithFakeOnboarding } from '../tests/render';
 import { ToolsStep } from './tools-step';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  sessionStorage.clear();
+});
 
 describe('onboarding tools', () => {
   it('keeps Drive and Sheets available, hides excluded Google apps, and reuses native connections', async () => {
@@ -111,4 +118,53 @@ it('distinguishes a linked GitHub account from repository setup', () => {
     screen.getByRole('button', { name: 'Configure GitHub repositories' })
   );
   expect(fake.calls()).toContain('configureGithubRepositories');
+});
+it('tracks a connector once its connection lands, not ones already connected', async () => {
+  const { fake } = renderWithFakeOnboarding(
+    () => <ToolsStep onContinue={vi.fn()} />,
+    {
+      catalog: [
+        { slug: 'linear', name: 'Linear', iconUrl: null },
+        { slug: 'notion', name: 'Notion', iconUrl: null },
+      ],
+      connectedTools: ['linear'],
+    }
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Connect Notion' }));
+  await waitFor(() =>
+    expect(
+      screen.getByRole('button', { name: 'Connected to Notion' })
+    ).toBeTruthy()
+  );
+  expect(
+    fake
+      .events()
+      .filter((item) => item.event === 'onboarding_v4_connector_connected')
+  ).toEqual([
+    {
+      event: 'onboarding_v4_connector_connected',
+      data: { connector: 'notion' },
+    },
+  ]);
+});
+it('reports a GitHub connect that lands after the OAuth reload', async () => {
+  // Web GitHub OAuth reloads the page, so the step remounts with the link.
+  savePendingConnectors(new Set(['github']));
+  const { fake } = renderWithFakeOnboarding(
+    () => <ToolsStep onContinue={vi.fn()} />,
+    { githubLinkStatus: 'linked' }
+  );
+  await waitFor(() =>
+    expect(
+      fake
+        .events()
+        .filter((item) => item.event === 'onboarding_v4_connector_connected')
+    ).toEqual([
+      {
+        event: 'onboarding_v4_connector_connected',
+        data: { connector: 'github' },
+      },
+    ])
+  );
+  expect(readPendingConnectors().size).toBe(0);
 });

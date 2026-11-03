@@ -25,6 +25,7 @@ name = "scheduled_action_openapi"
 path = "src/scheduling_openapi.rs"
 
 [dependencies]
+universal_input = { path = "../../crates/universal_input" }
 models_ai_projection = { path = "../../crates/models_ai_projection" }
 activity = { path = "../../crates/activity", default-features = false }
 agent = { path = "../../crates/agent", features = ["debug-messages"] }
@@ -46,6 +47,7 @@ ai_projections = { path = "../../crates/ai_projections", features = ["agent"] }
 ai_tools = { path = "../../crates/ai_tools" }
 ai_toolset = { path = "../../crates/ai_toolset" }
 ai_usage = { path = "../../crates/ai_usage" }
+analytics_client = { path = "../../crates/analytics_client" }
 anyhow = { workspace = true }
 async-openai = { workspace = true }
 async-stream = { workspace = true }
@@ -99,15 +101,18 @@ foreign_entity = { path = "../../crates/foreign_entity" }
 frecency = { path = "../../crates/frecency", features = ["outbound", "postgres"] }
 fusionauth = { path = "../../crates/fusionauth" }
 futures = { workspace = true }
-github = { path = "../../crates/github", default-features = false, features = ["outbound", "ports", "sync"] }
+github = { path = "../../crates/github", default-features = false, features = ["installation_claims", "outbound", "ports", "sync"] }
 github_pull_requests = { path = "../../crates/github_pull_requests", features = ["outbound", "s3", "service"] }
 granola_sync = { path = "../../crates/granola_sync" }
 harness_id = { path = "../../crates/harness_id" }
 harnesses = { path = "../../crates/harnesses", default-features = false, features = ["outbound", "ports"] }
 http = { workspace = true }
 http-body-util = { workspace = true }
+image_generation = { path = "../../crates/image_generation", features = ["axum"] }
 import = { path = "../../crates/import" }
 import_notion = { path = "../../crates/import_notion" }
+import_linear = { path = "../../crates/import_linear" }
+import_jira = { path = "../../crates/import_jira" }
 initiative = { path = "../../crates/initiative", default-features = false, features = ["postgres"] }
 jev = { path = "../../crates/jev", features = ["decisions", "outbound"] }
 kafka_util = { path = "../../crates/kafka_util" }
@@ -116,6 +121,7 @@ lazy_static = { workspace = true }
 lexical_client = { path = "../../crates/lexical_client" }
 lexical_mention_extractor = { path = "../../crates/lexical_mention_extractor" }
 log = { workspace = true }
+lru = { workspace = true }
 macro_auth = { path = "../../crates/macro_auth" }
 macro_authorization = { path = "../../crates/macro_authorization", features = ["axum", "outbound", "postgres"] }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }

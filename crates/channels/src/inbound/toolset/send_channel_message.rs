@@ -9,7 +9,7 @@ use crate::domain::ports::ChannelService;
 use crate::inbound::toolset::{ChannelToolContext, types::ChannelMessageAttachmentInput};
 use entity_access::domain::ports::EntityAccessService;
 use messages::domain::{
-    models::{MessageAttribution, NewAttachment, PostMessage, PostMessageNotificationPolicy},
+    models::{NewAttachment, PostMessage, PostMessageNotificationPolicy},
     ports::MessageError,
 };
 
@@ -79,7 +79,7 @@ where
                 access,
                 PostMessage {
                     id: None,
-                    attribution: MessageAttribution::ActingUser,
+                    attribution: service_context.attribution(),
                     notification_policy: PostMessageNotificationPolicy::Default,
                     content: self.content.clone(),
                     thread_id: self.thread_id,
@@ -102,8 +102,7 @@ fn send_error(err: MessageError) -> ToolCallError {
     let description = match &err {
         MessageError::Invalid(message) => (*message).to_string(),
         MessageError::Forbidden => {
-            "not allowed to send this message: it attaches or mentions an item the user cannot view"
-                .to_string()
+            "not allowed to send this message: it attaches an item the user cannot view".to_string()
         }
         MessageError::NotFound => "thread not found in this channel".to_string(),
         MessageError::Conflict | MessageError::Repository(_) => {

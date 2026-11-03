@@ -88,6 +88,9 @@ pub enum EmailErr {
     /// Thread not found.
     #[error("Thread not found")]
     ThreadNotFound,
+    /// A bulk request named more threads than one request may change.
+    #[error("At most {0} threads can change in one request")]
+    TooManyThreads(usize),
     /// The caller does not have permission to perform this action.
     #[error("You do not have permission to perform this action")]
     Unauthorized,

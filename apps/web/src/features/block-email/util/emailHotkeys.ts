@@ -78,6 +78,7 @@ export function registerEmailHotkeys(
     keyDownHandler: handlers.blockSender,
     hotkeyToken: TOKENS.email.blockSender,
     displayPriority: 5,
+    condition: () => handlers.canActOnSender(),
   });
   registerHotkey({
     scopeId: scopeId,
@@ -85,6 +86,7 @@ export function registerEmailHotkeys(
     keyDownHandler: handlers.markSenderSignal,
     hotkeyToken: TOKENS.email.markSenderSignal,
     displayPriority: 5,
+    condition: () => handlers.canActOnSender(),
   });
   registerHotkey({
     scopeId: scopeId,
@@ -92,6 +94,7 @@ export function registerEmailHotkeys(
     keyDownHandler: handlers.markSenderNoise,
     hotkeyToken: TOKENS.email.markSenderNoise,
     displayPriority: 5,
+    condition: () => handlers.canActOnSender(),
   });
   registerHotkey({
     hotkey: ['arrowup', 'p'],

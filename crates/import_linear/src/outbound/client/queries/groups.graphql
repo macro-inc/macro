@@ -1,0 +1,6 @@
+query ImportProjects($after: String) {
+  projects(first: 50, after: $after, includeArchived: true) {
+    nodes { id name description url }
+    pageInfo { hasNextPage endCursor }
+  }
+}

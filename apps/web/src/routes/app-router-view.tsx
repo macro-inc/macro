@@ -6,6 +6,7 @@ import { ChannelInviteAcceptance } from '@app/features/channel-invitations/Chann
 import { ChannelsViewSkeleton } from '@app/features/channels-view/channels-view-skeleton';
 import { DriveViewSkeleton } from '@app/features/drive-view/drive-view-skeleton';
 import { EmailViewSkeleton } from '@app/features/email-view/email-view-skeleton';
+import { ExternalViewSkeleton } from '@app/features/external-view/external-view-skeleton';
 import { InviteLinksPortal } from '@app/features/gtm-invite/InviteLinksPortal';
 import { InviteWelcome } from '@app/features/gtm-invite/InviteWelcome';
 import {
@@ -100,8 +101,14 @@ import {
   channelsSplitRoute,
   codersRoute,
   companiesRoute,
+  crmItemRoute,
+  crmPipelineItemRoute,
+  crmPipelineRecordFileItemRoute,
+  crmPipelineRecordItemRoute,
   crmPipelineRecordRoute,
   crmPipelineRoute,
+  crmRecordFileItemRoute,
+  crmRecordItemRoute,
   crmRecordRoute,
   debugRoutes,
   driveCallRoute,
@@ -114,6 +121,8 @@ import {
   emailSignupCallbackRoute,
   emailSplitRoute,
   emailThreadRoute,
+  externalChatRoute,
+  externalRoute,
   foldersRoute,
   formRespondRoute,
   homeCalendarRoute,
@@ -123,6 +132,7 @@ import {
   homeSplitRoute,
   inboxLinkCallbackRoute,
   internalInviteLinksRoute,
+  internalSystemStatusRoute,
   inviteRoute,
   legacyContentRoute,
   loginPopupSuccessRoute,
@@ -160,6 +170,11 @@ import {
   withMeetingShell,
 } from './shells';
 
+const ExternalChatRouteView = lazyNamed(
+  () => import('@app/features/external-view/route-views'),
+  'ExternalChatRouteView'
+);
+
 const { Router, Route } = SplitRouter;
 
 // Views under appRoute load lazily (lazy-route-views.ts); auth and booking
@@ -167,6 +182,14 @@ const { Router, Route } = SplitRouter;
 const BookingLinksRouteView = lazyNamed(
   () => import('@app/features/scheduling/route-views'),
   'BookingLinksRouteView'
+);
+const ExternalRouteView = lazyNamed(
+  () => import('@app/features/external-view/route-views'),
+  'ExternalRouteView'
+);
+const SystemStatusDashboard = lazyNamed(
+  () => import('@app/features/system-status/views/SystemStatusDashboard'),
+  'SystemStatusDashboard'
 );
 
 /** Debug views stay behind the registry's lazy import. */
@@ -252,6 +275,10 @@ export function AppRouterView() {
         <Route
           definition={internalInviteLinksRoute}
           component={InviteLinksPortal}
+        />
+        <Route
+          definition={internalSystemStatusRoute}
+          component={SystemStatusDashboard}
         />
         <Route definition={teamInviteRoute} component={TeamInviteAcceptance} />
         <Route
@@ -385,6 +412,16 @@ export function AppRouterView() {
           component={BookingLinksRouteView}
         />
         <Route
+          definition={externalRoute}
+          component={ExternalRouteView}
+          loading={ExternalViewSkeleton}
+        >
+          <Route
+            definition={externalChatRoute}
+            component={ExternalChatRouteView}
+          />
+        </Route>
+        <Route
           definition={calendarSplitRoute}
           component={CalendarRouteView}
           loading={CalendarViewSkeleton}
@@ -406,9 +443,15 @@ export function AppRouterView() {
         <Route definition={callDetailRoute} component={CallDetailRouteView} />
         <Route definition={companiesRoute} component={CompaniesRouteView}>
           <Route definition={crmPipelineRoute}>
+            <Route definition={crmPipelineItemRoute} />
             <Route definition={crmPipelineRecordRoute} />
+            <Route definition={crmPipelineRecordItemRoute} />
+            <Route definition={crmPipelineRecordFileItemRoute} />
           </Route>
+          <Route definition={crmItemRoute} />
           <Route definition={crmRecordRoute} />
+          <Route definition={crmRecordItemRoute} />
+          <Route definition={crmRecordFileItemRoute} />
         </Route>
         <Route definition={foldersRoute} component={FoldersRouteView} />
         <Route definition={searchRoute} component={SearchRouteView} />

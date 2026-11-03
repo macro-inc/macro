@@ -1,12 +1,20 @@
+import { MessageNotificationIndexContext } from '@notifications/components/MarkMessageNotifications';
 import {
-  MarkMessageNotifications,
-  MessageNotificationIndexContext,
-} from '@notifications/components/MarkMessageNotifications';
+  installMessageIntersectionObserver,
+  ObservedMessage as MarkMessageNotifications,
+} from '@notifications/tests/message-read-visibility';
 import type { UnifiedNotification } from '@notifications/types';
 import type { MessageListItem } from '@service-storage/messages';
 import { render, waitFor } from '@solidjs/testing-library';
 import { createSignal, For, Show } from 'solid-js';
-import { expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+
+let intersect: ReturnType<typeof installMessageIntersectionObserver>;
+beforeEach(() => {
+  intersect = installMessageIntersectionObserver();
+});
+afterEach(() => vi.unstubAllGlobals());
+
 import { notifyElementOnMount } from '../../Thread/message-element-lifecycle';
 import { ThreadCollapsedIndicator } from '../../Thread/ThreadCollapsedIndicator';
 import { createChannelUnreadNavigation } from '../create-channel-unread-navigation';
@@ -121,11 +129,13 @@ it('shares unread lookups across mounted messages without rescanning history per
   expect(bulkMarkAsRead).not.toHaveBeenCalled();
 
   setMessageIds(Array.from({ length: 50 }, (_, index) => `other-${index}`));
-  expect(view.container.querySelectorAll('span')).toHaveLength(50);
+  expect(view.container.children).toHaveLength(50);
   expect(readMetadata).toHaveBeenCalledTimes(initialReads);
   expect(bulkMarkAsRead).not.toHaveBeenCalled();
 
   setMessageIds([...messageIds(), 'reply-12']);
+  expect(bulkMarkAsRead).not.toHaveBeenCalled();
+  intersect();
   await waitFor(() => expect(bulkMarkAsRead).toHaveBeenCalledOnce());
   expect(bulkMarkAsRead).toHaveBeenCalledWith([reply]);
   expect(globalRead).not.toHaveBeenCalled();
@@ -219,7 +229,7 @@ it('updates one chip live without suspending the channel or loading the global f
   expect(globalRead).not.toHaveBeenCalled();
 });
 
-it('hands off to the inline unread indicator, keeps other offscreen threads reachable, and only marks rendered replies seen', async () => {
+it('hands off to the inline unread indicator, keeps other offscreen threads reachable, and only marks visible replies seen', async () => {
   const [records, setRecords] = createSignal<UnifiedNotification[]>([]);
   const [container, setContainer] = createSignal<HTMLDivElement>();
   const [expanded, setExpanded] = createSignal(false);
@@ -365,6 +375,8 @@ it('hands off to the inline unread indicator, keeps other offscreen threads reac
   ).toBe(true);
   expect(bulkMarkAsRead).not.toHaveBeenCalled();
   view.getByTitle('Expand thread').click();
+  expect(bulkMarkAsRead).not.toHaveBeenCalled();
+  intersect();
   await waitFor(() => expect(bulkMarkAsRead).toHaveBeenCalledOnce());
   expect(bulkMarkAsRead).toHaveBeenCalledWith([notification('root-3', 14)]);
   expect(view.getByText('Unread reply content')).toBeTruthy();

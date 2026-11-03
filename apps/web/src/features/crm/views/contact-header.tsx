@@ -1,9 +1,10 @@
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { formatDateAndTime, formatRelativeTimestamp } from '@entity';
-import ContactIcon from '@phosphor/address-book.svg';
-import ClockIcon from '@phosphor/clock.svg';
-import EnvelopeIcon from '@phosphor/envelope.svg';
+import ContactIcon from '@icon/system/regular/address-book.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import { Avatar, Badge, badgeTriggerClasses, Tooltip } from '@ui';
 import { Show } from 'solid-js';
 import { useCrmContext } from '../context/crm-context';
@@ -95,7 +96,10 @@ export function ContactHeader(props: {
           </Show>
         </Avatar>
         <h1 class="min-w-0 flex-1 text-2xl font-semibold">
-          <Show when={props.contact} fallback={'Loading contact…'}>
+          <Show
+            when={props.contact}
+            fallback={<ListSkeleton.Bar class="h-6 w-48" />}
+          >
             {(contact) => <TitleEditor contact={contact()} />}
           </Show>
         </h1>

@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::RoutineApp;
 use crate::domain::RoutineSchedule;
 #[test]
 fn agent_tasks_do_not_silently_become_model_tasks_or_override_defaults() {
@@ -11,9 +12,17 @@ fn agent_tasks_do_not_silently_become_model_tasks_or_override_defaults() {
             expression: "0 0 9 * * *".into(),
             timezone: "UTC".into(),
         },
+        required_apps: vec![RoutineApp {
+            app_slug: "linear".into(),
+            name: "Linear".into(),
+        }],
     };
     let body = configuration_body(&config, Utc::now()).unwrap();
     assert_eq!(body["task"]["agent"]["bot_id"], agent_id.to_string());
+    assert_eq!(
+        body["task"]["mcp_servers"],
+        serde_json::json!([{ "app_slug": "linear", "server_name": "Linear" }])
+    );
     assert!(body["task"].get("model").is_none());
     assert!(body.get("enabled").is_none());
     assert!(body.get("owner").is_none());
@@ -78,6 +87,7 @@ async fn requests_forward_authenticated_identity_and_preserve_target_and_activat
         schedule: RoutineSchedule::Once {
             at: Utc::now() + chrono::Duration::hours(1),
         },
+        required_apps: Vec::new(),
     };
     client.create(&user, &config).await.unwrap();
     client.update(&user, id, &config).await.unwrap();
@@ -200,5 +210,52 @@ async fn run_now_explains_an_exhausted_ai_allowance() {
         .expect_err("402 is not a successful run");
 
     assert!(error.to_string().contains("allowance"), "{error}");
+    server.await.unwrap();
+}
+
+/// The scheduler's rejection names the cause, so the agent can tell a deleted
+/// agent from one the user may not run or a configuration it must fix.
+#[tokio::test]
+async fn create_rejections_carry_the_scheduler_reason() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/scheduled-action", listener.local_addr().unwrap());
+    let rejections = [
+        ("404 Not Found", "selected agent is unavailable"),
+        ("403 Forbidden", "routine owner is not authorized"),
+        (
+            "400 Bad Request",
+            "invalid routine task; select a model or agent and provide instructions",
+        ),
+        (
+            "422 Unprocessable Entity",
+            "connect every app this routine requires",
+        ),
+    ];
+    let server = serve_responses(
+        listener,
+        rejections
+            .iter()
+            .map(|(status, reason)| (*status, (*reason).to_owned()))
+            .collect(),
+    );
+    let client = RoutineClient::new(&url, "test-internal-key").unwrap();
+    let user = MacroUserIdStr::parse_from_str("macro|routine@example.com").unwrap();
+    let config = RoutineConfiguration {
+        name: "Stuck tickets".into(),
+        instructions: "Sweep stuck tickets".into(),
+        target: RoutineTarget::Agent {
+            agent_id: Uuid::from_u128(1),
+        },
+        schedule: RoutineSchedule::Cron {
+            expression: "0 0 9,17 * * *".into(),
+            timezone: "UTC".into(),
+        },
+        required_apps: vec![],
+    };
+
+    for (_, reason) in rejections {
+        let error = client.create(&user, &config).await.unwrap_err();
+        assert!(error.to_string().contains(reason), "{error}");
+    }
     server.await.unwrap();
 }

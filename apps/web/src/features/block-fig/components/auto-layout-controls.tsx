@@ -7,9 +7,9 @@ import { InspectorSelect } from './inspector-select';
  */
 
 import type { AutoLayout, NodeInfo, Sizing } from '@core/fig-engine/types';
-import ArrowDown from '@phosphor/arrow-down.svg';
-import ArrowRight from '@phosphor/arrow-right.svg';
-import CornersOut from '@phosphor/corners-out.svg';
+import ArrowDown from '@icon/system/regular/arrow-down.svg';
+import ArrowRight from '@icon/system/regular/arrow-right.svg';
+import CornersOut from '@icon/system/regular/corners-out.svg';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import type { Constraint, Patch } from '../primitives/create-fig-editor';
 import { ChoiceRow, NumberField, ParsedField } from './design-fields';

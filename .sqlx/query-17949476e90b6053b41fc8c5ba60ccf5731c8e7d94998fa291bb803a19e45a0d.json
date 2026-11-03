@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM whatsapp_outgoing_event\n            WHERE account_id = $1 AND created_at < $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "17949476e90b6053b41fc8c5ba60ccf5731c8e7d94998fa291bb803a19e45a0d"
+}

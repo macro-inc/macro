@@ -16,7 +16,7 @@ export type FormAudience = 'members' | 'public';
 
 export type FormStatus = 'open' | 'closed';
 
-/** What the viewer may do: view = respond; edit = build, and edit responses (edit on the linked database). */
+/** What the viewer may do: view = respond (and read shared responses); edit = build, and edit responses (edit on the linked database). */
 export type FormAccess = 'view' | 'edit' | 'owner';
 
 export type SectionKind = 'questions' | 'gate' | 'booking';
@@ -68,6 +68,7 @@ export type FormColumnKind =
   | { type: 'number' }
   | { type: 'boolean' }
   | { type: 'date' }
+  | { type: 'date_range' }
   | { type: 'link' }
   | { type: 'select'; multi: boolean }
   | { type: 'select_number'; multi: boolean }
@@ -103,6 +104,8 @@ export type FormCellValue =
   | { type: 'number'; value: number }
   | { type: 'boolean'; value: boolean }
   | { type: 'date'; value: string }
+  /** Two instants; the end is never before the start. */
+  | { type: 'date_range'; value: { start: string; end: string } }
   | { type: 'link'; value: string[] }
   | { type: 'options'; value: FormOptionReference[] }
   | { type: 'entities'; value: FormEntityReference[] }
@@ -126,6 +129,13 @@ export type NumberOperator =
   | 'lessThan'
   | 'lessThanOrEqual';
 export type DateOperator = 'before' | 'after' | 'onOrBefore' | 'onOrAfter';
+export type DateRangeOperator =
+  | 'contains'
+  | 'doesNotContain'
+  | 'endsBefore'
+  | 'endsOnOrAfter'
+  | 'startsAfter'
+  | 'startsOnOrBefore';
 export type SetOperator =
   | 'isAnyOf'
   | 'isNoneOf'
@@ -139,6 +149,7 @@ export type GateTest =
   | { kind: 'text'; operator: TextOperator; value: string }
   | { kind: 'number'; operator: NumberOperator; value: number }
   | { kind: 'date'; operator: DateOperator; value: string }
+  | { kind: 'dateRange'; operator: DateRangeOperator; value: string }
   | { kind: 'checkbox'; checked: boolean }
   | { kind: 'options'; operator: SetOperator; options: string[] }
   | { kind: 'entities'; operator: SetOperator; entities: string[] };
@@ -183,6 +194,14 @@ export type FormSection = {
 /** Everything the form owns about presentation, in order. */
 export type FormLayout = { sections: FormSection[] };
 
+/** A form's logo, cover image and accent color; `null` where unset. */
+export type FormBranding = {
+  logoFileId: string | null;
+  coverFileId: string | null;
+  /** `#rrggbb`. */
+  accentColor: string | null;
+};
+
 export type FormMetadata = {
   id: string;
   name: string;
@@ -194,7 +213,10 @@ export type FormMetadata = {
   status: FormStatus;
   closesAt: string | null;
   tallyVisible: boolean;
+  responsesVisible: boolean;
+  anonymous: boolean;
   confirmationMessage: string;
+  branding: FormBranding;
   submittedColumnId: string | null;
   respondentColumnId: string | null;
 };

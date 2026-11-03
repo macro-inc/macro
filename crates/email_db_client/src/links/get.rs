@@ -201,6 +201,7 @@ struct DbInboxDetailsRow {
     updated_at: DateTime<Utc>,
     signature_on_replies_forwards: Option<bool>,
     signature: Option<String>,
+    read_receipts_enabled: Option<bool>,
     latest_backfill_status: Option<db::backfill::BackfillJobStatus>,
     provider_granted_scopes: Vec<String>,
     calendar_disabled: bool,
@@ -234,6 +235,7 @@ pub async fn fetch_inbox_details_for_macro_id(
                l.updated_at as "updated_at!",
                s.signature_on_replies_forwards as "signature_on_replies_forwards?",
                s.signature,
+               s.read_receipts_enabled as "read_receipts_enabled?",
                CASE WHEN l.provider = 'OUTLOOK' THEN
                    CASE WHEN NOT EXISTS (SELECT 1 FROM email_sync_streams ss WHERE ss.link_id = l.id AND ss.generation = l.sync_generation AND ss.kind IN ('folder_catalog','mail_folder'))
                        THEN 'Init'::email_backfill_job_status
@@ -284,9 +286,11 @@ pub async fn fetch_inbox_details_for_macro_id(
         .map(|row| {
             let settings = service::settings::Settings {
                 link_id: row.id,
-                // Missing settings row → schema default (FALSE).
+                // Missing settings row → schema defaults: replies/forwards off,
+                // read receipts on.
                 signature_on_replies_forwards: row.signature_on_replies_forwards.unwrap_or(false),
                 signature: row.signature,
+                read_receipts_enabled: row.read_receipts_enabled.unwrap_or(true),
             };
             let link = link::Link::try_from(DbLink {
                 id: row.id,

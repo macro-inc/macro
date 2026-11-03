@@ -38,12 +38,59 @@ const tally: QuestionTally[] = [
 ];
 
 describe('createPollVoting', () => {
+  it('keeps a vote on an anonymous poll final, and refuses a second one without editing', async () => {
+    const calls: string[] = [];
+    const notices: string[] = [];
+    await createRoot(async (dispose) => {
+      const [mine, setMine] = createSignal<MyResponse | null>(null);
+      const voting = createPollVoting({
+        poll: () => poll,
+        anonymous: () => true,
+        mine,
+        tally: () => tally,
+        submit: () => {
+          calls.push('POST');
+          return errAsync({
+            message: 'you already responded',
+            refusal: 'already-responded',
+          });
+        },
+        editMine: () => {
+          calls.push('PUT');
+          return okAsync({
+            kind: 'submitted',
+            responseId: 'response',
+            booking: null,
+          });
+        },
+        notify: (message) => notices.push(message),
+      });
+      await voting.vote('tacos');
+      expect(calls).toEqual(['POST']);
+      expect(notices).toEqual(['You already voted in this anonymous poll.']);
+      expect(voting.voted()).toBe(true);
+      expect(voting.final()).toBe(true);
+      setMine({
+        status: 'submitted',
+        booking: null,
+        submittedAt: undefined,
+        answers: [],
+        anonymous: true,
+      });
+      await voting.vote('pho');
+      expect(calls).toEqual(['POST']);
+      expect(voting.myVote()).toEqual([]);
+      dispose();
+    });
+  });
+
   it('casts a first vote as a submission, then changes it by editing the response', async () => {
     const calls: [string, SubmittedAnswer[]][] = [];
     await createRoot(async (dispose) => {
       const [mine, setMine] = createSignal<MyResponse | null>(null);
       const voting = createPollVoting({
         poll: () => poll,
+        anonymous: () => false,
         mine,
         tally: () => tally,
         submit: (answers) => {
@@ -115,6 +162,7 @@ describe('createPollVoting', () => {
     await createRoot(async (dispose) => {
       const voting = createPollVoting({
         poll: () => poll,
+        anonymous: () => false,
         mine: () => null,
         tally: () => undefined,
         submit: () =>

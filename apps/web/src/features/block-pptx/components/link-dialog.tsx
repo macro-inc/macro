@@ -6,10 +6,10 @@
  */
 
 import type { DeckOutline } from '@core/pptx-engine/types';
-import At from '@phosphor/at.svg';
-import Globe from '@phosphor/globe.svg';
-import Presentation from '@phosphor/presentation.svg';
-import X from '@phosphor/x.svg';
+import At from '@icon/system/regular/at.svg';
+import Globe from '@icon/system/regular/globe.svg';
+import Presentation from '@icon/system/regular/presentation.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui/components/Button';
 import { Dialog } from '@ui/components/Dialog';
 import { Input } from '@ui/components/Input';
@@ -326,7 +326,7 @@ export function LinkDialog(props: {
           </Button>
           <Button
             size="sm"
-            variant="cta"
+            variant="primary"
             type="submit"
             data-testid="pptx-link-ok"
             disabled={!link()}
@@ -335,13 +335,14 @@ export function LinkDialog(props: {
           </Button>
         </div>
         <Button
+          aria-label="Close"
+          tooltip="Close"
           size="icon-sm"
           variant="ghost"
-          label="Close"
           class="absolute top-3 right-3"
           onClick={props.onClose}
         >
-          <X />
+          <X class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </form>
     </Dialog>

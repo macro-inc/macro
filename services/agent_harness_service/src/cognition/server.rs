@@ -4,7 +4,10 @@
 use crate::cognition::{
     api::{self, context::ApiContext},
     config::{Config, Environment},
-    service,
+    service::{
+        self,
+        integration_analytics::{IntegrationAnalytics, IntegrationChange, IntegrationEvent},
+    },
 };
 use ai_tools::{NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress};
 use anyhow::Context;
@@ -378,6 +381,7 @@ pub async fn build(
         ),
     )
     .with_presentation_files(Arc::new(document_files.clone()))
+    .with_word_document_files(Arc::new(document_files.clone()))
     .with_design_files(Arc::new(document_files.clone()))
     .with_photoshop_files(Arc::new(document_files.clone()))
     .with_illustrator_files(Arc::new(document_files));
@@ -542,7 +546,7 @@ pub async fn build(
                 .with_enforcement(config.enable_ai_usage_enforcement),
             ),
             ai_billing.clone(),
-            ai_billing::outbound::HttpSettlementTrigger::new(auth_service_client),
+            ai_billing::outbound::HttpSettlementTrigger::new(auth_service_client.clone()),
             config.enable_ai_usage_billing,
         ));
 
@@ -554,7 +558,7 @@ pub async fn build(
     let decision_classifier = config
         .typesafe_api_key
         .value()
-        .map(jev::outbound::TypesafeJev::new)
+        .map(jev::outbound::SystemOneJev::typesafe)
         .transpose()
         .context("failed to configure the decision classifier")?
         .map(|provider| jev::domain::JevClassifier::new(provider, recorder.clone()));
@@ -576,8 +580,14 @@ pub async fn build(
     )
     .context("invalid MCP credentials encryption key")?;
     let granola_signing_key = *mcp_encryption_key.as_bytes();
-    let mcp_server_repo =
-        mcp_client::outbound::pg_server_repo::PgServerRepo::new(db.clone(), mcp_encryption_key);
+    let mcp_server_repo = mcp_client::outbound::NativeServerStore::new(
+        mcp_client::outbound::pg_server_repo::PgServerRepo::new(db.clone(), mcp_encryption_key),
+        Some(Arc::new(
+            mcp_client::outbound::auth_service_github_tokens::AuthServiceGithubTokens::new(
+                (*auth_service_client).clone(),
+            ),
+        )),
+    );
 
     // The Pipedream MCP stack, fully separate from the native one above
     // (own endpoints, own table, own toolset). Without credentials its
@@ -698,14 +708,6 @@ pub async fn build(
         channels_connection_gateway.clone(),
     );
 
-    let project_tool_context = ai_tools::build_project_tool_context(
-        db.clone(),
-        macro_event_broker.clone(),
-        entity_access_service.clone(),
-        document_tool_context.service.clone(),
-        user_email_service.clone(),
-    );
-
     let initiative_tool_context = ai_tools::build_initiative_tool_context(
         db.clone(),
         &document_tool_context,
@@ -724,6 +726,14 @@ pub async fn build(
         ),
         ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
     );
+    let project_tool_context = ai_tools::build_project_tool_context(
+        db.clone(),
+        macro_event_broker.clone(),
+        entity_access_service.clone(),
+        document_tool_context.service.clone(),
+        user_email_service.clone(),
+        databases_tool_context.service.clone(),
+    );
 
     let entity_creator = ai_tools::ToolEntityCreator {
         document_creator: document_tool_context.creator.clone(),
@@ -732,6 +742,7 @@ pub async fn build(
         task_properties: task_properties_for_import,
         document_properties: document_properties_for_import,
         team_repository: ai_tools::build_team_repository(db.clone()),
+        initiative_service: initiative_tool_context.service.clone(),
         project_service: project_tool_context.service.clone(),
         databases_service: databases_tool_context.service.clone(),
         document_service: document_tool_context.service.clone(),
@@ -746,6 +757,20 @@ pub async fn build(
         .with_slack_source(Arc::new(
             import::outbound::mcp_slack_source::McpSlackSource::new(mcp_selector.clone()),
         ))
+        .with_tracker_connections(
+            Arc::new(
+                import_linear::outbound::client::PipedreamLinearConnections::new(
+                    Arc::new(pipedream_repo.clone()),
+                    pipedream_client.clone(),
+                ),
+            ),
+            Arc::new(
+                import_jira::outbound::client::PipedreamJiraConnections::new(
+                    Arc::new(pipedream_repo.clone()),
+                    pipedream_client.clone(),
+                ),
+            ),
+        )
         .with_notion_connections(Arc::new(
             import_notion::outbound::pipedream::PipedreamNotionConnections::new(
                 Arc::new(pipedream_repo.clone()),
@@ -806,12 +831,20 @@ pub async fn build(
         ai_tools::FormsToolConfig {
             app_origin: macro_service_urls::AppServiceUrl::new()?.to_string(),
             editing_worker_url: config.ai_editing_worker_url.clone(),
+            static_files: static_file_service_client::StaticFileServiceClient::new(
+                internal_api_key.clone(),
+                macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
+            ),
         },
     );
 
     let tool_service_context = ai_tools::ToolServiceContext {
+        memory_tool_context: ai_tools::memory::build_memory_tool_context(
+            db.clone(),
+            recorder.clone(),
+        ),
         cognition_tool_context: ai_tools::build_cognition_tool_context()?,
-        connector_tool_context: ai_tools::build_connector_tool_context(db.clone(), None),
+        connector_tool_context: ai_tools::build_connector_tool_context(db.clone(), None, None),
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
         soup_service: soup_service.clone(),
@@ -855,6 +888,9 @@ pub async fn build(
         databases_sql_tool_context,
         import_tool_context: import::inbound::toolset::ImportToolContext::wired(
             import_service.clone(),
+        ),
+        mcp_server_tool_context: ai_tools::ToolMcpServerToolContext::wired(
+            mcp_client::domain::service::ServerDirectory::new(Arc::new(mcp_server_repo.clone())),
         ),
         chat_tool_context,
         channel_tool_context,
@@ -901,11 +937,9 @@ pub async fn build(
         Arc::new(all_tools.prompt.to_string());
 
     // Build memory service
-    let memory_repo = memory::outbound::pg_memory_repo::PgMemoryRepo::new(db.clone());
-    let memory_service = Arc::new(memory::domain::service::MemoryServiceImpl::new(
-        memory_repo,
+    let memory_service = Arc::new(ai_tools::memory::build_memory_service(
+        db.clone(),
         tool_service_context.clone(),
-        all_tools,
     ));
 
     tracing::info!("initialized memory service");
@@ -988,18 +1022,69 @@ pub async fn build(
         mcp_client_metadata.clone(),
         mcp_pre_registered,
     );
+    // Record connector connects and disconnects for product analytics.
+    let integration_analytics = IntegrationAnalytics::from_config(&config, &db);
+    let analytics_for_auth_hook = integration_analytics.clone();
+    let mcp_auth_hook: mcp_client::inbound::axum_router::McpAuthCompletedHook =
+        Arc::new(move |record: mcp_client::domain::models::McpServerRecord| {
+            analytics_for_auth_hook.record(
+                record.user_id,
+                IntegrationChange::Connected,
+                IntegrationEvent::mcp_server(&record.url),
+            );
+            Box::pin(async {})
+        });
+    let analytics_for_mcp_removed_hook = integration_analytics.clone();
+    let mcp_removed_hook: mcp_client::inbound::axum_router::McpServerRemovedHook =
+        Arc::new(move |record: mcp_client::domain::models::McpServerRecord| {
+            if let Some(event) = IntegrationEvent::removed_mcp_server(&record) {
+                analytics_for_mcp_removed_hook.record(
+                    record.user_id,
+                    IntegrationChange::Disconnected,
+                    event,
+                );
+            }
+            Box::pin(async {})
+        });
     let mcp_state = mcp_client::inbound::McpRouterState::new(
         mcp_server_repo,
         mcp_oauth,
         authorization_state.clone(),
         mcp_client_metadata,
-    );
+    )
+    .with_auth_completed_hook(mcp_auth_hook)
+    .with_server_removed_hook(mcp_removed_hook);
 
+    let analytics_for_pipedream_hook = integration_analytics.clone();
+    let pipedream_auth_hook: pipedream_mcp::inbound::axum_router::PipedreamAuthCompletedHook =
+        Arc::new(
+            move |connection: pipedream_mcp::domain::models::PipedreamConnection| {
+                analytics_for_pipedream_hook.record(
+                    connection.user_id,
+                    IntegrationChange::Connected,
+                    IntegrationEvent::pipedream(&connection.app_slug),
+                );
+                Box::pin(async {})
+            },
+        );
+    let pipedream_disconnected_hook: pipedream_mcp::inbound::axum_router::PipedreamDisconnectedHook =
+        Arc::new(
+            move |connection: pipedream_mcp::domain::models::PipedreamConnection| {
+                integration_analytics.record(
+                    connection.user_id,
+                    IntegrationChange::Disconnected,
+                    IntegrationEvent::pipedream(&connection.app_slug),
+                );
+                Box::pin(async {})
+            },
+        );
     let pipedream_state = pipedream_mcp::inbound::PipedreamRouterState::new(
         pipedream_repo,
         pipedream_client,
         authorization_state.clone(),
-    );
+    )
+    .with_auth_completed_hook(pipedream_auth_hook)
+    .with_disconnected_hook(pipedream_disconnected_hook);
 
     let cancellation = tokio_util::sync::CancellationToken::new();
     super::refresh::start(
@@ -1008,6 +1093,13 @@ pub async fn build(
         cancellation.clone(),
         event_broker_tracker.clone(),
     );
+    if !matches!(config.environment, Environment::Local) {
+        memory::schedule::start(
+            memory_service.clone(),
+            &event_broker_tracker,
+            cancellation.clone(),
+        )?;
+    }
     let router = api::build_router(ApiContext {
         db: db.clone(),
         email_service_client_external,

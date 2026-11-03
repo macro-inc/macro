@@ -1,14 +1,14 @@
 import type { ItemDragOverlayData } from '@app/components/app/ItemDragAndDrop';
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CaretUpIcon from '@phosphor/caret-up.svg';
-import CheckIcon from '@phosphor/check.svg';
-import DotsSixVerticalIcon from '@phosphor/dots-six-vertical.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import XIcon from '@phosphor/x.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CaretUpIcon from '@icon/system/regular/caret-up.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import DotsSixVerticalIcon from '@icon/system/regular/dots-six-vertical.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import {
   createSortable,
   maybeTransformStyle,
@@ -74,7 +74,7 @@ function DisableCrmDialog(props: {
       <Panel depth={2} class="max-h-[75vh] text-ink rounded-xl">
         <Panel.Header class="px-2 gap-1">
           <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
-            <XIcon />
+            <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Dialog.CloseButton>
           <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
             Disable CRM
@@ -107,7 +107,7 @@ function DisableCrmDialog(props: {
               Cancel
             </Button>
             <Button
-              variant="strong"
+              variant="secondary"
               disabled={
                 props.pending || props.confirmation !== DISABLE_CRM_PHRASE
               }
@@ -202,7 +202,7 @@ function CrmEnablementSection() {
         <Panel depth={2} class="max-h-[75vh] text-ink rounded-xl">
           <Panel.Header class="px-2 gap-1">
             <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
-              <XIcon />
+              <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Dialog.CloseButton>
             <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
               Enable CRM
@@ -222,7 +222,7 @@ function CrmEnablementSection() {
                 Cancel
               </Button>
               <Button
-                variant="outline"
+                variant="secondary"
                 disabled={patchCrmMutation.isPending}
                 onClick={() => handleEnable(false)}
               >
@@ -236,7 +236,7 @@ function CrmEnablementSection() {
                 </Show>
               </Button>
               <Button
-                variant="strong"
+                variant="secondary"
                 disabled={patchCrmMutation.isPending}
                 onClick={() => handleEnable(true)}
               >
@@ -436,7 +436,7 @@ function StageEditorRow(props: {
           <Tooltip label="Save">
             <Button
               aria-label="Save stage name"
-              variant="accent"
+              variant="primary"
               size="icon-sm"
               disabled={props.pending || !hasChanged()}
               onClick={commit}
@@ -580,7 +580,7 @@ function StagesSection() {
             when={dealStages.isCustomized()}
             fallback={
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 disabled={pending()}
                 onClick={handleCustomize}
@@ -592,7 +592,7 @@ function StagesSection() {
             }
           >
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               disabled={blocked()}
               onClick={() => setShowResetModal(true)}
@@ -646,7 +646,7 @@ function StagesSection() {
                 }}
               />
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 class="shrink-0"
                 disabled={newStageName().trim() === '' || pending()}

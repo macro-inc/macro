@@ -31,9 +31,18 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import io.opentelemetry.api.trace.SpanKind
+import io.opentelemetry.context.Context as TraceContext
 
 /** Main-thread owner shared by Telecom, FCM, service, Activity and the WebView. */
 internal object Calls {
+    var trace: CallTrace? = null
+        private set
+    fun stopTracing(outcome: String) {
+        val previous = trace
+        trace = null
+        previous?.finish(outcome)
+    }
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     var offer: CallOffer? = null
         private set
@@ -214,17 +223,25 @@ internal object Calls {
     fun receive(ctx: Context, data: Map<String, String>, sentTime: Long) {
         if (android.os.Build.VERSION.SDK_INT < 26) return
         val next = runCatching { CallOffer.parse(data["payload"].orEmpty(), sentTime) }.getOrNull()
+        val incomingTrace = next?.let { CallTracing.start(ctx, it) }
+        val receipt = incomingTrace?.phase("call.push.receive")
         val now = System.currentTimeMillis()
         // Log only the reason: payloads carry LiveKit credentials.
         val ignored = when {
-            data["recipientId"] != ctx.getSharedPreferences("macro_push", Context.MODE_PRIVATE).getString("recipient", null) -> "another account"
-            next == null -> "invalid payload"
-            !CallOffer.fresh(sentTime, now) -> "stale, sent ${now - sentTime}ms ago"
-            ctx.getSharedPreferences("macro_calls", Context.MODE_PRIVATE).getLong(next.callId, 0) > now - 120_000 -> "call recently ended"
-            offer != null -> "another call is ringing or active"
+            data["recipientId"] != ctx.getSharedPreferences("macro_push", Context.MODE_PRIVATE).getString("recipient", null) -> "another_account"
+            next == null -> "invalid_payload"
+            !CallOffer.fresh(sentTime, now) -> "stale"
+            ctx.getSharedPreferences("macro_calls", Context.MODE_PRIVATE).getLong(next.callId, 0) > now - 120_000 -> "recently_ended"
+            offer != null -> "duplicate_or_busy"
             else -> null
         }
-        if (ignored != null || next == null) { android.util.Log.i("MacroCall", "Ignored call push: $ignored"); return }
+        if (ignored != null || next == null) {
+            val outcome = ignored ?: "invalid_payload"
+            receipt?.end(outcome); incomingTrace?.finish(outcome)
+            android.util.Log.i("MacroCall", "Ignored call push: $outcome"); return
+        }
+        receipt?.end("accepted")
+        trace = incomingTrace
         recipient = ctx.getSharedPreferences("macro_push", Context.MODE_PRIVATE).getString("recipient", null)
         title = next.title
         offer = next; state = "ringing"; accepted = false
@@ -237,32 +254,45 @@ internal object Calls {
             }
             poller = scope.launch {
                 while (offer === next && room == null) {
-                    if (!CallOffer.fresh(next.sentTime, ringTime())) { end(ctx, next.callId); break }
+                    if (!CallOffer.fresh(next.sentTime, ringTime())) { end(ctx, next.callId, outcome = "expired"); break }
                     val status = ringStatus(next)
                     if (offer !== next || joinLease?.channelId == next.channelId) break
-                    if (RingPolicy.decide(next.sentTime, ringTime(), status) == RingPolicy.Decision.RESOLVE) { end(ctx, next.callId); break }
+                    if (RingPolicy.decide(next.sentTime, ringTime(), status) == RingPolicy.Decision.RESOLVE) {
+                        end(ctx, next.callId, outcome = when (status) { "answered" -> "answered_elsewhere"; "invalid" -> "invalid"; else -> "ended_remotely" }); break
+                    }
                     delay(1000)
                 }
             }
         } catch (error: Exception) {
             android.util.Log.w("MacroCall", "Incoming call failed: ${error.javaClass.simpleName}")
-            end(ctx, next.callId)
+            end(ctx, next.callId, outcome = "telecom_error", failed = true)
         }
     }
-    private suspend fun ringStatus(next: CallOffer): String? = withContext(Dispatchers.IO) {
-        runCatching {
+    internal suspend fun ringStatus(next: CallOffer, parent: TraceContext? = null): String? = withContext(Dispatchers.IO) {
+        val owner = trace?.takeIf { it.callId == next.callId }
+        val phase = owner?.phase("call.ring_status", parent ?: owner.context, SpanKind.CLIENT)
+        phase?.attribute("http.request.method", "GET")
+        try {
             val http = URL(next.ringUrl ?: return@withContext null).openConnection() as HttpURLConnection
             try {
                 http.instanceFollowRedirects = false
                 http.connectTimeout = 5000; http.readTimeout = 5000
                 http.setRequestProperty("Authorization", "Bearer ${next.token}")
-                when (http.responseCode) {
+                phase?.let { CallTracing.inject(it.context).forEach { (key, value) -> http.setRequestProperty(key, value) } }
+                val code = http.responseCode
+                phase?.attribute("http.response.status_code", code.toLong())
+                val status = when (code) {
                     200 -> JSONObject(http.inputStream.bufferedReader().use { it.readText() }).getString("status")
                     401, 403, 404 -> "invalid"
                     else -> null
                 }
+                phase?.end(when (status) { "ringing", "answered", "ended", "invalid" -> status; else -> "retry" }, code >= 500)
+                status
             } finally { http.disconnect() }
-        }.getOrNull()
+        } catch (error: Exception) {
+            phase?.end("network_error", failed = true, error = error)
+            null
+        } finally { phase?.end("unavailable") }
     }
     fun outgoing(ctx: Context, next: CallOffer, leaseId: String? = null) {
         if (leaseId != null) check(joinLease?.let { it.id == leaseId && it.channelId == next.channelId } == true) { "Call join was cancelled" }
@@ -295,44 +325,62 @@ internal object Calls {
         catch (error: Exception) {
             // Background starts can be denied, e.g. when FCM delivered the push without high priority.
             android.util.Log.w("MacroCall", "Incoming call UI failed: ${error.javaClass.simpleName}")
-            end(ctx)
+            end(ctx, outcome = "notification_error", failed = true)
         }
     }
-    fun answer(ctx: Context, id: String, verify: suspend (CallOffer) -> String? = ::ringStatus) {
+    fun answer(ctx: Context, id: String, verify: (suspend (CallOffer) -> String?)? = null) {
         val next = offer ?: return
         if (next.callId != id || room != null || answering) return
+        val attempt = trace?.phase("call.answer")
         answering = true
         scope.launch {
-            // Recheck immediately before answer to close the answered-elsewhere race.
-            val status = verify(next)
-            if (offer !== next) return@launch
-            answering = false
-            if (joinLease?.channelId == next.channelId) return@launch
-            if (room != null || accepted) return@launch
-            when (RingPolicy.decide(next.sentTime, ringTime(), status)) {
-                RingPolicy.Decision.RESOLVE -> { end(ctx, id); return@launch }
-                RingPolicy.Decision.RETRY -> { error = "Could not verify this call. Check your connection and try again."; publish(); return@launch }
-                RingPolicy.Decision.RING -> error = null
-            }
-            if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                if (!beginMicrophonePermission(id)) return@launch
-                runCatching {
-                    ctx.startActivity(Intent(ctx, CallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("answer", id))
-                }.onFailure { finishMicrophonePermission(id) }
-                return@launch
-            }
-            poller?.cancel(); poller = null
-            accepted = true; state = "connecting"
-            pendingAnswered = next.channelId
-            connect(ctx)
-            emit("answered", JSObject().apply { put("channelId", next.channelId); put("nativeMedia", true) })
+            try {
+                // Recheck immediately before answer to close the answered-elsewhere race.
+                val status = if (verify == null) ringStatus(next, attempt?.context) else verify(next)
+                if (offer !== next) return@launch
+                answering = false
+                if (joinLease?.channelId == next.channelId) return@launch
+                if (room != null || accepted) return@launch
+                when (RingPolicy.decide(next.sentTime, ringTime(), status)) {
+                    RingPolicy.Decision.RESOLVE -> { attempt?.end("resolved"); end(ctx, id, outcome = "resolved_before_answer"); return@launch }
+                    RingPolicy.Decision.RETRY -> { attempt?.end("verification_unavailable", failed = true); error = "Could not verify this call. Check your connection and try again."; publish(); return@launch }
+                    RingPolicy.Decision.RING -> error = null
+                }
+                if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                    if (!beginMicrophonePermission(id)) return@launch
+                    runCatching {
+                        val intent = Intent(ctx, CallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("answer", id)
+                        trace?.write(intent)
+                        ctx.startActivity(intent)
+                    }.onFailure { attempt?.end("permission_activity_error", failed = true, error = it); finishMicrophonePermission(id) }
+                    attempt?.end("permission_required")
+                    return@launch
+                }
+                poller?.cancel(); poller = null
+                accepted = true; state = "connecting"
+                pendingAnswered = next.channelId
+                attempt?.end("accepted")
+                connect(ctx)
+                emit("answered", JSObject().apply { put("channelId", next.channelId); put("nativeMedia", true) })
+            } catch (error: CancellationException) {
+                attempt?.end("cancelled")
+                throw error
+            } catch (error: Exception) {
+                attempt?.end("answer_error", failed = true, error = error)
+                throw error
+            } finally { attempt?.end("superseded") }
         }
     }
     fun connect(ctx: Context) {
         val next = offer ?: return
         if (room != null) return
         if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) { end(ctx, next.callId); return }
-        val media = LiveKit.create(ctx.applicationContext)
+        val connecting = trace?.phase("call.connect", kind = SpanKind.CLIENT)
+        val media = try { LiveKit.create(ctx.applicationContext) } catch (error: Exception) {
+            connecting?.end("initialization_error", failed = true, error = error)
+            end(ctx, next.callId, outcome = "connection_error", failed = true)
+            return
+        }
         room = media
         media.audioSwitchHandler?.loggingEnabled = false
         media.audioSwitchHandler?.registerAudioDeviceChangeListener { devices, selected ->
@@ -371,18 +419,22 @@ internal object Calls {
                 media.connect(next.serverUrl, next.token)
                 if (room !== media) return@launch
                 media.localParticipant.setMicrophoneEnabled(!muted && !interrupted())
+                connecting?.end("connected")
+                trace?.takeIf { it.callId == next.callId }?.finish("connected")
                 state = "connected"; connection?.setActive(); overlay = "expanded"; publish()
                 ctx.startActivity(Intent(ctx, CallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             } catch (_: CancellationException) {
                 // end() already owns teardown.
+                connecting?.end("cancelled")
             } catch (error: Exception) {
+                connecting?.end("connection_error", failed = true, error = error)
                 // Exception messages can contain the signaling URL/token; log types only.
                 android.util.Log.w("MacroCall", "Native media failed: ${error.javaClass.simpleName}; cause=${error.cause?.javaClass?.simpleName}")
                 if (offer === next) {
                     android.widget.Toast.makeText(ctx, "Could not connect the call. Please try again.", android.widget.Toast.LENGTH_LONG).show()
-                    end(ctx, next.callId)
+                    end(ctx, next.callId, outcome = "connection_error", failed = true)
                 }
-            }
+            } finally { connecting?.end("superseded") }
         }
     }
     suspend fun microphone(enabled: Boolean) = audioMutex.withLock {
@@ -452,10 +504,11 @@ internal object Calls {
         })
     }
     fun route(route: Int) { (connection as? TelecomService.MacroConnection)?.route(route) }
-    fun end(ctx: Context, id: String? = offer?.callId,
+    fun end(ctx: Context, id: String? = offer?.callId, outcome: String = "ended", failed: Boolean = false,
         disconnectConnection: (Connection) -> Unit = { it.setDisconnected(DisconnectCause(DisconnectCause.LOCAL)) }) {
         val next = offer ?: return
         if (next.callId != id) return
+        trace?.finish(outcome, failed); trace = null
         val preferences = ctx.getSharedPreferences("macro_calls", Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
         runCatching {

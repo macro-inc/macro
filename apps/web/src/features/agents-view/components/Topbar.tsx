@@ -1,5 +1,6 @@
 import { ViewShell } from '@app/components/view-shell/ViewShell';
-import ArrowLeft from '@phosphor/arrow-left.svg';
+import { ViewSidebar } from '@app/components/view-shell/ViewSidebar';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
 import { Button } from '@ui';
 import { type JSX, Show } from 'solid-js';
 
@@ -14,20 +15,19 @@ export function Topbar(props: {
     <ViewShell.TopBar class="touch:flex">
       <Show when={props.onBack}>
         <Button
+          aria-label="Back to conversations"
+          tooltip="Back to conversations"
           variant="ghost"
           size="icon-md"
-          label="Back to conversations"
           onClick={props.onBack}
         >
-          <ArrowLeft />
+          <ArrowLeft class="size-4 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </Show>
       <div class="flex min-w-0 items-center gap-1">
         {props.titleContent ?? (
           <Show when={props.title}>
-            <h1 class="min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink">
-              {props.title}
-            </h1>
+            <ViewSidebar.Title caret={false}>{props.title}</ViewSidebar.Title>
           </Show>
         )}
       </div>

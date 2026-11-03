@@ -13,11 +13,13 @@ import { DatabaseNamespace } from './entities/databases/namespace';
 import { DocumentNamespace } from './entities/documents/namespace';
 import { EmailNamespace } from './entities/email/namespace';
 import { EntityMentionNamespace } from './entities/entity-mentions/namespace';
+import { ExternalChatsNamespace } from './entities/external-chat/namespace';
 import { FavoritesNamespace } from './entities/favorites/namespace';
 import { ForeignEntityNamespace } from './entities/foreign/namespace';
 import { FormNamespace } from './entities/forms/namespace';
 import { GithubPullRequestNamespace } from './entities/github-pull-requests/namespace';
 import { HarnessNamespace } from './entities/harnesses/namespace';
+import { ImagesNamespace } from './entities/images/namespace';
 import { InitiativeNamespace } from './entities/initiatives/namespace';
 import { MeetingNamespace } from './entities/meetings/namespace';
 import { NotificationNamespace } from './entities/notifications/namespace';
@@ -31,6 +33,7 @@ import { UnfurlNamespace } from './entities/unfurls/namespace';
 import { UserNamespace } from './entities/users/namespace';
 import type { User } from './entities/users/user';
 import { WebhooksNamespace } from './entities/webhooks/namespace';
+import { WhatsAppNamespace } from './entities/whatsapp/namespace';
 import { WorkspaceNamespace } from './entities/workspace/namespace';
 import type { MacroEvents } from './events/receiver';
 import { MacroClient } from './utils/client';
@@ -70,6 +73,7 @@ export {
   type FormSectionPlacement,
   type FormSubmissionOutcome,
   type MyFormResponse,
+  type SavedFormResponse,
 } from './entities/forms/form';
 export { FormOption, FormQuestion } from './entities/forms/question';
 export { FormResponse } from './entities/forms/response';
@@ -127,6 +131,12 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   readonly channels: ChannelNamespace;
 
+  /** Chats from external providers (WhatsApp) added to Macro: read, share and send. */
+  readonly externalChats: ExternalChatsNamespace;
+
+  /** The current user's WhatsApp account and chat list; add chats from it. */
+  readonly whatsapp: WhatsAppNamespace;
+
   readonly chats: ChatNamespace;
 
   readonly crm: CrmNamespace;
@@ -143,6 +153,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   /** Build forms and submit answers without granting respondents database access. */
   readonly forms: FormNamespace;
+
+  /** Generate images with AI and attach them to messages. */
+  readonly images: ImagesNamespace;
 
   readonly notifications: NotificationNamespace;
 
@@ -192,6 +205,8 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.calendar = new CalendarNamespace(client);
     this.calls = new CallRecordNamespace(client);
     this.channels = new ChannelNamespace(client);
+    this.externalChats = new ExternalChatsNamespace(client);
+    this.whatsapp = new WhatsAppNamespace(client);
     this.chats = new ChatNamespace(client);
     this.crm = new CrmNamespace(client);
     this.databases = new DatabaseNamespace(client);
@@ -200,6 +215,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.favorites = new FavoritesNamespace(client);
     this.foreignEntities = new ForeignEntityNamespace(client);
     this.forms = new FormNamespace(client);
+    this.images = new ImagesNamespace(client);
     this.notifications = new NotificationNamespace(client);
     this.pins = new PinsNamespace(client);
     this.projects = new ProjectNamespace(client);
@@ -229,7 +245,12 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   }
 }
 
-export type { FoldedAgentSessionLog } from './entities/agent-sessions/agent-session';
+export type {
+  ArchiveCause,
+  AutoArchiveOverrides,
+  FoldedAgentSessionLog,
+  SessionAutoArchive,
+} from './entities/agent-sessions/agent-session';
 export type { CodeResult } from './entities/agent-sessions/code-execution';
 export {
   AgentConversation,
@@ -242,9 +263,9 @@ export type {
 } from './entities/agent-sessions/review';
 export { ReviewItem, SessionReview } from './entities/agent-sessions/review';
 export { ToolApproval } from './entities/agent-sessions/tool-approval';
+export type { SessionView } from './entities/agent-sessions/view';
 export { Agent, type AgentOptions } from './entities/agents/agent';
 export { UserApiKey } from './entities/api-keys/api-key';
-export { CalendarNote } from './entities/calendar/note';
 export { ChannelActivity } from './entities/channels/activity';
 export { ChannelPicture } from './entities/channels/picture';
 export { ChatGeneration, ChatMessage } from './entities/chats/generation';
@@ -272,15 +293,29 @@ export {
 export { EmailFilter, type EmailFilterOptions } from './entities/email/filter';
 export { EntityMention } from './entities/entity-mentions/mention';
 export {
+  ExternalChat,
+  type ExternalChatContent,
+} from './entities/external-chat/chat';
+export { ExternalChatMessage } from './entities/external-chat/message';
+export { ExternalChatParticipant } from './entities/external-chat/participant';
+export { ExternalChatSend } from './entities/external-chat/send';
+export { ExternalChatUpload } from './entities/external-chat/upload';
+export {
   GithubPullRequest,
   PullRequestChangeset,
 } from './entities/github-pull-requests/pull-request';
 export { Harness } from './entities/harnesses/harness';
 export { DevicePairing, HarnessPairing } from './entities/harnesses/pairing';
+export { GeneratedImage, StaticImage } from './entities/images/image';
+export type {
+  GenerateImageAspectRatio,
+  GenerateImageOptions,
+} from './entities/images/namespace';
 export {
   Initiative,
   type InitiativeOptions,
 } from './entities/initiatives/initiative';
+export type { InitiativeSummary } from './entities/initiatives/namespace';
 export { Meeting } from './entities/meetings/meeting';
 export type { TimelineOptions } from './entities/messages/thread';
 export { type MessageParent, MessageThread } from './entities/messages/thread';
@@ -297,6 +332,12 @@ export {
 } from './entities/routines/routine';
 export { AccessRequest, EntityAccess } from './entities/sharing/access';
 export type { SharePermissionOptions } from './entities/sharing/permissions';
+export type { TaskSummary } from './entities/tasks/task';
+export { WhatsAppAccount } from './entities/whatsapp/account';
+export {
+  WhatsAppChat,
+  type WhatsAppCommunity,
+} from './entities/whatsapp/chat';
 export type {
   WorkspaceFilters,
   WorkspaceItem,

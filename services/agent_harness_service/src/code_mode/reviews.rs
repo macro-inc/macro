@@ -7,7 +7,7 @@ use agent_session::domain::{
 use ai_toolset::RequestContext;
 use async_trait::async_trait;
 use import::domain::models::{NotionImportReport, NotionWriteChoices, RunStatus};
-use import::domain::service::NotionWorkspaceImporter;
+use import::domain::service::WorkspaceImporter;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::Deserialize;
 use serde_json::Value;
@@ -36,6 +36,36 @@ struct ImportDraft {
 #[serde(rename_all = "snake_case")]
 enum ImportReviewSource {
     Notion,
+    Linear,
+    Jira,
+}
+impl ImportReviewSource {
+    fn source(self) -> import::domain::models::ImportSource {
+        match self {
+            Self::Notion => import::domain::models::ImportSource::Notion,
+            Self::Linear => import::domain::models::ImportSource::Linear,
+            Self::Jira => import::domain::models::ImportSource::Jira,
+        }
+    }
+}
+
+fn import_source(
+    record: &ReviewRecord,
+) -> Result<import::domain::models::ImportSource, CodeModeError> {
+    let mut sources = record.items.iter().map(|item| {
+        serde_json::from_value::<ImportDraft>(item.draft.clone())
+            .map(|draft| draft.source.source())
+            .map_err(|_| CodeModeError::Invalid("Import draft is malformed.".into()))
+    });
+    let source = sources
+        .next()
+        .ok_or_else(|| CodeModeError::Invalid("Import review has no draft.".into()))??;
+    if sources.any(|other| other.ok() != Some(source)) {
+        return Err(CodeModeError::Invalid(
+            "An import review must contain one source.".into(),
+        ));
+    }
+    Ok(source)
 }
 
 pub struct Actions<S, H> {
@@ -57,7 +87,7 @@ impl<S: AgentSessionRepo, H: AgentSessionNotificationRecipient> ReviewActions fo
                 .owner_user()
                 .cloned()
                 .map_err(|_| CodeModeError::Forbidden)?,
-            archived: row.is_archived,
+            archived: row.is_archived(),
             prompter: self
                 .sessions
                 .turn_prompter(session)
@@ -76,7 +106,9 @@ impl<S: AgentSessionRepo, H: AgentSessionNotificationRecipient> ReviewActions fo
         if record.kind != ReviewKind::Import {
             return Ok(true);
         }
-        let report = self.import_report(account_holder).await?;
+        let report = self
+            .import_report(account_holder, import_source(record)?)
+            .await?;
         Ok(report.review_id == Some(record.id.0) && report.status == Some(RunStatus::Ready))
     }
     async fn execute(
@@ -119,7 +151,7 @@ impl<S: AgentSessionRepo, H: AgentSessionNotificationRecipient> ReviewActions fo
             // The plan is tied to the review before the card appears, so the
             // card never shows a plan it cannot approve.
             self.import_service()?
-                .attach_notion_review(owner, record.id.0, record.session_id)
+                .attach_workspace_review(owner, import_source(record)?, record.id.0, record.session_id)
                 .await
                 .map_err(|error| {
                     tracing::warn!(error = ?error, review = %record.id.0, "could not tie the import plan to its review");
@@ -140,6 +172,33 @@ impl<S: AgentSessionRepo, H: AgentSessionNotificationRecipient> ReviewActions fo
             },
         ).await.map_err(|_| CodeModeError::Invalid(format!("Review {} was saved, but presentation is pending. Read this review to retry presentation without creating another draft.", record.id.0)))
     }
+    async fn present_view(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        session: agent_session::domain::model::AgentSessionId,
+        view: &PresentedView,
+    ) -> Result<(), CodeModeError> {
+        self.harness
+            .present_tool(
+                session,
+                owner.clone(),
+                agent_session::domain::model::SessionToolPresentation {
+                    tool_call_id: format!("view_{}", view.id),
+                    title: "mcp__macro_internal__PresentView".into(),
+                    raw_input: serde_json::json!({"view": view.view}),
+                    // Readers render the decoded view from the result, as
+                    // they do a DisplayResults result.
+                    raw_output: serde_json::json!({"view": view.view}),
+                },
+            )
+            .await
+            .map_err(|_| {
+                CodeModeError::Invalid(
+                    "The view was not presented: the session could not take it. Present it again."
+                        .into(),
+                )
+            })
+    }
 }
 
 impl<S, H> Actions<S, H> {
@@ -154,9 +213,10 @@ impl<S, H> Actions<S, H> {
     async fn import_report(
         &self,
         owner: &MacroUserIdStr<'static>,
+        source: import::domain::models::ImportSource,
     ) -> Result<NotionImportReport, CodeModeError> {
         self.import_service()?
-            .notion_import_report(owner)
+            .workspace_import_report(owner, source)
             .await
             .map_err(|error| {
                 tracing::warn!(error = ?error, "could not read the notion import report");
@@ -175,11 +235,17 @@ impl<S, H> Actions<S, H> {
     ) -> Result<Value, CodeModeError> {
         let draft: ImportDraft = serde_json::from_value(draft)
             .map_err(|_| CodeModeError::Invalid("Import draft is malformed.".into()))?;
-        let ImportReviewSource::Notion = draft.source;
+        let source = draft.source.source();
+        if source != import_source(record)? {
+            return Err(CodeModeError::Invalid(
+                "The import source cannot change after presentation.".into(),
+            ));
+        }
         let report = self
             .import_service()?
-            .start_notion_write(
+            .start_workspace_write(
                 owner,
+                source,
                 record.id.0,
                 NotionWriteChoices {
                     excluded: draft.excluded,

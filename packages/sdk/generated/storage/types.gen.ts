@@ -5,6 +5,11 @@ export type ClientOptions = {
 };
 
 /**
+ * A color as `#rrggbb`, kept in lowercase.
+ */
+export type AccentColor = string;
+
+/**
  * Ordered from least to most access top -> bottom
  */
 export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
@@ -168,7 +173,7 @@ export type AddFavoriteRequest = {
     /**
      * The type of the entity to favorite.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 };
 
 /**
@@ -315,6 +320,11 @@ export type AgentMcpServers = {
  * Last synchronized state of a session's linked GitHub pull request.
  */
 export type AgentPullRequestState = 'open' | 'draft' | 'closed' | 'merged';
+
+/**
+ * Who or what archived an agent session.
+ */
+export type AgentSessionArchiveCause = 'user' | 'pull_request_merged' | 'runtime_closed';
 
 /**
  * Filters for agent sessions.
@@ -975,6 +985,12 @@ export type ApiEntityFilterAst = {
      */
     ghprf?: unknown;
     /**
+     * Filters applied to initiatives (wire key `if`). Opt-in like agent
+     * sessions: an omitted filter returns no initiatives, and any literal,
+     * a notification state included, opts them in.
+     */
+    if?: unknown;
+    /**
      * the filters that should be applied to the project entity
      */
     pf?: unknown;
@@ -992,6 +1008,7 @@ export type ApiGroupByField = 'date' | 'entity_type' | 'project' | {
      * Group by a property value (e.g., status, priority, or custom properties)
      */
     property: {
+        bucketing?: null | PropertyBucketing;
         entity_type?: null | ApiPropertyEntityType;
         /**
          * The property definition UUID to group by
@@ -1047,7 +1064,7 @@ export type ApiParticipantRole = 'owner' | 'admin' | 'member';
 /**
  * Entity type for property lookups (API representation).
  */
-export type ApiPropertyEntityType = 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
+export type ApiPropertyEntityType = 'CALL_RECORD' | 'CALENDAR_EVENT' | 'DATABASE_ROW' | 'INITIATIVE' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
 
 /**
  * What a committed batch answers: a result per op, and the journal's change
@@ -1209,6 +1226,11 @@ export type Awareness = {
  * when the server relayed it so receivers can drop older relays.
  */
 export type AwarenessRelay = {
+    /**
+     * Whether the viewer's grant lets them edit; a viewer who cannot is
+     * shown as viewing.
+     */
+    canEdit: boolean;
     /**
      * The database the viewer is in.
      */
@@ -1925,6 +1947,10 @@ export type CalendarMentionEvent = {
      * Entity update time of the previewed copy.
      */
     updatedAt: string;
+    /**
+     * The calendars holding `viewer_event_id`, the canonical copy's first.
+     */
+    viewerCalendarIds?: Array<string>;
     viewerCopy?: null | CalendarMentionViewerCopy;
     /**
      * The requester's own event entity for the mentioned meeting. Differs
@@ -2433,6 +2459,12 @@ export type CellValue = {
      */
     value: string;
 } | {
+    type: 'date_range';
+    /**
+     * A span of time; its end may not come before its start.
+     */
+    value: DateRange;
+} | {
     type: 'link';
     /**
      * Complete http or https URLs; at most one for a single-valued column.
@@ -2763,6 +2795,11 @@ export type ChannelLabelRule = {
 };
 
 /**
+ * Requested label namespace. Omission retains the deployed automatic selection.
+ */
+export type ChannelLabelScopeSelection = 'personal' | 'team';
+
+/**
  * The authorized scope's labels in manual order.
  */
 export type ChannelLabelsList = {
@@ -2770,6 +2807,10 @@ export type ChannelLabelsList = {
      * Every label of the scope, whether or not the caller sees channels in it.
      */
     labels: Array<ChannelLabel>;
+    /**
+     * Resolved label namespace.
+     */
+    scope: ChannelLabelScopeSelection;
     /**
      * Team scope, or `None` for private labels.
      */
@@ -3231,7 +3272,7 @@ export type CollabSurfaceResponse = {
     /**
      * Type of the parent entity.
      */
-    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
+    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
     /**
      * Lifecycle state (`ready` for every surface visible via the API).
      */
@@ -3507,6 +3548,8 @@ export type ColumnKind = {
     type: 'boolean';
 } | {
     type: 'date';
+} | {
+    type: 'date_range';
 } | {
     type: 'link';
 } | {
@@ -4100,11 +4143,12 @@ export type CreateChannelScopedBotResponse = {
  */
 export type CreateCrmCompanyRequest = {
     /**
-     * The company's email domain, e.g. "acme.com". Must be a bare
+     * Optional company domain, e.g. "acme.com". Omit for a name-only
+     * company. When supplied, must be a bare
      * domain (no scheme, path, or email) and not a generic email
      * provider domain.
      */
-    domain: string;
+    domain?: string | null;
     /**
      * Display name for the company. Team-scoped: overrides the
      * domain-directory name on every read path.
@@ -4117,8 +4161,8 @@ export type CreateCrmCompanyRequest = {
  */
 export type CreateCrmContactRequest = {
     /**
-     * The contact's email address, e.g. "jane@acme.com". Its domain
-     * must be one of the company's domains (400 otherwise).
+     * The contact's email address, including personal email providers.
+     * It need not match a company domain.
      */
     email: string;
     /**
@@ -4799,7 +4843,7 @@ export type CrmAssociation = {
      * Items associated with the contact.
      */
     contact: string;
-};
+} | 'activity';
 
 /**
  * The crm company filters used to narrow which CRM companies appear in soup.
@@ -5055,7 +5099,7 @@ export type CustomSpeakerAssignment = {
 /**
  * Data type for property values, determining storage and validation.
  */
-export type DataType = 'BOOLEAN' | 'DATE' | 'NUMBER' | 'STRING' | 'SELECT_NUMBER' | 'SELECT_STRING' | 'TAG' | 'ENTITY' | 'LINK';
+export type DataType = 'BOOLEAN' | 'DATE' | 'DATE_RANGE' | 'NUMBER' | 'STRING' | 'SELECT_NUMBER' | 'SELECT_STRING' | 'TAG' | 'ENTITY' | 'LINK';
 
 /**
  * A database: a named collection of tables, owned and shared as one entity.
@@ -5077,6 +5121,10 @@ export type Database = {
      * Owning user.
      */
     owner_id: string;
+    /**
+     * The folder it is filed in; `null` at the root.
+     */
+    project_id: string | null;
     /**
      * Set when trashed.
      */
@@ -5302,6 +5350,27 @@ export type DatabaseWebhookResponse = {
  * How a date cell compares to a date-time.
  */
 export type DateOperator = 'before' | 'after' | 'onOrBefore' | 'onOrAfter';
+
+/**
+ * A span of time from `start` to `end`, both included. A write whose end
+ * comes before its start is refused.
+ */
+export type DateRange = {
+    /**
+     * Where it ends; never before the start.
+     */
+    end: string;
+    /**
+     * Where it starts.
+     */
+    start: string;
+};
+
+/**
+ * How a date-range cell stands to a day: the whole day starting at the
+ * test's date-time, so a range from 1 PM to 5 PM contains its day.
+ */
+export type DateRangeOperator = 'contains' | 'doesNotContain' | 'endsBefore' | 'endsOnOrAfter' | 'startsAfter' | 'startsOnOrBefore';
 
 /**
  * Response body for `DELETE /channels/mentions/{mention_id}`.
@@ -6015,6 +6084,16 @@ export type DocumentUpdatedMetadata = {
     share_permission_updated: boolean;
 };
 
+/**
+ * Request body for duplicating a database.
+ */
+export type DuplicateDatabaseRequest = {
+    /**
+     * The copy's name; left out, "<name> copy".
+     */
+    name?: string | null;
+};
+
 export type EditAnchorRequest = EditPdfAnchorRequest & {
     fileType: 'pdf';
 };
@@ -6333,7 +6412,7 @@ export type EnsureCollabSurfaceRequest = {
     /**
      * Type of the parent entity access derives from.
      */
-    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
+    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 };
 
 /**
@@ -6607,6 +6686,800 @@ export type ExportDocumentResponse = {
 };
 
 /**
+ * Explicit request to add a chat; the provider account is selected
+ * server-side. The chat's name always follows the provider.
+ */
+export type ExternalChatAdd = {
+    /**
+     * Group or direct chat; must match what `remote_id` is.
+     */
+    kind: ExternalChatKind;
+    /**
+     * The service the chat lives in.
+     */
+    provider: ExternalChatProvider;
+    /**
+     * The chat's id at the provider, as its chat list names it. WhatsApp: a
+     * group the requester's account has joined, or a direct chat's other
+     * person's JID.
+     */
+    remoteId: string;
+};
+
+/**
+ * The added chat.
+ */
+export type ExternalChatAdded = {
+    /**
+     * Shareable entity identifier.
+     */
+    chatId: string;
+};
+
+/**
+ * One attachment of a message.
+ */
+export type ExternalChatAttachment = {
+    /**
+     * Length of audio or video in whole seconds, when declared.
+     */
+    durationSeconds?: number | null;
+    /**
+     * The static file holding it, once ready.
+     */
+    fileId?: string | null;
+    /**
+     * Display filename.
+     */
+    fileName: string;
+    /**
+     * Pixel height, when declared.
+     */
+    height?: number | null;
+    /**
+     * Declared MIME type.
+     */
+    mime: string;
+    /**
+     * Position within the message.
+     */
+    ordinal: number;
+    presentation?: null | ExternalChatMediaPresentation;
+    /**
+     * Declared size in bytes.
+     */
+    size: number;
+    /**
+     * Current state.
+     */
+    state: ExternalChatAttachmentState;
+    /**
+     * Pixel width of an image, sticker or video, when WhatsApp declared it.
+     */
+    width?: number | null;
+};
+
+/**
+ * Where an attachment of a message stands.
+ */
+export type ExternalChatAttachmentState = 'loading' | 'ready' | 'unavailable' | 'unsupported';
+
+/**
+ * Earlier messages imported after adding a chat.
+ */
+export type ExternalChatBackfill = {
+    /**
+     * Messages received from the phone so far (including ones already shown).
+     */
+    imported: number;
+    /**
+     * Progress.
+     */
+    state: ExternalChatBackfillState;
+};
+
+/**
+ * Where importing a group's earlier messages stands.
+ */
+export type ExternalChatBackfillState = 'waiting_for_message' | 'pending' | 'running' | 'waiting_for_phone' | 'done' | 'partial';
+
+/**
+ * A call in the group.
+ */
+export type ExternalChatCall = {
+    /**
+     * Length, when it connected.
+     */
+    durationSeconds?: number | null;
+    /**
+     * How it went for the account that saw it.
+     */
+    outcome: ExternalChatCallOutcome;
+    /**
+     * Video rather than voice.
+     */
+    video: boolean;
+};
+
+/**
+ * How a call went.
+ */
+export type ExternalChatCallOutcome = 'answered' | 'missed' | 'rejected' | 'other';
+
+/**
+ * Operations implemented for a chat, independent of current permission.
+ */
+export type ExternalChatCapabilities = {
+    /**
+     * Largest attachment in bytes.
+     */
+    attachmentLimitBytes: number;
+    /**
+     * Supported attachment MIME types.
+     */
+    attachmentTypes: Array<string>;
+    /**
+     * Attachments per send.
+     */
+    maxAttachments: number;
+    /**
+     * Edits and deletes are offered this long after sending.
+     */
+    mutationWindowSeconds: number;
+    /**
+     * Supported message operations.
+     */
+    mutations: Array<ExternalChatMutation>;
+    /**
+     * Maximum UTF-8 bytes per text send.
+     */
+    textLimitBytes: number;
+};
+
+/**
+ * The WhatsApp community a group belongs to.
+ */
+export type ExternalChatCommunity = {
+    /**
+     * This group is the community's announcement group.
+     */
+    announcements: boolean;
+    /**
+     * The community's WhatsApp JID.
+     */
+    id: string;
+    /**
+     * The community's name.
+     */
+    name: string;
+};
+
+/**
+ * One contact card, from its vCard.
+ */
+export type ExternalChatContactCard = {
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Phone numbers as written on the card.
+     */
+    phones: Array<string>;
+};
+
+/**
+ * Contact cards.
+ */
+export type ExternalChatContacts = {
+    /**
+     * The cards, in order.
+     */
+    contacts: Array<ExternalChatContactCard>;
+};
+
+/**
+ * Observed send state. `unknown` means the request may have reached WhatsApp;
+ * it is never sent again automatically.
+ */
+export type ExternalChatDeliveryState = 'pending' | 'sending' | 'unknown' | 'accepted' | 'failed';
+
+/**
+ * Full chat detail and current viewer capabilities.
+ */
+export type ExternalChatDetail = ExternalChatSummary & {
+    /**
+     * Caller's effective permission.
+     */
+    accessLevel: AccessLevel;
+    /**
+     * The provider's disappearing-messages timer in seconds while it is on;
+     * Macro keeps the messages anyway. `null` when off or unknown.
+     */
+    disappearingSeconds?: number | null;
+    /**
+     * Size and mutation limits.
+     */
+    limits: ExternalChatCapabilities;
+    members?: null | ExternalChatMembers;
+    /**
+     * Caller's own phone identity, never another account's identity.
+     */
+    sendingIdentity?: string | null;
+    /**
+     * Owner-controlled standard sharing configuration.
+     */
+    sharePermission: SharePermissionV2;
+};
+
+/**
+ * A WhatsApp event.
+ */
+export type ExternalChatEvent = {
+    /**
+     * Canceled by its organizer.
+     */
+    canceled?: boolean;
+    /**
+     * Description.
+     */
+    description?: string | null;
+    /**
+     * End.
+     */
+    endAt?: string | null;
+    /**
+     * Call link for an online event.
+     */
+    joinLink?: string | null;
+    /**
+     * Place name or address.
+     */
+    location?: string | null;
+    /**
+     * Title.
+     */
+    name: string;
+    /**
+     * Start.
+     */
+    startAt?: string | null;
+};
+
+/**
+ * Whether an external chat is a group or a one-to-one chat.
+ */
+export type ExternalChatKind = 'group' | 'direct';
+
+/**
+ * A shared place.
+ */
+export type ExternalChatLocation = {
+    /**
+     * Street address.
+     */
+    address?: string | null;
+    /**
+     * Caption or comment.
+     */
+    comment?: string | null;
+    /**
+     * Degrees.
+     */
+    latitude: number;
+    /**
+     * Shared as a live location (this is where it started).
+     */
+    live?: boolean;
+    /**
+     * Degrees.
+     */
+    longitude: number;
+    /**
+     * Place name.
+     */
+    name?: string | null;
+    /**
+     * Link the sender attached.
+     */
+    url?: string | null;
+};
+
+/**
+ * Attachment categories WhatsApp distinguishes.
+ */
+export type ExternalChatMediaKind = 'image' | 'audio' | 'video' | 'document';
+
+/**
+ * How WhatsApp shows an attachment, when not as a plain file of its kind.
+ */
+export type ExternalChatMediaPresentation = 'sticker' | 'gif' | 'voice_note';
+
+/**
+ * A chat's members as the caller's account last read them.
+ */
+export type ExternalChatMembers = {
+    /**
+     * Only admins may post.
+     */
+    announce: boolean;
+    /**
+     * The chat's name at the provider.
+     */
+    name: string;
+    /**
+     * When this was read from WhatsApp.
+     */
+    observedAt: string;
+    /**
+     * Everyone in the chat.
+     */
+    participants: Array<ExternalChatParticipant>;
+};
+
+/**
+ * An @-mention in a message body.
+ */
+export type ExternalChatMention = ExternalChatPersonRef & {
+    /**
+     * What follows the `@` in the body (WhatsApp: the digits of the
+     * person's id); replace `@<token>` with the name.
+     */
+    token: string;
+};
+
+/**
+ * One message in an external chat.
+ */
+export type ExternalChatMessage = {
+    /**
+     * Imported or pending attachments.
+     */
+    attachments: Array<ExternalChatAttachment>;
+    /**
+     * Plain text.
+     */
+    body: string;
+    /**
+     * Deleted for everyone.
+     */
+    deleted: boolean;
+    deliveryState?: null | ExternalChatDeliveryState;
+    /**
+     * Last edit timestamp.
+     */
+    editedAt?: string | null;
+    /**
+     * Forwarded from another chat.
+     */
+    forwarded: boolean;
+    /**
+     * Stable message id.
+     */
+    id: string;
+    /**
+     * A message, or a system line.
+     */
+    kind: ExternalChatMessageKind;
+    /**
+     * People the body @-mentions.
+     */
+    mentions: Array<ExternalChatMention>;
+    /**
+     * Reactions grouped by emoji.
+     */
+    reactions: Array<ExternalChatReaction>;
+    /**
+     * Timestamp first received by Macro.
+     */
+    receivedAt: string;
+    /**
+     * Message quoted by this one.
+     */
+    replyTo?: string | null;
+    rich?: null | ExternalChatRichContent;
+    /**
+     * Sender.
+     */
+    sender: ExternalChatSender;
+    /**
+     * Timestamp assigned by the provider.
+     */
+    sentAt: string;
+    /**
+     * Sent as view-once; Macro shows it like any media.
+     */
+    viewOnce: boolean;
+};
+
+/**
+ * The attachments of one message.
+ */
+export type ExternalChatMessageAttachments = {
+    /**
+     * Its attachments in order; deleted ones are omitted.
+     */
+    attachments: Array<ExternalChatAttachment>;
+    /**
+     * The message.
+     */
+    messageId: string;
+};
+
+/**
+ * What a timeline entry is.
+ */
+export type ExternalChatMessageKind = 'message' | 'system';
+
+/**
+ * Newest-first timeline page; `before` is the last returned message id.
+ */
+export type ExternalChatMessages = {
+    /**
+     * Messages in descending sent_at, id order.
+     */
+    messages: Array<ExternalChatMessage>;
+    /**
+     * Cursor for older messages.
+     */
+    nextCursor?: string | null;
+};
+
+/**
+ * Deliberate operations on an existing message.
+ */
+export type ExternalChatMutation = 'reaction' | 'edit' | 'delete';
+
+/**
+ * Someone in an external chat; Macro access is a separate grant.
+ */
+export type ExternalChatParticipant = {
+    /**
+     * Group admin.
+     */
+    admin: boolean;
+    /**
+     * The other address the provider verified for them.
+     */
+    alternateJid?: string | null;
+    /**
+     * Their name at the provider, untrusted.
+     */
+    displayName?: string | null;
+    /**
+     * Their id at the provider (WhatsApp: phone-number or LID JID).
+     */
+    jid: string;
+};
+
+/**
+ * A person named in a message: a Macro user when verified, else their name
+ * at the provider, else their phone number.
+ */
+export type ExternalChatPersonRef = {
+    /**
+     * Display name, never authentication evidence.
+     */
+    name: string;
+    /**
+     * Verified Macro user, if any.
+     */
+    userId?: string | null;
+};
+
+/**
+ * A poll, read-only in Macro.
+ */
+export type ExternalChatPoll = {
+    /**
+     * Options in order, with tallies.
+     */
+    options: Array<ExternalChatPollOption>;
+    /**
+     * The question.
+     */
+    question: string;
+    /**
+     * How many options one person may choose; 0 means any number.
+     */
+    selectableCount: number;
+    /**
+     * People who voted for anything.
+     */
+    voters: number;
+};
+
+/**
+ * One option of a poll with its votes.
+ */
+export type ExternalChatPollOption = {
+    /**
+     * The caller chose it.
+     */
+    mine: boolean;
+    /**
+     * Option text.
+     */
+    name: string;
+    /**
+     * Who chose it.
+     */
+    voters: Array<ExternalChatPersonRef>;
+    /**
+     * People who chose it.
+     */
+    votes: number;
+};
+
+/**
+ * The messaging service an external chat lives in.
+ */
+export type ExternalChatProvider = 'whatsapp';
+
+/**
+ * Grouped reactions.
+ */
+export type ExternalChatReaction = {
+    /**
+     * Number of reacting people.
+     */
+    count: number;
+    /**
+     * Emoji.
+     */
+    emoji: string;
+    /**
+     * Caller has this reaction.
+     */
+    mine: boolean;
+};
+
+/**
+ * An external chat entity bound to a remote chat.
+ */
+export type ExternalChatReference = {
+    /**
+     * External chat entity id.
+     */
+    id: string;
+    /**
+     * Display name, following WhatsApp.
+     */
+    name: string;
+};
+
+/**
+ * Why the viewer cannot send now.
+ */
+export type ExternalChatReplyBlock = 'no_account' | 'disconnected' | 'not_added' | 'not_allowed' | 'unavailable';
+
+/**
+ * Content of a deliberate send.
+ */
+export type ExternalChatReplyContent = {
+    /**
+     * Group participants the text @-mentions, by their WhatsApp id
+     * (`jid` of a roster participant); the text must contain
+     * `@<digits before the @ of the id>` for each.
+     */
+    mentions?: Array<string>;
+    /**
+     * UTF-8 text, at most [`TEXT_LIMIT_BYTES`] bytes.
+     */
+    text: string;
+    type: 'text';
+} | {
+    /**
+     * Optional caption; audio has none.
+     */
+    caption?: string | null;
+    type: 'media';
+    /**
+     * The staged upload, imported as the message's static file.
+     */
+    uploadId: string;
+} | {
+    /**
+     * Existing message, resolved to its provider source by the server.
+     */
+    messageId: string;
+    /**
+     * Explicit operation.
+     */
+    operation: ExternalChatMutation;
+    /**
+     * Replacement text or emoji; absent for delete, empty to remove a reaction.
+     */
+    text?: string | null;
+    type: 'mutation';
+};
+
+/**
+ * Structured content of a message besides its body.
+ */
+export type ExternalChatRichContent = (ExternalChatPoll & {
+    type: 'poll';
+}) | (ExternalChatLocation & {
+    type: 'location';
+}) | (ExternalChatContacts & {
+    type: 'contacts';
+}) | (ExternalChatEvent & {
+    type: 'event';
+}) | (ExternalChatSystemLine & {
+    type: 'system';
+});
+
+/**
+ * Durable result of a deliberate send.
+ */
+export type ExternalChatSendProgress = {
+    /**
+     * External chat.
+     */
+    chatId: string;
+    /**
+     * Intent creation time.
+     */
+    createdAt: string;
+    /**
+     * Sanitized failure code.
+     */
+    errorCode?: string | null;
+    /**
+     * Stable intent id.
+     */
+    id: string;
+    /**
+     * The chat's message, once the provider accepted it.
+     */
+    messageId?: string | null;
+    /**
+     * The original request, so a failed draft can be recovered.
+     */
+    payload: ExternalChatSendReply;
+    /**
+     * Current state.
+     */
+    state: ExternalChatDeliveryState;
+    /**
+     * Person who submitted it.
+     */
+    userId: string;
+};
+
+/**
+ * Explicit send action from a person. Only deliberate sends reach WhatsApp.
+ */
+export type ExternalChatSendReply = {
+    /**
+     * Stable client intent key. A changed payload with this key is a conflict.
+     */
+    idempotencyKey: string;
+    /**
+     * Content.
+     */
+    message: ExternalChatReplyContent;
+    /**
+     * Message being quoted, within this chat.
+     */
+    replyTo?: string | null;
+};
+
+/**
+ * Message sender from protocol-verified identity evidence.
+ */
+export type ExternalChatSender = {
+    /**
+     * Display name, never authentication evidence.
+     */
+    name: string;
+    /**
+     * External person identity.
+     */
+    personId: string;
+    /**
+     * Verified Macro user association, if present.
+     */
+    userId?: string | null;
+};
+
+/**
+ * An external chat visible through ordinary entity sharing.
+ */
+export type ExternalChatSummary = {
+    backfill?: null | ExternalChatBackfill;
+    /**
+     * Caller may currently send from their own account.
+     */
+    canSend: boolean;
+    community?: null | ExternalChatCommunity;
+    /**
+     * Entity identifier.
+     */
+    id: string;
+    /**
+     * A group, or a direct chat with one person (only its owner sends).
+     */
+    kind: ExternalChatKind;
+    /**
+     * Latest message timestamp.
+     */
+    lastMessageAt?: string | null;
+    /**
+     * Display name: the group's, or a direct chat's other person.
+     */
+    name: string;
+    /**
+     * The service the chat lives in.
+     */
+    provider: ExternalChatProvider;
+    sendReason?: null | ExternalChatReplyBlock;
+    /**
+     * Unread live messages for this viewer, counted up to
+     * [`UNREAD_COUNT_CAP`].
+     */
+    unreadCount: number;
+    /**
+     * Actual entity owner.
+     */
+    userId: string;
+};
+
+/**
+ * Kinds of system lines.
+ */
+export type ExternalChatSystemAction = 'group_created' | 'participants_added' | 'participants_removed' | 'participants_left' | 'participants_joined' | 'participants_promoted' | 'participants_demoted' | 'subject_changed' | 'icon_changed' | 'description_changed' | 'disappearing_changed' | 'message_pinned' | 'message_unpinned' | 'call';
+
+/**
+ * Something that happened in the chat.
+ */
+export type ExternalChatSystemLine = {
+    /**
+     * What happened.
+     */
+    action: ExternalChatSystemAction;
+    actor?: null | ExternalChatPersonRef;
+    call?: null | ExternalChatCall;
+    /**
+     * Who it happened to (added, removed, promoted, …).
+     */
+    participants: Array<ExternalChatPersonRef>;
+    /**
+     * New subject or description; disappearing-messages timer in seconds
+     * (`"0"` is off).
+     */
+    value?: string | null;
+};
+
+/**
+ * Multipart body of the attachments route.
+ */
+export type ExternalChatUploadRequest = {
+    /**
+     * One supported image, audio, video, PDF or text file.
+     */
+    file: Blob | File;
+};
+
+/**
+ * A staged attachment, sent only by a later deliberate send.
+ */
+export type ExternalChatUploadedAttachment = {
+    /**
+     * Display filename.
+     */
+    filename: string;
+    /**
+     * Category.
+     */
+    kind: ExternalChatMediaKind;
+    /**
+     * Use as `upload_id` in a media send.
+     */
+    uploadId: string;
+};
+
+/**
  * A single favorited entity, including display metadata hydrated from the
  * favorited entity where available. Display names are deliberately not
  * included: clients resolve them from the entity previews pipeline, which
@@ -6639,7 +7512,7 @@ export type Favorite = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
     /**
      * File type of the favorited document, when applicable.
      */
@@ -6661,7 +7534,7 @@ export type FavoriteEntityRef = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 };
 
 /**
@@ -6798,6 +7671,16 @@ export type FilterTest = {
      */
     value: string;
 } | {
+    kind: 'dateRange';
+    /**
+     * How the cell's range stands to the day.
+     */
+    operator: DateRangeOperator;
+    /**
+     * The start of the day compared against.
+     */
+    value: string;
+} | {
     /**
      * Whether the box is checked.
      */
@@ -6925,9 +7808,19 @@ export type ForeignEntityFilters = {
  */
 export type Form = {
     /**
+     * Whether nobody, the owner included, can see who gave which response.
+     * Who responded is kept apart from the responses, only so nobody
+     * responds twice. Fixed once anyone has responded.
+     */
+    anonymous: boolean;
+    /**
      * Who may respond.
      */
     audience: Audience;
+    /**
+     * Its logo, cover image and accent color.
+     */
+    branding: FormBranding;
     /**
      * When it stops taking responses, if it does.
      */
@@ -6968,10 +7861,19 @@ export type Form = {
      */
     ownerId: string;
     /**
+     * The folder it is filed in; `null` at the root.
+     */
+    projectId: string | null;
+    /**
      * The person column each signed-in submission names its respondent in;
-     * `null` once deleted.
+     * `null` once deleted, and on a form created anonymous. An anonymous
+     * form never writes it.
      */
     respondentColumnId: string | null;
+    /**
+     * Whether people with View may read individual response rows.
+     */
+    responsesVisible: boolean;
     /**
      * Whether its owner closed it.
      */
@@ -6995,10 +7897,26 @@ export type Form = {
 };
 
 /**
- * The caller's level on a form: view responds, edit changes questions and
- * reads responses, owner also sets the audience, closes and trashes it.
+ * The caller's level on a form: view responds (and reads responses when
+ * they are shared), edit changes questions and reads responses, owner
+ * also sets the audience, closes and trashes it.
  */
 export type FormAccess = 'view' | 'edit' | 'owner';
+
+/**
+ * A form's logo, cover image and accent color, each unset by default.
+ */
+export type FormBranding = {
+    accentColor: null | AccentColor;
+    /**
+     * The static file shown as a banner across the top of the page.
+     */
+    coverFileId: string | null;
+    /**
+     * The static file shown as the logo above the title.
+     */
+    logoFileId: string | null;
+};
 
 /**
  * A ready collaborative form and the result of publishing its latest draft.
@@ -7041,7 +7959,7 @@ export type FormDetail = {
 /**
  * What went wrong with a forms request.
  */
-export type FormErrorCode = 'tableAlreadyHasForm' | 'notFound' | 'forbidden' | 'ownerOnly' | 'signInRequired' | 'closed' | 'tableGone' | 'alreadyResponded' | 'noResponse' | 'unknownQuestion' | 'repeatedAnswer' | 'missingAnswer' | 'invalidAnswer' | 'widgetMismatch' | 'fileUploadNeedsSignIn' | 'invalidLayout' | 'invalidName' | 'invalidSharing' | 'tallyHidden' | 'conflict' | 'internal';
+export type FormErrorCode = 'tableAlreadyHasForm' | 'notFound' | 'forbidden' | 'ownerOnly' | 'signInRequired' | 'closed' | 'tableGone' | 'alreadyResponded' | 'noResponse' | 'anonymousResponseFinal' | 'unknownQuestion' | 'repeatedAnswer' | 'missingAnswer' | 'invalidAnswer' | 'widgetMismatch' | 'fileUploadNeedsSignIn' | 'invalidLayout' | 'invalidName' | 'invalidSharing' | 'tallyHidden' | 'invalidBranding' | 'conflict' | 'internal';
 
 /**
  * Why a forms request was refused or failed.
@@ -7297,6 +8215,11 @@ export type FormSectionDetail = {
  * Where a new form's responses go.
  */
 export type FormSource = {
+    /**
+     * Make the form anonymous from the start: its table gets no
+     * Respondent column.
+     */
+    anonymous?: boolean;
     /**
      * Keep the form, and the database made for it, out of Drive, as
      * for a channel poll.
@@ -8116,7 +9039,12 @@ export type GroupedInitialParams = {
      * Limit the number of items returned per group. Defaults to 20. Max 500.
      */
     per_group_limit?: number | null;
+    sort_direction?: null | SoupApiSortDirection;
     sort_method?: null | GroupedSoupSort;
+    /**
+     * Property definition selected for numeric property sorting.
+     */
+    sort_property_definition_id?: string | null;
 };
 
 /**
@@ -8135,7 +9063,12 @@ export type GroupedPageParams = {
      * Limit the number of items returned. Defaults to 20. Max 500.
      */
     limit?: number | null;
+    sort_direction?: null | SoupApiSortDirection;
     sort_method?: null | GroupedSoupSort;
+    /**
+     * Property definition selected for numeric property sorting.
+     */
+    sort_property_definition_id?: string | null;
 };
 
 /**
@@ -8185,7 +9118,7 @@ export type GroupedSoupPage = (GroupedSoupInitialPage & {
 /**
  * Sort method for grouped queries (frecency not supported).
  */
-export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated';
+export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'property';
 
 /**
  * Guest-safe message projection: no account identities, attachments, or entity grants.
@@ -8726,7 +9659,8 @@ export type InitiativeFilters = {
     /**
      * Opt this query into initiatives at all. Initiatives are off by
      * default — see [`crate::ast::initiative::InitiativeLiteral::Include`].
-     * Asking for specific `initiative_ids` or `owners` also opts in.
+     * Asking for specific `initiative_ids`, `owners` or `notification_filters`
+     * also opts in.
      */
     include?: boolean;
     /**
@@ -8738,9 +9672,13 @@ export type InitiativeFilters = {
      */
     name?: string | null;
     /**
-     * Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot
-     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
-     * owner.
+     * Filter by initiative notification state.
+     */
+    notification_filters?: NotificationFilters;
+    /**
+     * Filter by initiative owner principal — a user ('macro|user@example.com'), a
+     * bot ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include
+     * every owner.
      */
     owners?: Array<string>;
 };
@@ -9083,6 +10021,16 @@ export type LocationResponseV3 = {
 export type MacroUserIdStr = string;
 
 /**
+ * Mark messages through this message read.
+ */
+export type MarkRead = {
+    /**
+     * Message in the addressed group.
+     */
+    messageId: string;
+};
+
+/**
  * Persistent meeting metadata. No channel contents or archived media are exposed.
  */
 export type Meeting = {
@@ -9238,6 +10186,11 @@ export type Message = {
      * User who triggered a bot-authored message.
      */
     triggered_by?: string | null;
+    /**
+     * Self-reported name of the client the user triggered it through, such
+     * as "Claude Code"; a display label only.
+     */
+    triggered_via?: string | null;
     /**
      * Last persisted update.
      */
@@ -9637,6 +10590,7 @@ export type MessagePatchedMetadata = {
      * Actor that patched the message.
      */
     actor: ChannelSender;
+    completed_reply?: null | MessagePostedMetadata;
     /**
      * Macro Markdown body after the patch.
      */
@@ -9861,8 +10815,7 @@ export type MessageTopicEvent = {
 };
 
 /**
- * A signed-in respondent's own response, with its answers as the row
- * holds them now.
+ * A signed-in respondent's own response.
  */
 export type MyResponse = {
     /**
@@ -9871,14 +10824,17 @@ export type MyResponse = {
      */
     answers: Array<Answer>;
     /**
-     * The form's booking step, while the saved row still passes the form's
-     * current required questions and gates.
+     * The form's booking step, while the saved row still passes the
+     * form's current required questions and gates.
      */
     booking?: UnlockedBooking;
+    kind: 'saved';
     /**
      * The ledger entry.
      */
     response: FormResponse;
+} | {
+    kind: 'anonymous';
 };
 
 /**
@@ -10275,6 +11231,10 @@ export type Params = {
     limit?: number | null;
     sort_direction?: null | SoupApiSortDirection;
     sort_method?: null | SoupApiSort;
+    /**
+     * Property definition selected for numeric property sorting.
+     */
+    sort_property_definition_id?: string | null;
 };
 
 /**
@@ -10776,6 +11736,59 @@ export type ProjectPreviewData = {
 };
 
 /**
+ * Caller-defined, ordered UTC date ranges and a separate missing-value key.
+ */
+export type PropertyBucketing = PropertyDateRanges & {
+    type: 'date_ranges';
+};
+
+/**
+ * UTC timestamp interval. Lower bounds are inclusive; upper bounds are exclusive.
+ */
+export type PropertyDateFilterRange = {
+    /**
+     * Exclusive UTC upper bound, omitted for an open end.
+     */
+    end?: string | null;
+    /**
+     * Inclusive UTC lower bound, omitted for an open start.
+     */
+    start?: string | null;
+};
+
+/**
+ * A half-open UTC interval. An absent start or end extends to infinity.
+ */
+export type PropertyDateRange = {
+    /**
+     * Exclusive end, or positive infinity.
+     */
+    end?: string | null;
+    /**
+     * Unique caller-supplied group key.
+     */
+    key: string;
+    /**
+     * Inclusive start, or negative infinity.
+     */
+    start?: string | null;
+};
+
+/**
+ * A complete partition of present dates plus one bucket for absent values.
+ */
+export type PropertyDateRanges = {
+    /**
+     * Caller-supplied group key for entities with no date value.
+     */
+    missing_value_bucket_key: string;
+    /**
+     * Ordered, contiguous ranges covering every present date.
+     */
+    ranges: Array<PropertyDateRange>;
+};
+
+/**
  * Property definition model (service representation).
  */
 export type PropertyDefinition = {
@@ -10815,6 +11828,7 @@ export type PropertyDefinitionWithOptions = {
  * Multiple filters are AND'd together.
  */
 export type PropertyFilter = {
+    date_range?: null | PropertyDateFilterRange;
     /**
      * Entity reference IDs to match. Multiple values are OR'd together.
      */
@@ -10824,6 +11838,10 @@ export type PropertyFilter = {
      * When None, matches across all entity types.
      */
     entity_type?: string | null;
+    /**
+     * Flat Soup/search presence filter: true expands to an open date range, false to its negation.
+     */
+    has_date?: boolean | null;
     /**
      * Select option UUIDs to match. Multiple values are OR'd together.
      */
@@ -10928,6 +11946,13 @@ export type PropertyValue = {
      * Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}
      */
     value: string;
+} | {
+    type: 'DateRange';
+    /**
+     * Date range value
+     * Serializes as: {"type": "DateRange", "value": {"start": "2025-01-01T00:00:00Z", "end": "2025-01-31T00:00:00Z"}}
+     */
+    value: DateRange;
 } | {
     type: 'SelectOption';
     /**
@@ -11154,7 +12179,8 @@ export type RequestStatus = 'pending' | 'granted' | 'denied' | 'cancelled';
 export type RequestedHarnessScope = 'private' | 'team';
 
 /**
- * A layout as an op asks for it: a board may leave its card title out.
+ * A layout as an op asks for it: a board or timeline may leave its title
+ * out.
  */
 export type RequestedLayout = {
     /**
@@ -11185,6 +12211,30 @@ export type RequestedLayout = {
     /**
      * The column a card is titled by. Left out, a board keeps the
      * title it has, and a new board takes the table's first column.
+     */
+    title?: string;
+} | {
+    /**
+     * The columns a bar shows after its title, in order.
+     */
+    barFields?: Array<string>;
+    /**
+     * The select or tag column whose options color the bars, if any.
+     */
+    colorBy: string | null;
+    /**
+     * The single-select or single-person column grouping the bars, if
+     * any.
+     */
+    groupBy: string | null;
+    kind: 'timeline';
+    /**
+     * The date-range column whose cells are the bars.
+     */
+    range: string;
+    /**
+     * The column a bar is labelled by. Left out, a timeline keeps the
+     * title it has, and a new timeline takes the table's first column.
      */
     title?: string;
 };
@@ -11851,6 +12901,9 @@ export type SetPropertyValue = {
     type: 'date';
     value: string;
 } | {
+    type: 'date_range';
+    value: DateRange;
+} | {
     type: 'number';
     value: number;
 } | {
@@ -11898,7 +12951,7 @@ export type ShareEntity = {
 /**
  * An entity type with an existing Share surface.
  */
-export type ShareEntityType = 'document' | 'chat' | 'project' | 'initiative' | 'database' | 'call' | 'email_thread' | 'agent_session';
+export type ShareEntityType = 'document' | 'chat' | 'project' | 'initiative' | 'database' | 'call' | 'email_thread' | 'agent_session' | 'external_chat';
 
 export type SharePermissionV2 = {
     /**
@@ -11932,6 +12985,24 @@ export type SharePipeline = {
  * Controls whether shared email threads are included in results.
  */
 export type SharedEmailFilter = 'exclude' | 'include' | 'only';
+
+/**
+ * Another person's external chat entity the caller can view.
+ */
+export type SharedExternalChatReference = {
+    /**
+     * External chat entity id.
+     */
+    id: string;
+    /**
+     * Display name, following WhatsApp.
+     */
+    name: string;
+    /**
+     * Macro user who added the chat and shared it.
+     */
+    ownerId: string;
+};
 
 /**
  * Short ID response.
@@ -12062,6 +13133,11 @@ export type SoupAgentSessionSoupPropertiesField = {
     properties: Array<SoupProperty>;
 } & {
     /**
+     * When the session was archived, or `None` while it is active.
+     */
+    archivedAt?: string | null;
+    archivedBy?: null | AgentSessionArchiveCause;
+    /**
      * The bot running this session
      */
     botId: string;
@@ -12077,10 +13153,6 @@ export type SoupAgentSessionSoupPropertiesField = {
      * The agent session uuid
      */
     id: string;
-    /**
-     * Whether the session is archived and read-only.
-     */
-    isArchived: boolean;
     /**
      * The user-facing name of the session
      */
@@ -12170,7 +13242,7 @@ export type SoupApiItem = SoupItem & {
 /**
  * Sort options accepted by non-grouped soup API endpoints.
  */
-export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency' | 'touched_by_me' | 'notified_at';
+export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency' | 'touched_by_me' | 'notified_at' | 'property';
 
 /**
  * Sort direction accepted by non-grouped soup API endpoints.
@@ -13459,6 +14531,12 @@ export type SqlCell = {
      */
     value: string;
 } | {
+    type: 'dateRange';
+    /**
+     * A span from one date-time to another.
+     */
+    value: DateRange;
+} | {
     type: 'options';
     /**
      * The selected option ids; one for single-select columns.
@@ -13534,7 +14612,7 @@ export type SqlOutcome = {
 /**
  * The value kind of a result column.
  */
-export type SqlOutcomeKind = 'text' | 'number' | 'boolean' | 'date' | 'select' | 'entity' | 'row';
+export type SqlOutcomeKind = 'text' | 'number' | 'boolean' | 'date' | 'dateRange' | 'select' | 'entity' | 'row';
 
 /**
  * One option of a select column.
@@ -14091,6 +15169,13 @@ export type TallyBucket = {
      * The value.
      */
     value: TallyValue;
+    /**
+     * Who chose it, as Macro user ids in submission order: present only
+     * for the form's editors, or its viewers when it shares its responses,
+     * and never when it hides respondents. Rows no signed-in respondent
+     * submitted count without a voter.
+     */
+    voters?: Array<string> | null;
 };
 
 /**
@@ -14119,6 +15204,53 @@ export type TaskFilters = {
      * even when they do not match other document filters.
      */
     include_cbm_atm_nc?: boolean | null;
+};
+
+/**
+ * A similar existing task computed for an unsaved draft, returned to the task
+ * composer without persisting any embedding or match state.
+ */
+export type TaskSimilarityResult = {
+    /**
+     * The matching existing task.
+     */
+    taskId: string;
+    /**
+     * The matching task's display name.
+     */
+    taskName: string;
+    /**
+     * Cosine similarity from vector search.
+     */
+    vectorScore: number;
+};
+
+/**
+ * Request body for searching tasks similar to an unsaved draft.
+ */
+export type TaskSimilaritySearchRequest = {
+    /**
+     * Draft task body as embedding-format markdown. The composer produces it
+     * client-side with lexical-core's `markdownToEmbeddingText` (the same
+     * format lexical-service's `/markdown/{id}?target=embedding` renders), so
+     * this latency-sensitive endpoint embeds the text as-is without a
+     * lexical-service round trip.
+     */
+    markdown?: string | null;
+    /**
+     * Draft task title.
+     */
+    taskName: string;
+};
+
+/**
+ * Response for searching tasks similar to an unsaved draft.
+ */
+export type TaskSimilaritySearchResponse = {
+    /**
+     * Existing tasks similar to the draft.
+     */
+    results: Array<TaskSimilarityResult>;
 };
 
 /**
@@ -14865,11 +15997,20 @@ export type UpdateCrmTeamSettingsRequest = {
 };
 
 /**
- * A change to a form's facts; what is left out stays. The description and
- * confirmation message take edit, the rest owner. A form is renamed
+ * A change to a form's facts; what is left out stays. The description,
+ * confirmation message and branding take edit, the rest owner. A form is renamed
  * through the entity mutation router.
  */
 export type UpdateForm = {
+    /**
+     * A new accent color, or `null` for the default.
+     */
+    accentColor?: string | null;
+    /**
+     * Whether nobody can see who gave which response; refused once anyone
+     * has responded.
+     */
+    anonymous?: boolean;
     /**
      * Who may respond from now on.
      */
@@ -14883,9 +16024,21 @@ export type UpdateForm = {
      */
     confirmationMessage?: string;
     /**
+     * A new cover image, or `null` to remove it.
+     */
+    coverFileId?: string | null;
+    /**
      * Its new description.
      */
     description?: string;
+    /**
+     * A new logo, or `null` to remove it.
+     */
+    logoFileId?: string | null;
+    /**
+     * Whether people with View may read individual response rows.
+     */
+    responsesVisible?: boolean;
     /**
      * Open or close it.
      */
@@ -15290,6 +16443,30 @@ export type ViewLayout = {
      * the cards by the table's first remaining column.
      */
     title: string;
+} | {
+    /**
+     * The columns a bar shows after its title, in order.
+     */
+    barFields?: Array<string>;
+    /**
+     * The select or tag column whose options color the bars, if any.
+     */
+    colorBy: string | null;
+    /**
+     * The single-select or single-person column whose values group the
+     * bars, if any; moving a bar to another group sets this column.
+     */
+    groupBy: string | null;
+    kind: 'timeline';
+    /**
+     * The date-range column whose cells are the bars.
+     */
+    range: string;
+    /**
+     * The column a bar is labelled by, of any type. Removing it labels
+     * the bars by the table's first remaining column.
+     */
+    title: string;
 };
 
 export type ViewPatch = {
@@ -15541,9 +16718,250 @@ export type WebhookValidationTestEvent = {
 };
 
 /**
+ * One person's account, never owned by a workspace.
+ */
+export type WhatsAppAccount = {
+    /**
+     * Explicit consent generation; reconnecting a socket never changes it.
+     */
+    authorizationGeneration: number;
+    /**
+     * Stable account identity.
+     */
+    id: string;
+    /**
+     * WhatsApp-verified identity, absent until the first pairing succeeds.
+     */
+    identityJid?: string | null;
+    /**
+     * Lifecycle.
+     */
+    state: WhatsAppAccountState;
+    /**
+     * Authenticated owner.
+     */
+    userId: string;
+};
+
+/**
+ * Account lifecycle. Transport outages are not stored: a connected account
+ * stays connected while its session service reconnects.
+ */
+export type WhatsAppAccountState = 'pairing' | 'connected' | 'logged_out' | 'disconnected';
+
+/**
+ * Owner-scoped account state, including not connected.
+ */
+export type WhatsAppAccountView = {
+    account?: null | WhatsAppAccount;
+};
+
+/**
+ * Why a chat can't be added to Macro; the app words it from the code.
+ */
+export type WhatsAppCannotAdd = 'not_in_group' | 'community' | 'own_chat' | 'not_in_chat_list';
+
+/**
+ * One chat of the caller's WhatsApp chat list, as WhatsApp Web lists it.
+ */
+export type WhatsAppChat = {
+    added?: null | ExternalChatReference;
+    /**
+     * Archived in WhatsApp.
+     */
+    archived: boolean;
+    /**
+     * "Add to Macro" works now.
+     */
+    canAdd: boolean;
+    cannotAddReason?: null | WhatsAppCannotAdd;
+    community?: null | ExternalChatCommunity;
+    /**
+     * WhatsApp chat JID: a group, or the other person's phone-number JID
+     * (LID when WhatsApp never told us the number).
+     */
+    jid: string;
+    /**
+     * Group or direct chat.
+     */
+    kind: ExternalChatKind;
+    /**
+     * Newest activity WhatsApp reported (message or history sync); `null`
+     * when unknown, as for saved contacts never messaged. The list is
+     * sorted by it, newest first, unknown last.
+     */
+    lastActivityAt?: string | null;
+    /**
+     * Group: the subject, or member names for an unnamed group. Direct: the
+     * contact or WhatsApp name, else `+<phone>`. Always non-empty.
+     */
+    name: string;
+    /**
+     * The other person's phone number (`+<digits>`) of a direct chat, when
+     * WhatsApp told us it.
+     */
+    phoneNumber?: string | null;
+    /**
+     * Pinned in WhatsApp.
+     */
+    pinned: boolean;
+    shared?: null | SharedExternalChatReference;
+};
+
+/**
+ * The caller's WhatsApp chat list.
+ */
+export type WhatsAppChats = {
+    /**
+     * Newest activity first; chats with unknown activity last, by name.
+     */
+    chats: Array<WhatsAppChat>;
+};
+
+/**
+ * Explicit pairing intent; replacement is a separate deliberate action.
+ */
+export type WhatsAppConnect = {
+    /**
+     * Replace the retained identity with a different WhatsApp account.
+     */
+    replace?: boolean;
+};
+
+/**
+ * Result of disconnecting an account.
+ */
+export type WhatsAppDisconnect = {
+    /**
+     * The session service was asked to log the device out of WhatsApp. It
+     * unlinks asynchronously; WhatsApp's Linked devices list is authoritative.
+     */
+    remoteUnlinkRequested: boolean;
+};
+
+/**
+ * The consent generation the owner deliberately disconnects.
+ */
+export type WhatsAppDisconnectRequest = {
+    /**
+     * Fences retries against a later reconnect or replacement.
+     */
+    authorizationGeneration: number;
+};
+
+/**
+ * Result of the owner's Import.
+ */
+export type WhatsAppHistoryImport = {
+    /**
+     * Chats that started importing earlier messages from the phone.
+     */
+    started: number;
+};
+
+/**
+ * The owner asking whether a phone number has a WhatsApp account, to start
+ * a direct chat with it.
+ */
+export type WhatsAppLookup = {
+    /**
+     * Found: the direct chat's JID, now addable from the chat list.
+     */
+    chatJid?: string | null;
+    /**
+     * Poll `GET /whatsapp/lookups/{id}` with it.
+     */
+    id: string;
+    /**
+     * The number asked about, E.164 (`+<digits>`).
+     */
+    phoneNumber: string;
+    /**
+     * Progress.
+     */
+    state: WhatsAppLookupState;
+};
+
+/**
+ * A phone number to start a direct chat with.
+ */
+export type WhatsAppLookupRequest = {
+    /**
+     * E.164: `+`, the country code and the number, without spacing.
+     */
+    phoneNumber: string;
+};
+
+/**
+ * Where a phone-number lookup is.
+ */
+export type WhatsAppLookupState = 'pending' | 'found' | 'not_on_whatsapp' | 'failed';
+
+/**
+ * Owner-only pairing status. Deliberately has no `Debug` implementation: the
+ * QR and pairing code are secrets for the duration of the transaction.
+ */
+export type WhatsAppPairState = {
+    /**
+     * WhatsApp's WebAuthn request options while the state is `passkey`; the
+     * native authenticator answers through the passkey route.
+     */
+    challenge?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Pairing code to type on the phone, when phone-number pairing is used.
+     */
+    code?: string | null;
+    /**
+     * Same owner-bound deadline.
+     */
+    expiresAt: string;
+    /**
+     * Verified identity once paired.
+     */
+    identityJid?: string | null;
+    /**
+     * Current QR content; rotates while the transaction waits.
+     */
+    qr?: string | null;
+    /**
+     * Current state.
+     */
+    state: WhatsAppPairingState;
+};
+
+/**
+ * Owner-bound pairing transaction, without its QR or pairing code.
+ */
+export type WhatsAppPairing = {
+    /**
+     * Account being connected.
+     */
+    accountId: string;
+    /**
+     * Database-assigned deadline.
+     */
+    expiresAt: string;
+    /**
+     * One-use transaction id.
+     */
+    id: string;
+    /**
+     * Current state.
+     */
+    state: WhatsAppPairingState;
+};
+
+/**
+ * Pairing transaction state.
+ */
+export type WhatsAppPairingState = 'waiting' | 'qr' | 'passkey' | 'success' | 'expired' | 'cancelled' | 'failed';
+
+/**
  * How a question is asked. Each column kind takes a few, the first its
- * default; kinds asked one way only (numbers, checkboxes, entity and row
- * pickers) take none.
+ * default; kinds asked one way only (numbers, checkboxes, date ranges,
+ * entity and row pickers) take none.
  */
 export type Widget = 'short' | 'paragraph' | 'datetime' | 'date' | 'url' | 'file' | 'choice' | 'dropdown' | 'checkboxes';
 
@@ -16983,7 +18401,12 @@ export type IngestTranscriptResponses = {
 export type ListChannelLabelsData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels';
 };
 
@@ -17004,7 +18427,12 @@ export type ListChannelLabelsResponse = ListChannelLabelsResponses[keyof ListCha
 export type CreateChannelLabelData = {
     body: CreateChannelLabelRequest;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels';
 };
 
@@ -17033,7 +18461,12 @@ export type SetChannelLabelData = {
          */
         channel_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels/channels/{channel_id}';
 };
 
@@ -17056,7 +18489,12 @@ export type SetChannelLabelResponse = SetChannelLabelResponses[keyof SetChannelL
 export type PreviewSmartTagData = {
     body: ChannelLabelRule;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels/preview';
 };
 
@@ -17083,7 +18521,12 @@ export type DeleteChannelLabelData = {
          */
         label_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels/{label_id}';
 };
 
@@ -17110,7 +18553,12 @@ export type RenameChannelLabelData = {
          */
         label_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels/{label_id}';
 };
 
@@ -18149,6 +19597,9 @@ export type GetContactByEmailData = {
 };
 
 export type GetContactByEmailErrors = {
+    /**
+     * Invalid email or multiple visible contacts match; choose a contact ID.
+     */
     400: ErrorResponse;
     401: ErrorResponse;
     500: ErrorResponse;
@@ -18818,6 +20269,31 @@ export type UndoDatabaseChangeResponses = {
 };
 
 export type UndoDatabaseChangeResponse = UndoDatabaseChangeResponses[keyof UndoDatabaseChangeResponses];
+
+export type DuplicateDatabaseData = {
+    body: DuplicateDatabaseRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/duplicate';
+};
+
+export type DuplicateDatabaseErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DuplicateDatabaseError = DuplicateDatabaseErrors[keyof DuplicateDatabaseErrors];
+
+export type DuplicateDatabaseResponses = {
+    201: Database;
+};
+
+export type DuplicateDatabaseResponse = DuplicateDatabaseResponses[keyof DuplicateDatabaseResponses];
 
 export type ImportDatabaseTableData = {
     body: ImportTable;
@@ -19729,6 +21205,34 @@ export type GetBatchPreviewHandlerResponses = {
 
 export type GetBatchPreviewHandlerResponse = GetBatchPreviewHandlerResponses[keyof GetBatchPreviewHandlerResponses];
 
+export type TaskSimilaritySearchHandlerData = {
+    body: TaskSimilaritySearchRequest;
+    path?: never;
+    query?: never;
+    url: '/documents/similarity_search';
+};
+
+export type TaskSimilaritySearchHandlerErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type TaskSimilaritySearchHandlerError = TaskSimilaritySearchHandlerErrors[keyof TaskSimilaritySearchHandlerErrors];
+
+export type TaskSimilaritySearchHandlerResponses = {
+    /**
+     * Response for searching tasks similar to an unsaved draft.
+     */
+    200: {
+        /**
+         * Existing tasks similar to the draft.
+         */
+        results: Array<TaskSimilarityResult>;
+    };
+};
+
+export type TaskSimilaritySearchHandlerResponse = TaskSimilaritySearchHandlerResponses[keyof TaskSimilaritySearchHandlerResponses];
+
 export type GetDocumentByTeamSlugData = {
     body?: never;
     path: {
@@ -20630,6 +22134,229 @@ export type GetEntityPermissionResponses = {
 
 export type GetEntityPermissionResponse = GetEntityPermissionResponses[keyof GetEntityPermissionResponses];
 
+export type ExternalChatsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/external-chats';
+};
+
+export type ExternalChatsResponses = {
+    200: Array<ExternalChatSummary>;
+};
+
+export type ExternalChatsResponse = ExternalChatsResponses[keyof ExternalChatsResponses];
+
+export type ExternalChatAddData = {
+    body: ExternalChatAdd;
+    path?: never;
+    query?: never;
+    url: '/external-chats';
+};
+
+export type ExternalChatAddResponses = {
+    200: ExternalChatAdded;
+};
+
+export type ExternalChatAddResponse = ExternalChatAddResponses[keyof ExternalChatAddResponses];
+
+export type ExternalChatRemoveData = {
+    body?: never;
+    path: {
+        chat_id: string;
+    };
+    query?: never;
+    url: '/external-chats/{chat_id}';
+};
+
+export type ExternalChatRemoveResponses = {
+    204: void;
+};
+
+export type ExternalChatRemoveResponse = ExternalChatRemoveResponses[keyof ExternalChatRemoveResponses];
+
+export type ExternalChatData = {
+    body?: never;
+    path: {
+        chat_id: string;
+    };
+    query?: never;
+    url: '/external-chats/{chat_id}';
+};
+
+export type ExternalChatResponses = {
+    200: ExternalChatDetail;
+};
+
+export type ExternalChatResponse = ExternalChatResponses[keyof ExternalChatResponses];
+
+export type ExternalChatUploadData = {
+    body: ExternalChatUploadRequest;
+    path: {
+        chat_id: string;
+    };
+    query?: never;
+    url: '/external-chats/{chat_id}/attachments';
+};
+
+export type ExternalChatUploadResponses = {
+    200: ExternalChatUploadedAttachment;
+};
+
+export type ExternalChatUploadResponse = ExternalChatUploadResponses[keyof ExternalChatUploadResponses];
+
+export type ExternalChatDeliveryData = {
+    body: Array<string>;
+    path: {
+        chat_id: string;
+    };
+    query?: never;
+    url: '/external-chats/{chat_id}/delivery';
+};
+
+export type ExternalChatDeliveryResponses = {
+    200: Array<ExternalChatSendProgress>;
+};
+
+export type ExternalChatDeliveryResponse = ExternalChatDeliveryResponses[keyof ExternalChatDeliveryResponses];
+
+export type ExternalChatMessagesData = {
+    body?: never;
+    path: {
+        chat_id: string;
+    };
+    query?: {
+        /**
+         * Last message id in the previous page.
+         */
+        before?: string | null;
+        /**
+         * Page size, up to [`PAGE_LIMIT`]; [`DEFAULT_PAGE`] when absent.
+         */
+        limit?: number | null;
+    };
+    url: '/external-chats/{chat_id}/messages';
+};
+
+export type ExternalChatMessagesResponses = {
+    200: ExternalChatMessages;
+};
+
+export type ExternalChatMessagesResponse = ExternalChatMessagesResponses[keyof ExternalChatMessagesResponses];
+
+export type ExternalChatMessageAttachmentsData = {
+    body: Array<string>;
+    path: {
+        chat_id: string;
+    };
+    query?: never;
+    url: '/external-chats/{chat_id}/messages/attachments';
+};
+
+export type ExternalChatMessageAttachmentsResponses = {
+    200: Array<ExternalChatMessageAttachments>;
+};
+
+export type ExternalChatMessageAttachmentsResponse = ExternalChatMessageAttachmentsResponses[keyof ExternalChatMessageAttachmentsResponses];
+
+export type ExternalChatMessageData = {
+    body?: never;
+    path: {
+        chat_id: string;
+        message_id: string;
+    };
+    query?: never;
+    url: '/external-chats/{chat_id}/messages/{message_id}';
+};
+
+export type ExternalChatMessageResponses = {
+    200: ExternalChatMessage;
+};
+
+export type ExternalChatMessageResponse = ExternalChatMessageResponses[keyof ExternalChatMessageResponses];
+
+export type ExternalChatPermissionsData = {
+    body?: never;
+    path: {
+        chat_id: string;
+    };
+    query?: never;
+    url: '/external-chats/{chat_id}/permissions';
+};
+
+export type ExternalChatPermissionsResponses = {
+    200: SharePermissionV2;
+};
+
+export type ExternalChatPermissionsResponse = ExternalChatPermissionsResponses[keyof ExternalChatPermissionsResponses];
+
+export type ExternalChatUpdatePermissionsData = {
+    body: UpdateSharePermissionRequestV2;
+    path: {
+        chat_id: string;
+    };
+    query?: never;
+    url: '/external-chats/{chat_id}/permissions';
+};
+
+export type ExternalChatUpdatePermissionsResponses = {
+    204: void;
+};
+
+export type ExternalChatUpdatePermissionsResponse = ExternalChatUpdatePermissionsResponses[keyof ExternalChatUpdatePermissionsResponses];
+
+export type ExternalChatReadData = {
+    body: MarkRead;
+    path: {
+        chat_id: string;
+    };
+    query?: never;
+    url: '/external-chats/{chat_id}/read';
+};
+
+export type ExternalChatReadResponses = {
+    204: void;
+};
+
+export type ExternalChatReadResponse = ExternalChatReadResponses[keyof ExternalChatReadResponses];
+
+export type ExternalChatSendsData = {
+    body?: never;
+    path: {
+        chat_id: string;
+    };
+    query?: never;
+    url: '/external-chats/{chat_id}/sends';
+};
+
+export type ExternalChatSendsResponses = {
+    200: Array<ExternalChatSendProgress>;
+};
+
+export type ExternalChatSendsResponse = ExternalChatSendsResponses[keyof ExternalChatSendsResponses];
+
+export type ExternalChatSendData = {
+    body: ExternalChatSendReply;
+    path: {
+        chat_id: string;
+    };
+    query?: never;
+    url: '/external-chats/{chat_id}/sends';
+};
+
+export type ExternalChatSendErrors = {
+    /**
+     * One send request per second per user; Retry-After: 1
+     */
+    429: unknown;
+};
+
+export type ExternalChatSendResponses = {
+    200: ExternalChatSendProgress;
+};
+
+export type ExternalChatSendResponse = ExternalChatSendResponses[keyof ExternalChatSendResponses];
+
 export type ListFavoritesData = {
     body?: never;
     path?: never;
@@ -20637,7 +22364,7 @@ export type ListFavoritesData = {
         /**
          * Restrict to favorites whose entity is one of these types.
          */
-        entityType?: Array<'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form'>;
+        entityType?: Array<'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat'>;
         /**
          * Restrict to favorites whose entity is one of these ids.
          */
@@ -20706,7 +22433,7 @@ export type RemoveFavoriteByEntityData = {
         /**
          * The type of an entity in Macro
          */
-        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
+        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
         /**
          * The id of the favorited entity.
          */
@@ -21820,20 +23547,22 @@ export type GetItemsSoupData = {
          */
         limit?: number;
         /**
-         * Sort method. Options are viewed_at, created_at, updated_at,
-         * viewed_updated, frecency, touched_by_me, notified_at. Defaults to
-         * viewed_at.
+         * Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.
+         * Missing definitions, unsupported types, and mismatched values sort as missing.
+         * Flat property sorts omit calendar events, email, channels, calls, companies, and agent sessions.
+         * Defaults to viewed_at.
          */
         sort_method?: SoupApiSort;
         /**
+         * Property definition selected for numeric property sorting.
+         */
+        sort_property_definition_id?: string;
+        /**
          * Sort direction. Options are asc, desc. Defaults to desc.
          *
-         * Re-send this with every page: it is not carried in the cursor.
-         *
-         * Applies to the timestamp sort methods only. `asc` combined with
-         * `frecency` is rejected rather than ignored: frecency pages are ordered
-         * by relevance score and the cursor comparison assumes descending, so
-         * there is no ascending frecency order to give.
+         * Timestamp sorts require this parameter again on each page. Property
+         * cursors preserve their direction and always put missing values last.
+         * Ascending frecency, touched-by-me, and notified-at sorts are unsupported.
          */
         sort_direction?: SoupApiSortDirection;
         /**
@@ -23629,3 +25358,143 @@ export type ValidateWebhookResponses = {
 };
 
 export type ValidateWebhookResponse2 = ValidateWebhookResponses[keyof ValidateWebhookResponses];
+
+export type WhatsappAccountData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/whatsapp/account';
+};
+
+export type WhatsappAccountResponses = {
+    200: WhatsAppAccountView;
+};
+
+export type WhatsappAccountResponse = WhatsappAccountResponses[keyof WhatsappAccountResponses];
+
+export type WhatsappChatsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/whatsapp/chats';
+};
+
+export type WhatsappChatsResponses = {
+    200: WhatsAppChats;
+};
+
+export type WhatsappChatsResponse = WhatsappChatsResponses[keyof WhatsappChatsResponses];
+
+export type WhatsappConnectData = {
+    body: WhatsAppConnect;
+    path?: never;
+    query?: never;
+    url: '/whatsapp/connect';
+};
+
+export type WhatsappConnectResponses = {
+    200: WhatsAppPairing;
+};
+
+export type WhatsappConnectResponse = WhatsappConnectResponses[keyof WhatsappConnectResponses];
+
+export type WhatsappDisconnectData = {
+    body: WhatsAppDisconnectRequest;
+    path?: never;
+    query?: never;
+    url: '/whatsapp/disconnect';
+};
+
+export type WhatsappDisconnectResponses = {
+    200: WhatsAppDisconnect;
+};
+
+export type WhatsappDisconnectResponse = WhatsappDisconnectResponses[keyof WhatsappDisconnectResponses];
+
+export type WhatsappImportHistoryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/whatsapp/history-import';
+};
+
+export type WhatsappImportHistoryResponses = {
+    200: WhatsAppHistoryImport;
+};
+
+export type WhatsappImportHistoryResponse = WhatsappImportHistoryResponses[keyof WhatsappImportHistoryResponses];
+
+export type WhatsappStartLookupData = {
+    body: WhatsAppLookupRequest;
+    path?: never;
+    query?: never;
+    url: '/whatsapp/lookups';
+};
+
+export type WhatsappStartLookupResponses = {
+    200: WhatsAppLookup;
+};
+
+export type WhatsappStartLookupResponse = WhatsappStartLookupResponses[keyof WhatsappStartLookupResponses];
+
+export type WhatsappLookupData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/whatsapp/lookups/{id}';
+};
+
+export type WhatsappLookupResponses = {
+    200: WhatsAppLookup;
+};
+
+export type WhatsappLookupResponse = WhatsappLookupResponses[keyof WhatsappLookupResponses];
+
+export type WhatsappCancelPairingData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/whatsapp/pairing/{id}';
+};
+
+export type WhatsappCancelPairingResponses = {
+    204: void;
+};
+
+export type WhatsappCancelPairingResponse = WhatsappCancelPairingResponses[keyof WhatsappCancelPairingResponses];
+
+export type WhatsappPairingData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/whatsapp/pairing/{id}';
+};
+
+export type WhatsappPairingResponses = {
+    200: WhatsAppPairState;
+};
+
+export type WhatsappPairingResponse = WhatsappPairingResponses[keyof WhatsappPairingResponses];
+
+export type WhatsappPasskeyData = {
+    body: {
+        [key: string]: unknown;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/whatsapp/pairing/{id}/passkey';
+};
+
+export type WhatsappPasskeyResponses = {
+    204: void;
+};
+
+export type WhatsappPasskeyResponse = WhatsappPasskeyResponses[keyof WhatsappPasskeyResponses];

@@ -2,8 +2,8 @@ import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 
 import type { NodeIdMappings } from '@macro-inc/lexical-core';
-import { $getNodeByKey, type LexicalNode } from 'lexical';
-import { type ContainerID, LoroMap } from 'loro-crdt';
+import { $getNodeByKey, $isRootNode, type LexicalNode } from 'lexical';
+import { type ContainerID, LoroMap, LoroMovableList } from 'loro-crdt';
 
 const warn = (...args: any[]) => {
   if (DEV_MODE_ENV) console.warn('LoroNodeMappings:', ...args);
@@ -78,7 +78,7 @@ export function $findLoroContainerForLexicalNode(
     return null;
   }
 
-  const containerId = smartSearchContainersForNode(loroManager, nodeId);
+  const containerId = $searchContainersForNode(loroManager, node, nodeId);
 
   if (!containerId) {
     // %BOOKMARK - no container
@@ -102,10 +102,51 @@ function getMapValueOrContainer(
   return {};
 }
 
-function smartSearchContainersForNode(
+function nodeIdOfMap(map: LoroMap): string | undefined {
+  if (map.isDeleted()) return undefined;
+  const innerValue = getMapValueOrContainer(map, '$');
+  return 'id' in innerValue ? (innerValue.id as string) : undefined;
+}
+
+/** The container at the node's position in the Loro tree, if it holds the node. */
+function $containerAtNodePath(
   loroManager: LoroManager,
+  node: LexicalNode,
   nodeId: string
 ): ContainerID | undefined {
+  const path: number[] = [];
+  let current = node;
+  while (!$isRootNode(current)) {
+    const parent = current.getParent();
+    if (!parent) return undefined;
+    path.push(current.getIndexWithinParent());
+    current = parent;
+  }
+
+  let map = loroManager.doc.getMap('root');
+  for (const index of path.reverse()) {
+    const children = map.get('children');
+    if (!(children instanceof LoroMovableList)) return undefined;
+    const child = children.get(index);
+    if (!(child instanceof LoroMap)) return undefined;
+    map = child;
+  }
+
+  return nodeIdOfMap(map) === nodeId ? map.id : undefined;
+}
+
+/**
+ * Lexical and Loro trees line up except where local-only nodes (draft comment
+ * marks) shift positions; only those lookups scan every container.
+ */
+function $searchContainersForNode(
+  loroManager: LoroManager,
+  node: LexicalNode,
+  nodeId: string
+): ContainerID | undefined {
+  const atPath = $containerAtNodePath(loroManager, node, nodeId);
+  if (atPath) return atPath;
+
   const res = loroManager.getAllContainerIds();
 
   if (res.isErr()) {
@@ -113,9 +154,9 @@ function smartSearchContainersForNode(
     return undefined;
   }
 
-  const containerIds: ContainerID[] = res.value.reverse();
-
-  for (const containerId of containerIds) {
+  // Newest containers first, so a node re-created by undo or redo resolves to
+  // its live container.
+  for (const containerId of res.value.reverse()) {
     const maybeContainer = loroManager.getContainerById(containerId);
 
     if (maybeContainer.isErr()) {
@@ -123,21 +164,9 @@ function smartSearchContainersForNode(
       return undefined;
     }
 
-    let container = maybeContainer.value;
+    const container = maybeContainer.value?.getAttached();
 
-    container = container?.getAttached();
-
-    if (!container || !(container instanceof LoroMap)) continue;
-
-    const innerValue = getMapValueOrContainer(container, '$');
-
-    if (!('id' in innerValue)) {
-      continue;
-    }
-
-    const innerNodeId = innerValue.id as string;
-
-    if (innerNodeId === nodeId) {
+    if (container instanceof LoroMap && nodeIdOfMap(container) === nodeId) {
       return containerId;
     }
   }

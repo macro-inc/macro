@@ -1,6 +1,6 @@
 import { ViewBreadcrumbs } from '@app/components/view-shell';
 import { CallDetailView } from '@block-call/views/CallDetailView';
-import PhoneCallIcon from '@phosphor/phone-call.svg';
+import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import { DriveBreadcrumbsOutlet } from '../components/DriveBreadcrumbs';
 import { useDriveView } from '../context/drive-context';
 import {

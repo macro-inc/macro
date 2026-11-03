@@ -1,4 +1,6 @@
+import { ViewSidebar } from '@app/components/view-shell';
 import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-header';
+import { usePending } from '@app/observability/flow';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -86,6 +88,11 @@ export function MyActivityView(props: {
 }) {
   const context = useActivityContext();
   const state = createMyActivityState(context, () => props.scope);
+  usePending('activity.feed', () => state.feed().t === 'loading');
+  usePending(
+    'activity.overview',
+    () => props.scope !== 'team' && state.overview().t === 'loading'
+  );
   const [scroller, setScroller] = createSignal<HTMLDivElement>();
   const [topSpacer, setTopSpacer] = createSignal<HTMLDivElement>();
   const topSpacerSize = createElementSize(topSpacer);
@@ -145,7 +152,7 @@ export function MyActivityView(props: {
     <div class="@container/u-list flex size-full flex-col">
       <SplitHeaderLeft>
         <div class="flex items-center gap-3">
-          <span class="font-semibold text-sm">Activity</span>
+          <ViewSidebar.Title caret={false}>Activity</ViewSidebar.Title>
           <Show when={!isTouchDevice()}>
             <ActivityScopeTabs
               value={props.scope}

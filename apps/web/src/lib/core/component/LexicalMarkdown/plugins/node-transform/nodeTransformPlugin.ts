@@ -17,7 +17,10 @@ import {
   HeadingNode,
   QuoteNode,
 } from '@lexical/rich-text';
-import { $setBlocksType } from '@lexical/selection';
+import {
+  $ensureForwardRangeSelection,
+  $setBlocksType,
+} from '@lexical/selection';
 import type { ElementName } from '@macro-inc/lexical-core';
 import { CustomCodeNode } from '@macro-inc/lexical-core';
 import type {
@@ -110,7 +113,12 @@ function registerNodeTransform(editor: LexicalEditor) {
         return true;
       }
 
-      $setBlocksType(selection, NodeTransforms[transform]);
+      // Lexical excludes a focus at a block's start, even for backward ranges.
+      // Normalize a copy so the first selected block is included while the
+      // editor's actual selection keeps its direction.
+      const forwardSelection = selection.clone();
+      $ensureForwardRangeSelection(forwardSelection);
+      $setBlocksType(forwardSelection, NodeTransforms[transform]);
       return true;
     },
     COMMAND_PRIORITY_EDITOR

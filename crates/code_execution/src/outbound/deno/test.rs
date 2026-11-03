@@ -92,6 +92,7 @@ async fn real_sdk_nested_calls_are_authenticated_and_concurrent() {
     let (_root, service) = setup(Limits {
         max_output_bytes: 1024,
         max_frame_bytes: 1024,
+        max_result_bytes: 512,
         ..Limits::default()
     })
     .await;
@@ -198,6 +199,63 @@ export async function main({token, hosts, macro: supplied, session, execution}) 
 
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
+async fn a_program_presents_a_view_through_its_session() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let request = read_request(&mut stream).await;
+        let response = "HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n";
+        stream.write_all(response.as_bytes()).await.unwrap();
+        request
+    });
+    let environment = RunEnvironment {
+        token: "fixture-run-token".into(),
+        trace_headers: BTreeMap::new(),
+        session_id: Some(uuid::Uuid::from_u128(1)),
+        execution_id: Some(uuid::Uuid::from_u128(2)),
+        hosts: BTreeMap::from([("agent-harness".into(), format!("http://{address}"))]),
+    };
+    let source = r#"
+export async function main({execution}) {
+  await execution.views.present({ title: 'Launch notes', widgets: [{ type: 'md', markdown: 'Shipped.' }] });
+  return { data: 'presented' };
+}
+"#;
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: source.into(),
+                    timeout_ms: 5000,
+                },
+                environment,
+            )
+            .unwrap(),
+    )
+    .await;
+    assert!(
+        matches!(outcome, Outcome::Succeeded { ref value } if value["data"] == "presented"),
+        "{outcome:?}"
+    );
+    let request = tokio::time::timeout(Duration::from_secs(5), server)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        request.starts_with("POST /agent-sessions/00000000-0000-0000-0000-000000000001/views "),
+        "{request}"
+    );
+    let body = request.split("\r\n\r\n").nth(1).unwrap();
+    let body: serde_json::Value = serde_json::from_str(body).unwrap();
+    assert_eq!(body["view"]["title"], "Launch notes");
+    assert_eq!(body["executionId"], "00000000-0000-0000-0000-000000000002");
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
 async fn javascript_logs_result_and_cleanup() {
     let (root, service) = setup(Limits::default()).await;
     let (events, outcome) = run(&service, "export async function main() { console.log('working'); await Promise.resolve(); return 6 * 7; }", 5000).await;
@@ -281,6 +339,32 @@ async fn denies_ambient_io_and_external_module_imports() {
 
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
+async fn rejects_sleeping_and_points_at_routines() {
+    let (_root, service) = setup(Limits::default()).await;
+    let sources = [
+        "export async function main() { await new Promise(resolve => setTimeout(resolve, 20000)); }",
+        "export function main() { setInterval(() => {}, 1000); }",
+        "export function main() { setImmediate(() => {}); }",
+        "export async function main() { await new Promise(resolve => AbortSignal.timeout(1000).addEventListener('abort', resolve)); }",
+        "export function main() { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000); }",
+        "export async function main() { await Atomics.waitAsync(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000).value; }",
+        "export function main() { new Worker('data:text/javascript,setTimeout(() => postMessage(1), 1000)', {type: 'module'}); }",
+        "export async function main() { const { setTimeout } = await import('node:timers/promises'); await setTimeout(1000); }",
+        "import { setTimeout } from 'node:timers'; export async function main() { await new Promise(resolve => setTimeout(resolve, 1000)); }",
+        "import { Worker } from 'worker_threads'; export function main() { return Worker; }",
+    ];
+    for source in sources {
+        let (_, outcome) = run(&service, source, 5000).await;
+        assert!(
+            matches!(&outcome, Outcome::Failed { error } if error.code == FailureCode::Runtime && error.message.contains("create a routine with macro.routines.create")),
+            "{source}: {outcome:?}"
+        );
+    }
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
 async fn denies_unlisted_destinations_including_redirects() {
     let (_root, service) = setup(Limits::default()).await;
     let forbidden = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -349,12 +433,12 @@ async fn times_out_cancels_and_reaps_busy_processes() {
 async fn bounds_output_and_rejects_invalid_or_duplicate_frames() {
     let (_root, service) = setup(Limits {
         max_frame_bytes: 16 * 1024,
+        max_result_bytes: 8 * 1024,
         ..Limits::default()
     })
     .await;
     for body in [
         "console.log('x'.repeat(20000));",
-        "return 'x'.repeat(20000);",
         "Deno.stderr.writeSync(new TextEncoder().encode('x'.repeat(20000)));",
         "while (true) console.log('spam');",
         "Deno.stdout.writeSync(new TextEncoder().encode('not json\\n'));",
@@ -372,6 +456,67 @@ async fn bounds_output_and_rejects_invalid_or_duplicate_frames() {
             "{body}: {outcome:?}"
         );
     }
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn result_at_the_limit_fits_its_frame_unsummarized() {
+    let (_root, service) = setup(Limits {
+        max_frame_bytes: 1024,
+        max_output_bytes: 4096,
+        max_result_bytes: 1024 - RESULT_FRAME_OVERHEAD,
+        ..Limits::default()
+    })
+    .await;
+    // JSON quotes bring the string to exactly max_result_bytes.
+    let (_, outcome) = run(
+        &service,
+        &format!(
+            "export function main() {{ return 'x'.repeat({}); }}",
+            1024 - RESULT_FRAME_OVERHEAD - 2
+        ),
+        5000,
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(
+        value.as_str().unwrap().len(),
+        1024 - RESULT_FRAME_OVERHEAD - 2
+    );
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn oversized_result_data_is_summarized_and_reviews_kept() {
+    let limits = Limits::default();
+    let max_result_bytes = limits.max_result_bytes;
+    let (_root, service) = setup(limits).await;
+    let (_, outcome) = run(
+        &service,
+        "export function main(context) { return {data: {keys: Object.keys(context), items: Array.from({length: 2000}, (_, id) => ({id, name: 'x'.repeat(100)}))}, reviews: []}; }",
+        5000,
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(value["reviews"], serde_json::json!([]));
+    let data = &value["data"];
+    assert_eq!(data["truncated"], true);
+    assert_eq!(data["limitBytes"], max_result_bytes);
+    assert!(data["bytes"].as_u64().unwrap() > max_result_bytes as u64);
+    assert_eq!(
+        data["outline"],
+        "{keys: Array(8) of string, items: Array(2000) of {id: number, name: string}}"
+    );
+    assert!(data["preview"].as_str().unwrap().starts_with(
+        r#"{"keys":["token","traceHeaders","sessionId","executionId","hosts","macro","session","execution"],"items":[{"id":0,"#
+    ));
+    assert!(serde_json::to_vec(&value).unwrap().len() <= max_result_bytes);
     service.shutdown().await;
 }
 
@@ -413,10 +558,11 @@ async fn total_output_budget_applies_across_small_frames() {
     let (_root, service) = setup(Limits {
         max_frame_bytes: 1024,
         max_output_bytes: 4096,
+        max_result_bytes: 512,
         ..Limits::default()
     })
     .await;
-    let (_, outcome) = run(&service, "export async function main() { for(let i = 0; i < 20; i++) { console.log('x'.repeat(500)); await new Promise(resolve => setTimeout(resolve, 1)); } return null; }", 5000).await;
+    let (_, outcome) = run(&service, "export async function main() { for(let i = 0; i < 20; i++) { console.log('x'.repeat(500)); } return null; }", 5000).await;
     assert!(
         matches!(outcome, Outcome::Failed { error } if error.code == FailureCode::Limit && error.message == "process output limit exceeded")
     );

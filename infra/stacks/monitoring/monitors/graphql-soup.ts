@@ -4,8 +4,10 @@
 // remove them freely once the rollout settles.
 //
 // Thresholds sit above the 7 days before the 2026-10-11 ramp: none of these
-// would have fired in that week except where noted. PostHog covers the client
-// side (exceptions, browser cache and draft-queue logs, usage) on
+// would have fired in that week except where noted. Volume, gateway
+// connections and task count were raised on 2026-10-29 above the 7 days
+// before it, after the rollout outgrew the pre-ramp numbers. PostHog covers
+// the client side (exceptions, browser cache and draft-queue logs, usage) on
 // https://us.posthog.com/project/299018/dashboard/2198651.
 //
 // GraphQL resolver errors return HTTP 200 on a single path, so the endpoint
@@ -14,6 +16,8 @@
 // metric tags) once https://github.com/macro-inc/macro/pull/7911 deploys; until
 // then they have no data.
 import * as datadog from '@pulumi/datadog';
+import { goalertWebhooks } from '../goalert';
+import { notify, RENOTIFY_MINUTES } from '../notify';
 
 const GRAPHQL =
   'service:cloud-storage-service,env:prod,resource_name:post_/dss/items/soup/graphql';
@@ -32,16 +36,6 @@ const GATEWAY_ALB = 'loadbalancer:app/prod-gateway-alb/8e99d35bdc70b1c9';
 const ROLLOUT_CONTEXT = `Rollout: \`enable-graphql-soup\` (https://us.posthog.com/project/299018/feature_flags/738783).
 Client-side view: https://us.posthog.com/project/299018/dashboard/2198651`;
 
-// Datadog webhook integration that posts into the Macro "Alerts" channel
-// (https://macro.com/app/channel/019fb34d-fcfd-7548-9a0f-7084ea16416c). There
-// is no separate severe channel, so severity is marked in the message instead.
-const MACRO_ALERTS_CHANNEL = '@webhook-macro-alert-hook';
-
-const notify = (severe: boolean) =>
-  severe
-    ? `{{#is_alert}}SEVERE: user-facing impact likely, act now.{{/is_alert}}\n${MACRO_ALERTS_CHANNEL}`
-    : MACRO_ALERTS_CHANNEL;
-
 function rolloutMonitor(
   name: string,
   args: {
@@ -55,25 +49,30 @@ function rolloutMonitor(
     severe?: boolean;
   }
 ): datadog.Monitor {
-  return new datadog.Monitor(name, {
-    name: args.name,
-    type: args.type,
-    query: args.query,
-    message: `${args.description}
+  return new datadog.Monitor(
+    name,
+    {
+      name: args.name,
+      type: args.type,
+      query: args.query,
+      message: `${args.description}
 
 ${ROLLOUT_CONTEXT}
 
-${notify(args.severe ?? false)}`,
-    tags: ['env:prod', `service:${args.service}`, 'rollout:graphql-soup'],
-    priority: args.severe ? '2' : '3',
-    monitorThresholds: { critical: args.critical, warning: args.warning },
-    // APM and log counts are sparse at night; a full window would skip
-    // evaluations, and an empty count must read as zero rather than alert.
-    requireFullWindow: false,
-    onMissingData: 'default',
-    includeTags: true,
-    notifyAudit: false,
-  });
+${notify({ pages: args.severe ?? false })}`,
+      tags: ['env:prod', `service:${args.service}`, 'rollout:graphql-soup'],
+      priority: args.severe ? '2' : '3',
+      monitorThresholds: { critical: args.critical, warning: args.warning },
+      renotifyInterval: RENOTIFY_MINUTES,
+      // APM and log counts are sparse at night; a full window would skip
+      // evaluations, and an empty count must read as zero rather than alert.
+      requireFullWindow: false,
+      onMissingData: 'default',
+      includeTags: true,
+      notifyAudit: false,
+    },
+    { dependsOn: goalertWebhooks }
+  );
 }
 
 // Latency. The endpoint's p95 is long-tailed even when healthy (30-minute p95
@@ -179,15 +178,16 @@ rolloutMonitor('graphql-soup-unauthenticated-mutations', {
 });
 
 // Volume. There is no rate limit on the endpoint, so a client retry loop or
-// reconnect herd shows up here before it shows up as errors.
+// reconnect herd shows up here before it shows up as errors. Over the 7 days
+// to 2026-10-29 the average was 16k requests per 15 minutes, peak 42k.
 rolloutMonitor('graphql-soup-request-volume', {
   name: '[PROD] GraphQL soup: request volume surge',
   type: 'query alert',
-  query: `sum(last_15m):sum:trace.http.server.request.hits{${GRAPHQL}}.as_count() > 15000`,
+  query: `sum(last_15m):sum:trace.http.server.request.hits{${GRAPHQL}}.as_count() > 50000`,
   description:
-    'POST /dss/items/soup/graphql received {{value}} requests in 15 minutes (pre-rollout max was 3,841). Check for a client retry loop before scaling.',
-  critical: '15000',
-  warning: '8000',
+    'POST /dss/items/soup/graphql received {{value}} requests in 15 minutes (normal is about 16k, weekly peak 42k). Check for a client retry loop before scaling.',
+  critical: '50000',
+  warning: '45000',
   service: 'cloud-storage-service',
 });
 
@@ -226,15 +226,15 @@ rolloutMonitor('graphql-soup-dss-memory', {
 });
 
 // Each task opens its own DB pool, so a scale-out also eats DB connection
-// headroom. It scaled to 7 once in the pre-rollout week.
+// headroom. It scaled to at most 9 in the 7 days to 2026-10-29.
 rolloutMonitor('graphql-soup-dss-tasks', {
   name: '[PROD] GraphQL soup: cloud-storage-service scaled out',
   type: 'query alert',
-  query: `max(last_15m):avg:aws.ecs.service.running{${DSS}} >= 6`,
+  query: `max(last_15m):avg:aws.ecs.service.running{${DSS}} >= 10`,
   description:
-    'cloud-storage-service is running {{value}} tasks (normal is 3). Check macro-db-prod connections: each task adds a connection pool.',
-  critical: '6',
-  warning: '5',
+    'cloud-storage-service is running {{value}} tasks (weekly max was 9). Check macro-db-prod connections: each task adds a connection pool.',
+  critical: '10',
+  warning: '9',
   service: 'cloud-storage-service',
 });
 
@@ -277,26 +277,27 @@ rolloutMonitor('graphql-soup-db-cpu', {
 });
 
 // Load balancer. The gateway ALB is shared by every prod-gateway service and
-// there is no per-route size metric, so these only catch large shifts.
+// there is no per-route size metric, so these only catch large shifts. Active
+// connections peaked at 10.1k in the 7 days to 2026-10-29.
 rolloutMonitor('graphql-soup-alb-bytes', {
   name: '[PROD] GraphQL soup: prod-gateway-alb processed bytes surge',
   type: 'query alert',
-  query: `sum(last_15m):sum:aws.applicationelb.processed_bytes{${GATEWAY_ALB}}.as_count() > 3000000000`,
+  query: `sum(last_15m):sum:aws.applicationelb.processed_bytes{${GATEWAY_ALB}}.as_count() > 8000000000`,
   description:
-    'prod-gateway-alb processed {{value}} bytes in 15 minutes (pre-rollout max was 1.9 GB). GraphQL request bodies are unbounded.',
-  critical: '3000000000',
-  warning: '1500000000',
+    'prod-gateway-alb processed {{value}} bytes in 15 minutes (the 7 days to 2026-10-29 averaged 0.7 GB and peaked at 4.1 GB). GraphQL request bodies are unbounded.',
+  critical: '8000000000',
+  warning: '6000000000',
   service: 'prod-gateway-alb',
 });
 
 rolloutMonitor('graphql-soup-alb-connections', {
   name: '[PROD] GraphQL soup: prod-gateway-alb active connections high',
   type: 'query alert',
-  query: `avg(last_15m):sum:aws.applicationelb.active_connection_count{${GATEWAY_ALB}}.as_count() > 6000`,
+  query: `avg(last_15m):sum:aws.applicationelb.active_connection_count{${GATEWAY_ALB}}.as_count() > 15000`,
   description:
-    'prod-gateway-alb active connections are at {{value}} (pre-rollout max was 2,922). Long-lived GraphQL websockets hold connections for up to the 3,600s idle timeout.',
-  critical: '6000',
-  warning: '4000',
+    'prod-gateway-alb active connections are at {{value}} (weekly peak 10.1k). Long-lived GraphQL websockets hold connections for up to the 3,600s idle timeout.',
+  critical: '15000',
+  warning: '12000',
   service: 'prod-gateway-alb',
 });
 

@@ -107,6 +107,7 @@ export const TOKENS = {
     searchMenu: 'global.searchMenu',
     toggleSettings: 'global.toggleSettings',
     createNewSplit: 'global.createNewSplit',
+    createNewSplitBelow: 'global.createNewSplitBelow',
     inviteTeam: 'global.inviteTeam',
     undo: 'global.undo',
     redo: 'global.redo',
@@ -114,6 +115,14 @@ export const TOKENS = {
     zoomIn: 'global.zoomIn',
     zoomOut: 'global.zoomOut',
     zoomReset: 'global.zoomReset',
+  },
+
+  // desktop tabs
+  tabs: {
+    new: 'tabs.new',
+    close: 'tabs.close',
+    next: 'tabs.next',
+    previous: 'tabs.previous',
   },
 
   // sidebar navigation
@@ -134,6 +143,7 @@ export const TOKENS = {
       channels: 'sidebar.goTo.channels',
       calls: 'sidebar.goTo.calls',
       reviews: 'sidebar.goTo.reviews',
+      external: 'sidebar.goTo.external',
       companies: 'sidebar.goTo.companies',
       folders: 'sidebar.goTo.folders',
     },

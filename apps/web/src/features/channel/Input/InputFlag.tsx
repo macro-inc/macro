@@ -1,4 +1,4 @@
-import XIcon from '@phosphor/x.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Layer } from '@ui';
 import { type JSX, Show } from 'solid-js';
 

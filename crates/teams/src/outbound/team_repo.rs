@@ -1,14 +1,15 @@
 //! Implementation for TeamRepository using MacroDB.
 use crate::domain::{
     model::{
-        AcceptedTeamInvite, CreateTeamError, InviteUsersToTeamError, PatchTeamRequest,
-        RemoveTeamInviteError, RemoveUserFromTeamError, SeatPlan, Team, TeamError, TeamInvite,
-        TeamInviteDetails, TeamInviteLinkTeam, TeamInviteLinkToken, TeamInviteSnapshot, TeamMember,
-        TeamMembers, TeamPlan, TeamRole, TeamWithMembers, ToggleAutoJoinDomainError,
-        is_generic_email_domain, normalize_team_slug,
+        AcceptedTeamInvite, CreateTeamError, DueInviteReminder, InviteUsersToTeamError,
+        PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError, SeatPlan, Team,
+        TeamError, TeamInvite, TeamInviteDetails, TeamInviteLinkTeam, TeamInviteLinkToken,
+        TeamInviteSnapshot, TeamMember, TeamMembers, TeamPlan, TeamRole, TeamWithMembers,
+        ToggleAutoJoinDomainError, is_generic_email_domain, normalize_team_slug,
     },
     owned_entity_cleanup::ClearedTeam,
     team_repo::{TeamMembersService, TeamRepository},
+    team_service::invite_resend_interval,
 };
 use entity_access_db_utils::{EntityAccessSourceType, delete_source_grants, team_share};
 use macro_user_id::{
@@ -18,6 +19,7 @@ use macro_user_id::{
     user_id::MacroUserIdStr,
 };
 use model_owner::Owner;
+use model_user::Language;
 use models_permissions::share_permission::LinkShare;
 use sqlx::{PgPool, Row};
 use std::str::FromStr;
@@ -78,6 +80,7 @@ impl TeamRepositoryImpl {
         team_slug: &str,
         subscription_id: Option<&stripe::SubscriptionId>,
         owner_plan: SeatPlan,
+        auto_join_domain: Option<&str>,
     ) -> Result<Team, sqlx::Error> {
         let mut transaction = self.pool.begin().await?;
 
@@ -85,10 +88,14 @@ impl TeamRepositoryImpl {
 
         let team = sqlx::query!(
             r#"
-            INSERT INTO team (id, name, slug, owner_id, seat_count, subscription_id, paying)
-            VALUES ($1, $2, $3, $4, 1, $5, $6)
+            INSERT INTO team (
+                id, name, slug, owner_id, seat_count, subscription_id, paying, auto_join_domain
+            )
+            VALUES ($1, $2, $3, $4, 1, $5, $6, $7)
             RETURNING id, name, slug, owner_id, enterprise, allow_non_admin_invites,
-                default_link_share as "default_link_share: LinkShare"
+                auto_join_domain,
+                default_link_share as "default_link_share: LinkShare",
+                language as "language: Language"
             "#,
             id,
             team_name,
@@ -96,6 +103,7 @@ impl TeamRepositoryImpl {
             user_id.as_ref(),
             subscription_id.map(|s| s.to_string()),
             subscription_id.is_some(),
+            auto_join_domain,
         )
         .try_map(|row| {
             Ok(Team {
@@ -107,11 +115,11 @@ impl TeamRepositoryImpl {
                     .into_owned(),
                 // New teams have no team_crm_settings row yet.
                 crm_enabled: false,
-                // New teams start without an auto-join domain.
-                auto_join_domain: None,
+                auto_join_domain: row.auto_join_domain,
                 enterprise: row.enterprise,
                 allow_non_admin_invites: row.allow_non_admin_invites,
                 default_link_share: row.default_link_share,
+                language: row.language,
             })
         })
         .fetch_one(&mut *transaction)
@@ -346,14 +354,22 @@ impl TeamRepository for TeamRepositoryImpl {
         team_slug: &str,
         subscription_id: Option<&stripe::SubscriptionId>,
         owner_plan: SeatPlan,
+        auto_join_domain: Option<&str>,
     ) -> Result<Team, CreateTeamError> {
         if team_name.is_empty() || team_name.len() > 50 {
             return Err(CreateTeamError::InvalidTeamName(team_name.to_string()));
         }
 
-        self.create_team_inner(user_id, team_name, team_slug, subscription_id, owner_plan)
-            .await
-            .map_err(|e| e.into())
+        self.create_team_inner(
+            user_id,
+            team_name,
+            team_slug,
+            subscription_id,
+            owner_plan,
+            auto_join_domain,
+        )
+        .await
+        .map_err(|e| e.into())
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -437,17 +453,19 @@ impl TeamRepository for TeamRepositoryImpl {
     .fetch_all(&mut *transaction)
     .await?;
 
-        // Also re-send existing invites whose rate limit window has passed
+        // Also re-send existing invites whose email rate limit has passed;
+        // sooner, the email would be dropped while `last_sent_at` moved on.
         let resent_invites: Vec<(uuid::Uuid, uuid::Uuid, String)> = sqlx::query!(
             r#"
             SELECT id, team_id, email
             FROM team_invite
             WHERE team_id = $1
               AND email = ANY($2::text[])
-              AND last_sent_at < NOW() - INTERVAL '5 minutes'
+              AND last_sent_at <= NOW() - make_interval(secs => $3)
             "#,
             team_id,
             &email_strings[..],
+            invite_resend_interval().as_secs_f64(),
         )
         .map(|r| (r.id, r.team_id, r.email))
         .fetch_all(&mut *transaction)
@@ -542,6 +560,80 @@ impl TeamRepository for TeamRepositoryImpl {
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    #[tracing::instrument(skip(self), fields(claimed = tracing::field::Empty), err)]
+    async fn claim_due_invite_reminders(
+        &self,
+        limit: i64,
+    ) -> Result<Vec<DueInviteReminder>, TeamError> {
+        // The first reminder goes 3 days after the last email, the second 4
+        // days after the first. Invites older than 14 days are left alone, so
+        // a deploy never reminds people about invites from long ago. Skips
+        // invites the invitee could not accept (the team stopped paying for
+        // its subscription), already-members, and invites whose sender left
+        // the team, since the email is written in the sender's name.
+        let reminders = sqlx::query!(
+            r#"
+            WITH due AS (
+                SELECT ti.id
+                FROM team_invite ti
+                JOIN team t ON t.id = ti.team_id
+                WHERE ti.created_at > NOW() - INTERVAL '14 days'
+                  AND (
+                      (ti.reminders_sent = 0 AND ti.last_sent_at <= NOW() - INTERVAL '3 days')
+                      OR (ti.reminders_sent = 1 AND ti.last_sent_at <= NOW() - INTERVAL '4 days')
+                  )
+                  AND (t.enterprise OR t.paying OR t.subscription_id IS NULL)
+                  AND EXISTS (
+                      SELECT 1 FROM team_user tu
+                      WHERE tu.team_id = ti.team_id AND tu.user_id = ti.invited_by
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1 FROM team_user tu
+                      WHERE tu.team_id = ti.team_id AND tu.user_id = 'macro|' || ti.email
+                  )
+                ORDER BY ti.created_at
+                LIMIT $1
+                FOR UPDATE OF ti SKIP LOCKED
+            )
+            UPDATE team_invite ti
+            SET reminders_sent = ti.reminders_sent + 1,
+                last_sent_at = NOW()
+            FROM due, team t
+            WHERE ti.id = due.id AND t.id = ti.team_id
+            RETURNING
+                ti.id,
+                ti.team_id,
+                t.name AS team_name,
+                ti.email,
+                ti.invited_by,
+                ti.reminders_sent,
+                t.enterprise,
+                t.paying,
+                t.subscription_id IS NOT NULL AS "has_subscription!"
+            "#,
+            limit,
+        )
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        .map(|r| {
+            Ok(DueInviteReminder {
+                team_invite_id: r.id,
+                team_id: r.team_id,
+                team_name: r.team_name,
+                email: r.email,
+                invited_by: r.invited_by,
+                reminder_number: u8::try_from(r.reminders_sent).map_err(anyhow::Error::from)?,
+                enterprise: r.enterprise,
+                paying: r.paying,
+                has_subscription: r.has_subscription,
+            })
+        })
+        .collect::<Result<Vec<_>, TeamError>>()?;
+        tracing::Span::current().record("claimed", reminders.len());
+        Ok(reminders)
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -1075,6 +1167,7 @@ impl TeamRepository for TeamRepositoryImpl {
             SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain, t.enterprise,
                 t.allow_non_admin_invites,
                 t.default_link_share as "default_link_share: LinkShare",
+                t.language as "language: Language",
                 COALESCE(tcs.crm_enabled, FALSE) AS "crm_enabled!"
             FROM team t
             LEFT JOIN team_crm_settings tcs ON tcs.team_id = t.id
@@ -1095,6 +1188,7 @@ impl TeamRepository for TeamRepositoryImpl {
                 enterprise: row.enterprise,
                 allow_non_admin_invites: row.allow_non_admin_invites,
                 default_link_share: row.default_link_share,
+                language: row.language,
             })
         })
         .fetch_one(&self.pool)
@@ -1141,6 +1235,7 @@ impl TeamRepository for TeamRepositoryImpl {
             SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain, t.enterprise,
                 t.allow_non_admin_invites,
                 t.default_link_share as "default_link_share: LinkShare",
+                t.language as "language: Language",
                 COALESCE(tcs.crm_enabled, FALSE) AS "crm_enabled!"
             FROM team t
             JOIN team_user tu ON t.id = tu.team_id
@@ -1162,6 +1257,7 @@ impl TeamRepository for TeamRepositoryImpl {
                 enterprise: row.enterprise,
                 allow_non_admin_invites: row.allow_non_admin_invites,
                 default_link_share: row.default_link_share,
+                language: row.language,
             })
         })
         .fetch_all(&self.pool)
@@ -1272,15 +1368,23 @@ impl TeamRepository for TeamRepositoryImpl {
         // "keep".
         let default_link_share_provided = req.default_link_share.is_some();
         let default_link_share = req.default_link_share.flatten();
+        // Same for language: NULL lets each member's browser decide.
+        let language_provided = req.language.is_some();
+        let language = req.language.flatten();
 
-        if req.name.is_some() || normalized_slug.is_some() || default_link_share_provided {
+        if req.name.is_some()
+            || normalized_slug.is_some()
+            || default_link_share_provided
+            || language_provided
+        {
             let result = sqlx::query!(
                 r#"
                 UPDATE team
                 SET
                     name = COALESCE($2, name),
                     slug = COALESCE($3, slug),
-                    default_link_share = CASE WHEN $4 THEN $5 ELSE default_link_share END
+                    default_link_share = CASE WHEN $4 THEN $5 ELSE default_link_share END,
+                    language = CASE WHEN $6 THEN $7 ELSE language END
                 WHERE id = $1
                 "#,
                 team_id,
@@ -1288,6 +1392,8 @@ impl TeamRepository for TeamRepositoryImpl {
                 normalized_slug.as_deref(),
                 default_link_share_provided,
                 default_link_share as Option<LinkShare>,
+                language_provided,
+                language as Option<Language>,
             )
             .execute(&self.pool)
             .await?;
@@ -1539,8 +1645,17 @@ impl TeamRepository for TeamRepositoryImpl {
         &self,
         team_id: &uuid::Uuid,
         token: &TeamInviteLinkToken,
+        created_by: &MacroUserIdStr<'_>,
     ) -> Result<(), TeamError> {
-        invite_link::set_team_invite_link(&self.pool, team_id, token).await
+        invite_link::set_team_invite_link(&self.pool, team_id, token, created_by).await
+    }
+
+    #[tracing::instrument(skip(self, token), err)]
+    async fn get_team_invite_link_creator(
+        &self,
+        token: &TeamInviteLinkToken,
+    ) -> Result<Option<MacroUserIdStr<'static>>, TeamError> {
+        invite_link::get_team_invite_link_creator(&self.pool, token).await
     }
 
     #[tracing::instrument(skip(self), err)]

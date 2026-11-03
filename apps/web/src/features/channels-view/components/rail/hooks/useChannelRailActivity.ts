@@ -9,7 +9,11 @@ import type { ChannelsGroup } from '../../../types';
 import { channelGroup } from '../../../utils';
 import type { useChannelCalls } from './useChannelCalls';
 
-const CHANNEL_GROUPS: ChannelsGroup[] = ['channels', 'direct_messages'];
+const CHANNEL_GROUPS: ChannelsGroup[] = [
+  'team_channels',
+  'channels',
+  'direct_messages',
+];
 
 type ChannelActivityTarget = {
   channelId: string;
@@ -44,6 +48,7 @@ export function useChannelRailActivity(
     const unreadChannelIds = new Set<string>();
     const unreadNotificationIds = new Set<string>();
     const unreadCounts: Record<ChannelsGroup, number> = {
+      team_channels: 0,
       channels: 0,
       direct_messages: 0,
     };

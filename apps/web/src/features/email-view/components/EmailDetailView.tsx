@@ -1,11 +1,11 @@
-import { EntityDetailBreadcrumbSkeleton } from '@app/components/entity-detail/EntityDetailBreadcrumbSkeleton';
 import { useListNavigationHotkeys } from '@app/components/entity-detail/use-list-navigation-hotkeys';
-import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
+import { ViewShell } from '@app/components/view-shell';
 import { displaySubject } from '@app/features/email-compose/core/subject-text';
 import type { EmailThreadHost } from '@app/features/email-thread/context/email-thread-context';
 import { createEmailThreadSource } from '@app/features/email-thread/queries/thread-source';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { createSearchParams, useRouteParams } from '@app/lib/split-router';
+import { usePending } from '@app/observability/flow';
 import { emailThreadRoute } from '@app/routes/routes';
 import {
   EmailThreadControlGroups,
@@ -27,7 +27,6 @@ import {
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
 import { createSplitAutofocus } from '@components/app/split-layout/utils/createSplitAutofocus';
-import { EntityIcon } from '@core/component/EntityIcon';
 import { toEntityLoadError } from '@core/component/EntityLoadGate';
 import { getPermissions } from '@core/component/SharePermissions';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
@@ -38,9 +37,17 @@ import { registerScopeSignalHotkey } from '@core/hotkey/utils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { buildEntityData } from '@entity';
+import ArrowLeftIcon from '@phosphor/arrow-left.svg';
 import { useThreadQuery } from '@queries/email/thread';
 import { representativeThreadMessage } from '@queries/email/thread-subject';
-import { createEffect, createMemo, createSignal, Show } from 'solid-js';
+import { Button } from '@ui';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  Show,
+} from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { emailDetailSearch } from '../email-route';
 import { useEmailView } from '../email-view-context';
@@ -48,10 +55,22 @@ import { useEmailReaderPane } from '../reader-pane';
 import type { EmailThreadTarget } from '../types';
 import { useEmailDetailListNavigation } from '../use-email-detail-list-navigation';
 
+/**
+ * Where the title menu sits after the subject's last word. It unsets itself on
+ * unmount so a standalone draft, which has no subject line, gets the menu in
+ * the header instead.
+ */
+function TitleMenuMount(props: {
+  ref: (element: HTMLElement | undefined) => void;
+}) {
+  onCleanup(() => props.ref(undefined));
+  return <span ref={props.ref} class="ml-1.5 inline-flex align-middle" />;
+}
+
+/** The thread's title menu and header controls, which need the loaded thread. */
 function EmailDetailHeader(
   props: EmailThreadToolsOptions & {
-    value: string;
-    focusThread: () => void;
+    titleMenuMount: HTMLElement | undefined;
     controlsMount: HTMLDivElement | undefined;
     onEmailReminderSaved: () => void | Promise<void>;
   }
@@ -60,41 +79,23 @@ function EmailDetailHeader(
     useEmailThreadTools(props);
   return (
     <>
-      <ViewBreadcrumbs.Item
-        value={props.value}
-        metadata={{ type: 'email', id: props.id }}
-        order={1}
-      >
-        {(item) => (
-          <div class="flex min-w-0 items-center gap-0.5">
-            <ViewBreadcrumbs.Button
-              class="gap-1.5"
-              isActive={item.isActive()}
-              onClick={() => {
-                item.onSelect();
-                props.focusThread();
-              }}
-              tooltip={props.title}
-            >
-              <EntityIcon targetType="email" size="xs" class="shrink-0" />
-              <span class="truncate">{props.title}</span>
-            </ViewBreadcrumbs.Button>
-            <div class="shrink-0">
-              <SplitFileMenu
-                id={props.id}
-                itemType="email"
-                entityKind="email"
-                name={props.title}
-                entity={emailEntity()}
-                permissions={permissions()}
-                ops={[]}
-                tools={menuTools}
-                onEmailReminderSaved={props.onEmailReminderSaved}
-              />
-            </div>
-          </div>
+      <Show when={props.titleMenuMount} keyed>
+        {(mount) => (
+          <Portal mount={mount} ref={(div) => (div.style.display = 'contents')}>
+            <SplitFileMenu
+              id={props.id}
+              itemType="email"
+              entityKind="email"
+              name={props.title}
+              entity={emailEntity()}
+              permissions={permissions()}
+              ops={[]}
+              tools={menuTools}
+              onEmailReminderSaved={props.onEmailReminderSaved}
+            />
+          </Portal>
         )}
-      </ViewBreadcrumbs.Item>
+      </Show>
       <Show when={props.controlsMount}>
         {(mount) => (
           <Portal mount={mount()}>
@@ -123,10 +124,13 @@ export function EmailDetailView(props: {
   const notificationSource = useGlobalNotificationSource();
   const canAutofocus = useCanAutofocusSplitContent();
   const [controlsMount, setControlsMount] = createSignal<HTMLDivElement>();
+  const [subjectMenuMount, setSubjectMenuMount] = createSignal<HTMLElement>();
+  const [headerMenuMount, setHeaderMenuMount] = createSignal<HTMLElement>();
   const threadId = () => props.thread.id;
   const threadQuery = useThreadQuery(threadId, () => ({
     enabled: !!threadId(),
   }));
+  usePending('email.thread', () => threadQuery.isLoading);
   const source = createEmailThreadSource(threadId, threadQuery);
   const threadData = source.thread;
   const title = () => {
@@ -212,8 +216,8 @@ export function EmailDetailView(props: {
         hotkey: 'escape',
         description: 'Collapse message or back to list',
         // Escape unwinds thread state first (reply, expanded body, focused
-        // message). Once nothing is left to unwind it follows the breadcrumb
-        // back to the list this thread was opened from.
+        // message). Once nothing is left to unwind it goes back to the list
+        // this thread was opened from.
         keyDownHandler: () => {
           if (handlers.cancel()) return true;
           (pane?.focusList ?? closeThread)();
@@ -224,7 +228,6 @@ export function EmailDetailView(props: {
       });
     },
   };
-  const breadcrumbValue = () => `email-thread:${props.thread.id}`;
   useListNavigationHotkeys({
     scopeId: keyScope,
     enabled: () =>
@@ -243,16 +246,26 @@ export function EmailDetailView(props: {
     <SidePanel.Root floating defaultOpen={false}>
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
         <ViewShell.TopBar class="touch:flex">
-          <ViewBreadcrumbs.Outlet
-            class="flex-1"
-            aria-label="Email location"
-            fallback={<EntityDetailBreadcrumbSkeleton />}
-          />
+          {/* The subject sits atop the thread, so the header only goes
+              back; the reading pane already shows the list beside it. */}
+          <Show when={!pane}>
+            <Button
+              variant="ghost"
+              size="icon-md"
+              tooltip="Back"
+              aria-label="Back"
+              onClick={closeThread}
+            >
+              <ArrowLeftIcon class="size-4 touch:size-6" />
+            </Button>
+          </Show>
+          <div ref={setHeaderMenuMount} class="flex items-center" />
           <EmailThreadHeaderActions
             controls={<div ref={setControlsMount} class="flex items-center" />}
             share={
               <Show when={ENABLE_EMAIL_SHARING}>
                 <ShareTrigger
+                  size="md"
                   onClick={openShare}
                   id={props.thread.id}
                   blockType="email"
@@ -268,6 +281,7 @@ export function EmailDetailView(props: {
           tabIndex={-1}
         >
           <EmailThreadLoadGate
+            isLocalDraft={source.isLocalDraft()}
             result={loadResult}
             notificationSource={notificationSource}
             threadId={props.thread.id}
@@ -277,6 +291,7 @@ export function EmailDetailView(props: {
           >
             <EmailThreadHostView
               title={title()}
+              titleTrailing={<TitleMenuMount ref={setSubjectMenuMount} />}
               threadId={threadId}
               source={source}
               threadTransport={() => threadQuery.transport}
@@ -292,8 +307,7 @@ export function EmailDetailView(props: {
                   onMarkedUnread={closeThread}
                   onDeleted={closeThread}
                   listNavigation={listNavigation}
-                  value={breadcrumbValue()}
-                  focusThread={focusContainer}
+                  titleMenuMount={subjectMenuMount() ?? headerMenuMount()}
                   controlsMount={controlsMount()}
                 />
               )}

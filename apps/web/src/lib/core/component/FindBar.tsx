@@ -1,7 +1,7 @@
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretUp from '@phosphor/caret-up.svg';
-import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
-import X from '@phosphor/x.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CaretUp from '@icon/system/regular/caret-up.svg';
+import MagnifyingGlass from '@icon/system/regular/magnifying-glass.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui/components/Button';
 import { cn } from '@ui/utils/classname';
 import {
@@ -105,7 +105,7 @@ function FindBarSubmitButton() {
           !controller.hasUnsubmittedChanges() && !!controller.query().trim(),
       }}
     >
-      <MagnifyingGlass />
+      <MagnifyingGlass class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
     </Button>
   );
 }
@@ -204,7 +204,7 @@ function FindBarPreviousButton() {
         direction() === 'desc' ? controller.next() : controller.previous()
       }
     >
-      <CaretUp />
+      <CaretUp class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
     </Button>
   );
 }
@@ -225,7 +225,7 @@ function FindBarNextButton() {
         direction() === 'desc' ? controller.previous() : controller.next()
       }
     >
-      <CaretDown />
+      <CaretDown class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
     </Button>
   );
 }
@@ -239,7 +239,7 @@ function FindBarCloseButton() {
       aria-label="Close find bar"
       onClick={() => controller.close()}
     >
-      <X />
+      <X class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
     </Button>
   );
 }

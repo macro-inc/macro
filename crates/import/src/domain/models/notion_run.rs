@@ -19,6 +19,11 @@ pub enum NotionJob {
         /// Who the plan shares what it writes with.
         sharing: NotionSharing,
     },
+    /// Planning all visible issues and groups in a connected tracker.
+    TrackerPlan {
+        /// Who sees the imported entities.
+        sharing: NotionSharing,
+    },
     /// Writing the plan tied to `review_id`.
     Write {
         /// The review that approved the plan.

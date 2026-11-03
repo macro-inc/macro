@@ -9,9 +9,11 @@ import {
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useUserId } from '@core/context/user';
 import { type Accessor, createMemo, type Setter } from 'solid-js';
-import { buildSoupSearchRequest } from './search-request';
+import { buildSoupSearchRequest } from '../queries/search-request';
 
 interface CreateSearchStateArgs {
+  /** Where the search runs, for analytics. */
+  surface: Accessor<string>;
   soup: SoupState;
   filters: Accessor<QueryState>;
   assignees: Accessor<string[]>;
@@ -26,6 +28,7 @@ interface CreateSearchStateArgs {
 }
 
 export const createSearchState = ({
+  surface,
   soup,
   filters,
   assignees,
@@ -43,9 +46,12 @@ export const createSearchState = ({
     assignees: assignees(),
   });
 
-  const { entityPool } = useSearchContext();
+  const { entityPool, routinePool } = useSearchContext();
   const localPool = createMemo(() => {
-    const pool = entityPool();
+    const pool =
+      surface() === 'search'
+        ? [...entityPool(), ...routinePool()]
+        : entityPool();
     const activeIds = soup.predicates
       .activeIds()
       .filter((id) => id !== 'explicit-noise');
@@ -79,6 +85,7 @@ export const createSearchState = ({
   };
 
   const search = createSharedSearchState({
+    surface,
     text: searchText,
     buildRequest: (search) => buildSoupSearchRequest(filters(), search),
     localPool,

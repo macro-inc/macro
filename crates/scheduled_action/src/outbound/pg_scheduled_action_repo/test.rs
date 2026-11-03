@@ -18,20 +18,20 @@ use crate::domain::models::{
 };
 use crate::domain::ports::ScheduledActionRepo;
 
-const USER_A: &str = "macro|sched-a@macro.com";
-const USER_B: &str = "macro|sched-b@macro.com";
+pub(crate) const USER_A: &str = "macro|sched-a@macro.com";
+pub(crate) const USER_B: &str = "macro|sched-b@macro.com";
 const DAILY_9AM: &str = "0 0 9 * * *";
 
 fn user(id: &'static str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str(id).expect("valid user id")
 }
 
-fn user_owner(id: &'static str) -> Owner {
+pub(crate) fn user_owner(id: &'static str) -> Owner {
     Owner::User(user(id))
 }
 
 #[derive(Clone)]
-struct NoBots;
+pub(crate) struct NoBots;
 
 impl BotFacts for NoBots {
     async fn sponsor(&self, _bot: bot_id::BotId) -> EntityRegistryResult<Option<Owner>> {
@@ -48,7 +48,7 @@ impl BotFacts for SponsoredBy {
     }
 }
 
-fn test_repo(pool: PgPool) -> PgScheduledActionRepo<NoBots> {
+pub(crate) fn test_repo(pool: PgPool) -> PgScheduledActionRepo<NoBots> {
     PgScheduledActionRepo::new(
         pool,
         OwnedEntityRegistrar::new(OwnerGrantPolicy::new(NoBots)),
@@ -74,7 +74,7 @@ async fn direct_grants(pool: &PgPool, id: Uuid) -> Vec<(String, String, String)>
     .collect()
 }
 
-async fn insert_user(pool: &PgPool, id: &str) {
+pub(crate) async fn insert_user(pool: &PgPool, id: &str) {
     let macro_user_id = macro_uuid::generate_uuid_v7();
     sqlx::query!(
         r#"INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, $2)"#,
@@ -94,7 +94,7 @@ async fn insert_user(pool: &PgPool, id: &str) {
     .expect("user should insert");
 }
 
-fn sample_action(owner: Owner, name: &str) -> ScheduledAction {
+pub(crate) fn sample_action(owner: Owner, name: &str) -> ScheduledAction {
     let now = Utc::now();
     let schedule = Schedule::from_cron(DAILY_9AM.to_string()).expect("valid cron");
     let timezone = chrono_tz::UTC;
@@ -116,6 +116,7 @@ fn sample_action(owner: Owner, name: &str) -> ScheduledAction {
         next_run_at: Some(next_run_at),
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
+        template_id: None,
     }
 }
 
@@ -159,6 +160,61 @@ async fn create_action_returns_id_and_is_listable_by_owner(pool: PgPool) {
     assert_eq!(listed[0].name, "standup");
     assert_eq!(listed[0].id, created.id);
     assert_eq!(listed[0].owner, user_owner(USER_A));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn last_runs_report_each_actions_latest_finished_run(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = test_repo(pool);
+    let failing = repo
+        .create_action(sample_action(user_owner(USER_A), "failing"))
+        .await
+        .unwrap()
+        .id
+        .unwrap();
+    let recovered = repo
+        .create_action(sample_action(user_owner(USER_A), "recovered"))
+        .await
+        .unwrap()
+        .id
+        .unwrap();
+    let never_ran = repo
+        .create_action(sample_action(user_owner(USER_A), "never ran"))
+        .await
+        .unwrap()
+        .id
+        .unwrap();
+    let start = Utc::now() - chrono::Duration::hours(2);
+    let runs = [
+        (failing, 0, true),
+        (failing, 1, false),
+        (recovered, 0, false),
+        (recovered, 1, true),
+    ];
+    for (action_id, hour, is_success) in runs {
+        let end_time = start + chrono::Duration::hours(hour);
+        repo.create_execution_record(ActionExecutionRecord {
+            id: None,
+            action_id,
+            resource_id: None,
+            start_time: end_time,
+            end_time,
+            is_success,
+            result: json!(null),
+            created_at: end_time,
+        })
+        .await
+        .unwrap();
+    }
+
+    let last_runs = repo
+        .last_runs(&[failing, recovered, never_ran])
+        .await
+        .unwrap();
+
+    assert_eq!(last_runs.len(), 2);
+    assert!(!last_runs[&failing].is_success);
+    assert!(last_runs[&recovered].is_success);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

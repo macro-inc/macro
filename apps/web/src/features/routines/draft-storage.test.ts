@@ -17,6 +17,7 @@ const draft: ScheduleDraft = {
   daysOfWeek: [],
   dayOfMonth: '',
   target: { kind: 'model', model: 'retired-model' },
+  apps: [],
 };
 
 function store(value: unknown): void {

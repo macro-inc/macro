@@ -70,8 +70,8 @@ Doppler values while historical-image rollback is still needed. `APP_BASE_URL`
 is also ignored by the new harness; other services may still consume it.
 
 `POSTHOG_API_KEY` and `POSTHOG_HOST` are already typed harness fields. They
-remain available for existing feature flags and future analytics. No MCP
-analytics events or tracking client are added by this consolidation.
+drive feature flags and the public MCP and integration analytics; when the key
+is unset, analytics are off.
 
 ## Prepare preview stack outputs
 

@@ -118,6 +118,10 @@ fn selection() -> ValidateRoutineSession {
         owner: MacroUserIdStr::parse_from_str("macro|routine@macro.com").unwrap(),
         bot_id: BotId::new_from_uuid(generate_uuid_v7()),
         model: Some("selected/runtime-model".into()),
+        mcp_servers: vec![bots::domain::models::AgentMcpServer {
+            app_slug: "linear".into(),
+            server_name: "Linear".into(),
+        }],
     }
 }
 

@@ -47,7 +47,7 @@ const event: CalendarEvent = {
   isCancelled: false,
   isReadOnly: false,
   guestPolicy: DEFAULT_GUEST_POLICY,
-  viewerCan: NO_VIEWER_CAPABILITIES,
+  viewerCan: { ...NO_VIEWER_CAPABILITIES, rsvp: true },
   sourceCalendarIds: [],
   recurrenceLines: ['RRULE:FREQ=WEEKLY'],
   title: 'Team meeting',
@@ -117,7 +117,15 @@ describe('event RSVP confirmation', () => {
     expect(mutate).toHaveBeenCalledOnce();
   });
   it('offers no answer on a snapshot of a shared event', () => {
-    render(() => <EventRsvpSection event={{ ...event, isSnapshot: true }} />);
+    render(() => (
+      <EventRsvpSection
+        event={{
+          ...event,
+          isSnapshot: true,
+          viewerCan: NO_VIEWER_CAPABILITIES,
+        }}
+      />
+    ));
     expect(screen.queryByText('Going?')).toBeNull();
     expect(screen.queryByText('Yes')).toBeNull();
   });

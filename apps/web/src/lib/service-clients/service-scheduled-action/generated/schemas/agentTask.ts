@@ -5,11 +5,16 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
+
+import type { AgentMcpServer } from './agentMcpServer';
 import type { AgentTaskAgentProperty } from './agentTaskAgentProperty';
 import type { AgentTaskModel } from './agentTaskModel';
 
 export interface AgentTask {
   agent?: AgentTaskAgentProperty;
+  /** Apps the routine requires on top of the agent's own. The owner must
+have each one connected to save the routine and for it to run. */
+  mcp_servers?: AgentMcpServer[];
   model?: AgentTaskModel;
   prompt: string;
   user_prompt: string;

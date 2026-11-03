@@ -14,7 +14,7 @@ export function emailMatchesSelection(
   tab: EmailTab,
   selection: Record<string, string[]>
 ): boolean {
-  if (tab === 'scheduled' || tab === 'reminders') {
+  if (tab === 'scheduled' || tab === 'reminders' || tab === 'focus') {
     throw new Error(`${tab} membership is not owned by the Soup query`);
   }
   if (row.kind !== 'email') return false;

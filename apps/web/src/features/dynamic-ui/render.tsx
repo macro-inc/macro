@@ -7,7 +7,7 @@ import type {
   Widget,
   WidgetOf,
   WidgetType,
-} from './schema';
+} from './view';
 import { ChannelMessage } from './widgets/ChannelMessage';
 import { List } from './widgets/List';
 import { Md } from './widgets/Md';

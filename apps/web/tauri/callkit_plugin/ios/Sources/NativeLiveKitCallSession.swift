@@ -13,6 +13,7 @@ import UIKit
 final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendable {
     private let onSnapshotChanged: (ActiveCallSnapshot?) -> Void
     private let requestSystemEndCall: (UUID) -> Void
+    private let requestEndActiveCall: (@escaping () -> Void) -> Void
     private let onDrawerOpened: (String) -> Void
     private let onParticipantIdentitiesChanged: ([String]) -> Void
     private let videoOverlay: CallVideoOverlayController
@@ -20,13 +21,22 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         sourceViewProvider: { [weak self] in
             self?.videoOverlay.pictureInPictureSourceView()
         },
+        isCallActive: { [weak self] in
+            self?.activeCallUUID != nil
+        },
         onRestore: { [weak self] in
             guard let self else { return }
-            self.setVideoOverlayMode(.expanded)
-            if let channelId = self.activeCall?.channelId {
-                print("[CallKit] Picture in Picture restoring channelId=\(channelId)")
-                self.onDrawerOpened(channelId)
+            // Restoring into a drawer with no call behind it shows a Leave
+            // button that can never end anything.
+            guard let channelId = self.activeCall?.channelId else {
+                callKitLog("Picture in Picture restored with no active call; stopping it and resetting the overlay")
+                self.pictureInPicture.stopAndReset()
+                self.videoOverlay.reset()
+                return
             }
+            self.setVideoOverlayMode(.expanded)
+            callKitLog("Picture in Picture restoring channelId=\(channelId)")
+            self.onDrawerOpened(channelId)
         }
     )
 
@@ -53,12 +63,14 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     init(
         onSnapshotChanged: @escaping (ActiveCallSnapshot?) -> Void,
         requestSystemEndCall: @escaping (UUID) -> Void,
+        requestEndActiveCall: @escaping (@escaping () -> Void) -> Void,
         onDrawerOpened: @escaping (String) -> Void,
         onParticipantIdentitiesChanged: @escaping ([String]) -> Void,
         videoOverlay: CallVideoOverlayController
     ) {
         self.onSnapshotChanged = onSnapshotChanged
         self.requestSystemEndCall = requestSystemEndCall
+        self.requestEndActiveCall = requestEndActiveCall
         self.onDrawerOpened = onDrawerOpened
         self.onParticipantIdentitiesChanged = onParticipantIdentitiesChanged
         self.videoOverlay = videoOverlay
@@ -85,13 +97,16 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         videoOverlay.onSelectRemoteParticipant = { [weak self] participantId in
             self?.togglePinnedRemoteVideoParticipant(participantId)
         }
+        videoOverlay.isCallActive = { [weak self] in
+            self?.activeCallUUID != nil
+        }
         videoOverlay.onOpenDrawerFromThumbnail = { [weak self] in
             guard let channelId = self?.activeCall?.channelId else { return }
-            print("[CallKit] Native video overlay opened from thumbnail channelId=\(channelId)")
+            callKitLog("Native video overlay opened from thumbnail channelId=\(channelId)")
             self?.onDrawerOpened(channelId)
         }
         videoOverlay.onModeChanged = { [weak self] mode in
-            print("[CallKit] Picture in Picture refreshing source for overlay mode=\(mode.rawValue)")
+            callKitLog("Picture in Picture refreshing source for overlay mode=\(mode.rawValue)")
             self?.updateVideoOverlayMode(mode.rawValue)
             self?.pictureInPicture.prepare()
         }
@@ -112,7 +127,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             let audioAvailabilityChanged = previousInputAvailable != inputAvailable
                 || previousOutputAvailable != outputAvailable
             guard routeChanged || audioAvailabilityChanged else {
-                print("[CallKit] Audio route emit did not change route or engine availability; skipping microphone restore")
+                callKitLog("Audio route emit did not change route or engine availability; skipping microphone restore")
                 return
             }
 
@@ -126,14 +141,14 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         }
         audioRouteController.startObserving()
         pictureInPicture.prepare()
-        print("[CallKit] NativeLiveKitCallSession initialized")
+        callKitLog("NativeLiveKitCallSession initialized")
     }
 
     func prepareForCallKitAudio() {
         guard !didPrepareAudio else { return }
         didPrepareAudio = true
 
-        print("[CallKit] Prepared LiveKit audio for CallKit-controlled activation")
+        callKitLog("Prepared LiveKit audio for CallKit-controlled activation")
         configureAudioSessionCategory(reason: "prepareForCallKitAudio")
     }
 
@@ -147,9 +162,9 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         ])
         do {
             try AudioManager.shared.setEngineAvailability(.none)
-            print("[CallKit] Configured LiveKit audio for CallKit engine gating")
+            callKitLog("Configured LiveKit audio for CallKit engine gating")
         } catch {
-            print("[CallKit] Failed to gate LiveKit audio engine before CallKit activation: \(error)")
+            callKitLog("Failed to gate LiveKit audio engine before CallKit activation: \(error)", level: .error)
         }
     }
 
@@ -162,17 +177,17 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
                 options: [.allowBluetoothHFP, .mixWithOthers]
             )
             try session.setPreferredIOBufferDuration(0.02)
-            print("[CallKit] Configured AVAudioSession category for voice call reason=\(reason) \(describeAudioSession())")
+            callKitLog("Configured AVAudioSession category for voice call reason=\(reason) \(describeAudioSession())")
             audioRouteController.emitCurrentRoute()
             defaultBuiltInSpeakerRouteOnceIfNeeded(reason: "audioSessionCategoryConfigured:\(reason)")
         } catch {
-            print("[CallKit] Failed to set audio session category reason=\(reason): \(error) \(describeAudioSession())")
+            callKitLog("Failed to set audio session category reason=\(reason): \(error) \(describeAudioSession())", level: .error)
         }
     }
 
     func activateAudioEngine(reason: String = "CallKit didActivate", audioSession: AVAudioSession? = nil) {
         guard !isActivatingAudioEngine else {
-            print("[CallKit] Ignoring nested LiveKit audio engine activation reason=\(reason)")
+            callKitLog("Ignoring nested LiveKit audio engine activation reason=\(reason)")
             return
         }
         isActivatingAudioEngine = true
@@ -180,21 +195,21 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
 
         configureAudioSessionCategory(reason: reason)
         if !hasUsableAudioOutputRoute() {
-            print("[CallKit] Activating LiveKit audio engine with empty AVAudioSession route reason=\(reason) \(describeAudioSession())")
+            callKitLog("Activating LiveKit audio engine with empty AVAudioSession route reason=\(reason) \(describeAudioSession())")
         }
         do {
             if let audioSession {
                 LKRTCAudioSession.sharedInstance().audioSessionDidActivate(audioSession)
-                print("[CallKit] Notified LiveKit WebRTC audio session didActivate reason=\(reason)")
+                callKitLog("Notified LiveKit WebRTC audio session didActivate reason=\(reason)")
             }
             let availability = callKitAudioEngineAvailability()
-            print("[CallKit] Enabling LiveKit audio engine after CallKit activation reason=\(reason) input=\(availability.isInputAvailable) output=\(availability.isOutputAvailable) \(describeAudioSession())")
+            callKitLog("Enabling LiveKit audio engine after CallKit activation reason=\(reason) input=\(availability.isInputAvailable) output=\(availability.isOutputAvailable) \(describeAudioSession())")
             try AudioManager.shared.setEngineAvailability(availability)
             isCallKitAudioActive = true
-            print("[CallKit] CallKit activated AVAudioSession; LiveKit audio engine available reason=\(reason) input=\(AudioManager.shared.engineAvailability.isInputAvailable) output=\(AudioManager.shared.engineAvailability.isOutputAvailable) running=\(AudioManager.shared.isEngineRunning) \(describeAudioSession())")
+            callKitLog("CallKit activated AVAudioSession; LiveKit audio engine available reason=\(reason) input=\(AudioManager.shared.engineAvailability.isInputAvailable) output=\(AudioManager.shared.engineAvailability.isOutputAvailable) running=\(AudioManager.shared.isEngineRunning) \(describeAudioSession())")
             restoreMicrophoneIfNeeded(reason: reason)
         } catch {
-            print("[CallKit] Failed to enable LiveKit audio engine after CallKit activation reason=\(reason): \(error) \(describeAudioSession())")
+            callKitLog("Failed to enable LiveKit audio engine after CallKit activation reason=\(reason): \(error) \(describeAudioSession())", level: .error)
         }
     }
 
@@ -203,13 +218,13 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         do {
             if let audioSession {
                 LKRTCAudioSession.sharedInstance().audioSessionDidDeactivate(audioSession)
-                print("[CallKit] Notified LiveKit WebRTC audio session didDeactivate")
+                callKitLog("Notified LiveKit WebRTC audio session didDeactivate")
             }
-            print("[CallKit] Disabling LiveKit audio engine after CallKit deactivation \(describeAudioSession())")
+            callKitLog("Disabling LiveKit audio engine after CallKit deactivation \(describeAudioSession())")
             try AudioManager.shared.setEngineAvailability(.none)
-            print("[CallKit] CallKit deactivated AVAudioSession; LiveKit audio engine unavailable input=\(AudioManager.shared.engineAvailability.isInputAvailable) output=\(AudioManager.shared.engineAvailability.isOutputAvailable) running=\(AudioManager.shared.isEngineRunning) \(describeAudioSession())")
+            callKitLog("CallKit deactivated AVAudioSession; LiveKit audio engine unavailable input=\(AudioManager.shared.engineAvailability.isInputAvailable) output=\(AudioManager.shared.engineAvailability.isOutputAvailable) running=\(AudioManager.shared.isEngineRunning) \(describeAudioSession())")
         } catch {
-            print("[CallKit] Failed to disable LiveKit audio engine after CallKit deactivation: \(error) \(describeAudioSession())")
+            callKitLog("Failed to disable LiveKit audio engine after CallKit deactivation: \(error) \(describeAudioSession())", level: .error)
         }
     }
 
@@ -223,7 +238,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     }
 
     func connect(uuid: UUID, channelId: String, serverUrl: String, token: String) {
-        print("[CallKit] Native LiveKit connect requested uuid=\(uuid.uuidString) channelId=\(channelId)")
+        callKitLog("Native LiveKit connect requested uuid=\(uuid.uuidString) channelId=\(channelId)")
         let desiredAudioMuted = microphoneCoordinator.desiredMuted
         microphoneCoordinator.reset(desiredMuted: desiredAudioMuted)
         didApplyDefaultSpeakerRoute = false
@@ -233,12 +248,12 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         prepareForCallKitAudio()
         audioRouteController.prepareForCall()
 
-        print("[CallKit] Creating LiveKit Room uuid=\(uuid.uuidString)")
+        callKitLog("Creating LiveKit Room uuid=\(uuid.uuidString)")
         let newRoom = Room(
             delegate: self,
             roomOptions: RoomOptions(suspendLocalVideoTracksInBackground: false)
         )
-        print("[CallKit] Created LiveKit Room uuid=\(uuid.uuidString)")
+        callKitLog("Created LiveKit Room uuid=\(uuid.uuidString)")
 
         activeCallUUID = uuid
         activeCall = ActiveCallSnapshot(
@@ -265,20 +280,20 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         connectTask = Task { [weak self, oldRoom, weak newRoom] in
             guard let self else { return }
             if let oldRoom {
-                print("[CallKit] Disconnecting previous LiveKit room before new connect uuid=\(uuid.uuidString)")
+                callKitLog("Disconnecting previous LiveKit room before new connect uuid=\(uuid.uuidString)")
                 await oldRoom.disconnect()
-                print("[CallKit] Previous LiveKit room disconnected uuid=\(uuid.uuidString)")
+                callKitLog("Previous LiveKit room disconnected uuid=\(uuid.uuidString)")
             }
             guard let newRoom else { return }
             do {
-                print("[CallKit] Connecting LiveKit room uuid=\(uuid.uuidString)")
+                callKitLog("Connecting LiveKit room uuid=\(uuid.uuidString)")
                 try await newRoom.connect(url: serverUrl, token: token)
                 let isCurrentRoom = await MainActor.run { () -> Bool in
                     guard self.activeCallUUID == uuid, self.room === newRoom else { return false }
-                    print("[CallKit] LiveKit room connected uuid=\(uuid.uuidString) roomSid=\(self.describeOptional(newRoom.sid)) remoteCount=\(newRoom.remoteParticipants.count)")
-                    print("[CallKit] LiveKit local participant \(self.describeParticipant(newRoom.localParticipant))")
+                    callKitLog("LiveKit room connected uuid=\(uuid.uuidString) roomSid=\(self.describeOptional(newRoom.sid)) remoteCount=\(newRoom.remoteParticipants.count)")
+                    callKitLog("LiveKit local participant \(self.describeParticipant(newRoom.localParticipant))")
                     for participant in newRoom.remoteParticipants.values {
-                        print("[CallKit] LiveKit existing remote participant \(self.describeParticipant(participant))")
+                        callKitLog("LiveKit existing remote participant \(self.describeParticipant(participant))")
                     }
                     self.emitParticipantIdentities(from: newRoom)
                     self.videoOverlay.setLocalParticipantTitle(self.displayTitle(newRoom.localParticipant))
@@ -287,14 +302,23 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
                     return true
                 }
                 guard isCurrentRoom else {
-                    print("[CallKit] Ignoring LiveKit connect completion for stale room uuid=\(uuid.uuidString)")
+                    // The room was replaced or the call ended while connecting.
+                    // Nothing else holds it, so leaving it connected would keep
+                    // this user in the call server-side and could publish the
+                    // microphone. disconnect() is idempotent if teardown already
+                    // reached it.
+                    callKitLog("Disconnecting LiveKit room whose connect completed after it went stale uuid=\(uuid.uuidString) roomSid=\(self.describeOptional(newRoom.sid)) state=\(self.describe(newRoom.connectionState))")
+                    await newRoom.disconnect()
+                    callKitLog("Stale LiveKit room disconnected uuid=\(uuid.uuidString)")
                     return
                 }
             } catch is CancellationError {
-                print("[CallKit] LiveKit connect task cancelled uuid=\(uuid.uuidString)")
+                // Room.connect cleans the room up before rethrowing, so a
+                // cancelled connect never leaves it connected.
+                callKitLog("LiveKit connect task cancelled uuid=\(uuid.uuidString) state=\(self.describe(newRoom.connectionState))")
                 return
             } catch {
-                print("[CallKit] Failed to connect LiveKit room: \(error)")
+                callKitLog("Failed to connect LiveKit room uuid=\(uuid.uuidString): \(error)", level: .error)
                 DispatchQueue.main.async { [weak self, weak newRoom] in
                     guard let self, self.activeCallUUID == uuid, self.room === newRoom else { return }
                     self.requestSystemEndCall(uuid)
@@ -307,23 +331,23 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     }
 
     func disconnect() async {
-        print("[CallKit] Native LiveKit disconnect requested")
+        callKitLog("Native LiveKit disconnect requested")
         let toDisconnect: Room? = await MainActor.run {
             self.clearNativeCallState(deactivateAudio: true)
         }
 
         if let toDisconnect {
             await toDisconnect.disconnect()
-            print("[CallKit] Native LiveKit room disconnected")
+            callKitLog("Native LiveKit room disconnected")
         } else {
-            print("[CallKit] Native LiveKit disconnect had no active room")
+            callKitLog("Native LiveKit disconnect had no active room")
         }
     }
 
     func disconnectForAppTermination() {
-        print("[CallKit] Native LiveKit app termination disconnect requested")
+        callKitLog("Native LiveKit app termination disconnect requested")
         let backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "CallKitLiveKitDisconnectOnTerminate") {
-            print("[CallKit] Native LiveKit app termination disconnect background task expired")
+            callKitLog("Native LiveKit app termination disconnect background task expired")
         }
 
         Task { @MainActor [weak self] in
@@ -337,9 +361,9 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             let toDisconnect = self.clearNativeCallState(deactivateAudio: true)
             if let toDisconnect {
                 await toDisconnect.disconnect()
-                print("[CallKit] Native LiveKit room disconnected for app termination")
+                callKitLog("Native LiveKit room disconnected for app termination")
             } else {
-                print("[CallKit] Native LiveKit app termination disconnect had no active room")
+                callKitLog("Native LiveKit app termination disconnect had no active room")
             }
 
             if backgroundTask != .invalid {
@@ -351,7 +375,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     func setAudioMuted(_ muted: Bool) {
         guard activeCallUUID != nil, room != nil else {
             let generation = microphoneCoordinator.setDesiredMuted(muted)
-            print("[CallKit] setAudioMuted queued; no active native room muted=\(muted) generation=\(generation)")
+            callKitLog("setAudioMuted queued; no active native room muted=\(muted) generation=\(generation)")
             return
         }
 
@@ -377,7 +401,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             participantDisplayNamesByIdentity.removeValue(forKey: normalizedIdentity)
         }
 
-        print("[CallKit] Native LiveKit participant display name set identity=\(trimmedIdentity) normalizedIdentity=\(normalizedIdentity) displayName=\(participantDisplayNamesByIdentity[normalizedIdentity] ?? "nil")")
+        callKitLog("Native LiveKit participant display name updated hasDisplayName=\(normalizedName != nil) knownNames=\(participantDisplayNamesByIdentity.count)")
         if let room {
             videoOverlay.setLocalParticipantTitle(displayTitle(room.localParticipant))
             rebuildRemoteVideoLayout(from: room)
@@ -390,7 +414,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
 
     func setVideoEnabled(_ enabled: Bool) {
         guard let room, let uuid = activeCallUUID else {
-            print("[CallKit] setVideoEnabled ignored; no active native room enabled=\(enabled)")
+            callKitLog("setVideoEnabled ignored; no active native room enabled=\(enabled)")
             return
         }
 
@@ -404,25 +428,30 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             }
 
             do {
-                print("[CallKit] Setting native LiveKit camera enabled=\(enabled) uuid=\(uuid.uuidString)")
+                callKitLog("Setting native LiveKit camera enabled=\(enabled) uuid=\(uuid.uuidString)")
                 try await room.localParticipant.setCamera(enabled: enabled)
                 if enabled {
                     self.enableMultitaskingCameraAccessIfSupported(room: room, uuid: uuid)
-                    await MainActor.run {
-                        self.videoOverlay.setLocalVideoTrack(room.localParticipant.firstCameraVideoTrack)
-                        self.rebuildRemoteVideoLayout(from: room)
-                    }
-                    self.setVideoOverlayMode(.expanded)
-                } else {
-                    await MainActor.run {
-                        self.videoOverlay.setLocalVideoTrack(nil)
-                        self.rebuildRemoteVideoLayout(from: room)
-                    }
                 }
-                self.updateVideoMuted(!enabled, overlayMode: enabled ? "expanded" : self.activeCall?.videoOverlayMode)
-                print("[CallKit] Native LiveKit camera set enabled=\(enabled) uuid=\(uuid.uuidString)")
+                // The call can end while the camera toggles; updating the overlay
+                // afterwards would re-present the drawer with no call behind it.
+                let isCurrentCall = await MainActor.run { () -> Bool in
+                    guard self.activeCallUUID == uuid, self.isCurrentRoom(room) else { return false }
+                    self.videoOverlay.setLocalVideoTrack(enabled ? room.localParticipant.firstCameraVideoTrack : nil)
+                    self.rebuildRemoteVideoLayout(from: room)
+                    if enabled {
+                        self.setVideoOverlayMode(.expanded)
+                    }
+                    self.updateVideoMuted(!enabled, overlayMode: enabled ? "expanded" : self.activeCall?.videoOverlayMode)
+                    return true
+                }
+                guard isCurrentCall else {
+                    callKitLog("Ignoring native LiveKit camera result; call no longer active enabled=\(enabled) uuid=\(uuid.uuidString)")
+                    return
+                }
+                callKitLog("Native LiveKit camera set enabled=\(enabled) uuid=\(uuid.uuidString)")
             } catch {
-                print("[CallKit] Failed to set native LiveKit camera enabled=\(enabled) uuid=\(uuid.uuidString): \(error)")
+                callKitLog("Failed to set native LiveKit camera enabled=\(enabled) uuid=\(uuid.uuidString): \(error)", level: .error)
                 self.updateVideoMuted(true, overlayMode: self.activeCall?.videoOverlayMode)
             }
         }
@@ -434,37 +463,47 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
 
     private func toggleVideoFromOverlay() {
         let enabled = activeCall?.isVideoMuted ?? true
-        print("[CallKit] Native video overlay requested camera enabled=\(enabled)")
+        callKitLog("Native video overlay requested camera enabled=\(enabled)")
         setVideoEnabled(enabled)
     }
 
     private func toggleAudioFromOverlay() {
         let muted = !(activeCall?.isAudioMuted ?? false)
-        print("[CallKit] Native video overlay requested microphone muted=\(muted)")
+        callKitLog("Native video overlay requested microphone muted=\(muted)")
         setAudioMuted(muted)
     }
 
     private func toggleSpeakerFromOverlay() {
         let currentOutput = audioRouteController.currentRouteSnapshot().output
         let enableSpeaker = currentOutput != .speaker
-        print("[CallKit] Native video overlay requested speaker enabled=\(enableSpeaker) currentOutput=\(currentOutput.rawValue)")
+        callKitLog("Native video overlay requested speaker enabled=\(enableSpeaker) currentOutput=\(currentOutput.rawValue)")
         didApplyDefaultSpeakerRoute = true
         audioRouteController.setSpeakerEnabled(enableSpeaker)
     }
 
+    /// Leave must always work, even when the drawer or PiP outlived the call.
+    /// The coordinator's end path covers a desynced CallKit pointer, a failed
+    /// CXEndCallAction request, and a provider callback that never arrives;
+    /// its completion then tears down whatever native media or UI is left.
     private func endCallFromOverlay() {
-        guard let uuid = activeCallUUID else {
-            print("[CallKit] Native video overlay end call ignored; no active call")
-            return
+        let endingUUID = activeCallUUID
+        callKitLog("Native video overlay requesting call end uuid=\(endingUUID?.uuidString ?? "nil")")
+        requestEndActiveCall { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if let activeCallUUID = self.activeCallUUID, activeCallUUID != endingUUID {
+                    callKitLog("Skipping native teardown after overlay end; another call is active uuid=\(activeCallUUID.uuidString)")
+                    return
+                }
+                callKitLog("Native video overlay end completed; tearing down native call state uuid=\(endingUUID?.uuidString ?? "nil")")
+                await self.disconnect()
+            }
         }
-
-        print("[CallKit] Native video overlay requesting CallKit end uuid=\(uuid.uuidString)")
-        requestSystemEndCall(uuid)
     }
 
     private func togglePinnedRemoteVideoParticipant(_ participantId: String) {
         pinnedRemoteVideoParticipantId = pinnedRemoteVideoParticipantId == participantId ? nil : participantId
-        print("[CallKit] Native video overlay pinned remote participant=\(pinnedRemoteVideoParticipantId ?? "nil")")
+        callKitLog("Native video overlay pinned remote participant=\(pinnedRemoteVideoParticipantId != nil)")
         if let room {
             rebuildRemoteVideoLayout(from: room)
         }
@@ -472,7 +511,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
 
     func switchCamera() {
         guard let room, let uuid = activeCallUUID else {
-            print("[CallKit] switchCamera ignored; no active native room")
+            callKitLog("switchCamera ignored; no active native room")
             return
         }
 
@@ -481,15 +520,15 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
                 let track = room?.localParticipant.firstCameraVideoTrack as? LocalVideoTrack,
                 let capturer = track.capturer as? CameraCapturer
             else {
-                print("[CallKit] switchCamera ignored; no active local camera track uuid=\(uuid.uuidString)")
+                callKitLog("switchCamera ignored; no active local camera track uuid=\(uuid.uuidString)")
                 return
             }
 
             do {
                 _ = try await capturer.switchCameraPosition()
-                print("[CallKit] Native LiveKit camera switched uuid=\(uuid.uuidString)")
+                callKitLog("Native LiveKit camera switched uuid=\(uuid.uuidString)")
             } catch {
-                print("[CallKit] Failed to switch native LiveKit camera uuid=\(uuid.uuidString): \(error)")
+                callKitLog("Failed to switch native LiveKit camera uuid=\(uuid.uuidString): \(error)", level: .error)
             }
         }
     }
@@ -500,7 +539,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         from oldConnectionState: ConnectionState
     ) {
         let stateString = describe(connectionState)
-        print("[CallKit] LiveKit connection state changed \(describe(oldConnectionState)) -> \(stateString)")
+        callKitLog("LiveKit connection state changed \(describe(oldConnectionState)) -> \(stateString) roomSid=\(describeOptional(room.sid))")
         DispatchQueue.main.async { [weak self, weak room] in
             guard let self, let room, self.room === room else { return }
 
@@ -521,25 +560,25 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     }
 
     func room(_ room: Room, didFailToConnectWithError error: LiveKitError?) {
-        print("[CallKit] LiveKit delegate didFailToConnect error=\(String(describing: error))")
+        callKitLog("LiveKit delegate didFailToConnect error=\(String(describing: error))", level: .error)
     }
 
     func room(_ room: Room, didDisconnectWithError error: LiveKitError?) {
-        print("[CallKit] LiveKit delegate didDisconnect error=\(String(describing: error))")
+        callKitLog("LiveKit delegate didDisconnect error=\(String(describing: error))")
     }
 
     func room(_ room: Room, didStartReconnectWithMode reconnectMode: ReconnectMode) {
-        print("[CallKit] LiveKit reconnect started mode=\(reconnectMode)")
+        callKitLog("LiveKit reconnect started mode=\(reconnectMode)")
     }
 
     func room(_ room: Room, didCompleteReconnectWithMode reconnectMode: ReconnectMode) {
-        print("[CallKit] LiveKit reconnect completed mode=\(reconnectMode)")
+        callKitLog("LiveKit reconnect completed mode=\(reconnectMode)")
     }
 
     func room(_ room: Room, participantDidConnect participant: RemoteParticipant) {
         DispatchQueue.main.async { [weak self, weak room] in
             guard let self, let room, self.room === room else { return }
-            print("[CallKit] LiveKit remote participant connected \(self.describeParticipant(participant)) remoteCount=\(room.remoteParticipants.count)")
+            callKitLog("LiveKit remote participant connected \(self.describeParticipant(participant)) remoteCount=\(room.remoteParticipants.count)")
             self.emitParticipantIdentities(from: room)
             self.rebuildRemoteVideoLayout(from: room)
         }
@@ -548,7 +587,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     func room(_ room: Room, participantDidDisconnect participant: RemoteParticipant) {
         DispatchQueue.main.async { [weak self, weak room] in
             guard let self, let room, self.room === room else { return }
-            print("[CallKit] LiveKit remote participant disconnected \(self.describeParticipant(participant)) remoteCount=\(room.remoteParticipants.count)")
+            callKitLog("LiveKit remote participant disconnected \(self.describeParticipant(participant)) remoteCount=\(room.remoteParticipants.count)")
             let id = self.participantId(participant)
             if self.pinnedRemoteVideoParticipantId == id {
                 self.pinnedRemoteVideoParticipantId = nil
@@ -567,7 +606,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
                 .map { self.participantId($0) }
             guard speakingIds != self.speakingRemoteParticipantIds else { return }
             self.speakingRemoteParticipantIds = speakingIds
-            print("[CallKit] LiveKit speaking participants updated participants=\(participants.map { self.describeParticipant($0) })")
+            callKitLog("LiveKit speaking participants updated participants=\(participants.map { self.describeParticipant($0) })")
             self.rebuildRemoteVideoLayout(from: room)
         }
     }
@@ -575,23 +614,23 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     func room(_ room: Room, participant: Participant, didUpdateState state: ParticipantState) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            print("[CallKit] LiveKit participant state updated \(self.describeParticipant(participant)) state=\(state)")
+            callKitLog("LiveKit participant state updated \(self.describeParticipant(participant)) state=\(state)")
         }
     }
 
     func room(_ room: Room, participant: Participant, didUpdateConnectionQuality quality: ConnectionQuality) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            print("[CallKit] LiveKit participant quality updated \(self.describeParticipant(participant)) quality=\(quality)")
+            callKitLog("LiveKit participant quality updated \(self.describeParticipant(participant)) quality=\(quality)")
         }
     }
 
     func room(_ room: Room, participant: LocalParticipant, didPublishTrack publication: LocalTrackPublication) {
         DispatchQueue.main.async { [weak self, weak room] in
             guard let self, let room else { return }
-            print("[CallKit] LiveKit local track published \(self.describeParticipant(participant)) \(self.describe(publication))")
+            callKitLog("LiveKit local track published \(self.describeParticipant(participant)) \(self.describe(publication))")
             guard self.isCurrentRoom(room) else {
-                print("[CallKit] Ignoring local track publish from stale room")
+                callKitLog("Ignoring local track publish from stale room")
                 return
             }
             if let track = publication.track as? VideoTrack, publication.source == .camera {
@@ -606,9 +645,9 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     func room(_ room: Room, participant: LocalParticipant, didUnpublishTrack publication: LocalTrackPublication) {
         DispatchQueue.main.async { [weak self, weak room] in
             guard let self, let room else { return }
-            print("[CallKit] LiveKit local track unpublished \(self.describeParticipant(participant)) \(self.describe(publication))")
+            callKitLog("LiveKit local track unpublished \(self.describeParticipant(participant)) \(self.describe(publication))")
             guard self.isCurrentRoom(room) else {
-                print("[CallKit] Ignoring local track unpublish from stale room")
+                callKitLog("Ignoring local track unpublish from stale room")
                 return
             }
             if publication.source == .camera {
@@ -622,14 +661,18 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     func room(_ room: Room, participant: LocalParticipant, remoteDidSubscribeTrack publication: LocalTrackPublication) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            print("[CallKit] LiveKit remote subscribed to local track \(self.describeParticipant(participant)) \(self.describe(publication))")
+            callKitLog("LiveKit remote subscribed to local track \(self.describeParticipant(participant)) \(self.describe(publication))")
         }
     }
 
     func room(_ room: Room, participant: RemoteParticipant, didPublishTrack publication: RemoteTrackPublication) {
         DispatchQueue.main.async { [weak self, weak room] in
             guard let self, let room else { return }
-            print("[CallKit] LiveKit remote track published \(self.describeParticipant(participant)) \(self.describe(publication))")
+            callKitLog("LiveKit remote track published \(self.describeParticipant(participant)) \(self.describe(publication))")
+            guard self.isCurrentRoom(room) else {
+                callKitLog("Ignoring remote track publish from stale room")
+                return
+            }
             if publication.kind == .video {
                 self.rebuildRemoteVideoLayout(from: room)
             }
@@ -639,7 +682,13 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     func room(_ room: Room, participant: RemoteParticipant, didSubscribeTrack publication: RemoteTrackPublication) {
         DispatchQueue.main.async { [weak self, weak room] in
             guard let self, let room else { return }
-            print("[CallKit] LiveKit remote track subscribed \(self.describeParticipant(participant)) \(self.describe(publication))")
+            callKitLog("LiveKit remote track subscribed \(self.describeParticipant(participant)) \(self.describe(publication))")
+            // A stale room's late subscription must not re-expand a drawer
+            // whose call already ended.
+            guard self.isCurrentRoom(room) else {
+                callKitLog("Ignoring remote track subscribe from stale room")
+                return
+            }
             if publication.track is VideoTrack, self.isRemoteVideoSource(publication.source) {
                 self.rebuildRemoteVideoLayout(from: room)
                 self.setVideoOverlayMode(.expanded)
@@ -650,7 +699,11 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     func room(_ room: Room, participant: RemoteParticipant, didUnsubscribeTrack publication: RemoteTrackPublication) {
         DispatchQueue.main.async { [weak self, weak room] in
             guard let self, let room else { return }
-            print("[CallKit] LiveKit remote track unsubscribed \(self.describeParticipant(participant)) \(self.describe(publication))")
+            callKitLog("LiveKit remote track unsubscribed \(self.describeParticipant(participant)) \(self.describe(publication))")
+            guard self.isCurrentRoom(room) else {
+                callKitLog("Ignoring remote track unsubscribe from stale room")
+                return
+            }
             if self.isRemoteVideoSource(publication.source) {
                 self.rebuildRemoteVideoLayout(from: room)
             }
@@ -660,7 +713,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     func room(_ room: Room, participant: RemoteParticipant, didFailToSubscribeTrackWithSid trackSid: Track.Sid, error: LiveKitError) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            print("[CallKit] LiveKit remote track subscribe failed \(self.describeParticipant(participant)) trackSid=\(trackSid) error=\(error)")
+            callKitLog("LiveKit remote track subscribe failed \(self.describeParticipant(participant)) trackSid=\(trackSid) error=\(error)", level: .error)
         }
     }
 
@@ -672,7 +725,11 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     ) {
         DispatchQueue.main.async { [weak self, weak room] in
             guard let self, let room else { return }
-            print("[CallKit] LiveKit track mute updated \(self.describeParticipant(participant)) \(self.describe(trackPublication)) muted=\(isMuted)")
+            callKitLog("LiveKit track mute updated \(self.describeParticipant(participant)) \(self.describe(trackPublication)) muted=\(isMuted)")
+            guard self.isCurrentRoom(room) else {
+                callKitLog("Ignoring track mute update from stale room")
+                return
+            }
             if participant is RemoteParticipant, trackPublication.kind == .video {
                 self.rebuildRemoteVideoLayout(from: room)
             }
@@ -696,7 +753,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
 
     private func rebuildRemoteVideoLayout(from room: Room) {
         guard isCurrentRoom(room) else {
-            print("[CallKit] Ignoring remote video layout rebuild from stale room")
+            callKitLog("Ignoring remote video layout rebuild from stale room")
             return
         }
 
@@ -745,14 +802,14 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             lastPublishedVideoParticipants = participants
             lastPublishedPrimaryParticipantId = primary?.id
             videoOverlay.setRemoteVideoParticipants(participants, primaryId: primary?.id)
-            print("[CallKit] Rebuilt remote video layout participants=\(participants.map { "\($0.id):\($0.title)" }) primary=\(primary?.id ?? "nil") pinned=\(pinnedRemoteVideoParticipantId ?? "nil")")
+            callKitLog("Rebuilt remote video layout participants=\(participants.count) withVideo=\(participants.filter { $0.track != nil }.count) hasPrimary=\(primary != nil) pinned=\(pinnedRemoteVideoParticipantId != nil)")
         }
         updatePictureInPicture(from: room, primary: primary)
     }
 
     private func updatePictureInPicture(from room: Room, primary: NativeVideoParticipant?) {
         let localTrack = room.localParticipant.firstCameraVideoTrack
-        print("[CallKit] Picture in Picture selected localTitle=\(displayTitle(room.localParticipant)) localTrack=\(localTrack != nil) primaryParticipant=\(primary?.id ?? "nil") remoteTitle=\(primary?.title ?? "nil") remoteTrack=\(primary?.track != nil)")
+        callKitLog("Picture in Picture selected localTrack=\(localTrack != nil) hasPrimary=\(primary != nil) remoteTrack=\(primary?.track != nil)")
         pictureInPicture.setParticipants(
             localTitle: displayTitle(room.localParticipant),
             localTrack: localTrack,
@@ -763,28 +820,28 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
 
     private func enableMultitaskingCameraAccessIfSupported(room: Room, uuid: UUID?) {
         guard #available(iOS 16.0, *) else {
-            print("[CallKit] Multitasking camera access unavailable before iOS 16 uuid=\(uuid?.uuidString ?? "nil")")
+            callKitLog("Multitasking camera access unavailable before iOS 16 uuid=\(uuid?.uuidString ?? "nil")")
             return
         }
         guard
             let track = room.localParticipant.firstCameraVideoTrack as? LocalVideoTrack,
             let capturer = track.capturer as? CameraCapturer
         else {
-            print("[CallKit] Multitasking camera access skipped; no local camera capturer uuid=\(uuid?.uuidString ?? "nil")")
+            callKitLog("Multitasking camera access skipped; no local camera capturer uuid=\(uuid?.uuidString ?? "nil")")
             return
         }
         guard capturer.isMultitaskingAccessSupported else {
-            print("[CallKit] Multitasking camera access not supported uuid=\(uuid?.uuidString ?? "nil")")
+            callKitLog("Multitasking camera access not supported uuid=\(uuid?.uuidString ?? "nil")")
             return
         }
 
         capturer.isMultitaskingAccessEnabled = true
-        print("[CallKit] Multitasking camera access enabled uuid=\(uuid?.uuidString ?? "nil") enabled=\(capturer.isMultitaskingAccessEnabled)")
+        callKitLog("Multitasking camera access enabled uuid=\(uuid?.uuidString ?? "nil") enabled=\(capturer.isMultitaskingAccessEnabled)")
     }
 
     private func emitParticipantIdentities(from room: Room) {
         guard isCurrentRoom(room) else {
-            print("[CallKit] Ignoring participant identity emit from stale room")
+            callKitLog("Ignoring participant identity emit from stale room")
             return
         }
         onParticipantIdentitiesChanged(participantIdentities(from: room))
@@ -846,8 +903,10 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         identity.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
+    /// SID only: identities are `macro|<email>` and names are display names,
+    /// neither of which may reach the persisted log.
     private func describeParticipant(_ participant: Participant) -> String {
-        "participantSid=\(describeOptional(participant.sid)) identity=\(describeOptional(participant.identity?.stringValue)) name=\(describeOptional(participant.name)) title=\(displayTitle(participant))"
+        "participantSid=\(describeOptional(participant.sid)) agent=\(isAgentParticipant(participant))"
     }
 
     private func fallbackParticipantName(identity: String) -> String {
@@ -865,34 +924,34 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         let session = AVAudioSession.sharedInstance()
         switch session.recordPermission {
         case .granted:
-            print("[CallKit] Microphone permission granted uuid=\(uuid.uuidString)")
+            callKitLog("Microphone permission granted uuid=\(uuid.uuidString)")
             if isCallKitAudioActive && !AudioManager.shared.engineAvailability.isInputAvailable {
                 do {
                     try AudioManager.shared.setEngineAvailability(.default)
-                    print("[CallKit] Restored LiveKit input availability after microphone grant uuid=\(uuid.uuidString)")
+                    callKitLog("Restored LiveKit input availability after microphone grant uuid=\(uuid.uuidString)")
                 } catch {
-                    print("[CallKit] Failed to restore LiveKit input availability after microphone grant uuid=\(uuid.uuidString): \(error)")
+                    callKitLog("Failed to restore LiveKit input availability after microphone grant uuid=\(uuid.uuidString): \(error)", level: .error)
                 }
             }
             return true
         case .denied:
             setOutputOnlyAvailabilityIfNeeded(uuid: uuid)
-            print("[CallKit] Microphone permission denied uuid=\(uuid.uuidString); keeping native room connected muted")
+            callKitLog("Microphone permission denied uuid=\(uuid.uuidString); keeping native room connected muted")
             return false
         case .undetermined:
-            print("[CallKit] Microphone permission undetermined uuid=\(uuid.uuidString); requesting permission")
+            callKitLog("Microphone permission undetermined uuid=\(uuid.uuidString); requesting permission")
             let granted = await withCheckedContinuation { continuation in
                 session.requestRecordPermission { granted in
                     continuation.resume(returning: granted)
                 }
             }
-            print("[CallKit] Microphone permission request completed uuid=\(uuid.uuidString) granted=\(granted)")
+            callKitLog("Microphone permission request completed uuid=\(uuid.uuidString) granted=\(granted)")
             if granted, isCallKitAudioActive {
                 do {
                     try AudioManager.shared.setEngineAvailability(.default)
-                    print("[CallKit] Enabled LiveKit input availability after microphone permission request uuid=\(uuid.uuidString)")
+                    callKitLog("Enabled LiveKit input availability after microphone permission request uuid=\(uuid.uuidString)")
                 } catch {
-                    print("[CallKit] Failed to enable LiveKit input availability after microphone permission request uuid=\(uuid.uuidString): \(error)")
+                    callKitLog("Failed to enable LiveKit input availability after microphone permission request uuid=\(uuid.uuidString): \(error)", level: .error)
                 }
             } else if !granted {
                 setOutputOnlyAvailabilityIfNeeded(uuid: uuid)
@@ -900,7 +959,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             return granted
         @unknown default:
             setOutputOnlyAvailabilityIfNeeded(uuid: uuid)
-            print("[CallKit] Microphone permission unknown uuid=\(uuid.uuidString); keeping native room connected muted")
+            callKitLog("Microphone permission unknown uuid=\(uuid.uuidString); keeping native room connected muted")
             return false
         }
     }
@@ -908,18 +967,18 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     private func ensureCameraPermission(uuid: UUID) async -> Bool {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
-            print("[CallKit] Camera permission granted uuid=\(uuid.uuidString)")
+            callKitLog("Camera permission granted uuid=\(uuid.uuidString)")
             return true
         case .denied, .restricted:
-            print("[CallKit] Camera permission denied uuid=\(uuid.uuidString)")
+            callKitLog("Camera permission denied uuid=\(uuid.uuidString)")
             return false
         case .notDetermined:
-            print("[CallKit] Camera permission undetermined uuid=\(uuid.uuidString); requesting permission")
+            callKitLog("Camera permission undetermined uuid=\(uuid.uuidString); requesting permission")
             let granted = await AVCaptureDevice.requestAccess(for: .video)
-            print("[CallKit] Camera permission request completed uuid=\(uuid.uuidString) granted=\(granted)")
+            callKitLog("Camera permission request completed uuid=\(uuid.uuidString) granted=\(granted)")
             return granted
         @unknown default:
-            print("[CallKit] Camera permission unknown uuid=\(uuid.uuidString)")
+            callKitLog("Camera permission unknown uuid=\(uuid.uuidString)")
             return false
         }
     }
@@ -944,7 +1003,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         guard activeCallUUID != nil else { return }
         guard !didApplyDefaultSpeakerRoute else { return }
         guard hasUsableAudioOutputRoute() else {
-            print("[CallKit] Skipping built-in speaker default because AVAudioSession route is not ready reason=\(reason) \(describeAudioSession())")
+            callKitLog("Skipping built-in speaker default because AVAudioSession route is not ready reason=\(reason) \(describeAudioSession())")
             return
         }
 
@@ -953,7 +1012,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
 
         guard route.output != .speaker || !route.isSpeakerForced else {
             didApplyDefaultSpeakerRoute = true
-            print("[CallKit] Built-in speaker default already satisfied reason=\(reason)")
+            callKitLog("Built-in speaker default already satisfied reason=\(reason)")
             return
         }
         if route.output != .unknown {
@@ -963,21 +1022,21 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         let didDefault = audioRouteController.defaultToSpeakerIfBuiltInRoute(reason: reason)
         didApplyDefaultSpeakerRoute = didDefault
         if !didDefault {
-            print("[CallKit] Built-in speaker default did not apply; will retry on later route change reason=\(reason)")
+            callKitLog("Built-in speaker default did not apply; will retry on later route change reason=\(reason)")
         }
     }
 
     private func setDesiredAudioMuted(_ muted: Bool, reason: String) {
         guard let room, let uuid = activeCallUUID else { return }
         let generation = microphoneCoordinator.setDesiredMuted(muted)
-        print("[CallKit] Native LiveKit desired microphone muted=\(muted) reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation) currentSnapshotMuted=\(activeCall?.isAudioMuted.description ?? "nil")")
+        callKitLog("Native LiveKit desired microphone muted=\(muted) reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation) currentSnapshotMuted=\(activeCall?.isAudioMuted.description ?? "nil")")
         applyMicrophoneState(muted, room: room, uuid: uuid, generation: generation, reason: reason)
     }
 
     private func applyInitialMicrophoneState(room: Room, uuid: UUID, reason: String) {
         let muted = microphoneCoordinator.desiredMuted
         let generation = microphoneCoordinator.generation
-        print("[CallKit] Applying initial LiveKit microphone state muted=\(muted) reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation)")
+        callKitLog("Applying initial LiveKit microphone state muted=\(muted) reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation)")
         applyMicrophoneState(muted, room: room, uuid: uuid, generation: generation, reason: reason)
     }
 
@@ -985,11 +1044,11 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         guard let room, let uuid = activeCallUUID else { return }
         guard activeCall?.connectionState == "connected" else { return }
         guard canEnableMicrophoneAudio() else {
-            print("[CallKit] Waiting to restore LiveKit microphone reason=\(reason) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) \(describeAudioSession())")
+            callKitLog("Waiting to restore LiveKit microphone reason=\(reason) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) \(describeAudioSession())")
             return
         }
         guard let generation = microphoneCoordinator.beginRestoreIfNeeded() else {
-            print("[CallKit] Skipping LiveKit microphone restore reason=\(reason) desiredMuted=\(microphoneCoordinator.desiredMuted) lastKnownMuted=\(microphoneCoordinator.describeLastKnownMuted()) restoreInFlight=\(microphoneCoordinator.isRestoreInFlight) lastApplyFailed=\(microphoneCoordinator.lastApplyFailed)")
+            callKitLog("Skipping LiveKit microphone restore reason=\(reason) desiredMuted=\(microphoneCoordinator.desiredMuted) lastKnownMuted=\(microphoneCoordinator.describeLastKnownMuted()) restoreInFlight=\(microphoneCoordinator.isRestoreInFlight) lastApplyFailed=\(microphoneCoordinator.lastApplyFailed)")
             return
         }
 
@@ -1016,11 +1075,11 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
                     }
 
                     guard self.isCurrentMicrophoneOperation(generation, room: room, uuid: uuid, desiredMuted: muted) else {
-                        print("[CallKit] Skipping LiveKit microphone unmute for stale desired state reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation) desiredMuted=\(self.microphoneCoordinator.desiredMuted)")
+                        callKitLog("Skipping LiveKit microphone unmute for stale desired state reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation) desiredMuted=\(self.microphoneCoordinator.desiredMuted)")
                         return
                     }
                     guard self.canEnableMicrophoneAudio() else {
-                        print("[CallKit] Deferring LiveKit microphone unmute until CallKit audio engine is ready reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation) desiredMuted=\(self.microphoneCoordinator.desiredMuted) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) \(self.describeAudioSession())")
+                        callKitLog("Deferring LiveKit microphone unmute until CallKit audio engine is ready reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation) desiredMuted=\(self.microphoneCoordinator.desiredMuted) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) \(self.describeAudioSession())")
                         await self.markMicrophoneApplyDeferred(room: room, uuid: uuid, generation: generation)
                         return
                     }
@@ -1031,23 +1090,23 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
                 let microphoneWarning = enabled ? Task {
                     try? await Task.sleep(nanoseconds: 5_000_000_000)
                     if !Task.isCancelled {
-                        print("[CallKit] Still waiting for LiveKit microphone enable reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) \(self.describeAudioSession())")
+                        callKitLog("Still waiting for LiveKit microphone enable reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) \(self.describeAudioSession())")
                     }
                 } : nil
                 defer { microphoneWarning?.cancel() }
 
-                print("[CallKit] Applying native LiveKit microphone muted=\(muted) reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation) desiredMuted=\(self.microphoneCoordinator.desiredMuted) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) \(self.describeAudioSession())")
+                callKitLog("Applying native LiveKit microphone muted=\(muted) reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation) desiredMuted=\(self.microphoneCoordinator.desiredMuted) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) \(self.describeAudioSession())")
                 try await room.localParticipant.setMicrophone(enabled: enabled)
                 guard self.isCurrentMicrophoneOperation(generation, room: room, uuid: uuid, desiredMuted: muted) else {
-                    print("[CallKit] Native LiveKit microphone apply completed after desired state changed reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation) desiredMuted=\(self.microphoneCoordinator.desiredMuted)")
+                    callKitLog("Native LiveKit microphone apply completed after desired state changed reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation) desiredMuted=\(self.microphoneCoordinator.desiredMuted)")
                     return
                 }
                 self.updateAudioMuted(muted, room: room, uuid: uuid, expectedGeneration: generation, applyFailed: false)
-                print("[CallKit] Native LiveKit microphone applied muted=\(muted) reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation)")
+                callKitLog("Native LiveKit microphone applied muted=\(muted) reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation)")
             } catch is CancellationError {
-                print("[CallKit] LiveKit microphone apply cancelled reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation)")
+                callKitLog("LiveKit microphone apply cancelled reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation)")
             } catch {
-                print("[CallKit] Failed to apply native LiveKit microphone muted=\(muted) reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation) desiredMuted=\(self.microphoneCoordinator.desiredMuted): \(error)")
+                callKitLog("Failed to apply native LiveKit microphone muted=\(muted) reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation) desiredMuted=\(self.microphoneCoordinator.desiredMuted): \(error)", level: .error)
                 guard self.isCurrentMicrophoneOperation(generation, room: room, uuid: uuid, desiredMuted: muted) else { return }
                 self.updateAudioMuted(muted, room: room, uuid: uuid, expectedGeneration: generation, applyFailed: true)
             }
@@ -1079,16 +1138,16 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             try AudioManager.shared.setEngineAvailability(
                 AudioEngineAvailability(isInputAvailable: false, isOutputAvailable: true)
             )
-            print("[CallKit] Set LiveKit audio engine to output-only uuid=\(uuid.uuidString) running=\(AudioManager.shared.isEngineRunning) \(describeAudioSession())")
+            callKitLog("Set LiveKit audio engine to output-only uuid=\(uuid.uuidString) running=\(AudioManager.shared.isEngineRunning) \(describeAudioSession())")
         } catch {
-            print("[CallKit] Failed to set LiveKit audio engine to output-only uuid=\(uuid.uuidString): \(error) \(describeAudioSession())")
+            callKitLog("Failed to set LiveKit audio engine to output-only uuid=\(uuid.uuidString): \(error) \(describeAudioSession())", level: .error)
         }
     }
 
     private func describeAudioSession() -> String {
         let session = AVAudioSession.sharedInstance()
-        let inputs = session.currentRoute.inputs.map { "\($0.portType.rawValue):\($0.portName)" }.joined(separator: ",")
-        let outputs = session.currentRoute.outputs.map { "\($0.portType.rawValue):\($0.portName)" }.joined(separator: ",")
+        let inputs = session.currentRoute.inputs.map { $0.portType.rawValue }.joined(separator: ",")
+        let outputs = session.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ",")
         return "audioSession(category=\(session.category.rawValue), mode=\(session.mode.rawValue), activeSecondaryAudioSilenced=\(session.secondaryAudioShouldBeSilencedHint), recordPermission=\(describe(session.recordPermission)), sampleRate=\(session.sampleRate), ioBuffer=\(session.ioBufferDuration), inputs=[\(inputs)], outputs=[\(outputs)])"
     }
 
@@ -1132,17 +1191,17 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
                 actualMuted: isMuted,
                 applyFailed: applyFailed
             ) else {
-                print("[CallKit] Ignoring stale native microphone state update uuid=\(uuid.uuidString) generation=\(expectedGeneration) currentGeneration=\(self.microphoneCoordinator.generation) actualMuted=\(isMuted)")
+                callKitLog("Ignoring stale native microphone state update uuid=\(uuid.uuidString) generation=\(expectedGeneration) currentGeneration=\(self.microphoneCoordinator.generation) actualMuted=\(isMuted)")
                 return
             }
             let previousMuted = snapshot.isAudioMuted
             guard previousMuted != isMuted else {
-                print("[CallKit] Native LiveKit microphone state unchanged uuid=\(uuid.uuidString) actualMuted=\(isMuted) desiredMuted=\(self.microphoneCoordinator.desiredMuted) generation=\(expectedGeneration)")
+                callKitLog("Native LiveKit microphone state unchanged uuid=\(uuid.uuidString) actualMuted=\(isMuted) desiredMuted=\(self.microphoneCoordinator.desiredMuted) generation=\(expectedGeneration)")
                 return
             }
             snapshot.isAudioMuted = isMuted
             self.activeCall = snapshot
-            print("[CallKit] Native LiveKit microphone state updated uuid=\(uuid.uuidString) previousMuted=\(previousMuted) actualMuted=\(isMuted) desiredMuted=\(self.microphoneCoordinator.desiredMuted) generation=\(expectedGeneration)")
+            callKitLog("Native LiveKit microphone state updated uuid=\(uuid.uuidString) previousMuted=\(previousMuted) actualMuted=\(isMuted) desiredMuted=\(self.microphoneCoordinator.desiredMuted) generation=\(expectedGeneration)")
             self.videoOverlay.setAudioMuted(isMuted)
             self.emitSnapshot()
         }
@@ -1202,15 +1261,15 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
 
     private func emitSnapshot() {
         if let activeCall {
-            print("[CallKit] Emitting native snapshot state=\(activeCall.connectionState) channelId=\(activeCall.channelId) callId=\(activeCall.callId)")
+            callKitLog("Emitting native snapshot state=\(activeCall.connectionState) channelId=\(activeCall.channelId) callId=\(activeCall.callId)")
         } else {
-            print("[CallKit] Emitting native snapshot state=disconnected")
+            callKitLog("Emitting native snapshot state=disconnected")
         }
         onSnapshotChanged(activeCall)
     }
 
     private func emitDisconnectedSnapshot(_ snapshot: ActiveCallSnapshot) {
-        print("[CallKit] Emitting native snapshot state=disconnected channelId=\(snapshot.channelId) callId=\(snapshot.callId)")
+        callKitLog("Emitting native snapshot state=disconnected channelId=\(snapshot.channelId) callId=\(snapshot.callId)")
         onSnapshotChanged(snapshot)
     }
 }
@@ -1272,36 +1331,36 @@ private final class CallKitAudioEngineLogger: AudioEngineObserver, @unchecked Se
     var desiredMutedProvider: (() -> Bool?)?
 
     func engineDidCreate(_ engine: AVAudioEngine) -> Int {
-        print("[CallKit] LiveKit audio engine did create desiredMuted=\(describeDesiredMuted())")
+        callKitLog("LiveKit audio engine did create desiredMuted=\(describeDesiredMuted())")
         return next?.engineDidCreate(engine) ?? 0
     }
 
     func engineWillEnable(_ engine: AVAudioEngine, isPlayoutEnabled: Bool, isRecordingEnabled: Bool) -> Int {
-        print("[CallKit] LiveKit audio engine will enable playout=\(isPlayoutEnabled) recording=\(isRecordingEnabled) desiredMuted=\(describeDesiredMuted())")
+        callKitLog("LiveKit audio engine will enable playout=\(isPlayoutEnabled) recording=\(isRecordingEnabled) desiredMuted=\(describeDesiredMuted())")
         let result = next?.engineWillEnable(engine, isPlayoutEnabled: isPlayoutEnabled, isRecordingEnabled: isRecordingEnabled) ?? 0
-        print("[CallKit] LiveKit audio engine will enable result=\(result)")
+        callKitLog("LiveKit audio engine will enable result=\(result)")
         return result
     }
 
     func engineWillStart(_ engine: AVAudioEngine, isPlayoutEnabled: Bool, isRecordingEnabled: Bool) -> Int {
-        print("[CallKit] LiveKit audio engine will start playout=\(isPlayoutEnabled) recording=\(isRecordingEnabled) desiredMuted=\(describeDesiredMuted())")
+        callKitLog("LiveKit audio engine will start playout=\(isPlayoutEnabled) recording=\(isRecordingEnabled) desiredMuted=\(describeDesiredMuted())")
         let result = next?.engineWillStart(engine, isPlayoutEnabled: isPlayoutEnabled, isRecordingEnabled: isRecordingEnabled) ?? 0
-        print("[CallKit] LiveKit audio engine will start result=\(result)")
+        callKitLog("LiveKit audio engine will start result=\(result)")
         return result
     }
 
     func engineDidStop(_ engine: AVAudioEngine, isPlayoutEnabled: Bool, isRecordingEnabled: Bool) -> Int {
-        print("[CallKit] LiveKit audio engine did stop playout=\(isPlayoutEnabled) recording=\(isRecordingEnabled) desiredMuted=\(describeDesiredMuted())")
+        callKitLog("LiveKit audio engine did stop playout=\(isPlayoutEnabled) recording=\(isRecordingEnabled) desiredMuted=\(describeDesiredMuted())")
         return next?.engineDidStop(engine, isPlayoutEnabled: isPlayoutEnabled, isRecordingEnabled: isRecordingEnabled) ?? 0
     }
 
     func engineDidDisable(_ engine: AVAudioEngine, isPlayoutEnabled: Bool, isRecordingEnabled: Bool) -> Int {
-        print("[CallKit] LiveKit audio engine did disable playout=\(isPlayoutEnabled) recording=\(isRecordingEnabled) desiredMuted=\(describeDesiredMuted())")
+        callKitLog("LiveKit audio engine did disable playout=\(isPlayoutEnabled) recording=\(isRecordingEnabled) desiredMuted=\(describeDesiredMuted())")
         return next?.engineDidDisable(engine, isPlayoutEnabled: isPlayoutEnabled, isRecordingEnabled: isRecordingEnabled) ?? 0
     }
 
     func engineWillRelease(_ engine: AVAudioEngine) -> Int {
-        print("[CallKit] LiveKit audio engine will release desiredMuted=\(describeDesiredMuted())")
+        callKitLog("LiveKit audio engine will release desiredMuted=\(describeDesiredMuted())")
         return next?.engineWillRelease(engine) ?? 0
     }
 
@@ -1312,7 +1371,7 @@ private final class CallKitAudioEngineLogger: AudioEngineObserver, @unchecked Se
         format: AVAudioFormat,
         context: [AnyHashable: Any]
     ) -> Int {
-        print("[CallKit] LiveKit audio engine will connect output format=\(format) desiredMuted=\(describeDesiredMuted())")
+        callKitLog("LiveKit audio engine will connect output format=\(format) desiredMuted=\(describeDesiredMuted())")
         return next?.engineWillConnectOutput(engine, src: src, dst: dst, format: format, context: context) ?? 0
     }
 
@@ -1323,7 +1382,7 @@ private final class CallKitAudioEngineLogger: AudioEngineObserver, @unchecked Se
         format: AVAudioFormat,
         context: [AnyHashable: Any]
     ) -> Int {
-        print("[CallKit] LiveKit audio engine will connect input format=\(format) desiredMuted=\(describeDesiredMuted())")
+        callKitLog("LiveKit audio engine will connect input format=\(format) desiredMuted=\(describeDesiredMuted())")
         return next?.engineWillConnectInput(engine, src: src, dst: dst, format: format, context: context) ?? 0
     }
 

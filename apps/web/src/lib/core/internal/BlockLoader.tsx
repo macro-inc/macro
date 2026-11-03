@@ -1,6 +1,7 @@
 import { useSharedAccessUpdates } from '@app/features/access-requests/access-requests';
 import { shareEntity } from '@app/features/access-requests/core/types';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { useFlow, usePending } from '@app/observability/flow';
 import { useIsAuthenticated } from '@core/context/user';
 import type { OwnedBlockHandle } from '@core/orchestrator';
 import { Telemetry } from '@macro-inc/observability';
@@ -57,6 +58,11 @@ export function BlockLoader<
   T extends BlockDefinition<D, BlockName, P, L>,
 >(props: BlockLoaderProps<D, P, L, T>): JSX.Element {
   const authenticated = useIsAuthenticated();
+  const flow = useFlow();
+  usePending(
+    'block.publish',
+    () => !blockDataSignal.get() && !blockErrorSignal.get()
+  );
   const setData = blockDataSignal.set;
   const setError = blockErrorSignal.set;
   const setLiveTrackingEnabled = blockLiveTrackingEnabledSignal.set;
@@ -74,6 +80,11 @@ export function BlockLoader<
   const currentSharedAccess = useSharedAccessUpdates(
     () => shareEntity(blockNameToItemType(props.definition.name), props.id),
     (level, previous) => {
+      if (level === null) {
+        clearLoadedDocument();
+        setError('UNAUTHORIZED');
+        return;
+      }
       const data = blockDataSignal.get();
       const hasLoadedPermissions =
         data != null && typeof data === 'object' && 'userAccessLevel' in data;
@@ -82,10 +93,7 @@ export function BlockLoader<
       const accessChanged = hasLoadedPermissions
         ? blockUserAccessSignal.get() !== level
         : previous !== undefined && previous !== level;
-      if (level === null) {
-        clearLoadedDocument();
-        setError('UNAUTHORIZED');
-      } else if (
+      if (
         (data != null && accessChanged) ||
         blockErrorSignal.get() === 'UNAUTHORIZED'
       ) {
@@ -124,7 +132,18 @@ export function BlockLoader<
     // Tracked before the first await so a failure view can re-run the load.
     retryToken();
     const result = await loadBlockDataAfterComponentPreload(
-      () => props.definition.load(props.source, 'initial'),
+      () =>
+        flow.task('block.data', async (span) => {
+          span.setAttr('block.type', props.definition.name);
+          span.setAttr('document.id', props.id);
+          const result = await props.definition.load(
+            props.source,
+            'initial',
+            span
+          );
+          if (result.isErr()) span.error('Block data could not load');
+          return result;
+        }),
       props.definition.component.preload
     );
     if (result.isErr()) {
@@ -198,8 +217,9 @@ Check that the load function does not return a preload source when the intent is
     const data = result.value;
     setError(null);
 
-    if (!isNested && data && props.definition.openTrackingEnabled !== false) {
-      const trackOpened = () => {
+    if (!isNested && data) {
+      const tracksOpenHistory = props.definition.openTrackingEnabled !== false;
+      if (tracksOpenHistory) {
         // we need to pass in a client accessor since the mutation is dynamically imported outside a query context provider
         import('./trackBlockOpened')
           .then(({ track }) => {
@@ -218,13 +238,13 @@ Check that the load function does not return a preload source when the intent is
           );
 
         analytics.pageView(data.__block);
+      }
+
+      if (props.definition.openAnalyticsEnabled ?? tracksOpenHistory)
         analytics.track('open_entity', {
           entityType: data.__block,
           entityId: props.id,
         });
-      };
-
-      trackOpened();
     }
 
     setData(() => data);

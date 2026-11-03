@@ -9,6 +9,8 @@ import {
   laneValue,
   layoutColumns,
   movedViewOrder,
+  timelineLayout,
+  timelineRangeColumns,
   withLaneHidden,
   withLaneOrder,
   withLayoutColumn,
@@ -221,6 +223,81 @@ describe('a removed column', () => {
         'rsvp'
       )
     ).toEqual(err({ kind: 'board-groups-by-column' }));
+  });
+});
+
+describe('a removed column on a timeline', () => {
+  const timeline = {
+    id: 'view',
+    databaseId: 'database',
+    tableId: 'table',
+    name: 'Timeline',
+    position: 'a0',
+    createdAt: '2026-10-01T00:00:00Z',
+    updatedAt: '2026-10-01T00:00:00Z',
+    query: { filter: null, sort: [] },
+    layout: {
+      kind: 'timeline' as const,
+      range: 'dates',
+      title: 'name',
+      groupBy: 'rsvp',
+      barFields: ['rsvp', 'notes'],
+      colorBy: 'rsvp',
+    },
+  };
+
+  it('cannot leave a timeline without the dates it spans', () => {
+    expect(withoutColumn(timeline, 'dates')).toEqual(
+      err({ kind: 'timeline-spans-column' })
+    );
+  });
+
+  it('stops grouping, coloring and showing the column, keeping the dates and label', () => {
+    expect(withoutColumn(timeline, 'rsvp')).toEqual(
+      ok({
+        ...timeline,
+        layout: {
+          kind: 'timeline',
+          range: 'dates',
+          title: 'name',
+          groupBy: null,
+          barFields: ['notes'],
+          colorBy: null,
+        },
+      })
+    );
+  });
+});
+
+describe('a new timeline', () => {
+  const dates: DatabaseViewColumn = {
+    id: 'dates',
+    name: 'Dates',
+    dataType: 'DATE_RANGE',
+    isMultiSelect: false,
+    options: [],
+    writable: true,
+  };
+
+  it('spans only date-range columns', () => {
+    expect(
+      timelineRangeColumns([
+        name,
+        dates,
+        { ...name, id: 'due', dataType: 'DATE' },
+      ])
+    ).toEqual([dates]);
+  });
+
+  it('labels its bars by the first column and is not grouped, colored or showing other fields', () => {
+    expect(timelineLayout('dates', [name, rsvp, dates])).toEqual({
+      kind: 'timeline',
+      range: 'dates',
+      title: 'name',
+      groupBy: null,
+      barFields: [],
+      colorBy: null,
+    });
   });
 });
 

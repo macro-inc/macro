@@ -8,8 +8,14 @@ import {
 import { HEADER_HEIGHT } from './gantt-context';
 import { type GanttDate, ganttDateFromDay, toGanttDay } from './gantt-date';
 import { type GanttGuide, ganttCreationRange } from './gantt-interaction';
+import { ganttTimedCreation } from './gantt-time';
 
-export type GanttCreation = { start: Date; end: Date };
+/**
+ * A range drawn or dragged on the chart. All day, it spans the local days
+ * `start` to `end` inclusive, each at local midnight; otherwise it runs
+ * between the two instants.
+ */
+export type GanttCreation = { start: Date; end: Date; allDay: boolean };
 
 /** Owns selection and pointer listeners; only a completed gesture opens the host composer. */
 export function createGanttCreation(options: {
@@ -25,11 +31,14 @@ export function createGanttCreation(options: {
   ) => GanttGuide | undefined;
   onCreate: Accessor<((dates: GanttCreation) => void) | undefined>;
   minDate: Accessor<GanttDate>;
+  /** Whether a drag starting now selects quarter hours rather than days. */
+  timed: Accessor<boolean>;
 }) {
   const [draft, setDraft] = createSignal<{
     first: number;
     last: number;
     top: number;
+    timed: boolean;
   }>();
   let cancelGesture: (() => void) | undefined;
 
@@ -65,6 +74,7 @@ export function createGanttCreation(options: {
     const top = event.clientY - rect.top + viewport.scrollTop - 14;
     let last = first;
     let moved = false;
+    const timed = options.timed();
     let finished = false;
     options.setEditing(true);
     options.clearGuide();
@@ -80,7 +90,7 @@ export function createGanttCreation(options: {
         minimum ?? -Infinity,
         options.pointToDay(x, undefined, false)?.day ?? last
       );
-      if (moved) setDraft({ first, last, top });
+      if (moved) setDraft({ first, last, top, timed });
     };
     const cancel = () => {
       // Cancellation also invalidates callbacks already queued for this gesture.
@@ -106,11 +116,16 @@ export function createGanttCreation(options: {
       update(next);
       const range = ganttCreationRange(first, last);
       cancel();
-      if (moved)
-        options.onCreate()?.({
-          start: ganttDateFromDay(range.start),
-          end: ganttDateFromDay(range.end - 1),
-        });
+      if (!moved) return;
+      options.onCreate()?.(
+        timed
+          ? { ...ganttTimedCreation(first, last), allDay: false }
+          : {
+              start: ganttDateFromDay(range.start),
+              end: ganttDateFromDay(range.end - 1),
+              allDay: true,
+            }
+      );
     };
 
     cancelGesture = cancel;

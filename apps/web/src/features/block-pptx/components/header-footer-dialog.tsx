@@ -7,7 +7,7 @@
  */
 
 import type { DeckOutline, SlideOutline } from '@core/pptx-engine/types';
-import X from '@phosphor/x.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui/components/Button';
 import { Dialog } from '@ui/components/Dialog';
 import { Input, inputClasses } from '@ui/components/Input';
@@ -248,7 +248,7 @@ export function HeaderFooterDialog(props: {
           </Button>
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             data-testid="pptx-hf-apply"
             disabled={ro()}
             tooltip={
@@ -262,7 +262,7 @@ export function HeaderFooterDialog(props: {
           </Button>
           <Button
             size="sm"
-            variant="cta"
+            variant="primary"
             data-testid="pptx-hf-apply-all"
             disabled={ro()}
             onClick={() => apply(true)}
@@ -271,13 +271,14 @@ export function HeaderFooterDialog(props: {
           </Button>
         </div>
         <Button
+          aria-label="Close"
+          tooltip="Close"
           size="icon-sm"
           variant="ghost"
-          label="Close"
           class="absolute top-3 right-3"
           onClick={props.onClose}
         >
-          <X />
+          <X class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
     </Dialog>

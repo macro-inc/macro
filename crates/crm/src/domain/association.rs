@@ -16,6 +16,10 @@ pub struct CrmRecordAssociation {
     pub company_ids: Vec<Uuid>,
     /// Contacts matched through the Contacts property or a reference.
     pub contact_ids: Vec<Uuid>,
+    /// Normalized domains of visible companies, for activity email matching.
+    pub domains: Vec<String>,
+    /// Normalized addresses of visible contacts, for activity email matching.
+    pub addresses: Vec<String>,
 }
 
 impl CrmRecordAssociation {
@@ -24,6 +28,8 @@ impl CrmRecordAssociation {
         Self {
             company_ids: vec![company_id],
             contact_ids,
+            domains: Vec::new(),
+            addresses: Vec::new(),
         }
     }
 
@@ -32,6 +38,8 @@ impl CrmRecordAssociation {
         Self {
             company_ids: Vec::new(),
             contact_ids: vec![contact_id],
+            domains: Vec::new(),
+            addresses: Vec::new(),
         }
     }
 }

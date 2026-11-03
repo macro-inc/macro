@@ -229,7 +229,7 @@ export function ReviewStack(props: {
       <Show when={controller.stale() || controller.error()}>
         <div class="mb-3 flex flex-wrap items-center gap-2">
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             disabled={working()}
             onClick={() => fireAndForget(reload(), 'agent-reviews')}
@@ -324,7 +324,7 @@ export function ReviewStack(props: {
             {progress()}
           </span>
           <Button
-            variant="strong"
+            variant="secondary"
             size="sm"
             class="ml-auto"
             disabled={locked() || pending() === 0}

@@ -8,9 +8,9 @@ import { useUserId } from '@core/context/user';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { getWebOrigin } from '@core/util/webOrigin';
-import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import LinkIcon from '@phosphor/link.svg';
+import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
 import { Dropdown } from '@ui';
 import { For, Show, Suspense } from 'solid-js';
 import type { EventType } from './core/types';
@@ -55,7 +55,9 @@ function Actions(props: { sidebar?: boolean; compact?: boolean }) {
   return (
     <Dropdown placement={props.sidebar ? 'bottom-start' : 'bottom-end'}>
       <Dropdown.Trigger
-        variant={props.compact ? 'outline' : 'ghost'}
+        aria-label="Booking links"
+        tooltip="Booking links"
+        variant={props.compact ? 'secondary' : 'ghost'}
         size={props.sidebar || props.compact ? 'md' : 'lg'}
         class={
           props.sidebar
@@ -64,14 +66,13 @@ function Actions(props: { sidebar?: boolean; compact?: boolean }) {
               ? 'shrink-0 px-2 text-sm'
               : 'shrink-0 px-2 text-sm lg:px-3'
         }
-        label="Booking links"
       >
         <Show
           when={props.sidebar}
           fallback={<LinkIcon class="size-5 mobile:size-6 lg:size-4" />}
         >
           <ViewSidebar.Icon>
-            <LinkIcon />
+            <LinkIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </ViewSidebar.Icon>
         </Show>
         <span

@@ -327,6 +327,26 @@ async fn run_coordinator(
         )
         .await;
     }
+    // An organizer's policy change this run reached guest copies in other
+    // inboxes; their viewers refetch as well.
+    let mut aligned = report
+        .aligned_copies
+        .iter()
+        .map(|copy| (copy.owner_id.as_str(), copy.email_link_id))
+        .collect::<Vec<_>>();
+    aligned.sort_unstable();
+    aligned.dedup();
+    for (owner_id, link_id) in aligned {
+        cg_refresh_calendar(
+            &ctx.connection_gateway_client,
+            &ctx.db,
+            owner_id,
+            link_id,
+            ctx.team_sharing_enabled,
+            false,
+        )
+        .await;
+    }
 
     match run_result {
         Ok(()) => Disposition::Ack,

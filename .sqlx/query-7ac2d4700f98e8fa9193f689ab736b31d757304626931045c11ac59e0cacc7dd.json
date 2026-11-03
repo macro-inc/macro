@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT external_chat_access_level($1, $2) AS \"access_level?: AccessLevel\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level?: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "7ac2d4700f98e8fa9193f689ab736b31d757304626931045c11ac59e0cacc7dd"
+}

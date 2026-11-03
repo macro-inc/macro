@@ -9,8 +9,8 @@ use crate::domain::models::CrmPropertyEdge;
 #[cfg(test)]
 mod test;
 
-/// Entities whose Companies property names a company in `company_ids`, or
-/// whose Contacts property names a contact in `contact_ids`.
+/// Entities whose Companies or Contacts properties name the requested CRM records,
+/// including typed references in entity columns currently bound to database rows.
 ///
 /// The property definition ids are literals rather than binds so the planner
 /// can match the partial `idx_ep_companies_value_gin` and
@@ -39,6 +39,27 @@ pub(super) async fn property_edges(
         JOIN entity_properties ep
             ON ep.property_definition_id = '00000001-0000-0000-0000-000000000013'
            AND ep.values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', contact.id))
+        UNION
+        SELECT ep.entity_type, ep.entity_id
+        FROM database_columns dc
+        JOIN property_definitions pd
+            ON pd.id = dc.property_definition_id AND pd.data_type = 'ENTITY'
+        JOIN entity_properties ep
+            ON ep.property_definition_id = dc.property_definition_id
+           AND ep.entity_type = 'DATABASE_ROW'
+        JOIN database_rows r
+            ON r.id::text = ep.entity_id AND r.table_id = dc.table_id
+        WHERE EXISTS (
+            SELECT 1
+            FROM jsonb_array_elements(
+                CASE WHEN jsonb_typeof(ep.values->'value') = 'array'
+                    THEN ep.values->'value' ELSE '[]'::jsonb END
+            ) AS reference
+            WHERE (reference->>'entity_type' = 'COMPANY'
+                   AND reference->>'entity_id' = ANY($1::text[]))
+               OR (reference->>'entity_type' = 'CONTACT'
+                   AND reference->>'entity_id' = ANY($2::text[]))
+        )
         "#,
         &company_ids,
         &contact_ids,

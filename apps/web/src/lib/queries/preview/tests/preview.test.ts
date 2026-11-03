@@ -100,7 +100,7 @@ describe('preview transport facade', () => {
     });
   });
 
-  it('uses urql-solid data while leaving the regular query disabled', () => {
+  it('uses urql-solid data without building the regular queries', () => {
     createRoot((dispose) => {
       const [item] = useItemPreview(() => ({
         id: 'doc-1',
@@ -108,8 +108,25 @@ describe('preview transport facade', () => {
       }));
 
       expect(item()).toEqual(preview);
-      const regularOptions = useQueryOptions[0]?.();
-      expect(regularOptions).toMatchObject({ enabled: false });
+      expect(useQueryOptions).toHaveLength(0);
+      dispose();
+    });
+  });
+
+  it('builds the regular query once the GraphQL preview falls back', () => {
+    createRoot((dispose) => {
+      const [fallback, setFallback] = createSignal(false);
+      createGraphqlItemPreviewQueryMock.mockReturnValue({
+        data: () => undefined,
+        shouldFallback: fallback,
+        refetch: vi.fn(),
+      });
+      useItemPreview(() => ({ id: 'doc-1', type: 'document' }));
+      expect(useQueryOptions).toHaveLength(0);
+
+      setFallback(true);
+      expect(useQueryOptions).toHaveLength(1);
+      expect(useQueryOptions[0]?.()).toMatchObject({ enabled: true });
       dispose();
     });
   });

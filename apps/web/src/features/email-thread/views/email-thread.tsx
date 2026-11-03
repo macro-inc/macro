@@ -5,16 +5,20 @@ import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import type { JSX } from 'solid-js';
 import { type Accessor, Match, Show, Switch } from 'solid-js';
+import { EmailThreadTitle } from '../components/email-thread-title';
 import type { EmailThreadHost } from '../context/email-thread-context';
 import { useEmailThreadState } from '../context/email-thread-state-context';
 import { useEmailThreadViewContext } from '../context/email-thread-view-context';
 import { createThreadNavigation } from '../primitives/thread-navigation';
 import { createThreadReplyArea } from '../primitives/thread-reply-area';
 import { BottomReplyButtons } from './bottom-reply-buttons';
+import { EmailParticipants } from './email-participants';
 import { MessageList } from './message-list';
 import { MobileEmailCompose } from './mobile-email-compose';
 export type EmailThreadViewProps = {
   title: string;
+  /** Host control after the subject's last word, in place of Copy subject. */
+  titleTrailing?: JSX.Element;
   threadId: Accessor<string>;
   host?: EmailThreadHost;
   header?: JSX.Element;
@@ -132,6 +136,30 @@ export function EmailThreadView(props: EmailThreadViewProps) {
                 class="@container w-full flex-1 flex flex-col items-center overflow-hidden"
                 ref={context.registerMessagesContainer}
               >
+                {/* Desktop keeps the subject, tags and participants still
+                    while the messages scroll up under them. */}
+                <Show when={!isTouchDevice() && props.title}>
+                  {(title) => (
+                    <div class="shrink-0 w-full flex justify-center">
+                      <div class="macro-message-width macro-message-padding w-full pt-2 pb-3.5">
+                        <EmailThreadTitle
+                          onCopy={viewContext.copySubject}
+                          title={title()}
+                          copyReveal="hover"
+                          trailing={props.titleTrailing}
+                          class="text-2xl"
+                        />
+                        <div class="h-2" aria-hidden="true" />
+                        {/* Bounded so a long expanded list scrolls instead of
+                            crowding out the messages; the padding keeps focus
+                            rings unclipped. */}
+                        <div class="-m-1 max-h-34 overflow-y-auto p-1">
+                          <EmailParticipants />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </Show>
                 <MessageList
                   initialLoadComplete={context.initialLoadComplete()}
                   markdownDomRef={(el) => {

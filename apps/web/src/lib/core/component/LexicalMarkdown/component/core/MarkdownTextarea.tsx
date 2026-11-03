@@ -22,6 +22,7 @@ import {
   on,
   onCleanup,
   Show,
+  untrack,
 } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
 import { FloatingMenuGroup } from '../../context/FloatingMenuContext';
@@ -57,6 +58,7 @@ import type { MentionLinkResolver } from '../../plugins/text-paste/textPastePlug
 import { createMenuOperations } from '../../shared/inlineMenu';
 import {
   editorIsEmpty,
+  editorStateAsMarkdown,
   initializeEditorEmpty,
   setEditorStateFromHtml,
   setEditorStateFromMarkdown,
@@ -98,6 +100,8 @@ function isHistoryItem(
 }
 
 interface MarkdownTextareaProps {
+  /** Controlled Markdown. External changes update the document without echoing onChange. */
+  value?: string;
   editable: Accessor<boolean>;
   onChange?: (value: string, editor?: LexicalEditor) => void;
   initialValue?: string;
@@ -162,6 +166,8 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
   const [markdownState, setMarkdownState] = createSignal<string>('');
 
   let didInitializeContent = false;
+  const [connected, setConnected] = createSignal(false);
+  let externalMarkdown: string | undefined;
 
   const onConnect = () => {
     if (props.focusOnMount) {
@@ -170,13 +176,19 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
       });
     }
 
-    if (props.initialHtml) {
+    if (props.value !== undefined) {
+      setEditorStateFromMarkdown(editor, props.value);
+      externalMarkdown = editorStateAsMarkdown(editor);
+    } else if (props.initialHtml) {
       setEditorStateFromHtml(editor, props.initialHtml);
     } else if (props.initialValue) {
       setEditorStateFromMarkdown(editor, props.initialValue);
     }
 
-    if (props.initialHtml || props.initialValue) {
+    if (
+      props.value === undefined &&
+      (props.initialHtml || props.initialValue)
+    ) {
       // We do this to make sure anything relying on the markdownState existing initially
       // has the content
       props.onChange?.(markdownState());
@@ -184,7 +196,18 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
 
     props.onInitialized?.(editor);
     didInitializeContent = true;
+    setConnected(true);
   };
+
+  createEffect(() => {
+    const value = props.value;
+    if (!connected() || value === undefined) return;
+    untrack(() => {
+      if (value === editorStateAsMarkdown(editor)) return;
+      setEditorStateFromMarkdown(editor, value);
+      externalMarkdown = editorStateAsMarkdown(editor);
+    });
+  });
 
   createEffect(() => {
     editor.setEditable(props.editable());
@@ -195,6 +218,9 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
       markdownState,
       () => {
         if (!didInitializeContent) return;
+        const external = markdownState() === externalMarkdown;
+        externalMarkdown = undefined;
+        if (external) return;
         props.onChange?.(markdownState(), editor);
       },
       { defer: true }

@@ -6,6 +6,16 @@ Sidebar `Search` button → `/app/search` with a focused query box. Results
 (including a `Featured Results` group) filter live as you type; no Enter needed. `Ctrl+K` is
 usually faster for jump-to-entity; `/` opens workspace search when no editor is focused.
 
+Routines are found by name in a typed `Ctrl+K` **All** query, in touch Search's
+**All** name results, and in the desktop Search page's `Featured Results`. They
+come from the routines list (Quick Access `routine` bucket), not the search
+service, and open the routine in the Agents workspace. They stay out of the
+empty recency list and out of Home, Drive and Tasks searches.
+
+Desktop filter chips use one compact control size for values, match mode, and
+clear actions. Labels and controls stay vertically centered inside a frame that
+grows to fit them, rather than clipping taller segments.
+
 On touch devices, the dock's **Search** button opens a persistent **Search…**
 input in `/app/search`. It starts in **All** with Command Menu-style Quick Access
 name search. Categories are **All, Email, Agents, Files, Tasks, Projects, Channels,
@@ -19,6 +29,12 @@ Typed **All** and **People** name searches also find known teammates before thei
 first DM, with or without CRM. Existing one-to-one DMs replace person rows while
 preserving name/email matches; selecting a person opens their DM. Verify both
 categories with a teammate who has no conversation or CRM record.
+Name search here, in Command K, and in the Chat sidebar finds a conversation by
+its participants in any order, separated by spaces or commas, with name prefixes
+allowed. A query naming exactly its participants ranks it right after exact
+names, above a larger group holding the same people. In Command K and mobile
+name search, a person's first name alone also counts as exact for their DM or
+person row.
 On phones, name-result icons and avatars are scaled to 150% (16px artwork
 becomes 24px), preserving row height and text alignment.
 
@@ -42,8 +58,26 @@ verifying a local iOS build without PostHog configuration, enable that path with
 the build-time `VITE_ENABLE_GRAPHQL_SOUP=true` override; see the
 [cache guide](../../apps/web/docs/graphql-normalized-cache-plan.md#cached-email-quick-access).
 
-Category/mode changes keep the same input mounted and focused. Enter dismisses
-the keyboard without ending search. Opening a result hides search chrome while
+Category/mode changes keep the same input mounted and focused. Return inserts
+a newline and keeps the keyboard open; the Search bar expands with the text.
+When **enable-universal-input** is on, 34 characters (regardless of word count) reveal
+Universal Input's suggested form above the bar. The editor stays mounted while
+classification and extraction update the form. Shorter edits keep the form until
+the input is cleared. While the card is active, the normal search results and top
+category tabs are hidden; clearing the input restores them. The card stays above
+the keyboard with its type selector and action buttons visible; scroll the form
+contents inside the card. Use the
+explicit action button to create or send, or **Save as draft** to save an email.
+Manual field edits keep precedence over later predictions. Event dates and times
+are edited directly in the card; changing the start preserves the duration. The same PostHog flag
+as Command K applies; when it is off, the view keeps normal
+live search. Closing Search clears the input and its unsent suggested form.
+For Search intent, extraction selects a search type before extracting only that
+type's supported filters. Task status/priority/assignee/creator filters and channel
+In/From filters use the same controls and resolution as desktop Command K.
+The shared global-search filters and results update live above the bar. Open a
+filtered result directly; there is no separate Search submit action.
+Opening a result hides search chrome while
 preserving that Search history entry's query, category, mode, result order, and
 scroll position. Opening a result does not promote it within that saved list,
 even when its last-viewed time changes. Swiping back, pressing the native Back control, or using browser Back

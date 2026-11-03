@@ -71,18 +71,12 @@ export function RenameProjectDialog(props: {
             <Button
               type="button"
               variant="ghost"
-              depth={2}
               disabled={pending()}
               onClick={() => props.onOpenChange(false)}
             >
               Cancel
             </Button>
-            <Button
-              type="submit"
-              variant="strong"
-              depth={2}
-              disabled={!canSubmit()}
-            >
+            <Button type="submit" variant="primary" disabled={!canSubmit()}>
               {pending() ? 'Saving…' : 'Save name'}
             </Button>
           </ActionDialogShell.Footer>

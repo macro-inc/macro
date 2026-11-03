@@ -3,7 +3,7 @@ import { hapticImpact } from '@core/mobile/haptics';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { nativeNetworkStatus } from '@core/mobile/native-network-status';
 import { fireAndForget } from '@core/util/fireAndForget';
-import Spinner from '@phosphor-icons/core/bold/spinner-bold.svg';
+import Spinner from '@icon/system/bold/spinner-bold.svg';
 import { cn } from '@ui';
 import {
   type Accessor,

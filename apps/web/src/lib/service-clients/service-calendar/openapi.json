@@ -549,136 +549,6 @@
         }
       }
     },
-    "/events/{event_id}/notes": {
-      "get": {
-        "tags": ["calendar_events"],
-        "summary": "List notes visible through this meeting occurrence.",
-        "operationId": "event_notes",
-        "parameters": [
-          {
-            "name": "event_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "occurrenceKey",
-            "in": "query",
-            "description": "Stable occurrence key returned by the calendar read API.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/MeetingNote"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/events/{event_id}/notes/{document_id}": {
-      "put": {
-        "tags": ["calendar_events"],
-        "summary": "Idempotently link a markdown document and its optional team audience.",
-        "operationId": "link_event_note",
-        "parameters": [
-          {
-            "name": "event_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "document_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "occurrenceKey",
-            "in": "query",
-            "description": "Stable occurrence key returned by the calendar read API.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LinkNoteRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": ""
-          }
-        }
-      },
-      "delete": {
-        "tags": ["calendar_events"],
-        "summary": "Remove this meeting's grant without deleting the document.",
-        "operationId": "unlink_event_note",
-        "parameters": [
-          {
-            "name": "event_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "document_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "occurrenceKey",
-            "in": "query",
-            "description": "Stable occurrence key returned by the calendar read API.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": ""
-          }
-        }
-      }
-    },
     "/events/{event_id}/provider-url": {
       "get": {
         "tags": ["calendar_events"],
@@ -968,68 +838,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CalendarMutationApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/meeting-notes/documents": {
-      "get": {
-        "tags": ["calendar_events"],
-        "summary": "Suggest the caller's markdown documents and extra team audiences.",
-        "operationId": "note_documents",
-        "parameters": [
-          {
-            "name": "query",
-            "in": "query",
-            "description": "Empty returns recent documents.",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NotePicker"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/meeting-notes/documents/{document_id}/links": {
-      "get": {
-        "tags": ["calendar_events"],
-        "summary": "List an owned document's meeting grants, including unavailable meetings.",
-        "operationId": "document_note_links",
-        "parameters": [
-          {
-            "name": "document_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/DocumentNoteLink"
-                  }
                 }
               }
             }
@@ -1809,7 +1617,7 @@
       },
       "CopyCalendarEventRequest": {
         "type": "object",
-        "description": "Request body adding a channel-shared event to the requester's calendar.",
+        "description": "Request body adding a shared event to the requester's calendar.",
         "properties": {
           "calendarId": {
             "type": ["string", "null"],
@@ -1935,41 +1743,6 @@
               {
                 "$ref": "#/components/schemas/EventVisibility",
                 "description": "Event visibility."
-              }
-            ]
-          }
-        }
-      },
-      "DocumentNoteLink": {
-        "type": "object",
-        "description": "An owner's durable sharing link, including meetings they can no longer open.",
-        "required": ["documentName", "eventId", "occurrenceKey", "eventTitle"],
-        "properties": {
-          "documentName": {
-            "type": "string",
-            "description": "Current name of the owned markdown document."
-          },
-          "eventId": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Linked calendar copy."
-          },
-          "eventTitle": {
-            "type": "string",
-            "description": "Current title, or a safe placeholder when meeting details are unavailable."
-          },
-          "occurrenceKey": {
-            "type": "string",
-            "description": "Original occurrence start, or `single` for a one-time meeting."
-          },
-          "team": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/NoteTeam",
-                "description": "Independent optional team audience."
               }
             ]
           }
@@ -2145,17 +1918,6 @@
           }
         }
       },
-      "LinkNoteRequest": {
-        "type": "object",
-        "description": "Optional additional view access for one team.",
-        "properties": {
-          "teamId": {
-            "type": ["string", "null"],
-            "format": "uuid",
-            "description": "Null means the meeting audience only."
-          }
-        }
-      },
       "ListCalendarsResponse": {
         "type": "object",
         "description": "Calendars visible to the requester across connected and delegated inboxes.",
@@ -2167,88 +1929,6 @@
               "$ref": "#/components/schemas/VisibleCalendar"
             },
             "description": "Primaries and writable calendars first."
-          }
-        }
-      },
-      "MeetingNote": {
-        "type": "object",
-        "description": "One linked document and the extra access this link grants.",
-        "required": ["documentId", "name", "canManage"],
-        "properties": {
-          "canManage": {
-            "type": "boolean",
-            "description": "Whether this viewer can change this document's sharing."
-          },
-          "documentId": {
-            "type": "string",
-            "description": "Markdown document identity."
-          },
-          "name": {
-            "type": "string",
-            "description": "Current document name."
-          },
-          "team": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/NoteTeam",
-                "description": "Optional extra team view grant."
-              }
-            ]
-          }
-        }
-      },
-      "NoteDocument": {
-        "type": "object",
-        "description": "A document available in the note picker.",
-        "required": ["documentId", "name"],
-        "properties": {
-          "documentId": {
-            "type": "string",
-            "description": "Markdown document identity."
-          },
-          "name": {
-            "type": "string",
-            "description": "Current document name, never a copied title."
-          }
-        }
-      },
-      "NotePicker": {
-        "type": "object",
-        "description": "Picker results; only documents whose owner is the caller are suggested.",
-        "required": ["documents", "teams"],
-        "properties": {
-          "documents": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/NoteDocument"
-            },
-            "description": "At most 30 matching markdown documents, most recently updated first."
-          },
-          "teams": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/NoteTeam"
-            },
-            "description": "Teams the caller currently belongs to."
-          }
-        }
-      },
-      "NoteTeam": {
-        "type": "object",
-        "description": "An additional team audience, separate from the meeting's audience.",
-        "required": ["id", "name"],
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Team identity."
-          },
-          "name": {
-            "type": "string",
-            "description": "Display name."
           }
         }
       },
@@ -2329,6 +2009,22 @@
               "team_ooo_changed": {
                 "type": "boolean",
                 "description": "True for sharing changes and any possibly affected OOO projection."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The viewer's request to join a shared event was answered.",
+            "required": ["event_id", "event"],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": ["join_request_answered"]
+              },
+              "event_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The shared event they asked to join."
               }
             }
           }
@@ -2596,6 +2292,10 @@
           "color": {
             "type": ["string", "null"],
             "description": "Provider color."
+          },
+          "contributesToAvailability": {
+            "type": "boolean",
+            "description": "Whether this calendar counts toward the requester's busy time: their\nsetting, by default only the primary calendars of inboxes they own.\nThe nearest thing to \"this is the requester's own\": a provider's\naccess role only says what they may do, on a colleague's calendar too."
           },
           "defaultReminders": {
             "type": "array",

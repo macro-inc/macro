@@ -37,10 +37,22 @@ function BaseToolCall(props: ToolCallProps) {
           expanded={showReason()}
           onToggle={() => setShowReason((shown) => !shown)}
           showToggle={reason() !== undefined}
-          status={<span class="text-ink">Failed</span>}
+          status={
+            <span
+              classList={{ 'text-ink': !grouped(), 'text-failure': grouped() }}
+            >
+              Failed
+            </span>
+          }
         />
       ))
-      .with({ kind: 'stopped' }, () => <span class="text-xs">Stopped</span>)
+      .with({ kind: 'stopped' }, () => (
+        <span
+          classList={{ 'text-xs': !grouped(), 'text-ink-disabled': grouped() }}
+        >
+          Stopped
+        </span>
+      ))
       .exhaustive();
   };
 
@@ -49,7 +61,6 @@ function BaseToolCall(props: ToolCallProps) {
       <Tool.Row
         active={props.renderContext.running}
         align={props.align}
-        grouped={grouped()}
         icon={props.icon}
         trailing={trailing()}
       >
@@ -62,7 +73,7 @@ function BaseToolCall(props: ToolCallProps) {
         {(text) => (
           <p
             class="whitespace-pre-wrap break-words pb-2"
-            classList={{ 'pl-6': grouped(), 'pl-9 pr-3': !grouped() }}
+            classList={{ 'pl-9 pr-3': !grouped() }}
           >
             {text()}
           </p>

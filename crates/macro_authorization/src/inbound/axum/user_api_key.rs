@@ -4,7 +4,9 @@ use ::axum::{
 };
 use rootcause::Report;
 
-use crate::{MacroAuthorizationError, MacroAuthorizationService, MacroUserAuthentication};
+use crate::{
+    CredentialOrigin, MacroAuthorizationError, MacroAuthorizationService, MacroUserAuthentication,
+};
 
 use super::{
     MacroAuthorizationRejection, MacroAuthorizationState, authenticated_user,
@@ -30,7 +32,7 @@ where
         .await
         .map_err(user_api_key_authorization_rejection)?;
 
-    authenticated_user(user_context)
+    authenticated_user(user_context, CredentialOrigin::UserApiKey)
 }
 
 fn user_api_key(headers: &HeaderMap) -> Result<String, MacroAuthorizationRejection> {

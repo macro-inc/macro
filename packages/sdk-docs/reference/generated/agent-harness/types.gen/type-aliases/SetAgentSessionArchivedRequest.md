@@ -1,6 +1,6 @@
 # Type Alias: SetAgentSessionArchivedRequest
 
-> **SetAgentSessionArchivedRequest** = \{ `isArchived`: `boolean`; \}
+> **SetAgentSessionArchivedRequest** = \{ `archived`: `boolean`; \}
 
 Request body for archiving or unarchiving an agent session.
 
@@ -8,4 +8,4 @@ Request body for archiving or unarchiving an agent session.
 
 | Property | Type | Description |
 | ------ | ------ | ------ |
-| <a id="property-isarchived"></a> `isArchived` | `boolean` | The requested archive state. |
+| <a id="property-archived"></a> `archived` | `boolean` | Archive the session, or restore it. |

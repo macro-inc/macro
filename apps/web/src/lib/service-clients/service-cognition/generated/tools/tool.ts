@@ -47,6 +47,10 @@ type ToolParserMap = {
     call: types.ConfigureBot;
     response: types.ConfigureBotResponse;
   };
+  ConnectMcpServer: {
+    call: types.ConnectMcpServer;
+    response: types.ConnectMcpServerResponse;
+  };
   ContentSearch: {
     call: types.ContentSearch;
     response: types.SearchToolResponse;
@@ -152,10 +156,6 @@ type ToolParserMap = {
     call: types.DispatchCodingAgent;
     response: types.DispatchedCodingAgent;
   };
-  DisplayResults: {
-    call: types.DisplayResults;
-    response: types.DisplayResultsResponse;
-  };
   DuplicateItem: {
     call: types.DuplicateItem;
     response: types.DuplicateItemResponse;
@@ -231,9 +231,21 @@ type ToolParserMap = {
     response: types.TeamAvailability;
   };
   GetThread: { call: types.GetThread; response: types.GetThreadResponse };
+  GetUserActivity: {
+    call: types.GetUserActivity;
+    response: types.ActivityReports;
+  };
   ImportCompaniesCsv: {
     call: types.ImportCompaniesCsv;
     response: types.ImportCompaniesCsvResponse;
+  };
+  ImportFromJira: {
+    call: types.ImportFromJira;
+    response: types.TrackerImportResponse;
+  };
+  ImportFromLinear: {
+    call: types.ImportFromLinear;
+    response: types.TrackerImportResponse;
   };
   ImportFromNotion: {
     call: types.ImportFromNotion;
@@ -252,6 +264,10 @@ type ToolParserMap = {
     response: types.IssueBotCredentialResponse;
   };
   ListAgents: { call: types.ListAgents; response: types.ListAgentsResponse };
+  ListAgentUpdates: {
+    call: types.ListAgentUpdates;
+    response: types.AgentUpdates;
+  };
   ListBookingLinks: {
     call: types.ListBookingLinks;
     response: types.ListBookingLinksResult;
@@ -389,6 +405,7 @@ type ToolParserMap = {
     response: types.ReadChannelThreadResponse;
   };
   ReadChat: { call: types.ReadChat; response: types.ReadChatResponse };
+  ReadCodeDocs: { call: types.ReadCodeDocs; response: types.SymbolReferences };
   ReadContent: { call: types.ReadContent; response: types.ReadContentResponse };
   ReadDesign: { call: types.ReadDesign; response: types.ReadDesignResponse };
   ReadDiscussion: {
@@ -408,6 +425,7 @@ type ToolParserMap = {
     call: types.ReadInitiativeActivity;
     response: types.ProjectActivityResult;
   };
+  ReadMemory: { call: types.ReadMemory; response: types.ExplicitMemory };
   ReadMetadata: {
     call: types.ReadMetadata;
     response: types.ReadMetadataResponse;
@@ -523,6 +541,7 @@ type ToolParserMap = {
     call: types.UpdateInitiativeSharing;
     response: types.ProjectDetails;
   };
+  UpdateMemory: { call: types.UpdateMemory; response: types.ExplicitMemory };
   UpdatePipelineEntries: {
     call: types.UpdatePipelineEntries;
     response: types.UpdatePipelineEntriesResponse;
@@ -579,6 +598,10 @@ const toolParserMap = {
   ConfigureBot: {
     call: schemas.ConfigureBot,
     response: schemas.ConfigureBotResponse,
+  },
+  ConnectMcpServer: {
+    call: schemas.ConnectMcpServer,
+    response: schemas.ConnectMcpServerResponse,
   },
   ContentSearch: {
     call: schemas.ContentSearch,
@@ -691,10 +714,6 @@ const toolParserMap = {
     call: schemas.DispatchCodingAgent,
     response: schemas.DispatchedCodingAgent,
   },
-  DisplayResults: {
-    call: schemas.DisplayResults,
-    response: schemas.DisplayResultsResponse,
-  },
   DuplicateItem: {
     call: schemas.DuplicateItem,
     response: schemas.DuplicateItemResponse,
@@ -779,9 +798,21 @@ const toolParserMap = {
     response: schemas.TeamAvailability,
   },
   GetThread: { call: schemas.GetThread, response: schemas.GetThreadResponse },
+  GetUserActivity: {
+    call: schemas.GetUserActivity,
+    response: schemas.ActivityReports,
+  },
   ImportCompaniesCsv: {
     call: schemas.ImportCompaniesCsv,
     response: schemas.ImportCompaniesCsvResponse,
+  },
+  ImportFromJira: {
+    call: schemas.ImportFromJira,
+    response: schemas.TrackerImportResponse,
+  },
+  ImportFromLinear: {
+    call: schemas.ImportFromLinear,
+    response: schemas.TrackerImportResponse,
   },
   ImportFromNotion: {
     call: schemas.ImportFromNotion,
@@ -802,6 +833,10 @@ const toolParserMap = {
   ListAgents: {
     call: schemas.ListAgents,
     response: schemas.ListAgentsResponse,
+  },
+  ListAgentUpdates: {
+    call: schemas.ListAgentUpdates,
+    response: schemas.AgentUpdates,
   },
   ListBookingLinks: {
     call: schemas.ListBookingLinks,
@@ -958,6 +993,10 @@ const toolParserMap = {
     response: schemas.ReadChannelThreadResponse,
   },
   ReadChat: { call: schemas.ReadChat, response: schemas.ReadChatResponse },
+  ReadCodeDocs: {
+    call: schemas.ReadCodeDocs,
+    response: schemas.SymbolReferences,
+  },
   ReadContent: {
     call: schemas.ReadContent,
     response: schemas.ReadContentResponse,
@@ -983,6 +1022,7 @@ const toolParserMap = {
     call: schemas.ReadInitiativeActivity,
     response: schemas.ProjectActivityResult,
   },
+  ReadMemory: { call: schemas.ReadMemory, response: schemas.ExplicitMemory },
   ReadMetadata: {
     call: schemas.ReadMetadata,
     response: schemas.ReadMetadataResponse,
@@ -1113,6 +1153,10 @@ const toolParserMap = {
     call: schemas.UpdateInitiativeSharing,
     response: schemas.ProjectDetails,
   },
+  UpdateMemory: {
+    call: schemas.UpdateMemory,
+    response: schemas.ExplicitMemory,
+  },
   UpdatePipelineEntries: {
     call: schemas.UpdatePipelineEntries,
     response: schemas.UpdatePipelineEntriesResponse,
@@ -1180,6 +1224,10 @@ type ToolDataMap = {
   ConfigureBot: {
     call: types.ConfigureBot;
     response: types.ConfigureBotResponse;
+  };
+  ConnectMcpServer: {
+    call: types.ConnectMcpServer;
+    response: types.ConnectMcpServerResponse;
   };
   ContentSearch: {
     call: types.ContentSearch;
@@ -1286,10 +1334,6 @@ type ToolDataMap = {
     call: types.DispatchCodingAgent;
     response: types.DispatchedCodingAgent;
   };
-  DisplayResults: {
-    call: types.DisplayResults;
-    response: types.DisplayResultsResponse;
-  };
   DuplicateItem: {
     call: types.DuplicateItem;
     response: types.DuplicateItemResponse;
@@ -1365,9 +1409,21 @@ type ToolDataMap = {
     response: types.TeamAvailability;
   };
   GetThread: { call: types.GetThread; response: types.GetThreadResponse };
+  GetUserActivity: {
+    call: types.GetUserActivity;
+    response: types.ActivityReports;
+  };
   ImportCompaniesCsv: {
     call: types.ImportCompaniesCsv;
     response: types.ImportCompaniesCsvResponse;
+  };
+  ImportFromJira: {
+    call: types.ImportFromJira;
+    response: types.TrackerImportResponse;
+  };
+  ImportFromLinear: {
+    call: types.ImportFromLinear;
+    response: types.TrackerImportResponse;
   };
   ImportFromNotion: {
     call: types.ImportFromNotion;
@@ -1386,6 +1442,10 @@ type ToolDataMap = {
     response: types.IssueBotCredentialResponse;
   };
   ListAgents: { call: types.ListAgents; response: types.ListAgentsResponse };
+  ListAgentUpdates: {
+    call: types.ListAgentUpdates;
+    response: types.AgentUpdates;
+  };
   ListBookingLinks: {
     call: types.ListBookingLinks;
     response: types.ListBookingLinksResult;
@@ -1523,6 +1583,7 @@ type ToolDataMap = {
     response: types.ReadChannelThreadResponse;
   };
   ReadChat: { call: types.ReadChat; response: types.ReadChatResponse };
+  ReadCodeDocs: { call: types.ReadCodeDocs; response: types.SymbolReferences };
   ReadContent: { call: types.ReadContent; response: types.ReadContentResponse };
   ReadDesign: { call: types.ReadDesign; response: types.ReadDesignResponse };
   ReadDiscussion: {
@@ -1542,6 +1603,7 @@ type ToolDataMap = {
     call: types.ReadInitiativeActivity;
     response: types.ProjectActivityResult;
   };
+  ReadMemory: { call: types.ReadMemory; response: types.ExplicitMemory };
   ReadMetadata: {
     call: types.ReadMetadata;
     response: types.ReadMetadataResponse;
@@ -1657,6 +1719,7 @@ type ToolDataMap = {
     call: types.UpdateInitiativeSharing;
     response: types.ProjectDetails;
   };
+  UpdateMemory: { call: types.UpdateMemory; response: types.ExplicitMemory };
   UpdatePipelineEntries: {
     call: types.UpdatePipelineEntries;
     response: types.UpdatePipelineEntriesResponse;
