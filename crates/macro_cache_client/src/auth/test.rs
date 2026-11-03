@@ -1,6 +1,10 @@
 use super::PendingPasswordlessSignup;
 use crate::MacroCache;
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "tests take the Redis URL from the process env, not service config"
+)]
 fn cache() -> MacroCache {
     let url = std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".into());
     MacroCache::new(&url)
