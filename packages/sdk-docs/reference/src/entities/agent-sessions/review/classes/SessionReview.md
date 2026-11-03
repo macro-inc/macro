@@ -82,15 +82,15 @@ Submit the saved pending drafts. Never retries a conflict or ambiguous send.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: `ReviewRecord_Serialize`; `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`ReviewRecord_Serialize`](../../../../../generated/agent-reviews/type-aliases/ReviewRecord_Serialize.md); `id`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: `ReviewRecord_Serialize`; `id`: `string`; \}
+\{ `detail?`: [`ReviewRecord_Serialize`](../../../../../generated/agent-reviews/type-aliases/ReviewRecord_Serialize.md); `id`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
-| `detail?` | `ReviewRecord_Serialize` |
+| `detail?` | [`ReviewRecord_Serialize`](../../../../../generated/agent-reviews/type-aliases/ReviewRecord_Serialize.md) |
 | `id` | `string` |
 
 #### Inherited from
@@ -166,7 +166,7 @@ Present a review in a session without requiring a code execution.
 | ------ | ------ |
 | `client` | `MacroClient` |
 | `session` | [`AgentSession`](../../agent-session/classes/AgentSession.md) |
-| `record` | `ReviewRecord_Serialize` |
+| `record` | [`ReviewRecord_Serialize`](../../../../../generated/agent-reviews/type-aliases/ReviewRecord_Serialize.md) |
 
 #### Returns
 

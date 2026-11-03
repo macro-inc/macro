@@ -12,7 +12,7 @@ An item handle scopes edits and decisions to its persisted review.
 
 | Parameter | Type |
 | ------ | ------ |
-| `snapshot` | `ReviewItem`\<`SendEmail`, `SendEmailResponse`\> \| `ReviewItem`\<`CreateCalendarEvent_Serialize`, `ToolCalendarEvent`\> \| `ReviewItem`\<`ImportDraft`, `NotionImportReport_Serialize`\> |
+| `snapshot` | [`ReviewItem`](../../../../../generated/agent-reviews/type-aliases/ReviewItem.md)\<[`SendEmail`](../../../../../generated/agent-reviews/type-aliases/SendEmail.md), [`SendEmailResponse`](../../../../../generated/agent-reviews/type-aliases/SendEmailResponse.md)\> \| [`ReviewItem`](../../../../../generated/agent-reviews/type-aliases/ReviewItem.md)\<[`CreateCalendarEvent_Serialize`](../../../../../generated/agent-reviews/type-aliases/CreateCalendarEvent_Serialize.md), [`ToolCalendarEvent`](../../../../../generated/agent-reviews/type-aliases/ToolCalendarEvent.md)\> \| [`ReviewItem`](../../../../../generated/agent-reviews/type-aliases/ReviewItem.md)\<[`ImportDraft`](../../../../../generated/agent-reviews/type-aliases/ImportDraft.md), [`NotionImportReport_Serialize`](../../../../../generated/agent-reviews/type-aliases/NotionImportReport_Serialize.md)\> |
 | `actions` | \{ `dismiss`: () => `Promise`\<`void`\>; `edit`: (`draft`) => `Promise`\<`void`\>; `submit`: () => `Promise`\<`void`\>; \} |
 | `actions.dismiss` | () => `Promise`\<`void`\> |
 | `actions.edit` | (`draft`) => `Promise`\<`void`\> |
@@ -28,11 +28,11 @@ An item handle scopes edits and decisions to its persisted review.
 
 #### Get Signature
 
-> **get** **draft**(): `CreateCalendarEvent_Serialize` \| `ImportDraft` \| `SendEmail`
+> **get** **draft**(): [`CreateCalendarEvent_Serialize`](../../../../../generated/agent-reviews/type-aliases/CreateCalendarEvent_Serialize.md) \| [`ImportDraft`](../../../../../generated/agent-reviews/type-aliases/ImportDraft.md) \| [`SendEmail`](../../../../../generated/agent-reviews/type-aliases/SendEmail.md)
 
 ##### Returns
 
-`CreateCalendarEvent_Serialize` \| `ImportDraft` \| `SendEmail`
+[`CreateCalendarEvent_Serialize`](../../../../../generated/agent-reviews/type-aliases/CreateCalendarEvent_Serialize.md) \| [`ImportDraft`](../../../../../generated/agent-reviews/type-aliases/ImportDraft.md) \| [`SendEmail`](../../../../../generated/agent-reviews/type-aliases/SendEmail.md)
 
 ***
 
@@ -52,13 +52,13 @@ An item handle scopes edits and decisions to its persisted review.
 
 #### Get Signature
 
-> **get** **result**(): `NotionImportReport_Serialize` \| `SendEmailResponse` \| `ToolCalendarEvent` \| `null`
+> **get** **result**(): [`NotionImportReport_Serialize`](../../../../../generated/agent-reviews/type-aliases/NotionImportReport_Serialize.md) \| [`SendEmailResponse`](../../../../../generated/agent-reviews/type-aliases/SendEmailResponse.md) \| [`ToolCalendarEvent`](../../../../../generated/agent-reviews/type-aliases/ToolCalendarEvent.md) \| `null`
 
 The action's confirmed response, `null` until it completes.
 
 ##### Returns
 
-`NotionImportReport_Serialize` \| `SendEmailResponse` \| `ToolCalendarEvent` \| `null`
+[`NotionImportReport_Serialize`](../../../../../generated/agent-reviews/type-aliases/NotionImportReport_Serialize.md) \| [`SendEmailResponse`](../../../../../generated/agent-reviews/type-aliases/SendEmailResponse.md) \| [`ToolCalendarEvent`](../../../../../generated/agent-reviews/type-aliases/ToolCalendarEvent.md) \| `null`
 
 ***
 
@@ -66,11 +66,11 @@ The action's confirmed response, `null` until it completes.
 
 #### Get Signature
 
-> **get** **status**(): `ItemStatus`
+> **get** **status**(): [`ItemStatus`](../../../../../generated/agent-reviews/type-aliases/ItemStatus.md)
 
 ##### Returns
 
-`ItemStatus`
+[`ItemStatus`](../../../../../generated/agent-reviews/type-aliases/ItemStatus.md)
 
 ## Methods
 
@@ -94,7 +94,7 @@ Replace this pending draft; `kind` must match the review's.
 
 | Parameter | Type |
 | ------ | ------ |
-| `draft` | `ReviewDraft_Deserialize` |
+| `draft` | [`ReviewDraft_Deserialize`](../../../../../generated/agent-reviews/type-aliases/ReviewDraft_Deserialize.md) |
 
 #### Returns
 
