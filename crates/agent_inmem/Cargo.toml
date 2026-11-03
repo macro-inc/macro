@@ -47,6 +47,7 @@ rmcp = { workspace = true, features = ["client", "transport-streamable-http-clie
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+skills = { path = "../skills" }
 sqlx = { workspace = true }
 sse-stream = { workspace = true }
 thiserror = { workspace = true }
@@ -54,9 +55,12 @@ tokio = { workspace = true, features = ["sync", "rt", "time", "macros"] }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
+uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+system_skills = { path = "../system_skills" }
+jev = { path = "../jev", features = ["outbound"] }
 rootcause = { workspace = true }
 agent_fold = { path = "../folds/agent_fold" }
 agent_session = { path = "../agent_session", features = ["test-utils"] }
@@ -67,4 +71,4 @@ opentelemetry = { workspace = true, features = ["trace"] }
 opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 tracing-opentelemetry = { workspace = true }
 tracing-subscriber = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time", "test-util"] }

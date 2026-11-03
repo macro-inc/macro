@@ -809,10 +809,35 @@ fn system_skill_tools_are_deferred_session_tools() {
                 skill.slug
             );
             assert!(
-                session.deferred.iter().any(|deferred| deferred.name == *tool),
+                session
+                    .deferred
+                    .iter()
+                    .any(|deferred| deferred.name == *tool),
                 "{} names {tool}, which is eager; skills cover deferred tools",
                 skill.slug
             );
         }
+    }
+}
+
+#[test]
+fn routed_prompts_list_built_in_skills_instead_of_inlining_them() {
+    let catalog = system_skills::catalog();
+    let inline = system_skills::inline();
+    for tools in [
+        tools_for(AiHost::AgentSession),
+        tools_for_agent_code_mode(),
+        tools_for(AiHost::Chat),
+        tools_for(AiHost::ChannelBot),
+    ] {
+        let prompt = tools.prompt.to_string();
+        let routed = tools.routed_prompt.to_string();
+        assert!(prompt.contains(&inline));
+        assert!(!prompt.contains(&catalog));
+        assert!(routed.contains(&catalog));
+        assert_eq!(
+            prompt.replacen(&inline, "", 1),
+            routed.replacen(&catalog, "", 1)
+        );
     }
 }

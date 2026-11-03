@@ -58,6 +58,14 @@ pub trait SkillService: Send + Sync + 'static {
         &self,
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<SkillSummary>, SkillError>> + Send;
+
+    /// Every skill an agent may load for `user_id` without being asked: the
+    /// built-ins and as many of the user's skills as routing can consider,
+    /// most recently updated first.
+    fn list_routable_skills(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<SkillSummary>, SkillError>> + Send;
 }
 
 /// Capabilities for accessing skill documents and their current markdown.

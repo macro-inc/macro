@@ -20,6 +20,7 @@
 //! is why the in-memory runtime is the one provider that needs no wire format
 //! for them. See [`system_prompt`] for how the sections are ordered.
 
+use std::pin::Pin;
 use std::sync::Arc;
 
 use agent::{AgentError, AgentLoop, ReadToolResult, StreamPart, SystemPrompt, ToolResultLimit};
@@ -35,10 +36,12 @@ use memory::outbound::pg_memory_repo::PgMemoryRepo;
 use model_owner::Owner;
 use sqlx::PgPool;
 use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
 use crate::domain::auto_model::{AutoModelSelector, DefaultAutoModel, JevAutoModel};
 use crate::domain::engine::{AgentIdentity, ReplyDelivery, TurnEngine, TurnRequest};
+use crate::domain::skill_routing::{NoSkillRouting, SessionSkills, SkillRoutingPolicy};
 use crate::domain::tool_gate::{NativeToolGate, NativeToolVerdict, UngatedNativeTools};
 use crate::domain::tool_mode::{StandardTools, ToolMode, ToolModeSelector};
 use crate::inbound::ask_user::{AskUser, AskUserContext};
@@ -80,6 +83,8 @@ pub struct RigTurnEngine {
     code_mode_tools: Arc<NativeTools>,
     tool_mode: Arc<dyn ToolModeSelector>,
     auto_model: Arc<dyn AutoModelSelector>,
+    skill_routing: Arc<dyn SkillRoutingPolicy>,
+    session_skills: Arc<SessionSkills>,
     tool_context: ToolServiceContext,
     gate: Arc<dyn NativeToolGate>,
 }
@@ -105,6 +110,8 @@ impl RigTurnEngine {
                 Some(cognition) => Arc::new(JevAutoModel::new(Arc::clone(cognition))),
                 None => Arc::new(DefaultAutoModel),
             },
+            skill_routing: Arc::new(NoSkillRouting),
+            session_skills: Arc::new(SessionSkills::default()),
             tool_context,
             gate: Arc::new(UngatedNativeTools),
         }
@@ -121,6 +128,13 @@ impl RigTurnEngine {
     #[must_use]
     pub fn with_tool_mode(mut self, selector: Arc<dyn ToolModeSelector>) -> Self {
         self.tool_mode = selector;
+        self
+    }
+
+    /// Decide per turn whether the owner's turns load skills on their own.
+    #[must_use]
+    pub fn with_skill_routing(mut self, policy: Arc<dyn SkillRoutingPolicy>) -> Self {
+        self.skill_routing = policy;
         self
     }
 }
@@ -273,6 +287,9 @@ struct NativeTools {
     with_user_input: Arc<AsyncToolCollection<InMemToolContext>>,
     without_user_input: Arc<AsyncToolCollection<InMemToolContext>>,
     prompt: String,
+    /// [`Self::prompt`] with a catalog of built-in skills in place of their
+    /// instructions, for turns that route skills.
+    routed_prompt: String,
     code_mode: bool,
     deferred: Arc<[ai_toolset::SearchableTool]>,
     /// Every native tool's name, for the opening line's model to guess the
@@ -304,6 +321,7 @@ impl NativeTools {
             without_user_input: Arc::new(tools_for_turn(other_tools, false)),
             code_mode,
             prompt: tools.prompt.to_string(),
+            routed_prompt: tools.routed_prompt.to_string(),
             deferred: tools.deferred,
             tool_names,
         }
@@ -330,6 +348,8 @@ impl TurnEngine for RigTurnEngine {
         let code_mode_tools = Arc::clone(&self.code_mode_tools);
         let tool_mode = Arc::clone(&self.tool_mode);
         let auto_model = Arc::clone(&self.auto_model);
+        let skill_routing = Arc::clone(&self.skill_routing);
+        let session_skills = Arc::clone(&self.session_skills);
         let tool_context = self.tool_context.clone();
         let gate = Arc::clone(&self.gate);
         let metering = agent::MeteringContext::current();
@@ -340,7 +360,11 @@ impl TurnEngine for RigTurnEngine {
                     return;
                 };
                 request.model = model;
-                let Some(selected) = select_tool_mode(tool_mode.as_ref(), &request).await else {
+                let (selected, routes) = tokio::join!(
+                    select_tool_mode(tool_mode.as_ref(), &request),
+                    routes_skills(skill_routing.as_ref(), &request),
+                );
+                let Some(selected) = selected else {
                     return;
                 };
                 let native_tools = match selected {
@@ -351,9 +375,14 @@ impl TurnEngine for RigTurnEngine {
                 // The product toolset makes this future large. Keep its state
                 // on the heap when adding the panic boundary, including in
                 // unoptimized local builds with Tokio's default worker stack.
+                let skills = TurnSkills {
+                    routes,
+                    sessions: &session_skills,
+                };
                 let turn = Box::pin(drive_turn(
                     &memory,
                     &native_tools,
+                    skills,
                     tool_context,
                     gate,
                     request,
@@ -412,6 +441,40 @@ async fn select_auto_model(
     }
 }
 
+// Only conversation turns load skills; summaries read no instructions.
+async fn routes_skills(policy: &dyn SkillRoutingPolicy, request: &TurnRequest) -> bool {
+    let Owner::User(owner) = &request.owner else {
+        return false;
+    };
+    request.purpose == crate::domain::engine::TurnPurpose::Conversation
+        && policy.routes(owner).await
+}
+
+/// Route the turn's request to skills. Boxed: the skill service's listing
+/// future is deep enough to overflow the turn's own future type.
+fn select_skills<'a>(
+    context: &'a ToolServiceContext,
+    owner: &'a MacroUserIdStr<'static>,
+    request: skills::domain::selection::SkillRequest<'a>,
+    already_loaded: &'a [uuid::Uuid],
+    cancel: &'a CancellationToken,
+) -> Pin<Box<dyn Future<Output = skills::domain::selection::SkillSelection> + Send + 'a>> {
+    Box::pin(skills::domain::selection::select_skills(
+        context.skill_tool_context.service.as_ref(),
+        context.cognition_tool_context.service.as_ref(),
+        owner,
+        request,
+        already_loaded,
+        cancel,
+    ))
+}
+
+/// Whether a turn loads skills on its own, and what its session has loaded.
+struct TurnSkills<'a> {
+    routes: bool,
+    sessions: &'a SessionSkills,
+}
+
 // A failed/missing code-mode MCP connection must never leave a turn with only the
 // small direct set. Summaries neither evaluate flags nor advertise tools.
 async fn select_tool_mode(
@@ -441,6 +504,7 @@ async fn select_tool_mode(
 async fn drive_turn(
     memory: &MemoryServiceImpl<PgMemoryRepo>,
     native_tools: &NativeTools,
+    skills: TurnSkills<'_>,
     base_context: ToolServiceContext,
     gate: Arc<dyn NativeToolGate>,
     request: TurnRequest,
@@ -548,12 +612,13 @@ async fn drive_turn(
             Arc::from(Vec::new()),
         )
     } else {
-        let requested = messages
+        let mut user_messages = messages
             .iter()
             .rev()
-            .find(|message| message.role == agent::types::Role::User)
-            .and_then(|message| message.content.user_message_text())
-            .unwrap_or_default();
+            .filter(|message| message.role == agent::types::Role::User)
+            .filter_map(|message| message.content.user_message_text());
+        let requested = user_messages.next().unwrap_or_default();
+        let previous = user_messages.next();
         let docs = async {
             if native_tools.code_mode {
                 agent_code_mode::domain::select_documentation(
@@ -567,10 +632,37 @@ async fn drive_turn(
                 String::new()
             }
         };
-        let (user_memory, sdk_docs) = tokio::join!(fetch_user_memory(memory, &owner), docs);
+        let loaded_skills = async {
+            if !skills.routes {
+                return String::new();
+            }
+            let selection = select_skills(
+                &base_context,
+                &owner,
+                skills::domain::selection::SkillRequest {
+                    latest: &requested,
+                    previous: previous.as_deref(),
+                },
+                &skills.sessions.loaded_ids(session_id),
+                &cancel,
+            )
+            .await;
+            skills::domain::selection::render_loaded(
+                &skills.sessions.add(session_id, selection.loaded),
+            )
+        };
+        let (user_memory, sdk_docs, loaded_skills) =
+            tokio::join!(fetch_user_memory(memory, &owner), docs, loaded_skills);
+        let tools_prompt = if skills.routes {
+            &native_tools.routed_prompt
+        } else {
+            &native_tools.prompt
+        };
+        // Loaded skills change less often than the SDK references, so they
+        // come first in the turn's part.
         let prompt = system_prompt(
-            &native_tools.prompt,
-            &sdk_docs,
+            tools_prompt,
+            &format!("{loaded_skills}{sdk_docs}"),
             session_id,
             delivery,
             identity.as_ref(),

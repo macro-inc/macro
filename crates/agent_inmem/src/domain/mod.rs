@@ -14,6 +14,8 @@ pub mod model_options;
 pub mod models;
 pub mod replay;
 pub mod session;
+/// Which skills a turn loads on its own, and what each session has loaded.
+pub mod skill_routing;
 /// Whether one of Macro's own tools may run in this turn.
 pub mod tool_gate;
 pub mod tool_mode;

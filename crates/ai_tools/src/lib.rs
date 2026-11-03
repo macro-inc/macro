@@ -147,7 +147,12 @@ pub fn database_read_only_tools() -> AiToolSet {
 
 pub struct ToolSetWithPrompt {
     pub toolset: Arc<AiToolSet>,
+    /// The prompt with every agent-only built-in skill's instructions inline,
+    /// for turns that do not route skills.
     pub prompt: Box<dyn std::fmt::Display + Send + Sync>,
+    /// The prompt with a catalog of built-in skills in place of their
+    /// instructions, for turns that load the skills a request needs.
+    pub routed_prompt: Box<dyn std::fmt::Display + Send + Sync>,
     /// The tools a [`DeferredToolSet`] keeps out of every request; the prompt
     /// lists them. Empty on hosts that send every schema.
     pub deferred: Arc<[ai_toolset::SearchableTool]>,
@@ -384,14 +389,17 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
         .iter()
         .map(|tool| (tool.name.as_str(), tool.description.as_str()))
         .collect();
-    let prompt: Box<dyn std::fmt::Display + Send + Sync> =
-        match prompt::deferred_tools::render(&catalog) {
-            Some(section) => Box::new(format!("{prompt}{section}")),
-            None => prompt,
-        };
+    let deferred_section = prompt::deferred_tools::render(&catalog).unwrap_or_default();
     ToolSetWithPrompt {
         toolset: Arc::new(toolset),
-        prompt,
+        routed_prompt: Box::new(format!(
+            "{prompt}{}{deferred_section}",
+            system_skills::catalog()
+        )),
+        prompt: Box::new(format!(
+            "{prompt}{}{deferred_section}",
+            system_skills::inline()
+        )),
         deferred,
     }
 }
@@ -417,6 +425,7 @@ pub fn all_tool_frontend_schemas() -> FrontendSchemas {
 pub fn no_tools() -> ToolSetWithPrompt {
     ToolSetWithPrompt {
         prompt: Box::new(&prompt::BASE_PROMPT),
+        routed_prompt: Box::new(&prompt::BASE_PROMPT),
         toolset: Arc::new(AsyncToolCollection::new()),
         deferred: Arc::from([]),
     }

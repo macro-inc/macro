@@ -10,6 +10,9 @@ use crate::domain::ports::{SkillLister, SkillReader, SkillSearcher, SkillService
 
 /// Maximum number of skills returned from a single listing.
 const LIST_LIMIT: u16 = 100;
+/// Maximum number of the user's skills routing considers; see
+/// [`crate::domain::selection::MAX_CALLS`].
+const ROUTABLE_LIMIT: u16 = 256;
 
 /// Skill domain service backed by discovery and authorized document reading ports.
 #[derive(Debug, Clone)]
@@ -159,5 +162,17 @@ impl<S: SkillSearcher, L: SkillLister, R: SkillReader> SkillService for SkillSer
         sort_most_recently_updated_first(&mut skills);
 
         Ok(skills)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn list_routable_skills(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Vec<SkillSummary>, SkillError> {
+        let mut skills = self.lister.list_skills(user_id, ROUTABLE_LIMIT).await?;
+        sort_most_recently_updated_first(&mut skills);
+        let mut routable: Vec<SkillSummary> = system_skill_summaries().collect();
+        routable.extend(skills);
+        Ok(routable)
     }
 }
