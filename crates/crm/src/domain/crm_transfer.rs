@@ -502,7 +502,32 @@ where
             .filter(|(_, field)| !pipeline.commercial_fields.is_system_select(field.id))
             .cloned()
             .collect::<Vec<_>>();
-        let added_options = missing_options(&customizable, &new_rows);
+        // Validate fixed-select inputs before deriving new options. Otherwise an
+        // invalid currency/outcome can reject its row after a custom Stage option
+        // from that same row has already been persisted.
+        let option_rows = new_rows
+            .iter()
+            .filter(|row| {
+                fields
+                    .iter()
+                    .filter(|(_, field)| pipeline.commercial_fields.is_system_select(field.id))
+                    .all(|(header, field)| {
+                        let Some((_, value)) = row.values.iter().find(|(h, _)| h == header) else {
+                            return true;
+                        };
+                        let FieldInput::One(value) = field_input(field, value) else {
+                            return false;
+                        };
+                        !value.trim().is_empty()
+                            && field
+                                .options
+                                .iter()
+                                .any(|(_, option)| option.trim().eq_ignore_ascii_case(value.trim()))
+                    })
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        let added_options = missing_options(&customizable, &option_rows);
         if !added_options.is_empty() {
             self.workflows
                 .edit(

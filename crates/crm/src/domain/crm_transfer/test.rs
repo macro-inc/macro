@@ -446,6 +446,70 @@ async fn a_pipeline_import_skips_present_records_keeps_new_deals_and_isolates_ba
 }
 
 #[tokio::test]
+async fn a_rejected_currency_row_does_not_add_its_stage_option() {
+    let mut workflows = Workflows::new(overview(PipelineRecordType::Company));
+    let currency = PipelineField {
+        options: vec![
+            (OptionId::new(), "USD".into()),
+            (OptionId::new(), "EUR".into()),
+        ],
+        ..field("Revenue currency", FieldKind::Select)
+    };
+    workflows
+        .overview
+        .pipeline
+        .pipeline
+        .commercial_fields
+        .money
+        .push(crate::domain::pipeline_commercial::MoneyColumn {
+            amount: workflows.overview.fields[3].id,
+            currency: currency.id,
+        });
+    workflows.overview.fields.push(currency);
+    workflows.refused = Some("XYZ");
+    let pipeline = workflows.overview.pipeline.pipeline.id;
+    let service = CrmTransferServiceImpl::new(
+        Arc::new(workflows),
+        Records {
+            domains: HashMap::from([
+                ("valid.example".into(), Uuid::now_v7()),
+                ("invalid.example".into(), Uuid::now_v7()),
+            ]),
+            ..Records::default()
+        },
+        Files::default(),
+    );
+
+    let outcome = service
+        .import_to_pipeline(
+            &viewer(),
+            pipeline,
+            CsvInput::Text(
+                "Company,Domain,Stage,Revenue currency\n\
+                 Valid,valid.example,Qualified,USD\n\
+                 Invalid,invalid.example,Do not add,XYZ\n"
+                    .into(),
+            ),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.added, 1);
+    assert_eq!(outcome.invalid.len(), 1);
+    assert_eq!(outcome.invalid[0].key, "invalid.example");
+    assert_eq!(
+        outcome.added_options,
+        [("Stage".into(), vec!["Qualified".into()])]
+    );
+    let edits = service.workflows.edits.lock().unwrap();
+    assert_eq!(edits.len(), 1);
+    assert_eq!(
+        edits[0].add_options,
+        [("Stage".into(), vec!["Qualified".into()])]
+    );
+}
+
+#[tokio::test]
 async fn new_contacts_at_one_new_domain_share_one_new_company() {
     let mut contacts = overview(PipelineRecordType::Contact);
     contacts.fields[0].name = "Contact".into();
