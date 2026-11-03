@@ -5,7 +5,10 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { enableProjects } from '@core/constant/featureFlags';
+import {
+  enableProjects,
+  USE_MACRO_PR_SUMMARY_BLOCK,
+} from '@core/constant/featureFlags';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import {
@@ -19,7 +22,7 @@ import { runCommand } from '@core/hotkey/utils';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { lazyNamed } from '@core/util/lazyNamed';
-import type { EntityData } from '@entity';
+import { type EntityData, isGithubPrEntity } from '@entity';
 import { EntitySelectionBadge } from '@entity/components/EntitySelectionBadge';
 import Macro from '@icon/macro-logo.svg';
 import ArrowLeft from '@icon/system/regular/arrow-left.svg';
@@ -131,6 +134,7 @@ export function CommandMenu() {
     : () => true; // assume list mode
 
   let suppressCloseAutoFocus = false;
+  let wasOpen = false;
 
   createEffect(() => {
     const open = CommandState.isOpen();
@@ -139,16 +143,27 @@ export function CommandMenu() {
     }
     if (open) {
       CommandState.onMenuOpen();
-      suppressCloseAutoFocus = false;
+      if (!wasOpen) {
+        suppressCloseAutoFocus = false;
+        CommandState.setFocusDestinationOnClose(false);
+      }
     } else {
       CommandState.onMenuClose();
     }
+    wasOpen = open;
   });
 
   const handleSelect = (item: CommandMenuItem) => {
+    CommandState.setFocusDestinationOnClose(
+      isEntityItem(item) &&
+        (item.bucket === 'initiative' ||
+          (item.data.type !== 'foreign' &&
+            (!isGithubPrEntity(item.data) || USE_MACRO_PR_SUMMARY_BLOCK)))
+    );
     if (
       isSearchItem(item) ||
       isAskAiItem(item) ||
+      isUserItem(item) ||
       item.kind === 'new-project' ||
       (isCommandItem(item) &&
         item.data.hotkeyToken === TOKENS.global.createCommand)
@@ -161,9 +176,13 @@ export function CommandMenu() {
       class="[&>[data-command-menu]>[data-layer]>[data-surface]]:border-0! [&>[data-command-menu]>[data-layer]>[data-surface]]:bg-transparent [&>[data-command-menu]>[data-layer]>[data-surface]]:rounded-[24px]"
       onOpenChange={CommandState.setIsOpen}
       onCloseAutoFocus={(e) => {
-        if (suppressCloseAutoFocus) {
+        if (suppressCloseAutoFocus || CommandState.focusDestinationOnClose()) {
           e.preventDefault();
           suppressCloseAutoFocus = false;
+        }
+        if (CommandState.focusDestinationOnClose()) {
+          globalSplitManager()?.returnFocus();
+          CommandState.setFocusDestinationOnClose(false);
         }
       }}
       open={CommandState.isOpen()}
@@ -424,6 +443,8 @@ function CommandSearchMenu(
       : CommandState.categoryFilter();
 
   const { popoverSplit } = useSplitLayout();
+  const canOpenInNewSplit = () =>
+    globalSplitManager()?.canAppendSplit() ?? false;
 
   const [attachHotkeys, hotkeyScope] = useHotkeyDOMScope('command-menu');
 
@@ -647,6 +668,24 @@ function CommandSearchMenu(
       const item = selectedItem();
       if (item) {
         handleItemAction(item, false);
+        return true;
+      }
+      return false;
+    },
+    runWithInputFocused: true,
+  });
+
+  // Universal Input mounts its own menu and scope, so there Shift+Enter
+  // stays a newline in its editor.
+  const confirmSplitHotkey = registerHotkey({
+    hotkey: 'shift+enter',
+    scopeId: hotkeyScope,
+    description: () => t('commandMenu.openInNewSplit'),
+    keyDownHandler: (event) => {
+      if (event?.isComposing) return false;
+      const item = selectedItem();
+      if (item) {
+        handleItemAction(item, true);
         return true;
       }
       return false;
@@ -915,6 +954,12 @@ function CommandSearchMenu(
               command={confirmHotkey}
               label={t('commandMenu.hintSearch')}
             />
+            <Show when={canOpenInNewSplit()}>
+              <HotkeyHint
+                command={confirmSplitHotkey}
+                label={t('commandMenu.hintSearchInNewSplit')}
+              />
+            </Show>
           </Match>
           <Match when={selectedIsAskAi()}>
             <HotkeyHint
@@ -927,6 +972,12 @@ function CommandSearchMenu(
               command={confirmHotkey}
               label={t('commandMenu.hintOpen')}
             />
+            <Show when={canOpenInNewSplit()}>
+              <HotkeyHint
+                command={confirmSplitHotkey}
+                label={t('commandMenu.openInNewSplit')}
+              />
+            </Show>
           </Match>
         </Switch>
 

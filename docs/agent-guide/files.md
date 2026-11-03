@@ -16,6 +16,12 @@ viewer identity is available, document inserts into Shared are rejected.
 Files opens **Drive** using the same shell as Tasks, on desktop and touch
 devices alike.
 
+The document header's **Copy Share Link** and the Share dialog's **Copy Link**
+copy a standalone link to the selected file, not the current browser URL.
+Folder paths, list filters, and other open splits are not included.
+PDF location links retain the selected page or annotation without unrelated
+query parameters from the surrounding view.
+
 With `enable-graphql-soup` enabled, supported file/folder/chat moves, trash,
 restore, permanent deletion, duplication, and share-policy changes use GraphQL
 mutations. Verify moving into a folder and back to root, opening the returned
@@ -26,7 +32,9 @@ retain successful siblings. A plan-refused chat duplicate still opens the paywal
 with either transport; it must not create a copy or retry through REST. Restore immediately after trash and confirm the row
 returns without waiting for retained deletion markers to expire, even if the
 trash's background refresh failed. A delete started after the restore request
-must still hide its row. With the flag off, the existing REST paths remain.
+must still hide its row. Deletion and restore overlays distinguish entity type as
+well as ID, so an unrelated conversation with the same ID remains visible.
+With the flag off, the existing REST paths remain.
 Deleting a non-owned item still only removes it from history. Forking a markdown
 history version still uses REST because GraphQL duplication copies current content.
 
@@ -35,15 +43,21 @@ With `enable-databases` enabled, **My Files** includes owned databases and
 also includes accessible databases owned by others. **Search Drive** matches
 database names and **Filter → Type → Database** narrows the list. **New →
 Database** creates and opens a database from file tabs or the folder overview;
-it is absent inside a folder because databases have no folder membership yet.
+it is absent inside a folder because a new database starts at the root.
 Database rows open their database block, including Enter and Open in new split.
 Right-click (or long-press) a database for the same entity actions as other
 Drive rows: Open in new split, Rename (edit or owner), Favorite, Copy Link,
-Copy ID, Share, and Delete (owner). Duplicate and Move to folder stay omitted
-because databases have no folder membership and no duplicate API.
-Databases have no view history and do not appear in **Recent**, folder contents,
-or **Email attachments**. Creation time orders them when the selected sort has
-no corresponding database timestamp.
+Copy ID, Share, Move to folder and Remove from folder (owner), and Delete
+(owner). Duplicate stays omitted because databases have no duplicate API.
+The owner can also drag a database or form row onto a folder (a sidebar folder
+or a folder row), or pick **Move to folder** from the database page's ⋯ menu or
+the form's title menu. A filed database or form appears in that folder's
+contents for everyone who can open it, inherits the folder's sharing like a
+document, and stays in the file tabs. Verify moving one into a nested folder
+shared with another user, that user opening it from the folder, and moving it
+back to root. Databases have no view history and do not appear in **Recent** or
+**Email attachments**. Creation time orders them when the selected sort has no
+corresponding database timestamp.
 
 On touch devices (phones and tablets), the Drive header is a scrollable pill
 strip — **Recent**, **My Files**, **Shared with me**, and **Folders** — with a
@@ -198,6 +212,19 @@ switch via the header pills; on narrow desktop layouts the header keeps a plain
 title and navigation goes through the hamburger overlay. Location, search,
 filters, expanded folders, list focus, and scroll position are restored when
 returning from an opened file.
+
+## Zooming opened images
+
+On a touch device, open an image file (an SVG, PNG, or JPEG) in Drive or as its
+own split. It rests at the size it always had: no larger than its own pixels,
+and an SVG with only a viewBox fills the pane. Pinch anywhere in the pane, on
+the image or beside it: the image grows until it fills the pane, then crops and
+pans with one finger, with a glide on release. A zoomed SVG stays sharp, because
+the image is laid out at its zoomed size rather than scaled up. One finger on an
+unzoomed image does nothing, so taps and the left-edge swipe back still work.
+Desktop keeps the plain image. The backend-free phone and tablet regression is
+`bunx playwright test --config src/features/block-image/browser-test/playwright.config.ts`
+from `apps/web`.
 
 ## Reading unrecognized files
 

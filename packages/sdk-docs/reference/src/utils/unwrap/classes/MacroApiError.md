@@ -1,6 +1,8 @@
 # Class: MacroApiError
 
 A non-2xx HTTP response (Macro API, or a raw fetch like presigned downloads).
+The message includes the server's explanation, such as a validation error,
+and `data` holds the parsed error body.
 
 ## Extends
 
