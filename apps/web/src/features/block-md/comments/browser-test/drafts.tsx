@@ -23,6 +23,7 @@ import { render } from 'solid-js/web';
 import { CommentButton } from '../../component/CommentButton';
 
 function Fixture() {
+  const readonly = new URLSearchParams(location.search).has('readonly');
   const [focused, setFocused] = createSignal(false);
   const [draftId, setDraftId] = createSignal<string>();
   const [result, setResult] = createSignal('');
@@ -37,6 +38,7 @@ function Fixture() {
   let root!: HTMLDivElement;
   onMount(() => {
     editor.setRootElement(root);
+    editor.setEditable(!readonly);
     const cleanupPeer = peerIdPlugin({
       peerId: () => '1',
       nodes: [CommentNode],
@@ -91,7 +93,7 @@ function Fixture() {
       <h1>Inline comment regression</h1>
       <div
         ref={root}
-        contentEditable
+        contentEditable={!readonly}
         role="textbox"
         aria-label="Document"
         class="border border-edge p-4 min-h-32"
@@ -99,7 +101,7 @@ function Fixture() {
         onFocusOut={() => setFocused(false)}
       />
       <CommentButton
-        disabled={!focused()}
+        disabled={!readonly && !focused()}
         onClick={() =>
           setResult(
             String(

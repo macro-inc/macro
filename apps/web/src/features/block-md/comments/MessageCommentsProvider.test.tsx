@@ -1,4 +1,7 @@
-import { DRAFT_THREAD_ID } from '@core/comments/commentType';
+import {
+  DRAFT_THREAD_ID,
+  type MessageCommentOperations,
+} from '@core/comments/commentType';
 import {
   LexicalWrapperContext,
   type LexicalWrapperWithMapping,
@@ -26,6 +29,7 @@ import { batch, createSignal, onCleanup, onMount } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMarkdownDocumentState } from '../context/markdown-document-state';
 import { MessageCommentsProvider } from './MessageCommentsProvider';
+import { useCreateMessageComment } from './messageCommentOperations';
 
 const mocks = vi.hoisted(() => ({
   state: undefined as
@@ -34,8 +38,16 @@ const mocks = vi.hoisted(() => ({
   threads: (): MessageListItem[] => [],
   rootId: (): string | null => 'root',
   navigationCount: (): number => 0,
+  post: vi.fn(),
 }));
 
+vi.mock('@app/lib/analytics/analytics-context', () => ({
+  useAnalytics: () => ({ track: vi.fn() }),
+}));
+vi.mock('./messageCommentsResource', () => ({
+  useCreateMarkedMessageResource: () => mocks.post,
+  useCreateMessageReplyResource: () => mocks.post,
+}));
 vi.mock('../context/markdown-document-context', () => ({
   useMarkdownDocument: () => ({
     documentId: () => 'document',
@@ -134,6 +146,11 @@ function setup(lateEditor = false) {
     } as unknown as PluginManager,
   };
   if (!lateEditor) state.editor.setMd('editor', editor);
+  let post!: MessageCommentOperations['createComment'];
+  function Posting() {
+    post = useCreateMessageComment();
+    return null;
+  }
   render(() => (
     <LexicalWrapperContext.Provider value={wrapper}>
       <div
@@ -145,6 +162,7 @@ function setup(lateEditor = false) {
           onCleanup(() => editor.setRootElement(null));
         }}
       />
+      <Posting />
       <MessageCommentsProvider
         activeComment={activeComment}
         loroManager={{ peerIdStr: '1' } as unknown as LoroManager}
@@ -155,6 +173,8 @@ function setup(lateEditor = false) {
   return {
     editor,
     state,
+    post: (input: Parameters<typeof post>[0]) => post(input),
+    setThreads,
     scroll,
     loadComments: () =>
       batch(() => {
@@ -186,6 +206,63 @@ function setup(lateEditor = false) {
 }
 
 describe('inline comment link navigation', () => {
+  it.each([false, true])(
+    'opens another comment after posting, metadata first: %s',
+    async (metadataFirst) => {
+      const f = setup(true);
+      f.finishLoading();
+      f.editor.update(
+        () => {
+          $getRoot().append(
+            $createParagraphNode().append(
+              $createTextNode('A shared directory with useful notes.')
+            )
+          );
+        },
+        { discrete: true }
+      );
+      for (let attempt = 0; attempt < 3; attempt++) {
+        f.editor.update(
+          () => {
+            const text = $getRoot()
+              .getAllTextNodes()
+              .find((node) => node.getTextContent().includes('shared'))!;
+            const start = text.getTextContent().indexOf('shared');
+            text.select(start, start + 6);
+            expect(
+              f.editor.dispatchCommand(CREATE_DRAFT_COMMENT_COMMAND, undefined)
+            ).toBe(true);
+          },
+          { discrete: true }
+        );
+        expect(f.state.comments.activeCommentThread).toBe(DRAFT_THREAD_ID);
+        const anchorId = f.state.comments.threads[DRAFT_THREAD_ID]!.anchorId;
+        const posted = {
+          ...thread,
+          id: `root-${attempt}`,
+          state: {
+            ...thread.state,
+            root_id: `root-${attempt}`,
+            anchor: { type: 'markdown' as const, mark_id: anchorId },
+          },
+        };
+        mocks.post.mockImplementationOnce(async () => {
+          if (metadataFirst) f.setThreads((previous) => [...previous, posted]);
+          return posted;
+        });
+        await f.post({ threadId: DRAFT_THREAD_ID, content: 'A comment' });
+        if (!metadataFirst) f.setThreads((previous) => [...previous, posted]);
+        await Promise.resolve();
+        expect(f.editor.getRootElement()?.textContent).toBe(
+          'A shared directory with useful notes.'
+        );
+        expect(
+          f.editor.getRootElement()?.querySelectorAll('mark.draft')
+        ).toHaveLength(0);
+        f.state.setCommentState('activeCommentThread', null);
+      }
+    }
+  );
   it('opens a new draft inside an existing comment and preserves that comment on cancellation', async () => {
     const f = setup();
     f.loadMarks();
