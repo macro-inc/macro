@@ -27,6 +27,10 @@ Eric. Each item is ready for one sitting; agents prepare the rest.
       page (open in the Connect browser, noVNC port 6081); an agent then
       creates the support account and sends the drafted question
       ([record](submissions/discord.md)).
+- [ ] Dialpad: approve the scope request (`calls:list`, `ai_recap`,
+      `offline_access`) and the app description in
+      [`submissions/dialpad.md`](submissions/dialpad.md), so an agent can file
+      Dialpad's OAuth app form. Macro's Dialpad call sync waits on it.
 - [ ] Rotate the `connect@macro.com` password (it was shared in a chat
       transcript on 2026-10-30), then update `CONNECT_ACCOUNT_PASSWORD` in
       Doppler `connect/prd`.

@@ -1,0 +1,10 @@
+id = "dialpad"
+name = "Dialpad"
+description = "Search calls, transcripts, contacts, and messages; place and transfer calls."
+access = ["mcp", "api"]
+mcp_url = "https://mcp.dialpad.com/mcp"
+client_registration = "own_app"
+scopes = ["calls:list", "ai_recap", "offline_access"]
+pipedream_app_slugs = ["dialpad"]
+status = "pending"
+probed = 2026-11-02
