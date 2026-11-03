@@ -65,7 +65,7 @@ export function EmailSettings() {
       <Show when={readReceipts().enabled}>
         <SettingsSection
           title="Read receipts"
-          description="See when recipients open messages you send. Macro adds an invisible image to each message, so opens are approximate: some mail apps load images automatically and others block them. Only people with access to the inbox see its opens."
+          description="See when recipients open messages you send."
         >
           <Suspense
             fallback={
