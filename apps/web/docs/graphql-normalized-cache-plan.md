@@ -1285,8 +1285,11 @@ scoring and property self/domain boosts, and excludes automated recipient mailbo
 before the result limit unless a full address was typed. The policy floor is generated
 from Rust alongside the transport schemas; older replies use bounded server fallback.
 Creation/sharing and main email recipient controls now own paged sources; email
-threads retain scoped addresses, not an address book. Remaining invitation/AI planner
-pools retain legacy sources. Universal task-property inference now uses complete
+threads retain scoped addresses, not an address book. Channel invitations and
+participant pickers also use those sources, with existing roster IDs excluded and
+empty continuations retained when a roster exceeds the native exclusion budget.
+Remaining Universal Input recipient/search/guest and AI-filter planner pools retain
+legacy sources. Universal task-property inference now uses complete
 per-label reference evidence instead of the shared pool, with ambiguous/incomplete
 names unresolved and manual properties taking precedence. Its other composer
 modes still retain that pool; whole-app memory completion and bounded shared name

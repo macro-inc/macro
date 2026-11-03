@@ -4,7 +4,10 @@ import type {
   RecipientSource,
   RecipientSourceInput,
 } from '@core/user/recipient-source';
+import { MAX_PEOPLE_BATCH } from '@graphql-cache/people/generated';
+import { hashKey } from '@tanstack/solid-query';
 import { createMemo } from 'solid-js';
+import { canonicalContactUserId } from './contact-user-id';
 import { readContactDirectory } from './directory';
 import { createContactDirectoryWindow } from './directory-query';
 
@@ -15,24 +18,43 @@ export function createContactRecipientSource(
   isSecondaryInbox: (id: string) => boolean,
   reader: typeof readContactDirectory = readContactDirectory
 ): RecipientSource<'user'> {
+  const excluded = createMemo(() => {
+    const ids = new Set<string>();
+    const self = input.selfId();
+    if (self && !input.includeSelf()) ids.add(self);
+    for (const value of input.excludedIds?.() ?? []) {
+      const id = canonicalContactUserId(value);
+      if (id) ids.add(id);
+    }
+    return ids;
+  });
+  const nativeExclusions = createMemo(() => {
+    const ids: string[] = [];
+    for (const id of excluded()) {
+      if (ids.length === MAX_PEOPLE_BATCH) break;
+      ids.push(id);
+    }
+    return ids;
+  });
+  const exclusionKey = createMemo(() => hashKey([[...excluded()].sort()]));
   const directory = createContactDirectoryWindow(scope, reader, input.enabled, {
     search: input.search,
-    policy: () => {
-      const self = input.selfId();
-      return {
-        mode: 'recipient',
-        excluded: self && !input.includeSelf() ? [self] : [],
-        senderDomain: input.senderDomain(),
-      };
-    },
+    resetKey: exclusionKey,
+    policy: () => ({
+      mode: 'recipient',
+      excluded: nativeExclusions(),
+      senderDomain: input.senderDomain(),
+    }),
   });
   return {
     items: createMemo(() =>
       (directory.data()?.users ?? [])
-        // The native policy excludes these before limiting. Server fallback is
-        // source-ordered and can leave a short/empty window with a continuation.
+        // Normal rosters are excluded before native limiting. A roster larger
+        // than the IPC budget, like server fallback, can yield a short/empty
+        // window; retain its continuation rather than accumulating more rows.
         .filter(
           (user) =>
+            !excluded().has(user.id) &&
             !isSecondaryInbox(user.id) &&
             (!isAutomatedAddress(user.email) ||
               input.search().trim().toLowerCase() === user.email.toLowerCase())

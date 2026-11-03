@@ -34,6 +34,14 @@ barrel. Legacy full-directory hooks throw. Tests cover zero closed-menu browse
 reads, explicit labels, Unassigned, unknown IDs, paging, query replacement, Only,
 reopening at page one and restoring the Owned constraint when a creator is cleared.
 
+`/?channel-recipients=modal` and `/?channel-recipients=panel` mount the real
+channel invitation dialog and participant add control over a bounded virtual
+100k source. Desktop/phone cases cover pre-limit roster exclusions, page/search
+selection retention, a member joining while selected, external invitations and
+whole-team selection. Picker portals remain inside their owning modal. The source
+unit suite additionally covers oversized rosters and cursor resets when exclusions
+beyond the native budget change.
+
 `/?recipient-ranking` mounts the real recipient selector over small supplied
 options and stand-in identity/profile services. It verifies that exact addresses
 win over recent word matches and Enter preserves selection across searches.
@@ -47,7 +55,7 @@ checks twenty replacements, close/reopen reset and query-history collection.
 New message/channel, call, routine-template and sharing pickers use this source;
 main email fields also use it, with composition coverage in
 `features/email-compose/browser-test/recipient-directory.app.e2e.ts`. Remaining
-invitation and AI-planner pools still require their separate migration.
+onboarding/import and AI-planner pools still require their separate migration.
 
 This is UI/adapter coverage, not a WASM memory measurement or live-backend trace.
 Real Turso/OPFS hydration/search coverage lives in `crates/client/cache-turso`.

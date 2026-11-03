@@ -70,7 +70,14 @@ can advance empty windows. Main email To/Cc/Bcc inputs receive the factory throu
 preserving the selected representation. Keep selection/outside dismissal synchronous;
 a delayed combobox close must not cancel a new query after refocus. Pass supplied
 names to option/chip avatars instead of filling the global name store. The internal
-recipient and email app-browser fixtures cover desktop/touch.
+recipient and email app-browser fixtures cover desktop/touch. Channel invitation
+and participant pickers use the same source with explicit roster exclusions; keep
+whole-team selection separate. Exclude up to the native IPC budget before ranking,
+filter any oversized roster remainder within each replaceable window, and retain
+empty continuations. Bind paging to the complete roster's reset key, including
+changes beyond that budget. Keep picker portals inside their owning dialog/drawer;
+cancel a recipient option's pointerup default so synchronous popup removal cannot
+be interpreted as an outside press that dismisses the containing drawer.
 Soup's general Assignee/Created by submenus, mobile accordion sections and
 consolidated chips use lazy contact sources too. Resolve closed-chip labels with
 `useContactFilterLabels`, never by constructing a browse window or a directory map.

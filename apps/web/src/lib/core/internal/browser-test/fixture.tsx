@@ -10,6 +10,7 @@ import { createMemo, createSignal, Match, Switch } from 'solid-js';
 import { render } from 'solid-js/web';
 import { ContactDirectoryInspector } from '../ContactDirectoryInspector';
 import { CalendarFilterFixture } from './calendar-fixture';
+import { ChannelRecipientFixture } from './channel-recipient-fixture';
 import {
   DriveListFilterFixture,
   NotesListFilterFixture,
@@ -140,6 +141,11 @@ render(
   () => (
     <QueryClientProvider client={client}>
       <Switch fallback={<App />}>
+        <Match
+          when={new URLSearchParams(location.search).has('channel-recipients')}
+        >
+          <ChannelRecipientFixture />
+        </Match>
         <Match when={new URLSearchParams(location.search).has('soup-filters')}>
           <SoupFilterFixture />
         </Match>
