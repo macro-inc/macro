@@ -9,7 +9,7 @@
    or "Replace 27+ apps" opener). Its callout lines come alive and become a diagram: one demo call flows into the CRM,
    a task and the calendar; an agent picks up all of it and drafts the follow-up; the team picks it up; you send it
    and everything syncs. Then the diagram folds into one shared context and the end card (price, CTA, proof).
-   ?cut=full|30|15  &hook=notion|slack|replace  &fmt=916|45|11 */
+   ?cut=full|30|15  &hook=notion|slack|replace  &word=<tool>  &fmt=916|45|11 */
 @font-face { font-family: "Inter"; src: url("fonts/inter-variable.woff2") format("woff2"); font-weight: 100 900; font-display: block; }
 @font-face { font-family: "display"; src: url("fonts/roboto-slab-variable.woff2") format("woff2"); font-weight: 100 900; font-display: block; }
 :root { --bg: #f5f1e8; --rail: #efebe3; --panel: #e9e5dc; --surf: #ece8df; --tile: #dfdbd3; --ink: #1d1c1a; --body: #54524f; --lab: #72706c; --mut: #8f8c86;
@@ -262,7 +262,7 @@ const S = {
 }[CUT];
 const NODE_IN = { cal: "c0", call: "c1", crm: "c2", task: "c3", cal2: "c4", email: "c9", chat: "c10", doc: "c11" };
 const NODES = Object.keys(NL).filter((k) => (k === "agent" ? S.agent != null : S.w[NODE_IN[k]] != null));
-const WORD = HOOK === "slack" ? "Slack" : "Notion";
+const WORD = Q.get("word") || (HOOK === "slack" ? "Slack" : "Notion");   // &word= swaps the tool in the static opener
 const TR = [["d", "Let’s roll it out to all [six of us]."], ["j", "Great, I’ll [send pricing] today."], ["d", "Can onboarding start [Thursday]?"]];
 const BODY = ["Hi Dana,", "Great talking today. Here’s pricing for", "your team of six, and you’re all set for", "Thursday’s onboarding at 10."];
 const PS_TXT = "P.S. We’ll bring over your Notion and Slack.";
