@@ -234,7 +234,14 @@ fn parse_shell_env(output: &str) -> Vec<(String, String)> {
     };
     let mut vars: Vec<(String, String)> = Vec::new();
     for line in body.lines() {
+        // bash prints exported functions as `BASH_FUNC_name%%=() {`; they
+        // start an entry (so their body lines don't join the previous
+        // variable) that is dropped below.
         let assignment = line.split_once('=').filter(|(name, _)| {
+            let name = name
+                .strip_prefix("BASH_FUNC_")
+                .and_then(|function| function.strip_suffix("%%"))
+                .unwrap_or(name);
             !name.is_empty()
                 && !name.starts_with(|c: char| c.is_ascii_digit())
                 && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
@@ -248,6 +255,7 @@ fn parse_shell_env(output: &str) -> Vec<(String, String)> {
             (None, None) => {}
         }
     }
+    vars.retain(|(name, _)| !name.starts_with("BASH_FUNC_"));
     vars
 }
 
@@ -744,7 +752,7 @@ mod tests {
         let output = format!(
             "Welcome! PATH=/banner\n{ENV_START}\nPATH=/usr/bin:/bin\n\
              CLAUDE_CODE_OAUTH_TOKEN=token\nNOTE=line one\nline two\n\
-             EMPTY=\n{ENV_END}\nbye\n"
+             BASH_FUNC_greet%%=() {{  echo hi\n}}\nEMPTY=\n{ENV_END}\nbye\n"
         );
         assert_eq!(
             parse_shell_env(&output),

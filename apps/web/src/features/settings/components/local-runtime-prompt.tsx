@@ -13,7 +13,7 @@ import {
 import LaptopIcon from '@phosphor/laptop.svg';
 import XIcon from '@phosphor/x.svg';
 import type { UnlistenFn } from '@tauri-apps/api/event';
-import { createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { createSignal, onCleanup, onMount, Show, Suspense } from 'solid-js';
 
 const LocalRuntimeSetup = lazyNamed(
   () => import('@app/features/local-runtime/local-runtime-setup'),
@@ -161,11 +161,13 @@ export function LocalRuntimePrompt() {
         onClose={() => setSetupOpen(false)}
       >
         <Show when={setupOpen()}>
-          <LocalRuntimeSetup
-            defaultWorkspace={defaultWorkspace()}
-            autoStart
-            onClose={() => setSetupOpen(false)}
-          />
+          <Suspense>
+            <LocalRuntimeSetup
+              defaultWorkspace={defaultWorkspace()}
+              autoStart
+              onClose={() => setSetupOpen(false)}
+            />
+          </Suspense>
         </Show>
       </LocalRuntimeSetupDialog>
     </>
