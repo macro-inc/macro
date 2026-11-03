@@ -20,13 +20,39 @@ it('keeps failed removals for a new drain without retrying successful entries', 
 
 it('retains intents when lookup or transport throws', async () => {
   const store = new InMemoryWALStore<string>();
-  const remove = vi.fn().mockRejectedValue(new Error('offline'));
+  const error = new Error('offline');
+  const remove = vi.fn().mockRejectedValue(error);
   await expect(
     createCommentMarkCleanup(store, remove).enqueue('cancelled')
-  ).rejects.toThrow('offline');
+  ).rejects.toMatchObject({ errors: [error] });
   expect((await store.getAll()).map((entry) => entry.update)).toEqual([
     'cancelled',
   ]);
+});
+
+it('continues after a rejected lookup without losing its cleanup intent', async () => {
+  const store = new InMemoryWALStore<string>();
+  await store.append('failed');
+  await store.append('accepted');
+  const error = new Error('lookup unavailable');
+  const remove = vi.fn(async (id: string) => {
+    if (id === 'failed') throw error;
+    return true;
+  });
+  await expect(
+    createCommentMarkCleanup(store, remove).flush()
+  ).rejects.toMatchObject({
+    errors: [error],
+  });
+  expect(remove.mock.calls).toEqual([['failed'], ['accepted']]);
+  expect((await store.getAll()).map((entry) => entry.update)).toEqual([
+    'failed',
+  ]);
+
+  const retry = vi.fn(async () => true);
+  await createCommentMarkCleanup(store, retry).flush();
+  expect(retry).toHaveBeenCalledExactlyOnceWith('failed');
+  expect(await store.getAll()).toEqual([]);
 });
 
 it('drains an intent appended while another removal is pending', async () => {

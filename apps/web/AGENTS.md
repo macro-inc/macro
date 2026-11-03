@@ -1064,7 +1064,8 @@ publish the mark from an isolated peer with `PeerCommentUpdate`,
 and post the message only after acknowledgement. Refused operations never enter
 the editor's WAL. Preserve input on failure. Cancelled publications retry mark
 cleanup from the user/document-scoped IndexedDB queue; preserve marks when a
-message request's outcome is uncertain. Overlapping comments must retain each
+message request's outcome is uncertain. Keep failed cleanup entries queued without
+blocking later entries. Overlapping comments must retain each
 saved range through cancel, save, and collaboration updates.
 Comment controls preserve editor focus on both pointerdown and mousedown.
 The backend-free browser regression is

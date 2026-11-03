@@ -9,11 +9,18 @@ export function createCommentMarkCleanup(
   let rerun = false;
 
   async function drain() {
+    const errors: unknown[] = [];
     for (const entry of await store.getAll()) {
-      if (!entry.delivered && (await remove(entry.update)))
-        await store.markDelivered([entry.id]);
+      try {
+        if (!entry.delivered && (await remove(entry.update)))
+          await store.markDelivered([entry.id]);
+      } catch (error) {
+        errors.push(error);
+      }
     }
     await store.pruneDelivered();
+    if (errors.length)
+      throw new AggregateError(errors, 'Comment mark cleanup failed');
   }
 
   async function flush() {
