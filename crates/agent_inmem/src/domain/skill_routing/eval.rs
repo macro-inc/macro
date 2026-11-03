@@ -25,16 +25,10 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 /// Area skills the design plans and `system_skills` does not have yet.
-const PLANNED: &[(&str, &str)] = &[
-    (
-        "Finding Things",
-        "Use when the user asks to find, look up or list their own Macro content (documents, emails, messages, tasks, people), or asks something their workspace answers; not for the web.",
-    ),
-    (
-        "Routines",
-        "Use when something should happen later, on a schedule, or whenever an event occurs, such as every Monday, a reminder, or when an email arrives.",
-    ),
-];
+const PLANNED: &[(&str, &str)] = &[(
+    "Finding Things",
+    "Use when the user asks to find, look up or list their own Macro content (documents, emails, messages, tasks, people), or asks something their workspace answers; not for the web.",
+)];
 
 /// Each prompt and the skills it should load, by name.
 const PROMPTS: &[(&str, &[&str])] = &[

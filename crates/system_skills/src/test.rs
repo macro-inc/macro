@@ -162,3 +162,11 @@ fn tasks_skill_checks_for_duplicates_before_creating() {
     assert!(text.contains("create nothing, say so, and ask the user instead"));
     assert!(text.contains("Never edit, merge or delete the matching tasks"));
 }
+
+#[test]
+fn routines_skill_writes_runs_that_stand_alone_and_reuses_routines() {
+    let text = routines::SKILL.render_content();
+    assert!(text.contains("never sees this conversation"));
+    assert!(text.contains("update it instead of adding a second"));
+    assert!(text.contains("A meeting with other people is a calendar event"));
+}

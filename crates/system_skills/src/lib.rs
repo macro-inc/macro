@@ -27,6 +27,7 @@ pub mod configure_agent;
 pub mod crm;
 pub mod databases;
 pub mod email;
+pub mod routines;
 pub mod tasks;
 pub mod what_i_did_yesterday;
 
@@ -104,6 +105,7 @@ pub static SYSTEM_SKILLS: &[&SystemSkill] = &[
     &channels::SKILL,
     &tasks::SKILL,
     &coding::SKILL,
+    &routines::SKILL,
 ];
 
 /// Look up a system skill by its well-known id.
