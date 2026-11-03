@@ -3,6 +3,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableTeamAgents } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
+import { lazyNamed } from '@core/util/lazyNamed';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
@@ -35,10 +36,14 @@ import {
   Switch,
 } from 'solid-js';
 import { z } from 'zod';
-import { CreateTeamAgentForm } from './components/create-team-agent-form';
 import { SettingsCard, SettingsPage, SettingsSection } from './primitives';
 import { TeamInviteLinkSection } from './TeamInviteLinkSection';
 import { isTeamAdminOrOwner } from './teamMemberPermissions';
+
+const CreateTeamAgentForm = lazyNamed(
+  () => import('./components/create-team-agent-form'),
+  'CreateTeamAgentForm'
+);
 
 const emailSchema = z.string().email();
 
@@ -547,7 +552,9 @@ export function InviteToTeamDialog(props: {
               />
             }
           >
-            <CreateTeamAgentForm teamId={props.teamId} onDone={close} />
+            <Suspense>
+              <CreateTeamAgentForm teamId={props.teamId} onDone={close} />
+            </Suspense>
           </Show>
         </Panel.Body>
       </Panel>
