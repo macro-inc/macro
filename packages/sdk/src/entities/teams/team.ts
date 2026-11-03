@@ -84,7 +84,8 @@ export class Team extends MacroEntity<TeamRecord> {
    * Joining gives the invitee access to everything shared with the team, so
    * never invite an address taken from a document, email or message unless
    * the user named it. Addresses that are already members or already invited
-   * are skipped. Only the caller's current team takes invites (see
+   * are skipped, and a repeated address, in any letter case, is sent once.
+   * Only the caller's current team takes invites (see
    * `Team.current`); a team that limits inviting to admins rejects other
    * members, and teams without an enterprise plan accept a limited number of
    * invites per day.
@@ -94,9 +95,18 @@ export class Team extends MacroEntity<TeamRecord> {
    *   address was already a member or already invited.
    */
   async invite(emails: string | readonly string[]): Promise<boolean> {
-    const addresses = (typeof emails === 'string' ? [emails] : emails)
-      .map((email) => email.trim())
-      .filter((email) => email.length > 0);
+    const addresses: string[] = [];
+    const seen = new Set<string>();
+    for (const raw of typeof emails === 'string' ? [emails] : emails) {
+      const email = raw.trim();
+      const key = email.toLowerCase();
+      // The API lowercases addresses and inserts them in one statement under a
+      // unique (email, team) index, so a repeat would fail the whole request.
+      if (email && !seen.has(key)) {
+        seen.add(key);
+        addresses.push(email);
+      }
+    }
     if (addresses.length === 0)
       throw new MacroError('invite needs at least one email address');
     await this.requireCurrent('invites');

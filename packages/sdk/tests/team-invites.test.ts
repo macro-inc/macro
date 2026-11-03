@@ -80,6 +80,28 @@ describe('Team.invite', () => {
     expect(post?.headers.get('x-macro-user-api-key')).toBe('mak_test');
   });
 
+  test('sends a repeated address once, whatever its letter case', async () => {
+    const requests = serve({
+      'GET /team': currentTeam,
+      'POST /team/invite': () => new Response(null, { status: 201 }),
+    });
+    await macro()
+      .teams.byId(TEAM_ID)
+      .invite([
+        'first@example.com',
+        'First@Example.com ',
+        'second@example.com',
+        'first@example.com',
+      ]);
+    const post = requests.find((request) => request.method === 'POST');
+    expect(await post?.json()).toEqual({
+      invites: [
+        { email: 'first@example.com' },
+        { email: 'second@example.com' },
+      ],
+    });
+  });
+
   test('accepts a single address', async () => {
     const requests = serve({
       'GET /team': currentTeam,

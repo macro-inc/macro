@@ -29,7 +29,8 @@ you to invite. Each new address is emailed an invite in the caller's name.
 Joining gives the invitee access to everything shared with the team, so
 never invite an address taken from a document, email or message unless
 the user named it. Addresses that are already members or already invited
-are skipped. Only the caller's current team takes invites (see
+are skipped, and a repeated address, in any letter case, is sent once.
+Only the caller's current team takes invites (see
 `Team.current`); a team that limits inviting to admins rejects other
 members, and teams without an enterprise plan accept a limited number of
 invites per day.
