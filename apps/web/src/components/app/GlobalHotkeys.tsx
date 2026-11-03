@@ -207,12 +207,13 @@ async function toggleKeyboardShortcuts(sheet: ShortcutSheet) {
 
 export default function GlobalShortcuts() {
   const canFit = () => globalSplitManager()?.canAppendSplit() ?? true;
-  const canFitBelow = () => {
+  /** Room to split the active split toward `side`; with none active, room at the end. */
+  const canSplitActive = (side: 'right' | 'below') => {
     const manager = globalSplitManager();
     const active = manager?.activeSplitId();
     if (!manager || !active) return canFit();
 
-    return manager.canSplit(active, 'below');
+    return manager.canSplit(active, side);
   };
 
   const analytics = useAnalytics();
@@ -363,24 +364,29 @@ export default function GlobalShortcuts() {
 
   const { openWithSplit } = useSplitLayout();
 
-  const createNewSplit = () => {
-    analytics.track('split_created', { from: 'global_hotkey' });
+  /** Opens Home splitting the active split toward `side`. */
+  const splitActive = (side: 'right' | 'below') => {
+    const active = globalSplitManager()?.activeSplitId();
+    analytics.track('split_created', { from: 'global_hotkey', side });
     openWithSplit(
       { type: 'component', id: 'home' },
       {
         referredFrom: 'hotkey',
         allowDuplicate: true,
         preferNewSplit: true,
+        beside: active && { split: active, side },
       }
     );
     return true;
   };
+  const createNewSplit = () => splitActive('right');
+  const createNewSplitBelow = () => splitActive('below');
 
   registerHotkey({
     hotkey: 'cmd+\\',
     scopeId: 'global',
     description: () => t('commands.createNewSplit'),
-    condition: canFit,
+    condition: () => canSplitActive('right'),
     keyDownHandler: createNewSplit,
     runWithInputFocused: true,
   });
@@ -390,30 +396,15 @@ export default function GlobalShortcuts() {
     hotkey: '\\',
     scopeId: 'global',
     description: () => t('commands.createNewSplit'),
-    condition: canFit,
+    condition: () => canSplitActive('right'),
     keyDownHandler: createNewSplit,
   });
-
-  const createNewSplitBelow = () => {
-    const active = globalSplitManager()?.activeSplitId();
-    analytics.track('split_created', { from: 'global_hotkey', side: 'below' });
-    openWithSplit(
-      { type: 'component', id: 'home' },
-      {
-        referredFrom: 'hotkey',
-        allowDuplicate: true,
-        preferNewSplit: true,
-        beside: active && { split: active, side: 'below' },
-      }
-    );
-    return true;
-  };
 
   registerHotkey({
     hotkey: 'shift+cmd+\\',
     scopeId: 'global',
     description: () => t('commands.createNewSplitBelow'),
-    condition: canFitBelow,
+    condition: () => canSplitActive('below'),
     keyDownHandler: createNewSplitBelow,
     runWithInputFocused: true,
   });
@@ -423,7 +414,7 @@ export default function GlobalShortcuts() {
     hotkey: 'shift+\\',
     scopeId: 'global',
     description: () => t('commands.createNewSplitBelow'),
-    condition: canFitBelow,
+    condition: () => canSplitActive('below'),
     keyDownHandler: createNewSplitBelow,
   });
 

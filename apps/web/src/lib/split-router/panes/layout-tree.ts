@@ -111,8 +111,9 @@ function replacePane(
 }
 
 /**
- * Splits `target` in two along `side`'s axis, with `pane` on that side. Beside
- * a sibling along the same axis, the two share what `target` had.
+ * Puts `pane` on `side` of `target`. Within a split along that axis it joins
+ * as a sibling with an equal share, the others scaling down to make room;
+ * otherwise `target` becomes a split of the two, halved.
  */
 export function splitPane(
   layout: PaneLayout,
@@ -120,17 +121,37 @@ export function splitPane(
   pane: PaneId,
   side: SplitSide
 ): PaneLayout {
+  const axis = axisOf(side);
   const before = side === 'left' || side === 'above';
+  const added = paneNode(pane);
 
-  return replacePane(layout, target, (node) => {
-    const added = paneNode(pane);
-    const children = before ? [added, node] : [node, added];
+  const place = (node: PaneLayout): PaneLayout => {
+    if (node.type === 'pane') {
+      if (node.pane !== target) return node;
 
-    return joined(
-      axisOf(side),
-      children.map((child) => ({ node: child, share: 1 }))
+      const children = before ? [added, node] : [node, added];
+
+      return { type: 'split', axis, children, shares: [0.5, 0.5] };
+    }
+
+    const at = node.children.findIndex(
+      (child) => child.type === 'pane' && child.pane === target
     );
-  })!;
+    if (at < 0 || node.axis !== axis) {
+      return { ...node, children: node.children.map(place) };
+    }
+
+    const incoming = 1 / (node.children.length + 1);
+    const parts = partsOf(node).map((part) => ({
+      node: part.node,
+      share: part.share * (1 - incoming),
+    }));
+    parts.splice(before ? at : at + 1, 0, { node: added, share: incoming });
+
+    return joined(axis, parts)!;
+  };
+
+  return place(layout);
 }
 
 /**

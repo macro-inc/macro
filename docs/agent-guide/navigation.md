@@ -8,11 +8,11 @@ Windows, Linux, and mobile layouts do not add this space.
 On macOS, Back and Forward arrows beside the traffic lights navigate the active
 split's history. Each arrow is
 disabled when its direction has no entry. Sidebar controls remain inside each
-workspace. The top-right split icon opens another Home split, even
-when Home is already open, and is disabled when there is no room for a new split.
-Its tooltip is “New split” and displays the registered new-split shortcut (`\`).
-The icon before it, “New split below” (`|`), opens Home stacked below the
-active split and is disabled when that split has no room to divide.
+workspace. The top-right split icon opens another Home split to the right of
+the active split, even when Home is already open, and is disabled when that
+split has no room to divide. Its tooltip is “New split” and displays the
+registered new-split shortcut (`\`). The icon before it, “New split below”
+(`|`), opens Home stacked below the active split.
 
 ## Desktop tabs (macOS, `enable-desktop-tabs` flag)
 
@@ -297,9 +297,11 @@ inactive desktop panes are slightly darker than the active pane across themes,
 while retaining the theme hue. Any split can be divided beside or stacked:
 the split menu (right-click a split's header) offers **New split left**,
 **right**, **above**, and **below**, each splitting that split and disabled
-when it lacks room (400px wide, 240px tall per split). `\` adds a full-height
-split at the end; `|` (Shift+\, or Shift+Cmd+\ while typing) stacks Home below
-the active split. Option+Shift-click (Alt+Shift elsewhere) on anything that
+when it lacks room (400px wide, 240px tall per split). `\` (or Cmd+\ while
+typing) opens Home to the right of the active split, so in a stack only the
+active split divides; `|` (Shift+\, or Shift+Cmd+\ while typing) stacks Home
+below it. A new split beside others along the same axis takes an equal share.
+Option+Shift-click (Alt+Shift elsewhere) on anything that
 Shift-clicks into a new split opens it below the split it came from. Closing a
 stacked split gives its space to its neighbours; **Swap split left/right**
 trades places with the previous or next split in reading order, and the tiles

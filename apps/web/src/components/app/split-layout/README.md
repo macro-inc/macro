@@ -15,6 +15,7 @@ and, stacked, `DEFAULT_SPLIT_MIN_HEIGHT` tall (`splitContentSizing.ts`).
 
 Open beside a split with `beside: { split, side }` on `openWithSplit` or
 `createNewSplit`; without it a new split is a full-height column at the end.
+The new-split keys (`\`, `|`) and title-bar buttons open beside the active split.
 `canAppendSplit()` checks room for that column and `canSplit(id, side)` for a
 split along `side`'s axis, both against the area `TiledSplits` measured.
 A Shift-click that also holds Option (Alt) opens below the split it came from:

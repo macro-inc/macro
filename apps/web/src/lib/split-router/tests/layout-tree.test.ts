@@ -40,13 +40,17 @@ describe('layout tree', () => {
     expect(paneIds(layout)).toEqual(['a', 'b', 'c']);
   });
 
-  it('puts a pane beside a sibling on the same axis by halving its share', () => {
+  it('adds a sibling on the same axis with an equal share', () => {
     const layout = splitPane(rowLayout([a, b])!, a, c, 'left');
 
     expect(layout).toEqual({
       type: 'split',
       axis: 'row',
-      shares: [0.25, 0.25, 0.5],
+      shares: [
+        expect.closeTo(1 / 3),
+        expect.closeTo(1 / 3),
+        expect.closeTo(1 / 3),
+      ],
       children: [leaf(c), leaf(a), leaf(b)],
     });
   });

@@ -59,12 +59,15 @@ export function DesktopTitleBar() {
       <Show when={globalSplitManager()}>
         {(manager) => {
           const activeId = () => manager().activeSplitId();
-          const canSplitBelow = () => {
+          /** Room to split the active split toward `side`; with none active, room at the end. */
+          const canSplit = (side: 'right' | 'below') => {
             const active = activeId();
+            if (!active) return manager().canAppendSplit();
 
-            return active ? manager().canSplit(active, 'below') : false;
+            return manager().canSplit(active, side);
           };
-          const openHome = (below: boolean) => {
+          /** Opens Home splitting the active split toward `side`. */
+          const openHome = (side: 'right' | 'below') => {
             const active = activeId();
             manager().openWithSplit(
               { type: 'component', id: LIST_VIEW_ID.home },
@@ -73,10 +76,7 @@ export function DesktopTitleBar() {
                 allowDuplicate: true,
                 replaceWhenFull: false,
                 activate: true,
-                beside:
-                  below && active
-                    ? { split: active, side: 'below' }
-                    : undefined,
+                beside: active && { split: active, side },
               }
             );
           };
@@ -91,8 +91,8 @@ export function DesktopTitleBar() {
                 }}
                 variant="ghost"
                 size="icon-sm"
-                disabled={!canSplitBelow()}
-                onClick={() => openHome(true)}
+                disabled={!canSplit('below')}
+                onClick={() => openHome('below')}
               >
                 <RowsPlusIcon class="size-4" />
               </Button>
@@ -104,8 +104,8 @@ export function DesktopTitleBar() {
                 }}
                 variant="ghost"
                 size="icon-sm"
-                disabled={!manager().canAppendSplit()}
-                onClick={() => openHome(false)}
+                disabled={!canSplit('right')}
+                onClick={() => openHome('right')}
               >
                 <ColumnsPlusIcon class="size-4" />
               </Button>
