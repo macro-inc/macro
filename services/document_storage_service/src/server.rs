@@ -130,10 +130,9 @@ use macro_authorization::{
 };
 use macro_env_var::maybe_env_vars;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
-#[cfg(feature = "delete_document_worker")]
-use macro_service_urls::AiEditingWorkerUrl;
 use macro_service_urls::{
-    ConnectionGatewayUrl, LexicalServiceUrl, StaticFileServiceUrl, SyncServiceUrl,
+    AiEditingWorkerUrl, ConnectionGatewayUrl, LexicalServiceUrl, StaticFileServiceUrl,
+    SyncServiceUrl,
 };
 use macro_sha_count_client::Redis;
 use notification::domain::service::{
@@ -1415,6 +1414,13 @@ pub async fn run() -> anyhow::Result<()> {
         ),
     );
     let admission = macro_agent_tool_context.admission.clone();
+    // Document AI edits over HTTP share the channel agent's admission.
+    let document_ai_admission = admission.clone();
+    let document_editing_worker = Arc::new(
+        documents_hex::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+            AiEditingWorkerUrl::new()?.to_string(),
+        ),
+    );
     let bot_trigger_router = channel_bots::inbound::BotTriggerRouter::new_with_admission(
         message_service.clone(),
         conversation_access.clone(),
@@ -2321,6 +2327,15 @@ pub async fn run() -> anyhow::Result<()> {
             task_dedup_service,
             lexical_client: lexical_client.clone(),
             creator: document_creator,
+            editing_worker: document_editing_worker.clone(),
+            ai_editing: Arc::new(documents_hex::domain::ai_editing::AiEditingService::new(
+                document_editing_worker,
+                document_ai_admission,
+                ai_usage::pg_recorder_with_enforcement(
+                    db.clone(),
+                    config.enable_ai_usage_enforcement,
+                ),
+            )),
             document_permission_jwt_secret: config.document_permission_jwt.as_ref().to_string(),
             non_user_owners,
         },

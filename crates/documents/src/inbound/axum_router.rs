@@ -4,6 +4,9 @@
 //! - `POST /` — create a new document
 //! - `GET /{document_id}` — get document metadata
 //! - `GET /slug/{slug}` - get document by team slug
+//! - `GET /{document_id}/structure` — markdown document XML with node ids
+//! - `POST /{document_id}/edits` — apply typed edit ops to a markdown document
+//! - `POST /{document_id}/ai-edit` — edit a markdown document by instructions
 //! - `GET /{document_id}/location_v3` — get document content location (presigned URL)
 //! - `GET /{document_id}/branch_name` — get short ID + task-aware git branch name (when the document is a task)
 //! - `GET /{document_id}/github_prs` — get GitHub pull requests associated with a task document
@@ -19,6 +22,10 @@
 #[cfg(test)]
 mod tests;
 
+#[cfg(feature = "ai_tools")]
+pub mod ai_edit;
+#[cfg(feature = "ai_tools")]
+pub mod apply_edits;
 pub mod content_uploaded;
 pub mod copy_document;
 #[cfg(feature = "document_create")]
@@ -40,6 +47,8 @@ pub mod get_github_pull_request_tasks;
 pub mod get_github_pull_requests;
 pub mod get_location;
 pub mod get_short_id;
+#[cfg(feature = "ai_tools")]
+pub mod get_structure;
 pub mod get_text;
 pub mod put_interaction;
 pub mod put_snapshot;
@@ -167,6 +176,10 @@ pub type DefaultDocumentCreator<T> = crate::domain::create::DocumentCreator<
     crate::outbound::mention_tracker::LexicalCommsMentionTracker,
 >;
 
+/// Editing worker the document edit routes commit ops through.
+#[cfg(feature = "ai_tools")]
+pub type DefaultEditingWorker = crate::outbound::editing_worker_client::ReqwestEditingWorkerClient;
+
 /// Router state containing document router dependencies.
 pub struct DocumentRouterState<T, Svc, Auth> {
     /// The document service implementation.
@@ -185,6 +198,12 @@ pub struct DocumentRouterState<T, Svc, Auth> {
     /// Backend-owned document creation use case.
     #[cfg(feature = "document_create_adapters")]
     pub creator: DefaultDocumentCreator<T>,
+    /// Editing worker that commits typed document edit ops.
+    #[cfg(feature = "ai_tools")]
+    pub editing_worker: Arc<DefaultEditingWorker>,
+    /// EditDocument's AI-editing use case, with the host's admission and metering.
+    #[cfg(feature = "ai_tools")]
+    pub ai_editing: Arc<crate::domain::ai_editing::AiEditingService<DefaultEditingWorker>>,
     /// JWT secret for signing document permission tokens.
     pub document_permission_jwt_secret: String,
     /// Whether a team bot with no acting user may own what it creates.
@@ -203,6 +222,10 @@ impl<T, Svc, Auth> Clone for DocumentRouterState<T, Svc, Auth> {
             lexical_client: self.lexical_client.clone(),
             #[cfg(feature = "document_create_adapters")]
             creator: self.creator.clone(),
+            #[cfg(feature = "ai_tools")]
+            editing_worker: self.editing_worker.clone(),
+            #[cfg(feature = "ai_tools")]
+            ai_editing: self.ai_editing.clone(),
             document_permission_jwt_secret: self.document_permission_jwt_secret.clone(),
             non_user_owners: self.non_user_owners,
         }
@@ -297,6 +320,21 @@ where
             "/{document_id}/team_share",
             axum::routing::get(get_team_share_handler::<T, Svc, Auth>)
                 .put(set_team_share_handler::<T, Svc, Auth>),
+        );
+
+    #[cfg(feature = "ai_tools")]
+    let document_id_routes = document_id_routes
+        .route(
+            "/{document_id}/structure",
+            axum::routing::get(get_structure::get_structure_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/{document_id}/edits",
+            axum::routing::post(apply_edits::apply_edits_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/{document_id}/ai-edit",
+            axum::routing::post(ai_edit::ai_edit_handler::<T, Svc, Auth>),
         );
 
     let document_id_routes = document_id_routes.layer(middleware::from_fn_with_state(

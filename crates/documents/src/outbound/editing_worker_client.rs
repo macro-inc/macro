@@ -1,7 +1,8 @@
 //! Outbound adapter for the AI editing worker.
 
 use crate::domain::ports::editing::{
-    EditMode, EditResult, EditUsage, EditingWorkerService, EditorName,
+    DocumentOp, DocumentOpsOutcome, EditMode, EditResult, EditUsage, EditingWorkerService,
+    EditorName,
 };
 use anyhow::Context;
 use macro_sync_service_jwt::DocumentPermissionToken;
@@ -10,6 +11,15 @@ use std::sync::Arc;
 
 #[cfg(test)]
 mod test;
+
+/// The worker's `/document-ops` 200 body.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DocumentOpsApplied {
+    applied: usize,
+    changed_block_ids: Vec<String>,
+    revision: String,
+}
 
 /// Reqwest-backed client for the AI editing worker.
 #[derive(Clone)]
@@ -360,7 +370,87 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
             edits_applied: body["ops"].as_array().map(|a| a.len()).unwrap_or(0),
             usage,
             clarification: body["clarification"].as_str().map(str::to_owned),
+            changed_block_ids: body["changedBlockIds"]
+                .as_array()
+                .map(|ids| {
+                    ids.iter()
+                        .filter_map(serde_json::Value::as_str)
+                        .map(str::to_owned)
+                        .collect()
+                })
+                .unwrap_or_default(),
+            revision: body["revision"].as_str().map(str::to_owned),
+            summary: body["summary"].as_str().map(str::to_owned),
         })
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(%document_id, operations = operations.len(), http.status_code),
+        err
+    )]
+    async fn document_ops(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+        operations: &[DocumentOp],
+        editor: Option<EditorName>,
+    ) -> anyhow::Result<DocumentOpsOutcome> {
+        let mut request_body = serde_json::json!({
+            "documentId": document_id,
+            "documentToken": document_token.as_str(),
+            "operations": operations,
+        });
+        if let Some(editor) = editor {
+            request_body["editor"] = serde_json::json!({ "name": editor.as_str() });
+        }
+        let mut headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut headers);
+        let response = self
+            .client
+            .post(format!("{}/document-ops", self.worker_url))
+            .headers(headers)
+            .timeout(std::time::Duration::from_secs(45))
+            .json(&request_body)
+            .send()
+            .await
+            .context("editing worker request failed")?;
+        let status = response.status();
+        tracing::Span::current().record("http.status_code", status.as_u16());
+        let body = response
+            .json::<serde_json::Value>()
+            .await
+            .unwrap_or_default();
+        let error = body.get("error").and_then(serde_json::Value::as_str);
+        match (status, error) {
+            (reqwest::StatusCode::OK, _) => {
+                let applied: DocumentOpsApplied = serde_json::from_value(body.clone())
+                    .context("editing worker reported a malformed applied batch")?;
+                Ok(DocumentOpsOutcome::Applied {
+                    applied: applied.applied,
+                    changed_block_ids: applied.changed_block_ids,
+                    revision: applied.revision,
+                })
+            }
+            (reqwest::StatusCode::UNPROCESSABLE_ENTITY, Some("edit_rejected")) => {
+                Ok(DocumentOpsOutcome::Rejected(
+                    serde_json::from_value(body["failures"].clone())
+                        .context("editing worker reported malformed failures")?,
+                ))
+            }
+            (reqwest::StatusCode::BAD_GATEWAY, Some("unacknowledged")) => {
+                Ok(DocumentOpsOutcome::Unacknowledged(
+                    body["message"].as_str().unwrap_or_default().to_owned(),
+                ))
+            }
+            (reqwest::StatusCode::BAD_REQUEST, _) => Ok(DocumentOpsOutcome::Invalid(
+                body.get("message")
+                    .and_then(serde_json::Value::as_str)
+                    .or(error)
+                    .map_or_else(|| body.to_string(), str::to_owned),
+            )),
+            _ => anyhow::bail!("editing worker returned {status}: {body}"),
+        }
     }
 
     #[tracing::instrument(skip_all, fields(document_id), err)]

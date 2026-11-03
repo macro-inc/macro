@@ -5,6 +5,8 @@ pub mod document_sync;
 
 #[cfg(feature = "document_create_adapters")]
 pub mod document_bytes_upload;
+#[cfg(feature = "ai_tools")]
+pub mod document_xml;
 #[cfg(feature = "outbound")]
 pub mod editing_activity;
 #[cfg(feature = "ai_tools")]

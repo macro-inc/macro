@@ -484,6 +484,15 @@ impl LexicalClient {
         Ok(response.data)
     }
 
+    /// Fetches the live document as the XML view agents edit against: every
+    /// block carries its durable node id as an attribute.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn get_xml(&self, document_id: &str) -> Result<String> {
+        let url = format!("{}/xml/{}", self.url, document_id);
+        let response: MarkdownResponse = self.get_json(&url).await?;
+        Ok(response.data)
+    }
+
     /// Fetches the document body rendered as [embedding-format markdown](EmbeddingMarkdown),
     /// typed so callers can only consume it as an [`EmbeddingMarkdown`]. Prefer
     /// this over [`get_markdown`](Self::get_markdown) with

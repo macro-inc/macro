@@ -11,6 +11,9 @@ pub mod canvas;
 #[cfg(feature = "ai_tools")]
 pub mod comments;
 pub mod content;
+/// Model-free structure reads and typed op batches for markdown documents.
+#[cfg(feature = "ai_tools")]
+pub mod document_edits;
 pub mod docx_export;
 /// Unified entity-mutation capability impls.
 #[cfg(feature = "service")]

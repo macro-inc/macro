@@ -13,6 +13,12 @@ pub struct EditResult {
     /// If set, the worker needs more information. Invoke again with the
     /// requested details appended to the instructions.
     pub clarification: Option<String>,
+    /// Durable ids of the blocks the edit touched.
+    pub changed_block_ids: Vec<String>,
+    /// The document's version after the edit, as sync-service encodes it.
+    pub revision: Option<String>,
+    /// What changed, in words.
+    pub summary: Option<String>,
 }
 
 /// Token usage for one model used by the editing worker.
@@ -42,6 +48,42 @@ impl EditorName {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+}
+
+/// One edit op, as the TypeScript package `@macro-inc/editor-ops` defines
+/// `DocumentOp`. The worker validates it; this service only carries it.
+pub type DocumentOp = serde_json::Map<String, serde_json::Value>;
+
+/// Why one op of a refused batch could not apply.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+pub struct DocumentOpFailure {
+    /// Position of the op in the submitted batch.
+    pub index: usize,
+    /// Machine-readable failure kind, such as a missing node.
+    pub kind: String,
+    /// What went wrong, for the program that built the op.
+    pub message: String,
+}
+
+/// What became of a batch of document ops sent to the editing worker.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DocumentOpsOutcome {
+    /// Every op applied and the change was acknowledged.
+    Applied {
+        /// Number of ops applied.
+        applied: usize,
+        /// Durable ids of the blocks the batch touched.
+        changed_block_ids: Vec<String>,
+        /// The document's version after the batch, as sync-service encodes it.
+        revision: String,
+    },
+    /// At least one op failed against the live document; nothing was committed.
+    Rejected(Vec<DocumentOpFailure>),
+    /// The ops are malformed; nothing was committed.
+    Invalid(String),
+    /// The batch was sent to storage but never acknowledged, so it may have applied.
+    Unacknowledged(String),
 }
 
 /// Which pipeline the editing worker runs.
@@ -133,6 +175,16 @@ pub trait EditingWorkerService: Send + Sync + 'static {
         mode: EditMode,
         editor: Option<EditorName>,
     ) -> impl Future<Output = anyhow::Result<EditResult>> + Send;
+
+    /// Apply a batch of typed ops to the live document, all or nothing, with
+    /// no model. `editor` labels the cursor readers see, as in [`Self::edit`].
+    fn document_ops(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+        operations: &[DocumentOp],
+        editor: Option<EditorName>,
+    ) -> impl Future<Output = anyhow::Result<DocumentOpsOutcome>> + Send;
 
     /// Delete all AI edit trace records for `document_id`. Called during
     /// document deletion so traces (which hold full document content) don't

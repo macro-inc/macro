@@ -643,7 +643,20 @@ impl EditingWorkerService for FakeEditingWorker {
             edits_applied: 1,
             usage: Vec::new(),
             clarification: None,
+            changed_block_ids: Vec::new(),
+            revision: None,
+            summary: None,
         })
+    }
+
+    async fn document_ops(
+        &self,
+        _document_id: &str,
+        _document_token: &DocumentPermissionToken,
+        _operations: &[crate::domain::ports::editing::DocumentOp],
+        _editor: Option<EditorName>,
+    ) -> anyhow::Result<crate::domain::ports::editing::DocumentOpsOutcome> {
+        panic!("unexpected document_ops call")
     }
 
     async fn delete_traces(&self, _document_id: &str) -> anyhow::Result<()> {

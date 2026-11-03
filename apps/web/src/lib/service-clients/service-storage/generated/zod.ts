@@ -18809,6 +18809,49 @@ export const editDocumentResponse = zod
   .describe('Edit document response.');
 
 /**
+ * A client that disconnects aborts the edit: axum drops this handler's
+future, which drops the in-flight request to the editing worker, and the
+worker aborts on its request signal. Steps already acknowledged stay.
+ * @summary Edit a markdown document or task by instructions with the caller's edit
+access. Runs EditDocument's pipeline as a live collaborator, with its AI
+admission and billing.
+ */
+export const editDocumentWithAiParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const editDocumentWithAiBody = zod
+  .object({
+    fast: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Run the single-model fast pipeline, for one small, contained edit.'
+      ),
+    instructions: zod
+      .string()
+      .min(1)
+      .describe(
+        'Natural-language instructions. Name the section or quote the text to\nchange, describe the outcome, and say what must stay as it is.'
+      ),
+  })
+  .describe('What to change, in words.');
+
+export const editDocumentWithAiResponse = zod
+  .object({
+    changedBlockIds: zod
+      .array(zod.string())
+      .describe('Durable ids of the blocks the edit touched.'),
+    revision: zod
+      .string()
+      .describe(
+        "The document's version after the edit, as sync-service encodes it."
+      ),
+    summary: zod.string().describe('What changed, in words.'),
+  })
+  .describe('A completed edit by instructions.');
+
+/**
  * Returns the short UUID and git branch name for a task document.
 Returns 400 if the document is not a task.
  * @summary Handler for `GET /documents/{document_id}/branch_name`.
@@ -19003,6 +19046,48 @@ export const copyDocumentResponse = zod
     error: zod.boolean().describe('Indicates if an error occurred.'),
   })
   .describe('Response wrapper for the copy document endpoint.');
+
+/**
+ * @summary Apply typed edit ops to a markdown document or task with the caller's edit
+access. The batch merges with concurrent collaborators and commits all or
+nothing.
+ */
+export const applyDocumentEditsParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const applyDocumentEditsBodyOperationsMax = 200;
+
+export const applyDocumentEditsBody = zod
+  .object({
+    operations: zod
+      .array(zod.object({}))
+      .min(1)
+      .max(applyDocumentEditsBodyOperationsMax)
+      .describe(
+        "1 to 200 ops, applied in order, all or nothing. Each is a `DocumentOp`\nfrom `@macro-inc\/editor-ops`, the op vocabulary's source of truth."
+      ),
+  })
+  .describe("A batch of edit ops built against the document's structure.");
+
+export const applyDocumentEditsResponseAppliedMin = 0;
+
+export const applyDocumentEditsResponse = zod
+  .object({
+    applied: zod
+      .number()
+      .min(applyDocumentEditsResponseAppliedMin)
+      .describe('Number of ops applied.'),
+    changedBlockIds: zod
+      .array(zod.string())
+      .describe('Durable ids of the blocks the batch touched.'),
+    revision: zod
+      .string()
+      .describe(
+        "The document's version after the batch, as sync-service encodes it."
+      ),
+  })
+  .describe('A committed batch.');
 
 /**
  * @summary Generates a presigned url to download the raw content of the document
@@ -19689,6 +19774,24 @@ export const simpleSaveResponse = zod.object({
   }),
   error: zod.boolean().describe('Indicates if an error occurred'),
 });
+
+/**
+ * @summary Read a markdown document or task as XML with durable node ids, the view
+`POST /documents/{document_id}/edits` addresses.
+ */
+export const getDocumentStructureParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const getDocumentStructureResponse = zod
+  .object({
+    xml: zod
+      .string()
+      .describe('Document XML; every block carries its node id.'),
+  })
+  .describe(
+    "A markdown document's structure, the format `EditDocument`'s model reads."
+  );
 
 /**
  * @summary Gets the team-share state of a document. The team is resolved from the

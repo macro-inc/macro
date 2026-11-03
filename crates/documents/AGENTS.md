@@ -36,6 +36,16 @@ word docs, Illustrator/Photoshop files).
 - `src/inbound/axum_router.rs`: the HTTP surface; `axum_router/get_text.rs`
   serves `/text-content` through `src/domain/text.rs`. Native Markdown comes
   from live collaborative storage, not the legacy S3 export.
+- `src/domain/document_edits.rs`: SDK editing of markdown documents and tasks,
+  tokens minted like EditDocument's. `POST /{id}/ai-edit` runs EditDocument's
+  `AiEditingService` (admission, models, metering) by instructions: 422
+  `edit_refused` is the worker's clarification, 502 `edit_failed` may have
+  partly applied, and a client disconnect drops the worker call (never spawn
+  it). `GET /{id}/structure` (view receipt) returns lexical-service's XML view;
+  `POST /{id}/edits` sends 1-200 opaque `DocumentOp`s (defined in
+  `@macro-inc/editor-ops`, never in Rust) to the worker's `/document-ops` with
+  no model or metering: 422 lists refused ops (nothing committed), 502
+  `unacknowledged` may have applied.
 
 ## Scope
 
