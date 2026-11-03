@@ -175,6 +175,23 @@ export type BulkGetByEventItemIdsRequest = {
     eventItemIds: Array<string>;
 };
 
+export type BulkItem = {
+    item_id: string;
+    item_type: EntityType;
+};
+
+export type BulkRemoveItemsRequest = {
+    items: Array<BulkItem>;
+};
+
+export type BulkSetItemsRequest = {
+    items: Array<BulkItem>;
+    /**
+     * A future resume time. Omit to mute indefinitely.
+     */
+    snoozed_until?: string | null;
+};
+
 /**
  * A channel member who sees a calendar event only through a channel share
  * asked the person who shared it to add them as a guest. Sent to the sharer,
@@ -1628,6 +1645,48 @@ export type UnsubscribeItemResponses = {
 };
 
 export type UnsubscribeItemResponse = UnsubscribeItemResponses[keyof UnsubscribeItemResponses];
+
+export type RemoveUnsubscribeItemsData = {
+    body: BulkRemoveItemsRequest;
+    path?: never;
+    query?: never;
+    url: '/unsubscribe/items';
+};
+
+export type RemoveUnsubscribeItemsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RemoveUnsubscribeItemsError = RemoveUnsubscribeItemsErrors[keyof RemoveUnsubscribeItemsErrors];
+
+export type RemoveUnsubscribeItemsResponses = {
+    200: EmptyResponse;
+};
+
+export type RemoveUnsubscribeItemsResponse = RemoveUnsubscribeItemsResponses[keyof RemoveUnsubscribeItemsResponses];
+
+export type UnsubscribeItemsData = {
+    body: BulkSetItemsRequest;
+    path?: never;
+    query?: never;
+    url: '/unsubscribe/items';
+};
+
+export type UnsubscribeItemsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UnsubscribeItemsError = UnsubscribeItemsErrors[keyof UnsubscribeItemsErrors];
+
+export type UnsubscribeItemsResponses = {
+    200: EmptyResponse;
+};
+
+export type UnsubscribeItemsResponse = UnsubscribeItemsResponses[keyof UnsubscribeItemsResponses];
 
 export type RemoveUnsubscribeAllData = {
     body?: never;

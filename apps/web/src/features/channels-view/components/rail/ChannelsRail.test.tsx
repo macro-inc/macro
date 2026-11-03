@@ -21,6 +21,7 @@ vi.mock('@core/context/user', () => ({
 }));
 const mocks = vi.hoisted(() => ({
   fetchChannel: vi.fn<(id: string) => Promise<ChannelEntity>>(),
+  bulkPreferences: vi.fn(),
   favoriteId: undefined as string | undefined,
   fetchGroupIds:
     vi.fn<typeof import('../../queries')['fetchChannelGroupIds']>(),
@@ -189,6 +190,11 @@ vi.mock('@queries/channel/notification-selection', () => ({
 vi.mock('@queries/channel/selection-by-id', () => ({
   fetchChannelSelectionById: mocks.fetchChannel,
 }));
+vi.mock('@queries/notification/unsubscribes', () => ({
+  useBulkNotificationPreferencesMutation: () => ({
+    mutateAsync: mocks.bulkPreferences,
+  }),
+}));
 vi.mock('@queries/channel-labels/channel-labels', () => ({
   useChannelLabelsQuery: () => ({ isSuccess: false }),
   useCreateChannelLabelMutation: () => ({}),
@@ -329,6 +335,29 @@ beforeEach(() => {
   mocks.userId = 'viewer';
   mocks.source.muteEntity.mockResolvedValue(undefined);
   mocks.source.unmuteEntity.mockResolvedValue(undefined);
+  mocks.bulkPreferences.mockImplementation(
+    async (args: {
+      items: { item_type: string; item_id: string }[];
+      muted: boolean;
+    }) => {
+      const results = await Promise.allSettled(
+        args.items.map((item) => {
+          const entity = { type: item.item_type, id: item.item_id };
+          return args.muted
+            ? mocks.source.muteEntity(entity)
+            : mocks.source.unmuteEntity(entity);
+        })
+      );
+      return {
+        succeeded: args.items.filter(
+          (_, index) => results[index].status === 'fulfilled'
+        ),
+        failed: args.items.filter(
+          (_, index) => results[index].status === 'rejected'
+        ),
+      };
+    }
+  );
   mocks.fetchGroupIds.mockReset();
   mocks.fetchGroupIds.mockResolvedValue(['one', 'unloaded']);
   mocks.row = channel;
@@ -714,6 +743,25 @@ describe('section notification actions', () => {
 
     return actions;
   };
+
+  it('submits all section members through one bulk operation', async () => {
+    const current = {
+      ...label,
+      channelIds: Array.from({ length: 16 }, (_, index) => `channel-${index}`),
+    };
+    const actions = mountActions(() => [current]);
+    await actions.muteSection('label:section', true);
+
+    expect(mocks.bulkPreferences).toHaveBeenCalledExactlyOnceWith({
+      actorId: 'viewer',
+      items: current.channelIds.map((item_id) => ({
+        item_type: 'channel',
+        item_id,
+      })),
+      muted: true,
+    });
+    expect(actions.sectionNotificationsDisabled('label:section')).toBe(false);
+  });
 
   it('uses the complete current membership instead of loaded rows or a stale snapshot', async () => {
     let current = label;

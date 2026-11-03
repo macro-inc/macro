@@ -9,11 +9,15 @@ import type { Result } from 'neverthrow';
 import { z } from 'zod';
 import type {
   BulkGetByEventItemIdsRequest,
+  BulkItem,
+  BulkRemoveItemsRequest,
+  BulkSetItemsRequest,
   GetAllUserNotificationsResponse,
   NotificationState,
 } from './generated/schemas';
 import type { ApiUserNotification } from './generated/schemas/apiUserNotification';
 import type { DeviceRequest } from './generated/schemas/deviceRequest';
+import { EntityType } from './generated/schemas/entityType';
 import type { GetNotificationTypePreferencesResponse } from './generated/schemas/getNotificationTypePreferencesResponse';
 import type { NotificationBulkRequest } from './generated/schemas/notificationBulkRequest';
 import type { UserUnsubscribe } from './generated/schemas/userUnsubscribe';
@@ -25,6 +29,26 @@ const _NOTIFICATION_WEBSOCKET_EVENT = 'notification';
 
 type WithEventItemId = { event_item_id: string };
 type WithItem = { item_id: string; item_type: string };
+
+const notificationEntityType = z.enum(EntityType);
+
+function notificationPreferenceItems(
+  items: readonly UserUnsubscribe[]
+): BulkItem[] {
+  return items.map((item) => {
+    let itemType = item.item_type;
+    if (itemType === 'email' || itemType === 'thread') {
+      itemType = 'email_thread';
+    } else if (itemType === 'foreign') {
+      itemType = 'foreign_entity';
+    }
+
+    return {
+      item_id: item.item_id,
+      item_type: notificationEntityType.parse(itemType),
+    };
+  });
+}
 
 function notificationFetch(
   url: string,
@@ -235,6 +259,28 @@ export const notificationServiceClient = {
         method: 'GET',
       })
     ).map((result) => ({ data: result }));
+  },
+  async unsubscribeItems(
+    items: readonly UserUnsubscribe[],
+    snoozedUntil?: string
+  ) {
+    const body: BulkSetItemsRequest = {
+      items: notificationPreferenceItems(items),
+      snoozed_until: snoozedUntil,
+    };
+    return notificationFetch<{}>('/unsubscribe/items', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+  async removeUnsubscribeItems(items: readonly UserUnsubscribe[]) {
+    const body: BulkRemoveItemsRequest = {
+      items: notificationPreferenceItems(items),
+    };
+    return notificationFetch<{}>('/unsubscribe/items', {
+      method: 'DELETE',
+      body: JSON.stringify(body),
+    });
   },
   async unsubscribeItem(args: WithItem & { snoozed_until?: string | null }) {
     const query = args.snoozed_until

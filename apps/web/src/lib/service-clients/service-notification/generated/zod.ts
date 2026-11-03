@@ -125,6 +125,100 @@ export const removeUnsubscribeItemResponse = zod
   );
 
 /**
+ * @summary Atomically mute or snooze items for the authenticated user.
+ */
+export const unsubscribeItemsBody = zod.object({
+  items: zod.array(
+    zod.object({
+      item_id: zod.string(),
+      item_type: zod
+        .enum([
+          'user',
+          'chat',
+          'channel',
+          'channel_message',
+          'document',
+          'project',
+          'email_thread',
+          'calendar_event',
+          'team',
+          'call',
+          'foreign_entity',
+          'static_file',
+          'crm_company',
+          'crm_contact',
+          'crm_pipeline',
+          'reminder',
+          'skill',
+          'agent_session',
+          'scheduled_action',
+          'initiative',
+          'database',
+          'database_row',
+          'form',
+          'external_chat',
+        ])
+        .describe('The type of an entity in Macro'),
+    })
+  ),
+  snoozed_until: zod.iso
+    .datetime({})
+    .nullish()
+    .describe('A future resume time. Omit to mute indefinitely.'),
+});
+
+export const unsubscribeItemsResponse = zod
+  .object({})
+  .describe(
+    'Empty response is required due to custom fetch forcing `response.json()`'
+  );
+
+/**
+ * @summary Atomically resume delivery for the authenticated user's items.
+ */
+export const removeUnsubscribeItemsBody = zod.object({
+  items: zod.array(
+    zod.object({
+      item_id: zod.string(),
+      item_type: zod
+        .enum([
+          'user',
+          'chat',
+          'channel',
+          'channel_message',
+          'document',
+          'project',
+          'email_thread',
+          'calendar_event',
+          'team',
+          'call',
+          'foreign_entity',
+          'static_file',
+          'crm_company',
+          'crm_contact',
+          'crm_pipeline',
+          'reminder',
+          'skill',
+          'agent_session',
+          'scheduled_action',
+          'initiative',
+          'database',
+          'database_row',
+          'form',
+          'external_chat',
+        ])
+        .describe('The type of an entity in Macro'),
+    })
+  ),
+});
+
+export const removeUnsubscribeItemsResponse = zod
+  .object({})
+  .describe(
+    'Empty response is required due to custom fetch forcing `response.json()`'
+  );
+
+/**
  * @summary Unsubscribes user from all notifications.
  */
 export const unsubscribeAllResponse = zod

@@ -34,6 +34,7 @@ enforced by the ordinary backend APIs.
 
 - Keep handwritten behavior in `src/`; never edit `generated/` or `specs/`.
 - Keep WhatsApp pairing, passkeys, connection setup/disconnect and rollout configuration out of the handwritten public SDK; operate on accounts linked in the app, with personal bearer sessions for account/access controls. External chat sends/uploads accept the connection owner's session or own API token; bots never send.
+- Keep notification mute, unmute, and snooze endpoints, including bulk item preferences, in the app-only coverage exclusions.
 - Keep `external-chat/` provider-neutral; provider-specific reads (WhatsApp community chats) branch on `provider` with an exhaustive match.
 - Use existing entity handles for reads and mutations. Follow the
   [SDK rule](../../.agents/rules/sdk.md) and `add-sdk-endpoint` skill.
