@@ -1,6 +1,9 @@
 //! Bounded tool-free completions using the shared agent completion path.
 
-use agent::{MeteringContext, structured_output::DynamicSchema};
+use agent::{
+    MeteringContext,
+    structured_output::{CompletionThinking, DynamicSchema},
+};
 use ai_usage::{AiFeature, UsageContext, UsageRecorder};
 use async_trait::async_trait;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -21,6 +24,7 @@ pub struct ToolFreeRequest {
     pub system_prompt: String,
     pub prompt: String,
     pub schema: DynamicSchema,
+    pub thinking: CompletionThinking,
 }
 
 /// Sanitized capacity and deadline errors, or the shared completion failure.
@@ -95,11 +99,12 @@ impl ToolFreeCompletion for ToolFreeCompletionService {
     ) -> Result<Value, ToolFreeCompletionError> {
         let recorder = self.recorder.clone();
         self.run(async move {
-            agent::structured_output::dynamic_structured_completion(
+            agent::structured_output::dynamic_structured_completion_thinking(
                 request.model,
                 &request.system_prompt,
                 vec![agent::Message::user(request.prompt)],
                 request.schema,
+                request.thinking,
                 recorder.as_ref(),
                 UsageContext::new(AiFeature::DynamicCompletionsApi, owner),
             )

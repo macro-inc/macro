@@ -57,6 +57,7 @@
 - [CompletePipedreamMcpConnectionErrors](type-aliases/CompletePipedreamMcpConnectionErrors.md)
 - [CompletePipedreamMcpConnectionResponse](type-aliases/CompletePipedreamMcpConnectionResponse.md)
 - [CompletePipedreamMcpConnectionResponses](type-aliases/CompletePipedreamMcpConnectionResponses.md)
+- [CompletionThinking](type-aliases/CompletionThinking.md)
 - [CompletionUsage](type-aliases/CompletionUsage.md)
 - [ConnectedServer](type-aliases/ConnectedServer.md)
 - [ConversationRecord](type-aliases/ConversationRecord.md)

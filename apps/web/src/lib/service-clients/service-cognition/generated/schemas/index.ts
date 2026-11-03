@@ -86,6 +86,7 @@ export * from './chatStreamOneOfSixType';
 export * from './chatTokenCount';
 export * from './chatUpdatedAt';
 export * from './completeOnboardingRequest';
+export * from './completionThinking';
 export * from './completionUsage';
 export * from './completionUsageEntity';
 export * from './connectedServer';

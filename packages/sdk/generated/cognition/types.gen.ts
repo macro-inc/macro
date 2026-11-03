@@ -404,6 +404,11 @@ export type CompleteOnboardingRequest = {
 };
 
 /**
+ * How much a model may think before it gives a structured answer.
+ */
+export type CompletionThinking = 'default' | 'low';
+
+/**
  * User and feature attribution for one invocation.
  */
 export type CompletionUsage = {
@@ -1989,6 +1994,11 @@ export type StructuredCompletionRequest = {
     model: string;
     output_schema: DynamicSchema;
     prompt: string;
+    /**
+     * How much the model may think first; `low` answers faster. Applies to
+     * completions without tools.
+     */
+    thinking?: CompletionThinking;
     toolset?: ToolSet;
 };
 

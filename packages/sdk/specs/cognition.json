@@ -3437,6 +3437,11 @@
           }
         }
       },
+      "CompletionThinking": {
+        "type": "string",
+        "description": "How much a model may think before it gives a structured answer.",
+        "enum": ["default", "low"]
+      },
       "CompletionUsage": {
         "type": "object",
         "description": "User and feature attribution for one invocation.",
@@ -6120,6 +6125,10 @@
           },
           "prompt": {
             "type": "string"
+          },
+          "thinking": {
+            "$ref": "#/components/schemas/CompletionThinking",
+            "description": "How much the model may think first; `low` answers faster. Applies to\ncompletions without tools."
           },
           "toolset": {
             "$ref": "#/components/schemas/ToolSet"
