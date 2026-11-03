@@ -26,7 +26,7 @@ const registration = {
     audience: 'members',
     tallyVisible: false,
     responsesVisible: false,
-    respondentHidden: false,
+    anonymous: false,
     status: 'open',
     closesAt: null,
     confirmationMessage: 'See you there!',

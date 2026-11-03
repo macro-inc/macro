@@ -23,7 +23,7 @@ async fn a_projection_commits_its_layout_and_revision_together(pool: PgPool) {
         updated_at: at(9),
         is_hidden_in_drive: false,
         responses_visible: false,
-        respondent_hidden: false,
+        anonymous: false,
     };
     let layout = FormLayout {
         sections: vec![FormSection::Questions {

@@ -78,7 +78,7 @@ describe('availability', () => {
     closesAt: '2026-10-03T17:00:00Z',
     tallyVisible: false,
     responsesVisible: false,
-    respondentHidden: false,
+    anonymous: false,
     confirmationMessage: '',
     submittedColumnId: null,
     respondentColumnId: null,

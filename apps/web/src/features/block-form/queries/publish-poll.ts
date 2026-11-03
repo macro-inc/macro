@@ -102,7 +102,7 @@ export function publishPoll(
           updateForm(formId, {
             tallyVisible: draft.showResults,
             responsesVisible: draft.shareResponses,
-            respondentHidden: draft.anonymous,
+            anonymous: draft.anonymous,
           }).mapErr(writeFailureOf)
         )
         .orElse(abandon)

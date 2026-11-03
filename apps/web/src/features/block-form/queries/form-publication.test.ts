@@ -15,7 +15,7 @@ const detail: FormCollaboration['detail'] = {
     audience: 'members',
     tallyVisible: false,
     responsesVisible: false,
-    respondentHidden: false,
+    anonymous: false,
     status: 'open',
     closesAt: null,
     confirmationMessage: 'Thank you',

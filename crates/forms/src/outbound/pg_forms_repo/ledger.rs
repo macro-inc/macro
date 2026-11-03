@@ -1,5 +1,7 @@
 //! The submission ledger, `form_responses`. Its partial unique index on
-//! `(form_id, respondent_id)` is what keeps a signed-in person to one entry.
+//! `(form_id, respondent_id)` is what keeps a signed-in person to one entry;
+//! on an anonymous form, whose entries name nobody, the key of
+//! `form_submission_receipts` does.
 
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -127,6 +129,72 @@ pub(super) async fn record_submission(
         Some(row) => RecordedResponse::Recorded(FormResponse::try_from(row)?),
         None => RecordedResponse::AlreadySubmitted,
     })
+}
+
+// The voter stays out of the span: it would pair them with the row.
+#[tracing::instrument(err, skip(pool, voter, row))]
+pub(super) async fn record_anonymous_submission(
+    pool: &PgPool,
+    form: FormId,
+    voter: Option<&MacroUserIdStr<'_>>,
+    row: RowId,
+    day: DateTime<Utc>,
+) -> Result<RecordedResponse, PgFormsRepoError> {
+    let mut transaction = pool.begin().await?;
+    if let Some(voter) = voter {
+        let receipt = sqlx::query_scalar!(
+            r#"
+            INSERT INTO form_submission_receipts (form_id, user_id) VALUES ($1, $2)
+            ON CONFLICT DO NOTHING
+            RETURNING 1 AS "one!"
+            "#,
+            form.into_uuid(),
+            voter.as_ref(),
+        )
+        .fetch_optional(&mut *transaction)
+        .await?;
+        if receipt.is_none() {
+            transaction.rollback().await?;
+            return Ok(RecordedResponse::AlreadySubmitted);
+        }
+    }
+    // A random id, unlike a time-ordered one, says nothing of when or in
+    // what order people responded.
+    let recorded = sqlx::query_as!(
+        ResponseRow,
+        r#"
+        INSERT INTO form_responses (id, form_id, row_id, status, submitted_at, updated_at)
+        VALUES ($1, $2, $3, 'submitted', $4, $4)
+        RETURNING id, form_id, status, stopped_at_section, row_id, submitted_at, updated_at
+        "#,
+        Uuid::new_v4(),
+        form.into_uuid(),
+        row.into_uuid(),
+        day,
+    )
+    .fetch_one(&mut *transaction)
+    .await?;
+    transaction.commit().await?;
+    Ok(RecordedResponse::Recorded(FormResponse::try_from(recorded)?))
+}
+
+#[tracing::instrument(err, skip(pool, voter))]
+pub(super) async fn holds_receipt(
+    pool: &PgPool,
+    form: FormId,
+    voter: &MacroUserIdStr<'_>,
+) -> Result<bool, PgFormsRepoError> {
+    Ok(sqlx::query_scalar!(
+        r#"
+        SELECT EXISTS (
+            SELECT 1 FROM form_submission_receipts WHERE form_id = $1 AND user_id = $2
+        ) AS "held!"
+        "#,
+        form.into_uuid(),
+        voter.as_ref(),
+    )
+    .fetch_one(pool)
+    .await?)
 }
 
 #[tracing::instrument(err, skip(pool))]

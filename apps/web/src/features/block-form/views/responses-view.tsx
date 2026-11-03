@@ -63,7 +63,7 @@ export function ResponsesView(props: { detail: FormDetail }) {
         {context.ui.renderResponsesGrid({
           databaseId: form().databaseId,
           tableId: form().tableId,
-          hideColumnId: form().respondentHidden
+          hideColumnId: form().anonymous
             ? form().respondentColumnId
             : null,
         })}

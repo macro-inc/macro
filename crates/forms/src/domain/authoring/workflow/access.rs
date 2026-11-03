@@ -37,7 +37,7 @@ impl<
                         closes_at: Some(intent.draft.closes_at),
                         tally_visible: Some(intent.draft.tally_visible),
                         responses_visible: intent.draft.responses_visible,
-                        respondent_hidden: intent.draft.respondent_hidden,
+                        anonymous: intent.draft.anonymous,
                         ..Default::default()
                     },
                 )

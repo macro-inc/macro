@@ -111,8 +111,8 @@ pub struct Form {
     #[schema(value_type = Option<Uuid>, required = true)]
     pub submitted_column_id: Option<ColumnId>,
     /// The person column each signed-in submission names its respondent in;
-    /// `null` once deleted. When `respondent_hidden`, the form still owns
-    /// this column but does not write it.
+    /// `null` once deleted, and on a form created anonymous. An anonymous
+    /// form never writes it.
     #[schema(value_type = Option<Uuid>, required = true)]
     pub respondent_column_id: Option<ColumnId>,
     /// Who may respond.
@@ -121,9 +121,10 @@ pub struct Form {
     pub tally_visible: bool,
     /// Whether people with View may read individual response rows.
     pub responses_visible: bool,
-    /// Whether respondent identity is withheld from response rows. The
-    /// ledger still records who responded so they cannot submit twice.
-    pub respondent_hidden: bool,
+    /// Whether nobody, the owner included, can see who gave which response.
+    /// Who responded is kept apart from the responses, only so nobody
+    /// responds twice. Fixed once anyone has responded.
+    pub anonymous: bool,
     /// Whether its owner closed it.
     pub status: FormStatus,
     /// When it stops taking responses, if it does.
@@ -176,6 +177,10 @@ pub enum FormSource {
         /// for a channel poll.
         #[serde(default, rename = "isHiddenInDrive")]
         is_hidden_in_drive: bool,
+        /// Make the form anonymous from the start: its table gets no
+        /// Respondent column.
+        #[serde(default)]
+        anonymous: bool,
     },
     /// An existing table in a database the caller owns. The form starts with a
     /// question per column.
@@ -239,11 +244,12 @@ pub struct UpdateForm {
     #[schema(nullable = false)]
     #[specta(optional)]
     pub responses_visible: Option<bool>,
-    /// Whether respondent identity is withheld from response rows.
+    /// Whether nobody can see who gave which response; refused once anyone
+    /// has responded.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schema(nullable = false)]
     #[specta(optional)]
-    pub respondent_hidden: Option<bool>,
+    pub anonymous: Option<bool>,
 }
 
 impl UpdateForm {
@@ -254,7 +260,7 @@ impl UpdateForm {
             || self.closes_at.is_some()
             || self.tally_visible.is_some()
             || self.responses_visible.is_some()
-            || self.respondent_hidden.is_some()
+            || self.anonymous.is_some()
     }
 }
 

@@ -181,7 +181,7 @@ export type FormMetadataPatch = {
   closesAt?: string | null;
   tallyVisible?: boolean;
   responsesVisible?: boolean;
-  respondentHidden?: boolean;
+  anonymous?: boolean;
 };
 
 export type SubmitOutcome =

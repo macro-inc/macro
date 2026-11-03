@@ -249,7 +249,7 @@ async fn an_edit_rewrites_every_question_of_the_row_and_clears_dropped_answers()
 async fn a_hidden_respondent_edits_their_row_as_the_owner() {
     let world = world();
     seed_rsvp(&world, Audience::Members);
-    world.lock().unwrap().forms[0].form.respondent_hidden = true;
+    world.lock().unwrap().forms[0].form.anonymous = true;
     let forms = service(&world);
     respond(&forms, VIEWER, answers(EMPLOYEE, Some("Vegan"))).await;
 
@@ -593,7 +593,7 @@ async fn nobody_sees_who_voted_when_the_form_hides_respondents() {
     seed_rsvp(&world, Audience::Members);
     {
         let mut world = world.lock().unwrap();
-        world.forms[0].form.respondent_hidden = true;
+        world.forms[0].form.anonymous = true;
         world.forms[0].form.responses_visible = true;
     }
     let forms = service(&world);

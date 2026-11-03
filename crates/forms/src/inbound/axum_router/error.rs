@@ -128,6 +128,10 @@ impl IntoResponse for FormsApiError {
                 StatusCode::NOT_FOUND,
                 body(FormErrorCode::NoResponse, message),
             ),
+            FormError::AnonymousResponseFinal => (
+                StatusCode::CONFLICT,
+                body(FormErrorCode::AnonymousResponseFinal, message),
+            ),
             FormError::UnknownQuestion { question } => (
                 StatusCode::BAD_REQUEST,
                 FormErrorResponse {

@@ -40,7 +40,7 @@ vi.mock('@queries/storage/forms', () => ({
         closesAt: null,
         tallyVisible: true,
         responsesVisible: false,
-        respondentHidden: false,
+        anonymous: false,
         confirmationMessage: '',
         submittedColumnId: null,
         respondentColumnId: null,

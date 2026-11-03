@@ -34,7 +34,7 @@ function offsite(): FormDetail {
       closesAt: null,
       tallyVisible: false,
       responsesVisible: false,
-      respondentHidden: false,
+      anonymous: false,
       confirmationMessage: 'See you there!',
       submittedColumnId: null,
       respondentColumnId: null,
@@ -311,7 +311,7 @@ describe('RespondView', () => {
   it('offers the shared Responses table from a saved response and says names stay off it', () => {
     const detail = offsite();
     detail.form.responsesVisible = true;
-    detail.form.respondentHidden = true;
+    detail.form.anonymous = true;
     const { context } = createMockFormContext({
       detail,
       mine: {

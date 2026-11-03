@@ -23,6 +23,8 @@ pub enum CreateSource {
     NewDatabase {
         /// Keep the form, and the database made for it, out of Drive.
         is_hidden_in_drive: bool,
+        /// Make the form anonymous, with no Respondent column.
+        anonymous: bool,
     },
     /// An existing table of the database the receipt names. Attaching a
     /// form to an existing table takes the database's Owner: the form's
@@ -143,7 +145,8 @@ pub trait FormsRepo: Send + Sync + 'static {
     /// what it leaves out stays. With `forbidden_widget`, the change goes
     /// through only if no question of the form asks one of its columns with
     /// its widget when it commits; concurrent writes of the form's facts and
-    /// layout serialize, so the check holds.
+    /// layout serialize, so the check holds. A change of whether the form is
+    /// anonymous goes through only while it has no accepted response.
     fn update_form(
         &self,
         id: FormId,
@@ -212,6 +215,27 @@ pub trait FormsRepo: Send + Sync + 'static {
         row: RowId,
         at: DateTime<Utc>,
     ) -> impl Future<Output = Result<RecordedResponse, Self::Error>> + Send;
+
+    /// Record a response to an anonymous form whose row is written, in one
+    /// transaction: a signed-in voter's receipt, which names no response,
+    /// and a ledger entry that names nobody, with a random id and stamped
+    /// `day`. A voter who already holds a receipt answers
+    /// [`RecordedResponse::AlreadySubmitted`] and nothing is written.
+    fn record_anonymous_submission(
+        &self,
+        form: FormId,
+        voter: Option<&MacroUserIdStr<'_>>,
+        row: RowId,
+        day: DateTime<Utc>,
+    ) -> impl Future<Output = Result<RecordedResponse, Self::Error>> + Send;
+
+    /// Whether a signed-in person holds a receipt for responding to an
+    /// anonymous form.
+    fn holds_receipt(
+        &self,
+        form: FormId,
+        voter: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<bool, Self::Error>> + Send;
 
     /// Point an entry at a new row, for a response whose row was deleted
     /// and written again.

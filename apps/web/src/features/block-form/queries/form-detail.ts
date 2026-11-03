@@ -33,7 +33,7 @@ export function toFormMetadata(form: Form): FormMetadata {
     closesAt: form.closesAt ?? null,
     tallyVisible: form.tallyVisible,
     responsesVisible: form.responsesVisible,
-    respondentHidden: form.respondentHidden,
+    anonymous: form.anonymous,
     confirmationMessage: form.confirmationMessage,
     submittedColumnId: form.submittedColumnId ?? null,
     respondentColumnId: form.respondentColumnId ?? null,

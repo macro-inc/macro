@@ -94,6 +94,9 @@ pub enum FormUpdate {
     /// The change forbade a widget one of the form's questions uses when it
     /// committed; nothing was written.
     WidgetInUse,
+    /// The change would make the form anonymous, or stop it being, after
+    /// someone responded; nothing was written.
+    AnonymityLocked,
 }
 
 /// A form's ledger counts.
@@ -124,12 +127,11 @@ pub enum SharingRefusal {
     /// or names no level.
     #[error("a channel grant is invalid")]
     InvalidChannelGrant,
-    /// Earlier responses already name their respondents, and the database
-    /// keeps those names in its history, so anonymity cannot start late.
-    #[error(
-        "responses already name their respondents; make a form anonymous before anyone responds"
-    )]
-    RespondentsAlreadyNamed,
+    /// Someone has responded, so whether the form is anonymous is fixed:
+    /// earlier responses name their respondents, or were given on the
+    /// promise that nobody would see who gave them.
+    #[error("whether a form is anonymous can't change once anyone has responded")]
+    AnonymityLocked,
 }
 
 /// Errors of the forms domain.
@@ -162,6 +164,10 @@ pub enum FormError {
     /// The respondent has no saved response.
     #[error("you have no response to this form")]
     NoResponse,
+    /// Nothing links a response to an anonymous form to its respondent, so
+    /// it can't be found to change.
+    #[error("a response to an anonymous form can't be changed")]
+    AnonymousResponseFinal,
     /// An answer names a question the form does not ask.
     #[error("the form has no question {question}")]
     UnknownQuestion {

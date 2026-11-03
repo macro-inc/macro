@@ -471,7 +471,7 @@ where
                 }
             ),
             responses_visible: false,
-            respondent_hidden: false,
+            anonymous: false,
         };
         match self
             .repository

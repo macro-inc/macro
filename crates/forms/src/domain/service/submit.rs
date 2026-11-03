@@ -6,7 +6,7 @@ use crate::domain::drafts::{FormDraftRepository, FormDraftStore};
 
 use std::collections::HashMap;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, DurationRound, TimeDelta, Utc};
 use databases::domain::models::{DatabaseError, OpBatch, TableDetail, Viewer};
 use databases::domain::ports::{DatabaseMetadataReads, DatabaseRowReads, DatabasesService};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
@@ -33,11 +33,11 @@ use crate::domain::models::{
 use crate::domain::ports::{Clock, FormAccessDirectory, FormEventPublisher, FormsRepo};
 
 /// Who a response's row is written as: the respondent, or the form's owner
-/// for an anonymous visitor or when the form hides respondents, so the row's
-/// author and its history name nobody.
+/// for an anonymous visitor or on an anonymous form, so the row's author and
+/// its history name nobody.
 fn row_author(form: &Form, respondent: &Respondent) -> Result<MacroUserIdStr<'static>, FormError> {
     match respondent {
-        Respondent::Member(user) if !form.respondent_hidden => Ok(user.clone()),
+        Respondent::Member(user) if !form.anonymous => Ok(user.clone()),
         Respondent::Member(_) | Respondent::Anonymous => owner_of(form),
     }
 }
@@ -66,7 +66,7 @@ fn insert_cells(
             value: CellValue::Date(submitted_at),
         });
     }
-    if !form.respondent_hidden
+    if !form.anonymous
         && let (Some(column), Respondent::Member(user)) = (
             writable(columns, form.respondent_column_id, respondent_kind()),
             respondent,
@@ -236,12 +236,19 @@ where
         let now = self.now();
         let (form, respondent, table, layout) = self.open_for(receipt, now).await?;
         if let Respondent::Member(user) = &respondent {
-            let existing = self
-                .repository
-                .response_of(form.id, user)
-                .await
-                .map_err(repository_error)?;
-            if existing.is_some_and(|entry| entry.status == ResponseStatus::Submitted) {
+            let responded = if form.anonymous {
+                self.repository
+                    .holds_receipt(form.id, user)
+                    .await
+                    .map_err(repository_error)?
+            } else {
+                self.repository
+                    .response_of(form.id, user)
+                    .await
+                    .map_err(repository_error)?
+                    .is_some_and(|entry| entry.status == ResponseStatus::Submitted)
+            };
+            if responded {
                 return Err(FormError::AlreadyResponded);
             }
         }
@@ -251,8 +258,11 @@ where
             Evaluation::Passed(answered) => answered,
             Evaluation::Stopped { section, message } => {
                 // Only a signed-in respondent has an entry to stop; an
-                // anonymous one leaves no trace.
-                if let Respondent::Member(user) = &respondent {
+                // anonymous one, or anyone on an anonymous form, leaves no
+                // trace.
+                if let Respondent::Member(user) = &respondent
+                    && !form.anonymous
+                {
                     self.repository
                         .record_stop(form.id, user, section, now)
                         .await
@@ -262,10 +272,24 @@ where
                 return Ok(SubmissionOutcome::Stopped { section, message });
             }
         };
+        // An anonymous form's responses carry only their day, so their
+        // times can't be matched against who was active when.
+        let stamped = if form.anonymous {
+            now.duration_trunc(TimeDelta::days(1))
+                .map_err(|_| FormError::DatabaseContract("a submission time has no day"))?
+        } else {
+            now
+        };
         let insert = vec![DatabaseOp::Rows {
             table: form.table_id,
             change: RowsChange::Insert {
-                rows: vec![insert_cells(&form, &columns, &answered, &respondent, now)],
+                rows: vec![insert_cells(
+                    &form,
+                    &columns,
+                    &answered,
+                    &respondent,
+                    stamped,
+                )],
             },
         }];
         // The row first, under the form's receipt, then the ledger, in its
@@ -277,11 +301,16 @@ where
             Respondent::Member(user) => Some(user),
             Respondent::Anonymous => None,
         };
-        let recorded = self
-            .repository
-            .record_submission(form.id, member, row, now)
-            .await
-            .map_err(|error| {
+        let recorded = if form.anonymous {
+            self.repository
+                .record_anonymous_submission(form.id, member, row, stamped)
+                .await
+        } else {
+            self.repository
+                .record_submission(form.id, member, row, now)
+                .await
+        }
+        .map_err(|error| {
                 tracing::error!(error = ?error, form_id = %form.id, row_id = %row, "a response's row was written but its ledger entry was not");
                 repository_error(error)
             })?;
@@ -299,15 +328,14 @@ where
             FormResponseSubmittedMetadata {
                 form_id: form.id,
                 response_id: response,
-                // Hidden respondents stay in the ledger so they cannot vote
-                // twice, but the event names nobody — activity would leak
-                // who responded.
+                // An anonymous form's event names nobody; activity would
+                // say who responded.
                 respondent: match respondent {
-                    Respondent::Member(user) if !form.respondent_hidden => Some(user),
+                    Respondent::Member(user) if !form.anonymous => Some(user),
                     Respondent::Member(_) | Respondent::Anonymous => None,
                 },
                 row_id: Some(row),
-                submitted_at: now,
+                submitted_at: stamped,
             },
         ));
         Ok(SubmissionOutcome::Submitted {
@@ -327,6 +355,9 @@ where
             return Err(FormError::SignInRequired);
         };
         let (form, _, table, layout) = self.open_for(receipt, now).await?;
+        if form.anonymous {
+            return Err(FormError::AnonymousResponseFinal);
+        }
         let entry = self
             .repository
             .response_of(form.id, &user)
@@ -461,6 +492,18 @@ where
             return Err(FormError::SignInRequired);
         };
         let form = self.live_form(receipt_form_id(receipt)?).await?;
+        if form.anonymous {
+            return if self
+                .repository
+                .holds_receipt(form.id, &user)
+                .await
+                .map_err(repository_error)?
+            {
+                Ok(MyResponse::Anonymous)
+            } else {
+                Err(FormError::NoResponse)
+            };
+        }
         let response = self
             .repository
             .response_of(form.id, &user)
@@ -468,7 +511,7 @@ where
             .map_err(repository_error)?
             .ok_or(FormError::NoResponse)?;
         let Some(row) = response.row else {
-            return Ok(MyResponse {
+            return Ok(MyResponse::Saved {
                 response,
                 answers: vec![],
                 booking: None,
@@ -487,7 +530,7 @@ where
         {
             Ok(cells) => cells,
             Err(DatabaseError::NotFound) => {
-                return Ok(MyResponse {
+                return Ok(MyResponse::Saved {
                     response,
                     answers: vec![],
                     booking: None,
@@ -498,7 +541,7 @@ where
         let table = self.table_of(&form).await?;
         let layout = self.refresh_layout(&form, table.as_ref()).await?.layout;
         let Some(cells) = cells.remove(&row) else {
-            return Ok(MyResponse {
+            return Ok(MyResponse::Saved {
                 response,
                 answers: vec![],
                 booking: None,
@@ -510,7 +553,7 @@ where
                 Some(table) => still_passes(&layout, &question_columns(&table), &answers),
                 None => false,
             };
-        Ok(MyResponse {
+        Ok(MyResponse::Saved {
             response,
             answers,
             booking: passes.then(|| unlocked_booking(&layout)).flatten(),

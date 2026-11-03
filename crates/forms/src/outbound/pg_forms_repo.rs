@@ -96,7 +96,7 @@ struct FormRow {
     name_follows_database: bool,
     is_hidden_in_drive: bool,
     responses_visible: bool,
-    respondent_hidden: bool,
+    anonymous: bool,
 }
 
 impl TryFrom<FormRow> for StoredForm {
@@ -122,7 +122,7 @@ impl TryFrom<FormRow> for StoredForm {
                 updated_at: row.updated_at,
                 is_hidden_in_drive: row.is_hidden_in_drive,
                 responses_visible: row.responses_visible,
-                respondent_hidden: row.respondent_hidden,
+                anonymous: row.anonymous,
             },
             trashed_at: row.trashed_at,
             name_follows_database: row.name_follows_database,
@@ -169,7 +169,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                 id, name, description, owner_id, database_id, table_id,
                 submitted_column_id, respondent_column_id, audience, tally_visible,
                 status, closes_at, confirmation_message, created_at, updated_at,
-                name_follows_database, is_hidden_in_drive, responses_visible, respondent_hidden
+                name_follows_database, is_hidden_in_drive, responses_visible, anonymous
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
             ON CONFLICT (table_id) DO NOTHING
@@ -192,7 +192,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
             name_follows_database,
             form.is_hidden_in_drive,
             form.responses_visible,
-            form.respondent_hidden,
+            form.anonymous,
         )
         .execute(&mut *transaction)
         .await;
@@ -239,7 +239,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
             SELECT id, name, description, owner_id, database_id, table_id,
                    submitted_column_id, respondent_column_id, audience, tally_visible,
                    status, closes_at, confirmation_message, created_at, updated_at, trashed_at,
-                   name_follows_database, is_hidden_in_drive, responses_visible, respondent_hidden
+                   name_follows_database, is_hidden_in_drive, responses_visible, anonymous
             FROM forms WHERE id = $1
             "#,
             id.into_uuid(),
@@ -259,7 +259,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                 SELECT id, name, description, owner_id, database_id, table_id,
                        submitted_column_id, respondent_column_id, audience, tally_visible,
                        status, closes_at, confirmation_message, created_at, updated_at, trashed_at,
-                   name_follows_database, is_hidden_in_drive, responses_visible, respondent_hidden
+                   name_follows_database, is_hidden_in_drive, responses_visible, anonymous
                 FROM forms WHERE id = ANY($1) AND trashed_at IS NULL
                 ORDER BY id
                 "#,
@@ -292,7 +292,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                 SELECT id, name, description, owner_id, database_id, table_id,
                        submitted_column_id, respondent_column_id, audience, tally_visible,
                        status, closes_at, confirmation_message, created_at, updated_at, trashed_at,
-                   name_follows_database, is_hidden_in_drive, responses_visible, respondent_hidden
+                   name_follows_database, is_hidden_in_drive, responses_visible, anonymous
                 FROM forms WHERE database_id = $1 AND trashed_at IS NULL
                 ORDER BY created_at, id
                 "#,
@@ -364,6 +364,27 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                 return Ok(FormUpdate::WidgetInUse);
             }
         }
+        // The form's row lock also waits out a response being recorded, so
+        // no response lands between this check and the change.
+        if let Some(anonymous) = changes.anonymous {
+            let locked = sqlx::query_scalar!(
+                r#"
+                SELECT f.anonymous <> $2 AND EXISTS (
+                    SELECT 1 FROM form_responses
+                    WHERE form_id = f.id AND status = 'submitted'
+                ) AS "locked!"
+                FROM forms f WHERE f.id = $1
+                "#,
+                id.into_uuid(),
+                anonymous,
+            )
+            .fetch_one(&mut *transaction)
+            .await?;
+            if locked {
+                transaction.rollback().await?;
+                return Ok(FormUpdate::AnonymityLocked);
+            }
+        }
         let updated = sqlx::query_as!(
             FormRow,
             r#"
@@ -375,13 +396,13 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                 closes_at = CASE WHEN $6 THEN $7 ELSE closes_at END,
                 tally_visible = COALESCE($8, tally_visible),
                 responses_visible = COALESCE($10, responses_visible),
-                respondent_hidden = COALESCE($11, respondent_hidden),
+                anonymous = COALESCE($11, anonymous),
                 updated_at = $9
             WHERE id = $1
             RETURNING id, name, description, owner_id, database_id, table_id,
                       submitted_column_id, respondent_column_id, audience, tally_visible,
                       status, closes_at, confirmation_message, created_at, updated_at, trashed_at,
-                   name_follows_database, is_hidden_in_drive, responses_visible, respondent_hidden
+                   name_follows_database, is_hidden_in_drive, responses_visible, anonymous
             "#,
             id.into_uuid(),
             changes.description.as_deref(),
@@ -393,7 +414,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
             changes.tally_visible,
             updated_at,
             changes.responses_visible,
-            changes.respondent_hidden,
+            changes.anonymous,
         )
         .fetch_one(&mut *transaction)
         .await?;
@@ -417,7 +438,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
             RETURNING id, name, description, owner_id, database_id, table_id,
                       submitted_column_id, respondent_column_id, audience, tally_visible,
                       status, closes_at, confirmation_message, created_at, updated_at, trashed_at,
-                   name_follows_database, is_hidden_in_drive, responses_visible, respondent_hidden
+                   name_follows_database, is_hidden_in_drive, responses_visible, anonymous
             "#,
             id.into_uuid(),
             name,
@@ -443,7 +464,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
             RETURNING id, name, description, owner_id, database_id, table_id,
                       submitted_column_id, respondent_column_id, audience, tally_visible,
                       status, closes_at, confirmation_message, created_at, updated_at, trashed_at,
-                      name_follows_database, is_hidden_in_drive, responses_visible, respondent_hidden
+                      name_follows_database, is_hidden_in_drive, responses_visible, anonymous
             "#,
             id.into_uuid(),
             updated_at,
@@ -522,6 +543,24 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
         at: DateTime<Utc>,
     ) -> Result<RecordedResponse, Self::Error> {
         ledger::record_submission(&self.pool, form, respondent, row, at).await
+    }
+
+    async fn record_anonymous_submission(
+        &self,
+        form: FormId,
+        voter: Option<&MacroUserIdStr<'_>>,
+        row: RowId,
+        day: DateTime<Utc>,
+    ) -> Result<RecordedResponse, Self::Error> {
+        ledger::record_anonymous_submission(&self.pool, form, voter, row, day).await
+    }
+
+    async fn holds_receipt(
+        &self,
+        form: FormId,
+        voter: &MacroUserIdStr<'_>,
+    ) -> Result<bool, Self::Error> {
+        ledger::holds_receipt(&self.pool, form, voter).await
     }
 
     async fn repoint_response(

@@ -110,22 +110,31 @@ pub struct FormResponse {
     pub updated_at: DateTime<Utc>,
 }
 
-/// A signed-in respondent's own response, with its answers as the row
-/// holds them now.
+/// A signed-in respondent's own response.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
-#[serde(rename_all = "camelCase")]
-pub struct MyResponse {
-    /// The ledger entry.
-    pub response: FormResponse,
-    /// The row's cells for the form's current questions, the empty ones
-    /// left out; none when the row is gone.
-    pub answers: Vec<Answer>,
-    /// The form's booking step, while the saved row still passes the form's
-    /// current required questions and gates.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[schema(nullable = false)]
-    #[specta(optional)]
-    pub booking: Option<UnlockedBooking>,
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum MyResponse {
+    /// Their ledger entry, with its answers as the row holds them now.
+    Saved {
+        /// The ledger entry.
+        response: FormResponse,
+        /// The row's cells for the form's current questions, the empty ones
+        /// left out; none when the row is gone.
+        answers: Vec<Answer>,
+        /// The form's booking step, while the saved row still passes the
+        /// form's current required questions and gates.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schema(nullable = false)]
+        #[specta(optional)]
+        booking: Option<UnlockedBooking>,
+    },
+    /// They responded to an anonymous form. Nothing links them to their
+    /// response, so there is nothing more to show.
+    Anonymous,
 }
 
 /// A booking step a passing response has unlocked, with its destination.

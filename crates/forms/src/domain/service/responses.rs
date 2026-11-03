@@ -166,7 +166,7 @@ where
         }
         // Voters show to whoever may read the responses, and never on a form
         // that hides its respondents.
-        let voters = if !form.respondent_hidden && (editor || form.responses_visible) {
+        let voters = if !form.anonymous && (editor || form.responses_visible) {
             Some(
                 self.repository
                     .respondents_by_row(form.id)

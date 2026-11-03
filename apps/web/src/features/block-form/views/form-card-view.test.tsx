@@ -29,7 +29,7 @@ function lunchPoll(access: FormDetail['access']): FormDetail {
       closesAt: null,
       tallyVisible: true,
       responsesVisible: false,
-      respondentHidden: false,
+      anonymous: false,
       confirmationMessage: '',
       submittedColumnId: null,
       respondentColumnId: null,
@@ -191,7 +191,7 @@ describe('FormCardView poll', () => {
   it('sends anyone to the Responses tab when shared responses name nobody', () => {
     const { onOpen, onOpenResponses } = mount('view', (detail) => {
       detail.form.responsesVisible = true;
-      detail.form.respondentHidden = true;
+      detail.form.anonymous = true;
     });
     expect(screen.queryByRole('button', { name: 'Results' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Responses' }));
@@ -208,7 +208,7 @@ describe('FormCardView poll', () => {
 
   it('sends editors of an anonymous poll to the Responses tab', () => {
     const { onOpenResponses } = mount('edit', (detail) => {
-      detail.form.respondentHidden = true;
+      detail.form.anonymous = true;
     });
     expect(screen.queryByRole('button', { name: 'Results' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Responses' }));

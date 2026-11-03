@@ -107,7 +107,7 @@ it('patches tally, shared responses and anonymity after the layout is valid', as
   expect(storage.updateForm).toHaveBeenCalledWith('form-1', {
     tallyVisible: false,
     responsesVisible: true,
-    respondentHidden: true,
+    anonymous: true,
   });
 });
 

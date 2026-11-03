@@ -102,7 +102,7 @@ beforeEach(() => {
         closesAt: null,
         tallyVisible: false,
         responsesVisible: false,
-        respondentHidden: false,
+        anonymous: false,
         confirmationMessage: 'Thank you',
         submittedColumnId: null,
         respondentColumnId: null,

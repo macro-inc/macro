@@ -412,10 +412,10 @@ export function RespondView(props: {
                     <p class="px-1 text-xs text-ink-muted">
                       Stored as a row in a database the form owner controls.{' '}
                       {props.detail.form.responsesVisible
-                        ? props.detail.form.respondentHidden
+                        ? props.detail.form.anonymous
                           ? 'Everyone who can open this form sees your answers, without your name.'
                           : 'Everyone who can open this form sees your answers and your name.'
-                        : props.detail.form.respondentHidden
+                        : props.detail.form.anonymous
                           ? 'The form’s editors see your answers, without your name.'
                           : 'Your answers are visible to the form’s editors.'}
                     </p>

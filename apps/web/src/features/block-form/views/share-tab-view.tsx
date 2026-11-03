@@ -187,11 +187,11 @@ export function ShareTabView(props: {
             size="md"
             label="Anonymous"
             labelClass="text-sm text-ink"
-            checked={form().respondentHidden}
+            checked={form().anonymous}
             disabled={!isOwner() || pending()}
-            onChange={(respondentHidden) =>
+            onChange={(anonymous) =>
               fireAndForget(
-                update({ respondentHidden }, 'Anonymous responses'),
+                update({ anonymous }, 'Anonymous responses'),
                 'form-share'
               )
             }

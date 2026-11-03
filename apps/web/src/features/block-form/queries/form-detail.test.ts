@@ -114,7 +114,7 @@ describe('the booking step', () => {
     closesAt: null,
     tallyVisible: false,
     responsesVisible: false,
-    respondentHidden: false,
+    anonymous: false,
     confirmationMessage: '',
     submittedColumnId: null,
     respondentColumnId: null,

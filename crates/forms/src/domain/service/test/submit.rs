@@ -197,7 +197,7 @@ async fn a_signed_in_visitor_of_a_public_form_keeps_their_identity_and_one_respo
 async fn a_hidden_respondent_is_still_recorded_once_and_left_off_the_row() {
     let world = world();
     seed_rsvp(&world, Audience::Members);
-    world.lock().unwrap().forms[0].form.respondent_hidden = true;
+    world.lock().unwrap().forms[0].form.anonymous = true;
     let forms = service(&world);
     submit_as(&forms, VIEWER, employee_answers()).await.unwrap();
     let again = submit_as(&forms, VIEWER, employee_answers()).await;
@@ -227,7 +227,7 @@ async fn a_form_cannot_turn_anonymous_after_a_response_names_its_respondent() {
         .update_form(
             form_receipt::<EditAccessLevel>(RSVP_FORM, OWNER, AccessLevel::Owner),
             UpdateForm {
-                respondent_hidden: Some(true),
+                anonymous: Some(true),
                 ..UpdateForm::default()
             },
         )
@@ -238,7 +238,7 @@ async fn a_form_cannot_turn_anonymous_after_a_response_names_its_respondent() {
             SharingRefusal::RespondentsAlreadyNamed
         ))
     ));
-    assert!(!world.lock().unwrap().forms[0].form.respondent_hidden);
+    assert!(!world.lock().unwrap().forms[0].form.anonymous);
 }
 
 #[tokio::test]

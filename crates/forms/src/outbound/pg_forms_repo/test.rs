@@ -174,7 +174,7 @@ fn form_over(table: &Table) -> Form {
         updated_at: at(9),
         is_hidden_in_drive: false,
         responses_visible: false,
-        respondent_hidden: false,
+        anonymous: false,
     }
 }
 
@@ -261,7 +261,7 @@ async fn a_form_hidden_in_drive_stays_hidden_through_a_rename(pool: PgPool) {
     let form = Form {
         is_hidden_in_drive: true,
         responses_visible: false,
-        respondent_hidden: false,
+        anonymous: false,
         ..form_over(&table)
     };
     repo.create_form(&form, &layout_over(&table), true)
@@ -361,7 +361,7 @@ async fn facts_change_only_where_given_and_a_closing_time_can_be_cleared(pool: P
                 closes_at: Some(Some(at(17))),
                 tally_visible: Some(true),
                 responses_visible: None,
-                respondent_hidden: None,
+                anonymous: None,
             },
             at(10),
             None,

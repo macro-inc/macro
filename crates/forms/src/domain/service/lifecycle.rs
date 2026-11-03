@@ -84,16 +84,6 @@ where
         {
             within(text, MAX_TEXT_LENGTH)?;
         }
-        if update.respondent_hidden == Some(true) && !form.respondent_hidden {
-            let counts = self
-                .repository
-                .response_counts(form.id)
-                .await
-                .map_err(repository_error)?;
-            if counts.submitted > 0 {
-                return Err(SharingRefusal::RespondentsAlreadyNamed.into());
-            }
-        }
         // A public form asks for no file: going public holds only if no
         // question asks for one when the change commits. A file widget left
         // on a column the grid retyped asks for nothing, so only the
@@ -123,6 +113,7 @@ where
             }
             FormUpdate::FormGone => Err(FormError::NotFound),
             FormUpdate::WidgetInUse => Err(FormError::FileUploadNeedsSignIn),
+            FormUpdate::AnonymityLocked => Err(SharingRefusal::AnonymityLocked.into()),
         }
     }
 

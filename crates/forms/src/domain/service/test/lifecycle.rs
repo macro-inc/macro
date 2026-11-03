@@ -53,7 +53,7 @@ async fn an_editor_changes_the_wording_but_only_the_owner_changes_who_responds_a
             ..UpdateForm::default()
         },
         UpdateForm {
-            respondent_hidden: Some(true),
+            anonymous: Some(true),
             ..UpdateForm::default()
         },
     ] {
@@ -76,7 +76,7 @@ async fn an_editor_changes_the_wording_but_only_the_owner_changes_who_responds_a
                 closes_at: Some(Some(closing)),
                 tally_visible: Some(true),
                 responses_visible: Some(true),
-                respondent_hidden: Some(true),
+                anonymous: Some(true),
                 ..UpdateForm::default()
             },
         )
@@ -87,7 +87,7 @@ async fn an_editor_changes_the_wording_but_only_the_owner_changes_who_responds_a
     assert_eq!(owned.closes_at, Some(closing));
     assert!(owned.tally_visible);
     assert!(owned.responses_visible);
-    assert!(owned.respondent_hidden);
+    assert!(owned.anonymous);
 
     let reopened = forms
         .update_form(

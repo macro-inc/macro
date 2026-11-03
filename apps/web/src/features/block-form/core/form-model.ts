@@ -206,7 +206,7 @@ export type FormMetadata = {
   closesAt: string | null;
   tallyVisible: boolean;
   responsesVisible: boolean;
-  respondentHidden: boolean;
+  anonymous: boolean;
   confirmationMessage: string;
   submittedColumnId: string | null;
   respondentColumnId: string | null;

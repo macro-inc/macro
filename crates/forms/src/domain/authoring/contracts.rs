@@ -91,9 +91,10 @@ pub struct AccessDraft {
     /// Whether people with View may read individual response rows.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub responses_visible: Option<bool>,
-    /// Whether respondent identity is withheld from response rows.
+    /// Whether nobody, the owner included, can see who gave which response;
+    /// refused once anyone has responded.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub respondent_hidden: Option<bool>,
+    pub anonymous: Option<bool>,
     /// Direct channel changes only; this does not post messages or send invitations.
     #[serde(default)]
     pub channel_grants: Vec<GrantChange>,
