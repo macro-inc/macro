@@ -332,6 +332,7 @@ lru = "0.16"
 md-5 = "0.10.6"
 miniz_oxide = { version = "0.8", features = ["with-alloc"] }
 mockall = "0.13"
+nutype = { version = "0.8.0", features = ["serde", "derive_unchecked"] }
 nom = "8"
 openssl-sys = "0.9"
 opus-pure = "0.2.1"

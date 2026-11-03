@@ -2,38 +2,55 @@
 
 ## What it is
 
-The view an agent presents in agent sessions (`execution.views.present`), as the web's
-dynamic-UI renderer draws it: the generated model-facing schema and
-`view_problems`, which finds what the renderer would reject before a view is
-presented.
+The view an agent shows a person (`execution.views.present` in agent
+sessions, `DisplayResults` in chat), as the web's dynamic-UI renderer draws
+it. `View` and `Widget` are the source of truth: decoding into them is the
+only validation, the model's JSON Schema comes from them through schemars,
+and the web's TypeScript through specta.
 
 ## Start here
 
-- `src/present_view.schema.generated.json`: generated; never edit by hand.
-- `src/check.rs`: reads a view the way Zod does; a field the schema does not
-  name is ignored, as the renderer ignores it.
+- `src/view.rs`: `View`, `Widget` and their parts. A variant's doc comment is
+  the model's guidance for it; it reaches ExecuteCode's description and the
+  `DisplayResults` tool schema.
+- `src/query.rs`: the list widget's filter, the web's Next Soup `Query`.
+- `src/decode.rs`: `decode_view` and `deserialize_view`. A field the types do
+  not name is ignored.
 
 ## Boundaries
 
-- Depends on: nothing but `serde_json`.
-- Used by: `agent_code_mode` (`execution.views.present`; ExecuteCode's
-  description includes the generated schema).
+- Depends on: `serde`, `serde_path_to_error`, `schemars`, `specta`, `nutype`.
+- Used by: `agent_code_mode` (`execution.views.present`, ExecuteCode's
+  description), `ai_tools` (`DisplayResults`), `agent_fold` (view tool
+  details and activity cards, built for wasm too).
 
 ## Recipes
 
-- Change a widget: edit `apps/web/src/features/dynamic-ui/schema.ts`, then
-  `bun run gen-dynamic-ui-schema` in `apps/web`.
+- Add a widget: add a `Widget` variant with its doc comment, run
+  `just gen-dynamic-ui-types` in `apps/web`, and add its arm to `Render` in
+  `apps/web/src/features/dynamic-ui/render.tsx`; the exhaustive `match` fails
+  to compile until you do.
+- Bound a value (a count, a range, a non-empty string): make it a `nutype`
+  newtype so an out-of-range value fails to decode, and give the field a
+  schemars attribute (`range`, `length`) so the model's schema shows the
+  bound. nutype supports only schemars 0.8.
 
 ## Checks
 
-- `cargo test -p dynamic_ui`
-- `bunx vitest run src/features/dynamic-ui/toolSchema.test.ts` in `apps/web`
-  fails when the generated schema is stale.
+- `cargo test -p dynamic_ui`; `the_present_view_schema_is_pinned` snapshots
+  the model-facing schema with insta.
+- `just gen-dynamic-ui-types` in `apps/web`, then commit
+  `src/features/dynamic-ui/generated` and `packages/lexical-core/generated`;
+  CI's Check Specta Types step fails when they are stale.
 
 ## Gotchas
 
-- A schema keyword the check does not read lets through views the renderer
-  rejects; `the_view_check_reads_every_keyword_the_generated_schema_uses`
-  fails until `CHECKED_KEYWORDS` or `IGNORED_KEYWORDS` names it.
 - Problems name a place and what belongs there, never what the view holds:
-  they reach logs with the failed call.
+  they reach logs and the model with the failed call. `decode.rs` drops the
+  value serde quotes.
+- Paths stop at an internally tagged widget: serde buffers a tagged variant's
+  fields, so a problem inside one names the widget, not the field.
+- The browser never validates a view: every path decodes it on the server
+  first. Render views only from decoded data (a `DisplayResults` result, a
+  presented view's result, a stored activity card), never from the model's
+  arguments.
