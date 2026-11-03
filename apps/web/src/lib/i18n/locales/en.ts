@@ -12,6 +12,7 @@ import localRuntime from './en/local-runtime';
 import mobile from './en/mobile';
 import nav from './en/nav';
 import settingsLanguage from './en/settings-language';
+import settingsMobileApp from './en/settings-mobile-app';
 import settingsNav from './en/settings-nav';
 import settingsShortcuts from './en/settings-shortcuts';
 import shortcuts from './en/shortcuts';
@@ -38,6 +39,7 @@ export default {
   mobile,
   nav,
   settingsLanguage,
+  settingsMobileApp,
   settingsNav,
   settingsShortcuts,
   shortcuts,
