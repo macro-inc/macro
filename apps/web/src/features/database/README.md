@@ -60,7 +60,9 @@ without a position writer; it cannot offer card moves that pretend to persist.
 Hosts load saved positions for the selected view before enabling moves and keep
 the position cache scoped to that view. Hosts that switch boards supply a stable
 `BoardPositions.viewId` so pending visual moves and sort prompts retire when the
-selected board changes. Cards reuse `GridCell` with wrapping
+selected board changes. Reading `move` and `setPositions` must bind those
+capabilities to the originating view; a pending response must not update the
+newly selected view's cache. Cards reuse `GridCell` with wrapping
 enabled, labels above each value, and an explicit empty-value dash. Keep the
 drag grip outside `CardActions`, whose descendants opt out of dragging.
 `onComposeRecord` replaces a board lane's inline card with the host's own form,
