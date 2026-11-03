@@ -237,7 +237,8 @@ fn up(args: &UpArgs) -> Result<()> {
     let kickstart_json =
         std::fs::read_to_string(gen_compose::kickstart_dir(&instance).join("kickstart.json"))?;
     // TLS clients reject `*.localhost` (a wildcard directly under a one-label
-    // TLD), so each instance gets a certificate naming its own host.
+    // TLD), and the shared ingress chooses certificates by SNI, so each
+    // instance's certificate names only its own host.
     let certs = issue_host_certificate(&instance, &name.host())?;
 
     let mut state = read_state(&instance);
@@ -406,6 +407,7 @@ fn issue_host_certificate(instance: &Instance, host: &str) -> Result<PathBuf> {
         .arg(repo_root().join("infra/local/certs/issue-host.sh"))
         .arg(&dir)
         .arg(host)
+        .arg("exact")
         .output()
         .context("issuing the instance certificate")?;
     ensure!(
