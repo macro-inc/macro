@@ -34,8 +34,8 @@ use super::{
 pub struct CompanyContactItem {
     /// The CRM contact id.
     pub id: Uuid,
-    /// The contact's email address.
-    pub email: String,
+    /// The contact's email address, if it has one.
+    pub email: Option<String>,
     /// The contact's display name, when known.
     pub name: Option<String>,
     /// Most recent known interaction with this contact.
