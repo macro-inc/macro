@@ -226,7 +226,7 @@ function ReadReceiptsRow(props: { link: EmailLink }) {
         size="md"
         label={`Read receipts for ${props.link.email_address}`}
         labelClass="sr-only"
-        checked={props.link.settings.read_receipts_enabled ?? false}
+        checked={props.link.settings.read_receipts_enabled ?? true}
         disabled={updateSettings.isPending}
         onChange={(checked) =>
           updateSettings.mutate(

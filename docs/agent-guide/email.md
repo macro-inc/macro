@@ -838,8 +838,8 @@ open shadow root: Playwright text locators can reach them, but a card's ordinary
 
 ### Read receipts
 
-With `enable-email-read-receipts` on and read receipts turned on for an inbox
-(see [Settings](settings.md#email-read-receipts)), messages sent from that
+With `enable-email-read-receipts` on and read receipts on for an inbox, which
+is the default (see [Settings](settings.md#email-read-receipts)), messages sent from that
 inbox show **Opened** or **Not opened** beside the date in the expanded
 message header. The desktop tooltip and the expanded header details (tap the
 header caret on touch) give the count and first and last open times. Only
