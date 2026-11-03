@@ -10,6 +10,7 @@ import {
 } from '../core/knobs';
 import type { CodeStepDraft } from '../core/routine-steps';
 import { callCount } from '../core/step-history';
+import { StepChange, StepRevision } from './routine-step-change';
 import { KnobSettings, StepSentence } from './routine-step-knobs';
 import { Field, useSteps } from './routine-steps';
 
@@ -20,8 +21,8 @@ export function StepNote(props: { children: JSX.Element }) {
 
 /**
  * A code step: what it does in its owner's words, with its knobs to change
- * in place, where it may make changes, and its code, folded away. AI writes
- * and changes the code; the owner changes the knobs.
+ * in place, and its code, folded away. The owner changes the knobs, and asks
+ * AI in words to change the rest, keeping the rewrite once they've seen it.
  */
 export function CodeStepBody(props: {
   step: CodeStepDraft;
@@ -30,6 +31,8 @@ export function CodeStepBody(props: {
 }) {
   const steps = useSteps();
   const [showCode, setShowCode] = createSignal(false);
+  // A rewrite waiting to be kept or undone; the step is unchanged until then.
+  const [revision, setRevision] = createSignal<CodeStepDraft>();
   const calls = () => {
     const record = steps.run()?.get(props.path);
     return record?.kind === 'code' ? record : undefined;
@@ -48,51 +51,75 @@ export function CodeStepBody(props: {
     });
   return (
     <div class="grid min-w-0 gap-3">
-      <Show
-        when={sentence()}
-        fallback={
-          <Show when={props.step.summary.trim()}>
-            {(summary) => <p class="text-sm text-ink-muted">{summary()}</p>}
-          </Show>
-        }
-      >
-        {(sentence) => (
-          <StepSentence
-            sentence={sentence()}
-            knobs={props.step.knobs}
-            onKnob={setKnob}
+      <Show when={revision()}>
+        {(revised) => (
+          <StepRevision
+            before={props.step}
+            after={revised()}
+            onKeep={() => {
+              props.onChange(revised());
+              setRevision(undefined);
+            }}
+            onUndo={() => setRevision(undefined)}
           />
         )}
       </Show>
-      <Show when={settings().length ? settings() : undefined}>
-        {(knobs) => (
-          <Field label="Settings">
-            <KnobSettings knobs={knobs()} onKnob={setKnob} />
-          </Field>
-        )}
-      </Show>
-      <Show
-        when={props.step.problems?.length ? props.step.problems : undefined}
-      >
-        {(problems) => (
-          <div
-            role="alert"
-            class="grid min-w-0 gap-1.5 rounded-xl border border-failure/30 bg-failure-bg px-3 py-2.5"
-          >
-            <span class="text-sm text-failure">
-              This code doesn’t type-check against Macro’s SDK yet, so the
-              routine can’t be saved with it. Draft it again or remove this
-              step.
-            </span>
-            <For each={problems()}>
-              {(problem) => (
-                <pre class="min-w-0 overflow-auto whitespace-pre-wrap font-mono text-xs text-ink-muted">
-                  {problem}
-                </pre>
-              )}
-            </For>
-          </div>
-        )}
+      <Show when={!revision()}>
+        <Show
+          when={sentence()}
+          fallback={
+            <Show when={props.step.summary.trim()}>
+              {(summary) => <p class="text-sm text-ink-muted">{summary()}</p>}
+            </Show>
+          }
+        >
+          {(sentence) => (
+            <StepSentence
+              sentence={sentence()}
+              knobs={props.step.knobs}
+              onKnob={setKnob}
+            />
+          )}
+        </Show>
+        <Show when={settings().length ? settings() : undefined}>
+          {(knobs) => (
+            <Field label="Settings">
+              <KnobSettings knobs={knobs()} onKnob={setKnob} />
+            </Field>
+          )}
+        </Show>
+        <Show
+          when={props.step.problems?.length ? props.step.problems : undefined}
+        >
+          {(problems) => (
+            <div
+              role="alert"
+              class="grid min-w-0 gap-1.5 rounded-xl border border-failure/30 bg-failure-bg px-3 py-2.5"
+            >
+              <span class="text-sm text-failure">
+                This code doesn’t type-check against Macro’s SDK yet, so the
+                routine can’t be saved with it. Draft it again or remove this
+                step.
+              </span>
+              <For each={problems()}>
+                {(problem) => (
+                  <pre class="min-w-0 overflow-auto whitespace-pre-wrap font-mono text-xs text-ink-muted">
+                    {problem}
+                  </pre>
+                )}
+              </For>
+            </div>
+          )}
+        </Show>
+        <Show when={steps.author}>
+          {(author) => (
+            <StepChange
+              step={props.step}
+              author={author()}
+              onRevised={setRevision}
+            />
+          )}
+        </Show>
       </Show>
       <div class="grid min-w-0 gap-2">
         <Button
@@ -110,8 +137,8 @@ export function CodeStepBody(props: {
             <code>{props.step.source}</code>
           </pre>
           <StepNote>
-            Written by AI and checked against Macro’s SDK when saved. Ask AI to
-            change it; change the underlined values above yourself.
+            Written by AI and checked against Macro’s SDK when saved. Change the
+            underlined values yourself, and the rest by saying what to change.
           </StepNote>
         </Show>
       </div>

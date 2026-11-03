@@ -172,7 +172,10 @@ vi.mock('@app/lib/analytics/posthog', () => ({
     enabled: flag.key === 'enable-routine-conditions',
   }),
 }));
-vi.mock('./routine-ai-composer', () => ({ RoutineAiComposer: () => null }));
+vi.mock('./routine-ai-composer', () => ({
+  RoutineAiComposer: () => null,
+  useComposerContext: () => () => ({}),
+}));
 vi.mock('@queries/storage/system-skills', () => ({
   useSystemSkillsQuery: () => ({
     skills: () => [{ id: 'compose-skill-id', name: 'Compose Routines' }],

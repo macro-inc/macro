@@ -7,6 +7,7 @@ import {
   routineModelSchema,
   routineTargetSchema,
 } from './routine-target';
+import type { RoutineTriggerDraft } from './routine-triggers';
 
 /** Areas a code step may change; reads are always allowed. The scheduler owns this list. */
 export const writeScopes = [
@@ -55,6 +56,18 @@ export type AgentStepDraft = {
   instructions: string;
 };
 export type StepDraft = AgentStepDraft | CodeStepDraft;
+
+/** What AI may make a step: code written once, or Ask AI each run. */
+export type StepKind = StepDraft['kind'];
+
+/** The routine a step is added to or changed in. */
+export type RoutineSoFar = {
+  triggers: RoutineTriggerDraft[];
+  steps: StepDraft[];
+};
+
+/** A step drafted to add at the end, and why it is code or Ask AI. */
+export type AddedStep = { step: StepDraft; reason: string };
 
 /** Bounds the scheduler enforces; mirrored for immediate feedback. */
 export const STEP_LIMITS = {

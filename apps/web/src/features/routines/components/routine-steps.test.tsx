@@ -8,7 +8,12 @@ import {
 } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { agentStep, type StepDraft } from '../core/routine-steps';
+import type { StepAuthor } from '../context/routine-slots';
+import {
+  agentStep,
+  type CodeStepDraft,
+  type StepDraft,
+} from '../core/routine-steps';
 import type { RoutineTriggerDraft } from '../core/routine-triggers';
 import { RoutineSteps, RoutineStepsSummary } from './routine-step-editor';
 import type { RoutineRunView, RoutineStepSlots } from './routine-steps';
@@ -37,6 +42,7 @@ function renderSteps(options: {
   triggers: RoutineTriggerDraft[];
   steps?: StepDraft[];
   lastRun?: RoutineRunView;
+  author?: StepAuthor;
 }) {
   const [steps, setSteps] = createSignal<StepDraft[]>(
     options.steps ?? [agentStep({ kind: 'model', model: 'm' }, 'Summarize')]
@@ -57,7 +63,11 @@ function renderSteps(options: {
         onChange={setSteps}
         triggers={options.triggers}
         defaultTarget={{ kind: 'model', model: 'm' }}
-        slots={slots}
+        slots={
+          options.author
+            ? { ...slots, createStepAuthor: () => options.author! }
+            : slots
+        }
         lastRun={options.lastRun}
         showRun={showRun()}
       />
@@ -118,7 +128,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const codeStep = (title: string, output?: string): StepDraft => ({
+const codeStep = (title: string, output?: string): CodeStepDraft => ({
   id: crypto.randomUUID(),
   kind: 'code',
   ...(output ? { output } : {}),
@@ -222,5 +232,88 @@ describe('routine steps editor', () => {
     await waitFor(() =>
       expect(document.activeElement?.textContent).toMatch(/^1.*Ask AI/)
     );
+  });
+
+  it('adds the next step from a description, says why, and switches or undoes it', async () => {
+    const add = vi
+      .fn<StepAuthor['add']>()
+      .mockResolvedValueOnce({
+        step: codeStep('Escalate blocking tasks'),
+        reason: 'it does the same thing every run',
+      })
+      .mockResolvedValueOnce({
+        step: agentStep({ kind: 'model', model: 'm' }, 'Escalate them'),
+        reason: 'it needs judgment',
+      });
+    const steps = renderSteps({
+      triggers: [email],
+      steps: [codeStep('Label invoices')],
+      author: { add, revise: vi.fn() },
+    });
+    const box = screen.getByRole('textbox', { name: 'Add a step' });
+    fireEvent.input(box, { target: { value: 'escalate blocking tasks' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect((await screen.findByRole('status')).textContent).toContain(
+      'runs the same way every time: it does the same thing'
+    );
+    expect(steps().map((step) => step.kind)).toEqual(['code', 'code']);
+    expect((box as HTMLInputElement).value).toBe('');
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Ask AI each run instead' })
+    );
+    await waitFor(() =>
+      expect(steps().map((step) => step.kind)).toEqual(['code', 'agent'])
+    );
+    expect(add).toHaveBeenLastCalledWith('escalate blocking tasks', 'agent');
+    expect(screen.getByRole('status').textContent).toContain('Added as Ask AI');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(steps().map((step) => step.kind)).toEqual(['code']);
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('changes a code step in words, and changes nothing until it’s kept', async () => {
+    const before: CodeStepDraft = {
+      ...codeStep('Escalate blocking tasks'),
+      knobs: [{ type: 'number', name: 'days', label: 'Days', value: 3 }],
+      sentence: 'Check tasks due within {days} days.',
+    };
+    const revise = vi.fn<StepAuthor['revise']>().mockResolvedValue({
+      ...before,
+      sentence: 'Check tasks due within {days} days and overdue tasks.',
+      source: 'export async function main() { overdue(); }',
+    });
+    const steps = renderSteps({
+      triggers: [email],
+      steps: [before],
+      author: { add: vi.fn(), revise },
+    });
+    fireEvent.input(screen.getByRole('textbox', { name: 'Change this step' }), {
+      target: { value: 'also include overdue tasks' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Change' }));
+    const review = await screen.findByRole('region', {
+      name: 'Rewritten step',
+    });
+    expect(revise).toHaveBeenCalledWith(before, 'also include overdue tasks');
+    expect(within(review).getByText('and overdue tasks').tagName).toBe('MARK');
+    expect(within(review).getByText('Rewritten and checked')).toBeTruthy();
+    expect(
+      within(review).getByText('Your values stay as they are.')
+    ).toBeTruthy();
+    expect(steps()[0]).toBe(before);
+
+    fireEvent.click(
+      within(review).getByRole('button', { name: 'Show code changes' })
+    );
+    expect(within(review).getByLabelText('Code changes').textContent).toContain(
+      '+ export async function main() { overdue(); }'
+    );
+    fireEvent.click(within(review).getByRole('button', { name: 'Keep' }));
+    expect(steps()[0]).toMatchObject({
+      source: 'export async function main() { overdue(); }',
+    });
+    expect(screen.queryByRole('region', { name: 'Rewritten step' })).toBeNull();
   });
 });

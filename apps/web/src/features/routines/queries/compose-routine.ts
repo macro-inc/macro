@@ -46,7 +46,7 @@ export type CodeGuidance = {
 };
 
 /** Times the drafter may fix code the type checker rejects before it gives up. */
-const MAX_CODE_FIXES = 3;
+export const MAX_CODE_FIXES = 3;
 
 /** A drafted code step the type checker rejects, and what to fix it with. */
 export type CodeFailure = {
@@ -82,7 +82,7 @@ const compositionSchema = z.object({
   steps: z.array(z.unknown()),
 });
 
-function stepJsonSchema(code: boolean) {
+export function stepJsonSchema(code: boolean) {
   return {
     type: 'object',
     description: `One step: ${code ? '{type:"code",id?,title,summary,writes,knobs,sentence,source} | ' : ''}{type:"agent",model?,agent?:{bot_id},instructions}`,
@@ -316,7 +316,7 @@ export function draftFromComposition(
 const COMPOSE_FAILED = 'Couldn’t draft that routine. Please try again.';
 
 /** How to write code steps for `description`; absent when the scheduler can't check code. */
-async function codeGuidance(
+export async function codeGuidance(
   description: string
 ): Promise<CodeGuidance | undefined> {
   const guide = await scheduledActionClient.codeGuide({ task: description });
@@ -359,10 +359,24 @@ async function complete(
   instructions: string,
   code: boolean
 ): Promise<unknown> {
+  return completeAs(model, prompt, instructions, compositionOutputSchema(code));
+}
+
+type OutputSchema = Parameters<
+  typeof cognitionApiServiceClient.structuredCompletion
+>[0]['output_schema'];
+
+/** One structured completion in `schema`'s shape; undefined when it failed. */
+export async function completeAs(
+  model: TModel,
+  prompt: string,
+  instructions: string,
+  schema: OutputSchema
+): Promise<unknown> {
   const response = await cognitionApiServiceClient.structuredCompletion({
     model,
     prompt,
-    output_schema: compositionOutputSchema(code),
+    output_schema: schema,
     additional_instructions: instructions,
     toolset: { type: 'none' },
     // Thinking at length took Gemini past the request's deadline; a quick

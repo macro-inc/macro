@@ -24,8 +24,13 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
+import type { StepAuthor } from '../context/routine-slots';
 import type { HistoryStep } from '../core/history';
-import type { AgentStepDraft, StepDraft } from '../core/routine-steps';
+import type {
+  AgentStepDraft,
+  RoutineSoFar,
+  StepDraft,
+} from '../core/routine-steps';
 import type { RoutineTarget } from '../core/routine-target';
 import type { RoutineTriggerDraft } from '../core/routine-triggers';
 import { copyStep } from '../core/step-edits';
@@ -45,6 +50,8 @@ export type RoutineStepSlots = {
     target: RoutineTarget;
     onChange(target: RoutineTarget): void;
   }>;
+  /** AI that adds and changes steps; without it, steps are added by hand. */
+  createStepAuthor?(routine: Accessor<RoutineSoFar>): StepAuthor;
 };
 
 /** A finished run to show on the steps: what each step did, by path. */
@@ -63,6 +70,8 @@ type StepsContextValue = {
   fresh: Set<string>;
   /** What the shown run did at each step path. */
   run: Accessor<ReadonlyMap<string, HistoryStep> | undefined>;
+  /** AI that adds and changes steps, when the host provides it. */
+  author?: StepAuthor;
 };
 
 const StepsContext = createContext<StepsContextValue>();
@@ -93,6 +102,10 @@ export function StepsProvider(
       ? new Map(lastRun.steps.map((step) => [step.path, step] as const))
       : undefined;
   };
+  const author = props.slots.createStepAuthor?.(() => ({
+    triggers: props.triggers,
+    steps: props.steps,
+  }));
   return (
     <StepsContext.Provider
       value={{
@@ -101,6 +114,7 @@ export function StepsProvider(
         slots: props.slots,
         fresh: new Set(),
         run,
+        author,
       }}
     >
       {props.children}
@@ -161,7 +175,7 @@ export function StepList(props: {
         // Into the list's gap, and behind the last card's corners.
         class={props.steps.length > 0 ? '-mt-5' : undefined}
       >
-        <AddStep onAdd={(step) => props.onChange([...props.steps, step])} />
+        <AddStep steps={props.steps} onChange={props.onChange} />
       </RoutineTray>
     </div>
   );

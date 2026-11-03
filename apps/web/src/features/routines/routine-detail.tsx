@@ -27,6 +27,7 @@ import { createRoutineDetailSource } from './queries/routine-sources';
 import { createRoutineConnectedApps, RoutineApps } from './routine-apps';
 import { RoutineExecutionPicker } from './routine-execution-picker';
 import { RoutinePromptEditor } from './routine-prompt-editor';
+import { createRoutineStepAuthor } from './routine-step-author';
 import {
   openShareRoutineDialog,
   RoutineTemplatePage,
@@ -179,6 +180,7 @@ export function RoutineDetail(props: {
           Triggers: RoutineTriggers,
           Apps: RoutineApps,
           createConnectedApps: createRoutineConnectedApps,
+          createStepAuthor: createRoutineStepAuthor,
           createChatMetadata: createChatHistoryMetadata,
           createAgentMetadata: createAgentHistoryMetadata,
         }}

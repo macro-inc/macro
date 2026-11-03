@@ -120,7 +120,14 @@ vi.mock('./queries/schedules', async () => {
 
 // Keep the real trigger menu, picker, model discovery adapter, storage, and mutation
 // lifecycle. The editor double exposes initialValue and detects any remount.
-vi.mock('./routine-ai-composer', () => ({ RoutineAiComposer: () => null }));
+vi.mock('./routine-ai-composer', () => ({
+  RoutineAiComposer: () => null,
+  useComposerContext: () => () => ({}),
+}));
+// Steps are added by hand here; AI adding steps is covered with the steps.
+vi.mock('./routine-step-author', () => ({
+  createRoutineStepAuthor: undefined,
+}));
 vi.mock('./routine-step-pickers', () => ({
   routineToolSlots: {
     LabelPicker: () => null,
