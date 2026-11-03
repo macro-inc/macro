@@ -93,6 +93,8 @@ export type LoadStage =
   | 'log_fetch'
   /** The fetched log was folded; the surface can show the truth. */
   | 'fold'
+  /** Snapshot events were projected into the surface's stores. */
+  | 'projection'
   /** A surface painted the cached transcript. */
   | 'warm_render'
   /** A surface painted the fetched transcript. */
@@ -230,6 +232,12 @@ export class SessionLoadTrace {
   /** The fetched snapshot is folded and the surface can read the session. */
   folded(foldStartedAt: number): void {
     this.stage('fold', foldStartedAt);
+  }
+
+  /** Listener projection is synchronous work inside the historical fold stage. */
+  projected(startedAt: number, messages: number): void {
+    if (this.#ended) return;
+    this.stage('projection', startedAt, { projection_messages: messages });
   }
 
   /**

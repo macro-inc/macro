@@ -80,6 +80,7 @@ import {
   type QueryRevalidationWire,
   type ReadResult,
 } from '../protocol';
+import { classifyCacheError } from '../telemetry';
 import { createDeferredQueryRereads } from './deferred-query-rereads';
 import {
   createDocumentQueryReader,
@@ -1247,8 +1248,14 @@ export function normalizedCacheExchange(
         span?: Span
       ): Promise<boolean> {
         let applied = true;
+        span?.setAttr('cache.effect_count', effects.length);
         for (const effect of effects) {
           if (!isCurrent()) return false;
+          const effectSpan = span?.span(
+            effect.kind === 'write'
+              ? 'graphql.subscription.cache_write'
+              : 'graphql.subscription.cache_delete'
+          );
           try {
             if (effect.kind === 'write') {
               await host.writeQuery({
@@ -1263,9 +1270,14 @@ export function normalizedCacheExchange(
           } catch (error) {
             applied = false;
             span?.error('Subscription cache effect failed');
+            span?.setAttr('cache.failure', classifyCacheError(error));
+            effectSpan?.setAttr('cache.failure', classifyCacheError(error));
             // One failed cache effect must neither skip later effects nor
             // prevent delivery of the original operation result.
+            effectSpan?.error('Subscription cache effect failed');
             options.onCacheError?.(error, op);
+          } finally {
+            effectSpan?.end();
           }
         }
         return applied && isCurrent();

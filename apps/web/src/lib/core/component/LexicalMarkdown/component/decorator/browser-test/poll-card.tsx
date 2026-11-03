@@ -73,6 +73,8 @@ function pollDetail(
       status: 'open',
       closesAt: null,
       tallyVisible: true,
+      responsesVisible: false,
+      anonymous: false,
       confirmationMessage: '',
       submittedColumnId: null,
       respondentColumnId: null,

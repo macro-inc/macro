@@ -1,3 +1,4 @@
+import { useFlow, usePending } from '@app/observability/flow';
 import { ENABLE_MENTION_TRACKING } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
@@ -65,20 +66,25 @@ function CanvasDocumentSession(
   const activePointers = new Set<number>();
   const userId = useUserId();
   const openedBy = userId();
-  const sync = canvasSyncSource(documentId, userId);
+  const flow = useFlow();
+  const sync = canvasSyncSource(documentId, userId, flow.span);
   const canEdit = () =>
     props.canEdit &&
     !props.isNested &&
     userId() === openedBy &&
     sync.canWrite();
-  const session = createCanvasSession({
-    documentId,
-    initial,
-    requireShared: props.shared,
-    userId: userId(),
-    canEdit,
-    ...sync,
-  });
+  const session = flow.span.run(() =>
+    createCanvasSession({
+      documentId,
+      span: flow.span,
+      initial,
+      requireShared: props.shared,
+      userId: userId(),
+      canEdit,
+      ...sync,
+    })
+  );
+  usePending('canvas.sync', () => session.state().t === 'loading');
   const sharedDoc = () => {
     const state = session.state();
     return state.t === 'ready' ? state.doc : undefined;
