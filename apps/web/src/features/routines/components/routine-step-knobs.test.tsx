@@ -73,13 +73,16 @@ describe('a step’s sentence', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Days: 7. Change it' }));
     const number = await screen.findByRole('spinbutton', { name: 'Days' });
+    expect(screen.getByText('1 or more')).toBeTruthy();
     fireEvent.input(number, { target: { value: '0' } });
     expect(screen.getByText('Use 1 or more.')).toBeTruthy();
-    expect(
-      (screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement)
-        .disabled
-    ).toBe(true);
+    // Enter saves a number, but not one out of bounds.
+    fireEvent.submit(number.closest('form')!);
     expect(current()[2]).toMatchObject({ value: 7 });
+    fireEvent.click(screen.getByRole('button', { name: 'One more' }));
+    expect((number as HTMLInputElement).value).toBe('1');
+    fireEvent.submit(number.closest('form')!);
+    expect(current()[2]).toMatchObject({ value: 1 });
   });
 
   it('saves the option picked from a choice’s menu', () => {

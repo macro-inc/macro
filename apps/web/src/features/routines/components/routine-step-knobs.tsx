@@ -2,7 +2,7 @@ import CheckIcon from '@icon/system/regular/check.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { Popover } from '@kobalte/core/popover';
-import { Button, Dropdown, TextField } from '@ui';
+import { Button, cn, Dropdown, TextField } from '@ui';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import {
   type Knob,
@@ -209,7 +209,10 @@ function KnobPopover(props: {
       </Popover.Trigger>
       <Popover.Portal mount={menuMount(trigger)}>
         <Popover.Content
-          class="menu-surface z-modal w-80 max-w-[calc(100vw-1rem)] p-3"
+          class={cn(
+            'menu-surface z-modal max-w-[calc(100vw-1rem)] p-3',
+            props.knob.type === 'number' ? 'w-auto' : 'w-80'
+          )}
           onKeyDown={(event) => event.stopPropagation()}
         >
           <form
@@ -225,24 +228,43 @@ function KnobPopover(props: {
               problem={problem()}
               onInput={setDraft}
             />
-            <div class="flex justify-end gap-2">
-              <Popover.CloseButton
-                as={Button}
-                type="button"
-                variant="ghost"
-                size="sm"
-              >
-                Cancel
-              </Popover.CloseButton>
-              <Button type="submit" size="sm" disabled={!!problem()}>
-                Save
-              </Button>
-            </div>
+            {/* A number is one field: Enter saves it, as in a form. */}
+            <Show
+              when={props.knob.type !== 'number'}
+              fallback={
+                <span class="text-xs text-ink-muted">
+                  Enter saves · Esc cancels
+                </span>
+              }
+            >
+              <div class="flex justify-end gap-2">
+                <Popover.CloseButton
+                  as={Button}
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                >
+                  Cancel
+                </Popover.CloseButton>
+                <Button type="submit" size="sm" disabled={!!problem()}>
+                  Save
+                </Button>
+              </div>
+            </Show>
           </form>
         </Popover.Content>
       </Popover.Portal>
     </Popover>
   );
+}
+
+/** The numbers a knob takes, in words, or undefined when any number does. */
+function numberRange(knob: { min?: number; max?: number }) {
+  if (knob.min !== undefined && knob.max !== undefined)
+    return `${knob.min} to ${knob.max}`;
+  if (knob.min !== undefined) return `${knob.min} or more`;
+  if (knob.max !== undefined) return `${knob.max} or less`;
+  return undefined;
 }
 
 /** The field that edits one knob, by its kind. */
@@ -256,29 +278,73 @@ function KnobEditor(props: {
   return (
     <Switch>
       <Match when={props.knob.type === 'number' && props.knob}>
-        {(knob) => (
-          <TextField
-            class="grid gap-1.5"
-            value={String(props.value)}
-            validationState={invalid()}
-            onChange={(value) =>
-              props.onInput(value.trim() === '' ? Number.NaN : Number(value))
-            }
-          >
-            <TextField.Label class="text-xs font-medium text-ink-muted">
-              {knob().label}
-            </TextField.Label>
-            <TextField.Input
-              type="number"
-              inputMode="decimal"
-              min={knob().min}
-              max={knob().max}
-            />
-            <TextField.ErrorMessage class="text-xs text-failure">
-              {props.problem}
-            </TextField.ErrorMessage>
-          </TextField>
-        )}
+        {(knob) => {
+          const value = () =>
+            typeof props.value === 'number' ? props.value : Number.NaN;
+          // One more or fewer, kept in range.
+          const step = (by: number) => {
+            const next = (Number.isFinite(value()) ? value() : 0) + by;
+            props.onInput(
+              Math.min(
+                knob().max ?? Number.POSITIVE_INFINITY,
+                Math.max(knob().min ?? Number.NEGATIVE_INFINITY, next)
+              )
+            );
+          };
+          return (
+            <TextField
+              class="grid gap-1.5"
+              value={Number.isFinite(value()) ? String(value()) : ''}
+              validationState={invalid()}
+              onChange={(text) =>
+                props.onInput(text.trim() === '' ? Number.NaN : Number(text))
+              }
+            >
+              <TextField.Label class="text-xs font-medium text-ink-muted">
+                {knob().label}
+              </TextField.Label>
+              <div class="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-label="One fewer"
+                  disabled={value() <= (knob().min ?? Number.NEGATIVE_INFINITY)}
+                  onClick={() => step(-1)}
+                >
+                  −
+                </Button>
+                <TextField.Input
+                  type="number"
+                  inputMode="decimal"
+                  class="w-20 text-center"
+                  min={knob().min}
+                  max={knob().max}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-label="One more"
+                  disabled={value() >= (knob().max ?? Number.POSITIVE_INFINITY)}
+                  onClick={() => step(1)}
+                >
+                  +
+                </Button>
+                <Show when={numberRange(knob())}>
+                  {(range) => (
+                    <TextField.Description class="pl-1 text-xs text-ink-muted">
+                      {range()}
+                    </TextField.Description>
+                  )}
+                </Show>
+              </div>
+              <TextField.ErrorMessage class="text-xs text-failure">
+                {props.problem}
+              </TextField.ErrorMessage>
+            </TextField>
+          );
+        }}
       </Match>
       <Match when={props.knob.type === 'question' && props.knob}>
         {(knob) => (
