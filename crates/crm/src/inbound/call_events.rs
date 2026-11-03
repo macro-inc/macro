@@ -146,11 +146,11 @@ impl<Q: CallRecordQueryService, L: CallRecordLinkStore> CallLinkConsumer<Q, L> {
                         }
                     };
                     let kafka_message = message.inner();
-                    let span = tracing::info_span!(
-                        "crm_call_link_event",
-                        topic = kafka_message.topic(),
-                        partition = kafka_message.partition(),
-                        offset = kafka_message.offset(),
+                    // Continues the trace that published the event, so an
+                    // imported call's link joins its webhook-to-ingest trace.
+                    let span = kafka_util::consumer_span(
+                        kafka_message,
+                        CrmCallLinksGroup::GROUP_NAME,
                     );
                     let decoded = {
                         let _guard = span.enter();

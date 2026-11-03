@@ -60,15 +60,16 @@ pub struct ContactPhone {
     pub source: PhoneSource,
 }
 
-/// Parse numbers a person typed, in order, dropping repeats. The error names
-/// the first value that is not a number with its country code.
+/// Parse numbers a person typed, in order, dropping repeats. The error says
+/// which entry is not a number with its country code, by position: the value
+/// itself is personal data and errors are recorded on spans.
 pub fn parse_contact_phones(phones: &[String]) -> Result<Vec<PhoneNumber>, CrmError> {
     let mut parsed: Vec<PhoneNumber> = Vec::new();
-    for text in phones {
+    for (index, text) in phones.iter().enumerate() {
         let phone = PhoneNumber::parse(text).ok_or_else(|| {
             CrmError::InvalidRequest(format!(
-                "{} is not a phone number with its country code, starting with +",
-                text.trim()
+                "Phone number {} is not a number with its country code, starting with +",
+                index + 1
             ))
         })?;
         if !parsed.contains(&phone) {
