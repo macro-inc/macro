@@ -1,4 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { queryReadyGate } from '@queries/gate';
 import type { DatabaseView } from '@service-storage/generated/schemas/databaseView';
 import type { Accessor } from 'solid-js';
 import type { BoardPositionsState } from '../../database/primitives/board-layout';
@@ -20,7 +21,7 @@ export function useDatabaseBoardPositions(
     },
     state: (): BoardPositionsState => {
       if (!stored()) return { kind: 'ready', positions: [] };
-      if (positions.isSuccess)
+      if (queryReadyGate(positions))
         return { kind: 'ready', positions: positions.data };
       if (positions.isError)
         return {

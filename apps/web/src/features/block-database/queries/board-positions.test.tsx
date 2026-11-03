@@ -22,6 +22,7 @@ import type {
 import { DatabaseBoardView } from '../../database/views/database-board-view';
 import { useDatabaseBoardPositions } from './board-positions';
 import { databaseViewKeys } from './keys';
+import { refreshCardPositions } from './views';
 
 const transport = vi.hoisted(() => ({
   applyDatabaseOps: vi.fn(),
@@ -303,3 +304,68 @@ it.each(['success', 'refusal'] as const)(
     expect(cardsIn('To do')).toEqual(['moving']);
   }
 );
+
+it('keeps cached positions ready when a background refresh fails', async () => {
+  const view: DatabaseView = {
+    id: 'view',
+    databaseId: 'database',
+    tableId: 'table',
+    name: 'Board',
+    position: 'a0',
+    query: { filter: null, sort: [] },
+    layout: {
+      kind: 'board',
+      title: 'name',
+      groupBy: 'stage',
+      lanes: [],
+      cardFields: [],
+      hideEmptyLanes: false,
+    },
+    createdAt: '2026-09-01T00:00:00Z',
+    updatedAt: '2026-09-01T00:00:00Z',
+  };
+  const saved: CardPosition[] = [
+    { row: 'first', lane: { kind: 'option', id: 'done' }, position: 'a0' },
+  ];
+  transport.viewPositions
+    .mockResolvedValueOnce(ok({ positions: saved }))
+    .mockRejectedValueOnce(new Error('Refresh failed'));
+
+  function PositionState() {
+    const positions = useDatabaseBoardPositions(
+      'database',
+      () => view,
+      () => true
+    );
+    return (
+      <output aria-label="Board positions">{positions.state().kind}</output>
+    );
+  }
+
+  render(() => (
+    <QueryClientProvider client={queryClient}>
+      <PositionState />
+    </QueryClientProvider>
+  ));
+
+  await waitFor(() =>
+    expect(screen.getByLabelText('Board positions').textContent).toBe('ready')
+  );
+  expect(
+    queryClient.getQueryData(
+      databaseViewKeys.positions('database', 'view').queryKey
+    )
+  ).toEqual(saved);
+
+  void refreshCardPositions('database', 'view');
+
+  await waitFor(() => expect(transport.viewPositions).toHaveBeenCalledTimes(2));
+  await waitFor(() =>
+    expect(screen.getByLabelText('Board positions').textContent).toBe('ready')
+  );
+  expect(
+    queryClient.getQueryData(
+      databaseViewKeys.positions('database', 'view').queryKey
+    )
+  ).toEqual(saved);
+});
