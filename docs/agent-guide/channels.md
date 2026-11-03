@@ -1022,9 +1022,9 @@ trailing controls, with no extra right padding.
 The sidebar uses TanStack Virtual for the section stack, each expanded channel
 list, and search results. Rows retain stable identities through live refreshes;
 focused and dragged rows remain mounted when they leave the visible range.
-Keyboard navigation scrolls smoothly only when the highlighted row enters the
-viewport's two-row context margin, leaving neighboring rows visible above and
-below. The margin shrinks in short sections; reduced motion disables animation.
+Keyboard navigation scrolls immediately, without animation, only when the
+highlighted row enters the viewport's two-row context margin, leaving neighboring
+rows visible above and below. The margin shrinks in short sections.
 Section jumps also reveal the heading with surrounding context.
 Capped sections scroll independently. When All channels is last and has no saved
 height, it grows to show its full list while rows remain virtualized against the

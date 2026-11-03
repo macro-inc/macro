@@ -53,19 +53,6 @@ beforeEach(() => {
   viewportHeight = 200;
   vi.useFakeTimers();
   vi.stubGlobal('ResizeObserver', MeasuredResizeObserver);
-  vi.stubGlobal(
-    'matchMedia',
-    vi.fn((media: string) => ({
-      matches: false,
-      media,
-      onchange: null,
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    }))
-  );
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
     function (this: HTMLElement) {
       return this.hasAttribute('data-viewport') ? 200 : 32;
@@ -193,7 +180,7 @@ describe('channel rail virtualizer', () => {
     expect(view.viewport.scrollTop).toBe(732);
   });
 
-  it('smoothly reveals two context rows above and below the focused row', async () => {
+  it('immediately reveals two context rows above and below the focused row', async () => {
     const view = mount(320, 0, 64);
     measure(200);
 
@@ -201,7 +188,7 @@ describe('channel rail virtualizer', () => {
     await vi.advanceTimersByTimeAsync(200);
     expect(view.scrollTo).toHaveBeenCalledWith({
       top: 376,
-      behavior: 'smooth',
+      behavior: 'auto',
     });
 
     view.handle()?.scrollToIndex(10, { align: 'nearest' });
@@ -218,7 +205,7 @@ describe('channel rail virtualizer', () => {
     expect(view.viewport.scrollTop).toBe(320);
   });
 
-  it('includes preceding sections in padded smooth scrolling', async () => {
+  it('includes preceding sections in padded scrolling', async () => {
     const view = mount(500, 500, 64);
     measure(600);
 
@@ -236,19 +223,22 @@ describe('channel rail virtualizer', () => {
     expect(view.viewport.scrollTop).toBe(464);
   });
 
-  it('uses immediate padded scrolling when reduced motion is requested', async () => {
-    const preference = window.matchMedia('(prefers-reduced-motion: reduce)');
-    vi.spyOn(window, 'matchMedia').mockReturnValue({
-      ...preference,
-      matches: true,
-    });
+  it('immediately follows rapid changes to the keyboard target', () => {
     const view = mount(320, 0, 64);
     measure(200);
     view.scrollTo.mockClear();
 
     view.handle()?.scrollToIndex(15, { align: 'nearest' });
-    await vi.advanceTimersByTimeAsync(200);
-    expect(view.scrollTo).toHaveBeenCalledWith({ top: 376, behavior: 'auto' });
+    expect(view.viewport.scrollTop).toBe(376);
+    view.handle()?.scrollToIndex(40, { align: 'nearest' });
+    expect(view.viewport.scrollTop).toBe(1176);
+    view.handle()?.scrollToIndex(10, { align: 'nearest' });
+
+    expect(view.scrollTo).toHaveBeenLastCalledWith({
+      top: 256,
+      behavior: 'auto',
+    });
+    expect(view.viewport.scrollTop).toBe(256);
   });
 
   it('preserves row elements through refreshed keys and reordering', () => {
@@ -317,7 +307,7 @@ describe('channel rail target scrolling', () => {
 
     expect(container.scrollTo).toHaveBeenCalledWith({
       top: 264,
-      behavior: 'smooth',
+      behavior: 'instant',
     });
   });
 
@@ -349,12 +339,12 @@ describe('channel rail target scrolling', () => {
 
     expect(container.scrollTo).toHaveBeenCalledWith({
       top: 200,
-      behavior: 'smooth',
+      behavior: 'instant',
     });
     expect(inner.viewport.scrollTop).toBe(556);
   });
 
-  it('cancels an old smooth scroll when a new heading already has context', () => {
+  it('keeps an already visible heading in place after a distant target', () => {
     const container = document.createElement('div');
     const heading = document.createElement('div');
     Object.defineProperties(container, {
@@ -370,7 +360,7 @@ describe('channel rail target scrolling', () => {
     scrollChannelRailTargetIntoView(container, heading, 64);
     expect(container.scrollTo).toHaveBeenLastCalledWith({
       top: 496,
-      behavior: 'smooth',
+      behavior: 'instant',
     });
 
     bounds.mockReturnValue(new DOMRect(0, 100, 300, 32));

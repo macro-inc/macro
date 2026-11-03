@@ -49,12 +49,9 @@ export function scrollChannelRailTargetIntoView(
     offset = bottom - container.clientHeight + gap;
   }
 
-  const immediate =
-    offset === 0 ||
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   container.scrollTo({
     top: container.scrollTop + offset,
-    behavior: immediate ? 'instant' : 'smooth',
+    behavior: 'instant',
   });
 }
 type ChannelRailVirtualizerProps<K extends string> = {
@@ -129,9 +126,7 @@ function VirtualRows<K extends string>(
 
       virtualizer.scrollToIndex(index, {
         align: !align || align === 'nearest' ? 'auto' : align,
-        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
-          ? 'auto'
-          : 'smooth',
+        behavior: 'auto',
       });
     },
     getScrollOffsetForIndex: (index, options) => {
