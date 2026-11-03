@@ -526,9 +526,11 @@ of breadcrumbs; it returns to the filtered list (hidden in the reading pane,
 where the list is already beside the thread). The subject, tags and
 participants stay put while only the messages scroll. The full subject, including
 its last word beside the title action, supports text selection. Pressing `Escape`
-in the open thread with focus outside any input does the same once there is nothing left to unwind
-(an open reply, an expanded body, or a focused message each take one `Escape`
-first); the list keeps the row you came from focused and comes back at the same
+in the open thread with focus outside any input returns to the originating list
+once there is nothing left to unwind (an open reply, an expanded body, or a
+focused message each take one `Escape` first). In the reading pane, it restores
+list focus without closing the thread. The list keeps the row you came from
+focused and comes back at the same
 scroll position, scrolling only if j/k in the thread moved focus off screen. If
 the focused row leaves the list without a list `e` (a reply in Signal marks it
 done, or another device archives it), focus moves to the row that took its
