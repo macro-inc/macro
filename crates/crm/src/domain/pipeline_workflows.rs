@@ -302,6 +302,9 @@ where
             .apply_ops(receipt, viewer.acting_bot, batch)
             .await
             .map_err(|error| match error {
+                // Treat a refused row as a caller-correctable workflow error.
+                // CSV import retries these individually and reports invalid rows
+                // while still accepting the valid rows in the same batch.
                 super::pipelines::PipelineError::Database(
                     databases::domain::models::DatabaseError::InvalidOp(refusal),
                 ) => WorkflowError::Invalid(refusal.reason),
@@ -539,7 +542,11 @@ where
                             ))
                         })?;
                     match record_type {
-                        PipelineRecordType::Company => contact.company_id,
+                        PipelineRecordType::Company => contact.company_id.ok_or_else(|| {
+                            WorkflowError::Invalid(format!(
+                                "The contact with the email {email} has no company."
+                            ))
+                        })?,
                         PipelineRecordType::Contact => contact.id,
                     }
                 }

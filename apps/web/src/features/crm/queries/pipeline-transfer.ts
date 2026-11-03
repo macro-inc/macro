@@ -127,7 +127,7 @@ export function createPipelineTransfer(
         if (contact.isOk())
           records.set(id, {
             name: contact.value.name ?? '',
-            key: contact.value.email,
+            key: contact.value.email ?? '',
           });
       });
       return records;

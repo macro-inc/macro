@@ -85,7 +85,8 @@ function VisibilityControl(props: RecordVisibilityActionProps) {
             </Show>
             <Show when={props.kind === 'contact'}>
               {' '}
-              Their company must also be visible for them to appear in People.
+              If linked to a company, that company must also be visible for them
+              to appear in People.
             </Show>
           </Show>
         }

@@ -4125,9 +4125,25 @@ export type CreateCrmCompanyRequest = {
 export type CreateCrmContactRequest = {
     /**
      * The contact's email address, including personal email providers.
-     * It need not match a company domain.
+     * It need not match a company domain. Optional: omit it to add the
+     * contact by name only.
      */
-    email: string;
+    email?: string | null;
+    /**
+     * Display name for the contact.
+     */
+    name: string;
+};
+
+/**
+ * Request body for `POST /crm/contacts`.
+ */
+export type CreateCrmTeamContactRequest = {
+    /**
+     * The contact's email address, of any domain. Optional: omit it to
+     * add the contact by name only.
+     */
+    email?: string | null;
     /**
      * Display name for the contact.
      */
@@ -4809,6 +4825,20 @@ export type CrmAssociation = {
 } | 'activity';
 
 /**
+ * A domain the team keeps out of email sync.
+ */
+export type CrmBlockedDomainResponse = {
+    /**
+     * When it was added.
+     */
+    created_at: string;
+    /**
+     * The blocked domain, lowercase.
+     */
+    domain: string;
+};
+
+/**
  * The crm company filters used to narrow which CRM companies appear in soup.
  */
 export type CrmCompanyFilters = {
@@ -4888,17 +4918,19 @@ export type CrmCompanyResponse = {
  */
 export type CrmContactResponse = {
     /**
-     * The id of the company the contact belongs to.
+     * The id of the company the contact belongs to; absent for a
+     * contact without a company.
      */
-    companyId: string;
+    companyId?: string | null;
     /**
      * When the contact record was created.
      */
     createdAt: string;
     /**
-     * The contact's email address.
+     * The contact's email address; absent for contacts added by name
+     * alone.
      */
-    email: string;
+    email?: string | null;
     /**
      * Earliest known interaction with this contact.
      */
@@ -5024,6 +5056,11 @@ export type CrmTeamSettingsResponse = {
      * Who can change the deal stage set in CRM settings.
      */
     edit_stages_role: CrmPermissionRole;
+    /**
+     * Whether email sync keeps personal-provider addresses (gmail.com
+     * etc.) out of the CRM.
+     */
+    exclude_personal_emails: boolean;
     /**
      * System stage option id to team stage option id for seeded stages.
      */
@@ -13696,21 +13733,21 @@ export type SoupCrmContactSoupPropertiesField = {
     properties: Array<SoupProperty>;
 } & {
     /**
-     * Parent company ID.
+     * Parent company ID; `None` for a contact without a company.
      */
-    companyId: string;
+    companyId?: string | null;
     /**
-     * Parent company's display name.
+     * Parent company's display name; `None` without a company.
      */
-    companyName: string;
+    companyName?: string | null;
     /**
      * Record creation time.
      */
     createdAt: string;
     /**
-     * Full email address.
+     * Full email address; `None` for a contact added by name alone.
      */
-    email: string;
+    email?: string | null;
     /**
      * Earliest interaction for this team record.
      */
@@ -15956,6 +15993,11 @@ export type UpdateCrmTeamSettingsRequest = {
     default_team_view_id?: string | null;
     delete_records_role?: null | CrmPermissionRole;
     edit_stages_role?: null | CrmPermissionRole;
+    /**
+     * Whether email sync keeps personal-provider addresses out of the
+     * CRM. Admin/owner only.
+     */
+    exclude_personal_emails?: boolean | null;
     move_closed_deals_role?: null | CrmPermissionRole;
     /**
      * Replacement team-views array (whole-blob, last write wins).
@@ -19334,6 +19376,80 @@ export type GetChannelsResponses = {
 
 export type GetChannelsResponse = GetChannelsResponses[keyof GetChannelsResponses];
 
+export type ListCrmBlockedDomainsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/crm/blocked-domains';
+};
+
+export type ListCrmBlockedDomainsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListCrmBlockedDomainsError = ListCrmBlockedDomainsErrors[keyof ListCrmBlockedDomainsErrors];
+
+export type ListCrmBlockedDomainsResponses = {
+    200: Array<CrmBlockedDomainResponse>;
+};
+
+export type ListCrmBlockedDomainsResponse = ListCrmBlockedDomainsResponses[keyof ListCrmBlockedDomainsResponses];
+
+export type UnblockCrmDomainData = {
+    body?: never;
+    path: {
+        /**
+         * A bare domain like acme.com
+         */
+        domain: string;
+    };
+    query?: never;
+    url: '/crm/blocked-domains/{domain}';
+};
+
+export type UnblockCrmDomainErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UnblockCrmDomainError = UnblockCrmDomainErrors[keyof UnblockCrmDomainErrors];
+
+export type UnblockCrmDomainResponses = {
+    204: void;
+};
+
+export type UnblockCrmDomainResponse = UnblockCrmDomainResponses[keyof UnblockCrmDomainResponses];
+
+export type BlockCrmDomainData = {
+    body?: never;
+    path: {
+        /**
+         * A bare domain like acme.com
+         */
+        domain: string;
+    };
+    query?: never;
+    url: '/crm/blocked-domains/{domain}';
+};
+
+export type BlockCrmDomainErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type BlockCrmDomainError = BlockCrmDomainErrors[keyof BlockCrmDomainErrors];
+
+export type BlockCrmDomainResponses = {
+    204: void;
+};
+
+export type BlockCrmDomainResponse = BlockCrmDomainResponses[keyof BlockCrmDomainResponses];
+
 export type CreateCrmCompanyData = {
     body: CreateCrmCompanyRequest;
     path?: never;
@@ -19550,6 +19666,29 @@ export type SearchContactsResponses = {
 };
 
 export type SearchContactsResponse2 = SearchContactsResponses[keyof SearchContactsResponses];
+
+export type CreateCrmTeamContactData = {
+    body: CreateCrmTeamContactRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/contacts';
+};
+
+export type CreateCrmTeamContactErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateCrmTeamContactError = CreateCrmTeamContactErrors[keyof CreateCrmTeamContactErrors];
+
+export type CreateCrmTeamContactResponses = {
+    200: CrmContactResponse;
+};
+
+export type CreateCrmTeamContactResponse = CreateCrmTeamContactResponses[keyof CreateCrmTeamContactResponses];
 
 export type GetContactByEmailData = {
     body?: never;

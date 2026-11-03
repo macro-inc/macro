@@ -68,6 +68,7 @@ const context: CrmContext = {
   createTeamViews: unused,
   createLists: unused,
   createCompanyImporter: unused,
+  createBlockedDomains: unused,
   renameCompany: unused,
   renameContact: unused,
   hideCompany: unused,

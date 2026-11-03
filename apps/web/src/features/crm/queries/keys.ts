@@ -10,4 +10,5 @@ export const crmKeys = createQueryKeys('crm', {
   contact: (contactId: string) => [contactId],
   contactByEmail: (teamId: string, email: string) => [teamId, email],
   quickAccessContacts: null,
+  blockedDomains: null,
 });
