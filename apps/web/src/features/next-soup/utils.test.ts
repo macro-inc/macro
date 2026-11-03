@@ -1,4 +1,5 @@
 import { createCalendarRange } from '@app/features/calendar-view/calendar-range';
+import { createSearchParamsCodec } from '@app/lib/split-router';
 import {
   previewBlockTarget,
   previewCalendarTarget,
@@ -9,7 +10,8 @@ import {
   homeCalendarNavigation,
   homePreviewNavigation,
 } from '../home/home-preview-navigation';
-import { homePreviewTarget } from '../home/home-route';
+import { homePreviewLegacyTarget, homePreviewTarget } from '../home/home-route';
+import { homeProjectSearch } from '../home/home-route-schema';
 
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: vi.fn(() => false),
@@ -326,6 +328,67 @@ describe('project rows', () => {
     name: 'Roadmap',
     ownerId: 'owner',
   };
+
+  it.each(['unseen', 'seen'] as const)(
+    'keeps a %s discussion target in the Home preview URL and touch fallback',
+    (state) => {
+      const notification: UnifiedNotification = {
+        id: 'project-comment-notification',
+        entity_id: projectId,
+        entity_type: 'initiative',
+        sender_id: null,
+        state,
+        created_at: '2026-10-01T12:00:00Z',
+        updated_at: '2026-10-01T12:00:00Z',
+        sent: true,
+        viewed_at: null,
+        notification_event_type: 'initiative_discussion',
+        notification_metadata: {
+          tag: 'initiative_discussion',
+          content: {
+            projectName: 'Roadmap',
+            owner: 'owner',
+            reason: 'reply',
+            messageId: 'reply',
+            threadId: 'root',
+            text: 'Update',
+          },
+        },
+      };
+      const selection = { ...entity, notifications: () => [notification] };
+      const navigation = homePreviewNavigation(selection);
+      const project = createSearchParamsCodec(homeProjectSearch).parse(
+        navigation.search.project ?? {}
+      ).value;
+      const search = {
+        channel: { messageId: '', threadId: '' },
+        document: { commentId: '' },
+        project,
+      };
+      expect(homePreviewTarget(navigation.params, search)).toMatchObject({
+        blockType: 'initiative',
+        blockId: projectId,
+        params: { section: 'overview', discussionId: 'reply' },
+      });
+      expect(homePreviewLegacyTarget(navigation.params, search)).toMatchObject({
+        type: 'initiative',
+        id: projectId,
+        entryMetadata: { search: { project: { discussionId: ['reply'] } } },
+      });
+      expect(
+        homePreviewNavigation({
+          ...selection,
+          notificationDisplayCutoff: '2026-10-02T12:00:00Z',
+        }).search.project?.discussionId
+      ).toEqual(['']);
+      expect(
+        homePreviewNavigation({
+          ...selection,
+          notifications: () => [{ ...notification, state: 'done' }],
+        }).search.project?.discussionId
+      ).toEqual(['']);
+    }
+  );
 
   it.each([false, true])(
     'opens a project through its Tasks-hosted identity (new split: %s)',
@@ -1903,6 +1966,7 @@ describe('getChannelEntityTarget', () => {
     'pdf-detail',
     'agent-detail',
     'call-detail',
+    'project',
   ])('clears stale %s targets on ordinary Home navigation', (namespace) => {
     const navigation = homePreviewNavigation({ type: 'channel', id: 'other' });
     expect(Object.hasOwn(navigation.search, namespace)).toBe(true);

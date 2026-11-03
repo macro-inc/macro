@@ -18,6 +18,7 @@ import {
 } from './ai-editing/ai-toolkit';
 import {
   type AwarenessSource,
+  DEFAULT_EDITOR_NAME,
   nextAiPeerId,
   type Peer,
   PeerPool,
@@ -44,7 +45,7 @@ export class EditingWorkspace {
     wal: WALSyncer<RawUpdate>,
     opts: EditingWorkspaceOptions = {}
   ) {
-    this.pool = opts.pool ?? new PeerPool();
+    this.pool = opts.pool ?? PeerPool.forEditor(DEFAULT_EDITOR_NAME);
     // Seed the editing surface from the merged state.
     this.session = createEditingSession();
     loadSnapshot(
