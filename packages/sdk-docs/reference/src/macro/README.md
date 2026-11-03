@@ -46,6 +46,18 @@ Re-exports [ApplyOpsOptions](../entities/databases/database/type-aliases/ApplyOp
 
 ***
 
+### ArchiveCause
+
+Re-exports [ArchiveCause](../../generated/agent-harness/types.gen/type-aliases/ArchiveCause.md)
+
+***
+
+### AutoArchiveOverrides
+
+Re-exports [AutoArchiveOverrides](../entities/agent-sessions/agent-session/type-aliases/AutoArchiveOverrides.md)
+
+***
+
 ### CallMessage
 
 Re-exports [CallMessage](../entities/calls/message/classes/CallMessage.md)
@@ -613,6 +625,12 @@ Re-exports [RoutineOptions](../entities/routines/routine/interfaces/RoutineOptio
 ### RoutineTriggerOptions
 
 Re-exports [RoutineTriggerOptions](../entities/routines/routine/type-aliases/RoutineTriggerOptions.md)
+
+***
+
+### SessionAutoArchive
+
+Re-exports [SessionAutoArchive](../entities/agent-sessions/agent-session/type-aliases/SessionAutoArchive.md)
 
 ***
 

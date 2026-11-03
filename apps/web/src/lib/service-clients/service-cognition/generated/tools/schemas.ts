@@ -10781,7 +10781,34 @@ export const ListEntitiesResponse = z.object({
           name: z.string(),
           ownerId: z.string(),
           botId: z.string().uuid(),
-          isArchived: z.boolean(),
+          archivedBy: z
+            .union([
+              z.any().superRefine((x, ctx) => {
+                const schemas = [
+                  z.literal('user'),
+                  z.literal('pull_request_merged'),
+                  z.literal('runtime_closed'),
+                ];
+                const errors = schemas.reduce<z.ZodError[]>(
+                  (errors, schema) =>
+                    ((result) =>
+                      result.error ? [...errors, result.error] : errors)(
+                      schema.safeParse(x)
+                    ),
+                  []
+                );
+                if (schemas.length - errors.length !== 1) {
+                  ctx.addIssue({
+                    path: ctx.path,
+                    code: 'invalid_union',
+                    unionErrors: errors,
+                    message: 'Invalid input: Should pass single schema',
+                  });
+                }
+              }),
+              z.null(),
+            ])
+            .optional(),
           status: z.string(),
           turnState: z.union([z.string(), z.null()]).optional(),
           repoUrl: z.union([z.string(), z.null()]).optional(),
@@ -12397,7 +12424,36 @@ export const SessionConversation = z.object({
   name: z.string(),
   ownerId: z.string(),
   botId: z.string().uuid(),
-  isArchived: z.boolean(),
+  archivedBy: z
+    .union([
+      z.any().superRefine((x, ctx) => {
+        const schemas = [
+          z.literal('user'),
+          z.literal('pull_request_merged'),
+          z.literal('runtime_closed'),
+        ];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      z.null(),
+    ])
+    .optional(),
+  archivedAt: z
+    .union([z.string().datetime({ offset: true }), z.null()])
+    .optional(),
   harness: z.string(),
   model: z.string(),
   status: z.string(),

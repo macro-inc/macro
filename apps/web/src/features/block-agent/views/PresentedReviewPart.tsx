@@ -1,3 +1,4 @@
+import { isSessionArchived } from '@service-agent-harness/session-archive';
 import { createEffect, createMemo, createSignal, Show } from 'solid-js';
 import { PersistedReview } from '../../agent-reviews/views/persisted-review';
 import { useOptionalAgentSession } from '../context/AgentSessionContext';
@@ -57,7 +58,7 @@ export function PresentedReviewPart(props: {
       session?.sessionId() === props.sessionId &&
         session.userId() &&
         session.session()?.canEdit &&
-        !session.session()?.isArchived
+        !isSessionArchived(session.session())
     );
   return (
     <>

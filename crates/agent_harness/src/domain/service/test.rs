@@ -375,6 +375,10 @@ impl agent_session::domain::ports::SessionTurnObserver for SignallingTurnObserve
             reason,
         );
     }
+
+    fn runtime_closed(&self, id: AgentSessionId) {
+        agent_session::domain::ports::SessionTurnObserver::runtime_closed(&self.harness, id);
+    }
 }
 
 /// The test's half of [`SignallingTurnObserver`], plus the lifecycle facts

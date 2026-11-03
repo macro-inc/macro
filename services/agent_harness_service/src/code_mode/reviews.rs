@@ -43,7 +43,7 @@ impl<S: AgentSessionRepo, H: AgentSessionNotificationRecipient> ReviewActions fo
                 .owner_user()
                 .cloned()
                 .map_err(|_| CodeModeError::Forbidden)?,
-            archived: row.is_archived,
+            archived: row.is_archived(),
             prompter: self
                 .sessions
                 .turn_prompter(session)
