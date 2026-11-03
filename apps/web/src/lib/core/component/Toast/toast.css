@@ -46,7 +46,7 @@
 }
 
 .macro-toast[data-mobile][data-single-row] .macro-toast-heading {
-  column-gap: 16px;
+  gap: 24px;
 }
 
 .macro-toast-surface {

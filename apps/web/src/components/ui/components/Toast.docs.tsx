@@ -545,7 +545,7 @@ export default defineDoc({
       id: 'app-position',
       title: 'App position',
       description:
-        'Desktop toasts appear at the bottom-right; mobile toasts sit above the dock and swipe away in either direction without a close icon. Multi-row mobile cards use 92vw clamped between 320px and 480px, capped by the available width. Single-row notices stay content-sized, with 16px between the title and inline actions. These previews have their own queue, separate from real app notifications. Switching examples or leaving the page clears them.',
+        'Desktop toasts appear at the bottom-right; mobile toasts sit above the dock and swipe away in either direction without a close icon. Multi-row mobile cards use 92vw clamped between 320px and 480px, capped by the available width. Single-row notices stay content-sized, with 24px between the title and inline actions even when the action group wraps. These previews have their own queue, separate from real app notifications. Switching examples or leaving the page clears them.',
       render: AppPositionDemo,
       fill: true,
     },
