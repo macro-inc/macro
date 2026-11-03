@@ -388,8 +388,9 @@ async fn rebind_work(
 ) -> Result<(), InboxLifecycleError> {
     sqlx::query!("UPDATE email_mailbox_watch_work SET next_run_at=now(),revision=revision+1 WHERE link_id=$1",link)
         .execute(&mut **tx).await.map_err(failed)?;
-    sqlx::query!(r#"INSERT INTO email_sync_streams(id,link_id,generation,kind,scope_id,position,initial_complete,scan_id)
-        SELECT gen_random_uuid(),link_id,$3,kind,scope_id,position,initial_complete,scan_id FROM email_sync_streams WHERE link_id = $1 AND generation = $2
+    // The import run continues in the new generation, so it keeps its stamps.
+    sqlx::query!(r#"INSERT INTO email_sync_streams(id,link_id,generation,kind,scope_id,position,initial_complete,scan_id,import_started_at,import_completed_at)
+        SELECT gen_random_uuid(),link_id,$3,kind,scope_id,position,initial_complete,scan_id,import_started_at,import_completed_at FROM email_sync_streams WHERE link_id = $1 AND generation = $2
         ON CONFLICT DO NOTHING"#,link,old,new).execute(&mut **tx).await.map_err(failed)?;
     sqlx::query!(r#"INSERT INTO email_message_reconciliation(link_id,generation,provider_id,is_import)
         SELECT link_id,$3,provider_id,is_import FROM email_message_reconciliation WHERE link_id = $1 AND generation = $2 ON CONFLICT DO NOTHING"#,link,old,new).execute(&mut **tx).await.map_err(failed)?;

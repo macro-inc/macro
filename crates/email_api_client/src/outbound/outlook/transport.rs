@@ -271,6 +271,9 @@ impl OutlookApiClientRepository {
                         .map(|date| date.duration_since(SystemTime::now()).unwrap_or_default())
                 })
             });
+        if let Some(delay) = retry_after {
+            span.record("outlook.retry_after_seconds", whole_seconds(delay));
+        }
         let body = response.text().await.unwrap_or_default();
         let error: Value = serde_json::from_str(&body).unwrap_or(Value::Null);
         let code = error.pointer("/error/code").and_then(Value::as_str);
@@ -348,21 +351,22 @@ fn record_attempt(span: &tracing::Span, result: &Result<Response, GraphFailure>)
         span.record("outlook.throttle_origin", "none");
         return;
     };
-    let (origin, retry_after) = match &failure.error {
+    // A response's Retry-After was recorded when it arrived; a gate refusal
+    // has no response, so its delay is recorded here.
+    let origin = match &failure.error {
         EmailApiError::RateLimited {
             origin: RateLimitOrigin::Provider { .. },
-            retry_after,
-        } => ("graph", *retry_after),
-        EmailApiError::RateLimited { retry_after, .. } => ("gate", *retry_after),
-        _ => ("none", None),
+            ..
+        } => "graph",
+        EmailApiError::RateLimited { retry_after, .. } => {
+            if let Some(delay) = retry_after {
+                span.record("outlook.retry_after_seconds", whole_seconds(*delay));
+            }
+            "gate"
+        }
+        _ => "none",
     };
     span.record("outlook.throttle_origin", origin);
-    if let Some(delay) = retry_after {
-        span.record(
-            "outlook.retry_after_seconds",
-            i64::try_from(delay.as_millis().div_ceil(1000)).unwrap_or(i64::MAX),
-        );
-    }
     if origin == "gate" {
         tracing::debug!(parent: span, error = %failure.error, "Microsoft request gate deferred a Graph request");
     } else {
@@ -371,6 +375,10 @@ fn record_attempt(span: &tracing::Span, result: &Result<Response, GraphFailure>)
             tracing::field::display(&failure.error),
         );
     }
+}
+
+fn whole_seconds(delay: Duration) -> i64 {
+    i64::try_from(delay.as_millis().div_ceil(1000)).unwrap_or(i64::MAX)
 }
 
 pub(super) fn invalid_response() -> EmailApiError {

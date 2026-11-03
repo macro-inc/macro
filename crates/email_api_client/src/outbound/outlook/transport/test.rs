@@ -97,7 +97,7 @@ const MAILBOX: MailboxAccess = MailboxAccess {
 };
 
 #[tokio::test]
-async fn graph_throttling_is_recorded_with_its_retry_after_and_request_id() {
+async fn graph_retry_after_and_request_ids_are_recorded_on_every_response() {
     let spans = Spans::default();
     let _subscriber =
         tracing::subscriber::set_default(tracing_subscriber::registry().with(spans.clone()));
@@ -110,6 +110,11 @@ async fn graph_throttling_is_recorded_with_its_retry_after_and_request_id() {
                 .insert_header("Retry-After", "7")
                 .insert_header("request-id", "graph-request-1"),
         )
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/AAMkBusy"))
+        .respond_with(ResponseTemplate::new(503).insert_header("Retry-After", "11"))
         .mount(&server)
         .await;
     Mock::given(method("GET"))
@@ -129,6 +134,12 @@ async fn graph_throttling_is_recorded_with_its_retry_after_and_request_id() {
                 .unwrap(),
         )
         .await;
+    let unavailable = api
+        .get::<Value>(
+            &token,
+            api.endpoint(&["me", "messages", "AAMkBusy"]).unwrap(),
+        )
+        .await;
     let succeeded = api
         .get::<Value>(&token, api.endpoint(&["me", "messages", "AAMkOK"]).unwrap())
         .await;
@@ -136,9 +147,13 @@ async fn graph_throttling_is_recorded_with_its_retry_after_and_request_id() {
     assert!(matches!(throttled, Err(EmailApiError::RateLimited { .. })));
     assert!(succeeded.is_ok());
     let requests = spans.named("outlook.graph_request");
-    let [throttled, succeeded] = requests.as_slice() else {
-        panic!("expected two Graph request spans, got {requests:?}");
+    assert!(matches!(unavailable, Err(EmailApiError::Transient { .. })));
+    let [throttled, unavailable, succeeded] = requests.as_slice() else {
+        panic!("expected three Graph request spans, got {requests:?}");
     };
+    assert_eq!(unavailable["http.response.status_code"], "503");
+    assert_eq!(unavailable["outlook.throttle_origin"], "none");
+    assert_eq!(unavailable["outlook.retry_after_seconds"], "11");
     assert_eq!(throttled["operation.name"], "outlook.graph_request");
     assert_eq!(throttled["url.template"], "/me/messages/{id}");
     assert_eq!(throttled["mailbox.link_id"], MAILBOX.link_id.to_string());
