@@ -432,10 +432,32 @@ An `@` inside a word stays literal text. Check hardware-keyboard input too;
 it should open only one menu.
 The same software-keyboard check applies to `:` for emoji and `/` for formatting
 commands: type a search and tap a result without sending the draft.
-Type `/gif` or choose **GIF** from `+`. The picker opens above the composer on
-phones and stays visible after you choose the action, including with the iOS
-keyboard open. Trending GIFs show first; tap search to filter, then tap a GIF
-to insert it without sending the draft.
+Type `/gif` or choose **GIF** from `+`. The rounded picker replaces any active
+formatting or link menu, opens above the composer on phones, and stays visible
+after you choose the action, including with the iOS keyboard open. Both the `/`
+formatting menu and the GIF picker span the available chat width on phones,
+using the mentions menu's side gutters.
+If the browser has no caret selection or its range has no rendered geometry,
+the GIF picker anchors to its editor rather than staying hidden.
+The larger desktop GIF picker stays within the viewport on narrow screens.
+Repeat after scrolling the page: the picker must stay beside the composer,
+without adding the page's scroll offset to its fixed position.
+Open and dismiss the keyboard while the picker is open: it must recalculate
+its placement and available height. Focusing search must not scroll the page
+away from the composer.
+Trending GIFs show first, with the large search field focused on both desktop
+and phones. Search keeps the composer expanded, and tapping anywhere in the
+search field keeps focus there. Tap a GIF to download its original animated bytes
+and upload them to Macro's static-file service before insertion, without sending
+the draft. The picker shows upload progress and prevents duplicate selections;
+a failure removes the unused upload and leaves the picker open for retry. Closing
+the picker, changing the draft, or losing edit permission prevents a late insertion.
+Cancellation aborts the transfer and discards any completed upload that was not inserted.
+On desktop, arrow keys move through the two-column grid and scroll the full
+selection outline into view; Enter inserts it and Escape closes the picker.
+Check that GIFs animate in the picker, in the draft, after sending, after copying
+and pasting, and in the enlarged image viewer. Newly inserted GIFs use static-file references; picker
+previews and existing Klipy URL images still load directly with anonymous CORS.
 
 Closed mention menus do not gather, rank, or paginate candidates. When checking
 channel-switch performance, include touch navigation back to the list and reopening
