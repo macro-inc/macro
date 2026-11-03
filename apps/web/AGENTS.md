@@ -929,6 +929,9 @@ The same suite covers stopping and reloading an agent reply inside a mention:
 keep incomplete trailing Macro XML hidden in settled agent prose, preserve
 completed chips and literal tag examples in Markdown code, and leave user prompts
 unchanged.
+A finished agent reply offers Make a doc, which saves that reply's prose as a
+markdown document and opens it beside the session. Leave thoughts, tool rows,
+and a reply that is still streaming out of it.
 Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when using the Nix Chrome binary.
 
 Reuse the responsive import review for Notion, Linear and Jira; scope report

@@ -1359,6 +1359,8 @@ with `evaluate_script`. Do not wait on response text: the page displays
 `Time to first token: N s` and doc content that easily false-matches `wait_for` patterns.
 After completion, each assistant message gets `Edit assistant response in Notes` and
 `Copy assistant response` buttons; tool-use turns render as an expandable `N steps` button.
+Agent session replies use **Make a doc** under a finished reply instead; see
+[Making a doc from an agent reply](#making-a-doc-from-an-agent-reply).
 The chat auto-titles itself after the first exchange (route stays stable, title changes).
 
 The agent has workspace tools (it can list your documents, read channels, create tasks,
@@ -1753,6 +1755,14 @@ either viewer can be drag-selected and copied, from the composer and from sent
 messages.
 Selecting text in the composer or outside the transcript must not show the reply
 button; clearing the transcript selection dismisses it.
+
+### Making a doc from an agent reply
+
+A finished agent reply with prose shows **Make a doc** under the reply. It
+creates a markdown document from that prose and opens it beside the session.
+The title is the reply's first heading, or its first line when there is no
+heading. Thoughts, tool calls, and a reply that is still streaming are left
+out. The same action in the older chat is `Edit assistant response in Notes`.
 
 ### Expanded session mentions
 

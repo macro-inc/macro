@@ -32,6 +32,7 @@ import { match } from 'ts-pattern';
 import { useOptionalAgentSession } from '../context/AgentSessionContext';
 import { useOpenPromptOrigin } from '../open-prompt-origin';
 import { isControlMessage } from '../state/control-message';
+import { documentFromAgentProse } from '../state/document-from-message';
 import { isNotificationMessage } from '../state/notification-message';
 import { agentContextText, promptOrigin } from '../state/prompt-origin';
 import { thoughtIsStreaming } from '../state/thought-streaming';
@@ -44,6 +45,7 @@ import {
   WorkingLine,
 } from '../ui';
 import { LiveToolGroup } from '../views/LiveToolGroup';
+import { MakeDocumentFromMessage } from './MakeDocumentFromMessage';
 import { PromptFooter } from './PromptFooter';
 import { AttachmentPart } from './parts/AttachmentPart';
 import { ControlPart } from './parts/ControlPart';
@@ -347,6 +349,11 @@ export function Message(props: {
   const inFlight = () => props.inFlight;
   const failure = () =>
     props.message.stop?.kind === 'failed' ? props.message.stop : undefined;
+  const documentDraft = createMemo(() =>
+    props.message.author.kind === 'agent'
+      ? documentFromAgentProse(props.message.parts)
+      : undefined
+  );
 
   return (
     // A control and an event notification are both user-authored by the
@@ -419,6 +426,14 @@ export function Message(props: {
                   />
                 )}
               </Show>
+            )}
+          </Show>
+          <Show when={!inFlight() && documentDraft()}>
+            {(draft) => (
+              <MakeDocumentFromMessage
+                title={draft().title}
+                markdown={draft().markdown}
+              />
             )}
           </Show>
         </div>

@@ -19,6 +19,9 @@ const renderTelemetry = vi.hoisted(() => ({
 vi.mock('../context/AgentSessionContext', () => ({
   useOptionalAgentSession: renderTelemetry.context,
 }));
+vi.mock('./MakeDocumentFromMessage', () => ({
+  MakeDocumentFromMessage: () => null,
+}));
 
 // The layer under test is how a message lays its parts out — which calls fold
 // into a group and at what index — so every part renderer and ui primitive
