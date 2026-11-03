@@ -72,12 +72,12 @@ function ParticipantTileWrapper(props: {
   // Fills its cell, but never wider than 16:9: on a wide panel a full-width
   // tile crops a 16:9 camera to a zoomed-in strip. Taller cells (phones,
   // grids) still fill, so portrait video keeps the space.
-  // The minimum height sits on the cell: size containment ignores content.
+  // Cells can shrink to fit the screen-share strip and picture-in-picture grid.
   return (
     <div
       hidden={props.hidden}
       class={cn(
-        'flex size-full min-h-30 items-center justify-center [container-type:size]',
+        'flex size-full min-h-0 items-center justify-center [container-type:size]',
         props.class
       )}
     >
@@ -250,11 +250,7 @@ function ParticipantTile(props: {
       onToggleFocus={props.onToggleFocus}
       focusLabel={`${props.isFocused ? 'Unfocus' : 'Focus'} ${displayName()}`}
       hidden={props.hidden}
-      class={cn(
-        'min-w-0',
-        props.avatarSize === 'sm' && 'min-h-0',
-        props.hidden && 'hidden'
-      )}
+      class={cn('min-w-0', props.hidden && 'hidden')}
     >
       <Show
         when={cameraTrack()}
@@ -621,7 +617,7 @@ export function CallOverlay(props: {
                 inert={controlsHidden()}
                 data-holds-prompts={isTouchDevice() ? undefined : ''}
               >
-                <div class="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 mobile:grid-cols-[minmax(0,1fr)_auto] mobile:px-[max(16px,var(--mobile-chrome-gutter))] mobile:@max-[24rem]/call-stage:grid-cols-1 mobile:@max-[21rem]/call-stage:gap-1 @3xl/call-stage:grid-cols-[minmax(0,1fr)_minmax(18rem,2fr)_minmax(0,1fr)]">
+                <div class="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 mobile:grid-cols-[minmax(0,1fr)_auto] mobile:px-[max(16px,var(--mobile-chrome-gutter))] mobile:@max-[26rem]/call-stage:grid-cols-1 mobile:@max-[21rem]/call-stage:gap-1 @3xl/call-stage:grid-cols-[minmax(0,1fr)_minmax(18rem,2fr)_minmax(0,1fr)]">
                   <div class="min-w-0 max-w-48 mobile:hidden">
                     {props.footerLeading}
                   </div>

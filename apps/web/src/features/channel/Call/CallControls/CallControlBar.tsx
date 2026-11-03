@@ -42,6 +42,7 @@ function MediaSplitButton(props: {
         <ButtonGroup
           size={isMobile() ? 'icon-md' : 'icon-lg'}
           aria-label={props.label}
+          class="shrink-0"
         >
           <ButtonGroup.Button
             aria-label={props.toggleLabel}
@@ -108,7 +109,7 @@ export function CallControlBar(props: {
       data-call-controls
       class="@container relative z-20 w-full max-w-xl mobile:max-w-none"
     >
-      <div class="mx-auto flex w-fit max-w-full flex-wrap items-center justify-center gap-2 rounded-full bg-menu-glass p-1.5 text-ink glass mobile:flex-nowrap mobile:@max-[20rem]:px-0 @max-xs:gap-1 @max-3xs:gap-0 @max-3xs:px-0 @sm:gap-3">
+      <div class="mx-auto flex w-fit max-w-full flex-wrap items-center justify-center gap-2 rounded-full bg-menu-glass p-1.5 text-ink glass mobile:@max-[20rem]:px-0 @max-xs:gap-1 @max-3xs:gap-0 @max-3xs:px-0 @sm:gap-3">
         <MediaSplitButton
           label="Microphone"
           onOpenChange={(open) => {

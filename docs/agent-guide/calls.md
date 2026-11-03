@@ -275,8 +275,9 @@ On phones, the fully rounded control bar fits its buttons instead of filling the
 available width. Controls have 8px gaps, expanding to 12px in roomy bars and
 contracting on narrow phones so all controls fit. The sidebar button stays
 separate on the right with a 48px tap target and the row keeps its side gutters.
-On phones at most 384px wide, the sidebar button moves below the bar so the
-additional screen-share settings control fits without clipping.
+On phones at most 416px wide, the sidebar button moves below the bar so the
+additional screen-share settings control fits without clipping. Controls wrap
+on smaller available widths without shrinking their split-button segments.
 On desktop, the sidebar button stays at the bottom-right and Copy Meeting Url
 stays at the bottom-left, without horizontal padding on the footer row. On
 phones, Copy Meeting Url uses the shared `CopyButton` in a standard 40px
