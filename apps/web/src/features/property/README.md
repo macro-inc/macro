@@ -51,6 +51,11 @@ Editable list cells use the shared ghost `Property.Pill` styling. Project hover
 cards use a cube header with the assigned value below it; empty Project hover
 cards retain the one-line empty message.
 
+The single-item Source property uses `SourceLinkPill` in composers, inline pills,
+and the side panel: its item opens through the shared mention-link navigation,
+including `specific_message_id`; its caret opens the host's existing picker.
+Empty or unsupported references retain the ordinary editable property pill.
+
 `EntityRowTags.collapse` connects to the host's shared priority-overflow controller.
 Show at most three individual chips by default and keep the rest in overflow.
 Measure actual title, tag, and control widths; collapse more trailing chips when

@@ -573,6 +573,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   the create response confirms success; never clear newer composer input from a
   late callback or automatically retry an uncertain create. Keep recovery copies
   through restarts and remove them on explicit logout. See the Tasks walkthrough.
+- Prefill task Source through the originating action's composer preset under
+  `enable-task-source-property`; keep the shared composer flag-agnostic and retain
+  exact message IDs through property edits. See the Tasks walkthrough.
 - Shared server-state queries and mutations live in `src/lib/queries`; keep
   feature-specific query orchestration with its owning feature.
 - Keep CRM contacts explicitly included in the auxiliary GraphQL backfill;

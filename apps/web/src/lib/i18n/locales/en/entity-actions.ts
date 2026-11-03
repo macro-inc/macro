@@ -37,6 +37,8 @@ export default {
   addToProject: 'Add to project…',
   openProjectNamed: 'Open project {{name}}',
   changeProject: 'Change project',
+  openSourceNamed: 'Open source {{name}}',
+  changeSource: 'Change source',
   moveToFolder: 'Move to folder',
   removeFromFolder: 'Remove from folder',
   duplicate: 'Duplicate',
