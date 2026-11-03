@@ -276,6 +276,52 @@ async fn outlook_resync_fences_page_workers_and_never_creates_a_gmail_backfill(d
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn outlook_resync_starts_a_new_import_run_once(db: PgPool) {
+    let telemetry = crate::telemetry_capture::Telemetry::default();
+    let _guard = telemetry.install();
+    let (repo, link, _) = shared(&db).await;
+    sqlx::query!(
+        r#"INSERT INTO email_sync_streams (id,link_id,generation,kind,scope_id,initial_complete,import_started_at,import_completed_at)
+        VALUES ($1,$2,1,'folder_catalog','mail',true,now() - interval '1 day',now() - interval '23 hours')"#,
+        macro_uuid::generate_uuid_v7(),
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE email_sync_streams SET initial_complete = true WHERE link_id = $1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let service = InboxLifecycleService::new(repo.clone(), Effects);
+
+    service.resync(&actor("remaining"), link).await.unwrap();
+    let again = service.resync(&actor("remaining"), link).await.unwrap();
+
+    assert!(again.already_in_progress);
+    let started = telemetry.events("outlook import started");
+    let [(level, fields)] = started.as_slice() else {
+        panic!("expected one start, got {started:?}");
+    };
+    assert_eq!(*level, tracing::Level::INFO);
+    assert_eq!(fields["link_id"], link.to_string());
+    assert_eq!(fields["sync_generation"], "1");
+    let run = sqlx::query!(
+        r#"SELECT import_started_at > now() - interval '1 minute' AS "restarted!", import_completed_at
+        FROM email_sync_streams WHERE link_id = $1 AND kind = 'folder_catalog'"#,
+        link
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(run.restarted);
+    assert!(run.import_completed_at.is_none());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn gmail_resync_commits_the_backfill_with_durable_publication(db: PgPool) {
     let (repo, link, _) = shared(&db).await;
     sqlx::query!(

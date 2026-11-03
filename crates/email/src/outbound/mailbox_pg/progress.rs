@@ -44,63 +44,57 @@ impl MailboxProgressRepository for PgMailboxSync {
         .execute(&self.db)
         .await
         .map_err(db_error)?;
-        // Each subquery reads only the current generation's queue and streams
-        // through their primary-key and unique prefixes; no message table scan.
+        // One aggregate per Outlook link, each read through the
+        // (link_id, generation, ...) key prefixes of the current generation's
+        // queue and streams and the link's newest minute counts. Old
+        // generations and the message table are never read.
         let rows = sqlx::query!(
             r#"
-            WITH mailboxes AS (
-                SELECT l.id, l.sync_generation, l.is_sync_active, l.needs_reauth
-                FROM email_links l
-                WHERE l.provider = 'OUTLOOK' AND (l.is_sync_active OR EXISTS (
-                    SELECT 1 FROM email_message_reconciliation q
-                    WHERE q.link_id = l.id AND q.generation = l.sync_generation
-                ))
-            ),
-            queue AS (
-                SELECT q.link_id,
-                    count(*) AS queued,
-                    count(*) FILTER (WHERE q.available_at > now()) AS parked,
-                    count(*) FILTER (WHERE q.lease_until > now()) AS leased,
-                    min(q.available_at) FILTER (
-                        WHERE q.available_at <= now() AND (q.lease_until IS NULL OR q.lease_until <= now())
-                    ) AS oldest_due,
-                    max(q.available_at) FILTER (WHERE q.available_at > now()) AS parked_until
-                FROM mailboxes m
-                JOIN email_message_reconciliation q ON q.link_id = m.id AND q.generation = m.sync_generation
-                GROUP BY q.link_id
-            ),
-            streams AS (
-                SELECT s.link_id, count(*) AS incomplete
-                FROM mailboxes m
-                JOIN email_sync_streams s ON s.link_id = m.id AND s.generation = m.sync_generation
-                WHERE s.kind IN ('folder_catalog', 'mail_folder') AND NOT s.initial_complete
-                GROUP BY s.link_id
-            ),
-            imports AS (
-                SELECT i.link_id,
-                    sum(i.imported) FILTER (WHERE i.minute > now() - interval '5 minutes') AS imported_5m,
-                    max(i.last_imported_at) AS last_imported_at
-                FROM mailboxes m
-                JOIN email_mailbox_import_minutes i ON i.link_id = m.id
-                GROUP BY i.link_id
-            )
-            SELECT m.id AS "link_id!",
-                m.sync_generation AS "sync_generation!",
-                m.is_sync_active AS "sync_active!",
-                m.needs_reauth AS "needs_reauth!",
-                COALESCE(q.queued, 0) AS "queued!",
-                COALESCE(q.parked, 0) AS "parked!",
-                COALESCE(q.leased, 0) AS "leased!",
+            SELECT l.id AS "link_id!",
+                l.sync_generation AS "sync_generation!",
+                l.is_sync_active AS "sync_active!",
+                l.needs_reauth AS "needs_reauth!",
+                q.queued AS "queued!",
+                q.parked AS "parked!",
+                q.leased AS "leased!",
                 COALESCE(floor(EXTRACT(EPOCH FROM now() - q.oldest_due)), 0)::bigint AS "oldest_waiting_seconds!",
                 COALESCE(ceil(EXTRACT(EPOCH FROM q.parked_until - now())), 0)::bigint AS "parked_until_max_seconds!",
-                COALESCE(s.incomplete, 0) AS "streams_incomplete!",
-                COALESCE(i.imported_5m, 0)::bigint AS "imported_5m!",
-                floor(EXTRACT(EPOCH FROM now() - i.last_imported_at))::bigint AS seconds_since_last_import
-            FROM mailboxes m
-            LEFT JOIN queue q ON q.link_id = m.id
-            LEFT JOIN streams s ON s.link_id = m.id
-            LEFT JOIN imports i ON i.link_id = m.id
-            ORDER BY m.id
+                s.incomplete AS "streams_incomplete!",
+                COALESCE(recent.imported_5m, 0)::bigint AS "imported_5m!",
+                floor(EXTRACT(EPOCH FROM now() - latest.last_imported_at))::bigint AS seconds_since_last_import
+            FROM email_links l
+            CROSS JOIN LATERAL (
+                SELECT count(*) AS queued,
+                    count(*) FILTER (WHERE available_at > now()) AS parked,
+                    count(*) FILTER (WHERE lease_until > now()) AS leased,
+                    min(available_at) FILTER (
+                        WHERE available_at <= now() AND (lease_until IS NULL OR lease_until <= now())
+                    ) AS oldest_due,
+                    max(available_at) FILTER (WHERE available_at > now()) AS parked_until
+                FROM email_message_reconciliation
+                WHERE link_id = l.id AND generation = l.sync_generation
+            ) q
+            CROSS JOIN LATERAL (
+                SELECT count(*) AS incomplete
+                FROM email_sync_streams
+                WHERE link_id = l.id AND generation = l.sync_generation
+                    AND kind IN ('folder_catalog', 'mail_folder') AND NOT initial_complete
+            ) s
+            CROSS JOIN LATERAL (
+                SELECT sum(imported) AS imported_5m
+                FROM email_mailbox_import_minutes
+                WHERE link_id = l.id AND minute > now() - interval '5 minutes'
+            ) recent
+            -- A flush carries imports from at most the minute before it, so
+            -- the latest import is in one of the two newest minutes.
+            CROSS JOIN LATERAL (
+                SELECT max(last_imported_at) AS last_imported_at
+                FROM (
+                    SELECT last_imported_at FROM email_mailbox_import_minutes
+                    WHERE link_id = l.id ORDER BY minute DESC LIMIT 2
+                ) newest
+            ) latest
+            WHERE l.provider = 'OUTLOOK' AND (l.is_sync_active OR q.queued > 0)
         "#
         )
         .fetch_all(&self.db)
