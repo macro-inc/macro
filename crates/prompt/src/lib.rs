@@ -11,7 +11,6 @@ pub mod agent_session;
 pub mod channel_mention;
 pub mod citations;
 pub mod code_mode;
-pub mod coding_agents;
 pub mod connected_toolsets;
 pub mod databases;
 pub mod deferred_tools;
@@ -387,7 +386,7 @@ mod tests {
     fn mcp_and_coding_agents_open_ready_pull_requests_with_ci_passing() {
         assert!(mcp_instructions("https://macro.com").contains(pull_requests::READY_PULL_REQUEST));
 
-        let coding = coding_agents::PROMPT.to_string();
+        let coding = system_skills::coding::SKILL.to_string();
         assert!(coding.contains("ready for review, not a draft"));
         assert!(coding.contains("CI passing"));
     }

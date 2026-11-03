@@ -34,10 +34,6 @@ const PLANNED: &[(&str, &str)] = &[
         "Routines",
         "Use when something should happen later, on a schedule, or whenever an event occurs, such as every Monday, a reminder, or when an email arrives.",
     ),
-    (
-        "Coding",
-        "Use when changing code, a repository, a pull request or a coding agent.",
-    ),
 ];
 
 /// Each prompt and the skills it should load, by name.

@@ -374,16 +374,12 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
         AiHost::Mcp => Arc::from([]),
     };
     let prompt: Box<dyn std::fmt::Display + Send + Sync> = match host {
-        AiHost::Chat => Box::new(prompt::TOOL_USE_PROMPT.compose(&prompt::coding_agents::PROMPT)),
-        AiHost::AgentSession if code_mode_direct => Box::new(
-            prompt::CODE_MODE_SESSION_TOOL_USE_PROMPT.compose(&prompt::coding_agents::PROMPT),
-        ),
-        AiHost::AgentSession => {
-            Box::new(prompt::SESSION_TOOL_USE_PROMPT.compose(&prompt::coding_agents::PROMPT))
+        AiHost::Chat => Box::new(&prompt::TOOL_USE_PROMPT),
+        AiHost::AgentSession if code_mode_direct => {
+            Box::new(&prompt::CODE_MODE_SESSION_TOOL_USE_PROMPT)
         }
-        AiHost::ChannelBot | AiHost::Mcp => {
-            Box::new(prompt::DIRECT_TOOL_USE_PROMPT.compose(&prompt::coding_agents::PROMPT))
-        }
+        AiHost::AgentSession => Box::new(&prompt::SESSION_TOOL_USE_PROMPT),
+        AiHost::ChannelBot | AiHost::Mcp => Box::new(&prompt::DIRECT_TOOL_USE_PROMPT),
     };
     let catalog: Vec<(&str, &str)> = deferred
         .iter()
