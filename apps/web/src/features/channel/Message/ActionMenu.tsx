@@ -1,4 +1,6 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { recordEmojiUsage } from '@core/component/Emoji/emojiUsage';
+import { enableReminders } from '@core/constant/featureFlags';
 import type {
   MessageActionEvent,
   MessageActionHandler,
@@ -6,6 +8,7 @@ import type {
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ReplyIcon from '@icon/system/regular/arrow-bend-up-left.svg';
+import BellIcon from '@icon/system/regular/bell-simple.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
 import TaskIcon from '@icon/system/regular/list-checks.svg';
@@ -42,6 +45,7 @@ type ActionId =
   | 'reply'
   | 'copy-link'
   | 'copy-message-text'
+  | 'create-reminder'
   | 'create-task'
   | 'chat'
   | 'edit'
@@ -91,6 +95,7 @@ function ActionButton(props: {
 function ActionMenuContent(props: ActionMenuProps) {
   const message = useMessage();
   const actions = useMessageActions();
+  const remindersEnabled = useFeatureFlag(enableReminders);
   const actionMenuVisibility = useMessageActionMenuVisibility();
   const [emojiMenuOpen, setEmojiMenuOpen] = createSignal(false);
   let selectedReplyText: string | undefined;
@@ -117,6 +122,12 @@ function ActionMenuContent(props: ActionMenuProps) {
   const hasReactAction = () => actions?.onReact !== undefined;
 
   const composeActions: ActionItem[] = [
+    {
+      id: 'create-reminder',
+      label: 'Reminder',
+      icon: BellIcon,
+      onClick: actions?.onCreateReminder,
+    },
     {
       id: 'create-task',
       label: 'Task',
@@ -170,7 +181,11 @@ function ActionMenuContent(props: ActionMenuProps) {
     },
   ];
 
-  const visibleCompose = composeActions.filter((item) => item.onClick);
+  const visibleCompose = composeActions.filter(
+    (item) =>
+      item.onClick &&
+      (item.id !== 'create-reminder' || remindersEnabled().enabled)
+  );
   const visibleOther = otherActions.filter((item) => item.onClick);
   const visibleActions = [...visibleCompose, ...visibleOther];
 

@@ -867,6 +867,21 @@ impl GraphqlReminderMetadata {
     async fn scheduled_for(&self) -> Option<String> {
         self.0.scheduled_for.map(|timestamp| timestamp.to_rfc3339())
     }
+
+    /// Channel a message reminder opens.
+    async fn channel_id(&self) -> Option<ID> {
+        self.0.channel_id.map(|id| ID(id.to_string()))
+    }
+
+    /// Channel message a message reminder opens.
+    async fn message_id(&self) -> Option<ID> {
+        self.0.message_id.map(|id| ID(id.to_string()))
+    }
+
+    /// Thread root when the reminded message is a reply.
+    async fn thread_id(&self) -> Option<ID> {
+        self.0.thread_id.map(|id| ID(id.to_string()))
+    }
 }
 
 /// GraphQL wrapper for calendar event reminder metadata.

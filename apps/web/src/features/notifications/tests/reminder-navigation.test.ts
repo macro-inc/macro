@@ -48,6 +48,7 @@ vi.mock('@queries/notification/user-notifications', () => ({
   getNotificationById,
 }));
 
+import { navigateToChannelMessage } from '@block-channel/utils/link';
 import type { SplitManager } from '@components/app/split-layout/layoutManager';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -76,6 +77,7 @@ describe('reminder notification navigation', () => {
   const openWithSplit = vi.fn();
   const layout = {
     getSplitByContent: vi.fn(() => undefined),
+    getOrchestrator: () => undefined,
     openWithSplit,
   } as unknown as SplitManager;
   beforeEach(() => {
@@ -153,6 +155,33 @@ describe('reminder notification navigation', () => {
     expect(onApplied).not.toHaveBeenCalled();
     openWithSplit.mock.calls[0][1].onApplied();
     expect(onApplied).toHaveBeenCalledOnce();
+  });
+
+  it('opens the channel message a reminder was set on', async () => {
+    const notification = {
+      ...reminderNotification(),
+      entity_id: 'reminder-1',
+      entity_type: 'reminder',
+      notification_metadata: {
+        tag: 'reminder',
+        content: {
+          description: 'invite link',
+          reminderId: 'reminder-1',
+          channelId: 'channel-1',
+          messageId: 'message-1',
+          threadId: 'thread-1',
+        },
+      },
+    } as UnifiedNotification;
+    const result = await openNotification(notification, layout);
+    expect(result.isOk()).toBe(true);
+    expect(navigateToChannelMessage).toHaveBeenCalledWith(
+      undefined,
+      'channel-1',
+      'message-1',
+      'thread-1',
+      expect.objectContaining({ splitManager: layout })
+    );
   });
 
   it('does not reopen a removed generic reminder surface', async () => {

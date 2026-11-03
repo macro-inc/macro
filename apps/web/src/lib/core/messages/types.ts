@@ -47,5 +47,6 @@ export type MessageActions = {
   onEdit?: MessageActionHandler;
   onDelete?: MessageActionHandler;
   onCreateTask?: MessageActionHandler;
+  onCreateReminder?: MessageActionHandler;
   onChat?: MessageActionHandler;
 };

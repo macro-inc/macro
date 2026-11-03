@@ -203,4 +203,34 @@ pub trait RemindersService: Send + Sync + 'static {
         thread: Uuid,
         command: super::email_followup::EmailFollowupCommand,
     ) -> impl Future<Output = Result<super::email_followup::EmailFollowup, ReminderError>> + Send;
+
+    /// Read the caller's active reminder for a channel message.
+    fn get_channel_message_reminder(
+        &self,
+        access: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::ViewOnly,
+        >,
+        message_id: Uuid,
+    ) -> impl Future<
+        Output = Result<Option<super::channel_message::ChannelMessageReminder>, ReminderError>,
+    > + Send;
+
+    /// Schedule or replace the caller's reminder for a channel message.
+    fn set_channel_message_reminder(
+        &self,
+        access: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::ViewOnly,
+        >,
+        message_id: Uuid,
+        command: super::channel_message::SetChannelMessageReminder,
+    ) -> impl Future<Output = Result<super::channel_message::ChannelMessageReminder, ReminderError>> + Send;
+
+    /// Remove the caller's active reminder for a channel message.
+    fn remove_channel_message_reminder(
+        &self,
+        access: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::ViewOnly,
+        >,
+        message_id: Uuid,
+    ) -> impl Future<Output = Result<(), ReminderError>> + Send;
 }

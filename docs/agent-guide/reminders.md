@@ -1,8 +1,14 @@
 # Email reminders
 
-Reminders snooze email conversations. They are available only inside Email;
-there is no global Reminders sidebar item, standalone reminder, task reminder,
-recurrence editor, or reminder AI tool. Calendar event alarms remain separate.
+Reminders snooze email conversations and can also bring you back to a channel
+message. There is no global Reminders sidebar item, standalone reminder, task
+reminder, recurrence editor, or reminder AI tool. Calendar event alarms remain
+separate.
+
+On a channel message, `Reminder` sits to the left of `Task` in the hover menu
+(and in the touch action sheet). It uses the same time choices as email snooze,
+without the reply condition. The notification opens that message. One active
+reminder is kept per person and message.
 
 ## Snooze or change a conversation
 

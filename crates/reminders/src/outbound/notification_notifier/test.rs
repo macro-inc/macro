@@ -10,6 +10,7 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use super::*;
+use crate::domain::models::ReminderSubject;
 
 const OWNER: &str = "macro|reminders-owner@macro.com";
 
@@ -32,7 +33,9 @@ fn reminder_id() -> Uuid {
 fn due() -> DueReminder {
     DueReminder {
         reminder_id: reminder_id(),
-        thread_id: Uuid::from_bytes([9; 16]),
+        subject: ReminderSubject::EmailThread {
+            thread_id: Uuid::from_bytes([9; 16]),
+        },
         description: "Follow up on the contract".into(),
         owner_id: owner(),
         scheduled_for: now(),
@@ -119,7 +122,10 @@ async fn addresses_the_notification_at_the_email_thread() {
 
     let entity = &ingress.last()["req"]["notification_entity"];
     assert_eq!(entity["entity_type"], "email_thread");
-    assert_eq!(entity["entity_id"], due().thread_id.to_string());
+    let ReminderSubject::EmailThread { thread_id } = due().subject else {
+        panic!("email reminder");
+    };
+    assert_eq!(entity["entity_id"], thread_id.to_string());
 }
 
 #[tokio::test]
@@ -174,4 +180,41 @@ async fn surfaces_a_rejected_send_as_an_error() {
     // The dispatcher relies on this to leave the firing uncompleted and
     // retryable rather than marking it delivered.
     assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn addresses_a_channel_message_without_using_the_channel_as_the_entity() {
+    let ingress = CapturingIngress::default();
+    let channel_id = Uuid::from_bytes([4; 16]);
+    let message_id = Uuid::from_bytes([5; 16]);
+    let mut due = due();
+    due.subject = ReminderSubject::ChannelMessage {
+        channel_id,
+        message_id,
+        thread_id: Some(Uuid::from_bytes([6; 16])),
+    };
+
+    NotificationReminderNotifier::new(ingress.clone())
+        .notify(&due)
+        .await
+        .expect("notify succeeds");
+
+    let sent = ingress.last();
+    assert_eq!(
+        sent["req"]["notification_entity"]["entity_type"],
+        "reminder"
+    );
+    assert_eq!(
+        sent["req"]["notification_entity"]["entity_id"],
+        reminder_id().to_string()
+    );
+    assert_eq!(
+        sent["req"]["notification"]["content"]["channelId"],
+        channel_id.to_string()
+    );
+    assert_eq!(
+        sent["req"]["notification"]["content"]["messageId"],
+        message_id.to_string()
+    );
+    assert_eq!(sent["req"]["sender_id"], serde_json::Value::Null);
 }

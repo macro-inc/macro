@@ -1587,6 +1587,18 @@ pub struct ReminderMetadata {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<String>, format = DateTime)]
     pub scheduled_for: Option<DateTime<Utc>>,
+    /// Channel a message reminder opens. Absent for email snoozes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<String>, format = Uuid)]
+    pub channel_id: Option<Uuid>,
+    /// Channel message a message reminder opens. Absent for email snoozes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<String>, format = Uuid)]
+    pub message_id: Option<Uuid>,
+    /// Thread root when the reminded message is a reply.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<String>, format = Uuid)]
+    pub thread_id: Option<Uuid>,
 }
 
 impl Notification for ReminderMetadata {

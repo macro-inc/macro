@@ -1,3 +1,4 @@
+import { openChannelMessageReminder } from '@app/features/reminders/channel-message-reminder';
 import { useUserId } from '@core/context/user';
 import { useDeleteMessageMutation } from '@queries/messages/mutations';
 import {
@@ -43,6 +44,12 @@ function EditableThreadInner() {
     deleteMessage: deleteConfirmation.requestDelete,
     addReaction: addReactionMutation.mutate,
     removeReaction: removeReactionMutation.mutate,
+    onCreateReminder: ({ message }) => {
+      openChannelMessageReminder({
+        channelId: ctx.channelId(),
+        message,
+      });
+    },
     onReply: ({ message, selectedText, renderedText }) => {
       if (message.thread_id) {
         const current = replyInputState();

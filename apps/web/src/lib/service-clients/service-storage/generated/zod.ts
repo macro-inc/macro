@@ -56111,6 +56111,82 @@ export const recentlyDeletedResponse = zod.object({
 });
 
 /**
+ * @summary Read the caller's active reminder for one channel message.
+ */
+export const getChannelMessageReminderParams = zod.object({
+  channel_id: zod.uuid(),
+  message_id: zod.uuid(),
+});
+
+export const getChannelMessageReminderResponse = zod
+  .object({
+    reminder: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            channelId: zod.uuid().describe('Channel the message belongs to.'),
+            description: zod
+              .string()
+              .describe('Snippet shown in the notification.'),
+            messageId: zod
+              .uuid()
+              .describe('Message to open when the reminder fires.'),
+            remindAt: zod.iso
+              .datetime({})
+              .describe('When to notify the owner.'),
+            reminderId: zod.uuid().describe('Reminder row.'),
+            threadId: zod
+              .uuid()
+              .nullish()
+              .describe('Thread root when the message is a reply.'),
+          })
+          .describe('An active reminder on one channel message.'),
+      ])
+      .optional(),
+  })
+  .describe("Read response: the caller's active reminder, or none.");
+
+/**
+ * @summary Schedule or replace the caller's reminder for one channel message.
+ */
+export const setChannelMessageReminderParams = zod.object({
+  channel_id: zod.uuid(),
+  message_id: zod.uuid(),
+});
+
+export const setChannelMessageReminderBody = zod
+  .object({
+    description: zod.string().describe('Snippet shown in the notification.'),
+    remindAt: zod.iso
+      .datetime({})
+      .describe('When to notify the owner. Must be in the future.'),
+  })
+  .describe('Request to schedule or replace a message reminder.');
+
+export const setChannelMessageReminderResponse = zod
+  .object({
+    channelId: zod.uuid().describe('Channel the message belongs to.'),
+    description: zod.string().describe('Snippet shown in the notification.'),
+    messageId: zod.uuid().describe('Message to open when the reminder fires.'),
+    remindAt: zod.iso.datetime({}).describe('When to notify the owner.'),
+    reminderId: zod.uuid().describe('Reminder row.'),
+    threadId: zod
+      .uuid()
+      .nullish()
+      .describe('Thread root when the message is a reply.'),
+  })
+  .describe('An active reminder on one channel message.');
+
+/**
+ * @summary Remove the caller's active reminder for one channel message.
+ */
+export const removeChannelMessageReminderParams = zod.object({
+  channel_id: zod.uuid(),
+  message_id: zod.uuid(),
+});
+
+/**
  * @summary List original email threads with caller-private reminder work.
  */
 export const listEmailRemindersQueryLimitMax = 100;

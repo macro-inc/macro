@@ -1,7 +1,7 @@
 //! Serialize email dispatch with edits/removal while reusing occurrence alerts.
 use super::{EmailFollowupRepo, service::EmailFollowupService};
 use crate::domain::{
-    models::{DeliveryOutcome, DueFiring, ReminderError, SweepSummary},
+    models::{DeliveryOutcome, DueFiring, ReminderError, ReminderSubject, SweepSummary},
     ports::{Clock, ReminderDispatch, ReminderDispatchRepo},
 };
 use email::domain::followup::EmailFollowupMailbox;
@@ -45,6 +45,9 @@ impl<
         else {
             return Ok(DeliveryOutcome::Gone);
         };
+        if matches!(due.subject, ReminderSubject::ChannelMessage { .. }) {
+            return self.delivery.deliver(firing).await;
+        }
         let Some(record) = self
             .email
             .repo

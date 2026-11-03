@@ -1053,10 +1053,22 @@ export const listTypedNotificationsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          channelId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'Channel a message reminder opens. Absent for email snoozes.'
+                            ),
                           description: zod
                             .string()
                             .describe(
                               'What the user asked to be reminded about.'
+                            ),
+                          messageId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'Channel message a message reminder opens. Absent for email snoozes.'
                             ),
                           reminderId: zod
                             .uuid()
@@ -1066,6 +1078,12 @@ export const listTypedNotificationsResponse = zod
                             .nullish()
                             .describe(
                               "Which firing this is — the occurrence the reminder came due for.\n\nWhat distinguishes two firings of the same recurring reminder, which are\notherwise identical: same id, same description. The collapse key is\nbuilt from it, so without it Tuesday's alert would replace Monday's\nunread one on the lock screen.\n\nOptional because notifications written before recurring dispatch existed\nhave no such field, and they still have to read back."
+                            ),
+                          threadId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'Thread root when the reminded message is a reply.'
                             ),
                         })
                         .describe(
@@ -3102,10 +3120,22 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          channelId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'Channel a message reminder opens. Absent for email snoozes.'
+                            ),
                           description: zod
                             .string()
                             .describe(
                               'What the user asked to be reminded about.'
+                            ),
+                          messageId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'Channel message a message reminder opens. Absent for email snoozes.'
                             ),
                           reminderId: zod
                             .uuid()
@@ -3115,6 +3145,12 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             .nullish()
                             .describe(
                               "Which firing this is — the occurrence the reminder came due for.\n\nWhat distinguishes two firings of the same recurring reminder, which are\notherwise identical: same id, same description. The collapse key is\nbuilt from it, so without it Tuesday's alert would replace Monday's\nunread one on the lock screen.\n\nOptional because notifications written before recurring dispatch existed\nhave no such field, and they still have to read back."
+                            ),
+                          threadId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'Thread root when the reminded message is a reply.'
                             ),
                         })
                         .describe(
@@ -5145,10 +5181,22 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .object({
                       content: zod
                         .object({
+                          channelId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'Channel a message reminder opens. Absent for email snoozes.'
+                            ),
                           description: zod
                             .string()
                             .describe(
                               'What the user asked to be reminded about.'
+                            ),
+                          messageId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'Channel message a message reminder opens. Absent for email snoozes.'
                             ),
                           reminderId: zod
                             .uuid()
@@ -5158,6 +5206,12 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             .nullish()
                             .describe(
                               "Which firing this is — the occurrence the reminder came due for.\n\nWhat distinguishes two firings of the same recurring reminder, which are\notherwise identical: same id, same description. The collapse key is\nbuilt from it, so without it Tuesday's alert would replace Monday's\nunread one on the lock screen.\n\nOptional because notifications written before recurring dispatch existed\nhave no such field, and they still have to read back."
+                            ),
+                          threadId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'Thread root when the reminded message is a reply.'
                             ),
                         })
                         .describe(
@@ -7121,15 +7175,33 @@ export const getTypedNotificationByIdResponse = zod
             .object({
               content: zod
                 .object({
+                  channelId: zod
+                    .uuid()
+                    .nullish()
+                    .describe(
+                      'Channel a message reminder opens. Absent for email snoozes.'
+                    ),
                   description: zod
                     .string()
                     .describe('What the user asked to be reminded about.'),
+                  messageId: zod
+                    .uuid()
+                    .nullish()
+                    .describe(
+                      'Channel message a message reminder opens. Absent for email snoozes.'
+                    ),
                   reminderId: zod.uuid().describe('The reminder that fired.'),
                   scheduledFor: zod.iso
                     .datetime({})
                     .nullish()
                     .describe(
                       "Which firing this is — the occurrence the reminder came due for.\n\nWhat distinguishes two firings of the same recurring reminder, which are\notherwise identical: same id, same description. The collapse key is\nbuilt from it, so without it Tuesday's alert would replace Monday's\nunread one on the lock screen.\n\nOptional because notifications written before recurring dispatch existed\nhave no such field, and they still have to read back."
+                    ),
+                  threadId: zod
+                    .uuid()
+                    .nullish()
+                    .describe(
+                      'Thread root when the reminded message is a reply.'
                     ),
                 })
                 .describe(

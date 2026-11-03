@@ -491,6 +491,9 @@ use utoipa::OpenApi;
         reminders::inbound::axum_router::get_email_followup_handler,
         reminders::inbound::axum_router::set_email_followup_handler,
         reminders::inbound::axum_router::email_collection::list_email_reminders_handler,
+        reminders::inbound::axum_router::get_channel_message_reminder_handler,
+        reminders::inbound::axum_router::set_channel_message_reminder_handler,
+        reminders::inbound::axum_router::remove_channel_message_reminder_handler,
         // initiatives
         initiative::inbound::axum_router::list::list_initiatives_handler,
         initiative::inbound::axum_router::create::create_initiative_handler,

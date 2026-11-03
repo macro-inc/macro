@@ -652,6 +652,9 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		reminderReminderId: reminderId
 		reminderDescription: description
 		reminderScheduledFor: scheduledFor
+		reminderChannelId: channelId
+		reminderMessageId: messageId
+		reminderThreadId: threadId
 	}
 	... on GraphqlCalendarEventReminderMetadata {
 		calendarEventReminderEventId: eventId

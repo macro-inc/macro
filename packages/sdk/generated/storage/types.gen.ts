@@ -2856,6 +2856,43 @@ export type ChannelMessage = {
 };
 
 /**
+ * An active reminder on one channel message.
+ */
+export type ChannelMessageReminder = {
+    /**
+     * Channel the message belongs to.
+     */
+    channelId: string;
+    /**
+     * Snippet shown in the notification.
+     */
+    description: string;
+    /**
+     * Message to open when the reminder fires.
+     */
+    messageId: string;
+    /**
+     * When to notify the owner.
+     */
+    remindAt: string;
+    /**
+     * Reminder row.
+     */
+    reminderId: string;
+    /**
+     * Thread root when the message is a reply.
+     */
+    threadId?: string | null;
+};
+
+/**
+ * Read response: the caller's active reminder, or none.
+ */
+export type ChannelMessageReminderResponse = {
+    reminder?: null | ChannelMessageReminder;
+};
+
+/**
  * A user's membership in a channel.
  */
 export type ChannelParticipant = {
@@ -12736,6 +12773,20 @@ export type SetChannelLabelRequest = {
      * The label to put the channel in, or `null` to remove it from its label.
      */
     labelId?: string | null;
+};
+
+/**
+ * Request to schedule or replace a message reminder.
+ */
+export type SetChannelMessageReminder = {
+    /**
+     * Snippet shown in the notification.
+     */
+    description: string;
+    /**
+     * When to notify the owner. Must be in the future.
+     */
+    remindAt: string;
 };
 
 /**
@@ -24331,6 +24382,81 @@ export type RecentlyDeletedResponses = {
 };
 
 export type RecentlyDeletedResponse = RecentlyDeletedResponses[keyof RecentlyDeletedResponses];
+
+export type RemoveChannelMessageReminderData = {
+    body?: never;
+    path: {
+        channel_id: string;
+        message_id: string;
+    };
+    query?: never;
+    url: '/reminders/channels/{channel_id}/messages/{message_id}';
+};
+
+export type RemoveChannelMessageReminderErrors = {
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RemoveChannelMessageReminderError = RemoveChannelMessageReminderErrors[keyof RemoveChannelMessageReminderErrors];
+
+export type RemoveChannelMessageReminderResponses = {
+    /**
+     * Removed
+     */
+    204: void;
+};
+
+export type RemoveChannelMessageReminderResponse = RemoveChannelMessageReminderResponses[keyof RemoveChannelMessageReminderResponses];
+
+export type GetChannelMessageReminderData = {
+    body?: never;
+    path: {
+        channel_id: string;
+        message_id: string;
+    };
+    query?: never;
+    url: '/reminders/channels/{channel_id}/messages/{message_id}';
+};
+
+export type GetChannelMessageReminderErrors = {
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetChannelMessageReminderError = GetChannelMessageReminderErrors[keyof GetChannelMessageReminderErrors];
+
+export type GetChannelMessageReminderResponses = {
+    200: ChannelMessageReminderResponse;
+};
+
+export type GetChannelMessageReminderResponse = GetChannelMessageReminderResponses[keyof GetChannelMessageReminderResponses];
+
+export type SetChannelMessageReminderData = {
+    body: SetChannelMessageReminder;
+    path: {
+        channel_id: string;
+        message_id: string;
+    };
+    query?: never;
+    url: '/reminders/channels/{channel_id}/messages/{message_id}';
+};
+
+export type SetChannelMessageReminderErrors = {
+    400: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetChannelMessageReminderError = SetChannelMessageReminderErrors[keyof SetChannelMessageReminderErrors];
+
+export type SetChannelMessageReminderResponses = {
+    200: ChannelMessageReminder;
+};
+
+export type SetChannelMessageReminderResponse = SetChannelMessageReminderResponses[keyof SetChannelMessageReminderResponses];
 
 export type ListEmailRemindersData = {
     body?: never;

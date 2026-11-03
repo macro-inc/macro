@@ -1,5 +1,5 @@
 #![deny(missing_docs)]
-//! Private email snoozes with durable inbox restoration and notification delivery.
+//! Private email snoozes and channel-message reminders, with notification delivery.
 
 pub mod domain;
 

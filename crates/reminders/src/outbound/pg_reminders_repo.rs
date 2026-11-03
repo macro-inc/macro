@@ -1,11 +1,12 @@
 //! PostgreSQL storage for email snoozes and delivery claims.
 
+mod channel_message;
 mod email_collection;
 mod email_followup;
 #[cfg(test)]
 mod test;
 
-use crate::domain::models::{DueFiring, DueReminder};
+use crate::domain::models::{DueFiring, DueReminder, ReminderSubject};
 use crate::domain::ports::{ReminderDispatchRepo, RemindersRepo};
 use chrono::{DateTime, Utc};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
@@ -81,9 +82,16 @@ impl ReminderDispatchRepo for PgRemindersRepo {
             r#"
             SELECT r.id, r.next_run_at
             FROM reminder r
-            JOIN reminder_email_followup f ON f.reminder_id = r.id
             WHERE r.enabled AND r.completed_at IS NULL
               AND r.next_run_at <= $1
+              AND (
+                  EXISTS (
+                      SELECT 1 FROM reminder_email_followup f WHERE f.reminder_id = r.id
+                  )
+                  OR EXISTS (
+                      SELECT 1 FROM reminder_channel_message m WHERE m.reminder_id = r.id
+                  )
+              )
               AND NOT EXISTS (
                   SELECT 1 FROM reminder_occurrence o
                   WHERE o.reminder_id = r.id AND o.scheduled_for = r.next_run_at
@@ -108,9 +116,16 @@ impl ReminderDispatchRepo for PgRemindersRepo {
     async fn find_due_reminder(&self, firing: DueFiring) -> Result<Option<DueReminder>, Self::Err> {
         let row = sqlx::query!(
             r#"
-            SELECT r.id, r.user_id, r.description, f.thread_id, r.next_run_at
+            SELECT r.id, r.user_id, r.description, r.next_run_at,
+                   f.thread_id AS "email_thread_id?",
+                   m.channel_id AS "channel_id?",
+                   m.message_id AS "message_id?",
+                   m.thread_id AS "message_thread_id?"
             FROM reminder r
-            JOIN reminder_email_followup f ON f.reminder_id = r.id AND f.user_id = r.user_id
+            LEFT JOIN reminder_email_followup f
+              ON f.reminder_id = r.id AND f.user_id = r.user_id
+            LEFT JOIN reminder_channel_message m
+              ON m.reminder_id = r.id AND m.user_id = r.user_id
             WHERE r.id = $1 AND r.next_run_at = $2
               AND r.enabled AND r.completed_at IS NULL
             "#,
@@ -119,20 +134,31 @@ impl ReminderDispatchRepo for PgRemindersRepo {
         )
         .fetch_optional(&self.pool)
         .await?;
-        row.map(|row| {
-            Ok(DueReminder {
-                reminder_id: row.id,
-                thread_id: row.thread_id,
-                description: row.description,
-                owner_id: MacroUserIdStr::parse_from_str(&row.user_id)
-                    .map_err(|_| RemindersRepoErr::InvalidUserId {
-                        reminder_id: row.id,
-                    })?
-                    .into_owned(),
-                scheduled_for: row.next_run_at,
-            })
-        })
-        .transpose()
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        let subject = if let Some(thread_id) = row.email_thread_id {
+            ReminderSubject::EmailThread { thread_id }
+        } else if let (Some(channel_id), Some(message_id)) = (row.channel_id, row.message_id) {
+            ReminderSubject::ChannelMessage {
+                channel_id,
+                message_id,
+                thread_id: row.message_thread_id,
+            }
+        } else {
+            return Ok(None);
+        };
+        Ok(Some(DueReminder {
+            reminder_id: row.id,
+            subject,
+            description: row.description,
+            owner_id: MacroUserIdStr::parse_from_str(&row.user_id)
+                .map_err(|_| RemindersRepoErr::InvalidUserId {
+                    reminder_id: row.id,
+                })?
+                .into_owned(),
+            scheduled_for: row.next_run_at,
+        }))
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -202,14 +228,26 @@ impl ReminderDispatchRepo for PgRemindersRepo {
         reminder_id: Uuid,
         scheduled_for: DateTime<Utc>,
     ) -> Result<(), Self::Err> {
+        let mut tx = self.pool.begin().await?;
         sqlx::query!(
             r#"UPDATE reminder_occurrence SET sent_at = now()
                WHERE reminder_id = $1 AND scheduled_for = $2"#,
             reminder_id,
             scheduled_for,
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?;
+        // A channel-message reminder fires once. Email snoozes keep their own
+        // workflow state and do not match this entity type.
+        sqlx::query!(
+            r#"UPDATE reminder
+               SET completed_at = now(), enabled = false, updated_at = now()
+               WHERE id = $1 AND entity_type = 'channel_message' AND completed_at IS NULL"#,
+            reminder_id,
+        )
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
         Ok(())
     }
 }

@@ -56,6 +56,8 @@ import type { ChannelLabel } from './generated/schemas/channelLabel';
 import type { ChannelLabelRule } from './generated/schemas/channelLabelRule';
 import type { ChannelLabelScopeSelection } from './generated/schemas/channelLabelScopeSelection';
 import type { ChannelLabelsList } from './generated/schemas/channelLabelsList';
+import type { ChannelMessageReminder } from './generated/schemas/channelMessageReminder';
+import type { ChannelMessageReminderResponse } from './generated/schemas/channelMessageReminderResponse';
 import { ChannelType } from './generated/schemas/channelType';
 import {
   type CloudStorageItemType,
@@ -158,6 +160,7 @@ import type { SaveDocumentResponseData } from './generated/schemas/saveDocumentR
 import type { SearchContactsParams } from './generated/schemas/searchContactsParams';
 import type { SearchContactsResponse } from './generated/schemas/searchContactsResponse';
 import type { SetChannelLabelRequest } from './generated/schemas/setChannelLabelRequest';
+import type { SetChannelMessageReminder } from './generated/schemas/setChannelMessageReminder';
 import type { SetChannelPictureRequest } from './generated/schemas/setChannelPictureRequest';
 import type { SetCompanyNameRequest } from './generated/schemas/setCompanyNameRequest';
 import type { SetContactNameRequest } from './generated/schemas/setContactNameRequest';
@@ -295,6 +298,12 @@ export type { ApiChannelAttachment } from './generated/schemas/apiChannelAttachm
 export type { ApiChannelAttachmentsPage as ChannelAttachmentsPage } from './generated/schemas/apiChannelAttachmentsPage';
 export type { ApiChannelParticipant } from './generated/schemas/apiChannelParticipant';
 export type { GetOrCreateChannelResponse } from './generated/schemas/getOrCreateChannelResponse';
+
+export type {
+  ChannelMessageReminder,
+  ChannelMessageReminderResponse,
+  SetChannelMessageReminder,
+};
 
 export type IdResponse = { id: string };
 export type MessageResponse = { message: string };
@@ -2739,6 +2748,27 @@ export const storageServiceClient = {
         method: 'PUT',
         body: JSON.stringify(command),
       });
+    },
+    async getChannelMessageReminder(channelId: string, messageId: string) {
+      return await dssFetch<ChannelMessageReminderResponse>(
+        `/reminders/channels/${channelId}/messages/${messageId}`
+      );
+    },
+    async setChannelMessageReminder(
+      channelId: string,
+      messageId: string,
+      command: SetChannelMessageReminder
+    ) {
+      return await dssFetch<ChannelMessageReminder>(
+        `/reminders/channels/${channelId}/messages/${messageId}`,
+        { method: 'PUT', body: JSON.stringify(command) }
+      );
+    },
+    async removeChannelMessageReminder(channelId: string, messageId: string) {
+      return await dssFetch(
+        `/reminders/channels/${channelId}/messages/${messageId}`,
+        { method: 'DELETE' }
+      );
     },
   },
   async editThread(params) {

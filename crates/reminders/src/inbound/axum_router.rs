@@ -14,7 +14,10 @@ use axum::{
     response::IntoResponse,
     routing::get,
 };
-use entity_access::domain::ports::EntityAccessService;
+use entity_access::domain::{
+    models::{EntityType, ViewOnly},
+    ports::EntityAccessService,
+};
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
@@ -88,6 +91,12 @@ where
             "/email/{thread_id}",
             get(get_email_followup_handler::<S, Eas, Auth>)
                 .put(set_email_followup_handler::<S, Eas, Auth>),
+        )
+        .route(
+            "/channels/{channel_id}/messages/{message_id}",
+            get(get_channel_message_reminder_handler::<S, Eas, Auth>)
+                .put(set_channel_message_reminder_handler::<S, Eas, Auth>)
+                .delete(remove_channel_message_reminder_handler::<S, Eas, Auth>),
         )
         .with_state(state)
 }
@@ -166,4 +175,120 @@ where
             .execute_email_followup(user.authorization.user.macro_user_id, thread_id, command)
             .await?,
     ))
+}
+
+async fn channel_view<Eas, Auth>(
+    state: &RemindersRouterState<impl RemindersService, Eas, Auth>,
+    user: &macro_authorization::MacroUserAuthentication,
+    channel_id: Uuid,
+) -> Result<entity_access::domain::models::EntityAccessReceipt<ViewOnly>, ReminderError>
+where
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    state
+        .entity_access_service
+        .generate_entity_access_receipt::<ViewOnly>(
+            &user.macro_user_id,
+            user.user_context.organization_id.map(i64::from),
+            &channel_id.to_string(),
+            EntityType::Channel,
+        )
+        .await
+        .map_err(|error| match error {
+            entity_access::domain::models::AccessError::Unauthorized
+            | entity_access::domain::models::AccessError::UnauthorizedWithMessage(_) => {
+                ReminderError::EntityAccessDenied
+            }
+            entity_access::domain::models::AccessError::NotFound(_) => {
+                ReminderError::EntityNotFound
+            }
+            entity_access::domain::models::AccessError::BadRequest(message) => {
+                ReminderError::BadRequest(message.to_string())
+            }
+            entity_access::domain::models::AccessError::Unavailable(error)
+            | entity_access::domain::models::AccessError::Internal(error) => {
+                ReminderError::Internal(error)
+            }
+        })
+}
+
+/// Read the caller's active reminder for one channel message.
+#[utoipa::path(get, tag = "reminders", operation_id = "get_channel_message_reminder",
+    path = "/reminders/channels/{channel_id}/messages/{message_id}",
+    params(("channel_id" = Uuid, Path), ("message_id" = Uuid, Path)),
+    responses((status = 200, body = crate::domain::channel_message::ChannelMessageReminderResponse),
+              (status = 403, body = ErrorResponse), (status = 500, body = ErrorResponse)))]
+pub async fn get_channel_message_reminder_handler<S, Eas, Auth>(
+    State(state): State<RemindersRouterState<S, Eas, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path((channel_id, message_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<crate::domain::channel_message::ChannelMessageReminderResponse>, ReminderError>
+where
+    S: RemindersService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let access = channel_view(&state, &user.authorization.user, channel_id).await?;
+    Ok(Json(
+        crate::domain::channel_message::ChannelMessageReminderResponse {
+            reminder: state
+                .service
+                .get_channel_message_reminder(access, message_id)
+                .await?,
+        },
+    ))
+}
+
+/// Schedule or replace the caller's reminder for one channel message.
+#[utoipa::path(put, tag = "reminders", operation_id = "set_channel_message_reminder",
+    path = "/reminders/channels/{channel_id}/messages/{message_id}",
+    params(("channel_id" = Uuid, Path), ("message_id" = Uuid, Path)),
+    request_body = crate::domain::channel_message::SetChannelMessageReminder,
+    responses((status = 200, body = crate::domain::channel_message::ChannelMessageReminder),
+              (status = 400, body = ErrorResponse), (status = 403, body = ErrorResponse),
+              (status = 404, body = ErrorResponse), (status = 500, body = ErrorResponse)))]
+pub async fn set_channel_message_reminder_handler<S, Eas, Auth>(
+    State(state): State<RemindersRouterState<S, Eas, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path((channel_id, message_id)): Path<(Uuid, Uuid)>,
+    Json(command): Json<crate::domain::channel_message::SetChannelMessageReminder>,
+) -> Result<Json<crate::domain::channel_message::ChannelMessageReminder>, ReminderError>
+where
+    S: RemindersService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let access = channel_view(&state, &user.authorization.user, channel_id).await?;
+    Ok(Json(
+        state
+            .service
+            .set_channel_message_reminder(access, message_id, command)
+            .await?,
+    ))
+}
+
+/// Remove the caller's active reminder for one channel message.
+#[utoipa::path(delete, tag = "reminders", operation_id = "remove_channel_message_reminder",
+    path = "/reminders/channels/{channel_id}/messages/{message_id}",
+    params(("channel_id" = Uuid, Path), ("message_id" = Uuid, Path)),
+    responses((status = 204, description = "Removed"),
+              (status = 403, body = ErrorResponse), (status = 404, body = ErrorResponse),
+              (status = 500, body = ErrorResponse)))]
+pub async fn remove_channel_message_reminder_handler<S, Eas, Auth>(
+    State(state): State<RemindersRouterState<S, Eas, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path((channel_id, message_id)): Path<(Uuid, Uuid)>,
+) -> Result<StatusCode, ReminderError>
+where
+    S: RemindersService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let access = channel_view(&state, &user.authorization.user, channel_id).await?;
+    state
+        .service
+        .remove_channel_message_reminder(access, message_id)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE reminder r\n               SET enabled = false, completed_at = now(), updated_at = now()\n               FROM reminder_channel_message m\n               WHERE m.reminder_id = r.id AND m.user_id = r.user_id\n                 AND m.user_id = $1 AND m.message_id = $2\n                 AND r.completed_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "71aed9fbfc5aa341f5d5ffc4b264401a504e67e6905de477d4162cdc15678ff0"
+}

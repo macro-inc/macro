@@ -36,6 +36,9 @@ const NEW_NOTIFICATION: GraphqlNotificationPatch = {
       reminderReminderId: 'reminder-1',
       reminderDescription: 'Review the document',
       reminderScheduledFor: null,
+      reminderChannelId: null,
+      reminderMessageId: null,
+      reminderThreadId: null,
     },
   },
 };

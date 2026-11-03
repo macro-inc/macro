@@ -2,22 +2,24 @@
 
 ## What it is
 
-Part of the Email feature. Private email snoozes: durable inbox
-restoration, scheduled dispatch, and notification delivery, plus email
-follow-up reminders.
+Part of the Email feature, plus one-shot reminders that open a channel
+message. Private email snoozes: durable inbox restoration, scheduled
+dispatch, and notification delivery, plus email follow-up reminders.
 
 ## Start here
 
-- `src/domain.rs` module list: `email_collection` (snooze/restore) and
-  `email_followup` (follow-up reminders), each with its own `service.rs`.
-- `src/domain/service/dispatch.rs`: the recurring dispatch loop shared by both.
+- `src/domain.rs` module list: `email_collection` (snooze/restore),
+  `email_followup` (follow-up reminders), and `channel_message` (open a
+  channel message later).
+- `src/domain/service/dispatch.rs`: the recurring dispatch loop shared by email
+  snoozes and channel-message reminders.
 - `src/inbound/dispatch_worker.rs`: the queue worker entry point (`dispatch` feature).
 - `src/outbound/pg_reminders_repo.rs`: Postgres repo, split by sub-area.
 
 ## Scope
 
-- Owns: email snooze scheduling/restoration, email follow-up reminders, and
-  their dispatch/notification delivery.
+- Owns: email snooze scheduling/restoration, email follow-up reminders,
+  channel-message reminders, and their dispatch/notification delivery.
 - Not here: the Reminders *view* in the web app, or general task reminders →
   `apps/web`.
 

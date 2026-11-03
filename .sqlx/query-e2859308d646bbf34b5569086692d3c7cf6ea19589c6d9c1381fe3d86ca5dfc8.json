@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT r.id, r.user_id, r.description, r.next_run_at,\n                   f.thread_id AS \"email_thread_id?\",\n                   m.channel_id AS \"channel_id?\",\n                   m.message_id AS \"message_id?\",\n                   m.thread_id AS \"message_thread_id?\"\n            FROM reminder r\n            LEFT JOIN reminder_email_followup f\n              ON f.reminder_id = r.id AND f.user_id = r.user_id\n            LEFT JOIN reminder_channel_message m\n              ON m.reminder_id = r.id AND m.user_id = r.user_id\n            WHERE r.id = $1 AND r.next_run_at = $2\n              AND r.enabled AND r.completed_at IS NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "next_run_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "email_thread_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "channel_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "message_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "message_thread_id?",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "e2859308d646bbf34b5569086692d3c7cf6ea19589c6d9c1381fe3d86ca5dfc8"
+}

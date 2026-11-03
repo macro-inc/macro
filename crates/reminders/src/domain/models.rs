@@ -20,14 +20,33 @@ pub const MAX_PAGE_SIZE: u32 = 500;
 #[error("invalid cursor")]
 pub struct InvalidCursor;
 
-/// Email reminder delivery facts, private to its owner.
+/// What a due reminder should open.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReminderSubject {
+    /// An email conversation being snoozed.
+    EmailThread {
+        /// Original email thread to notify on.
+        thread_id: Uuid,
+    },
+    /// A channel message the owner asked to be reminded about.
+    ChannelMessage {
+        /// Channel that contains the message.
+        channel_id: Uuid,
+        /// Message to open.
+        message_id: Uuid,
+        /// Thread root when the message is a reply.
+        thread_id: Option<Uuid>,
+    },
+}
+
+/// Reminder delivery facts, private to its owner.
 #[derive(Debug, Clone)]
 pub struct DueReminder {
-    /// Identity of this snooze.
+    /// Identity of this reminder.
     pub reminder_id: Uuid,
-    /// Original email thread to notify on.
-    pub thread_id: Uuid,
-    /// Email subject captured when the snooze was scheduled.
+    /// What the notification should open.
+    pub subject: ReminderSubject,
+    /// Text captured when the reminder was scheduled.
     pub description: String,
     /// Only recipient of this notification.
     pub owner_id: MacroUserIdStr<'static>,

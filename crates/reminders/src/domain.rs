@@ -10,3 +10,6 @@ pub mod service;
 
 #[cfg(feature = "ports")]
 pub mod email_followup;
+
+#[cfg(feature = "ports")]
+pub mod channel_message;

@@ -311,3 +311,89 @@ async fn removing_snooze_retracts_only_its_email_notification(pool: PgPool) {
     expected.sort();
     assert_eq!(remaining, expected);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_channel_message_reminder_is_due_once_and_opens_that_message(pool: PgPool) {
+    use crate::domain::{
+        channel_message::{ChannelMessageReminder, ChannelMessageReminderRepo},
+        models::ReminderSubject,
+    };
+    insert_user(&pool, USER_A).await;
+    let repo = PgRemindersRepo::new(pool.clone());
+    let channel_id = Uuid::now_v7();
+    let message_id = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO comms_channels (id, name, channel_type, owner_id)
+           VALUES ($1, 'Reminder', 'private', $2)"#,
+        channel_id,
+        USER_A,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, sender_id, content)
+           VALUES ($1, 'channel', $2, $3, 'hello')"#,
+        message_id,
+        channel_id.to_string(),
+        USER_A,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let owner = user(USER_A);
+    let remind_at = at(2026, 8, 1, 11);
+    repo.save_reminder(
+        &owner,
+        &ChannelMessageReminder {
+            reminder_id: Uuid::now_v7(),
+            channel_id,
+            message_id,
+            thread_id: None,
+            description: "hello".into(),
+            remind_at,
+        },
+    )
+    .await
+    .unwrap();
+
+    let due = repo
+        .due_firings(at(2026, 8, 1, 12))
+        .await
+        .expect("query succeeds");
+    assert_eq!(due.len(), 1);
+    let resolved = repo
+        .find_due_reminder(due[0])
+        .await
+        .expect("read succeeds")
+        .expect("firing resolves");
+    assert_eq!(
+        resolved.subject,
+        ReminderSubject::ChannelMessage {
+            channel_id,
+            message_id,
+            thread_id: None,
+        }
+    );
+
+    assert!(
+        repo.claim_occurrence(resolved.reminder_id, remind_at, no_retry())
+            .await
+            .unwrap()
+    );
+    repo.complete_occurrence(resolved.reminder_id, remind_at)
+        .await
+        .unwrap();
+    assert!(
+        repo.due_firings(at(2026, 8, 1, 12))
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        repo.active_reminder(&owner, message_id)
+            .await
+            .unwrap()
+            .is_none()
+    );
+}

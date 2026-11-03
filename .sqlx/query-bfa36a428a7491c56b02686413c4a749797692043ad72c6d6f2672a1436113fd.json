@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO reminder_channel_message (reminder_id, user_id, channel_id, message_id, thread_id)\n               VALUES ($1, $2, $3, $4, $5)\n               ON CONFLICT (reminder_id) DO UPDATE SET\n                   channel_id = EXCLUDED.channel_id,\n                   message_id = EXCLUDED.message_id,\n                   thread_id = EXCLUDED.thread_id\n               WHERE reminder_channel_message.user_id = EXCLUDED.user_id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bfa36a428a7491c56b02686413c4a749797692043ad72c6d6f2672a1436113fd"
+}

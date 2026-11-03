@@ -17,7 +17,7 @@ export function indexUnreadMessageNotifications(
     const messageId = 'messageId' in content ? content.messageId : undefined;
     const commentId =
       'commentId' in content ? String(content.commentId) : undefined;
-    if (messageId !== undefined) append(messageId, notification);
+    if (messageId) append(messageId, notification);
     if (commentId !== undefined && commentId !== messageId)
       append(commentId, notification);
   }

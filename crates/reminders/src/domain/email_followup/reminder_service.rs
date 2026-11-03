@@ -33,10 +33,23 @@ impl<R, E, C, A> EmailRemindersService<R, E, C, A> {
         }
     }
 }
+
+impl<R, E, C, A> EmailRemindersService<R, E, C, A>
+where
+    R: Clone,
+    C: Clone,
+{
+    fn messages(&self) -> crate::domain::channel_message::ChannelMessageReminderService<R, C> {
+        crate::domain::channel_message::ChannelMessageReminderService::with_clock(
+            self.email.repo.clone(),
+            self.email.clock.clone(),
+        )
+    }
+}
 impl<
-    R: EmailFollowupRepo,
+    R: EmailFollowupRepo + crate::domain::channel_message::ChannelMessageReminderRepo,
     E: EmailFollowupMailbox,
-    C: Clock,
+    C: Clock + Clone,
     A: entity_access::domain::ports::EntityAccessService,
 > RemindersService for EmailRemindersService<R, E, C, A>
 {
@@ -70,5 +83,36 @@ impl<
         command: EmailFollowupCommand,
     ) -> Result<EmailFollowup, ReminderError> {
         self.email.execute(user, thread, command).await
+    }
+
+    async fn get_channel_message_reminder(
+        &self,
+        access: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::ViewOnly,
+        >,
+        message_id: Uuid,
+    ) -> Result<Option<crate::domain::channel_message::ChannelMessageReminder>, ReminderError> {
+        self.messages().get(&access, message_id).await
+    }
+
+    async fn set_channel_message_reminder(
+        &self,
+        access: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::ViewOnly,
+        >,
+        message_id: Uuid,
+        command: crate::domain::channel_message::SetChannelMessageReminder,
+    ) -> Result<crate::domain::channel_message::ChannelMessageReminder, ReminderError> {
+        self.messages().set(&access, message_id, command).await
+    }
+
+    async fn remove_channel_message_reminder(
+        &self,
+        access: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::ViewOnly,
+        >,
+        message_id: Uuid,
+    ) -> Result<(), ReminderError> {
+        self.messages().remove(&access, message_id).await
     }
 }

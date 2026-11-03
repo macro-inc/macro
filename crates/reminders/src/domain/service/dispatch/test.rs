@@ -46,7 +46,9 @@ fn firing(n: u8) -> DueFiring {
 fn due_once(n: u8) -> DueReminder {
     DueReminder {
         reminder_id: uuid(n),
-        thread_id: uuid(n + 10),
+        subject: crate::domain::models::ReminderSubject::EmailThread {
+            thread_id: uuid(n + 10),
+        },
         description: "Follow up".into(),
         owner_id: owner(),
         scheduled_for: now(),

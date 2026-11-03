@@ -540,6 +540,30 @@ function getSupportedHandler(
         }
       )
       .with('reminder', () => {
+        const meta = notification.notification_metadata;
+        if (
+          meta.tag === 'reminder' &&
+          meta.content.messageId &&
+          meta.content.channelId
+        ) {
+          const messageId = meta.content.messageId;
+          const channelId = meta.content.channelId;
+          const threadId = meta.content.threadId ?? messageId;
+          return async (lm: SplitManager, newSplit: boolean = false) => {
+            await navigateToChannelMessage(
+              lm.getOrchestrator(),
+              channelId,
+              messageId,
+              threadId,
+              {
+                splitManager: lm,
+                preferNewSplit: newSplit,
+                sourceHandle,
+                ...(onApplied ? { onApplied } : {}),
+              }
+            );
+          };
+        }
         if (notification.entity_type !== 'email_thread') return null;
         return async (lm: SplitManager, newSplit: boolean = false) => {
           openSplitIfNotOpen(lm, 'email', notification.entity_id, {

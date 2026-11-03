@@ -66,6 +66,7 @@ export type CreateChannelMessageActionsOptions = {
   onReply?: MessageActionHandler;
   onEdit?: MessageActionHandler;
   onCreateTask?: MessageActionHandler;
+  onCreateReminder?: MessageActionHandler;
   onChat?: MessageActionHandler;
   effects?: Partial<ChannelMessageActionEffects>;
 };
@@ -205,6 +206,7 @@ export function createChannelMessageActions(
           }
         : undefined,
       onCreateTask: options.onCreateTask,
+      onCreateReminder: !isDeleted ? options.onCreateReminder : undefined,
       onChat: !isDeleted ? options.onChat : undefined,
     };
   };

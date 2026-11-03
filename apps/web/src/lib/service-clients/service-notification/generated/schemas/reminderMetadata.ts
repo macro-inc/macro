@@ -4,7 +4,10 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ReminderMetadataChannelId } from './reminderMetadataChannelId';
+import type { ReminderMetadataMessageId } from './reminderMetadataMessageId';
 import type { ReminderMetadataScheduledFor } from './reminderMetadataScheduledFor';
+import type { ReminderMetadataThreadId } from './reminderMetadataThreadId';
 
 /**
  * Metadata for a reminder the user set for themselves coming due.
@@ -19,8 +22,12 @@ rather than in here, and clients resolve its name from that — so the
 dispatcher does not have to look up a name across five entity types.
  */
 export interface ReminderMetadata {
+  /** Channel a message reminder opens. Absent for email snoozes. */
+  channelId?: ReminderMetadataChannelId;
   /** What the user asked to be reminded about. */
   description: string;
+  /** Channel message a message reminder opens. Absent for email snoozes. */
+  messageId?: ReminderMetadataMessageId;
   /** The reminder that fired. */
   reminderId: string;
   /** Which firing this is — the occurrence the reminder came due for.
@@ -33,4 +40,6 @@ unread one on the lock screen.
 Optional because notifications written before recurring dispatch existed
 have no such field, and they still have to read back. */
   scheduledFor?: ReminderMetadataScheduledFor;
+  /** Thread root when the reminded message is a reply. */
+  threadId?: ReminderMetadataThreadId;
 }

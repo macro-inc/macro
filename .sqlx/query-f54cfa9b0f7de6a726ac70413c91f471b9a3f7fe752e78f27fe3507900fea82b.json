@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE reminder\n               SET completed_at = now(), enabled = false, updated_at = now()\n               WHERE id = $1 AND entity_type = 'channel_message' AND completed_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f54cfa9b0f7de6a726ac70413c91f471b9a3f7fe752e78f27fe3507900fea82b"
+}

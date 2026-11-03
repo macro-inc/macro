@@ -7156,6 +7156,18 @@ type GraphqlReminderMetadata {
 	notifications written before recurring dispatch existed.
 	"""
 	scheduledFor: String
+	"""
+	Channel a message reminder opens.
+	"""
+	channelId: ID
+	"""
+	Channel message a message reminder opens.
+	"""
+	messageId: ID
+	"""
+	Thread root when the reminded message is a reply.
+	"""
+	threadId: ID
 }
 
 """

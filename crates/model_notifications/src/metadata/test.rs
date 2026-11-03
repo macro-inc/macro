@@ -904,6 +904,9 @@ fn reminder_body_is_bounded_for_the_push_payload() {
         reminder_id: Uuid::parse_str("22222222-2222-4222-8222-222222222222").unwrap(),
         description: "🎉".repeat(2_000),
         scheduled_for: None,
+        channel_id: None,
+        message_id: None,
+        thread_id: None,
     };
 
     let body = metadata.format_body(None).unwrap();
@@ -1025,6 +1028,9 @@ fn reminder_key(id: &str, scheduled_for: Option<DateTime<Utc>>) -> String {
         reminder_id: Uuid::parse_str(id).unwrap(),
         description: "x".to_string(),
         scheduled_for,
+        channel_id: None,
+        message_id: None,
+        thread_id: None,
     }
     .collapse_key(&entity)
     .into_hashed()

@@ -1,6 +1,8 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { EmojiSelector } from '@core/component/Emoji/EmojiSelector';
 import { recordEmojiUsage } from '@core/component/Emoji/emojiUsage';
+import { enableReminders } from '@core/constant/featureFlags';
 import { focusInput } from '@core/directive/focusInput';
 import type {
   MessageActionEvent,
@@ -9,6 +11,7 @@ import type {
 } from '@core/messages/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ReplyIcon from '@icon/system/regular/arrow-bend-up-left.svg';
+import BellIcon from '@icon/system/regular/bell-simple.svg';
 import CheckSquareIcon from '@icon/system/regular/check-square.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
@@ -35,6 +38,7 @@ type ActionId =
   | 'copy-message-text'
   | 'edit'
   | 'delete'
+  | 'create-reminder'
   | 'create-task'
   | 'ask-macro';
 
@@ -49,7 +53,8 @@ type ActionItem = {
 
 function buildActionItems(
   actions: MessageActions | undefined,
-  message: { id: string; thread_id?: string | null } | undefined
+  message: { id: string; thread_id?: string | null } | undefined,
+  remindersEnabled: boolean
 ): ActionItem[] {
   const messageId = message?.id;
   // Reply inputs are keyed by the thread root, not the long-pressed message.
@@ -78,6 +83,12 @@ function buildActionItems(
       label: 'Copy link',
       icon: LinkIcon,
       onClick: actions?.onCopyLink,
+    },
+    {
+      id: 'create-reminder',
+      label: 'Reminder',
+      icon: BellIcon,
+      onClick: remindersEnabled ? actions?.onCreateReminder : undefined,
     },
     {
       id: 'create-task',
@@ -160,6 +171,7 @@ function EmojiSearchView(props: {
 
 export function ActionDrawer() {
   const drawerState = useMessageActionDrawer();
+  const remindersEnabled = useFeatureFlag(enableReminders);
   const [showEmojiSearch, setShowEmojiSearch] = createSignal(false);
 
   if (!drawerState) {
@@ -194,7 +206,8 @@ export function ActionDrawer() {
     drawerState.close();
   };
 
-  const actionItems = () => buildActionItems(actions(), message());
+  const actionItems = () =>
+    buildActionItems(actions(), message(), remindersEnabled().enabled);
   const nonDestructiveActions = () =>
     actionItems().filter((item) => item.onClick && !item.destructive);
   const destructiveActions = () =>

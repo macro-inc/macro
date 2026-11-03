@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO reminder (\n                   id, user_id, description, entity_type, entity_id, remind_at, next_run_at, enabled, completed_at\n               ) VALUES ($1, $2, $3, 'channel_message', $4, $5, $5, true, NULL)\n               ON CONFLICT (id) DO UPDATE SET\n                   description = EXCLUDED.description,\n                   remind_at = EXCLUDED.remind_at,\n                   next_run_at = EXCLUDED.next_run_at,\n                   enabled = true,\n                   completed_at = NULL,\n                   updated_at = now()\n               WHERE reminder.user_id = EXCLUDED.user_id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "df17e9ab3407600de9b0c8f48f49751c7fb2c332815db4536340922b0b35fdb7"
+}

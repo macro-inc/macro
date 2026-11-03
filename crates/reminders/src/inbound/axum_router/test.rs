@@ -42,6 +42,34 @@ impl RemindersService for FakeRemindersService {
     ) -> Result<crate::domain::email_followup::EmailFollowup, ReminderError> {
         unreachable!()
     }
+    async fn get_channel_message_reminder(
+        &self,
+        _: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::ViewOnly,
+        >,
+        _: Uuid,
+    ) -> Result<Option<crate::domain::channel_message::ChannelMessageReminder>, ReminderError> {
+        unreachable!()
+    }
+    async fn set_channel_message_reminder(
+        &self,
+        _: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::ViewOnly,
+        >,
+        _: Uuid,
+        _: crate::domain::channel_message::SetChannelMessageReminder,
+    ) -> Result<crate::domain::channel_message::ChannelMessageReminder, ReminderError> {
+        unreachable!()
+    }
+    async fn remove_channel_message_reminder(
+        &self,
+        _: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::ViewOnly,
+        >,
+        _: Uuid,
+    ) -> Result<(), ReminderError> {
+        unreachable!()
+    }
 }
 use entity_access::domain::models::EntityAccessReceipt;
 use macro_user_id::user_id::MacroUserIdStr;

@@ -11,7 +11,7 @@ use model_notifications::ReminderMetadata;
 use notification::domain::models::SendNotificationRequestBuilder;
 use notification::domain::service::NotificationIngress;
 
-use crate::domain::models::DueReminder;
+use crate::domain::models::{DueReminder, ReminderSubject};
 use crate::domain::ports::ReminderNotifier;
 
 /// Delivers due reminders by handing them to the notification ingress, which
@@ -42,15 +42,37 @@ impl<I: NotificationIngress> ReminderNotifier for NotificationReminderNotifier<I
     // reminder id is safe to put in a span.
     #[tracing::instrument(err, skip_all, fields(reminder_id = %due.reminder_id))]
     async fn notify(&self, due: &DueReminder) -> Result<(), Self::Err> {
+        let (notification_entity, channel_id, message_id, thread_id) = match due.subject {
+            ReminderSubject::EmailThread { thread_id } => (
+                EntityType::EmailThread.with_entity_string(thread_id.to_string()),
+                None,
+                None,
+                None,
+            ),
+            ReminderSubject::ChannelMessage {
+                channel_id,
+                message_id,
+                thread_id,
+            } => (
+                // The reminder is private. Filing it on the channel would let a
+                // channel mute swallow a notification the owner set for themselves.
+                EntityType::Reminder.with_entity_string(due.reminder_id.to_string()),
+                Some(channel_id),
+                Some(message_id),
+                thread_id,
+            ),
+        };
         let request = SendNotificationRequestBuilder {
-            notification_entity: EntityType::EmailThread
-                .with_entity_string(due.thread_id.to_string()),
+            notification_entity,
             secondary_notification_entity: None,
             notification: ReminderMetadata {
                 reminder_id: due.reminder_id,
                 description: due.description.clone(),
                 // Retraction must distinguish a previous firing from a newer snooze.
                 scheduled_for: Some(due.scheduled_for),
+                channel_id,
+                message_id,
+                thread_id,
             },
             // Must stay None. A recipient who is also the sender is filtered
             // out of their own notification, and a reminder's only recipient is

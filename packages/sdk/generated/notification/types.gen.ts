@@ -1425,9 +1425,17 @@ export type RealtimeNotifTaggedContentValue = Entity & {
  */
 export type ReminderMetadata = {
     /**
+     * Channel a message reminder opens. Absent for email snoozes.
+     */
+    channelId?: string | null;
+    /**
      * What the user asked to be reminded about.
      */
     description: string;
+    /**
+     * Channel message a message reminder opens. Absent for email snoozes.
+     */
+    messageId?: string | null;
     /**
      * The reminder that fired.
      */
@@ -1444,6 +1452,10 @@ export type ReminderMetadata = {
      * have no such field, and they still have to read back.
      */
     scheduledFor?: string | null;
+    /**
+     * Thread root when the reminded message is a reply.
+     */
+    threadId?: string | null;
 };
 
 /**

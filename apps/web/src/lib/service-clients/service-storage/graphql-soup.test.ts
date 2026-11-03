@@ -208,6 +208,9 @@ it('preserves the scheduled occurrence identity on reminder notifications', asyn
       reminderReminderId: 'reminder-1',
       reminderDescription: 'Follow up',
       reminderScheduledFor: '2026-09-21T10:00:00Z',
+      reminderChannelId: null,
+      reminderMessageId: null,
+      reminderThreadId: null,
     },
   });
   expect(mapped.entity_type).toBe('email_thread');

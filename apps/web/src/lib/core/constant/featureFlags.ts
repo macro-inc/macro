@@ -531,10 +531,11 @@ export const enableProjects = defineFlag({
   default: onInDev,
 });
 
-// Email snooze: the "Remind me" action, its 'h' shortcut, and the shared
-// time-selection command menu.
-// Every surface routes through `makeCreateReminderAction().canExecute`, so this
-// is the single gate for all of them. PostHog-gated with a dev-mode default.
+// Email snooze and channel-message reminders: the "Remind me" action, its 'h'
+// shortcut, the message Reminder button, and the shared time-selection menu.
+// Email surfaces route through `makeCreateReminderAction().canExecute`; the
+// message button checks this flag where it renders. PostHog-gated with a
+// dev-mode default.
 export const enableReminders = defineFlag({
   key: 'enable-reminders',
   env: 'ENABLE_REMINDERS',
