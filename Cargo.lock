@@ -3813,7 +3813,6 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "email_utils",
- "entity_access",
  "futures",
  "macro_authorization",
  "macro_db_migrator",
@@ -3887,7 +3886,6 @@ dependencies = [
  "email_api_client",
  "email_db_client",
  "email_utils",
- "entity_access",
  "futures",
  "google_token",
  "macro_auth",
@@ -4947,6 +4945,7 @@ name = "connect_demo"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "chrono",
  "connect_client",
  "connect_platform",
  "futures",

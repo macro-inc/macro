@@ -1,0 +1,10 @@
+id = "highlevel"
+name = "HighLevel"
+description = "Read and update contacts, conversations, calendars, and opportunities."
+access = ["mcp"]
+mcp_url = "https://services.leadconnectorhq.com/mcp"
+client_registration = "dcr"
+scopes = []
+pipedream_app_slugs = ["highlevel_oauth"]
+status = "live"
+probed = 2026-10-31

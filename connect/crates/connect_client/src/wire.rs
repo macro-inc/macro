@@ -16,10 +16,23 @@ pub struct CatalogEntry {
     pub description: String,
     /// Access methods, such as `mcp`.
     pub access: Vec<String>,
+    /// How Connect obtains an OAuth client; absent for API-key-only apps.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub oauth_client: Option<OAuthClient>,
     /// Vendor-owned MCP server URL.
     pub mcp_url: String,
     /// Connect-served icon path when an official SVG is available.
     pub icon_url: Option<String>,
+}
+
+/// How Connect obtains a vendor OAuth client.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum OAuthClient {
+    /// Connect registers and manages its own vendor OAuth app.
+    ManagedOauthApp,
+    /// The vendor authorization server registers Connect's client.
+    Dcr,
 }
 
 /// Body for creating a browser connect session.
@@ -57,6 +70,110 @@ pub struct Connection {
     pub scopes: Vec<String>,
     /// Creation time.
     pub created_at: DateTime<Utc>,
+}
+
+/// Filters and paging for a customer's connections.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct ConnectionsQuery {
+    /// Page size; defaults to 100 and cannot exceed 500.
+    pub limit: Option<u16>,
+    /// Opaque cursor from a prior page.
+    pub cursor: Option<String>,
+    /// Restrict results to an app.
+    pub app_id: Option<String>,
+    /// Restrict results to a connection status.
+    pub status: Option<ConnectionStatus>,
+}
+
+/// A connection and its owning customer's opaque user identifier.
+#[derive(Clone, Debug, Deserialize, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ListedConnection {
+    /// Customer-provided user identifier.
+    pub external_user_id: String,
+    /// Stable app identifier.
+    pub app_id: String,
+    /// Current usability.
+    pub status: ConnectionStatus,
+    /// Granted OAuth scopes.
+    pub scopes: Vec<String>,
+    /// Creation time.
+    pub created_at: DateTime<Utc>,
+    /// Last connection update.
+    pub updated_at: DateTime<Utc>,
+    /// Access token expiration, when known.
+    pub access_token_expires_at: Option<DateTime<Utc>>,
+}
+
+/// One page of customer connections.
+#[derive(Clone, Debug, Deserialize, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionsPage {
+    /// Connections in descending creation order.
+    pub items: Vec<ListedConnection>,
+    /// Opaque position for the next page, or null when complete.
+    pub next_cursor: Option<String>,
+}
+
+/// Filters and paging for a customer's connected users.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct UsersQuery {
+    /// Number of users per page; defaults to 100 and cannot exceed 500.
+    pub limit: Option<u16>,
+    /// Opaque cursor from a prior page.
+    pub cursor: Option<String>,
+    /// Select users with a matching app connection.
+    pub app_id: Option<String>,
+    /// Select users with a matching connection status.
+    pub status: Option<ConnectionStatus>,
+}
+
+/// A customer user and all of their connections.
+#[derive(Clone, Debug, Deserialize, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ListedUser {
+    /// Customer-provided user identifier.
+    pub external_user_id: String,
+    /// Creation time of the user's first connection.
+    pub first_connected_at: DateTime<Utc>,
+    /// Every connection of the user, ordered by app ID.
+    pub connections: Vec<ListedConnection>,
+}
+
+/// One page of connected users.
+#[derive(Clone, Debug, Deserialize, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UsersPage {
+    /// Users ordered by first connection time, newest first, then user ID descending.
+    pub items: Vec<ListedUser>,
+    /// Opaque position for the next page, or null when complete.
+    pub next_cursor: Option<String>,
+}
+
+/// Connection counts for one catalog app.
+#[derive(Clone, Debug, Deserialize, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AppConnectionsSummary {
+    /// Stable app identifier.
+    pub app_id: String,
+    /// Usable connections.
+    pub active: u64,
+    /// Connections requiring new consent.
+    pub needs_reauth: u64,
+}
+
+/// Counts for a customer and each app with connections.
+#[derive(Clone, Debug, Deserialize, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionsSummary {
+    /// Distinct users with at least one connection.
+    pub users: u64,
+    /// Total connections.
+    pub connections: u64,
+    /// Connections requiring new consent.
+    pub needs_reauth: u64,
+    /// Counts by app; apps with no connections are omitted.
+    pub apps: Vec<AppConnectionsSummary>,
 }
 
 /// Current usability of a connection.

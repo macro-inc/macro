@@ -52,8 +52,9 @@ export class TaskNamespace {
 
   /**
    * Existing tasks of yours or your team's that look like the same work as a
-   * task with this title and body, most similar first. Call it before
-   * `create`; if one is a likely duplicate, ask the user instead of creating.
+   * task with this title and body, most similar first. Call it in the same
+   * program as `create`: create only when nothing is a likely duplicate, and
+   * otherwise return the matches and ask the user instead of creating.
    */
   findSimilar(opts: { title: string; body?: string }): Promise<SimilarTask[]> {
     return Task.findSimilar(this.client, opts);
