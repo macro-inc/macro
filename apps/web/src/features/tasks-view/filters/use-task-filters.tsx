@@ -2,6 +2,11 @@ import type {
   AiFilterOutcome,
   ListFilterGroup,
 } from '@app/components/view-shell';
+import { NO_ASSIGNEE } from '@app/features/next-soup/filters';
+import {
+  AssigneeDiscoveryStatus,
+  useAssigneePicker,
+} from '@app/features/next-soup/soup-view/filters-bar/assignee-picker';
 import { addUnique, removeValue } from '@app/lib/signals/store-array-updaters';
 import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
@@ -47,6 +52,11 @@ export function useTaskFilters() {
   const currentUserId = useUserId();
   const tagGroup = useTagFilterGroup();
   const [customRange, setCustomRange] = createSignal<TaskDateRangeDraft>();
+  const assigneePicker = useAssigneePicker(
+    () => (state.facets.assignees ?? []).filter((id) => id !== TASK_VIEWER),
+    () => true
+  );
+  const resetAssigneeDiscovery = () => assigneePicker.setDiscovering(false);
 
   const peopleOptions = createMemo(() => {
     const me = currentUserId();
@@ -169,7 +179,17 @@ export function useTaskFilters() {
         id: 'assignees',
         label: 'Assignee',
         searchPlaceholder: 'Search assignees...',
-        options: withUnavailable('assignees', peopleOptions()),
+        options: [
+          ...peopleOptions().filter((option) => option.id === TASK_VIEWER),
+          ...assigneePicker
+            .options()
+            .filter((option) => option.id !== NO_ASSIGNEE),
+        ],
+        action: assigneePicker.action(),
+        footer: <AssigneeDiscoveryStatus discovery={assigneePicker} />,
+        onOpenChange: (open) => {
+          if (!open) resetAssigneeDiscovery();
+        },
       },
       {
         id: 'created-by',
@@ -257,6 +277,7 @@ export function useTaskFilters() {
 
   return {
     activeCount,
+    resetAssigneeDiscovery,
     applyDescription,
     clear: () =>
       batch(() => {

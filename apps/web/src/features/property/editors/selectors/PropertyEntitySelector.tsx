@@ -1,7 +1,9 @@
+import { t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { useEmail, useUserId } from '@core/context/user';
 import { emailToId, useAugmentUserWithDmActivity } from '@core/user';
+import { idToDisplayName, idToEmail } from '@core/user/util';
 import { createFreshSearch } from '@core/util/freshSort';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import { useSelectedFirst } from '@core/util/useSelectedFirst';
@@ -17,7 +19,7 @@ import { useSearchInputFocus } from '@property/utils';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { debounce } from '@solid-primitives/scheduled';
-import { cn } from '@ui';
+import { Button, cn } from '@ui';
 import * as EmailValidator from 'email-validator';
 import {
   createEffect,
@@ -117,6 +119,17 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const [inputValue, setInputValue] = createSignal('');
   const [searchTerm, setSearchTerm] = createSignal('');
   const [selectedIndex, setSelectedIndex] = createSignal(0);
+  const [findOtherUsers, setFindOtherUsers] = createSignal(false);
+  const openedSelectedIds = new Set(props.selectedOptions());
+  const hasUserDiscovery = () =>
+    props.config.specificEntityType === 'USER' &&
+    !!props.config.users &&
+    props.config.allowOtherUsers === true;
+  const toggleUserDiscovery = () => {
+    setFindOtherUsers((value) => !value);
+    setSelectedIndex(0);
+    searchInputRef.focus();
+  };
   const keyboardMode = useKeyPressed(100);
 
   // Pinned options filtered by search term
@@ -194,6 +207,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   });
 
   const isLoadingEntities = createMemo(() => {
+    if (props.config.users && !findOtherUsers()) {
+      return props.config.usersLoading?.() ?? false;
+    }
     if (needsEmailSearch()) {
       return (
         emailsQuery.isLoading ||
@@ -204,16 +220,47 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     return isQuickAccessLoading();
   });
 
-  // Convert quickAccess items to CombinedEntity format
-  const entities = createMemo((): CombinedEntity[] => {
-    const specificEntityType = props.config.specificEntityType;
-
-    // An explicit user pool replaces the quick-access people list.
-    if (specificEntityType === 'USER' && props.config.users) {
-      return props.config
-        .users()
-        .map((user) => userToEntity(augmentUserWithDmActivity(user)));
+  // A scoped pool still offers agents and keeps existing outsiders removable.
+  const scopedUserEntities = createMemo(() => {
+    if (props.config.specificEntityType !== 'USER' || !props.config.users) {
+      return undefined;
     }
+    const users = new Map(
+      [
+        ...props.config.users(),
+        ...(props.config.additionalUsers?.() ?? []),
+      ].map((user) => [user.id, user])
+    );
+    if (hasUserDiscovery()) {
+      const selectedIds = new Set([
+        ...openedSelectedIds,
+        ...props.selectedOptions(),
+      ]);
+      for (const item of quickAccessItems()) {
+        if (item.kind !== 'user' || users.has(item.id)) continue;
+        if (findOtherUsers() || selectedIds.has(item.id)) {
+          users.set(item.id, item.data);
+        }
+      }
+      for (const id of selectedIds) {
+        if (users.has(id)) continue;
+        users.set(id, {
+          id,
+          email: isBotPrincipalId(id) ? '' : idToEmail(id),
+          name: isBotPrincipalId(id) ? 'Agent' : idToDisplayName(id),
+        });
+      }
+    }
+    return [...users.values()].map((user) =>
+      userToEntity(augmentUserWithDmActivity(user))
+    );
+  });
+
+  // Convert quickAccess items to CombinedEntity format.
+  const entities = createMemo((): CombinedEntity[] => {
+    const scoped = scopedUserEntities();
+    if (scoped) return scoped;
+    const specificEntityType = props.config.specificEntityType;
 
     // For THREAD type, use email data (not in quickAccess yet)
     if (specificEntityType === 'THREAD') {
@@ -337,7 +384,6 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     getId: (e: CombinedEntity) => e.id,
   });
 
-  const openedSelectedIds = new Set(props.selectedOptions());
   const selectedEntityCountAtOpen = createMemo(() => {
     if (!props.config.isMultiSelect || searchTerm()) return 0;
     return sortedEntities().filter((entity) => openedSelectedIds.has(entity.id))
@@ -401,8 +447,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     }
   };
 
-  const totalCount = () =>
+  const resultCount = () =>
     pinnedCount() + sortedEntities().length + (customEmail() ? 1 : 0);
+  const totalCount = () => resultCount() + (hasUserDiscovery() ? 1 : 0);
 
   // Reset selected index to top when search term or list changes
   createEffect(() => {
@@ -423,6 +470,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   });
 
   const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.target instanceof HTMLElement && e.target.closest('button')) return;
     const total = totalCount();
     if (total === 0) return;
 
@@ -441,6 +489,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       } else if (idx < pCount + sortedEntities().length) {
         const entity = sortedEntities()[idx - pCount];
         if (entity) toggleEntity(entity);
+      } else if (hasUserDiscovery() && idx === resultCount()) {
+        toggleUserDiscovery();
       } else {
         const entity = customEmailEntity();
         if (entity) toggleEntity(entity);
@@ -484,7 +534,20 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         </div>
       </div>
 
-      <Show when={totalCount() > 0}>
+      <Show
+        when={
+          props.config.users &&
+          !findOtherUsers() &&
+          (props.config.usersLoading?.() || props.config.usersError?.())
+        }
+      >
+        <div role="status" class="px-3 py-2 text-sm text-ink-muted">
+          {props.config.usersLoading?.()
+            ? t('viewMenus.loadingTeamMembers')
+            : t('viewMenus.teamMembersUnavailable')}
+        </div>
+      </Show>
+      <Show when={resultCount() > 0}>
         {/* Picking a row keeps focus in the search field: a tap that moved
             it would drop the phone keyboard until the refocus below. iOS
             devices still send mousedown after a cancelled pointerdown. */}
@@ -681,11 +744,45 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         </div>
       </Show>
 
-      <Show when={totalCount() === 0}>
+      <Show
+        when={
+          resultCount() === 0 &&
+          !(
+            props.config.users &&
+            !findOtherUsers() &&
+            (props.config.usersLoading?.() || props.config.usersError?.())
+          )
+        }
+      >
         <div class="text-center py-4 text-ink-muted text-sm">
           <Show when={!isLoadingEntities()} fallback={<span>Loading...</span>}>
             No {getEntityTypePluralLabel(props.config.specificEntityType)} found
           </Show>
+        </div>
+      </Show>
+      <Show when={hasUserDiscovery()}>
+        <div
+          class="shrink-0 border-t border-edge-muted p-1.5"
+          onPointerDown={keepSearchFocus}
+          onMouseDown={keepSearchFocus}
+        >
+          <Button
+            variant="ghost"
+            size="sm"
+            fullWidth
+            class={cn(
+              'justify-start',
+              selectedIndex() === resultCount() && 'bg-hover'
+            )}
+            onClick={toggleUserDiscovery}
+            onMouseEnter={() => {
+              if (!keyboardMode()) setSelectedIndex(resultCount());
+            }}
+          >
+            {findOtherUsers()
+              ? t('viewMenus.backToTeam')
+              : t('viewMenus.findOtherPeople')}
+          </Button>
         </div>
       </Show>
     </div>

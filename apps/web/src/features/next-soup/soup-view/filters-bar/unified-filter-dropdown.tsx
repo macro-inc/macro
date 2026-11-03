@@ -27,7 +27,6 @@ import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import CircleDashedIcon from '@icon/system/regular/circle-dashed.svg';
 import FilterIcon from '@icon/system/regular/funnel-simple.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
@@ -53,6 +52,11 @@ import {
   Switch,
 } from 'solid-js';
 import {
+  AssigneeDiscoveryStatus,
+  buildContactLabel,
+  useAssigneePicker,
+} from './assignee-picker';
+import {
   type FilterCategory,
   filterInboxGithubPrOption,
 } from './filter-categories';
@@ -62,6 +66,8 @@ import {
   SearchableFilterSubmenu,
 } from './filter-menu';
 import type { SearchableOption } from './searchable-multi-select';
+
+export { buildContactLabel } from './assignee-picker';
 
 import { useTagFilter } from './tag-filter';
 
@@ -471,18 +477,6 @@ const DOCUMENTS_FILTER_CATEGORIES: FilterCategory[] = [
   },
 ];
 
-export function buildContactLabel(
-  contact: { id: string; name?: string | null },
-  currentUserId: string | undefined
-): string {
-  if (contact.id === currentUserId) {
-    return contact.name
-      ? t('viewMenus.contactMe', { name: contact.name })
-      : t('viewMenus.me');
-  }
-  return contact.name || contact.id;
-}
-
 export const VIEW_FILTER_CATEGORIES: Record<ListView, FilterCategory[]> = {
   home: HOME_FILTER_CATEGORIES,
   // No refinements yet: the touched-by-me query rejects channel/email
@@ -559,6 +553,7 @@ export const UnifiedFilterDropdown = (
   const [internalOpen, setInternalOpen] = createSignal(false);
   const open = () => props.open?.() ?? internalOpen();
   const setOpen = (v: boolean) => {
+    if (!v) assigneePicker.setDiscovering(false);
     setInternalOpen(v);
     props.onOpenChange?.(v);
   };
@@ -666,41 +661,10 @@ export const UnifiedFilterDropdown = (
     }
   };
 
-  // Assignee options for tasks view
-  const assigneeOptions = createMemo((): SearchableOption[] => {
-    const currentUserId = userId();
-    const noAssigneeOption: SearchableOption = {
-      id: NO_ASSIGNEE,
-      label: t('viewMenus.unassigned'),
-      icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,
-    };
-    let meOption: SearchableOption | undefined;
-    const otherContactOptions: SearchableOption[] = [];
-    for (const contact of contacts()) {
-      const opt: SearchableOption = {
-        id: contact.id,
-        label: buildContactLabel(contact, currentUserId),
-        icon: () => (
-          <UserIcon
-            id={contact.id}
-            size="sm"
-            suppressClick
-            showTooltip={false}
-          />
-        ),
-      };
-      if (contact.id === currentUserId) {
-        meOption = opt;
-      } else {
-        otherContactOptions.push(opt);
-      }
-    }
-    return [
-      ...(meOption ? [meOption] : []),
-      noAssigneeOption,
-      ...otherContactOptions,
-    ];
-  });
+  const assigneePicker = useAssigneePicker(
+    assigneeFilter,
+    () => currentView() === 'tasks'
+  );
 
   const handleAssigneeChange = (ids: string[]) => {
     const current = assigneeFilter();
@@ -932,10 +896,17 @@ export const UnifiedFilterDropdown = (
                     <SearchableFilterSubmenu
                       onSelectionComplete={() => setOpen(false)}
                       label={t('viewMenus.assignee')}
-                      options={assigneeOptions}
+                      options={assigneePicker.options}
                       activeIds={assigneeFilter}
                       onChange={handleAssigneeChange}
                       placeholder={t('viewMenus.searchAssignees')}
+                      action={assigneePicker.action()}
+                      footer={
+                        <AssigneeDiscoveryStatus discovery={assigneePicker} />
+                      }
+                      onOpenChange={(open) => {
+                        if (!open) assigneePicker.setDiscovering(false);
+                      }}
                     />
                   </Show>
 

@@ -80,6 +80,20 @@ height on touch instead of adopting the shared button touch minimum. Only
 the task-detail title-row tags selector uses the 36px touch target; document
 title-row tags retain their compact height.
 
+## Assignee selection
+
+The system Assignees property uses the current team roster, plus available
+agents. **Find other people…** explicitly expands to the existing Quick Access
+people pool; **Back to team members** restores the roster without dropping picks.
+Already-selected outsiders remain visible and removable, including references
+absent from contacts. Closing and reopening starts in team mode.
+
+This applies to task/project composers, property pills, side panels, bulk
+editors, and touch picker sheets. References remain `USER` values; discovery
+does not add arbitrary email addresses or CRM-only records. Company owner stays
+strictly team-only, and custom people properties keep their existing pool.
+`queries/team-members.ts` shares the non-suspending roster with Assignee filters.
+
 ## Side-panel collections
 
 Property rows use a 4px vertical gap, including inline Tags and the boundary

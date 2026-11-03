@@ -23,6 +23,10 @@ export type EntitySelectorConfig = {
   /** Explicit pool for USER pickers (e.g. company owner → team members);
    * replaces the default quick-access people list. */
   users?: Accessor<IUser[]>;
+  /** Allow explicit discovery beyond `users`, retaining selected outsiders. */
+  allowOtherUsers?: boolean;
+  usersLoading?: Accessor<boolean>;
+  usersError?: Accessor<boolean>;
   /** Additional principals offered alongside the default people pool. */
   additionalUsers?: Accessor<IUser[]>;
   /** When the query is a valid email that is not already in the pool,

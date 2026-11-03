@@ -28,8 +28,12 @@ vi.mock('@core/user', () => ({
   useAugmentUserWithDmActivity: () => (user: unknown) => user,
 }));
 vi.mock('@core/user/util', () => ({
-  idToEmail: (id: string) => id,
-  idToDisplayName: (id: string) => id,
+  idToEmail: (id: string) => id.replace('macro|', ''),
+  idToDisplayName: (id: string) => {
+    if (id === 'macro|alice@example.com') return 'Alice';
+    if (id === 'macro|teammate@example.com') return 'Teammate';
+    return id.replace('macro|', '');
+  },
 }));
 vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => <span /> }));
 vi.mock('@core/context/quickAccess', () => ({
@@ -59,6 +63,15 @@ vi.mock('@core/context/quickAccess', () => ({
                   email: 'alice@example.com',
                 },
               },
+              {
+                kind: 'user',
+                id: 'macro|outside@example.com',
+                data: {
+                  id: 'macro|outside@example.com',
+                  name: 'Outside',
+                  email: 'outside@example.com',
+                },
+              },
             ],
     }),
   }),
@@ -81,7 +94,16 @@ vi.mock('@queries/soup/search', () => ({
   useSearchSoupQuery: () => ({ status: 'pending', isFetching: false }),
 }));
 vi.mock('@queries/team/teams', () => ({
-  useCurrentTeamQuery: () => ({ data: null }),
+  useCurrentTeamQuery: () => ({
+    isPending: false,
+    isError: false,
+    data: {
+      members: [
+        { user_id: 'macro|alice@example.com' },
+        { user_id: 'macro|teammate@example.com' },
+      ],
+    },
+  }),
 }));
 vi.mock('../../queries/agent-assignees', () => ({
   useAgentAssignees: (enabled: () => boolean) => () =>
@@ -258,6 +280,88 @@ describe('assigning an agent through task and project properties', () => {
   });
 });
 
+describe('team-first assignees', () => {
+  it.each([EntityEditor, EntitySheetEditor])(
+    'searches the roster before explicit discovery and retains the discovered pick',
+    async (Editor) => {
+      const onSave = setup(undefined, property, Editor);
+      expect(screen.getByText('Teammate')).toBeTruthy();
+      expect(screen.queryByText('Outside')).toBeNull();
+      const input = screen.getByPlaceholderText('Add assignees...');
+      fireEvent.input(input, { target: { value: 'outside' } });
+      await waitFor(() => expect(screen.queryByText('Teammate')).toBeNull());
+      expect(screen.queryByText('Outside')).toBeNull();
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Find other people…' })
+      );
+      fireEvent.click(await screen.findByText('Outside'));
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Back to team members' })
+      );
+      expect(await screen.findByText('Outside')).toBeTruthy();
+      fireEvent.click(
+        screen.getByText(Editor === EntitySheetEditor ? 'Done' : 'Dismiss')
+      );
+      await waitFor(() =>
+        expect(onSave).toHaveBeenCalledWith(
+          property,
+          {
+            valueType: 'ENTITY',
+            refs: [
+              { entity_id: userId, entity_type: 'USER' },
+              { entity_id: 'macro|outside@example.com', entity_type: 'USER' },
+            ],
+          },
+          new Map([['macro|outside@example.com', 'Outside']])
+        )
+      );
+    }
+  );
+
+  it('removes a selected outsider missing from contacts without discovery', async () => {
+    const assigned: EntityProperty = {
+      ...property,
+      value: [{ entity_id: 'macro|former@example.com', entity_type: 'USER' }],
+    };
+    const onSave = setup(undefined, assigned);
+    fireEvent.click(screen.getByText('former@example.com'));
+    fireEvent.click(screen.getByText('Dismiss'));
+    await waitFor(() =>
+      expect(onSave).toHaveBeenCalledWith(
+        assigned,
+        { valueType: 'ENTITY', refs: null },
+        new Map([['macro|former@example.com', 'former@example.com']])
+      )
+    );
+  });
+
+  it('reaches discovery with the keyboard after a team-only search has no matches', async () => {
+    setup(undefined, { ...property, value: [] });
+    const input = screen.getByPlaceholderText('Add assignees...');
+    fireEvent.input(input, { target: { value: 'outside' } });
+    await waitFor(() => expect(screen.queryByText('Teammate')).toBeNull());
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(await screen.findByText('Outside')).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Back to team members' })
+    ).toBeTruthy();
+  });
+
+  it('keeps custom people fields broad and company owners strictly team-only', () => {
+    setup(undefined, { ...property, propertyDefinitionId: 'custom-people' });
+    expect(screen.getByText('Outside')).toBeTruthy();
+    cleanup();
+    setup(undefined, {
+      ...property,
+      propertyDefinitionId: SYSTEM_PROPERTY_IDS.COMPANY_OWNER,
+    });
+    expect(screen.getByText('Teammate')).toBeTruthy();
+    expect(screen.queryByText('Outside')).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Find other people…' })
+    ).toBeNull();
+  });
+});
 describe('people in a picker sheet', () => {
   it('drops the picks on Escape and saves them on Done', async () => {
     const dropped = setup(undefined, property, EntitySheetEditor);

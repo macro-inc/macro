@@ -30,6 +30,7 @@ import CircleDashedIcon from '@icon/system/regular/circle-dashed.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useContacts } from '@queries/contacts/contacts';
 import { batch, createMemo, createSignal, type JSX } from 'solid-js';
+import { AssigneeDiscoveryStatus, useAssigneePicker } from './assignee-picker';
 import type {
   ConsolidatedFilter,
   FilterValue,
@@ -146,13 +147,17 @@ export function useFilterRefinements() {
     return hasClientFilterDiff || hasQueryFilterDiff || hasSubFilters;
   });
 
+  const assigneePicker = useAssigneePicker(
+    assigneeFilter,
+    () => currentView() === 'tasks'
+  );
+
   /**
    * Human-readable options for the assignee sub-filter, keyed by assignee ID.
-   * Mirrors the same logic used in UnifiedFilterDropdown's assigneeOptions.
+   * Uses the same team and selected-outsider options as the pickers.
    */
   const assigneeOptionsMap = createMemo(
     (): Map<string, { label: string; icon?: () => JSX.Element }> => {
-      const uid = currentUserId();
       const map = new Map<
         string,
         { label: string; icon?: () => JSX.Element }
@@ -161,60 +166,12 @@ export function useFilterRefinements() {
         label: t('viewMenus.unassigned'),
         icon: () => <CircleDashedIcon class="size-3 text-ink-muted" />,
       });
-      for (const contact of contacts()) {
-        map.set(contact.id, {
-          label: buildContactLabel(contact, uid),
-          icon: () => (
-            <UserIcon
-              id={contact.id}
-              size="sm"
-              suppressClick
-              showTooltip={false}
-            />
-          ),
-        });
+      for (const option of assigneePicker.options()) {
+        map.set(option.id, { label: option.label, icon: option.icon });
       }
       return map;
     }
   );
-
-  /**
-   * Searchable options for the assignee filter (for use in searchable multi-select).
-   */
-  const assigneeSearchableOptions = createMemo((): SearchableOption[] => {
-    const uid = currentUserId();
-    const noAssigneeOption: SearchableOption = {
-      id: NO_ASSIGNEE,
-      label: t('viewMenus.unassigned'),
-      icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,
-    };
-    let meOption: SearchableOption | undefined;
-    const otherContactOptions: SearchableOption[] = [];
-    for (const contact of contacts()) {
-      const opt: SearchableOption = {
-        id: contact.id,
-        label: buildContactLabel(contact, uid),
-        icon: () => (
-          <UserIcon
-            id={contact.id}
-            size="sm"
-            suppressClick
-            showTooltip={false}
-          />
-        ),
-      };
-      if (contact.id === uid) {
-        meOption = opt;
-      } else {
-        otherContactOptions.push(opt);
-      }
-    }
-    return [
-      ...(meOption ? [meOption] : []),
-      noAssigneeOption,
-      ...otherContactOptions,
-    ];
-  });
 
   /** Creator options for the Tasks and Files Created by filter. */
   const createdByOptionsMap = createMemo(
@@ -633,6 +590,7 @@ export function useFilterRefinements() {
           const [isPopupOpen, _setPopupOpen] = createSignal(false);
           const setPopupOpen = (v: boolean) => {
             if (!v) {
+              assigneePicker.setDiscovering(false);
               queueMicrotask(() =>
                 panel.panelRef()?.focus({ preventScroll: true })
               );
@@ -645,7 +603,11 @@ export function useFilterRefinements() {
               return t('viewMenus.assignee');
             },
             values: getValues,
-            searchableOptions: assigneeSearchableOptions,
+            searchableOptions: assigneePicker.options,
+            searchAction: assigneePicker.action,
+            searchFooter: (
+              <AssigneeDiscoveryStatus discovery={assigneePicker} />
+            ),
             activeSearchableIds: assigneeFilter,
             onSearchableChange: handleAssigneeChange,
             get searchPlaceholder() {

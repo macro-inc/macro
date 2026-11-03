@@ -1,8 +1,10 @@
 import { MobileFilterDrawer } from '@app/components/view-shell/MobileFilterDrawer';
+import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Accordion } from '@kobalte/core/accordion';
-import type { DialogHandle } from '@ui';
+import { Key } from '@solid-primitives/keyed';
+import { Button, type DialogHandle, Input } from '@ui';
 import {
   createMemo,
   createSignal,
@@ -24,7 +26,15 @@ export function TasksFilterDrawer() {
   const { state, setPrimarySort, setState, savedViews, savedViewScope } =
     useTasksView();
   const filters = useTaskFilters();
-  const [open, setOpen] = createSignal(false);
+  const [open, setDrawerOpen] = createSignal(false);
+  const [assigneeSearch, setAssigneeSearch] = createSignal('');
+  const setOpen = (value: boolean) => {
+    if (!value) {
+      filters.resetAssigneeDiscovery();
+      setAssigneeSearch('');
+    }
+    setDrawerOpen(value);
+  };
   const owner = getOwner();
   let disposed = false;
   let pending:
@@ -151,30 +161,50 @@ export function TasksFilterDrawer() {
           defaultValue={[filters.groups()[0]?.id ?? 'status']}
         >
           <div class="flex flex-col gap-3">
-            <For each={filters.groups()}>
+            <Key each={filters.groups()} by="id">
               {(group) => {
                 const activeCount = createMemo(
                   () =>
-                    group.options.filter(
+                    group().options.filter(
                       (option) =>
-                        option.id !== group.defaultOptionId &&
-                        filters.isSelected(group.id, option.id)
+                        option.id !== group().defaultOptionId &&
+                        filters.isSelected(group().id, option.id)
                     ).length
                 );
 
                 return (
                   <MobileFilterDrawer.Section
-                    value={group.id}
-                    label={group.label}
+                    value={group().id}
+                    label={group().label}
                     activeCount={activeCount()}
                   >
-                    <For each={group.options}>
+                    <Show when={group().id === 'assignees'}>
+                      <div class="px-3 pb-2">
+                        <Input
+                          aria-label={t('viewMenus.searchAssigneesLabel')}
+                          placeholder={group().searchPlaceholder}
+                          value={assigneeSearch()}
+                          onInput={(event) =>
+                            setAssigneeSearch(event.currentTarget.value)
+                          }
+                        />
+                      </div>
+                    </Show>
+                    <For
+                      each={group().options.filter(
+                        (option) =>
+                          group().id !== 'assignees' ||
+                          option.label
+                            .toLowerCase()
+                            .includes(assigneeSearch().toLowerCase())
+                      )}
+                    >
                       {(option) => (
                         <MobileFilterDrawer.Option
-                          selectionMode={group.selectionMode ?? 'multiple'}
-                          checked={filters.isSelected(group.id, option.id)}
+                          selectionMode={group().selectionMode ?? 'multiple'}
+                          checked={filters.isSelected(group().id, option.id)}
                           onChange={(checked) =>
-                            filters.setSelected(group.id, option.id, checked)
+                            filters.setSelected(group().id, option.id, checked)
                           }
                           icon={option.icon?.()}
                         >
@@ -182,10 +212,26 @@ export function TasksFilterDrawer() {
                         </MobileFilterDrawer.Option>
                       )}
                     </For>
+                    <Show when={group().action}>
+                      {(action) => (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          fullWidth
+                          class="justify-start"
+                          onPointerDown={(event) => event.preventDefault()}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={action().onSelect}
+                        >
+                          {action().label}
+                        </Button>
+                      )}
+                    </Show>
+                    {group().footer}
                   </MobileFilterDrawer.Section>
                 );
               }}
-            </For>
+            </Key>
           </div>
         </Accordion>
       </MobileFilterDrawer>

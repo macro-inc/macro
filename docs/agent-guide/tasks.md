@@ -1158,6 +1158,21 @@ with the PR's status, title, `owner/repo#N`, and line changes. Clicking it opens
 Macro in a new split (in place on touch devices); a PR Macro has not synced yet opens on
 GitHub instead.
 
+Assignees initially lists and searches current team members plus available
+agents. Choose **Find other people…** to search other eligible people from the
+existing contacts pool, then **Back to team members** to return without losing
+picks. Selected outsiders stay visible and removable, even after leaving the team
+or disappearing from contacts. Each new opening starts in team mode. Discovery
+does not invite arbitrary email addresses or select CRM-only contact records.
+
+The same scope applies to task/project creation and editing, bulk Set assignee,
+and desktop/mobile Assignee filters. Existing **Me** and **Unassigned** choices
+keep their semantics; Created by and custom people fields keep their contact lists.
+Check that a teammate absent from contacts appears by default, that an unselected
+outsider requires discovery even when searching by email, and that a selected
+outsider can be removed without discovery. Repeat with keyboard navigation and a
+touch picker sheet; Cancel still discards drafts and Done still applies them.
+
 The Assignees picker offers people and available agents together. Agent rows show
 their name and an `Agent` label; saved agents also show their `@handle`. Search by
 name or handle to find one. Built-in session agents follow the same availability

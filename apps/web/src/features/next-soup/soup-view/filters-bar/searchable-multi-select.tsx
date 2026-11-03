@@ -31,6 +31,8 @@ export type SearchableSelectAction = {
   label: string;
   icon?: () => JSX.Element;
   onSelect: () => void;
+  /** Keep discovery actions in the open picker without changing its value. */
+  closeOnSelect?: boolean;
 };
 
 /**
@@ -69,6 +71,7 @@ type SearchableMultiSelectProps = {
   open?: Accessor<boolean>;
   onOpenChange?: (open: boolean) => void;
   children: JSX.Element;
+  footer?: JSX.Element;
 };
 
 // Options use virtual focus. A native pointer focus would land on the enclosing
@@ -288,6 +291,10 @@ const useActiveOptions = (
 
 const getOptionId = (opt: SearchableOption) => opt.id;
 
+const filterWithAction = (option: SearchableOption, query: string) =>
+  option.id === ACTION_ID ||
+  option.label.toLowerCase().includes(query.toLowerCase());
+
 export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
   const [portalAnchor, setPortalAnchor] = createSignal<HTMLDivElement>();
   const selectionIntent = createMultiSelectIntent();
@@ -318,7 +325,8 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
       { id: ACTION_ID, label: action.label, icon: action.icon },
     ];
   });
-  const hasMatches = useHasMatches(displayOptions, searchQuery);
+  const matches = useHasMatches(displayOptions, searchQuery);
+  const hasMatches = () => !!props.action || matches();
 
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open);
@@ -327,7 +335,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
 
   const handleChange = (selected: SearchableOption[]) => {
     if (props.action && selected.some((o) => o.id === ACTION_ID)) {
-      handleOpenChange(false);
+      if (props.action.closeOnSelect !== false) handleOpenChange(false);
       props.action.onSelect();
       return;
     }
@@ -375,6 +383,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
       optionValue="id"
       optionTextValue="label"
       optionLabel="label"
+      defaultFilter={props.action ? filterWithAction : undefined}
       optionDisabled="disabled"
       allowsEmptyCollection
       virtualized
@@ -430,6 +439,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
                 />
               </Show>
             </div>
+            {props.footer}
           </Combobox.Content>
         </Layer>
       </Combobox.Portal>
@@ -448,6 +458,8 @@ type SearchableMultiSelectInlineProps = {
   listboxClass?: string;
   /** Keep `options` in their given order instead of pinning selected first. */
   preserveOrder?: boolean;
+  action?: SearchableSelectAction;
+  footer?: JSX.Element;
 };
 
 /**
@@ -463,7 +475,8 @@ export const SearchableMultiSelectInline = (
   const [searchQuery, setSearchQuery] = createSignal('');
 
   const activeOptions = useActiveOptions(props.options, props.activeIds);
-  const hasMatches = useHasMatches(props.options, searchQuery);
+  const matches = useHasMatches(props.options, searchQuery);
+  const hasMatches = () => !!props.action || matches();
   // Inline variant is freshly mounted each time the parent submenu opens,
   // so we don't need an explicit "menu opened" trigger — the memo's first
   // run captures the current selection ordering.
@@ -475,8 +488,21 @@ export const SearchableMultiSelectInline = (
   });
   const sortedOptions = () =>
     props.preserveOrder ? props.options() : selectedFirstOptions();
+  const displayOptions = createMemo(() => {
+    const action = props.action;
+    if (!action) return sortedOptions();
+    return [
+      ...sortedOptions(),
+      { id: ACTION_ID, label: action.label, icon: action.icon },
+    ];
+  });
 
   const handleChange = (selected: SearchableOption[]) => {
+    if (props.action && selected.some((option) => option.id === ACTION_ID)) {
+      props.action.onSelect();
+      if (props.action.closeOnSelect !== false) props.onSelectionComplete?.();
+      return;
+    }
     const id =
       selected.find((option) => !props.activeIds().includes(option.id))?.id ??
       activeOptions().find(
@@ -532,12 +558,13 @@ export const SearchableMultiSelectInline = (
       selectionBehavior="toggle"
       closeOnSelection={false}
       open
-      options={sortedOptions()}
+      options={displayOptions()}
       value={activeOptions()}
       onChange={handleChange}
       onInputChange={setSearchQuery}
       optionValue="id"
       optionTextValue="label"
+      defaultFilter={props.action ? filterWithAction : undefined}
       optionLabel="label"
       optionDisabled="disabled"
       allowsEmptyCollection
@@ -572,6 +599,7 @@ export const SearchableMultiSelectInline = (
           />
         </Show>
       </div>
+      {props.footer}
     </Combobox>
   );
 };

@@ -1,18 +1,16 @@
 import { PickerSheet } from '@components/app/mobile/PickerSheet';
-import type { IUser } from '@core/user';
-import { idToDisplayName, idToEmail } from '@core/user/util';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import {
   entityReferencesToIdSet,
   updateEntityReferences,
 } from '@property/utils/entityConversion';
-import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { createSignal, Show, Suspense } from 'solid-js';
 import { useProperty } from '../../core/context';
 import { useAgentAssignees } from '../../queries/agent-assignees';
+import { useTeamMembers } from '../../queries/team-members';
 import type { EntityProperty, PropertyApiValues } from '../../types';
 import { isEntityProperty } from '../../utils';
 import { PropertyEntitySelector } from '../selectors/PropertyEntitySelector';
@@ -110,20 +108,12 @@ function EntityEditorSelector(
 ) {
   const property = props.draft.property;
 
-  // Company owners are always teammates, so the owner picker offers the
-  // team roster instead of the default quick-access people pool.
   const isCompanyOwner =
     property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.COMPANY_OWNER;
-  const agents = useAgentAssignees(
-    () => property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES
-  );
-  const teamQuery = useCurrentTeamQuery();
-  const teamMembers = (): IUser[] =>
-    (teamQuery.data?.members ?? []).map((member) => ({
-      id: member.user_id,
-      email: idToEmail(member.user_id),
-      name: idToDisplayName(member.user_id),
-    }));
+  const isAssignees =
+    property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES;
+  const agents = useAgentAssignees(() => isAssignees);
+  const team = useTeamMembers(() => isCompanyOwner || isAssignees);
 
   return (
     <>
@@ -138,7 +128,10 @@ function EntityEditorSelector(
             placeholder: `${property.isMultiSelect ? 'Add' : 'Change'} ${property.displayName.toLowerCase()}...`,
             specificEntityType: property.specificEntityType,
             selfFilter: props.selfFilter,
-            users: isCompanyOwner ? teamMembers : undefined,
+            users: isCompanyOwner || isAssignees ? team.users : undefined,
+            allowOtherUsers: isAssignees,
+            usersLoading: team.isLoading,
+            usersError: team.isError,
             additionalUsers: agents,
             fillHeight: props.fillHeight,
           }}

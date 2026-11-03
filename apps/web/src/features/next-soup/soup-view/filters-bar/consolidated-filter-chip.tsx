@@ -15,6 +15,7 @@ import {
 import {
   SearchableMultiSelect,
   type SearchableOption,
+  type SearchableSelectAction,
 } from './searchable-multi-select';
 
 export type FilterValue = {
@@ -56,6 +57,8 @@ export type ConsolidatedFilter = {
   setPopupOpen?: (v: boolean) => void;
   /** Keep options in their given order instead of pinning selected first. */
   preserveOptionOrder?: boolean;
+  searchAction?: Accessor<SearchableSelectAction>;
+  searchFooter?: JSX.Element;
 };
 
 interface ConsolidatedFilterChipProps {
@@ -263,6 +266,8 @@ const SearchableValueSegment = (props: {
       open={props.filter.isPopupOpen}
       onOpenChange={(v) => props.filter.setPopupOpen?.(v)}
       preserveOrder={props.filter.preserveOptionOrder}
+      action={props.filter.searchAction?.()}
+      footer={props.filter.searchFooter}
     >
       <Combobox.Trigger
         class={cn(

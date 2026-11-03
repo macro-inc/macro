@@ -1022,6 +1022,13 @@ and Escape return focus to the value through `Property.Root`; tabbing or clickin
 away leaves focus where the user put it. The backend-free regression is
 `bunx playwright test --config src/features/property/editors/inline/browser-test/playwright.config.ts`.
 
+### Assignee people scope
+
+Use the current team roster for Assignees in property editors and filters;
+keep other eligible people behind **Find other people…**, with selected outsiders
+still removable. Preserve agents and Me/Unassigned filter options. Keep company
+owners strictly team-only and unrelated people/contact fields unchanged.
+
 ### Sidebar tag dragging
 
 Email and Calls sidebar tags can be dragged onto taggable desktop list rows.
