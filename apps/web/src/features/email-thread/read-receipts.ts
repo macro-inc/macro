@@ -15,7 +15,9 @@ export function createThreadReadReceipts(threadId: Accessor<string>) {
   const tracking = () =>
     flag().enabled &&
     queryReadyGate(links) &&
-    links.data.links.some((link) => link.settings.read_receipts_enabled);
+    links.data.links.some(
+      (link) => link.settings.read_receipts_enabled ?? true
+    );
   const query = useThreadReadReceiptsQuery(threadId, tracking);
   return (message: EmailMessage): ReadReceipt | undefined => {
     if (!tracking() || !queryReadyGate(query)) return undefined;
