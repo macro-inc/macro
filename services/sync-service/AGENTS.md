@@ -87,6 +87,7 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
   A new write path does the same (`tests/peer_authors.test.ts`).
 - `migration-test-hooks` is test-only fault injection — never enable it in a
   deployed worker (see the feature's doc comment in `Cargo.toml`).
+- Provision `LEXICAL_SERVICE_AUTH_KEY` to match lexical-service before deploying; `just check-secrets <environment>` checks binding presence without reading values.
 - Never run `just deploy-dev` / `just deploy-prod` without explicit approval.
 
 ## Related

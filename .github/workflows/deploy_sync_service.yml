@@ -54,6 +54,12 @@ jobs:
     - name: Install dependencies
       run: npm ci
       working-directory: services/sync-service
+    - name: Check required secrets
+      run: node scripts/check-deploy-secrets.mjs ${{ inputs.environment || 'dev' }}
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      working-directory: services/sync-service
     - name: Apply D1 migrations
       run: npx wrangler d1 migrations apply USER_PEER_MAPPING --env ${{ inputs.environment || 'dev' }} --remote
       env:

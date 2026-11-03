@@ -77,6 +77,7 @@ fn deploy() -> Job {
         .add_step(add_wasm_target())
         .add_step(setup_node())
         .add_step(install_deps())
+        .add_step(check_secrets())
         .add_step(apply_d1_migrations())
         .add_step(deploy_step())
 }
@@ -99,6 +100,17 @@ fn install_deps() -> Step<Run> {
     Step::new("Install dependencies")
         .run("npm ci")
         .working_directory(xtask_paths::repo_dir!("services/sync-service"))
+}
+
+/// Fail before migrations or deployment if commenter validation cannot authenticate.
+fn check_secrets() -> Step<Run> {
+    Step::new("Check required secrets")
+        .run(format!(
+            "node scripts/check-deploy-secrets.mjs {ENVIRONMENT}"
+        ))
+        .working_directory(xtask_paths::repo_dir!("services/sync-service"))
+        .add_env(("CLOUDFLARE_API_TOKEN", vars::CLOUDFLARE_API_TOKEN))
+        .add_env(("CLOUDFLARE_ACCOUNT_ID", vars::CLOUDFLARE_ACCOUNT_ID))
 }
 
 /// Migrate first: new code against an already-migrated D1 is safe, the reverse

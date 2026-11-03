@@ -202,7 +202,9 @@ pub async fn process_message(
                     return Ok(());
                 }
                 WriteAccess::CommentMarks => {
-                    if !changes_only_comment_marks(dss, document_state, &updates).await {
+                    if !changes_only_comment_marks(dss, document_state, &updates, document_id, id)
+                        .await
+                    {
                         return Ok(());
                     }
                 }
@@ -347,10 +349,13 @@ pub async fn process_message(
 
 /// A commenter's updates are accepted only when they change nothing but
 /// comment marks. Anything that cannot be checked is refused.
+#[tracing::instrument(skip_all, fields(document.id = %document_id, op.id = %op_id))]
 async fn changes_only_comment_marks(
     dss: &SyncSession,
     document_state: &DocumentState,
     updates: &[SliceWrapper<'_, u8>],
+    document_id: &str,
+    op_id: &str,
 ) -> bool {
     let updates: Vec<&[u8]> = updates.iter().map(|update| &update[..]).collect();
     let change = match document_state.root_change(&updates) {

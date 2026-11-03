@@ -55,6 +55,21 @@ continue to use the Bebop schema. Regenerate the HTTP types from
 transport handles binary payloads and permission tokens; Orval generates shared
 models only.
 
+## Comment validation configuration
+
+Document commenters authenticate to lexical-service with the worker secret
+`LEXICAL_SERVICE_AUTH_KEY`. Provision it in each deployed environment with the
+matching lexical-service `INTERNAL_AUTH_KEY` through `wrangler secret put`.
+Never store its value in Wrangler vars or source control. Missing or invalid
+credentials fail closed: message creation can succeed independently while the
+anchor update remains unacknowledged in the client's WAL and local snapshot.
+A separate browser then cannot display that inline comment.
+
+CI and the `just deploy-*` recipes run `check-secrets` before migrations or
+worker deployment. This checks binding names only, not credential validity;
+validate comment-only writes after provisioning or rotating a key. Rejected
+validation spans include `document.id` and `op.id` for correlation with clients.
+
 ## Bebop
 The bebop schema is defined in `./bebop/schema.bop`.
 
