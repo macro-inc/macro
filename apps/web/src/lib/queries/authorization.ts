@@ -1,6 +1,7 @@
 import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
+import { ReactiveMap } from '@solid-primitives/map';
 import type { Client, CombinedError, OperationResult } from '@urql/core';
-import { createSignal, untrack } from 'solid-js';
+import { untrack } from 'solid-js';
 
 declare module '@urql/core' {
   interface OperationContext {
@@ -13,11 +14,9 @@ declare module '@urql/core' {
 }
 
 type AuthorizationState = { version: number; error?: CombinedError };
-const createAuthorizationStore = () =>
-  createSignal(new Map<string, AuthorizationState>());
 const CLIENT_AUTHORIZATION = new WeakMap<
   Client,
-  ReturnType<typeof createAuthorizationStore>
+  ReactiveMap<string, AuthorizationState>
 >();
 const AUTHORIZATION_CONTEXT_KEY = 'queryAuthorization';
 
@@ -25,18 +24,18 @@ const AUTHORIZATION_CONTEXT_KEY = 'queryAuthorization';
 export function createQueryAuthorization(key: () => string, client?: Client) {
   let store = client ? CLIENT_AUTHORIZATION.get(client) : undefined;
   if (!store) {
-    store = createAuthorizationStore();
+    store = new ReactiveMap<string, AuthorizationState>();
     if (client) CLIENT_AUTHORIZATION.set(client, store);
   }
-  const [state, setState] = store;
+  const state = store;
 
   return {
-    error: () => state().get(key())?.error,
+    error: () => state.get(key())?.error,
     /** Capture each request's scope and denial version before dispatch. */
     requestContext() {
       const scope = key();
       const currentVersion = () =>
-        untrack(() => state().get(scope)?.version ?? 0);
+        untrack(() => state.get(scope)?.version ?? 0);
       return {
         [AUTHORIZATION_CONTEXT_KEY]: {
           scope,
@@ -49,7 +48,7 @@ export function createQueryAuthorization(key: () => string, client?: Client) {
       const source = normalizedCacheResultMetadata(result)?.source;
       if (source && source !== 'live-network') return;
       const scope = key();
-      const previous = state().get(scope);
+      const previous = state.get(scope);
       if (client) {
         const request = result.operation.context[AUTHORIZATION_CONTEXT_KEY];
         if (
@@ -60,18 +59,12 @@ export function createQueryAuthorization(key: () => string, client?: Client) {
           return;
       }
       if (result.error?.graphQLErrors.length) {
-        setState((previous) =>
-          new Map(previous).set(scope, {
-            version: (previous.get(scope)?.version ?? 0) + 1,
-            error: result.error!,
-          })
-        );
+        state.set(scope, {
+          version: (previous?.version ?? 0) + 1,
+          error: result.error,
+        });
       } else if (!result.error && result.data && previous?.error) {
-        setState((previous) =>
-          new Map(previous).set(scope, {
-            version: (previous.get(scope)?.version ?? 0) + 1,
-          })
-        );
+        state.set(scope, { version: previous.version + 1 });
       }
     },
   };

@@ -1,5 +1,6 @@
 import { CombinedError, createClient, createRequest, gql } from '@urql/core';
-import { describe, expect, it } from 'vitest';
+import { createComputed, createRoot } from 'solid-js';
+import { describe, expect, it, onTestFinished } from 'vitest';
 import { createQueryAuthorization } from './authorization';
 
 const document = gql`query Viewer { viewer { id } }`;
@@ -62,6 +63,43 @@ describe('createQueryAuthorization', () => {
       error: denial,
     });
     expect(first.error()).toBeUndefined();
+  });
+
+  it('notifies only observers of the changed authorization scope', () => {
+    const client = createClient({ url: 'http://test/graphql', exchanges: [] });
+    const first = createQueryAuthorization(() => 'viewer:first', client);
+    const second = createQueryAuthorization(() => 'viewer:second', client);
+    const firstErrors: (CombinedError | undefined)[] = [];
+    const secondErrors: (CombinedError | undefined)[] = [];
+    createRoot((dispose) => {
+      onTestFinished(dispose);
+      createComputed(() => firstErrors.push(first.error()));
+      createComputed(() => secondErrors.push(second.error()));
+    });
+    const operation = client.createRequestOperation(
+      'query',
+      createRequest(document, {}),
+      first.requestContext()
+    );
+    const denial = new CombinedError({ graphQLErrors: ['Forbidden'] });
+
+    first.onResult({ stale: false, hasNext: false, operation, error: denial });
+    expect(firstErrors).toEqual([undefined, denial]);
+    expect(secondErrors).toEqual([undefined]);
+
+    const recovery = client.createRequestOperation(
+      'query',
+      createRequest(document, {}),
+      first.requestContext()
+    );
+    first.onResult({
+      stale: false,
+      hasNext: false,
+      operation: recovery,
+      data: { viewer: { id: 'current' } },
+    });
+    expect(firstErrors).toEqual([undefined, denial, undefined]);
+    expect(secondErrors).toEqual([undefined]);
   });
 
   it.each([
