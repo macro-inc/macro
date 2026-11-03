@@ -32,13 +32,15 @@ html.dark {
 html, body { background: var(--page); }
 body { font-family: "Inter", sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; overflow: hidden; }
 #stage { position: absolute; left: 0; top: 0; width: 1080px; transform-origin: 0 0; display: flex; flex-direction: column; align-items: center; }
+/* only the hero flexes: everything else keeps its size, so a big hero can never squeeze the CTA */
+#stage > * { flex: none; }
 .logo { height: 34px; display: block; }
 html.dark .logo { filter: invert(1) brightness(.95); }
 h1 { font-family: "display"; font-weight: 400; text-align: center; text-wrap: balance; letter-spacing: -0.01em; color: var(--ink); }
 h1 .hl { background: linear-gradient(transparent 8%, var(--hl) 8%, var(--hl) 92%, transparent 92%); color: var(--hl-ink);
   padding: 0 .08em; margin: 0 -.04em; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .sub { text-align: center; color: var(--body); font-size: 30px; line-height: 1.4; text-wrap: balance; }
-.hero { flex: 1 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; position: relative; }
+#stage > .hero { flex: 1 1 0; min-height: 0; display: flex; align-items: center; justify-content: center; position: relative; }
 .hero img { max-width: 100%; max-height: 100%; display: block;
   /* a soft edge so the frame's table melts into the page; the frames are cropped clear of every card */
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent), linear-gradient(transparent, #000 4%, #000 96%, transparent);
@@ -93,11 +95,13 @@ const S = document.getElementById("stage");
 S.style.height = H + "px";
 S.style.transform = `scale(${SCALE})`;
 // per format: vertical rhythm (top pad, logo→headline, headline size, headline→sub, sub→hero, hero→cta, cta→bottom)
-// and the column widths (headline, sub, hero); 9:16 keeps all of it inside the middle ~800 px
+// and the column widths (headline, sub, hero); 9:16 keeps all of it inside the middle ~800 px. The gaps are kept
+// tight so the hero gets every spare pixel; in 9:16 the CTA ends at about 75% of the height, above the Stories
+// reply bar and Sign up sticker
 const R = {
-  "45": { top: 70, gH: 64, hs: 78, gS: 26, gHero: 28, gCta: 30, bot: 64, hw: 940, sw: 860, xw: 1080, nw: 900, nh: 74, panel: 520, ss: 30 },
-  "916": { top: 292, gH: 64, hs: 80, gS: 28, gHero: 40, gCta: 40, bot: 520, hw: 800, sw: 760, xw: 820, nw: 820, nh: 70, panel: 600, ss: 30 },
-  "11": { top: 56, gH: 44, hs: 64, gS: 18, gHero: 16, gCta: 20, bot: 50, hw: 900, sw: 860, xw: 1080, nw: 900, nh: 60, panel: 360, ss: 26 },
+  "45": { top: 60, gH: 46, hs: 76, gS: 22, gHero: 22, gCta: 26, bot: 54, hw: 940, sw: 860, xw: 1080, nw: 900, nh: 74, panel: 520, ss: 30 },
+  "916": { top: 276, gH: 44, hs: 78, gS: 20, gHero: 28, gCta: 30, bot: 470, hw: 800, sw: 760, xw: 800, nw: 820, nh: 70, panel: 600, ss: 29 },
+  "11": { top: 48, gH: 36, hs: 62, gS: 16, gHero: 14, gCta: 18, bot: 44, hw: 900, sw: 860, xw: 1080, nw: 900, nh: 60, panel: 360, ss: 26 },
 }[FMT];
 
 if (NEWS[C]) {
@@ -118,7 +122,7 @@ if (NEWS[C]) {
     <h1 style="font-size:${R.hs}px;line-height:1.12;max-width:${R.hw}px">${hd}</h1>
     <div style="height:${R.gS}px;flex:none"></div><div class="sub" style="font-size:${R.ss}px;max-width:${R.sw}px">${sub}</div>
     <div style="height:${R.gHero}px;flex:none"></div>
-    <div class="hero" style="width:${R.xw}px">${hero}</div>
+    <div class="hero" style="width:${R.xw}px;max-width:${R.xw}px">${hero}</div>
     ${extra ? `<div style="flex:none;display:flex;flex-direction:column;align-items:center;max-width:${R.sw}px">${extra}</div>` : ""}
     <div style="height:${R.gCta}px;flex:none"></div>${CTA}
     <div style="height:${R.bot}px;flex:none"></div>`;
