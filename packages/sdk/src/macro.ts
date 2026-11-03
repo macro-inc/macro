@@ -245,6 +245,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 }
 
 export type {
+  ArchiveCause,
   AutoArchiveOverrides,
   FoldedAgentSessionLog,
   SessionAutoArchive,
