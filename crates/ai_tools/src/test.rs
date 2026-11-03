@@ -613,7 +613,7 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
     let direct = tools_for_agent_code_mode();
     let sdk = code_mode_tools();
     assert!(direct.toolset.tools.len() < standard.toolset.tools.len());
-    for name in ["ReadContent"] {
+    for name in ["ReadContent", "EditDocument"] {
         assert!(standard.toolset.tools.contains_key(name), "{name}");
         assert!(sdk.tools.contains_key(name), "{name}");
         assert!(!direct.toolset.tools.contains_key(name), "{name}");
@@ -635,7 +635,6 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         "ApplyCanvasEdits",
         "EditCanvas",
         "EditPresentation",
-        "EditDocument",
         "Subagent",
         "DispatchCodingAgent",
         "SearchTools",
@@ -669,12 +668,7 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
     );
     let deferred = DeferredToolSet::new(direct.toolset.clone(), direct.deferred.clone());
     let eager = deferred.request_schemas().unwrap();
-    for name in [
-        "ListEntities",
-        "NameSearch",
-        "ContentSearch",
-        "EditDocument",
-    ] {
+    for name in ["ListEntities", "NameSearch", "ContentSearch"] {
         assert!(eager.iter().any(|schema| schema.name == name), "{name}");
     }
     for name in ["SendEmail", "CreateCalendarEvent"] {

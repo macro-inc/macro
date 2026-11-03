@@ -13,6 +13,12 @@ pub struct EditResult {
     /// If set, the worker needs more information. Invoke again with the
     /// requested details appended to the instructions.
     pub clarification: Option<String>,
+    /// Durable ids of the blocks the edit touched.
+    pub changed_block_ids: Vec<String>,
+    /// The document's version after the edit, as sync-service encodes it.
+    pub revision: Option<String>,
+    /// What changed, in words.
+    pub summary: Option<String>,
 }
 
 /// Token usage for one model used by the editing worker.

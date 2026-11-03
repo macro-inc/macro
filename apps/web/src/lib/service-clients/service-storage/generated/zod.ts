@@ -18894,6 +18894,49 @@ export const editDocumentResponse = zod
   .describe('Edit document response.');
 
 /**
+ * A client that disconnects aborts the edit: axum drops this handler's
+future, which drops the in-flight request to the editing worker, and the
+worker aborts on its request signal. Steps already acknowledged stay.
+ * @summary Edit a markdown document or task by instructions with the caller's edit
+access. Runs EditDocument's pipeline as a live collaborator, with its AI
+admission and billing.
+ */
+export const editDocumentWithAiParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const editDocumentWithAiBody = zod
+  .object({
+    fast: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Run the single-model fast pipeline, for one small, contained edit.'
+      ),
+    instructions: zod
+      .string()
+      .min(1)
+      .describe(
+        'Natural-language instructions. Name the section or quote the text to\nchange, describe the outcome, and say what must stay as it is.'
+      ),
+  })
+  .describe('What to change, in words.');
+
+export const editDocumentWithAiResponse = zod
+  .object({
+    changedBlockIds: zod
+      .array(zod.string())
+      .describe('Durable ids of the blocks the edit touched.'),
+    revision: zod
+      .string()
+      .describe(
+        "The document's version after the edit, as sync-service encodes it."
+      ),
+    summary: zod.string().describe('What changed, in words.'),
+  })
+  .describe('A completed edit by instructions.');
+
+/**
  * Returns the short UUID and git branch name for a task document.
 Returns 400 if the document is not a task.
  * @summary Handler for `GET /documents/{document_id}/branch_name`.
