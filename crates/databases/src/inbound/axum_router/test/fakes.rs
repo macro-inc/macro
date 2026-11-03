@@ -51,6 +51,7 @@ impl JwtValidator for ValidToken {
                 origin: macro_authorization::CredentialOrigin::Session,
                 identity: ValidatedIdentity {
                     agent_id: None,
+                    agent_via: None,
                     user_id: USER.to_string(),
                     fusion_user_id: "fusion-ops-router".to_string(),
                     organization_id: None,

@@ -1,9 +1,55 @@
-import { Telemetry } from '@macro-inc/observability';
+import { NOOP_SPAN, type Span, Telemetry } from '@macro-inc/observability';
+import type { SamplingClass } from './sampling';
 
-type Outcome = 'success' | 'error' | 'cancelled' | 'timeout' | 'hidden';
+export type UiOperationOutcome =
+  | 'success'
+  | 'error'
+  | 'cancelled'
+  | 'timeout'
+  | 'hidden';
+type Outcome = UiOperationOutcome;
 type Attributes = Record<string, string | number | boolean>;
 
+/**
+ * What a perf root measures, recorded as `flow.kind` so dashboards can rank
+ * each kind separately. `boot` and `navigation` take their `route.id` from the
+ * first view that joins them, not from the route they started on.
+ */
+export type FlowKind = 'boot' | 'navigation' | 'view' | 'interaction';
+
+let activeRoute: string | undefined;
+
+/** Record the route of the view that opened most recently, for later roots. */
+export function setActiveRoute(route: string): void {
+  activeRoute = route;
+}
+
+/** The route of the view that opened most recently. */
+export function currentRoute(): string | undefined {
+  return activeRoute;
+}
+
+export interface UiOperationOptions {
+  /** Defaults to `interaction`. */
+  kind?: FlowKind;
+  event?: Event;
+  attributes?: Attributes;
+  /**
+   * When it started, in `performance.now()` time, for an operation that began
+   * before code could observe it (0 is the page's navigation start).
+   */
+  startTime?: number;
+  /** Add final attributes or child spans before the span ends. */
+  onFinish?: (span: Span, outcome: Outcome, end: number) => void;
+  /** The sampling class of the trace it starts. Defaults to `perf`. */
+  sampling?: SamplingClass;
+}
+
 export interface UiOperation {
+  /** The operation's root span, for child phases. */
+  readonly span: Span;
+  /** Whether it has finished, including by timeout or hiding the page. */
+  readonly ended: boolean;
   /** Runs application work in this operation's trace context. */
   run<T>(work: () => T): T;
   /** Static phase names only; never include user content. */
@@ -15,6 +61,8 @@ export interface UiOperation {
 }
 
 type Timing = {
+  /** Position in everything collected so far; survives buffer trimming. */
+  sequence: number;
   kind: string;
   start: number;
   duration: number;
@@ -22,12 +70,16 @@ type Timing = {
   processingStart?: number;
   processingEnd?: number;
   blockingDuration?: number;
+  interactionId?: number;
 };
 
 const MAX_ENTRIES = 200;
 const MAX_OPERATIONS = 32;
 const TIMEOUT_MS = 30_000;
 const timings: Timing[] = [];
+let collected = 0;
+// Event Timing only reports events at or above this duration.
+const EVENT_TIMING_THRESHOLD_MS = 16;
 const active = new Set<UiOperation>();
 let observers: PerformanceObserver[] = [];
 let supported: string[] = [];
@@ -39,8 +91,10 @@ function collect(entries: PerformanceEntry[]) {
       processingStart?: number;
       processingEnd?: number;
       blockingDuration?: number;
+      interactionId?: number;
     };
     timings.push({
+      sequence: collected++,
       kind: entry.entryType,
       start: entry.startTime,
       duration: entry.duration,
@@ -49,10 +103,122 @@ function collect(entries: PerformanceEntry[]) {
       processingStart: timing.processingStart,
       processingEnd: timing.processingEnd,
       blockingDuration: timing.blockingDuration,
+      interactionId: timing.interactionId,
     });
   }
   if (timings.length > MAX_ENTRIES)
     timings.splice(0, timings.length - MAX_ENTRIES);
+}
+
+export interface BlockingWork {
+  longTaskCount: number;
+  /** Long-task time inside the window. */
+  longTaskMs: number;
+  longAnimationFrameCount: number;
+  /** Long-animation-frame time inside the window. */
+  longAnimationFrameMs: number;
+  /** Blocking time the browser attributed to those frames. */
+  longAnimationFrameBlockingMs: number;
+}
+
+function measureBlockingWork(
+  start: number,
+  end: number,
+  entries: readonly Timing[]
+): BlockingWork {
+  const inWindow = (entry: Timing) =>
+    Math.max(
+      0,
+      Math.min(end, entry.start + entry.duration) - Math.max(start, entry.start)
+    );
+  const work: BlockingWork = {
+    longTaskCount: 0,
+    longTaskMs: 0,
+    longAnimationFrameCount: 0,
+    longAnimationFrameMs: 0,
+    longAnimationFrameBlockingMs: 0,
+  };
+  for (const entry of entries) {
+    if (entry.start >= end || entry.start + entry.duration <= start) continue;
+    if (entry.kind === 'longtask') {
+      work.longTaskCount++;
+      work.longTaskMs += inWindow(entry);
+    } else if (entry.kind === 'long-animation-frame') {
+      work.longAnimationFrameCount++;
+      work.longAnimationFrameMs += inWindow(entry);
+      work.longAnimationFrameBlockingMs += entry.blockingDuration ?? 0;
+    }
+  }
+  return work;
+}
+
+/**
+ * Long tasks and long animation frames between `start` and `end`
+ * (`performance.now()` time) from the app's shared observer, for samplers
+ * that must not install their own. The observer keeps a bounded recent
+ * buffer, so windows older than the last few hundred entries undercount.
+ */
+export function blockingWorkBetween(start: number, end: number): BlockingWork {
+  for (const observer of observers) collect(observer.takeRecords());
+  return measureBlockingWork(start, end, timings);
+}
+
+export interface EventTimingEntry {
+  /** Browser event type, such as `keydown`; never targets or content. */
+  name: string;
+  start: number;
+  inputDelayMs: number;
+  processingMs: number;
+  durationMs: number;
+  interactionId: number | undefined;
+}
+
+export interface EventTimingRead {
+  entries: EventTimingEntry[];
+  /** Pass to the next read to continue after these entries. */
+  cursor: number;
+  /** Buffered timings (of any kind) discarded before this read reached them. */
+  dropped: number;
+  supported: boolean;
+  /** Events shorter than this are never reported by the browser. */
+  thresholdMs: number;
+}
+
+/** A cursor at the end of the shared buffer, to read only later events. */
+export function eventTimingCursor(): number {
+  for (const observer of observers) collect(observer.takeRecords());
+  return collected;
+}
+
+/**
+ * Event Timing entries collected since `cursor` by the app's shared observer,
+ * for owners that summarize interactions (counts, percentiles) without their
+ * own observer or per-event spans. Read often enough to keep `dropped` at 0.
+ */
+export function readEventTimings(cursor: number): EventTimingRead {
+  for (const observer of observers) collect(observer.takeRecords());
+  const oldest = timings[0]?.sequence ?? collected;
+  const entries: EventTimingEntry[] = [];
+  for (const timing of timings) {
+    if (timing.sequence < cursor || timing.kind !== 'event') continue;
+    entries.push({
+      name: timing.name,
+      start: timing.start,
+      inputDelayMs: (timing.processingStart ?? timing.start) - timing.start,
+      processingMs:
+        (timing.processingEnd ?? timing.start) -
+        (timing.processingStart ?? timing.start),
+      durationMs: timing.duration,
+      interactionId: timing.interactionId,
+    });
+  }
+  return {
+    entries,
+    cursor: collected,
+    dropped: Math.max(0, oldest - cursor),
+    supported: supported.includes('event'),
+    thresholdMs: EVENT_TIMING_THRESHOLD_MS,
+  };
 }
 
 /** One bounded observer per supported entry type for the whole application. */
@@ -69,7 +235,9 @@ export function initializeUiOperationTelemetry(): () => void {
         observer.observe({
           type,
           buffered: true,
-          ...(type === 'event' ? { durationThreshold: 16 } : {}),
+          ...(type === 'event'
+            ? { durationThreshold: EVENT_TIMING_THRESHOLD_MS }
+            : {}),
         });
         observers.push(observer);
         supported.push(type);
@@ -116,6 +284,8 @@ function inputTime(event: Event | undefined, now: number): number | undefined {
 }
 
 const noop: UiOperation = {
+  span: NOOP_SPAN,
+  ended: true,
   run: (work) => work(),
   mark: () => {},
   finish: () => {},
@@ -131,7 +301,7 @@ const noop: UiOperation = {
  */
 export function startUiOperation(
   name: string,
-  options: { event?: Event; attributes?: Attributes } = {}
+  options: UiOperationOptions = {}
 ): UiOperation {
   if (
     typeof window === 'undefined' ||
@@ -139,11 +309,22 @@ export function startUiOperation(
     active.size >= MAX_OPERATIONS
   )
     return noop;
-  const started = performance.now();
+  const started = options.startTime ?? performance.now();
   const input = inputTime(options.event, started);
   const eventType = options.event?.type;
-  const span = Telemetry.span(name);
+  const span = Telemetry.span(name, {
+    sampling: options.sampling ?? 'perf',
+    startTime:
+      options.startTime === undefined
+        ? undefined
+        : performance.timeOrigin + options.startTime,
+  });
+  const kind = options.kind ?? 'interaction';
   span.setAttr('ui.operation', name);
+  span.setAttr('flow.kind', kind);
+  // A navigation's route is the view it opens, which joins it later.
+  if (kind !== 'boot' && kind !== 'navigation' && activeRoute !== undefined)
+    span.setAttr('route.id', activeRoute);
   span.setAttr('ui.visibility', document.visibilityState);
   span.setAttr('ui.performance_entry_types', supported.join(','));
   for (const [key, value] of Object.entries(options.attributes ?? {}))
@@ -170,33 +351,18 @@ export function startUiOperation(
       (entry) =>
         entry.start < end && entry.start + entry.duration > (input ?? started)
     );
-    for (const kind of ['longtask', 'long-animation-frame']) {
-      const entries = overlap.filter((entry) => entry.kind === kind);
-      const prefix =
-        kind === 'longtask' ? 'ui.long_task' : 'ui.long_animation_frame';
-      span.setAttr(`${prefix}_count`, entries.length);
-      span.setAttr(
-        `${prefix}_overlap_ms`,
-        entries.reduce(
-          (total, entry) =>
-            total +
-            Math.max(
-              0,
-              Math.min(end, entry.start + entry.duration) -
-                Math.max(input ?? started, entry.start)
-            ),
-          0
-        )
-      );
-      if (kind === 'long-animation-frame')
-        span.setAttr(
-          'ui.long_animation_frame_blocking_ms',
-          entries.reduce(
-            (total, entry) => total + (entry.blockingDuration ?? 0),
-            0
-          )
-        );
-    }
+    const work = measureBlockingWork(input ?? started, end, overlap);
+    span.setAttr('ui.long_task_count', work.longTaskCount);
+    span.setAttr('ui.long_task_overlap_ms', work.longTaskMs);
+    span.setAttr('ui.long_animation_frame_count', work.longAnimationFrameCount);
+    span.setAttr(
+      'ui.long_animation_frame_overlap_ms',
+      work.longAnimationFrameMs
+    );
+    span.setAttr(
+      'ui.long_animation_frame_blocking_ms',
+      work.longAnimationFrameBlockingMs
+    );
     const event =
       input === undefined
         ? undefined
@@ -232,10 +398,15 @@ export function startUiOperation(
       if (input !== undefined)
         span.setAttr('ui.input_to_paint_opportunity_ms', end - input);
     }
+    options.onFinish?.(span, outcome, end);
     active.delete(operation);
     span.end();
   }
   const operation: UiOperation = {
+    span,
+    get ended() {
+      return ended;
+    },
     run: (work) => span.run(work),
     mark: (phase) => {
       if (!ended)

@@ -1723,6 +1723,20 @@ export type PermissionAnswer = {
 };
 
 /**
+ * A view to present.
+ */
+export type PresentView = {
+    executionId?: null | ExecutionId;
+    /**
+     * A dynamic-UI view, in the format of the PresentView schema in
+     * ExecuteCode's description.
+     */
+    view: {
+        [key: string]: unknown;
+    };
+};
+
+/**
  * Request body for `POST /agent-sessions/preview`.
  *
  * Clients serialize this, so both derives are used.
@@ -3699,6 +3713,26 @@ export type AnswerAgentSessionToolApprovalResponses = {
 };
 
 export type AnswerAgentSessionToolApprovalResponse = AnswerAgentSessionToolApprovalResponses[keyof AnswerAgentSessionToolApprovalResponses];
+
+export type PresentSessionViewData = {
+    body: PresentView;
+    path: {
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/views';
+};
+
+export type PresentSessionViewErrors = {
+    400: unknown;
+    403: unknown;
+};
+
+export type PresentSessionViewResponses = {
+    204: void;
+};
+
+export type PresentSessionViewResponse = PresentSessionViewResponses[keyof PresentSessionViewResponses];
 
 export type ClassifyData = {
     body: ClassifyInputRequest;

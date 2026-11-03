@@ -17,3 +17,8 @@ Shared collaboration runtime used by the web app and non-browser workers.
 
 Browser authentication, sync HTTP endpoints, and document history UI remain in
 `apps/web` because they depend on app state and browser policy.
+
+Document load callers may pass `parentSpan` to the Loro manager and sync engine.
+Seed and catch-up phases then retain their caller's trace across asynchronous
+work. These components own their child phases and never end the supplied span.
+Omitting context preserves independent instrumentation for non-view callers.

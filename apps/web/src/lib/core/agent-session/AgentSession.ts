@@ -948,7 +948,23 @@ export class AgentSession {
         prompt.observe(events, delivery);
         if (prompt.ended) this.prompts.delete(prompt);
       }
+      const projectionStartedAt = performance.now();
       for (const listener of this.listeners) listener(events);
+      if (snapshot) {
+        this.trace.projected(
+          projectionStartedAt,
+          events.reduce(
+            (count, event) =>
+              count +
+              (event.kind === 'metadata'
+                ? 0
+                : event.kind === 'replace'
+                  ? event.messages.length
+                  : 1),
+            0
+          )
+        );
+      }
     });
     // A failed push must not poison the chain for every input after it.
     this.chain = run.catch((error: unknown) => {
