@@ -23,7 +23,6 @@ pub mod mentions;
 pub mod privacy;
 pub mod pull_requests;
 pub mod skills;
-pub mod tasks;
 pub mod tone;
 mod types;
 pub mod user_tools;
@@ -77,7 +76,6 @@ pub static SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROMPT
 pub static CODE_MODE_SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROMPT
     .compose(&code_mode::PROMPT)
     .compose(&user_tools::CODE_MODE_SESSION_PROMPT)
-    .compose(&tasks::PROMPT)
     .compose(&skills::PROMPT);
 
 /// Database-only agent instructions, without unrelated tool capabilities.

@@ -154,3 +154,11 @@ fn channels_skill_posts_a_channel_form_as_one_live_poll_card() {
         assert!(text.contains(guidance), "missing poll guidance: {guidance}");
     }
 }
+
+#[test]
+fn tasks_skill_checks_for_duplicates_before_creating() {
+    let text = tasks::SKILL.render_content();
+    assert!(text.contains("macro.tasks.findSimilar"));
+    assert!(text.contains("create nothing, say so, and ask the user instead"));
+    assert!(text.contains("Never edit, merge or delete the matching tasks"));
+}
