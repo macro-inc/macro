@@ -235,8 +235,8 @@ if (SWAP) {
   S.center = ["teams", "jira", "salesforce", "gdrive"];
   S.morph = (i) => 4 + i;                           // the beat the i-th ring tile lands as its module
   S.bumps = [[1, "chat", "calls", 1], [2, "docs", "tasks", -1]];
-  LINES.push({ l: 0, w: "Your tools weren't built", tin: -1, tout: 2.5 }, { l: 1, w: "to fit together.", tin: -1, tout: 2.5 },
-    { l: 0, w: "Macro was.", tin: 3, tout: 15.5 }, { l: 0, w: "One system.", tin: LOCK, tout: ENDB });
+  LINES.push({ l: 0, w: "Your tools weren't built", tin: -1, tout: 2.25 }, { l: 1, w: "to fit together.", tin: -1, tout: 2.25 },
+    { l: 0, w: "Macro was.", tin: 2.75, tout: 15.5 }, { l: 0, w: "One system.", tin: LOCK, tout: ENDB });
   CORE_IN.t0 = null;
 }
 
