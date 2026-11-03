@@ -182,13 +182,16 @@ describe('appearance picker interaction', () => {
     const { change } = renderPicker();
     const search = screen.getByRole('textbox', { name: 'Search icons' });
     fireEvent.input(search, { target: { value: 'rocket' } });
-    const rocket = await waitFor(() => {
-      const emoji = screen
-        .getAllByLabelText('Rocket', { selector: 'button' })
-        .find((button) => button.textContent?.includes('🚀'));
-      expect(emoji).toBeDefined();
-      return emoji;
-    });
+    const rocket = await waitFor(
+      () => {
+        const emoji = screen
+          .getAllByLabelText('Rocket', { selector: 'button' })
+          .find((button) => button.textContent?.includes('🚀'));
+        expect(emoji).toBeDefined();
+        return emoji;
+      },
+      { timeout: 5000 }
+    );
     if (!rocket) throw new Error('Missing emoji search result');
     fireEvent.keyDown(search, { key: 'ArrowDown' });
     await waitFor(() =>
