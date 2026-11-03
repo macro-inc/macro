@@ -773,7 +773,7 @@ function SinglePill(props: {
         >
           <SourceLinkPill
             property={props.property}
-            showLabel={false}
+            showSourceIcon={false}
             variant="ghost"
             iconClass="touch:size-4"
             fallback={pill()}

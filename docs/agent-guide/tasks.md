@@ -907,8 +907,9 @@ mobile picker sheet as other entity properties. Arbitrary external URLs and
 multiple sources are outside the experiment.
 
 Verify email and channel task buttons before entering any composer text: Source
-must already show the originating item. Create the task and reopen it to confirm
-Source persists. For a channel reply, follow Source and confirm the exact reply
+must already show the link glyph and originating item's icon and title, without
+a `Source:` prefix. Create the task and reopen it to confirm Source persists.
+For a channel reply, follow Source and confirm the exact reply
 opens; open and dismiss the picker without changing the value, then repeat.
 Replace Source with a document, clear Source, and recover an unconfirmed draft to
 check the selected value survives. Repeat on touch with the stacked picker sheet.

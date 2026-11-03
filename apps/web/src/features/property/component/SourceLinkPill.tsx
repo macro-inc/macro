@@ -1,6 +1,7 @@
 import { t } from '@app/lib/i18n';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import SourceIcon from '@icon/system/regular/link.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { ButtonGroup, cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
@@ -16,7 +17,7 @@ export function SourceLinkPill(props: {
   class?: string;
   iconClass?: string;
   variant?: 'secondary' | 'ghost';
-  showLabel?: boolean;
+  showSourceIcon?: boolean;
 }) {
   const ctx = useProperty();
   const reference = () => getEntityValues(props.property)[0];
@@ -55,10 +56,10 @@ export function SourceLinkPill(props: {
           class="min-w-0 shrink justify-start"
           onClick={open}
         >
-          <Show when={props.showLabel !== false}>
-            <span class="shrink-0 text-ink-muted">
-              {props.property.displayName}:
-            </span>
+          <Show when={props.showSourceIcon !== false}>
+            <SourceIcon
+              class={cn('size-3 shrink-0 text-ink-muted', props.iconClass)}
+            />
           </Show>
           <span
             aria-hidden="true"

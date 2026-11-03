@@ -54,7 +54,10 @@ cards retain the one-line empty message.
 The single-item Source property uses `SourceLinkPill` in composers, inline pills,
 and the side panel: its item opens through the shared mention-link navigation,
 including `specific_message_id`; its caret opens the host's existing picker.
-Empty or unsupported references retain the ordinary editable property pill.
+Inline Source pills use the link glyph instead of a `Source:` prefix, followed by
+the item's icon and title; side panels retain the separate property label.
+Empty Source values use the same link glyph; unsupported references retain the
+ordinary property editor.
 
 `EntityRowTags.collapse` connects to the host's shared priority-overflow controller.
 Show at most three individual chips by default and keep the rest in overflow.

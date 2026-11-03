@@ -50,7 +50,14 @@ export function PropertyValuePill(props: PropertyValuePillProps) {
             variant={props.variant ?? 'outline'}
             size={props.size}
           >
-            <Show when={props.showLabel && hasValue(property())}>
+            <Show
+              when={
+                props.showLabel &&
+                property().propertyDefinitionId !==
+                  SYSTEM_PROPERTY_IDS.SOURCE &&
+                hasValue(property())
+              }
+            >
               <span class="shrink-0 text-ink-muted">
                 {property().displayName}:
               </span>
