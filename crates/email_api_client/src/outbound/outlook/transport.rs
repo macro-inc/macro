@@ -1,4 +1,4 @@
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 use reqwest::{Method, RequestBuilder, Response, StatusCode};
 use serde::de::DeserializeOwned;
@@ -6,8 +6,13 @@ use serde_json::Value;
 use tracing::Instrument;
 use url::Url;
 
-use super::{IMMUTABLE_ID_PREFERENCE, OutlookApiClientRepository};
+use super::{IMMUTABLE_ID_PREFERENCE, OutlookApiClientRepository, route};
 use crate::domain::models::{AccessToken, EmailApiError, RateLimitOrigin, StreamToken};
+
+#[cfg(test)]
+mod test;
+
+const GRAPH_REQUEST: &str = "outlook.graph_request";
 
 /// A failed Graph request with the response details a caller may branch on.
 pub(super) struct GraphFailure {
@@ -157,19 +162,6 @@ impl OutlookApiClientRepository {
 
     /// One Graph round trip, including its wait for the mailbox gate. A replay
     /// with a refreshed token is its own attempt, so each keeps its status.
-    #[tracing::instrument(
-        name = "outlook.graph_request",
-        skip_all,
-        fields(
-            otel.kind = "client",
-            http.request.method = %method,
-            url.path = path,
-            link_id = self.mailbox.map(|mailbox| tracing::field::display(mailbox.link_id)),
-            http.response.status_code = tracing::field::Empty,
-            reauthorized = reauthorized,
-        ),
-        err(level = "warn")
-    )]
     async fn graph_attempt(
         &self,
         request: RequestBuilder,
@@ -177,7 +169,30 @@ impl OutlookApiClientRepository {
         path: &str,
         reauthorized: bool,
     ) -> Result<Response, GraphFailure> {
-        self.gated_graph_request(request).await
+        let span = tracing::info_span!(
+            "outlook.graph_request",
+            otel.kind = "client",
+            // Datadog names a client span that carries an HTTP method
+            // `http.client.request`; this keeps the span findable by name.
+            operation.name = GRAPH_REQUEST,
+            http.request.method = %method,
+            url.template = %route::url_template(self.root.path(), path),
+            mailbox.link_id = self.mailbox.map(|mailbox| tracing::field::display(mailbox.link_id)),
+            mailbox.sync_generation = self.mailbox.map(|mailbox| mailbox.sync_generation),
+            reauthorized,
+            http.response.status_code = tracing::field::Empty,
+            graph.request_id = tracing::field::Empty,
+            outlook.gate_wait_ms = tracing::field::Empty,
+            outlook.throttle_origin = tracing::field::Empty,
+            outlook.retry_after_seconds = tracing::field::Empty,
+            otel.status_description = tracing::field::Empty,
+        );
+        let result = self
+            .gated_graph_request(request)
+            .instrument(span.clone())
+            .await;
+        record_attempt(&span, &result);
+        result
     }
 
     /// Includes anonymous, preauthorized attachment uploads in mailbox accounting.
@@ -193,17 +208,23 @@ impl OutlookApiClientRepository {
     async fn gated_graph_request(&self, request: RequestBuilder) -> Result<Response, GraphFailure> {
         let permit = if let Some(gate) = &self.gate {
             let mailbox = self.mailbox.ok_or_else(invalid_response)?;
+            let started = Instant::now();
             let permit = gate
                 .acquire(mailbox)
                 .instrument(tracing::info_span!(
                     "outlook.graph_admission",
-                    link_id = %mailbox.link_id
+                    mailbox.link_id = %mailbox.link_id
                 ))
-                .await?;
-            Some((mailbox, permit))
+                .await;
+            tracing::Span::current().record(
+                "outlook.gate_wait_ms",
+                i64::try_from(started.elapsed().as_millis()).unwrap_or(i64::MAX),
+            );
+            Some((mailbox, permit?))
         } else {
             None
         };
+        crate::domain::request_count::record_sent();
         let result = Self::send_request(request).await;
         if let (Some(gate), Some((mailbox, permit))) = (&self.gate, permit) {
             let retry_after = match &result {
@@ -227,16 +248,18 @@ impl OutlookApiClientRepository {
         let method = request.method().clone();
         let response = client.execute(request).await.map_err(transport_failed)?;
         let status = response.status();
-        tracing::Span::current().record("http.response.status_code", status.as_u16());
-        if status.is_success() {
-            return Ok(response);
-        }
-        let path = response.url().path().to_owned();
         let request_id = response
             .headers()
             .get("request-id")
             .and_then(|v| v.to_str().ok())
             .map(str::to_owned);
+        let span = tracing::Span::current();
+        span.record("http.response.status_code", i64::from(status.as_u16()));
+        span.record("graph.request_id", request_id.as_deref());
+        if status.is_success() {
+            return Ok(response);
+        }
+        let path = response.url().path().to_owned();
         let retry_after = response
             .headers()
             .get("Retry-After")
@@ -248,6 +271,9 @@ impl OutlookApiClientRepository {
                         .map(|date| date.duration_since(SystemTime::now()).unwrap_or_default())
                 })
             });
+        if let Some(delay) = retry_after {
+            span.record("outlook.retry_after_seconds", whole_seconds(delay));
+        }
         let body = response.text().await.unwrap_or_default();
         let error: Value = serde_json::from_str(&body).unwrap_or(Value::Null);
         let code = error.pointer("/error/code").and_then(Value::as_str);
@@ -312,6 +338,47 @@ impl OutlookApiClientRepository {
             .await
             .map_err(|_| invalid_response())
     }
+}
+
+/// Numbers are recorded as `i64`: OpenTelemetry receives unsigned span fields
+/// as strings.
+///
+/// Record where a failed attempt was throttled and mark real failures as span
+/// errors. A gate refusal sent nothing, so it is neither an error nor a WARN;
+/// the sync unit that owns the request reports the deferral.
+fn record_attempt(span: &tracing::Span, result: &Result<Response, GraphFailure>) {
+    let Err(failure) = result else {
+        span.record("outlook.throttle_origin", "none");
+        return;
+    };
+    // A response's Retry-After was recorded when it arrived; a gate refusal
+    // has no response, so its delay is recorded here.
+    let origin = match &failure.error {
+        EmailApiError::RateLimited {
+            origin: RateLimitOrigin::Provider { .. },
+            ..
+        } => "graph",
+        EmailApiError::RateLimited { retry_after, .. } => {
+            if let Some(delay) = retry_after {
+                span.record("outlook.retry_after_seconds", whole_seconds(*delay));
+            }
+            "gate"
+        }
+        _ => "none",
+    };
+    span.record("outlook.throttle_origin", origin);
+    if origin == "gate" {
+        tracing::debug!(parent: span, error = %failure.error, "Microsoft request gate deferred a Graph request");
+    } else {
+        span.record(
+            "otel.status_description",
+            tracing::field::display(&failure.error),
+        );
+    }
+}
+
+fn whole_seconds(delay: Duration) -> i64 {
+    i64::try_from(delay.as_millis().div_ceil(1000)).unwrap_or(i64::MAX)
 }
 
 pub(super) fn invalid_response() -> EmailApiError {

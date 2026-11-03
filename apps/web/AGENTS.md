@@ -377,6 +377,11 @@ not to account-wide paired runtime count; a user can pair several computers.
 - All Mail previews exclude spam/junk and trash. Keep draft edits from restoring
   an excluded preview or timestamp, including synced Macro drafts; Drafts and
   Sent retain their own canonical membership.
+- Spam and Trash use scoped REST pages without shared preview normalization or
+  service search; restore through the provider-neutral thread-state mutation.
+  Refresh these isolated lists after read-state writes, provider sync events, and
+  settled Outlook operations; shared-cache updates cannot reach them. Preserve
+  newer selections when a pending folder restore finishes.
 
 Agent split headers show live viewers through `BlockLiveIndicators` with the
 resolved session ID; keep the existing `AgentSessionProvider` subscription to
@@ -683,6 +688,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Memory tool results use expandable rows on desktop and mobile; explicit preferences and activity reports remain inspectable after each tool call.
 
 ## Rules
+
+- Pass persistent touch row controls through `ListEntity.touchActions`; hover actions are hidden on touch, and the narrow inbox layout must retain the touch controls.
 
 Conventions for this app live in `.agents/rules/web/` and load when you touch
 matching files: data fetching, Solid reactivity, architecture, UI, UI primitives,
