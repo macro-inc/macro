@@ -1,11 +1,11 @@
 import releaseSync from '@jitl/quickjs-wasmfile-release-sync';
 import wasmModule from '@jitl/quickjs-wasmfile-release-sync/dist/emscripten-module.wasm';
+import type { DocumentOp } from '@macro-inc/editor-ops/document';
 import { nanoid } from 'nanoid';
 import {
   newQuickJSWASMModuleFromVariant,
   newVariant,
 } from 'quickjs-emscripten-core';
-import type { DocumentOp } from './ai-editing/editor';
 import { sandboxInit } from './ai-editing/editor/sandbox-init';
 import { runCanvasCode } from './canvas/sandbox';
 import { SANDBOX_CODE } from './editor-sandbox-code';

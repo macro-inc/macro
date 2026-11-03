@@ -1,5 +1,5 @@
+import type { DocumentOp } from '@macro-inc/editor-ops/document';
 import type { DocWriter } from '../doc/interfaces';
-import type { DocumentOp } from '../editor/ops';
 import type { Awareness } from './types';
 
 /** Records every DocWriter apply call; can be told to throw on a given kind (or several). */

@@ -271,6 +271,16 @@
         "ws": "^8.18.0",
       },
     },
+    "packages/editor-ops": {
+      "name": "@macro-inc/editor-ops",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@macro-inc/lexical-core": "workspace:*",
+        "@types/node": "^24.8.0",
+        "typescript": "^5.9.3",
+        "vitest": "5.0.1",
+      },
+    },
     "packages/email-renderer": {
       "name": "@macro-inc/email-renderer",
       "version": "0.0.1",
@@ -456,6 +466,7 @@
         "@ironcalc/wasm": "workspace:*",
         "@loro-mirror/core": "workspace:*",
         "@macro-inc/collaboration": "workspace:*",
+        "@macro-inc/editor-ops": "workspace:*",
         "@macro-inc/graphics": "workspace:*",
         "@macro-inc/lexical-core": "workspace:*",
         "@macro-inc/observability": "workspace:*",
@@ -1302,6 +1313,8 @@
     "@macro-inc/code-mode-sdk": ["@macro-inc/code-mode-sdk@workspace:packages/code-mode-sdk"],
 
     "@macro-inc/collaboration": ["@macro-inc/collaboration@workspace:packages/collaboration"],
+
+    "@macro-inc/editor-ops": ["@macro-inc/editor-ops@workspace:packages/editor-ops"],
 
     "@macro-inc/email-renderer": ["@macro-inc/email-renderer@workspace:packages/email-renderer"],
 

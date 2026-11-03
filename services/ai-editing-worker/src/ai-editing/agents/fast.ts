@@ -1,7 +1,7 @@
+import type { DocumentOp } from '@macro-inc/editor-ops/document';
 import { Telemetry } from '@macro-inc/observability';
 import { generateText, hasToolCall, type LanguageModel, stepCountIs } from 'ai';
 import type { LexicalSession } from '../ai-toolkit';
-import type { DocumentOp } from '../editor';
 import { FAST_SYSTEM } from '../prompts';
 import type { DocumentOpQueueParams } from '../queue';
 import type { CodeRunner } from '../runtime';

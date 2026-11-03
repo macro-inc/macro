@@ -1,4 +1,8 @@
 import {
+  type DatabaseQueryView,
+  EditError,
+} from '@macro-inc/editor-ops/document';
+import {
   $createDatabaseQueryNode,
   $isDatabaseQueryNode,
   type DatabaseQueryNode,
@@ -11,8 +15,6 @@ import {
   parseDatabaseQueryData,
 } from '@macro-inc/lexical-core/nodes/databaseQueryData';
 import type { LexicalNode } from 'lexical';
-import { EditError } from '../editor/errors';
-import type { DatabaseQueryView } from '../editor/ops';
 
 function requireChart(data: DatabaseQueryData, label: string): void {
   if (isDatabaseQueryChartMode(data.displayMode) && !data.chart)

@@ -1,0 +1,20 @@
+{
+  "name": "@macro-inc/editor-ops",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./document": "./src/document/index.ts"
+  },
+  "scripts": {
+    "lint": "bunx @biomejs/biome check .",
+    "test": "vitest run --config vitest.config.ts",
+    "type-check": "tsc --noEmit --project tsconfig.json"
+  },
+  "devDependencies": {
+    "@macro-inc/lexical-core": "workspace:*",
+    "@types/node": "^24.8.0",
+    "typescript": "^5.9.3",
+    "vitest": "5.0.1"
+  }
+}

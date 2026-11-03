@@ -2,12 +2,12 @@ import type {
   LanguageModelV3CallOptions,
   LanguageModelV3Usage,
 } from '@ai-sdk/provider';
+import type { DocumentOp } from '@macro-inc/editor-ops/document';
 import { MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
 import { createEditingSession, loadMarkdown } from '../ai-toolkit/session';
 import { mockAwarenessSource } from '../awareness/awareness-source';
 import { Doc } from '../doc/doc';
-import type { DocumentOp } from '../editor';
 import type { CoderRunCode, DispatchEditTrace } from '../tools';
 import { serializeWithXml } from '../utils';
 import { fastEditor } from './fast';

@@ -1,6 +1,6 @@
+import type { DocumentOp } from '@macro-inc/editor-ops/document';
 import { getQuickJS } from 'quickjs-emscripten';
 import { describe, expect, it } from 'vitest';
-import type { DocumentOp } from '.';
 import { SANDBOX_CODE } from '../../editor-sandbox-code';
 import { sandboxInit } from './sandbox-init';
 
@@ -15,11 +15,17 @@ async function runSnippet(
   const ctx = QuickJS.newContext();
   try {
     const refs = Array.from({ length: 8 }, (_, i) => `ref-${i}`);
-    ctx.unwrapResult(
-      ctx.evalCode(`${SANDBOX_CODE}\n${sandboxInit(validIds, refs, undefined)}`)
-    ).dispose();
+    ctx
+      .unwrapResult(
+        ctx.evalCode(
+          `${SANDBOX_CODE}\n${sandboxInit(validIds, refs, undefined)}`
+        )
+      )
+      .dispose();
     ctx.unwrapResult(ctx.evalCode(code)).dispose();
-    const out = ctx.unwrapResult(ctx.evalCode('JSON.stringify(editor.drain())'));
+    const out = ctx.unwrapResult(
+      ctx.evalCode('JSON.stringify(editor.drain())')
+    );
     const json = ctx.dump(out) as string;
     out.dispose();
     return JSON.parse(json) as DocumentOp[];

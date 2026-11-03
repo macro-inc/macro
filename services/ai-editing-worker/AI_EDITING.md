@@ -25,6 +25,23 @@ swaps the user token for a short-lived document token against the document
 service, builds the sync-service WebSocket URL from it, and hands everything to
 `runEditSession` (`src/run-edit.ts`).
 
+The 200 response carries the ops, usage and any clarification, plus
+`changedBlockIds` (top-level blocks the applied ops touched or created, in
+document order; `Doc` reports each applied op to the workspace's
+`BlockChanges`), `summary` (a factual sentence built from those blocks, e.g.
+"Edited 1 block, inserted 1 heading."; the models write none), and
+`revision`. The revision is base64 of the Loro oplog version once the
+sync service acknowledged every update, as sync-service encodes revisions
+(entry order varies, so compare decoded versions); with `propagate: false` it is
+the version the edit started from. Unacknowledged updates answer 502.
+
+Cancelling the request stops the edit, with no rollback. Every op and typing
+step propagates as it lands, and the sync socket closes on abort, so the
+document keeps what was sent before the abort. Nothing is applied afterwards: the
+queue checks the signal before each op and each animation step. An op that was
+being typed can be left partway, since typing is several steps and `setText`
+removes the old text before typing the new. The response is 499, never 200.
+
 ## Joining the document
 
 `runEditSession` is the main entrypoint that our edit endpoint calls to start an
@@ -99,7 +116,8 @@ edit; its default remains supervised.
 
 ### DocumentEditor and ops
 
-`DocumentEditor` is a ergonomic chainable surface the model calls. It has a
+`DocumentEditor` (`packages/editor-ops/src/document/`, shared with the SDK) is
+an ergonomic chainable surface the model calls. It has a
 million simple small methods like `bold`, `convertToHeading`,
 `insertTableAfter`, `mentionUser`. As you use it it accumulates all the ops but
 doesn't actually do any mutations on the document. As you create new nodes it
@@ -165,6 +183,21 @@ from that record, so a reused id would re-attribute every earlier edit made
 under it. The old `999999999999999000`–`999999999999999999` block is still
 recognized for existing history. Canvas instead uses full-width random session
 IDs and signed actor attribution, as described below.
+
+## Direct document ops
+
+`POST /document-ops` applies `DocumentOp`s a program built with
+`DocumentEditor` (the SDK's `DocumentStructure.edit`), with no model and no
+typing animation (`src/document-ops`). Body: `{ documentId, documentToken,
+operations (1-200), editor?: { name } }`; the token needs edit access. The
+worker joins the document as a peer and first applies every op to a scratch
+copy of the live state. If any op fails, nothing is committed and it answers
+422 `{ error: 'edit_rejected', failures: [{ index, kind, message }] }`.
+Otherwise it applies the same ops to the live session with no await in
+between, so a concurrent edit cannot slip in, and answers 200 `{ applied,
+changedBlockIds, revision }` (as `/edit` defines them) once the sync service acknowledged every update, or 502
+`{ error: 'unacknowledged', message }` when it did not (the batch may have
+applied).
 
 ## Comment marks
 

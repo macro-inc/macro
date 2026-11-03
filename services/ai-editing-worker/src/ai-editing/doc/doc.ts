@@ -31,6 +31,18 @@ import {
   TableCellHeaderStates,
   type TableNode,
 } from '@lexical/table';
+import {
+  type DatabaseQueryView,
+  type DocumentOp,
+  EditError,
+  type Format,
+  type ListKind,
+  type NodeRef,
+  type NodeSpec,
+  type Offset,
+  type Position,
+  type Scope,
+} from '@macro-inc/editor-ops/document';
 import { $createAgentSessionMentionNode } from '@macro-inc/lexical-core/nodes/AgentSessionMentionNode';
 import { $createBookingLinkMentionNode } from '@macro-inc/lexical-core/nodes/BookingLinkMentionNode';
 import { $createContactMentionNode } from '@macro-inc/lexical-core/nodes/ContactMentionNode';
@@ -65,6 +77,7 @@ import {
   $createParagraphNode,
   $createTextNode,
   $findMatchingParent,
+  $getNodeByKey,
   $getRoot,
   $isElementNode,
   $isTextNode,
@@ -80,18 +93,6 @@ import * as locate from '../ai-toolkit/locate';
 import * as modify from '../ai-toolkit/modify';
 import type { LexicalSession } from '../ai-toolkit/session';
 import * as tables from '../ai-toolkit/tables';
-import type {
-  DatabaseQueryView,
-  DocumentOp,
-  Format,
-  ListKind,
-  NodeRef,
-  NodeSpec,
-  Offset,
-  Position,
-  Scope,
-} from '../editor';
-import { EditError } from '../editor';
 import type { DocReader, DocWriter, Match } from './interfaces';
 import { assertSubstringMatched } from './substring-miss';
 
@@ -106,11 +107,16 @@ const FORMAT_BIT: Record<
   code: 'code',
 };
 
+/** The top-level blocks an applied op touched: as they stood before it, and after. */
+export type AppliedChange = { before: string[]; after: string[] };
+
 export class Doc implements DocReader, DocWriter {
   constructor(
     private readonly session: LexicalSession,
     /** Push the new state out (snapshot to mirror to Loro). Noop in unit tests. */
-    private readonly propagate: () => void = () => {}
+    private readonly propagate: () => void = () => {},
+    /** Told about every op that applied, never one that threw. */
+    private readonly onApplied?: (change: AppliedChange) => void
   ) {}
 
   /** A ref IS the node's id (we stamp it on at insert), so resolution is identity. */
@@ -132,6 +138,31 @@ export class Doc implements DocReader, DocWriter {
   }
 
   public apply(op: DocumentOp): void {
+    if (!this.onApplied) {
+      this.applyOp(op);
+      return;
+    }
+    const before = this.topLevelIds(op);
+    this.applyOp(op);
+    this.onApplied({ before, after: this.topLevelIds(op) });
+  }
+
+  /** Ids of the top-level blocks holding the nodes `op` names, skipping ones that don't exist. */
+  private topLevelIds(op: DocumentOp): string[] {
+    return this.read(() => {
+      const ids: string[] = [];
+      for (const ref of opNodeRefs(op)) {
+        const key = this.session.ids.idToNodeKeyMap.get(ref);
+        const node = key != null ? $getNodeByKey(key) : null;
+        const top = node?.getTopLevelElement();
+        const id = top ? $getId(top) : undefined;
+        if (id) ids.push(id);
+      }
+      return ids;
+    });
+  }
+
+  private applyOp(op: DocumentOp): void {
     match(op)
       .with({ kind: 'insertText' }, (e) =>
         this.insertText(e.node, e.at, e.text)
@@ -853,6 +884,17 @@ export class Doc implements DocReader, DocWriter {
     $setId(node, ref);
     $updateAllNodeIds(this.session.ids);
   }
+}
+
+/** Every node an op addresses or creates. */
+function opNodeRefs(op: DocumentOp): NodeRef[] {
+  const refs: NodeRef[] = [];
+  if ('node' in op) refs.push(op.node);
+  if ('nodes' in op) refs.push(...op.nodes);
+  if ('table' in op) refs.push(op.table);
+  if ('inline' in op) refs.push(op.inline);
+  if ('ref' in op && op.ref) refs.push(op.ref);
+  return refs;
 }
 
 /** A check-list item carries an (unchecked) checkbox; other list kinds don't. */

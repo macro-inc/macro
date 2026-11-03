@@ -1,7 +1,7 @@
+import { DocumentEditor } from '@macro-inc/editor-ops/document';
 import { describe, expect, it } from 'vitest';
-import { mockAwarenessSource } from '../awareness/awareness-source';
 import { createEditingSession, loadMarkdown } from '../ai-toolkit/session';
-import { DocumentEditor } from '../editor/document-editor';
+import { mockAwarenessSource } from '../awareness/awareness-source';
 import { type CodeRunner, runEditorCode } from '../runtime';
 import { serializeWithXml } from '../utils';
 import { Doc } from './doc';

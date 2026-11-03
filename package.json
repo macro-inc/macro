@@ -76,6 +76,7 @@
 			"packages/graphics",
 			"packages/loro-mirror",
 			"packages/lexical-core",
+			"packages/editor-ops",
 			"services/ai-editing-worker",
 			"services/bots/anthropic-status-bot",
 			"services/bots/goalert-bot",

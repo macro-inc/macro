@@ -1,7 +1,7 @@
+import { DocumentEditor } from '@macro-inc/editor-ops/document';
 import { describe, expect, it } from 'vitest';
-import { mockAwarenessSource } from '../awareness/awareness-source';
 import { createEditingSession, loadMarkdown } from '../ai-toolkit/session';
-import { DocumentEditor } from '../editor/document-editor';
+import { mockAwarenessSource } from '../awareness/awareness-source';
 import { type CodeRunner, docIds, runEditorCode } from '../runtime';
 import { serializeWithXml } from '../utils';
 import { Doc } from './doc';
@@ -85,8 +85,12 @@ describe('claims from the failure corpus', () => {
     const b = build('anchor paragraph');
     const anchor = blockIds(b.xml())[0]!;
     await Promise.all([
-      b.runInstant(`editor.insertParagraphAfter('${anchor}', 'from writer A');`),
-      b.runInstant(`editor.insertParagraphAfter('${anchor}', 'from writer B');`),
+      b.runInstant(
+        `editor.insertParagraphAfter('${anchor}', 'from writer A');`
+      ),
+      b.runInstant(
+        `editor.insertParagraphAfter('${anchor}', 'from writer B');`
+      ),
     ]);
     expect(b.xml()).toContain('from writer A');
     expect(b.xml()).toContain('from writer B');

@@ -728,3 +728,68 @@ describe('DocumentEditor — removeMany & accumulation', () => {
     ]);
   });
 });
+
+describe('DocumentEditor — saved database questions', () => {
+  it('takes a saved query handle and records its block', () => {
+    const query = {
+      toBlock: () =>
+        '<m-db-query>{"queryId":"q-1","prompt":"Pipeline","displayMode":"bar"}</m-db-query>',
+    };
+    const editor = ed();
+    const block = editor.insertDatabaseQueryAfter('b1', query);
+    const inline = editor.insertInlineDatabaseQuery('b2', 3, query);
+    expect(editor.drain()).toEqual<DocumentOp[]>([
+      {
+        kind: 'insertNode',
+        ref: block,
+        spec: {
+          block: 'database-query',
+          query:
+            '<m-db-query>{"queryId":"q-1","prompt":"Pipeline","displayMode":"bar"}</m-db-query>',
+        },
+        at: { after: 'b1' },
+      },
+      {
+        kind: 'insertInline',
+        ref: inline,
+        node: 'b2',
+        at: 3,
+        spec: {
+          inline: 'database-query',
+          query:
+            '<m-db-query>{"queryId":"q-1","prompt":"Pipeline","displayMode":"bar"}</m-db-query>',
+        },
+      },
+    ]);
+  });
+
+  it('refuses a handle whose block is not a saved question', () => {
+    expect(() =>
+      ed().appendDatabaseQuery({ toBlock: () => 'SELECT 1' })
+    ).toThrow(EditError);
+  });
+
+  it('points a database card at table and view handles by their ids', () => {
+    const ops = ed()
+      .setDatabaseLocation('b1', {
+        table: { id: 'table-2' },
+        view: { id: 'view-5' },
+      })
+      .setDatabaseLocation('b2', { tableId: 'table-3' })
+      .drain();
+    expect(ops).toEqual<DocumentOp[]>([
+      {
+        kind: 'setDatabaseLocation',
+        node: 'b1',
+        tableId: 'table-2',
+        viewId: 'view-5',
+      },
+      {
+        kind: 'setDatabaseLocation',
+        node: 'b2',
+        tableId: 'table-3',
+        viewId: undefined,
+      },
+    ]);
+  });
+});

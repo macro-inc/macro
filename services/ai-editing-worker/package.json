@@ -22,6 +22,7 @@
 		"@ironcalc/wasm": "workspace:*",
 		"@loro-mirror/core": "workspace:*",
 		"@macro-inc/collaboration": "workspace:*",
+		"@macro-inc/editor-ops": "workspace:*",
 		"@macro-inc/graphics": "workspace:*",
 		"@macro-inc/lexical-core": "workspace:*",
 		"@macro-inc/observability": "workspace:*",

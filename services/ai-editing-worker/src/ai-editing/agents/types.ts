@@ -1,7 +1,7 @@
+import type { DocumentOp } from '@macro-inc/editor-ops/document';
 import type { Span } from '@macro-inc/observability';
 import type { AwarenessSource } from '../awareness';
 import type { Doc } from '../doc';
-import type { DocumentOp } from '../editor';
 import type { DocumentOpQueueParams } from '../queue';
 import type {
   CoderRunCode,

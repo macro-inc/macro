@@ -1,6 +1,6 @@
+import type { DocumentOp } from '@macro-inc/editor-ops/document';
 import { describe, expect, it } from 'vitest';
 import type { DocReader, Match } from '../doc/interfaces';
-import type { DocumentOp } from '../editor/ops';
 import { animate } from './animators';
 import { mockRandomSource, type RandomSource } from './random-source';
 import { DEFAULT_RANGES, type DocumentOpStep } from './types';

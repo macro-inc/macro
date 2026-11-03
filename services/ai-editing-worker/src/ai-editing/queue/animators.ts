@@ -8,8 +8,7 @@
  * data. Nondeterminism comes only from `randomSource` (`integer`/`real`/
  * `direction`), so a fixed mock makes the whole action reproducible.
  */
-import { match } from 'ts-pattern';
-import type { DocReader } from '../doc';
+
 import type {
   DocumentOp,
   NodeRef,
@@ -17,7 +16,9 @@ import type {
   Offset,
   Position,
   Scope,
-} from '../editor';
+} from '@macro-inc/editor-ops/document';
+import { match } from 'ts-pattern';
+import type { DocReader } from '../doc';
 import type { RandomSource } from './random-source';
 import type { DocumentOpStep, RandomRanges } from './types';
 

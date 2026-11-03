@@ -1,9 +1,9 @@
+import { DocumentEditor } from '@macro-inc/editor-ops/document';
 import { $getId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
 import { $getRoot } from 'lexical';
 import { describe, expect, it } from 'vitest';
 import { mockAwarenessSource } from './awareness/awareness-source';
 import { Doc } from './doc/doc';
-import { DocumentEditor } from './editor/document-editor';
 import {
   type CodeRunner,
   docIds,

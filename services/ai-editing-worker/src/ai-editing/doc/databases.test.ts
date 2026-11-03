@@ -1,3 +1,4 @@
+import type { DatabaseQueryView } from '@macro-inc/editor-ops/document';
 import {
   $isDatabaseQueryNode,
   type DatabaseQueryNode,
@@ -9,7 +10,6 @@ import {
 import { $getRoot, $isParagraphNode } from 'lexical';
 import { describe, expect, it } from 'vitest';
 import { read, setup } from '../ai-toolkit/_test-helpers';
-import type { DatabaseQueryView } from '../editor';
 import { serializeWithXml } from '../utils';
 import { Doc } from './doc';
 
