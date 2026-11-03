@@ -557,7 +557,7 @@ export default defineDoc({
     },
     {
       id: 'actions',
-      title: 'Inline undo, stacked prompts, and custom content',
+      title: 'Desktop action layouts and mobile action columns',
       render: ActionsDemo,
       fill: true,
     },
@@ -583,7 +583,8 @@ export default defineDoc({
       'Keep action labels short and retain meaningful content on mobile.',
       'Use primary actions with a secondary Dismiss button instead of a close icon.',
       'Omit the close icon on mobile; retain swipe dismissal in either direction.',
-      'Set actionLayout to inline for brief notices; keep stacked actions for longer prompts.',
+      'On desktop, set actionLayout to inline for brief notices; longer prompts keep actions below the content.',
+      'On mobile, actions stack in a right-hand column beside the title and content.',
       'Use the existing toast service so queueing, timing, and dismissal stay consistent.',
       'Use the shared Spinner for loading; keep the progress bar for known progress.',
     ],

@@ -45,8 +45,20 @@
   border-radius: 9999px;
 }
 
-.macro-toast[data-mobile][data-single-row] .macro-toast-heading {
+/* Mobile actions form one column beside all title and body content. */
+.macro-toast[data-mobile][data-has-actions] .macro-toast-content {
+  display: flex;
+  align-items: center;
   gap: 24px;
+}
+
+.macro-toast-side-actions {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  max-width: 45%;
 }
 
 .macro-toast-surface {

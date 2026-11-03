@@ -40,7 +40,7 @@ const TOAST_STYLES: Record<
   },
 };
 
-/** A single entry in the actions row — icon and label rendered as a button */
+/** A single action — icon and label rendered as a button. */
 interface ToastAction {
   label: string;
   icon?: Component<{ class?: string }>;
@@ -60,7 +60,7 @@ interface ToastOptions {
   hideOnMobile?: boolean;
   /** Hide the visible dismissal control; Escape, swipe, and expiry stay unchanged. */
   showCloseButton?: boolean;
-  /** Place actions beside the title; defaults to a stacked action row. */
+  /** Desktop action placement; mobile actions stack beside the content. */
   actionLayout?: ToastActionLayout;
 }
 
@@ -273,12 +273,17 @@ export function ToastContent(props: {
   const actions = () => props.custom?.actions ?? props.actions ?? [];
   const hasBody = () => Boolean(props.custom?.content || props.subtext);
   const hasActions = () => actions().length > 0;
+  const mobileActions = () => isMobile() && hasActions();
   const inlineActions = () =>
     !props.embed &&
+    !mobileActions() &&
     hasActions() &&
     (props.custom?.actionLayout ?? props.actionLayout) === 'inline';
   const singleRow = () =>
-    !props.embed && !hasBody() && (!hasActions() || inlineActions());
+    !props.embed &&
+    !mobileActions() &&
+    !hasBody() &&
+    (!hasActions() || inlineActions());
   const showDismiss = () => props.showCloseButton !== false;
   const showCloseButton = () => showDismiss() && !hasActions() && !isMobile();
   const [height, setHeight] = createSignal<number>();
@@ -300,6 +305,7 @@ export function ToastContent(props: {
       data-macro-toast
       data-toast-id={props.toastId}
       data-mobile={isMobile() ? '' : undefined}
+      data-has-actions={hasActions() ? '' : undefined}
       data-single-row={singleRow() ? '' : undefined}
       class="macro-toast"
       style={{ '--toast-height': height() ? `${height()}px` : undefined }}
@@ -322,7 +328,7 @@ export function ToastContent(props: {
             fallback={
               <div
                 class={cn(
-                  'flex min-w-0 gap-2',
+                  'flex min-w-0 flex-1 gap-2',
                   singleRow() ? 'items-center' : 'items-start'
                 )}
               >
@@ -369,7 +375,9 @@ export function ToastContent(props: {
                         : props.subtext}
                     </Toast.Description>
                   </Show>
-                  <Show when={hasActions() && !inlineActions()}>
+                  <Show
+                    when={hasActions() && !inlineActions() && !mobileActions()}
+                  >
                     <div class="mt-3 flex flex-wrap items-center gap-2">
                       <ActionButtons
                         actions={actions()}
@@ -383,9 +391,9 @@ export function ToastContent(props: {
             }
           >
             {(Embed) => (
-              <div class="min-w-0">
+              <div class="min-w-0 flex-1">
                 <Dynamic component={Embed()} />
-                <Show when={hasActions()}>
+                <Show when={hasActions() && !mobileActions()}>
                   <div class="mt-3 flex flex-wrap items-center gap-2">
                     <ActionButtons
                       actions={actions()}
@@ -396,6 +404,15 @@ export function ToastContent(props: {
                 </Show>
               </div>
             )}
+          </Show>
+          <Show when={mobileActions()}>
+            <div class="macro-toast-side-actions">
+              <ActionButtons
+                actions={actions()}
+                showDismiss={showDismiss()}
+                onDismiss={props.onUserDismiss}
+              />
+            </div>
           </Show>
           <Show when={showCloseButton()}>
             <Toast.CloseButton
