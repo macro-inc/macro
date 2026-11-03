@@ -621,7 +621,7 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
     let direct = tools_for_agent_code_mode();
     let sdk = code_mode_tools();
     assert!(direct.toolset.tools.len() < standard.toolset.tools.len());
-    for name in ["ReadContent"] {
+    for name in ["ReadContent", "WebSearch"] {
         assert!(standard.toolset.tools.contains_key(name), "{name}");
         assert!(sdk.tools.contains_key(name), "{name}");
         assert!(!direct.toolset.tools.contains_key(name), "{name}");

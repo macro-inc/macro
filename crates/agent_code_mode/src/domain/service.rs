@@ -253,6 +253,7 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "CreateSkill"
                 | "Decide"
                 | "GenerateObject"
+                | "WebSearch"
         )
 }
 
