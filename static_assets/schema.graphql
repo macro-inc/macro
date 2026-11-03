@@ -442,6 +442,11 @@ type CompleteMutationRoot {
 	Delete the expected owned revision; repeating a completed deletion returns the ID.
 	"""
 	deleteSavedView(input: DeleteSavedViewInput!): ID!
+	"""
+	Set the authenticated viewer's personal order; definitions and their
+	revisions are unchanged. Returns the views in their new order.
+	"""
+	reorderSavedViews(input: ReorderSavedViewsInput!): [GraphqlSavedView!]!
 }
 
 """
@@ -7299,7 +7304,8 @@ type GraphqlSavedView {
 }
 
 """
-A page ordered by creation time and ID after effective visibility checks.
+A page in the viewer's own order, then by creation time and ID, after
+effective visibility checks.
 """
 type GraphqlSavedViewPage {
 	"""
@@ -10745,6 +10751,21 @@ input ReorderFavoritesInput {
 	Favorited entities in the desired order.
 	"""
 	favorites: [EntityRefInput!]!
+}
+
+"""
+Inputs for setting the viewer's own order of one kind of saved view.
+"""
+input ReorderSavedViewsInput {
+	"""
+	Consumer kind whose order is replaced, such as `email`.
+	"""
+	kind: String!
+	"""
+	Visible views of that kind in their new order, at most 200; views left
+	out follow them by creation time.
+	"""
+	ids: [ID!]!
 }
 
 """
