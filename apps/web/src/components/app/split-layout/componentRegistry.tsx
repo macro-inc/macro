@@ -3,7 +3,10 @@ import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CreatedCalendarEvent } from '@app/features/calendar/hooks/use-event-editor';
 import type { CalendarEvent } from '@app/features/calendar/types';
-import { composePropsFromParams } from '@app/features/email-compose/compose-params';
+import {
+  composePropsFromParams,
+  recipientsFromLink,
+} from '@app/features/email-compose/compose-params';
 import { HomeRouteView } from '@app/features/home/route-views';
 import { parseProjectRoute } from '@app/features/projects/core/route';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -391,16 +394,17 @@ registerComponent('channel-compose', () => {
 });
 registerComponent('email-compose', (params) => {
   usePageViewTracking('email-compose');
-  // mailto: links land here as `component/email-compose?to=a@x.com,b@y.com`.
+  // mailto: links land here as
+  // `component/email-compose?to=a@example.com,b@example.com` on touch;
+  // desktop carries `to` into its `/mail/new` route.
   const toParam = new URLSearchParams(window.location.search).get('to');
   const props = composePropsFromParams(params);
-  const initialTo =
-    props.initialTo ??
-    toParam
-      ?.split(',')
-      .map((e) => e.trim())
-      .filter(Boolean);
-  return <EmailCompose {...props} initialTo={initialTo} />;
+  return (
+    <EmailCompose
+      {...props}
+      initialTo={props.initialTo ?? recipientsFromLink(toParam)}
+    />
+  );
 });
 registerComponent('routine-compose', (params) => (
   <RoutineCreator

@@ -8,6 +8,20 @@ function stringParam(value: unknown): string | undefined {
 }
 
 /**
+ * Recipients a link names as `to=a@example.com,b@example.com`, as mailto:
+ * links do.
+ */
+export function recipientsFromLink(
+  value: string | null | undefined
+): string[] | undefined {
+  const recipients = value
+    ?.split(',')
+    .map((recipient) => recipient.trim())
+    .filter(Boolean);
+  return recipients?.length ? recipients : undefined;
+}
+
+/**
  * The composer's options from the params a new email opened with. Callers pass
  * them in memory, so a value of the wrong type is dropped rather than trusted.
  */

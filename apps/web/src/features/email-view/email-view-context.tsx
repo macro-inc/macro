@@ -1,5 +1,4 @@
 import type { EntityDetailNavigationOptions } from '@app/components/entity-detail/entity-detail-target';
-import { composeDraftSearch } from '@app/features/email-compose/compose-route-draft';
 import {
   createListController,
   type ListActivation,
@@ -7,6 +6,7 @@ import {
   listOwnedSlotName,
 } from '@app/components/list';
 import { setSidebarSectionCollapsed } from '@app/components/view-shell';
+import { composeDraftSearch } from '@app/features/email-compose/compose-route-draft';
 import { normalizeFacetSelection } from '@app/features/soup';
 import { registerListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
 import { makePersistedState } from '@app/lib/persistence';

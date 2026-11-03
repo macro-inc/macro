@@ -47,26 +47,40 @@ const routes = createRoutesManifest({
   defaultRoute: () => paneRoute({ id: emailSplitRoute.id, params: {} }),
 } satisfies SplitRoutes);
 
-function openCompose(touch: boolean) {
-  const to: Entry = {
-    id: 'entry',
-    location: {
-      route: paneRoute({
-        id: legacyContentRoute.id,
-        params: { type: 'component', id: 'email-compose' },
-      }),
-    },
-  };
+const legacyCompose: Entry = {
+  id: 'entry',
+  location: {
+    route: paneRoute({
+      id: legacyContentRoute.id,
+      params: { type: 'component', id: 'email-compose' },
+    }),
+  },
+};
+
+const newEmail: Entry = {
+  id: 'entry',
+  location: {
+    route: paneRoute(
+      { id: emailSplitRoute.id, params: {} },
+      { id: emailComposeRoute.id, params: {} }
+    ),
+  },
+};
+
+function run(
+  to: Entry,
+  options: { touch?: boolean; path: string; externalSearch?: string }
+) {
   for (const handler of createAppSplitRouterMiddleware({
-    isTouchDevice: () => touch,
+    isTouchDevice: () => options.touch ?? false,
   })) {
     const result = handler({
       routes,
       from: undefined,
       to,
-      path: '/component/email-compose',
-      cause: 'navigate',
-      externalSearch: undefined,
+      path: options.path,
+      cause: options.externalSearch ? 'external' : 'navigate',
+      externalSearch: options.externalSearch,
       signal: new AbortController().signal,
       redirect: (path) => ({ type: 'redirect', to: path }),
       cancel: () => ({ type: 'cancel' }),
@@ -78,12 +92,30 @@ function openCompose(touch: boolean) {
 }
 
 describe('new email in the Email view', () => {
-  it('opens a new email beside the list on desktop', () => {
-    expect(openCompose(false)).toEqual({ type: 'redirect', to: '/mail/new' });
+  it('opens a new email in the Email view on desktop', () => {
+    expect(run(legacyCompose, { path: '/component/email-compose' })).toEqual({
+      type: 'redirect',
+      to: '/mail/new',
+    });
   });
 
   it('keeps the full-screen composer on touch', () => {
-    expect(openCompose(true)).toBeUndefined();
+    expect(
+      run(legacyCompose, { touch: true, path: '/component/email-compose' })
+    ).toBeUndefined();
+  });
+
+  it('keeps the recipients a `?to=` link names', () => {
+    const result = run(newEmail, {
+      path: '/mail/new',
+      externalSearch: 'to=a@example.com,b@example.com',
+    });
+    if (result?.type !== 'redirect') throw new Error('Expected a redirect');
+    const url = new URL(result.to, window.location.origin);
+    expect(url.pathname).toBe('/mail/new');
+    expect(url.searchParams.get('s0.email-compose.to')).toBe(
+      'a@example.com,b@example.com'
+    );
   });
 
   it('reads /mail/new as a new email, not a thread', () => {
