@@ -10785,7 +10785,7 @@ export interface ToolContact {
   name?: string | null;
 }
 /**
- * Import companies into the team CRM from a CSV, such as a Macro companies export or a list from another CRM. Each row needs a domain (a Domain, Domains or Website column) and may name the company (Company or Name); a row takes its first valid domain, and companies the team already has are left as they are. Stage, Owner and Revenue live on pipeline entries rather than companies: when the CSV has them, they go on entries of pipelineId, or of a new pipeline (private unless shareNewPipeline) named after the file. Give the CSV as text in csv, or as documentId for a CSV file in Macro. Returns counts and the rows that could not be imported. To add rows to a pipeline without this, use ImportPipelineCsv.
+ * Import companies into the team CRM from a CSV, such as a Macro companies export or a list from another CRM. Each row needs a domain (a Domain, Domains or Website column) and may name the company (Company or Name); a row takes its first valid domain, and companies the team already has are left as they are. Stage, Owner and Revenue live on pipeline entries rather than companies: when the CSV has them, they go on entries of pipelineId, or of a new pipeline (private unless shareNewPipeline) named after the file. Use it instead of adding companies one at a time. Give the CSV as text in csv, or as documentId for a CSV file in Macro, which is the way to pass an uploaded file. Returns counts and the rows that could not be imported. To add rows to a pipeline without this, use ImportPipelineCsv.
  */
 export interface ImportCompaniesCsv {
   /**
@@ -11181,7 +11181,7 @@ export interface ImportNotionPageResponse {
   message: string;
 }
 /**
- * Import a CSV into a CRM pipeline as new deals (entries), such as a pipeline export or a sheet of deals. In a company pipeline each row needs a domain (Domain, Domains or Website column) and may name the company (Company); in a contact pipeline each row needs an Email and may name the contact (Contact). Missing companies and contacts are created. Other columns fill the pipeline fields with the same name (Stage, Owner as an email, Revenue, custom fields); stage labels the pipeline lacks are added. Records already in the pipeline are not added again, so retrying an interrupted import adds only what is missing; several rows for one new record become separate deals. Give the CSV as text in csv, or as documentId for a CSV file in Macro. Returns counts and the rows that could not be added.
+ * Import a CSV into a CRM pipeline as new deals (entries), such as a pipeline export or a sheet of deals. In a company pipeline each row needs a domain (Domain, Domains or Website column) and may name the company (Company); in a contact pipeline each row needs an Email and may name the contact (Contact). Missing companies and contacts are created. Other columns fill the pipeline fields with the same name (Stage, Owner as an email, Revenue, custom fields); stage labels the pipeline lacks are added. Records already in the pipeline are not added again, so retrying an interrupted import adds only what is missing; several rows for one new record become separate deals. Use it instead of adding deals one at a time. Give the CSV as text in csv, or as documentId for a CSV file in Macro, which is the way to pass an uploaded file. Returns counts and the rows that could not be added.
  */
 export interface ImportPipelineCsv {
   /**
@@ -12867,7 +12867,7 @@ export interface OpenDirectMessageResponse {
  * - **Select and tag columns take option labels** (`"Status" = 'Going'`), never option ids. Only labels the column carries are accepted; add new ones with `ALTER TABLE table ALTER COLUMN col ADD OPTIONS ('New label')`.
  * - **Relations hold the row ids of another table.** Write a list of row ids (`"Guests" = ['<row id>']`), test with `HAS '<row id>'`, and join with `ON i."Guest" = g.row_id`: `SELECT p."Name" AS party, COUNT(*) AS invites FROM "Invites" i JOIN "Parties" p ON i."Party" = p.row_id GROUP BY p."Name"`. Never compare a relation to a name.
  * - **Person and other entity columns hold Macro ids,** never names: `'macro|sam@example.com'` for a person, a list for a multi-valued column. Respect each column's `specificEntityType`.
- * - **People:** `macro.people` is everyone the user knows (contacts and teammates) with `id`, `name` and `email`, the viewer included: “me” is the row whose email is the signed-in user's. It is read-only. Find people there, then write their ids: `SELECT id, name, email FROM macro.people WHERE name LIKE '%julia%' OR email LIKE '%julia%'`, then `UPDATE "Parties" SET "Host" = 'macro|julia@example.com' WHERE row_id = '<id>'`. Join to read names or emails: `JOIN macro.people p ON t."Owner" = p.id`. Never invent a person or an id; when a name matches several people or none, ask.
+ * - **People:** `macro.people` is everyone the user knows (contacts and teammates) with `id`, `name` and `email`, the viewer included: “me” is the row whose email is the signed-in user's. It is read-only. Find people there, then write their ids: `SELECT id, name, email FROM macro.people WHERE name LIKE '%julia%' OR email LIKE '%julia%'`, then `UPDATE "Parties" SET "Host" = 'macro|julia@example.com' WHERE row_id = '<id>'`. Join to read names or emails: `JOIN macro.people p ON t."Owner" = p.id`. Use it, not ListTeamMembers, to find people for a database. Never invent a person or an id; when a name matches several people or none, ask.
  * - **Changing a column's type:** `ALTER TABLE table ALTER COLUMN col TYPE type`,  where type is text, number, boolean, date, date_range, link, select, select_number, tag, or entity(USER), entity(DOCUMENT), entity(TASK)…, with `[]` for several values (`select[]`). Call DescribeDatabase with `includeEditingMetadata: true` for the column's `safeTypes` and `checkedTypes`. A value that does not fit, or a multi-valued cell a single-valued type would truncate, refuses the statement with counts and examples: fix those values with UPDATE, or add a new column.
  * - **Schema commands** (one statement per call; edit access required):
  *   - `CREATE DATABASE "Sales CRM"` creates its starter table with a Name column. Call DescribeDatabase using the returned database ID before editing it; reuse that starter table.
@@ -14955,7 +14955,7 @@ export interface RoutineRunStarted {
  * - `chart` (bar/line/area/scatter/pie): `x` is the label column and `y` the numeric result columns, named exactly as the result columns are; alias aggregates (`COUNT(*) AS invites`) so they have stable names. `color` names a result column whose values split one `y` series into one series per value (e.g. invites per party colored by status); `stack` stacks bar or area series instead of setting them side by side.
  * - Pass `databaseId` so the question resolves against that database's tables.
  *
- * Saved questions never change. To change one, save a new one and use its new block.
+ * Saved questions never change, and a block you write or edit yourself does not work. To change one, save a new one and use its new block.
  */
 export interface SaveDatabaseQuery {
   /**
@@ -15886,7 +15886,7 @@ export interface ProjectChannelSharing {
   access: ProjectShareAccess;
 }
 /**
- * Move deals to another stage or change their fields in a CRM pipeline: "move Acme to Negotiation", "set the revenue on the Globex deal", "assign these deals to Sam". Address each entry by entryId (from FindPipelineEntries) or by the company or contact id it tracks, and set fields by name with text values: stages and other options by label, people as "me", an email or a macro| user id, numbers, true/false, or dates. Several entries change in one call, all or nothing. Returns each field before and after. This changes the entry in the pipeline, not the company's own properties.
+ * Move deals to another stage or change their fields in a CRM pipeline: "move Acme to Negotiation", "set the revenue on the Globex deal", "assign these deals to Sam". Address each entry by entryId (from FindPipelineEntries) or by the company or contact id it tracks, and set fields by name with text values: stages and other options by label, people as "me", an email or a macro| user id, numbers, true/false, or dates. Several entries change in one call, all or nothing. If a stage the user names does not exist, say so and offer to add it with EditPipeline; never pick a similar one. Returns each field before and after: check them before saying a change is saved. This changes the entry in the pipeline, not the company's own properties.
  */
 export interface UpdatePipelineEntries {
   /**
