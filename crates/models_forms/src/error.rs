@@ -49,6 +49,8 @@ pub enum FormErrorCode {
     AlreadyResponded,
     /// The caller has no saved response to read or edit.
     NoResponse,
+    /// A response to an anonymous form can't be changed.
+    AnonymousResponseFinal,
     /// An answer names a question the form does not ask.
     UnknownQuestion,
     /// A question is answered twice.

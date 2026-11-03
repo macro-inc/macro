@@ -73,6 +73,7 @@ export {
   type FormSectionPlacement,
   type FormSubmissionOutcome,
   type MyFormResponse,
+  type SavedFormResponse,
 } from './entities/forms/form';
 export { FormOption, FormQuestion } from './entities/forms/question';
 export { FormResponse } from './entities/forms/response';

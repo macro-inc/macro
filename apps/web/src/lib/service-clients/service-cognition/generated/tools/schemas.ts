@@ -2709,6 +2709,7 @@ export const CreateForm = z.object({
     const schemas = [
       z.object({
         isHiddenInDrive: z.boolean().optional(),
+        anonymous: z.boolean().optional(),
         kind: z.literal('new'),
       }),
       z.object({
@@ -3532,6 +3533,8 @@ export const MutationResult = z.object({
             }
           }),
           tallyVisible: z.boolean(),
+          responsesVisible: z.boolean(),
+          anonymous: z.boolean(),
           status: z.any().superRefine((x, ctx) => {
             const schemas = [z.literal('open'), z.literal('closed')];
             const errors = schemas.reduce<z.ZodError[]>(
@@ -11068,6 +11071,8 @@ export const ListResult = z.object({
           }
         }),
         tallyVisible: z.boolean(),
+        responsesVisible: z.boolean(),
+        anonymous: z.boolean(),
         status: z.any().superRefine((x, ctx) => {
           const schemas = [z.literal('open'), z.literal('closed')];
           const errors = schemas.reduce<z.ZodError[]>(
@@ -13847,6 +13852,8 @@ export const ReadResult = z.any().superRefine((x, ctx) => {
             }
           }),
           tallyVisible: z.boolean(),
+          responsesVisible: z.boolean(),
+          anonymous: z.boolean(),
           status: z.any().superRefine((x, ctx) => {
             const schemas = [z.literal('open'), z.literal('closed')];
             const errors = schemas.reduce<z.ZodError[]>(
@@ -14466,6 +14473,8 @@ export const ReadResult = z.any().superRefine((x, ctx) => {
             }
           }),
           tallyVisible: z.boolean(),
+          responsesVisible: z.boolean(),
+          anonymous: z.boolean(),
           status: z.any().superRefine((x, ctx) => {
             const schemas = [z.literal('open'), z.literal('closed')];
             const errors = schemas.reduce<z.ZodError[]>(
@@ -16367,6 +16376,8 @@ export const SetFormAccess = z.object({
         .union([z.string().datetime({ offset: true }), z.null()])
         .optional(),
       tallyVisible: z.boolean(),
+      responsesVisible: z.union([z.boolean(), z.null()]).optional(),
+      anonymous: z.union([z.boolean(), z.null()]).optional(),
       channelGrants: z
         .array(
           z.any().superRefine((x, ctx) => {

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE forms SET\n                description = COALESCE($2, description),\n                confirmation_message = COALESCE($3, confirmation_message),\n                audience = COALESCE($4, audience),\n                status = COALESCE($5, status),\n                closes_at = CASE WHEN $6 THEN $7 ELSE closes_at END,\n                tally_visible = COALESCE($8, tally_visible),\n                logo_file_id = CASE WHEN $10 THEN $11 ELSE logo_file_id END,\n                cover_file_id = CASE WHEN $12 THEN $13 ELSE cover_file_id END,\n                accent_color = CASE WHEN $14 THEN $15 ELSE accent_color END,\n                updated_at = $9\n            WHERE id = $1\n            RETURNING id, name, description, owner_id, database_id, table_id,\n                      submitted_column_id, respondent_column_id, audience, tally_visible,\n                      status, closes_at, confirmation_message, logo_file_id, cover_file_id, accent_color,\n                   created_at, updated_at, trashed_at,\n                   name_follows_database, is_hidden_in_drive, project_id\n            ",
+  "query": "\n            SELECT id, name, description, owner_id, database_id, table_id,\n                   submitted_column_id, respondent_column_id, audience, tally_visible,\n                   status, closes_at, confirmation_message, logo_file_id, cover_file_id, accent_color,\n                   created_at, updated_at, trashed_at,\n                   name_follows_database, is_hidden_in_drive, project_id, responses_visible, anonymous\n            FROM forms WHERE id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -112,25 +112,21 @@
         "ordinal": 21,
         "name": "project_id",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 22,
+        "name": "responses_visible",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 23,
+        "name": "anonymous",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Bool",
-        "Timestamptz",
-        "Bool",
-        "Timestamptz",
-        "Bool",
-        "Uuid",
-        "Bool",
-        "Uuid",
-        "Bool",
-        "Text"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -155,8 +151,10 @@
       true,
       false,
       false,
-      true
+      true,
+      false,
+      false
     ]
   },
-  "hash": "f3479ddd35d19a7e2cbddf56e4d7ceae6053583db8563c3840eceb7fbd71da8e"
+  "hash": "d68ac2f747c41c83b3f68f76f7c8da82d511655038891d6b3778b9b1dc895d58"
 }

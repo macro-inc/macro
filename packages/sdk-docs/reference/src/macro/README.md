@@ -628,6 +628,12 @@ Re-exports [RoutineTriggerOptions](../entities/routines/routine/type-aliases/Rou
 
 ***
 
+### SavedFormResponse
+
+Re-exports [SavedFormResponse](../entities/forms/form/type-aliases/SavedFormResponse.md)
+
+***
+
 ### SessionAutoArchive
 
 Re-exports [SessionAutoArchive](../entities/agent-sessions/agent-session/type-aliases/SessionAutoArchive.md)
