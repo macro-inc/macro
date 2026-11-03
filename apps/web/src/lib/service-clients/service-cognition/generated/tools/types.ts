@@ -12577,6 +12577,10 @@ export interface SkillSearchResult {
    */
   name: string;
   /**
+   * When to use the skill, when it says.
+   */
+  description?: string | null;
+  /**
    * When the skill was last updated, when known.
    */
   updatedAt?: string | null;
