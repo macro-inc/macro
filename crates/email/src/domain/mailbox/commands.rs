@@ -282,7 +282,13 @@ fn provider_action(
             }
         }
         MailboxAction::Junk(true) if !current.state.in_junk => FolderRole::Junk,
-        MailboxAction::Junk(false) if current.state.in_junk => FolderRole::Inbox,
+        MailboxAction::Junk(false) if current.state.in_junk => {
+            if current.state.is_draft {
+                FolderRole::Drafts
+            } else {
+                FolderRole::Inbox
+            }
+        }
         _ => return Ok(None),
     };
     if destination == FolderRole::Archive && !folders.iter().any(|f| f.role == FolderRole::Archive)
@@ -295,3 +301,6 @@ fn provider_action(
         .ok_or(EmailApiError::Conflict)?;
     Ok(Some(MessageAction::MoveToFolder(folder.id.clone())))
 }
+
+#[cfg(test)]
+mod test;
