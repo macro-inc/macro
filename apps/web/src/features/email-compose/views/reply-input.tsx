@@ -12,6 +12,7 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
+import { isEditableInput } from '@core/util/isEditableInput';
 import DotsThree from '@icon/system/regular/dots-three.svg';
 import Paperclip from '@icon/system/regular/paperclip.svg';
 import Trash from '@icon/system/regular/trash.svg';
@@ -44,9 +45,13 @@ import type { EmailComposeContext } from '../context/compose-capabilities';
 import { getOrInitEmailFormContext } from '../context/email-form-context';
 import { decodeBase64Utf8 } from '../core/decode-base64';
 import { plainTextToHtml } from '../core/plain-text-to-html';
-import { registerCcBccHotkeys } from '../primitives/cc-bcc-hotkeys';
+import {
+  registerCcBccHotkeys,
+  revealRecipientField,
+} from '../primitives/cc-bcc-hotkeys';
 import { registerDraftActionHotkeys } from '../primitives/draft-action-hotkeys';
 import { createDraftSyncStatus } from '../primitives/draft-sync-status';
+import { fieldOwnsEscape } from '../primitives/field-owns-escape';
 import { EMAIL_FORMAT_SHORTCUTS } from '../primitives/format-shortcuts';
 import { registerToggleAppendedThread } from '../primitives/prepare-email-body';
 import { ReplyEnvelope } from './reply-envelope';
@@ -134,6 +139,9 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
   let composeContainerRef: HTMLDivElement | undefined;
   let bottomBarRef: HTMLDivElement | undefined;
   const [editor, setEditor] = createSignal<LexicalEditor>();
+  // A reply keeps its thread's subject until someone chooses to edit it.
+  const [showSubject, setShowSubject] = createSignal(!!props.isEditingExisting);
+  let subjectInput: HTMLInputElement | undefined;
   const state = createReplyComposer(
     {
       drafts: composeContext.drafts,
@@ -345,6 +353,36 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
       });
 
       const recipients = state.recipients;
+      registerHotkey({
+        hotkey: 'shift+cmd+o',
+        scopeId: composeHotkeyScope,
+        description: 'Edit "To" recipients',
+        keyDownHandler: () => {
+          if (recipients.disabled()) return false;
+          revealRecipientField({
+            reveal: () => recipients.setShowExpandedRecipients(true),
+            input: recipients.toRef,
+          });
+          return true;
+        },
+        runWithInputFocused: true,
+        hotkeyToken: TOKENS.email.compose.edit.recipients,
+        shouldReturnFocusOnClose: false,
+      });
+      registerHotkey({
+        hotkey: 'shift+cmd+s',
+        scopeId: composeHotkeyScope,
+        description: 'Edit subject',
+        keyDownHandler: () => {
+          if (editingDisabled()) return false;
+          setShowSubject(true);
+          subjectInput?.focus();
+          return true;
+        },
+        runWithInputFocused: true,
+        hotkeyToken: TOKENS.email.compose.edit.subject,
+        shouldReturnFocusOnClose: false,
+      });
       registerCcBccHotkeys({
         scopeId: composeHotkeyScope,
         disabled: recipients.disabled,
@@ -390,7 +428,10 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
         scopeId: composeHotkeyScope,
         description: 'Close reply',
         keyDownHandler: () => {
+          if (fieldOwnsEscape(editor())) return false;
           if (isMobileCompose()) {
+            // The full-screen composer's fields close it themselves.
+            if (isEditableInput(document.activeElement)) return false;
             requestClose();
             return true;
           }
@@ -406,8 +447,9 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
           }
           return true;
         },
-        // Let editable fields handle Escape before closing the reply.
-        runWithInputFocused: false,
+        // Escape in the body or a field closes the reply too; the editor
+        // would otherwise only blur, leaving no keys working.
+        runWithInputFocused: true,
         hotkeyToken: TOKENS.email.cancelReply,
         displayPriority: 8,
       });
@@ -617,7 +659,10 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
             form.setSubject(subject);
             scheduleDraftSave();
           }}
-          showSubject={!!props.isEditingExisting}
+          showSubject={showSubject()}
+          subjectRef={(el) => {
+            subjectInput = el;
+          }}
           mobile={isMobileCompose}
           portalScope={composePortalScope}
           replyType={state.replyType}

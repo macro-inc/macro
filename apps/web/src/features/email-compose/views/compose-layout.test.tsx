@@ -197,4 +197,26 @@ describe('ComposeLayout root composition', () => {
     expect(sendHotkey?.keyDownHandler()).toBe(true);
     expect(onSend).toHaveBeenCalledTimes(2);
   });
+
+  it('hands Escape to the view while typing, which can leave it to a field', () => {
+    const onEscape = vi.fn(() => false);
+    render(() => <ComposeLayout onEscape={onEscape} />);
+    const escapeHotkey = registerHotkeyMock.mock.calls.find(
+      ([options]) => options.hotkey === 'escape'
+    )?.[0];
+
+    expect(escapeHotkey?.runWithInputFocused).toBe(true);
+    expect(escapeHotkey?.condition()).toBe(true);
+    expect(escapeHotkey?.keyDownHandler()).toBe(false);
+    onEscape.mockReturnValue(true);
+    expect(escapeHotkey?.keyDownHandler()).toBe(true);
+  });
+
+  it('leaves Escape alone in a composer with nowhere to go', () => {
+    render(() => <ComposeLayout />);
+    const escapeHotkey = registerHotkeyMock.mock.calls.find(
+      ([options]) => options.hotkey === 'escape'
+    )?.[0];
+    expect(escapeHotkey?.condition()).toBe(false);
+  });
 });

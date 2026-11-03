@@ -450,6 +450,8 @@ export interface EmailComposeHost {
   /** The draft a reload should reopen, or undefined when there is none. */
   recordDraft?: (draftId: string | undefined) => void;
   goBack?: () => void;
+  /** Leaves the composer: back to what it replaced, or closes its own split. */
+  close?: () => void;
   registerBack?: (handler: () => boolean) => void;
 }
 export interface EmailUndoHandle {

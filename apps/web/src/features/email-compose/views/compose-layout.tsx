@@ -78,6 +78,11 @@ export function ComposeLayout(props: {
   notice?: JSX.Element;
   class?: string;
   bodyDebugName?: string;
+  /**
+   * Escape anywhere in the form, even while typing. Return false to leave the
+   * key to the focused field.
+   */
+  onEscape?: () => boolean;
 }) {
   const ctx = useCompose();
 
@@ -179,6 +184,15 @@ export function ComposeLayout(props: {
     discardDisabled: ctx.deleteDisabled,
     discard: () => ctx.onDelete?.(),
     attach: ctx.hideAttachments ? undefined : ctx.onAddAttachments,
+  });
+
+  registerHotkey({
+    hotkey: 'escape',
+    scopeId: composeHotkeyScope,
+    description: 'Close draft',
+    condition: () => !!props.onEscape,
+    keyDownHandler: () => props.onEscape?.() ?? false,
+    runWithInputFocused: true,
   });
 
   registerHotkey({

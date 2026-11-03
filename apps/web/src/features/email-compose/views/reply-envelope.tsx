@@ -26,6 +26,7 @@ type ReplyEnvelopeProps = {
   subject: Accessor<string>;
   onSubjectChange: (subject: string) => void;
   showSubject: boolean;
+  subjectRef?: (el: HTMLInputElement) => void;
   mobile: Accessor<boolean>;
   portalScope: Accessor<'local' | undefined>;
   replyType: Accessor<ReplyType | undefined>;
@@ -243,6 +244,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
           >
             <div class="text-sm min-w-16 pl-4">Subject</div>
             <input
+              ref={props.subjectRef}
               type="text"
               class="flex-1 text-base bg-transparent outline-none border-0 px-3 py-1"
               value={props.subject()}
@@ -342,6 +344,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
 
         <div class="min-h-14 border-b border-edge-muted/70 flex flex-wrap items-center">
           <input
+            ref={props.subjectRef}
             type="text"
             class="w-full bg-transparent outline-none border-0 text-[17px] leading-6 text-ink placeholder:text-ink-placeholder"
             value={props.subject()}

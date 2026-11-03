@@ -24,6 +24,11 @@ function createSplitComposeHost() {
       });
     },
     goBack: () => panel?.handle.goBack(),
+    close: () => {
+      if (!panel) return;
+      if (panel.handle.canGoBack()) panel.handle.goBack();
+      else panel.handle.close();
+    },
     focusSibling: createPanelFocusSibling(),
     registerBack: (handler: () => boolean) => {
       useSplitBackInterceptor(handler);

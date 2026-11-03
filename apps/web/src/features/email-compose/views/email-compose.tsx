@@ -24,6 +24,7 @@ import {
   type EmailComposerOptions,
   hasComposeUndo,
 } from '../primitives/email-composer';
+import { fieldOwnsEscape } from '../primitives/field-owns-escape';
 import { ComposeLayout } from '../views/compose-layout';
 import { EmailComposeToolbar } from '../views/compose-toolbar';
 export type EmailComposeViewProps = Pick<
@@ -220,7 +221,7 @@ function LoadedEmailComposeView(
     });
   }
 
-  const leaveCompose = async () => {
+  const leaveCompose = async (leave = props.host?.goBack) => {
     try {
       await state.flushLocal();
     } catch (error) {
@@ -228,7 +229,13 @@ function LoadedEmailComposeView(
       return;
     }
     setDraftBackMenuOpen(false);
-    props.host?.goBack?.();
+    leave?.();
+  };
+  // Escape keeps the draft and leaves, as Back does.
+  const closeOnEscape = () => {
+    if (fieldOwnsEscape(editor())) return false;
+    fireAndForget(leaveCompose(props.host?.close), 'email-compose');
+    return true;
   };
   const reloadForRecovery = async () => {
     try {
@@ -319,6 +326,7 @@ function LoadedEmailComposeView(
           >
             <ComposeLayout
               toolbar={<EmailComposeToolbar editor={editor} />}
+              onEscape={closeOnEscape}
               notice={
                 // A missing inbox must not hide a draft that only this
                 // device holds, so both notices can show together.
@@ -343,7 +351,7 @@ function LoadedEmailComposeView(
         <DraftBackMenu
           open={draftBackMenuOpen()}
           onOpenChange={setDraftBackMenuOpen}
-          onSave={leaveCompose}
+          onSave={() => leaveCompose()}
           onDelete={async () => {
             try {
               if (!(await deleteDraftAndReset())) return;
