@@ -1,3 +1,4 @@
+import { createElementSize } from '@core/util/createElementSize';
 import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
@@ -7,7 +8,6 @@ import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { Key } from '@solid-primitives/keyed';
-import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   createVirtualizer,
   defaultRangeExtractor,

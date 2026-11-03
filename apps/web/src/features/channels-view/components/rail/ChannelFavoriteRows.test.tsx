@@ -79,7 +79,7 @@ vi.mock('@macro-inc/observability', async (importOriginal) => ({
     ) => await run({ setAttr() {} }),
   },
 }));
-vi.mock('@solid-primitives/resize-observer', () => ({
+vi.mock('@core/util/createElementSize', () => ({
   createElementSize: (element: () => HTMLElement | undefined) => ({
     width: 200,
     get height() {

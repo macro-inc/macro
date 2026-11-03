@@ -3,12 +3,12 @@ import { createLayoutAnimation } from '@app/components/drag-drop/create-layout-a
 import { SearchBar, ViewSidebar } from '@app/components/view-shell';
 import { SlackImportSidebar } from '@app/features/slack-import/slack-import-sidebar';
 import { t } from '@app/lib/i18n';
+import { createElementSize } from '@core/util/createElementSize';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { ChannelEntity } from '@entity';
 import { queryReadyGate } from '@queries/gate';
 import { useCurrentTeamQuery } from '@queries/team/teams';
-import { createElementSize } from '@solid-primitives/resize-observer';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { Button } from '@ui';
 import { tourTarget } from '@ui/components/Tour';

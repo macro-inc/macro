@@ -1,7 +1,7 @@
 import { UploadProgressIndicator } from '@core/component/UploadProgress/UploadProgressIndicator';
 import { isMobile } from '@core/mobile/isMobile';
+import { createElementSize } from '@core/util/createElementSize';
 import { Toast } from '@kobalte/core/toast';
-import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn } from '@ui/utils/classname';
 import { createSignal, type JSX, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';

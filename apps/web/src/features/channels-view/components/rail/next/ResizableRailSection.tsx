@@ -1,6 +1,6 @@
 import { t } from '@app/lib/i18n';
 import { useUserId } from '@core/context/user';
-import { createElementSize } from '@solid-primitives/resize-observer';
+import { createElementSize } from '@core/util/createElementSize';
 import { cn, Tooltip } from '@ui';
 import { createMemo, createSignal, type JSX, onCleanup, Show } from 'solid-js';
 import {

@@ -1,4 +1,4 @@
-import { createElementSize } from '@solid-primitives/resize-observer';
+import { createElementSize } from '@core/util/createElementSize';
 import { createEffect, createMemo, createSignal, type JSX, on } from 'solid-js';
 import {
   Virtualizer,
