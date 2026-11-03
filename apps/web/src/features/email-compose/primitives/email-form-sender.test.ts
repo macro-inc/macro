@@ -197,3 +197,45 @@ it.each(['base@example.com', 'resident@example.com'])(
       }
     })
 );
+
+it("replies to a shared thread from the viewer's inbox, not its owner's", () =>
+  createRoot((dispose) => {
+    try {
+      const shared = message('shared', {
+        link_id: 'owner-inbox',
+        from: { email: 'owner@example.com' },
+        to: [{ email: 'base@example.com' }],
+      });
+      const form = createEmailFormState(
+        { viewerEmail: () => 'base@example.com', inboxes: () => [primary] },
+        { type: 'replying_to', messageId: 'shared' },
+        {
+          getMessageById: () => shared,
+          getDraftForMessageReply: () => undefined,
+        }
+      );
+      expect(form.selectedInboxId()).toBeUndefined();
+      expect(form.recipients().to.map((item) => item.data.email)).toEqual([
+        'owner@example.com',
+      ]);
+    } finally {
+      dispose();
+    }
+  }));
+
+it('replies from the inbox holding the message when it is the viewer’s', () =>
+  createRoot((dispose) => {
+    try {
+      const form = createEmailFormState(
+        { viewerEmail: () => 'base@example.com', inboxes: () => [primary] },
+        { type: 'replying_to', messageId: 'parent' },
+        {
+          getMessageById: () => parent,
+          getDraftForMessageReply: () => undefined,
+        }
+      );
+      expect(form.selectedInboxId()).toBe('inbox');
+    } finally {
+      dispose();
+    }
+  }));

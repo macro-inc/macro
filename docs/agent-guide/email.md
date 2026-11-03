@@ -582,6 +582,20 @@ scrolls it into view, and briefly highlights it. For navigation regressions,
 exercise both a recent message and one outside the first page. Open another
 target while loading or highlighting: the previous request must not scroll the
 new thread or clear its highlight. Closing the split cancels pending positioning.
+### Sharing a thread
+
+The thread's **Share** dialog forwards it to people or channels at **Can edit**
+by default; its access dropdown also offers **Can view**, and the People tab
+changes an existing recipient between the two. Edit lets a recipient reply:
+they get Reply, Reply all, and Forward and the inline reply box, sending from an
+inbox of their own (their primary unless they pick another in From), never the
+owner's. The reply starts a thread in their inbox and threads under the original
+for every other participant through `In-Reply-To`/`References`; the owner's
+thread is untouched. View recipients read without a reply box, and only the
+owner keeps tags and side-panel edits. To verify, share a thread from one
+account at each level, open it from a second account under Shared, reply at
+edit, and check the reply arrives in the first account's conversation.
+
 The load gate and message body share one live thread source in both hosts. Cached
 body rendering should not wait for a second thread fetch, optional References,
 or inbox metadata. Inbox-dependent actions stay gated while ownership is unknown;

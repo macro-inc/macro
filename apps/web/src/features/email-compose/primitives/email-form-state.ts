@@ -124,9 +124,18 @@ export function createEmailFormState(
 
   // The inbox this compose sends from. Defaults to the inbox that owns the
   // thread/draft; the user can change it via the "from" selector.
-  const [selectedInboxId, setSelectedInboxId] = createSignal<
-    string | undefined
-  >((draft ?? replyingTo)?.link_id ?? undefined);
+  const [chosenInboxId, setSelectedInboxId] = createSignal<string | undefined>(
+    draft?.link_id ?? undefined
+  );
+  // A thread shared with the viewer sits in its owner's inbox, which the viewer
+  // cannot send from; that default yields to the composer's own-inbox fallback.
+  const replyInboxId = () => {
+    const inboxId = replyingTo?.link_id;
+    const inboxes = context.inboxes();
+    if (inboxes.length === 0) return inboxId;
+    return inboxes.some((inbox) => inbox.id === inboxId) ? inboxId : undefined;
+  };
+  const selectedInboxId = () => chosenInboxId() ?? replyInboxId();
   // Reply logic ("did I send this?") must be judged against the inbox the
   // message is sent from, not the account's primary email — otherwise replying
   // from a secondary or delegated inbox misclassifies the sender and picks the
@@ -141,7 +150,7 @@ export function createEmailFormState(
       .inboxes()
       .find(
         (inbox) =>
-          inbox.id === (selectedInboxId() ?? (draft ?? replyingTo)?.link_id)
+          inbox.id === (chosenInboxId() ?? (draft ?? replyingTo)?.link_id)
       );
   const senderEmail = () => {
     const choice = senderChoice();
