@@ -13,10 +13,11 @@
 //! stops it, and app launch resumes any configured daemon the user has not
 //! stopped.
 //!
-//! GUI apps on macOS inherit launchd's minimal `PATH`, where user-installed
-//! CLIs (`claude`, `codex`, `npm`) are invisible. Every macrod invocation runs
-//! with the user's login-shell `PATH` so detection matches what a terminal
-//! would see.
+//! GUI apps on macOS inherit launchd's minimal environment, where
+//! user-installed CLIs (`claude`, `codex`, `npm`) and the credentials and
+//! config their shells export are invisible. Every macrod invocation runs with
+//! the user's interactive login-shell environment, so detection and agent
+//! authentication match what a terminal would see.
 
 use std::path::PathBuf;
 use std::process::Stdio;
@@ -147,37 +148,125 @@ fn emit_status(app: &AppHandle, status: &MacrodStatus) {
     }
 }
 
-/// The user's login-shell `PATH`, resolved once. `None` when it cannot be
-/// read (non-unix, odd shells); callers fall back to the process `PATH`.
+/// Brackets the shell's `env` output, so rc-file banners are never parsed.
+#[cfg(any(unix, test))]
+const ENV_START: &str = "__MACRO_SHELL_ENV_START__";
+#[cfg(any(unix, test))]
+const ENV_END: &str = "__MACRO_SHELL_ENV_END__";
+
+/// How long an interactive login shell may take to print its environment.
+#[cfg(unix)]
+const SHELL_ENV_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Shell bookkeeping that describes the probe shell, not the user's setup.
+const SHELL_ONLY_VARS: [&str; 5] = ["_", "SHLVL", "PWD", "OLDPWD", "PATH"];
+
+/// The environment of the user's interactive login shell, resolved once:
+/// what a terminal sees, including variables exported from `.zshrc` or
+/// `.bashrc` that a non-interactive login shell skips. Agents read their
+/// credentials and config from there (`CLAUDE_CODE_OAUTH_TOKEN`,
+/// `CLAUDE_CONFIG_DIR`, `ANTHROPIC_API_KEY`, ...); without them Claude Code
+/// falls back to stale stored credentials and fails to authenticate. Empty
+/// when it cannot be read (non-unix, odd shells, a hung rc file).
+fn login_shell_env() -> &'static [(String, String)] {
+    static RESOLVED: OnceLock<Vec<(String, String)>> = OnceLock::new();
+    RESOLVED.get_or_init(|| {
+        #[cfg(unix)]
+        {
+            read_login_shell_env().unwrap_or_default()
+        }
+        #[cfg(not(unix))]
+        {
+            Vec::new()
+        }
+    })
+}
+
+#[cfg(unix)]
+fn read_login_shell_env() -> Option<Vec<(String, String)>> {
+    use std::io::Read as _;
+
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_owned());
+    // `env` output is shell-agnostic (fish would join "$PATH" with spaces).
+    let script = format!("echo {ENV_START}; env; echo {ENV_END}");
+    let mut child = std::process::Command::new(&shell)
+        .args(["-i", "-l", "-c", &script])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let mut stdout = child.stdout.take()?;
+    let reader = std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        let _ = stdout.read_to_end(&mut bytes);
+        bytes
+    });
+    let deadline = std::time::Instant::now() + SHELL_ENV_TIMEOUT;
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            _ => {
+                tracing::warn!(shell, "login shell environment timed out");
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+        }
+    }
+    let bytes = reader.join().ok()?;
+    let vars = parse_shell_env(&String::from_utf8_lossy(&bytes));
+    (!vars.is_empty()).then_some(vars)
+}
+
+/// Parse `env` output between the markers. A line that does not start a
+/// `NAME=` assignment continues the previous value (a multi-line variable).
+#[cfg(any(unix, test))]
+fn parse_shell_env(output: &str) -> Vec<(String, String)> {
+    let Some((_, rest)) = output.split_once(&format!("{ENV_START}\n")) else {
+        return Vec::new();
+    };
+    let Some((body, _)) = rest.rsplit_once(ENV_END) else {
+        return Vec::new();
+    };
+    let mut vars: Vec<(String, String)> = Vec::new();
+    for line in body.lines() {
+        // bash prints exported functions as `BASH_FUNC_name%%=() {`; they
+        // start an entry (so their body lines don't join the previous
+        // variable) that is dropped below.
+        let assignment = line.split_once('=').filter(|(name, _)| {
+            let name = name
+                .strip_prefix("BASH_FUNC_")
+                .and_then(|function| function.strip_suffix("%%"))
+                .unwrap_or(name);
+            !name.is_empty()
+                && !name.starts_with(|c: char| c.is_ascii_digit())
+                && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        });
+        match (assignment, vars.last_mut()) {
+            (Some((name, value)), _) => vars.push((name.to_owned(), value.to_owned())),
+            (None, Some((_, value))) => {
+                value.push('\n');
+                value.push_str(line);
+            }
+            (None, None) => {}
+        }
+    }
+    vars.retain(|(name, _)| !name.starts_with("BASH_FUNC_"));
+    vars
+}
+
+/// The user's login-shell `PATH`, when the shell environment was read.
 fn login_shell_path() -> Option<&'static str> {
-    static RESOLVED: OnceLock<Option<String>> = OnceLock::new();
-    RESOLVED
-        .get_or_init(|| {
-            #[cfg(unix)]
-            {
-                let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_owned());
-                // `env` output is shell-agnostic (fish would join "$PATH" with
-                // spaces); take the last PATH= line in case a login banner
-                // happens to contain one.
-                let output = std::process::Command::new(&shell)
-                    .args(["-l", "-c", "env"])
-                    .stdin(Stdio::null())
-                    .output()
-                    .ok()?;
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                stdout
-                    .lines()
-                    .rev()
-                    .find_map(|line| line.strip_prefix("PATH="))
-                    .map(str::to_owned)
-                    .filter(|path| !path.is_empty())
-            }
-            #[cfg(not(unix))]
-            {
-                None
-            }
-        })
-        .as_deref()
+    login_shell_env()
+        .iter()
+        .rev()
+        .find(|(name, _)| name == "PATH")
+        .map(|(_, path)| path.as_str())
+        .filter(|path| !path.is_empty())
 }
 
 /// The `PATH` macrod runs with: login shell first, then this process's own,
@@ -248,6 +337,12 @@ fn macrod_command(app: &AppHandle) -> Result<tokio::process::Command, String> {
     let binary =
         macrod_binary(app).ok_or_else(|| "macrod is not bundled with this build".to_owned())?;
     let mut command = tokio::process::Command::new(binary);
+    command.envs(
+        login_shell_env()
+            .iter()
+            .filter(|(name, _)| !SHELL_ONLY_VARS.contains(&name.as_str()))
+            .map(|(name, value)| (name.as_str(), value.as_str())),
+    );
     command.env("PATH", macrod_path_env());
     if crate::AppEnvironment::current() == crate::AppEnvironment::Development {
         // A config created by this daemon must target the dev deployment,
@@ -650,5 +745,28 @@ mod tests {
         let seconds: Vec<u64> = (1..=9).map(|n| restart_delay(n).as_secs()).collect();
         assert_eq!(seconds, [1, 2, 4, 8, 16, 32, 60, 60, 60]);
         assert_eq!(restart_delay(u32::MAX), RESTART_MAX_DELAY);
+    }
+
+    #[test]
+    fn shell_env_skips_banners_and_keeps_multiline_values() {
+        let output = format!(
+            "Welcome! PATH=/banner\n{ENV_START}\nPATH=/usr/bin:/bin\n\
+             CLAUDE_CODE_OAUTH_TOKEN=token\nNOTE=line one\nline two\n\
+             BASH_FUNC_greet%%=() {{  echo hi\n}}\nEMPTY=\n{ENV_END}\nbye\n"
+        );
+        assert_eq!(
+            parse_shell_env(&output),
+            [
+                ("PATH".to_owned(), "/usr/bin:/bin".to_owned()),
+                ("CLAUDE_CODE_OAUTH_TOKEN".to_owned(), "token".to_owned()),
+                ("NOTE".to_owned(), "line one\nline two".to_owned()),
+                ("EMPTY".to_owned(), String::new()),
+            ]
+        );
+    }
+
+    #[test]
+    fn shell_env_without_markers_is_empty() {
+        assert!(parse_shell_env("PATH=/usr/bin\n").is_empty());
     }
 }
