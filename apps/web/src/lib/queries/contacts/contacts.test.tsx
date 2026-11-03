@@ -20,6 +20,7 @@ import { fetchGraphqlContacts } from './graphql';
 
 const mocks = vi.hoisted(() => ({
   client: vi.fn(),
+  host: vi.fn(),
   flag: (): boolean => true,
   authenticated: (): boolean => true,
   flagLoading: (): boolean => false,
@@ -27,6 +28,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: mocks.client,
+  getGraphqlSoupCacheHost: mocks.host,
 }));
 vi.mock('@core/constant/featureFlags', () => ({
   enableGraphqlSoup: {},
@@ -77,7 +79,7 @@ function mount<T>(factory: () => T): T {
   return value;
 }
 
-function setup(viewer = VIEWER) {
+function setup(viewer = VIEWER, cached = true) {
   let stored: unknown;
   let server: ContactsQuery = {
     user: { id: viewer, contacts: [viewer, CONTACT] },
@@ -115,13 +117,14 @@ function setup(viewer = VIEWER) {
       url: 'https://contacts.invalid/graphql',
       fetch,
       exchanges: [
-        normalizedCacheExchange(host, {
-          extractIdentity: () => viewer,
-        }),
+        ...(cached
+          ? [normalizedCacheExchange(host, { extractIdentity: () => viewer })]
+          : []),
         fetchExchange,
       ],
     });
   mocks.client.mockReturnValue(client());
+  mocks.host.mockReturnValue(cached ? host : undefined);
   return {
     write,
     fetch,
@@ -171,6 +174,52 @@ describe('normal GraphQL contacts', () => {
     expect(mocks.rest).not.toHaveBeenCalled();
   });
 
+  it('reads the persisted catalog without a network request for cache-only SQL reads', async () => {
+    const s = setup();
+    await invalidateContacts();
+    s.offline();
+    expect(await fetchContacts('cache-only')).toEqual({
+      contacts: [VIEWER, CONTACT],
+    });
+    expect(s.fetch).toHaveBeenCalledOnce();
+  });
+
+  it('answers cache-only SQL reads without waiting for a mounted network refresh', async () => {
+    const s = setup();
+    await invalidateContacts();
+    const started = Promise.withResolvers<void>();
+    const network = Promise.withResolvers<Response>();
+    s.fetch.mockImplementationOnce(async () => {
+      started.resolve();
+      return network.promise;
+    });
+    mount(() => useContactsQuery());
+    await started.promise;
+    const cleanup = dispose;
+    dispose = () => {
+      network.resolve(
+        new Response(
+          JSON.stringify({
+            data: { user: { id: VIEWER, contacts: [VIEWER] } },
+          }),
+          { headers: { 'content-type': 'application/json' } }
+        )
+      );
+      cleanup?.();
+    };
+    expect(await fetchContacts('cache-only')).toEqual({
+      contacts: [VIEWER, CONTACT],
+    });
+  });
+
+  it('rejects cache-only reads promptly when the normalized cache becomes unavailable', async () => {
+    const s = setup(VIEWER, false);
+    await expect(fetchContacts('cache-only')).rejects.toThrow(
+      'Contacts cache unavailable'
+    );
+    expect(s.fetch).not.toHaveBeenCalled();
+  });
+
   it('follows an invalidation received during a refresh with a fresh membership read', async () => {
     const s = setup();
     const started = Promise.withResolvers<void>();
@@ -198,6 +247,36 @@ describe('normal GraphQL contacts', () => {
     expect(await fetchContacts()).toEqual({ contacts: [VIEWER] });
   });
 
+  it.each([false, true])(
+    'does not lose an invalidation during startup hydration (cache=%s)',
+    async (cached) => {
+      const s = setup(VIEWER, cached);
+      const started = Promise.withResolvers<void>();
+      const initial = Promise.withResolvers<Response>();
+      s.fetch.mockImplementationOnce(async () => {
+        started.resolve();
+        return initial.promise;
+      });
+      const state = mount(() => useContactsQuery());
+      await started.promise;
+      s.server([VIEWER]);
+      const refreshing = invalidateContacts();
+      initial.resolve(
+        new Response(
+          JSON.stringify({
+            data: { user: { id: VIEWER, contacts: [VIEWER, CONTACT] } },
+          }),
+          {
+            headers: { 'content-type': 'application/json' },
+          }
+        )
+      );
+      await refreshing;
+      expect(state.data?.contacts).toEqual([VIEWER]);
+      expect(s.fetch).toHaveBeenCalledTimes(2);
+    }
+  );
+
   it('updates mounted contacts when invalidation changes catalog membership', async () => {
     const s = setup();
     const state = mount(() => useContactsQuery());
@@ -206,6 +285,7 @@ describe('normal GraphQL contacts', () => {
     s.server([VIEWER]);
     await invalidateContacts();
     expect(state.data?.contacts).toEqual([VIEWER]);
+    expect(s.fetch).toHaveBeenCalledTimes(2);
   });
 
   it('does not report hydration complete until the catalog persists', async () => {

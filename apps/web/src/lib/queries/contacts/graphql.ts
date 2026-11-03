@@ -5,10 +5,20 @@ import {
   ContactsDocument,
   type ContactsQuery,
 } from '@service-storage/graphql/generated/graphql';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
-import { createRequest, type RequestPolicy } from '@urql/core';
+import {
+  getGraphqlSoupCacheHost,
+  getGraphqlSoupClient,
+} from '@service-storage/graphql-soup';
+import {
+  createRequest,
+  getOperationName,
+  type RequestPolicy,
+  stringifyDocument,
+} from '@urql/core';
 import type { Accessor } from 'solid-js';
 import { createTrailingRefetch } from '../trailing-refetch';
+
+const CONTACTS_REQUEST_CONTEXT_KEY = '__macroContactsRequest';
 
 function selectContacts(data: ContactsQuery) {
   // GraphQL errors can carry partial data even for a non-null catalog field.
@@ -16,6 +26,27 @@ function selectContacts(data: ContactsQuery) {
   if (!Array.isArray(contacts))
     throw new Error('Contacts read returned no catalog');
   return { contacts };
+}
+
+/** Cache RPC data is untyped; retain the generated document's complete shape. */
+function parseCachedContacts(data: unknown): ContactsQuery | undefined {
+  if (!data || typeof data !== 'object' || !('user' in data)) return;
+  const user = data.user;
+  if (
+    !user ||
+    typeof user !== 'object' ||
+    !('id' in user) ||
+    typeof user.id !== 'string' ||
+    !('contacts' in user)
+  )
+    return;
+  const contacts = user.contacts;
+  if (
+    !Array.isArray(contacts) ||
+    !contacts.every((id: unknown): id is string => typeof id === 'string')
+  )
+    return;
+  return { user: { id: user.id, contacts } };
 }
 
 /** One viewer-scoped catalog shared by startup hydration and contact pickers. */
@@ -39,32 +70,68 @@ export function fetchGraphqlContacts(
 ) {
   return Telemetry.span('contacts.load', async (span) => {
     const client = getGraphqlSoupClient();
-    const operation = client.createRequestOperation(
-      'query',
-      createRequest(ContactsDocument, {}),
-      { requestPolicy }
-    );
-    const fetch = operation.context.fetch;
-    const result = await client
-      .executeRequestOperation({
-        ...operation,
-        context: {
-          ...operation.context,
-          ...(fetch && {
-            fetch: (input: RequestInfo | URL, init?: RequestInit) =>
-              span.run(() => fetch(input, init)),
-          }),
-        },
-      })
-      .toPromise();
-    if (result.error || !result.data) {
-      span.error('Contacts read failed');
-      throw result.error ?? new Error('Contacts read returned no data');
+    let data: ContactsQuery | undefined;
+    if (requestPolicy === 'cache-only' || requestPolicy === 'cache-first') {
+      const host = getGraphqlSoupCacheHost();
+      if (host && !host.disabled) {
+        // Do not join a mounted urql query: its pending network response can
+        // delay a local SQL pass even when the complete catalog is on disk.
+        const cached = await host.readQuery({
+          query: stringifyDocument(ContactsDocument),
+          operationName: getOperationName(ContactsDocument),
+          variables: {},
+        });
+        if (host.disabled || getGraphqlSoupCacheHost() !== host)
+          throw new Error('Contacts cache replaced');
+        if (cached.kind === 'hit') data = parseCachedContacts(cached.data);
+      }
+      if (!data && requestPolicy === 'cache-only')
+        throw new Error('Contacts cache unavailable');
     }
-    const metadata = normalizedCacheResultMetadata(result);
-    if (metadata?.source === 'live-network') await metadata.persistence;
-    span.setAttr('contacts.count', result.data.user.contacts.length);
-    return selectContacts(result.data);
+    if (!data) {
+      const requestId = Symbol();
+      const read = () => {
+        const operation = client.createRequestOperation(
+          'query',
+          createRequest(ContactsDocument, {}),
+          { requestPolicy, [CONTACTS_REQUEST_CONTEXT_KEY]: requestId }
+        );
+        const fetch = operation.context.fetch;
+        return client
+          .executeRequestOperation({
+            ...operation,
+            context: {
+              ...operation.context,
+              ...(fetch && {
+                fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+                  span.run(() => fetch(input, init)),
+              }),
+            },
+          })
+          .toPromise();
+      };
+      let result = await read();
+      // urql can join a request that began before this invalidation. Let that
+      // request finish, then read again so the old snapshot cannot satisfy refresh.
+      if (
+        requestPolicy === 'network-only' &&
+        result.operation.context[CONTACTS_REQUEST_CONTEXT_KEY] !== requestId &&
+        getGraphqlSoupClient() === client
+      ) {
+        result = await read();
+      }
+      if (result.error || !result.data) {
+        span.error('Contacts read failed');
+        throw result.error ?? new Error('Contacts read returned no data');
+      }
+      const metadata = normalizedCacheResultMetadata(result);
+      if (metadata?.source === 'live-network') await metadata.persistence;
+      data = result.data;
+    }
+    if (getGraphqlSoupClient() !== client)
+      throw new Error('Contacts read superseded');
+    span.setAttr('contacts.count', data.user.contacts.length);
+    return selectContacts(data);
   });
 }
 
