@@ -311,6 +311,8 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
           return;
         }
         if (state.conditions || state.beforeSavedView) clearSavedViewState();
+        // Another account's view is not this one's: leave its URL too.
+        if (id && accountChanged) navigateToList(undefined);
       }
     )
   );
