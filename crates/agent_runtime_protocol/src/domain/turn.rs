@@ -74,6 +74,21 @@ pub struct TurnCompleteNotification {
     pub outcome: TurnOutcome,
 }
 
+/// The runtime session backing this ACP session was deliberately ended by
+/// the person or agent driving it, such as its terminal tab being closed.
+///
+/// An optional extension. A runtime sends it only for an explicit closure
+/// fact it observed, never for a disconnect, crash, timeout, or other loss it
+/// cannot attribute to a deliberate close. Receivers treat repeats as one
+/// fact; the ACP session may still be resumed by a later prompt.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcNotification)]
+#[notification(method = "_session/closed")]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeSessionClosedNotification {
+    /// ACP session whose runtime session was closed.
+    pub session_id: SessionId,
+}
+
 /// Recorded terminal outcome of a reconstructed turn.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]

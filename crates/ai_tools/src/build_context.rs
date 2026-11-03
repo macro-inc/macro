@@ -502,14 +502,6 @@ pub async fn build_tool_service_context_from_env(
         (*entity_access_service).clone(),
     );
 
-    let project_tool_context = crate::tool_context::build_project_tool_context(
-        pool.clone(),
-        macro_event_broker.clone(),
-        entity_access_service.clone(),
-        document_tool_context.service.clone(),
-        user_email_service.clone(),
-    );
-
     let anthropic_tool_context = build_anthropic_tool_context();
 
     let skill_tool_context = crate::tool_context::build_skill_tool_context(
@@ -535,6 +527,14 @@ pub async fn build_tool_service_context_from_env(
             ),
         ),
         crate::tool_context::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+    );
+    let project_tool_context = crate::tool_context::build_project_tool_context(
+        pool.clone(),
+        macro_event_broker.clone(),
+        entity_access_service.clone(),
+        document_tool_context.service.clone(),
+        user_email_service.clone(),
+        databases_tool_context.service.clone(),
     );
     let databases_sql_tool_context = crate::tool_context::build_databases_sql_tool_context(
         &databases_tool_context,
@@ -670,6 +670,10 @@ pub async fn build_tool_service_context_from_env(
     };
 
     Ok(ToolServiceContext {
+        memory_tool_context: crate::memory::build_memory_tool_context(
+            pool.clone(),
+            recorder.clone(),
+        ),
         connector_tool_context: crate::tool_context::build_connector_tool_context(
             pool.clone(),
             pipedream_client.clone(),

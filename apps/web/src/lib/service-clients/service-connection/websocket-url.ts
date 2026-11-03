@@ -1,6 +1,6 @@
 import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
-import { fetchToken } from '@core/util/fetchWithToken';
+import { ensureFreshSession } from '@core/util/fetchWithToken';
 import { getMacroApiToken } from '@service-auth/fetch';
 
 /** Resolve gateway credentials without initializing a connection. */
@@ -12,6 +12,6 @@ export async function resolveWsUrl() {
 
     return `${wsHost}?macro-api-token=${apiToken}`;
   }
-  await fetchToken();
+  await ensureFreshSession();
   return wsHost;
 }

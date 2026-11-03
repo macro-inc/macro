@@ -46,9 +46,15 @@ Re-exports [ApplyOpsOptions](../entities/databases/database/type-aliases/ApplyOp
 
 ***
 
-### CalendarNote
+### ArchiveCause
 
-Re-exports [CalendarNote](../entities/calendar/note/classes/CalendarNote.md)
+Re-exports [ArchiveCause](../../generated/agent-harness/types.gen/type-aliases/ArchiveCause.md)
+
+***
+
+### AutoArchiveOverrides
+
+Re-exports [AutoArchiveOverrides](../entities/agent-sessions/agent-session/type-aliases/AutoArchiveOverrides.md)
 
 ***
 
@@ -622,9 +628,27 @@ Re-exports [RoutineTriggerOptions](../entities/routines/routine/type-aliases/Rou
 
 ***
 
+### SavedFormResponse
+
+Re-exports [SavedFormResponse](../entities/forms/form/type-aliases/SavedFormResponse.md)
+
+***
+
+### SessionAutoArchive
+
+Re-exports [SessionAutoArchive](../entities/agent-sessions/agent-session/type-aliases/SessionAutoArchive.md)
+
+***
+
 ### SessionReview
 
 Re-exports [SessionReview](../entities/agent-sessions/review/classes/SessionReview.md)
+
+***
+
+### SessionView
+
+Re-exports [SessionView](../entities/agent-sessions/view/type-aliases/SessionView.md)
 
 ***
 

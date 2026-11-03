@@ -1,3 +1,4 @@
+import { usePending } from '@app/observability/flow';
 import { QueuedSendStatus } from '../../email-compose/queued-send-status';
 import '@entity/composed/ListEntity.css';
 import {
@@ -127,6 +128,7 @@ export function EmailList(props: EmailListProps) {
     selectedThread,
     filterByTag,
   } = useEmailView();
+  usePending('email.list.items', () => source.isLoading());
   const panel = useSplitPanelOrThrow();
 
   function openEntity(
@@ -306,6 +308,7 @@ export function EmailList(props: EmailListProps) {
   const actionState = toEntityActionListState({
     controller: list,
     getEntity: (row) => (row.kind === 'entity' ? row.entity : undefined),
+    positions: source.positions,
     collapse: {
       // Signal and Noise remove archived threads; finish the row animation first.
       enabled: () =>

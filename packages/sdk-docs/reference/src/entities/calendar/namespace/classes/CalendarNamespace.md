@@ -132,24 +132,6 @@ A handle to a calendar event by id, for driving mutations.
 
 ***
 
-### noteDocuments()
-
-> **noteDocuments**(`query?`): `Promise`\<\{ `documents`: \{ `document`: [`Document`](../../../documents/document/classes/Document.md); `name`: `string`; \}[]; `teams`: \{ `name`: `string`; `team`: [`Team`](../../../teams/team/classes/Team.md); \}[]; \}\>
-
-Find up to 30 owned markdown documents for meeting notes, plus available extra team audiences.
-
-#### Parameters
-
-| Parameter | Type | Default value |
-| ------ | ------ | ------ |
-| `query?` | `string` | `''` |
-
-#### Returns
-
-`Promise`\<\{ `documents`: \{ `document`: [`Document`](../../../documents/document/classes/Document.md); `name`: `string`; \}[]; `teams`: \{ `name`: `string`; `team`: [`Team`](../../../teams/team/classes/Team.md); \}[]; \}\>
-
-***
-
 ### occurrences()
 
 > **occurrences**(`options`): `AsyncGenerator`\<\{ `calendarName`: `string` \| `undefined`; `contributesToAvailability`: `boolean` \| `undefined`; `event`: [`CalendarEvent`](../../event/classes/CalendarEvent.md); `inbox`: `string` \| `undefined`; `occurrence`: [`CalendarOccurrence`](../../../../../generated/storage/types.gen/type-aliases/CalendarOccurrence.md); `role`: [`CalendarEventRole`](../type-aliases/CalendarEventRole.md) \| `undefined`; \}, `any`, `any`\>

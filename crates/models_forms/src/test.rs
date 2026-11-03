@@ -60,7 +60,10 @@ fn a_form_detail_reads_as_the_web_client_expects() {
             branding: FormBranding::default(),
             created_at: Utc.with_ymd_and_hms(2026, 9, 1, 9, 0, 0).unwrap(),
             updated_at: Utc.with_ymd_and_hms(2026, 9, 2, 9, 0, 0).unwrap(),
+            project_id: None,
             is_hidden_in_drive: false,
+            responses_visible: false,
+            anonymous: false,
         },
         access: FormAccess::Edit,
         table_gone: false,
@@ -117,12 +120,15 @@ fn a_form_detail_reads_as_the_web_client_expects() {
                 "respondentColumnId": null,
                 "audience": "members",
                 "tallyVisible": false,
+                "responsesVisible": false,
+                "anonymous": false,
                 "status": "open",
                 "closesAt": "2026-10-03T17:00:00Z",
                 "confirmationMessage": "",
                 "branding": { "logoFileId": null, "coverFileId": null, "accentColor": null },
                 "createdAt": "2026-09-01T09:00:00Z",
                 "updatedAt": "2026-09-02T09:00:00Z",
+                "projectId": null,
                 "isHiddenInDrive": false,
             },
             "access": "edit",
@@ -243,7 +249,8 @@ fn a_create_request_names_its_source_by_kind() {
     assert_eq!(
         new.source,
         FormSource::New {
-            is_hidden_in_drive: false
+            is_hidden_in_drive: false,
+            anonymous: false,
         }
     );
 
@@ -254,7 +261,8 @@ fn a_create_request_names_its_source_by_kind() {
     assert_eq!(
         hidden.source,
         FormSource::New {
-            is_hidden_in_drive: true
+            is_hidden_in_drive: true,
+            anonymous: false,
         }
     );
 
@@ -349,10 +357,12 @@ fn a_tally_names_options_and_checkbox_states() {
                 TallyBucket {
                     value: TallyValue::Option { option: CONTRACTOR },
                     count: 2,
+                    voters: Some(vec!["macro|a@example.com".to_string()]),
                 },
                 TallyBucket {
                     value: TallyValue::Checkbox { checked: true },
                     count: 1,
+                    voters: None,
                 },
             ],
         }],
@@ -364,7 +374,7 @@ fn a_tally_names_options_and_checkbox_states() {
                 "question": "00000000-0000-0000-0000-000000000091",
                 "responses": 3,
                 "buckets": [
-                    {"value": {"kind": "option", "option": "00000000-0000-0000-0000-0000000000c0"}, "count": 2},
+                    {"value": {"kind": "option", "option": "00000000-0000-0000-0000-0000000000c0"}, "count": 2, "voters": ["macro|a@example.com"]},
                     {"value": {"kind": "checkbox", "checked": true}, "count": 1},
                 ],
             }],
@@ -414,7 +424,10 @@ fn a_form_takes_responses_while_open_and_before_it_closes() {
         branding: FormBranding::default(),
         created_at: now,
         updated_at: now,
+        project_id: None,
         is_hidden_in_drive: false,
+        responses_visible: false,
+        anonymous: false,
     };
     assert!(form(FormStatus::Open, None).accepts_responses_at(now));
     assert!(
@@ -445,7 +458,10 @@ fn a_listed_form_names_the_callers_access_beside_the_form() {
             branding: FormBranding::default(),
             created_at: now,
             updated_at: now,
+            project_id: None,
             is_hidden_in_drive: false,
+            responses_visible: false,
+            anonymous: false,
         },
         access: FormAccess::View,
     };
@@ -463,12 +479,15 @@ fn a_listed_form_names_the_callers_access_beside_the_form() {
                 "respondentColumnId": null,
                 "audience": "public",
                 "tallyVisible": true,
+                "responsesVisible": false,
+                "anonymous": false,
                 "status": "closed",
                 "closesAt": null,
                 "confirmationMessage": "Thanks",
                 "branding": { "logoFileId": null, "coverFileId": null, "accentColor": null },
                 "createdAt": "2026-09-01T09:00:00Z",
                 "updatedAt": "2026-09-01T09:00:00Z",
+                "projectId": null,
                 "isHiddenInDrive": false,
             },
             "access": "view",
@@ -536,7 +555,10 @@ fn form_and_response_schemas_require_every_field_they_always_serialize() {
         branding: FormBranding::default(),
         created_at: now,
         updated_at: now,
+        project_id: None,
         is_hidden_in_drive: false,
+        responses_visible: false,
+        anonymous: false,
     };
     let response = FormResponse {
         id: FormResponseId::from_uuid(Uuid::from_u128(0xe1)),
@@ -593,7 +615,10 @@ fn a_form_sends_its_branding_with_its_facts() {
         },
         created_at: now,
         updated_at: now,
+        project_id: None,
         is_hidden_in_drive: false,
+        responses_visible: false,
+        anonymous: false,
     };
     assert_eq!(
         serde_json::to_value(&form).unwrap()["branding"],

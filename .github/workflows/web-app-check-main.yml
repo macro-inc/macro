@@ -17,6 +17,7 @@ jobs:
       should_run: ${{ steps.filter.outputs.should_run }}
       codegen_changed: ${{ steps.filter.outputs.codegen_changed }}
       i18n_changed: ${{ steps.filter.outputs.i18n_changed }}
+      database_grid_changed: ${{ steps.filter.outputs.database_grid_changed }}
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -52,6 +53,7 @@ jobs:
             - 'crates/agent_code_mode/src/domain/documentation.json'
             - 'crates/agent_code_mode/SKILL.md'
             - 'crates/ai_tools/src/display_results/schema.generated.json'
+            - 'crates/dynamic_ui/src/present_view.schema.generated.json'
             - '.github/actions/setup-reqs-web/**'
           codegen_changed:
             - 'crates/**/*.rs'
@@ -69,6 +71,8 @@ jobs:
             - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'
             - 'apps/web/src/components/ui/components/Dropdown.tsx'
             - 'apps/web/src/features/settings/**'
+          database_grid_changed:
+            - 'apps/web/src/features/database/**'
   android-native-check:
     name: Android Native Check
     runs-on: namespace-profile-linux-tiny-no-cache
@@ -421,6 +425,12 @@ jobs:
       run: |-
         bunx playwright install-deps chromium
         just test-i18n-browser
+      working-directory: apps/web
+    - name: Database Grid Browser Tests
+      if: needs.path-check.outputs.database_grid_changed == 'true'
+      run: |-
+        bunx playwright install-deps chromium
+        just test-database-browser
       working-directory: apps/web
     - name: Teardown Nix
       if: always()

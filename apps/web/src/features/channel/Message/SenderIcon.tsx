@@ -26,12 +26,15 @@ export function SenderIcon(props: SenderIconProps) {
 
   // Team bots render their uploaded avatar; first-party bots have none and
   // keep their brand mark, which UserIcon draws the same way the mention menu
-  // does.
+  // does. A post a user made through a client is that client's, so it shows
+  // the client's initial rather than the mark of the bot that carried it.
   const botSender = (): MessageSender | undefined => {
     const current = sender();
-    if (current.type !== 'bot' || firstPartyBotMark(current.id)) {
-      return undefined;
+    if (current.type !== 'bot') return undefined;
+    if (current.triggered_via) {
+      return { ...current, name: current.triggered_via, avatar_url: null };
     }
+    if (firstPartyBotMark(current.id)) return undefined;
     return current;
   };
 

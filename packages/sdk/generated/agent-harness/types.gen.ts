@@ -539,6 +539,11 @@ export type AgentSessionResponse = {
      */
     acpSessionId?: string | null;
     /**
+     * When the session was archived, or `None` while it is active.
+     */
+    archivedAt?: string | null;
+    archivedBy?: null | ArchiveCause;
+    /**
      * The bot running the agent.
      */
     botId: string;
@@ -566,10 +571,6 @@ export type AgentSessionResponse = {
      * at creation. Absent otherwise, so existing payloads are unchanged.
      */
     instructions?: string | null;
-    /**
-     * Whether the session is archived and read-only.
-     */
-    isArchived: boolean;
     /**
      * Model slug.
      */
@@ -701,6 +702,40 @@ export type AppConnectedRequest = {
      * The Pipedream app slug the owner connected, e.g. `notion`.
      */
     appSlug: string;
+};
+
+/**
+ * Who or what archived a session.
+ */
+export type ArchiveCause = 'user' | 'pull_request_merged' | 'runtime_closed';
+
+/**
+ * One session's choices over its owner's defaults. `null` follows the owner.
+ */
+export type AutoArchiveOverridesBody = {
+    /**
+     * Archive once the session's pull requests merge, or `null` to follow the owner.
+     */
+    onPullRequestMerged?: boolean | null;
+    /**
+     * Archive once the session's runtime session is deliberately closed, or `null` to follow
+     * the owner.
+     */
+    onRuntimeClosed?: boolean | null;
+};
+
+/**
+ * Which triggers archive the caller's sessions when a session has no choice of its own.
+ */
+export type AutoArchivePreferencesBody = {
+    /**
+     * Archive a session once every pull request linked to it is closed and at least one merged.
+     */
+    onPullRequestMerged: boolean;
+    /**
+     * Archive a session once the runtime session backing it is deliberately closed.
+     */
+    onRuntimeClosed: boolean;
 };
 
 export type BotId = string;
@@ -1018,9 +1053,10 @@ export type ConversationTurnState = 'queued' | 'running' | 'succeeded' | 'failed
  * say which bot and which directory, and must own that bot. Omitting it asks
  * for a managed session, whose runtime this deployment provisions. A managed
  * request may select an authorized persisted persona with `botId`; omitting
- * it uses the deployment's default coding persona. Fields describing someone
- * else's runtime must still be omitted rather than quietly ignored. Mixing
- * the two shapes is refused rather than guessed at.
+ * it uses the deployment's default coding persona, or Cursor when `repoUrl`
+ * is set. Fields describing someone else's runtime must still be omitted
+ * rather than quietly ignored. Mixing the two shapes is refused rather
+ * than guessed at.
  *
  * Clients serialize this, so both derives are used.
  */
@@ -1029,9 +1065,9 @@ export type CreateAgentSessionRequest = {
      * Bot the session runs for. On a managed request this optionally selects
      * a persisted persona the user owns, may use through team membership, or
      * can `@` mention in a shared channel; omitting it uses the deployment's
-     * default coding persona. On an external request, bot callers may omit it
-     * (their own identity is used) and must not name another bot; user callers
-     * must supply a bot they own.
+     * default coding persona, or Cursor when `repoUrl` is set. On an
+     * external request, bot callers may omit it (their own identity is used)
+     * and must not name another bot; user callers must supply a bot they own.
      */
     botId?: string | null;
     /**
@@ -1092,7 +1128,9 @@ export type CreateAgentSessionRequest = {
     /**
      * Explicit GitHub repository for a managed Cursor session, as one of the
      * urls `GET /agent-repositories` lists for the caller. Access is checked
-     * for the session owner. For external sessions this is informational:
+     * for the session owner. On a managed request that names no `botId`,
+     * this starts the session as Cursor — the only managed persona that
+     * honors a repository. For external sessions this is informational:
      * cloning it is the runtime operator's job.
      */
     repoUrl?: string | null;
@@ -1720,6 +1758,20 @@ export type PermissionAnswer = {
 };
 
 /**
+ * A view to present.
+ */
+export type PresentView = {
+    executionId?: null | ExecutionId;
+    /**
+     * A dynamic-UI view, in the format of the PresentView schema in
+     * ExecuteCode's description.
+     */
+    view: {
+        [key: string]: unknown;
+    };
+};
+
+/**
  * Request body for `POST /agent-sessions/preview`.
  *
  * Clients serialize this, so both derives are used.
@@ -2206,6 +2258,25 @@ export type SearchSuggestions = (QuerySearchSuggestions & {
 export type SearchType = 'all' | 'channels' | 'document-or-file' | 'task' | 'email' | 'calls' | 'folders' | 'agent' | 'calendar';
 
 /**
+ * A session's auto-archive settings and history.
+ */
+export type SessionAutoArchiveResponse = {
+    /**
+     * When a trigger first archived the session. Kept when a person restores it: a session
+     * archives itself at most once.
+     */
+    autoArchivedAt?: string | null;
+    /**
+     * The owner's defaults, which apply where the session has no choice of its own.
+     */
+    defaults: AutoArchivePreferencesBody;
+    /**
+     * The session's own choices.
+     */
+    overrides: AutoArchiveOverridesBody;
+};
+
+/**
  * The agent behind a session, as much of it as rendering a message needs.
  */
 export type SessionBot = {
@@ -2284,9 +2355,9 @@ export type SessionStatusDto = {
  */
 export type SetAgentSessionArchivedRequest = {
     /**
-     * The requested archive state.
+     * Archive the session, or restore it.
      */
-    isArchived: boolean;
+    archived: boolean;
 };
 
 export type SharePermissionV2 = {
@@ -2438,6 +2509,46 @@ export type WithAgentSessionId = {
      */
     id: string;
 };
+
+export type GetAgentAutoArchivePreferencesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/agent-auto-archive-preferences';
+};
+
+export type GetAgentAutoArchivePreferencesErrors = {
+    401: string;
+    500: string;
+};
+
+export type GetAgentAutoArchivePreferencesError = GetAgentAutoArchivePreferencesErrors[keyof GetAgentAutoArchivePreferencesErrors];
+
+export type GetAgentAutoArchivePreferencesResponses = {
+    200: AutoArchivePreferencesBody;
+};
+
+export type GetAgentAutoArchivePreferencesResponse = GetAgentAutoArchivePreferencesResponses[keyof GetAgentAutoArchivePreferencesResponses];
+
+export type PutAgentAutoArchivePreferencesData = {
+    body: AutoArchivePreferencesBody;
+    path?: never;
+    query?: never;
+    url: '/agent-auto-archive-preferences';
+};
+
+export type PutAgentAutoArchivePreferencesErrors = {
+    401: string;
+    500: string;
+};
+
+export type PutAgentAutoArchivePreferencesError = PutAgentAutoArchivePreferencesErrors[keyof PutAgentAutoArchivePreferencesErrors];
+
+export type PutAgentAutoArchivePreferencesResponses = {
+    200: AutoArchivePreferencesBody;
+};
+
+export type PutAgentAutoArchivePreferencesResponse = PutAgentAutoArchivePreferencesResponses[keyof PutAgentAutoArchivePreferencesResponses];
 
 export type DiscoverAgentCapabilitiesHandlerData = {
     body: DiscoverAgentCapabilitiesRequest;
@@ -3048,6 +3159,58 @@ export type SetAgentSessionArchivedResponses = {
 };
 
 export type SetAgentSessionArchivedResponse = SetAgentSessionArchivedResponses[keyof SetAgentSessionArchivedResponses];
+
+export type GetAgentSessionAutoArchiveData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/auto-archive';
+};
+
+export type GetAgentSessionAutoArchiveErrors = {
+    401: string;
+    403: string;
+    500: string;
+};
+
+export type GetAgentSessionAutoArchiveError = GetAgentSessionAutoArchiveErrors[keyof GetAgentSessionAutoArchiveErrors];
+
+export type GetAgentSessionAutoArchiveResponses = {
+    200: SessionAutoArchiveResponse;
+};
+
+export type GetAgentSessionAutoArchiveResponse = GetAgentSessionAutoArchiveResponses[keyof GetAgentSessionAutoArchiveResponses];
+
+export type PutAgentSessionAutoArchiveData = {
+    body: AutoArchiveOverridesBody;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/auto-archive';
+};
+
+export type PutAgentSessionAutoArchiveErrors = {
+    401: string;
+    403: string;
+    500: string;
+};
+
+export type PutAgentSessionAutoArchiveError = PutAgentSessionAutoArchiveErrors[keyof PutAgentSessionAutoArchiveErrors];
+
+export type PutAgentSessionAutoArchiveResponses = {
+    200: AutoArchiveOverridesBody;
+};
+
+export type PutAgentSessionAutoArchiveResponse = PutAgentSessionAutoArchiveResponses[keyof PutAgentSessionAutoArchiveResponses];
 
 export type GetAgentSessionChangesData = {
     body?: never;
@@ -3696,6 +3859,26 @@ export type AnswerAgentSessionToolApprovalResponses = {
 };
 
 export type AnswerAgentSessionToolApprovalResponse = AnswerAgentSessionToolApprovalResponses[keyof AnswerAgentSessionToolApprovalResponses];
+
+export type PresentSessionViewData = {
+    body: PresentView;
+    path: {
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/views';
+};
+
+export type PresentSessionViewErrors = {
+    400: unknown;
+    403: unknown;
+};
+
+export type PresentSessionViewResponses = {
+    204: void;
+};
+
+export type PresentSessionViewResponse = PresentSessionViewResponses[keyof PresentSessionViewResponses];
 
 export type ClassifyData = {
     body: ClassifyInputRequest;

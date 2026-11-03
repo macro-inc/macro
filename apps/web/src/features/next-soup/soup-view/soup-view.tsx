@@ -60,6 +60,7 @@ import {
   SoupEntityContextMenu,
 } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
+import { usePending } from '@app/observability/flow';
 import { usePreference } from '@app/preferences/use-preference';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
@@ -610,6 +611,9 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     isFetchingGroupPage,
     groupPageError,
   } = useSoupView();
+  usePending('list.items', source.isLoading);
+  usePending('list.search.remote', isSearchServiceLoading);
+  usePending('list.search.local', isLocalSearchSettling);
   const { hasActiveRefinements, hasHiddenItems, resetToTabDefaults } =
     useFilterRefinements();
 

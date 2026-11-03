@@ -139,10 +139,12 @@ export function startNativeDiagnostics(
   window.addEventListener('online', connectivity);
   window.addEventListener('offline', connectivity);
   heartbeat();
+  // This is a diagnostic breadcrumb, not a liveness lease. Visibility and
+  // connectivity transitions are still recorded immediately.
   const timer = setInterval(() => {
     // Background timer throttling is expected, not evidence of a hung frontend.
     if (document.visibilityState === 'visible') heartbeat();
-  }, 5000);
+  }, 30_000);
   return () => {
     clearInterval(timer);
     document.removeEventListener('visibilitychange', visibility);
