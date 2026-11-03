@@ -168,7 +168,7 @@ describe('AgentSession', () => {
           .status(),
     ]) {
       await expect(read()).rejects.toMatchObject({
-        name: 'MacroApiError',
+        name: 'MacroForbiddenError',
         status: 403,
         data: { message: 'Forbidden' },
       });
