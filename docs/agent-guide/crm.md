@@ -11,6 +11,11 @@ There are no built-in company views or Board/List layout. Companies and People
 are plain soup lists with the shared pagination. Existing personal/team saved
 views stay in the toolbar's Views menu.
 
+Opening a company or contact row in Companies or People clears its blue unread
+dot, including desktop preview activation, keyboard opening, and phone navigation.
+The read is saved in the background; a failed request restores the dot so opening
+it again can retry. Marking read does not mark the notification done.
+
 **Rollout:** Tasks, Email, Notes, Calls and Databases require PostHog `enable-crm-activity`
 (off by default; local override: `VITE_ENABLE_CRM_ACTIVITY=true`). CRM also uses
 this flag to decide whether to supply its task-composer preset; the shared
@@ -513,3 +518,10 @@ columns. Changing scope requires preparing again. Cancel stops preparation. CSV 
 quoted fields, original date timestamps and spreadsheet formula escaping.
 
 The existing CRM New menus use icons and muted descriptions for Company, Contact, and Pipeline. Pipeline availability and permissions are unchanged.
+
+For loading diagnostics (span names in the
+[observability guide](observability.md#navigation-and-view-phases)), switch
+sections and reopen a record: each restarts the `crm.company` / `crm.contact`
+flow, and disabled sources must not leave it waiting once metadata is ready.
+Traces hold opaque record ids and section categories, never names or addresses.
+Metadata errors may cancel the detail flow when the outer error panel replaces it.

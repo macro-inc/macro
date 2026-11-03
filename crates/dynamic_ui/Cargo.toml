@@ -1,0 +1,9 @@
+[package]
+name = "dynamic_ui"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+serde_json = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

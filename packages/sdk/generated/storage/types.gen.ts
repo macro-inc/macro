@@ -5,6 +5,11 @@ export type ClientOptions = {
 };
 
 /**
+ * A color as `#rrggbb`, kept in lowercase.
+ */
+export type AccentColor = string;
+
+/**
  * Ordered from least to most access top -> bottom
  */
 export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
@@ -315,6 +320,11 @@ export type AgentMcpServers = {
  * Last synchronized state of a session's linked GitHub pull request.
  */
 export type AgentPullRequestState = 'open' | 'draft' | 'closed' | 'merged';
+
+/**
+ * Who or what archived an agent session.
+ */
+export type AgentSessionArchiveCause = 'user' | 'pull_request_merged' | 'runtime_closed';
 
 /**
  * Filters for agent sessions.
@@ -1216,6 +1226,11 @@ export type Awareness = {
  * when the server relayed it so receivers can drop older relays.
  */
 export type AwarenessRelay = {
+    /**
+     * Whether the viewer's grant lets them edit; a viewer who cannot is
+     * shown as viewing.
+     */
+    canEdit: boolean;
     /**
      * The database the viewer is in.
      */
@@ -5070,6 +5085,10 @@ export type Database = {
      */
     owner_id: string;
     /**
+     * The folder it is filed in; `null` at the root.
+     */
+    project_id: string | null;
+    /**
      * Set when trashed.
      */
     trashed_at: string | null;
@@ -6026,6 +6045,16 @@ export type DocumentUpdatedMetadata = {
      * Whether share permissions were updated.
      */
     share_permission_updated: boolean;
+};
+
+/**
+ * Request body for duplicating a database.
+ */
+export type DuplicateDatabaseRequest = {
+    /**
+     * The copy's name; left out, "<name> copy".
+     */
+    name?: string | null;
 };
 
 export type EditAnchorRequest = EditPdfAnchorRequest & {
@@ -7742,9 +7771,19 @@ export type ForeignEntityFilters = {
  */
 export type Form = {
     /**
+     * Whether nobody, the owner included, can see who gave which response.
+     * Who responded is kept apart from the responses, only so nobody
+     * responds twice. Fixed once anyone has responded.
+     */
+    anonymous: boolean;
+    /**
      * Who may respond.
      */
     audience: Audience;
+    /**
+     * Its logo, cover image and accent color.
+     */
+    branding: FormBranding;
     /**
      * When it stops taking responses, if it does.
      */
@@ -7785,10 +7824,19 @@ export type Form = {
      */
     ownerId: string;
     /**
+     * The folder it is filed in; `null` at the root.
+     */
+    projectId: string | null;
+    /**
      * The person column each signed-in submission names its respondent in;
-     * `null` once deleted.
+     * `null` once deleted, and on a form created anonymous. An anonymous
+     * form never writes it.
      */
     respondentColumnId: string | null;
+    /**
+     * Whether people with View may read individual response rows.
+     */
+    responsesVisible: boolean;
     /**
      * Whether its owner closed it.
      */
@@ -7812,10 +7860,26 @@ export type Form = {
 };
 
 /**
- * The caller's level on a form: view responds, edit changes questions and
- * reads responses, owner also sets the audience, closes and trashes it.
+ * The caller's level on a form: view responds (and reads responses when
+ * they are shared), edit changes questions and reads responses, owner
+ * also sets the audience, closes and trashes it.
  */
 export type FormAccess = 'view' | 'edit' | 'owner';
+
+/**
+ * A form's logo, cover image and accent color, each unset by default.
+ */
+export type FormBranding = {
+    accentColor: null | AccentColor;
+    /**
+     * The static file shown as a banner across the top of the page.
+     */
+    coverFileId: string | null;
+    /**
+     * The static file shown as the logo above the title.
+     */
+    logoFileId: string | null;
+};
 
 /**
  * A ready collaborative form and the result of publishing its latest draft.
@@ -7858,7 +7922,7 @@ export type FormDetail = {
 /**
  * What went wrong with a forms request.
  */
-export type FormErrorCode = 'tableAlreadyHasForm' | 'notFound' | 'forbidden' | 'ownerOnly' | 'signInRequired' | 'closed' | 'tableGone' | 'alreadyResponded' | 'noResponse' | 'unknownQuestion' | 'repeatedAnswer' | 'missingAnswer' | 'invalidAnswer' | 'widgetMismatch' | 'fileUploadNeedsSignIn' | 'invalidLayout' | 'invalidName' | 'invalidSharing' | 'tallyHidden' | 'conflict' | 'internal';
+export type FormErrorCode = 'tableAlreadyHasForm' | 'notFound' | 'forbidden' | 'ownerOnly' | 'signInRequired' | 'closed' | 'tableGone' | 'alreadyResponded' | 'noResponse' | 'anonymousResponseFinal' | 'unknownQuestion' | 'repeatedAnswer' | 'missingAnswer' | 'invalidAnswer' | 'widgetMismatch' | 'fileUploadNeedsSignIn' | 'invalidLayout' | 'invalidName' | 'invalidSharing' | 'tallyHidden' | 'invalidBranding' | 'conflict' | 'internal';
 
 /**
  * Why a forms request was refused or failed.
@@ -8114,6 +8178,11 @@ export type FormSectionDetail = {
  * Where a new form's responses go.
  */
 export type FormSource = {
+    /**
+     * Make the form anonymous from the start: its table gets no
+     * Respondent column.
+     */
+    anonymous?: boolean;
     /**
      * Keep the form, and the database made for it, out of Drive, as
      * for a channel poll.
@@ -10709,8 +10778,7 @@ export type MessageTopicEvent = {
 };
 
 /**
- * A signed-in respondent's own response, with its answers as the row
- * holds them now.
+ * A signed-in respondent's own response.
  */
 export type MyResponse = {
     /**
@@ -10719,14 +10787,17 @@ export type MyResponse = {
      */
     answers: Array<Answer>;
     /**
-     * The form's booking step, while the saved row still passes the form's
-     * current required questions and gates.
+     * The form's booking step, while the saved row still passes the
+     * form's current required questions and gates.
      */
     booking?: UnlockedBooking;
+    kind: 'saved';
     /**
      * The ledger entry.
      */
     response: FormResponse;
+} | {
+    kind: 'anonymous';
 };
 
 /**
@@ -13011,6 +13082,11 @@ export type SoupAgentSessionSoupPropertiesField = {
     properties: Array<SoupProperty>;
 } & {
     /**
+     * When the session was archived, or `None` while it is active.
+     */
+    archivedAt?: string | null;
+    archivedBy?: null | AgentSessionArchiveCause;
+    /**
      * The bot running this session
      */
     botId: string;
@@ -13026,10 +13102,6 @@ export type SoupAgentSessionSoupPropertiesField = {
      * The agent session uuid
      */
     id: string;
-    /**
-     * Whether the session is archived and read-only.
-     */
-    isArchived: boolean;
     /**
      * The user-facing name of the session
      */
@@ -15046,6 +15118,13 @@ export type TallyBucket = {
      * The value.
      */
     value: TallyValue;
+    /**
+     * Who chose it, as Macro user ids in submission order: present only
+     * for the form's editors, or its viewers when it shares its responses,
+     * and never when it hides respondents. Rows no signed-in respondent
+     * submitted count without a voter.
+     */
+    voters?: Array<string> | null;
 };
 
 /**
@@ -15867,11 +15946,20 @@ export type UpdateCrmTeamSettingsRequest = {
 };
 
 /**
- * A change to a form's facts; what is left out stays. The description and
- * confirmation message take edit, the rest owner. A form is renamed
+ * A change to a form's facts; what is left out stays. The description,
+ * confirmation message and branding take edit, the rest owner. A form is renamed
  * through the entity mutation router.
  */
 export type UpdateForm = {
+    /**
+     * A new accent color, or `null` for the default.
+     */
+    accentColor?: string | null;
+    /**
+     * Whether nobody can see who gave which response; refused once anyone
+     * has responded.
+     */
+    anonymous?: boolean;
     /**
      * Who may respond from now on.
      */
@@ -15885,9 +15973,21 @@ export type UpdateForm = {
      */
     confirmationMessage?: string;
     /**
+     * A new cover image, or `null` to remove it.
+     */
+    coverFileId?: string | null;
+    /**
      * Its new description.
      */
     description?: string;
+    /**
+     * A new logo, or `null` to remove it.
+     */
+    logoFileId?: string | null;
+    /**
+     * Whether people with View may read individual response rows.
+     */
+    responsesVisible?: boolean;
     /**
      * Open or close it.
      */
@@ -20118,6 +20218,31 @@ export type UndoDatabaseChangeResponses = {
 };
 
 export type UndoDatabaseChangeResponse = UndoDatabaseChangeResponses[keyof UndoDatabaseChangeResponses];
+
+export type DuplicateDatabaseData = {
+    body: DuplicateDatabaseRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/duplicate';
+};
+
+export type DuplicateDatabaseErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DuplicateDatabaseError = DuplicateDatabaseErrors[keyof DuplicateDatabaseErrors];
+
+export type DuplicateDatabaseResponses = {
+    201: Database;
+};
+
+export type DuplicateDatabaseResponse = DuplicateDatabaseResponses[keyof DuplicateDatabaseResponses];
 
 export type ImportDatabaseTableData = {
     body: ImportTable;

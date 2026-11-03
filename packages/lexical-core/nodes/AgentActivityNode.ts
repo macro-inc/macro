@@ -28,13 +28,38 @@ export const AGENT_ACTIVITY_STATUSES = [
 /** Where one step of an agent's work got to. */
 export type AgentActivityStatus = (typeof AGENT_ACTIVITY_STATUSES)[number];
 
+/**
+ * What a step put in front of the person: a view the agent presented. The
+ * same shape the session's fold gives its rows.
+ */
+export type AgentActivityCard = {
+  kind: 'view';
+  /** A dynamic-UI view, validated where it renders. */
+  view: unknown;
+};
+
 /** One step of work as the agent session's fold worded it. */
 export type AgentActivityRow = {
   id: string;
   label: string;
   detail?: string;
   status: AgentActivityStatus;
+  /**
+   * What the step put in front of the person. A card this version cannot
+   * read is kept but not shown, so a newer server's cards never invalidate
+   * the steps.
+   */
+  card?: AgentActivityCard | null;
 };
+
+/** Return whether a value is a card this version knows how to show. */
+export function isAgentActivityCard(
+  value: unknown
+): value is AgentActivityCard {
+  if (!value || typeof value !== 'object') return false;
+  const card = value as Record<string, unknown>;
+  return card.kind === 'view' && 'view' in card;
+}
 
 /**
  * The steps an agent took between two passages of a reply: the activity
@@ -76,7 +101,10 @@ function isAgentActivityRow(value: unknown): value is AgentActivityRow {
     typeof row.id === 'string' &&
     typeof row.label === 'string' &&
     (row.detail === undefined || typeof row.detail === 'string') &&
-    isAgentActivityStatus(row.status)
+    isAgentActivityStatus(row.status) &&
+    (row.card === undefined ||
+      row.card === null ||
+      typeof row.card === 'object')
   );
 }
 

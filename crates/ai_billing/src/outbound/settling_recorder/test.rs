@@ -198,6 +198,7 @@ async fn record_with_policy(
             chargeable_cents,
             Default::default(),
             0,
+            0,
             AiPricing::testing(),
         ),
     });

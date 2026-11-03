@@ -70,7 +70,12 @@ In every composer `Cmd+Shift+.`, `Cmd+Shift+,` and `Cmd+Shift+D` discard the
 draft exactly like its trash button, `Cmd+Shift+U` opens the attach picker, and
 `Cmd+Shift+X`, `7`, `8` and `9` apply strikethrough, numbered list, bulleted
 list and quote. Check discard from both a reply (the reply closes) and
-standalone compose (the view goes back), with focus in the body.
+standalone compose (the view goes back), with focus in the body. The same
+three keys discard the drafts on the focused or selected rows of a list (Email
+or a soup view) that carry the Draft badge. The thread keeps its row and its
+place, even though its sort time falls back to the last real message, until
+the tab, filters, or sort change; only the badge and preview change back to
+that message. Check it on a reply draft in All: the row must not move.
 
 Star and mute feedback reports what happened to the write. With GraphQL Soup
 enabled, a star queued while offline toasts that it is waiting to sync (for
@@ -519,10 +524,13 @@ In the new Email view, ordinary row activation opens the thread inside
 `/app/component/mail`. On desktop the thread's header has a Back arrow instead
 of breadcrumbs; it returns to the filtered list (hidden in the reading pane,
 where the list is already beside the thread). The subject, tags and
-participants stay put while only the messages scroll. Pressing `Escape` in the open thread
-with focus outside any input does the same once there is nothing left to unwind
-(an open reply, an expanded body, or a focused message each take one `Escape`
-first); the list keeps the row you came from focused and comes back at the same
+participants stay put while only the messages scroll. The full subject, including
+its last word beside the title action, supports text selection. Pressing `Escape`
+in the open thread with focus outside any input returns to the originating list
+once there is nothing left to unwind (an open reply, an expanded body, or a
+focused message each take one `Escape` first). In the reading pane, it restores
+list focus without closing the thread. The list keeps the row you came from
+focused and comes back at the same
 scroll position, scrolling only if j/k in the thread moved focus off screen. If
 the focused row leaves the list without a list `e` (a reply in Signal marks it
 done, or another device archives it), focus moves to the row that took its

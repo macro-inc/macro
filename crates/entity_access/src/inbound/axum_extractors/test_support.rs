@@ -292,6 +292,7 @@ pub(super) fn user_scoped_bot_authentication() -> BotAuthentication {
         acting_user: Some(MacroUserAuthentication {
             origin: macro_authorization::CredentialOrigin::Bot,
             agent_id: None,
+            agent_via: None,
             macro_user_id: MacroUserIdStr::try_from(BOT_ACTING_USER_ID.to_string())
                 .expect("valid bot acting user id"),
             user_context: user_context_with_organization(

@@ -1,32 +1,47 @@
 import { CollapsibleSection } from '@app/components/view-shell';
-import { cn } from '@ui';
+import { t } from '@app/lib/i18n';
+import DotsSixVerticalIcon from '@icon/system/regular/dots-six-vertical.svg';
+import { createDraggable } from '@thisbeyond/solid-dnd';
+import { Button, cn, Tooltip } from '@ui';
 import { type JSX, Show } from 'solid-js';
+import type { ChannelSectionKey } from '../../../types';
+import type { useSectionReorder } from './useSectionReorder';
 
 /** Shared heading for built-in and custom Chat sections. */
 export function ChannelSectionHeading(props: {
   id: string;
   label: string;
-  title?: string;
+  tooltip?: string;
   open: boolean;
   focused: boolean;
   unreadCount: number;
   onToggle: () => void;
   badge?: JSX.Element;
+  dragHandle?: JSX.Element;
   children?: JSX.Element;
 }) {
   return (
     <CollapsibleSection.Root open={props.open} onOpenChange={props.onToggle}>
       <CollapsibleSection.Header
-        class={cn('rounded-lg pr-0', props.focused && 'bg-hover text-ink')}
+        class={cn(
+          'relative rounded-lg pr-0',
+          props.focused && 'bg-hover text-ink'
+        )}
       >
+        {props.dragHandle}
         <CollapsibleSection.Trigger
           id={props.id}
           role="treeitem"
           tabIndex={-1}
-          title={props.title}
           class={cn('flex-1', props.focused && 'text-ink')}
         >
-          <span class="min-w-0 truncate">{props.label}</span>
+          <Tooltip
+            as="span"
+            class="relative z-20 min-w-0"
+            label={props.tooltip ?? props.label}
+          >
+            <span class="truncate">{props.label}</span>
+          </Tooltip>
           {props.badge}
           <CollapsibleSection.Indicator />
           <Show when={props.unreadCount > 0}>
@@ -36,5 +51,57 @@ export function ChannelSectionHeading(props: {
         <div class="flex shrink-0 items-center">{props.children}</div>
       </CollapsibleSection.Header>
     </CollapsibleSection.Root>
+  );
+}
+
+/** Keep disclosure clicks separate from section dragging and keyboard reordering. */
+export function ChannelSectionDragHandle(props: {
+  section: ChannelSectionKey;
+  label: string;
+  reorder: ReturnType<typeof useSectionReorder>;
+}) {
+  const draggable = createDraggable(`${props.reorder.scope}:${props.section}`, {
+    dragType: 'channel-section',
+    dndScope: props.reorder.scope,
+    section: props.section,
+    get name() {
+      return props.label;
+    },
+    overlayContent: () => (
+      <div class="w-56 p-1">
+        <div class="flex min-w-0 items-center gap-2 text-xs font-medium text-ink">
+          <DotsSixVerticalIcon class="size-3.5 shrink-0 text-ink-muted" />
+          <span class="truncate">{props.label}</span>
+        </div>
+        <p class="mt-2 border-t border-edge-muted pt-2 text-xs text-ink-muted">
+          {t('channelSections.reorderingSection')}
+        </p>
+      </div>
+    ),
+  });
+
+  return (
+    <Button
+      ref={draggable.ref}
+      {...draggable.dragActivators}
+      variant="ghost"
+      size="icon-xs"
+      class="absolute -left-(--sidebar-gutter) top-1 z-10 cursor-grab opacity-0 group-hover/rail-section:opacity-100 focus-visible:opacity-100 active:cursor-grabbing"
+      aria-label={t('channelSections.reorderSection', { name: props.label })}
+      tooltip={t('channelSections.reorderSectionHint')}
+      onClick={(event: MouseEvent) => event.stopPropagation()}
+      onKeyDown={(event: KeyboardEvent) => {
+        if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        props.reorder.move(props.section, event.key === 'ArrowUp' ? -1 : 1);
+      }}
+    >
+      <DotsSixVerticalIcon class="size-3 -translate-x-1" />
+    </Button>
   );
 }

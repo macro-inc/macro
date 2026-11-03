@@ -8,33 +8,56 @@ import {
 } from './config';
 import { ATTR_DEPLOYMENT_ENVIRONMENT, CONSOLE_PREFIX } from './constants';
 import { Logging } from './logging';
-import type { Span } from './span';
-import { Tracing } from './tracing';
+import { keepsClass, type SamplingClass, TraceSampling } from './sampling';
+import type { Span, TraceContext } from './span';
+import { type SpanOptions, Tracing } from './tracing';
 
 type SpanOperation<T> = (span: Span) => Promise<T>;
 
 export class Telemetry {
   static readonly #tracing = new Tracing();
   static readonly #logging = new Logging();
+  static readonly #sampling = new TraceSampling();
   static #initialization: Promise<void> | undefined;
 
   private constructor() {}
 
-  static readonly config = new TelemetryRuntimeConfig();
+  static readonly config = new TelemetryRuntimeConfig(Telemetry.#sampling);
 
-  /** Initialize providers once, after the optional async enablement decision. */
-  static init(config: TelemetryInitConfig): Promise<void> {
+  /** Initialize providers once, with an optional buffer while enablement resolves. */
+  static init<Classes extends string = SamplingClass>(
+    config: TelemetryInitConfig<Classes>
+  ): Promise<void> {
     Telemetry.#initialization ??= Telemetry.#initialize(config);
     return Telemetry.#initialization;
   }
 
+  /**
+   * Start a span in the active trace. When that trace is dropped by sampling,
+   * the span starts its own trace if its `sampling` class is kept (always,
+   * without one) and is dropped otherwise.
+   */
   static span<T>(name: string, operation: SpanOperation<T>): Promise<T>;
-  static span(name: string): Span;
   static span<T>(
     name: string,
+    options: SpanOptions,
+    operation: SpanOperation<T>
+  ): Promise<T>;
+  static span(name: string, options?: SpanOptions): Span;
+  static span<T>(
+    name: string,
+    optionsOrOperation?: SpanOptions | SpanOperation<T>,
     operation?: SpanOperation<T>
   ): Span | Promise<T> {
-    return Telemetry.#runSpan(Telemetry.#tracing.span(name), operation);
+    if (typeof optionsOrOperation === 'function')
+      return Telemetry.#runSpan(
+        Telemetry.#tracing.span(name),
+        optionsOrOperation
+      );
+    return Telemetry.#runSpan(
+      Telemetry.#tracing.span(name, optionsOrOperation),
+      operation
+    );
   }
 
   /**
@@ -57,18 +80,22 @@ export class Telemetry {
     );
   }
 
-  /** Start an HTTP client span. Callers must end the returned span. */
-  static clientSpan(name: string): Span {
-    return Telemetry.#tracing.clientSpan(name);
+  /**
+   * Capture at synchronous transport/queue admission, before its first await.
+   * Prefer a known Span directly; a captured context creates/ends no span.
+   */
+  static captureContext(): TraceContext {
+    return Telemetry.#tracing.captureContext();
   }
 
   /** Record a point-in-time sample; timestamp is Unix time in milliseconds. */
   static recordSample(
     name: string,
     attributes: Attributes,
-    timestamp: number
+    timestamp: number,
+    sampling?: SamplingClass
   ): void {
-    Telemetry.#tracing.recordSample(name, attributes, timestamp);
+    Telemetry.#tracing.recordSample(name, attributes, timestamp, sampling);
   }
 
   static debug(message: string, attributes?: LogAttributes): void {
@@ -113,21 +140,47 @@ export class Telemetry {
     });
   }
 
-  static async #initialize(config: TelemetryInitConfig): Promise<void> {
-    try {
-      if (!(await config.enabled())) return;
-    } catch (error) {
-      console.warn(`${CONSOLE_PREFIX} Failed to resolve enablement`, error);
-      return;
-    }
-
+  static async #initialize<Classes extends string>(
+    config: TelemetryInitConfig<Classes>
+  ): Promise<void> {
+    // A single shared decision gates both the buffered tracing exporter and logs.
+    const enabled = Telemetry.#enabled(config);
+    const tracingConfig = { ...config, enabled: () => enabled };
     const resource = resourceFromAttributes({
       ...config.resourceAttributes,
       [ATTR_SERVICE_NAME]: config.serviceName,
       [ATTR_DEPLOYMENT_ENVIRONMENT]: config.environment,
     });
     const getUserId = () => Telemetry.config.userId;
-    Telemetry.#tracing.init(config, resource, getUserId);
-    Telemetry.#logging.init(config, resource, getUserId);
+    const sampling = Telemetry.#sampling;
+    sampling.configure(config.sampling ?? {});
+    Telemetry.#tracing.init(tracingConfig, resource, getUserId, sampling);
+    const allowed = await enabled;
+    const resolved =
+      allowed && config.startup
+        ? { ...config, ...(await config.startup) }
+        : config;
+    // Decided at enablement: spans buffered until now are placed at export.
+    const key = allowed ? config.samplingKey?.() : undefined;
+    sampling.decide(
+      (samplingClass, rate) =>
+        allowed &&
+        (resolved.recording === true ||
+          key === undefined ||
+          keepsClass(key, samplingClass, rate))
+    );
+    if (!allowed) return;
+    Telemetry.#logging.init(resolved, resource, getUserId);
+  }
+  static async #enabled<Classes extends string>(
+    config: TelemetryInitConfig<Classes>
+  ): Promise<boolean> {
+    try {
+      const [enabled] = await Promise.all([config.enabled(), config.startup]);
+      return enabled;
+    } catch (error) {
+      console.warn(`${CONSOLE_PREFIX} Failed to resolve enablement`, error);
+      return false;
+    }
   }
 }

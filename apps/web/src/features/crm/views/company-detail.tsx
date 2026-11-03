@@ -1,3 +1,4 @@
+import { TraceFlow, usePending } from '@app/observability/flow';
 import { SidePanel } from '@components/app/side-panel';
 import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
 import { CrmListSkeleton } from '../components/list-state';
@@ -36,14 +37,31 @@ import {
  * calls. Properties, sharing, and references open in the floating
  * information panel.
  */
-export function Company(props: {
+type CompanyProps = {
   companyId: string;
   section?: CompanySection;
   headerToggle?: boolean;
   onHidden?: () => void;
   onOpenContact?: (contact: CompanyContact) => void;
   onOpenPipeline?: (pipelineId: string) => void;
-}) {
+};
+
+export function Company(props: CompanyProps) {
+  return (
+    <TraceFlow
+      name="crm.company"
+      key={() => `${props.companyId}:${props.section ?? 'overview'}`}
+      attributes={{
+        'company.id': props.companyId,
+        'crm.section': props.section ?? 'overview',
+      }}
+    >
+      <CompanyContent {...props} />
+    </TraceFlow>
+  );
+}
+
+function CompanyContent(props: CompanyProps) {
   const context = useCrmContext();
   onCleanup(
     context.registerTaskComposerRecord(() => ({
@@ -53,7 +71,8 @@ export function Company(props: {
   );
   const listsEnabled = context.listsEnabled();
   const pipelinesEnabled = context.pipelinesEnabled();
-  const { company, contacts } = useCompanyQuery(() => props.companyId);
+  const { company, contacts, query } = useCompanyQuery(() => props.companyId);
+  usePending('crm.record', () => query.isLoading);
   const isTeamAdmin = useIsTeamAdmin();
   const hiddenMutation = useSetCompanyHiddenMutation();
   const section = () => props.section ?? 'overview';
