@@ -18038,10 +18038,11 @@ export const handlerResponse = zod
   .describe('The deterministic starter document ids for the current user.');
 
 /**
- * @summary Lists the built-in system skills. System skills are static, code-defined
-AI instructions (see the `system_skills` crate); they surface in the
-skills menu and AI skill tools like user skills, but have no document
-behind them, so clients must not offer to open them.
+ * @summary Lists the built-in system skills offered in the skills menu. System skills
+are static, code-defined AI instructions (see the `system_skills` crate);
+they surface in the skills menu and AI skill tools like user skills, but
+have no document behind them, so clients must not offer to open them.
+Agent-only skills are left out.
  */
 export const getSystemSkillsHandlerResponse = zod
   .object({

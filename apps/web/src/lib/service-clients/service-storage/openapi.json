@@ -10251,7 +10251,7 @@
     "/documents/system_skills": {
       "get": {
         "tags": ["document"],
-        "summary": "Lists the built-in system skills. System skills are static, code-defined\nAI instructions (see the `system_skills` crate); they surface in the\nskills menu and AI skill tools like user skills, but have no document\nbehind them, so clients must not offer to open them.",
+        "summary": "Lists the built-in system skills offered in the skills menu. System skills\nare static, code-defined AI instructions (see the `system_skills` crate);\nthey surface in the skills menu and AI skill tools like user skills, but\nhave no document behind them, so clients must not offer to open them.\nAgent-only skills are left out.",
         "operationId": "get_system_skills_handler",
         "responses": {
           "200": {
