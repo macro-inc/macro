@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_linked_account SET lease_epoch = lease_epoch + 1 WHERE id = $1\n            RETURNING user_id, identity_jid, state, lease_epoch",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "identity_jid",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "lease_epoch",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "040e92a2ed637aa0b708b0de368cf0da1916841cdf19defc8005b43f9683b516"
+}

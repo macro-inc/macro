@@ -382,6 +382,7 @@ async fn an_answer_the_thread_may_not_carry_points_at_the_session() {
         sender_id: channel_sender::ChannelSender::new_from_user(
             MacroUserIdStr::try_from_email("user@example.com").unwrap(),
         ),
+        triggered_via: None,
         triggered_by: None,
         bot_profile: None,
         mentions: vec![],
@@ -500,6 +501,7 @@ async fn shared_thread_and_dm_snapshots_omit_raw_tool_details() {
                     sender_id: channel_sender::ChannelSender::new_from_user(
                         MacroUserIdStr::try_from_email("user@example.com").unwrap(),
                     ),
+                    triggered_via: None,
                     triggered_by: None,
                     bot_profile: None,
                     mentions: vec![],
@@ -563,10 +565,12 @@ async fn shared_thread_and_dm_snapshots_omit_raw_tool_details() {
 #[test]
 fn a_stored_step_keeps_the_view_it_presented() {
     use agent_fold::domain::model::{ActivityCard, ActivityRow, Segment};
-    let view = serde_json::json!({
-        "title": "Launch notes",
-        "widgets": [{ "type": "md", "markdown": "Shipped." }]
-    });
+    let view = dynamic_ui::View {
+        title: Some("Launch notes".to_owned()),
+        widgets: vec![dynamic_ui::Widget::Md {
+            markdown: "Shipped.".to_owned(),
+        }],
+    };
     let segments = vec![ProjectedSegment {
         segment: Segment {
             index: 0,

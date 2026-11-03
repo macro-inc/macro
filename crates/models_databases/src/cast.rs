@@ -42,6 +42,8 @@ pub enum CastKind {
     Boolean,
     /// A date-time.
     Date,
+    /// A span from one date-time to another.
+    DateRange,
     /// A URL.
     Link,
     /// Options.
@@ -67,6 +69,7 @@ impl From<ColumnKind> for CastKind {
             ColumnKind::Number => CastKind::Number,
             ColumnKind::Boolean => CastKind::Boolean,
             ColumnKind::Date => CastKind::Date,
+            ColumnKind::DateRange => CastKind::DateRange,
             ColumnKind::Link => CastKind::Link,
             ColumnKind::Select { multi } | ColumnKind::SelectNumber { multi } => {
                 CastKind::Select { multi }
@@ -79,12 +82,13 @@ impl From<ColumnKind> for CastKind {
 }
 
 /// The types a column is offered to change to, in menu order.
-pub const TARGETS: [ColumnKind; 10] = [
+pub const TARGETS: [ColumnKind; 11] = [
     ColumnKind::Text,
     ColumnKind::Number,
     ColumnKind::Select { multi: false },
     ColumnKind::Select { multi: true },
     ColumnKind::Date,
+    ColumnKind::DateRange,
     ColumnKind::Boolean,
     ColumnKind::Link,
     ColumnKind::Entity {
@@ -114,6 +118,8 @@ pub enum ColumnTypeName {
     Boolean,
     /// `date`.
     Date,
+    /// `date_range`.
+    DateRange,
     /// `link`.
     Link,
     /// `select`.
@@ -136,6 +142,7 @@ impl ColumnKind {
             ColumnKind::Number => ColumnTypeName::Number,
             ColumnKind::Boolean => ColumnTypeName::Boolean,
             ColumnKind::Date => ColumnTypeName::Date,
+            ColumnKind::DateRange => ColumnTypeName::DateRange,
             ColumnKind::Link => ColumnTypeName::Link,
             ColumnKind::Select { .. } => ColumnTypeName::Select,
             ColumnKind::SelectNumber { .. } => ColumnTypeName::SelectNumber,
@@ -191,7 +198,7 @@ impl schemars::JsonSchema for SpelledColumnType {
         schemars::json_schema!({
             "type": "string",
             "description": "A column type as SQL spells it: text, number, boolean, date, link, \
-        select, select_number, tag, entity(KIND) or relation, with [] when a select or reference \
+        select, select_number, tag, date_range, entity(KIND) or relation, with [] when a select or reference \
         column holds several values (select[], entity(USER)).",
         })
     }
@@ -204,6 +211,7 @@ impl CastKind {
             CastKind::Text | CastKind::Link => ValueKind::Text,
             CastKind::Number => ValueKind::Number,
             CastKind::Date => ValueKind::Date,
+            CastKind::DateRange => ValueKind::DateRange,
             CastKind::Boolean => ValueKind::Checkbox,
             CastKind::Select { .. } => ValueKind::Options,
             CastKind::Entity { .. } | CastKind::Relation => ValueKind::Entities,
@@ -221,13 +229,14 @@ const NUMBER_TO_DATE: &str = "Numbers aren't dates.";
 const NUMBER_TO_CHECKBOX: &str = "Numbers aren't checkboxes.";
 const NUMBER_TO_URL: &str = "Numbers aren't URLs.";
 const FROM_CHECKBOX: &str = "A checkbox can only become text.";
-const FROM_DATE: &str = "A date can only become text.";
+const FROM_DATE: &str = "A date can only become text or a date range.";
+const FROM_DATE_RANGE: &str = "A date range can only become text.";
 const FROM_URL: &str = "A URL can only become text or a single select.";
 
 /// What changing a column of kind `from` to kind `to` does to its values.
 pub fn cast(from: CastKind, to: CastKind, contents: Contents) -> Cast {
     use Cast::{Checked, Never, Safe};
-    use CastKind::{Boolean, Date, Entity, Link, Number, Relation, Select, Text};
+    use CastKind::{Boolean, Date, DateRange, Entity, Link, Number, Relation, Select, Text};
 
     match (from, to) {
         _ if contents == Contents::Empty => Safe,
@@ -243,24 +252,30 @@ pub fn cast(from: CastKind, to: CastKind, contents: Contents) -> Cast {
         (_, Entity { .. }) => Never(TO_REFERENCES),
 
         (Text, Text) => Safe,
-        (Text, Number | Date | Boolean | Link | Select { .. }) => Checked,
+        (Text, Number | Date | DateRange | Boolean | Link | Select { .. }) => Checked,
 
         (Number, Text | Number | Select { .. }) => Safe,
-        (Number, Date) => Never(NUMBER_TO_DATE),
+        (Number, Date | DateRange) => Never(NUMBER_TO_DATE),
         (Number, Boolean) => Never(NUMBER_TO_CHECKBOX),
         (Number, Link) => Never(NUMBER_TO_URL),
 
         (Boolean, Text | Boolean) => Safe,
         (Boolean, _) => Never(FROM_CHECKBOX),
 
-        (Date, Text | Date) => Safe,
+        (Date, Text | Date | DateRange) => Safe,
         (Date, _) => Never(FROM_DATE),
 
+        (DateRange, Text | DateRange) => Safe,
+        (DateRange, _) => Never(FROM_DATE_RANGE),
+
         (Select { multi: false }, Text | Select { .. }) => Safe,
-        (Select { multi: false }, Number | Link | Date | Boolean) => Checked,
+        (Select { multi: false }, Number | Link | Date | DateRange | Boolean) => Checked,
 
         (Select { multi: true }, Select { multi: true }) => Safe,
-        (Select { multi: true }, Text | Select { .. } | Number | Link | Date | Boolean) => Checked,
+        (
+            Select { multi: true },
+            Text | Select { .. } | Number | Link | Date | DateRange | Boolean,
+        ) => Checked,
 
         (Link, Text | Link) => Safe,
         (Link, Select { multi: false }) => Checked,

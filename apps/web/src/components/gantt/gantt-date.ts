@@ -1,7 +1,8 @@
 import { match } from 'ts-pattern';
 
 export type GanttDate = string | Date | null | undefined;
-export type GanttScale = 'day' | 'week' | 'month';
+/** `hour` is the zoom past `day` that a chart showing hours reaches. */
+export type GanttScale = 'hour' | 'day' | 'week' | 'month';
 export type GanttInterval = { start: GanttDate; end?: GanttDate };
 /** Calendar-day ordinals, with an exclusive end. */
 export type GanttRange = { start: number; end: number };
@@ -71,6 +72,7 @@ export function formatGanttMonth(
 
 export function ganttPixelsPerDay(scale: GanttScale): number {
   return match(scale)
+    .with('hour', () => 1_152)
     .with('day', () => 40)
     .with('week', () => 20)
     .with('month', () => 6)
@@ -169,7 +171,10 @@ function nextMonth(day: number): number {
   return ordinal(date.getUTCFullYear(), date.getUTCMonth() + 1, 1);
 }
 
-/** Generate only visible ticks; long schedules do not create one node per calendar day. */
+/**
+ * Generate only visible ticks; long schedules do not create one node per
+ * calendar day. Days are the finest ticks: `hour` ticks days too.
+ */
 export function ganttTicks(
   range: GanttRange,
   scale: GanttScale,

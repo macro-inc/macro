@@ -1,6 +1,7 @@
 import { ViewSidebar } from '@app/components/view-shell';
 import { CreateMenuItem } from '@app/components/view-shell/CreateMenuItem';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
+import { t } from '@app/lib/i18n';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import BuildingsIcon from '@icon/system/regular/buildings.svg';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
@@ -29,12 +30,12 @@ export function CrmCreateMenu(props: {
         fallback={
           <Dropdown.Trigger
             as={ViewSidebar.Action}
-            aria-label="Create CRM record"
+            aria-label={t('create.createCrmRecord')}
           >
             <ViewSidebar.Icon>
               <PlusIcon class="size-4" />
             </ViewSidebar.Icon>
-            <span class="truncate">New</span>
+            <span class="truncate">{t('create.new')}</span>
             <ViewSidebar.Trailing>
               <CaretDownIcon class="size-3 shrink-0" />
             </ViewSidebar.Trailing>
@@ -44,7 +45,7 @@ export function CrmCreateMenu(props: {
         <Dropdown.Trigger
           as={ViewCreateButton}
           presentation={props.presentation ?? 'sidebar'}
-          aria-label="Create CRM record"
+          aria-label={t('create.createCrmRecord')}
           menu
         />
       </Show>
@@ -52,22 +53,22 @@ export function CrmCreateMenu(props: {
         <Dropdown.Group>
           <CreateMenuItem
             icon={BuildingsIcon}
-            title="Company"
-            description="Track an organization, its people, and your relationship with it."
+            title={t('create.companyLabel')}
+            description={t('create.guideCompany')}
             onSelect={props.onCreateCompany}
           />
           <CreateMenuItem
             icon={UserIcon}
-            title="Contact"
-            description="Keep a person's details and activity connected to their company."
+            title={t('create.contactLabel')}
+            description={t('create.guideContact')}
             onSelect={props.onCreateContact}
           />
           <Show when={props.pipeline}>
             {(pipeline) => (
               <CreateMenuItem
                 icon={TableIcon}
-                title="Pipeline"
-                description="Move records through stages to track deals or another repeatable process."
+                title={t('create.pipelineLabel')}
+                description={t('create.guidePipeline')}
                 disabled={pipeline().disabled}
                 onSelect={() => pipeline().onCreate()}
               />

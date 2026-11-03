@@ -8,7 +8,9 @@ export type ShareableEntityType =
   | 'project'
   | 'email'
   | 'form'
-  | 'agent_session';
+  | 'agent_session'
+  | 'call'
+  | 'database';
 
 /** The subset of {@link EntityData} the global share modal accepts. */
 export type ShareableEntityData = Extract<
@@ -32,6 +34,8 @@ export const isShareableEntityType = (
     type === 'chat' ||
     type === 'project' ||
     type === 'form' ||
-    type === 'agent_session'
+    type === 'agent_session' ||
+    type === 'call' ||
+    type === 'database'
   );
 };

@@ -7,7 +7,7 @@ import { throwOnErr } from '@core/util/result';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { schedulingClient } from '@service-email/scheduling';
 import { createLazyMemo } from '@solid-primitives/memo';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import type { BookingLinkMentionItem } from '../../../../utils/mentionsUtils';
 
@@ -27,32 +27,42 @@ function profileBookingLinks(
     .map((event) => ({ event, owner, profileId: profile.id }));
 }
 
+// Cached callbacks stay at module scope so they never retain the composer.
+function bookingSettingsQueryOptions(
+  scopeId: string,
+  teamId: string | undefined,
+  enabled: boolean
+) {
+  return queryOptions({
+    queryKey: schedulingKeys.settings(scopeId).queryKey,
+    queryFn: async () =>
+      (await throwOnErr(() => schedulingClient.settings(teamId))).profile,
+    enabled,
+    retry: false,
+    staleTime: 30_000,
+  });
+}
+
 export function useBookingLinkMention(options: UseBookingLinkMentionOptions) {
   const { enabled, searchTerm } = options;
 
   const shouldFetch = () => enabled() && searchTerm().trim() === '';
 
-  const personal = useQuery(() => ({
-    queryKey: schedulingKeys.settings('me').queryKey,
-    queryFn: async () =>
-      (await throwOnErr(() => schedulingClient.settings())).profile,
-    enabled: shouldFetch(),
-    retry: false,
-    staleTime: 30_000,
-  }));
+  const personal = useQuery(() =>
+    bookingSettingsQueryOptions('me', undefined, shouldFetch())
+  );
 
   const team = useCurrentTeamQuery(shouldFetch);
   const teamId = () => (team.isSuccess ? team.data?.team.id : undefined);
   const teamName = () => (team.isSuccess ? team.data?.team.name : undefined);
 
-  const teamProfile = useQuery(() => ({
-    queryKey: schedulingKeys.settings(teamId() ?? '').queryKey,
-    queryFn: async () =>
-      (await throwOnErr(() => schedulingClient.settings(teamId()))).profile,
-    enabled: shouldFetch() && !!teamId(),
-    retry: false,
-    staleTime: 30_000,
-  }));
+  const teamProfile = useQuery(() =>
+    bookingSettingsQueryOptions(
+      teamId() ?? '',
+      teamId(),
+      shouldFetch() && !!teamId()
+    )
+  );
 
   const bookingLinks = createLazyMemo((): BookingLinkMentionItem[] => {
     if (!shouldFetch()) return [];

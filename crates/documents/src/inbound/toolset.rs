@@ -32,6 +32,7 @@ use crate::{
     domain::ports::editing::{EditingWorkerService, EditorName},
     domain::ports::mentions::NoOpDocumentMentionTracker,
     domain::presentation::{NoPresentationFiles, PresentationFiles, PresentationService},
+    domain::word_document::WordDocumentFiles,
     inbound::toolset::{
         canvas::{ApplyCanvasEdits, EditCanvas, ReadCanvas, RenderCanvas},
         comment_on_text::CommentOnText,
@@ -62,7 +63,9 @@ use entity_access::domain::{
 };
 use lexical_client::LexicalClient;
 use macro_user_id::user_id::MacroUserIdStr;
-use messages::domain::{api::MessageServiceApi, ports::MessageError, service::MessageWrite};
+use messages::domain::{
+    api::MessageServiceApi, models::MessageAttribution, ports::MessageError, service::MessageWrite,
+};
 use model_owner::CreationPrincipal;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
@@ -109,7 +112,11 @@ pub struct DocumentToolContext<
     pub spreadsheet: Arc<crate::domain::spreadsheet::SpreadsheetService<DSvc, EDSvc>>,
 
     /// Reading and editing uploaded Word documents through their live copy.
-    pub word_documents: Arc<crate::domain::word_document::WordDocumentService<DSvc, EDSvc>>,
+    /// Hosts without a file store keep the default, which cannot seed a
+    /// document nobody has opened yet; wire one with
+    /// [`Self::with_word_document_files`].
+    pub word_documents:
+        Arc<crate::domain::word_document::WordDocumentService<DSvc, EDSvc, SyncServiceClient>>,
 
     /// Reading and editing PowerPoint presentations. Hosts without a file
     /// store keep the default, whose calls fail with a clear message; wire
@@ -151,6 +158,10 @@ pub struct DocumentToolContext<
     /// already read, so it hands the name over rather than have every tool
     /// look it up again.
     actor_name: Option<EditorName>,
+
+    /// The client the requesting user drives these tools through, such as an
+    /// MCP client, set with [`Self::with_via`]; comments carry it as a label.
+    via: Option<String>,
 }
 
 impl<
@@ -180,6 +191,7 @@ impl<
             recorder: self.recorder.clone(),
             actor: self.actor,
             actor_name: self.actor_name.clone(),
+            via: self.via.clone(),
         }
     }
 }
@@ -225,6 +237,8 @@ impl<
         let word_documents = Arc::new(crate::domain::word_document::WordDocumentService::new(
             service.clone(),
             editing.clone(),
+            sync_service_client.clone(),
+            Arc::new(crate::domain::word_document::NoWordDocumentFiles),
             document_permission_jwt_secret.clone(),
         ));
 
@@ -248,6 +262,7 @@ impl<
             recorder: Arc::new(ai_usage::NoOpUsageRecorder),
             actor: bot_id::MACRO_AI_BOT_ID,
             actor_name: None,
+            via: None,
         }
     }
 
@@ -272,6 +287,19 @@ impl<
     /// Store presentations the presentation tools read and edit through `files`.
     pub fn with_presentation_files(mut self, files: Arc<dyn PresentationFiles>) -> Self {
         self.presentations = Arc::new(PresentationService::new(files));
+        self
+    }
+
+    /// Read uploaded Word files through `files`, so the Word tools can seed a
+    /// document nobody has opened yet.
+    pub fn with_word_document_files(mut self, files: Arc<dyn WordDocumentFiles>) -> Self {
+        self.word_documents = Arc::new(crate::domain::word_document::WordDocumentService::new(
+            self.service.clone(),
+            self.editing.clone(),
+            self.sync_service_client.clone(),
+            files,
+            self.document_permission_jwt_secret.clone(),
+        ));
         self
     }
 
@@ -312,6 +340,23 @@ impl<
     pub fn with_actor_name(mut self, name: &str) -> Self {
         self.actor_name = EditorName::new(name);
         self
+    }
+
+    /// Label the comments these tools post with the client the requesting
+    /// user works through, such as an MCP client.
+    pub fn with_via(mut self, client: String) -> Self {
+        self.via = Some(client);
+        self
+    }
+
+    /// How a comment posted by these tools is attributed.
+    pub fn attribution(&self) -> MessageAttribution {
+        match &self.via {
+            Some(client) => MessageAttribution::ActingUserVia {
+                client: client.clone(),
+            },
+            None => MessageAttribution::ActingUser,
+        }
     }
 
     /// The name readers see on what these tools write as it happens - the

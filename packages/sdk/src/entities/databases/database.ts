@@ -190,6 +190,7 @@ function typeLabel(type: ColumnType): string {
     .with({ type: 'number' }, () => 'Number')
     .with({ type: 'boolean' }, () => 'Checkbox')
     .with({ type: 'date' }, () => 'Date')
+    .with({ type: 'date_range' }, () => 'Time range')
     .with({ type: 'link' }, () => 'URL')
     .with({ type: 'select', multi: true }, () => 'Multi-select')
     .with({ type: 'select', multi: false }, () => 'Select')
@@ -278,6 +279,24 @@ export class Database extends MacroEntity<DatabaseDetail> {
       await client.storage.createDatabase({ body: { name: options.name } }),
     );
     return new Database(client, record.id);
+  }
+
+  /**
+   * Copy the database into a new one the caller owns, with its tables,
+   * columns, views and rows. Its sharing, forms, webhooks and history stay
+   * with this one. Viewing it is enough.
+   */
+  async duplicate(options?: {
+    /** The copy's name; by default, "<name> copy". */
+    name?: string;
+  }): Promise<Database> {
+    const record = unwrap(
+      await this.client.storage.duplicateDatabase({
+        path: { id: this.id },
+        body: { name: options?.name },
+      }),
+    );
+    return new Database(this.client, record.id);
   }
 
   /** The databases the caller can see, each with the caller's access level. */

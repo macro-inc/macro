@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_send SET state = CASE WHEN state IN ('sending', 'unknown') THEN 'accepted' ELSE state END,\n                message_id = $4, claimed_epoch = NULL, updated_at = now()\n            WHERE chat_id = $1 AND user_id = $2 AND allocated_source_id = $3 AND dispatch_started_at IS NOT NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ee4b580ee7d25605ece8cece81721ab8b911a2fc3004d9bad60df48cffc493e3"
+}

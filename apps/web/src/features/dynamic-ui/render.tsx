@@ -8,7 +8,7 @@ import type {
   Widget,
   WidgetOf,
   WidgetType,
-} from './schema';
+} from './view';
 import { Cards } from './widgets/Cards';
 import { ChannelMessage } from './widgets/ChannelMessage';
 import { Events } from './widgets/Events';

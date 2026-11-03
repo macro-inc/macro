@@ -1,4 +1,4 @@
-import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
+import { parseLocalDate } from '@core/util/local-date';
 import type { EventTime } from '@service-storage/generated/schemas/eventTime';
 
 /** When an event happens, worded for a card or an agenda row. */

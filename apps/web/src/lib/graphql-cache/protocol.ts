@@ -127,20 +127,33 @@ export type EntityFilterCacheArgs = {
   /** Omit for exact evaluation; even an empty array requests reconciliation. */
   baseline?: Array<{ key: string; sortTimestamp: string }>;
   /** Explicit cached-Mail pagination, independent of server cursors. */
-  mail?: { view: 'ALL' | 'INBOX' | 'DRAFTS' | 'SENT'; cursor?: string };
+  mail?: {
+    view: 'ALL' | 'INBOX' | 'DRAFTS' | 'SENT';
+    /** Continue after this row. Valid across writes; not with `through`. */
+    cursor?: string;
+    /** A page's `endCursor`: read from the top through that row instead of `limit` rows. */
+    through?: string;
+  };
 };
 
 export type EntityFilterCacheResult =
   | LiveQueryUpdate
   | {
       kind: 'mail-page';
+      /** Complete engine-owned window; absent on older native runtimes. */
+      observationId?: string;
       revision: CacheRevision;
       keys: string[];
+      /** Server members with incomplete local metadata; absent on older native hosts. */
+      retainedKeys?: string[];
       /** View-correct timestamps aligned with keys, independent of cached previews. */
       sortTimestamps: string[];
       nextCursor: string | null;
+      /** Position of the last row. Absent from native engines that predate `through`. */
+      endCursor?: string | null;
       optimistic: boolean;
     }
+  /** The cursor's engine generation or query changed; on native engines that predate `through`, any write. */
   | { kind: 'stale-cursor'; revision: CacheRevision }
   | {
       kind: 'reconciled';
@@ -161,6 +174,10 @@ export type EntityFilterCacheResult =
 
 export type LiveQueryUpdate = {
   kind: 'live-query';
+  /** Native specification identity; absent from older installed binaries. */
+  registrationId?: string;
+  /** Immutable observation of this exact evaluated window; legacy hosts omit it. */
+  observationId?: string;
   revision: CacheRevision;
   reset: boolean;
   /** Omitted when the existing order remains valid. */
@@ -291,6 +308,8 @@ export type CacheRevisionResult = {
 };
 
 export const MAX_RECORD_SELECTION_PAGE_SIZE = 500;
+/** The most rows a Mail read `through` a position returns, as the engine caps it. */
+export const MAX_MAIL_THROUGH_ROWS = 5_000;
 export const MAX_CACHE_SEARCH_QUERY_BYTES = 512;
 export const MAX_NORMALIZED_RECORD_KEY_LENGTH = 1024;
 
@@ -587,12 +606,18 @@ export type CachedQueryInstanceWire = CachedQueryVariantWire & {
   value?: unknown;
 };
 
-/** Missing metadata means unknown (older runtimes); [] proves no search change. */
-export type HydrationSearchChanges = {
+/** Optional engine evidence. Missing fields preserve conservative invalidation. */
+export type CacheChangeHints = {
+  /** Windows proven unchanged. Missing IDs mean unknown, never unchanged. */
+  unchangedViews?: string[];
+  /** Known changed Quick Access buckets; [] proves no search change. */
   searchChangedBuckets?: string[];
 };
 
-export type HydrationResult = HydrationSearchChanges &
+/** Previous name, kept until the cache worker adopts CacheChangeHints. */
+export type HydrationSearchChanges = CacheChangeHints;
+
+export type HydrationResult = CacheChangeHints &
   (
     | { kind: 'data'; data: unknown; revision: CacheRevision }
     | { kind: 'void'; revision: CacheRevision }
@@ -606,7 +631,7 @@ export type RecordFieldChange =
     }
   | { kind: 'invalidate'; key: string };
 
-export type WriteResult = HydrationSearchChanges & {
+export type WriteResult = CacheChangeHints & {
   /** Effective view changes. Missing metadata requires a conservative reread. */
   fieldChanges?: RecordFieldChange[];
   /** Bindings omitted while committing an otherwise normalizable response. */
@@ -897,6 +922,7 @@ export type CacheRequest = { id: number } & (
 export type CacheResponseErrorCode =
   | 'owner-epoch-lost'
   | 'owner-lock-unavailable'
+  | 'owner-handoff-blocked'
   | 'admitted-enqueue-uncertain';
 
 /** Old-owner work was rejected after fenced engine loss and was not replayed. */
@@ -910,6 +936,14 @@ export const OWNER_EPOCH_LOST_ERROR_CODE: CacheResponseErrorCode =
  */
 export const OWNER_LOCK_UNAVAILABLE_ERROR_CODE: CacheResponseErrorCode =
   'owner-lock-unavailable';
+
+/**
+ * A read-only request was refused because the database was moving between
+ * owners and the foreground wait ran out. Storage is untouched and the engine
+ * keeps running, so the request can be retried once an owner is ready.
+ */
+export const OWNER_HANDOFF_BLOCKED_ERROR_CODE: CacheResponseErrorCode =
+  'owner-handoff-blocked';
 
 /** An admitted enqueue lost its reply and may already be durably queued. */
 export const ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE: CacheResponseErrorCode =
@@ -941,11 +975,11 @@ export type CachePush =
       kind: 'cache-changed';
       revision: CacheRevision;
       reset?: boolean;
-    } & HydrationSearchChanges)
+    } & CacheChangeHints)
   | ({
       kind: 'cache-hydrated';
       revision: CacheRevision;
-    } & HydrationSearchChanges)
+    } & CacheChangeHints)
   | { kind: 'mutation-settled'; settlement: MutationSettlement };
 
 export type WorkerMessage = CacheResponse | CachePush;
@@ -969,6 +1003,7 @@ export const isCacheResponseErrorCode = (
 ): value is CacheResponseErrorCode =>
   value === OWNER_EPOCH_LOST_ERROR_CODE ||
   value === OWNER_LOCK_UNAVAILABLE_ERROR_CODE ||
+  value === OWNER_HANDOFF_BLOCKED_ERROR_CODE ||
   value === ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE;
 
 /** Identifies a coordinator-fenced rejection from a lost owner epoch. */
@@ -986,6 +1021,14 @@ export const isOwnerLockUnavailableError = (
   value instanceof Error &&
   'errorCode' in value &&
   value.errorCode === OWNER_LOCK_UNAVAILABLE_ERROR_CODE;
+
+/** Identifies a read refused while the database moved between owners. */
+export const isOwnerHandoffBlockedError = (
+  value: unknown
+): value is Error & { errorCode: 'owner-handoff-blocked' } =>
+  value instanceof Error &&
+  'errorCode' in value &&
+  value.errorCode === OWNER_HANDOFF_BLOCKED_ERROR_CODE;
 
 /** Identifies an admitted enqueue whose durable outcome is unknown. */
 export const isAdmittedEnqueueUncertainError = (
@@ -1063,16 +1106,26 @@ export function isCachePush(value: unknown): value is CachePush {
           'revision',
           'reset',
           'searchChangedBuckets',
+          'unchangedViews',
         ]) &&
         isCacheRevision(value.revision) &&
         (value.reset === undefined || typeof value.reset === 'boolean') &&
+        (value.unchangedViews === undefined ||
+          isWireStringArray(value.unchangedViews)) &&
         (value.searchChangedBuckets === undefined ||
           isWireStringArray(value.searchChangedBuckets))
       );
     case 'cache-hydrated':
       return (
-        hasOnlyWireKeys(value, ['kind', 'revision', 'searchChangedBuckets']) &&
+        hasOnlyWireKeys(value, [
+          'kind',
+          'revision',
+          'searchChangedBuckets',
+          'unchangedViews',
+        ]) &&
         isCacheRevision(value.revision) &&
+        (value.unchangedViews === undefined ||
+          isWireStringArray(value.unchangedViews)) &&
         (value.searchChangedBuckets === undefined ||
           isWireStringArray(value.searchChangedBuckets))
       );

@@ -79,6 +79,8 @@ pub(super) struct InternalTools {
     pub(super) cognition: Option<Arc<dyn Cognition>>,
     pub(super) reviews: Arc<OnceLock<ReviewService>>,
     pub(super) gate: Arc<dyn agent_inmem::domain::tool_gate::NativeToolGate>,
+    /// Macro app origin, for links back to the calling session.
+    pub(super) app_url: Arc<str>,
 }
 
 impl ServerHandler for InternalTools {
@@ -91,11 +93,11 @@ impl ServerHandler for InternalTools {
         .with_title("Macro Internal MCP");
         info.instructions = Some(prompt::pull_requests::internal_mcp_instructions());
         info.instructions.as_mut().expect("instructions are set").push_str(
-            " macro_internal.PresentReview presents editable email/calendar draft stacks or questions through the shared session stream. It completes immediately as Presented to the user and never waits for approval. Later account-holder decisions deliver typed review.decided and review.settled system events. GetReview reads saved drafts and outcomes by reviewId. DecideReview uses the same claim/execute path and requires a real request from the review’s account holder in the current turn; system notifications never authorize decisions. After presenting an import plan, ask \"Should I kick it off?\"; when the review’s account holder says yes, submit it with macro_internal.DecideReview. macro_internal.PresentView presents a view (lists, timelines, channel messages) the same way with nothing saved: it is checked before it is drawn and returns immediately. These tools are available even when code mode is disabled.",
+            " macro_internal.PresentReview presents editable email/calendar draft stacks or questions through the shared session stream. It completes immediately as Presented to the user and never waits for approval. Later account-holder decisions deliver typed review.decided and review.settled system events. GetReview reads saved drafts and outcomes by reviewId. DecideReview uses the same claim/execute path and requires a real request from the review’s account holder in the current turn; system notifications never authorize decisions. After presenting an import plan, ask \"Should I kick it off?\"; when the review’s account holder says yes, submit it with macro_internal.DecideReview. These tools are available even when code mode is disabled.",
         );
         if self.code_mode.is_some() {
             info.instructions.as_mut().expect("instructions are set").push_str(
-                " macro_internal.ExecuteCode and macro_internal.DescribeCodeTools are available directly, without tool search. Follow their descriptions for the JavaScript main module, real SDK entity documentation, and persistent review workflow. Reuse entity documentation already expanded in context.",
+                " macro_internal.ExecuteCode, macro_internal.DescribeCodeTools and macro_internal.ReadCodeDocs are available directly, without tool search. Follow their descriptions for the JavaScript main module, SDK entity indexes and symbol references, and persistent review workflow. Reuse indexes and references already in context.",
             );
         }
         info
@@ -168,7 +170,10 @@ impl ServerHandler for InternalTools {
                 }),
         );
         for tool in &mut definitions {
-            if !matches!(tool.name.as_ref(), "DescribeCodeTools" | "ExecuteCode") {
+            if !matches!(
+                tool.name.as_ref(),
+                "DescribeCodeTools" | "ReadCodeDocs" | "ExecuteCode"
+            ) {
                 ai_toolset::actor::add_actor_schema(Arc::make_mut(&mut tool.input_schema));
             }
         }
@@ -196,7 +201,10 @@ impl ServerHandler for InternalTools {
             .owner_user()
             .map_err(|error| rmcp::ErrorData::invalid_request(error.to_string(), None))?;
         let mut acting_user = owner.clone();
-        if !matches!(request.name.as_ref(), "ExecuteCode" | "DescribeCodeTools") {
+        if !matches!(
+            request.name.as_ref(),
+            "ExecuteCode" | "DescribeCodeTools" | "ReadCodeDocs"
+        ) {
             let arguments = serde_json::Value::Object(request.arguments.take().unwrap_or_default());
             let (_, cleaned) = match ai_toolset::actor::ToolActor::take(&arguments) {
                 Ok(selection) => selection,
@@ -277,6 +285,11 @@ impl ServerHandler for InternalTools {
                     service: self.service.clone(),
                     tasks: self.tasks.clone(),
                     session: grant.id,
+                    session_url: format!(
+                        "{}/app/agent/{}",
+                        self.app_url.trim_end_matches('/'),
+                        grant.id
+                    ),
                 },
                 RequestContext::new(acting_user.clone()),
                 &request.name,

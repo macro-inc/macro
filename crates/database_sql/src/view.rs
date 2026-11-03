@@ -11,7 +11,7 @@ use models_databases::views::{DatabaseView, SchemaColumn, ViewProblem, check};
 use crate::catalog::{Catalog, Column, ColumnKind, Table};
 
 pub use board::{Board, BoardLane, board};
-pub use compile::compile_view;
+pub use compile::{compile_table_query, compile_view};
 
 /// The view's table, once the view checks out against it.
 fn checked_table<'catalog>(
@@ -44,11 +44,11 @@ fn schema_column(column: &Column) -> SchemaColumn {
     )
 }
 
-/// The column a checked view names by placement.
-fn placed(table: &Table, placement: ColumnId) -> &Column {
+/// The column a view names by placement.
+fn placed(table: &Table, placement: ColumnId) -> Result<&Column, ViewProblem> {
     table
         .columns
         .iter()
         .find(|column| column.placement == placement)
-        .expect("the view was checked against this table")
+        .ok_or(ViewProblem::UnknownColumn { column: placement })
 }

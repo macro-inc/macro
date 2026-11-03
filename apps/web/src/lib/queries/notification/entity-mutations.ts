@@ -18,6 +18,7 @@ type SimpleNotificationEntityType =
   | 'channel'
   | 'chat'
   | 'crm_company'
+  | 'crm_contact'
   | 'document'
   | 'email'
   | 'email_thread'
@@ -56,6 +57,7 @@ export function toNotificationEntityRef(
     case 'channel':
     case 'chat':
     case 'crm_company':
+    case 'crm_contact':
     case 'document':
     case 'email':
     case 'email_thread':
@@ -87,6 +89,7 @@ const ENTITY_TYPE_TO_GRAPHQL = {
   channel: 'CHANNEL',
   chat: 'CHAT',
   crm_company: 'CRM_COMPANY',
+  crm_contact: 'CRM_CONTACT',
   document: 'DOCUMENT',
   email: 'EMAIL_THREAD',
   email_thread: 'EMAIL_THREAD',
@@ -115,20 +118,27 @@ export function toNotificationEntityInput(
 
 /**
  * Mark all notifications associated with the supplied entities seen or done.
- * The changed-row response updates the normalized GraphQL cache; the client
- * also revalidates mounted readers to reconcile stale rows omitted by a no-op.
- * It is deliberately not mirrored into the legacy TanStack notification cache.
- * Returned rows include only the exact IDs needed by a later ID-scoped undo.
+ * The changed-row response updates the normalized GraphQL cache and every
+ * reader the cache maintains, and the rest are read again. A Done records the
+ * rows this client showed but the server left out
+ * (`confirmEntityNotificationsDone`); a mark seen that left out an expected
+ * row reads every reader again. Without the cache, mounted readers are read
+ * again. It is deliberately not mirrored into the legacy TanStack
+ * notification cache. Returned rows include only the exact IDs needed by a
+ * later ID-scoped undo.
  */
 export async function updateNotificationsForEntities(args: {
   entities: NotificationEntityRef[];
   operation: NotificationEntityUpdateOperation;
+  /** Notifications this client shows as changing, to detect a stale view. */
+  expectedNotificationIds?: readonly string[];
 }): Promise<UnifiedNotification[]> {
   if (args.entities.length === 0) return [];
 
   const rows = await updateGraphqlNotificationsForEntities({
     entities: args.entities.map(toNotificationEntityInput),
     operation: args.operation,
+    expectedNotificationIds: args.expectedNotificationIds,
   });
   if (!graphqlCacheEnabled()) {
     await refreshActiveGraphqlSoupQueries();

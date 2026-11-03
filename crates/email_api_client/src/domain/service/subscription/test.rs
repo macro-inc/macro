@@ -6,7 +6,7 @@ use super::super::super::models::{
     AccessToken, EmailApiError, ProviderSubscription, SyncCursor, TokenFreshness,
 };
 use super::super::super::ports::MailboxSubscriptionClient;
-use super::super::test_support::{Call, FakeRateLimiter, FakeTokenSource, call_log};
+use super::super::test_support::{Call, FakeGate, FakeTokenSource, call_log};
 use super::EmailApiClientServiceImpl;
 
 #[derive(Clone)]
@@ -54,9 +54,10 @@ async fn registration_and_stop_use_matching_costs_and_operations() {
         assert_eq!(
             *calls.lock().unwrap(),
             vec![
-                Call::RateLimit(Uuid::nil(), operation),
+                Call::Acquire(Uuid::nil(), operation),
                 Call::Token(Uuid::nil(), TokenFreshness::Cached),
                 Call::Repository(repository_call),
+                Call::Finish(Uuid::nil(), None),
             ]
         );
     }
@@ -75,9 +76,10 @@ async fn registration_can_bypass_the_token_cache_for_initialization() {
     assert_eq!(
         *calls.lock().unwrap(),
         vec![
-            Call::RateLimit(Uuid::nil(), super::ApiOperationKind::Subscribe),
+            Call::Acquire(Uuid::nil(), super::ApiOperationKind::Subscribe),
             Call::Token(Uuid::nil(), TokenFreshness::Fresh),
             Call::Repository("subscribe"),
+            Call::Finish(Uuid::nil(), None),
         ]
     );
 }
@@ -92,9 +94,10 @@ async fn teardown_stop_uses_the_health_neutral_token_path() {
     assert_eq!(
         *calls.lock().unwrap(),
         vec![
-            Call::RateLimit(Uuid::nil(), super::ApiOperationKind::Unsubscribe),
+            Call::Acquire(Uuid::nil(), super::ApiOperationKind::Unsubscribe),
             Call::HealthNeutralToken(Uuid::nil(), TokenFreshness::Cached),
             Call::Repository("unsubscribe"),
+            Call::Finish(Uuid::nil(), None),
         ]
     );
 }
@@ -117,12 +120,12 @@ fn link() -> Link {
 
 fn service(
     calls: super::super::test_support::CallLog,
-) -> EmailApiClientServiceImpl<SubscriptionClient, FakeTokenSource, FakeRateLimiter> {
+) -> EmailApiClientServiceImpl<SubscriptionClient, FakeTokenSource, FakeGate> {
     EmailApiClientServiceImpl::new(
         SubscriptionClient {
             calls: calls.clone(),
         },
         FakeTokenSource::new(calls.clone(), Ok(AccessToken::new("access-token"))),
-        FakeRateLimiter::new(calls, Ok(())),
+        FakeGate::new(calls, Ok(())),
     )
 }

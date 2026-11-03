@@ -152,7 +152,7 @@ impl AgentSessionRepo for FixedBotSessions {
             repo_url: None,
             workspace: "/workspace".to_owned(),
             name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
-            is_archived: false,
+            archived: None,
             sandbox_size: SandboxSize::Default,
             instructions: None,
             mcp_servers: Default::default(),
@@ -249,7 +249,7 @@ impl AgentSessionRepo for FixedBotSessions {
         unimplemented!("naming sessions is the session actor's job")
     }
 
-    async fn set_archived(&self, _id: AgentSessionId, _is_archived: bool) -> SessionResult<()> {
+    async fn set_archived(&self, _id: AgentSessionId, _archived: bool) -> SessionResult<()> {
         unimplemented!("archiving sessions is the harness service's job")
     }
 
@@ -258,6 +258,19 @@ impl AgentSessionRepo for FixedBotSessions {
     }
 
     async fn set_name_if_default(&self, _id: AgentSessionId, _name: &str) -> SessionResult<bool> {
+        unimplemented!("naming sessions is the session actor's job")
+    }
+
+    async fn generated_name(&self, _id: AgentSessionId) -> SessionResult<Option<String>> {
+        unimplemented!("naming sessions is the session actor's job")
+    }
+
+    async fn replace_generated_name(
+        &self,
+        _id: AgentSessionId,
+        _current: &str,
+        _name: &str,
+    ) -> SessionResult<bool> {
         unimplemented!("naming sessions is the session actor's job")
     }
 

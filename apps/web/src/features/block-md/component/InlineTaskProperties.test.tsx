@@ -382,6 +382,48 @@ it('unpins an implicit task default without dropping the other defaults', async 
   expect(mocks.properties()).toEqual(taskProperties);
 });
 
+it('updates task title chips in place when the properties emit new objects', async () => {
+  mocks.kind = 'task';
+  setup(taskProperties);
+  const status = screen.getByRole('button', { name: 'Unpin Status' });
+
+  mocks.setProperties?.(
+    taskProperties.map((item) => ({
+      ...item,
+      displayName: `${item.displayName} saved`,
+    }))
+  );
+
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Unpin Status saved' })).toBe(
+      status
+    )
+  );
+});
+
+it('keeps the Project chip mounted when saving assigns its placeholder an ID', async () => {
+  mocks.kind = 'task';
+  mocks.projectsEnabled = true;
+  setup(taskProperties);
+  const project = await screen.findByRole('button', { name: 'Unpin Project' });
+
+  mocks.setProperties?.([
+    ...taskProperties,
+    {
+      ...property,
+      propertyId: 'project-assignment',
+      propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
+      displayName: 'Project saved',
+    },
+  ]);
+
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Unpin Project saved' })).toBe(
+      project
+    )
+  );
+});
+
 it('keeps all task title pins cleared after serialization and reopening', async () => {
   mocks.kind = 'task';
   const editor = setup(taskProperties);

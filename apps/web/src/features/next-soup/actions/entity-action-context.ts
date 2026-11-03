@@ -16,6 +16,12 @@ export type EntityActionViewContext = {
   supportsMarkDone: boolean;
   supportsOpenInNewSplit: boolean;
   senderBucket: EntityActionSenderBucket | undefined;
+  /**
+   * How an open action treats a conversation, for views whose rows don't
+   * stand for a notification. Unset views keep the open defaults.
+   */
+  channelNavigation?: 'latest';
+  channelReadScope?: 'top-level';
 };
 
 export type EntityActionNavigationEvent = {
@@ -37,6 +43,8 @@ export type EntityActionListState = {
     SoupState['collapseEntity'],
     'callback' | 'shouldCollapse'
   >;
+  /** Lists that can keep rows in place while an action changes their sort. */
+  positions?: Pick<SoupState['positions'], 'hold'>;
 };
 
 export type EntityActionListFocusTarget = {
@@ -55,6 +63,7 @@ export type ToEntityActionListStateOptions<TItem, TMetadata> = {
     enabled: () => boolean;
     run: (entityId: string) => Promise<void>;
   };
+  positions?: EntityActionListState['positions'];
 };
 
 type AdaptedRow = {
@@ -63,19 +72,23 @@ type AdaptedRow = {
   entity: EntityData;
 };
 
+/** The Signal or Noise bucket an email is in, when the server said. */
+export function emailSenderBucket(
+  entity: EntityData | undefined
+): EntityActionSenderBucket | undefined {
+  if (entity?.type !== 'email' || entity.isSignal === undefined) return;
+  return entity.isSignal ? 'signal' : 'noise';
+}
+
+/**
+ * The sender bucket a view's tab shows. Views without a Signal or Noise tab
+ * (Search, folders, Recent) have none, so their rows offer no sender moves.
+ */
 function resolveSenderBucket(
   activeTab: string | undefined
 ): EntityActionSenderBucket | undefined {
   if (activeTab === 'noise') return 'noise';
-
-  if (
-    activeTab === undefined ||
-    activeTab === 'signal' ||
-    activeTab === 'important'
-  ) {
-    return 'signal';
-  }
-
+  if (activeTab === 'signal' || activeTab === 'important') return 'signal';
   return undefined;
 }
 
@@ -258,6 +271,7 @@ export function toEntityActionListState<TItem, TMetadata>(
       callback: collapseCallback,
       shouldCollapse: () => options.collapse?.enabled() ?? false,
     },
+    positions: options.positions,
   };
 }
 

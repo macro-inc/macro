@@ -27,14 +27,18 @@ export function ChangesNotice(props: {
       </Show>
       <Show when={props.onRefresh}>
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
           class="mt-2 gap-1.5"
           disabled={props.refreshing}
           onClick={() => props.onRefresh?.()}
         >
           <ArrowsClockwiseIcon
-            class={props.refreshing ? 'animate-spin' : undefined}
+            class={
+              props.refreshing
+                ? 'size-3 shrink-0 touch:size-6 animate-spin'
+                : 'size-3 shrink-0 touch:size-6'
+            }
           />
           <span>Refresh changes</span>
         </Button>

@@ -5,20 +5,18 @@
  */
 
 import { AgentActivity } from '@app/features/agent-activity/agent-activity';
+import { PermissionCard } from '@app/features/agent-interactions/components/PermissionCard';
 import {
   initialValues,
   validate,
 } from '@app/features/agent-interactions/state/elicitation-form';
+import type { View } from '@app/features/dynamic-ui/view';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { MagicChipView } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/MagicChipView';
 import type { MagicChipPresentation } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/presentation';
 import { MarkdownImage } from '@core/component/LexicalMarkdown/component/decorator/MarkdownImage';
 import { MediaLoadingPlaceholder } from '@core/component/LexicalMarkdown/component/decorator/MediaLoadingPlaceholder';
 import { useUserId } from '@core/context/user';
-import FileText from '@icon/system/regular/file-text.svg';
-import MagnifyingGlass from '@icon/system/regular/magnifying-glass.svg';
-import PencilSimple from '@icon/system/regular/pencil-simple.svg';
-import Terminal from '@icon/system/regular/terminal.svg';
 import type {
   ElicitationSchema,
   FoldedMessage,
@@ -205,12 +203,19 @@ function QueuedInFlightDemo() {
     {
       actionId: 'older',
       kind: 'prompt',
-      prompt: 'Summarize the queue design',
+      prompt:
+        '<m-agent-context>{"version":1,"text":"Private instructions"}</m-agent-context>\n\nSummarize the queue design',
     },
     {
       actionId: 'newer',
       kind: 'prompt',
       prompt: 'Also mention the flush control',
+    },
+    {
+      actionId: 'refused',
+      kind: 'prompt',
+      prompt: 'This steer was refused, so it stays queued',
+      sendFailed: true,
     },
   ]);
   const [note, setNote] = createSignal(
@@ -218,7 +223,10 @@ function QueuedInFlightDemo() {
   );
 
   return (
-    <div class="flex max-w-xl flex-col gap-2">
+    <div
+      class="flex max-w-xl flex-col gap-2"
+      data-testid="queued-context-proof"
+    >
       <p class="text-xs text-ink-muted">{note()}</p>
       <QueuedPrompts
         items={items()}
@@ -471,37 +479,8 @@ function DisplayResultsDemo() {
         name: { kind: 'mcp', server: 'macro', tool: 'DisplayResults' },
         status: pending() ? 'running' : 'completed',
         detail: {
-          kind: 'macro',
-          input: {
-            view: {
-              title: 'Launch overview',
-              widgets: [
-                {
-                  type: 'md',
-                  markdown:
-                    'The checklist is ready. **Two steps remain before launch.**',
-                },
-                {
-                  type: 'timeline',
-                  events: [
-                    {
-                      time: 'Today',
-                      title: 'Review launch checklist',
-                      description:
-                        'Confirm the release notes and rollout plan.',
-                    },
-                    {
-                      time: 'Tomorrow',
-                      title: 'Launch',
-                      description: 'Publish the release after checks pass.',
-                      future: true,
-                    },
-                  ],
-                },
-              ],
-            },
-          },
-          output: null,
+          kind: 'view',
+          view: pending() ? null : PRESENTED_VIEW,
           error: null,
         },
       },
@@ -523,7 +502,7 @@ function DisplayResultsDemo() {
   );
 }
 
-const PRESENTED_VIEW = {
+const PRESENTED_VIEW: View = {
   title: 'Launch overview',
   widgets: [
     {
@@ -549,27 +528,19 @@ const PRESENTED_VIEW = {
   ],
 };
 
-/** A PresentView call as the session holds it: the agent's own call, or the
- * one the harness presents (`view_<id>`). */
+/** The PresentView call the harness presents (`view_<id>`) for
+ * `execution.views.present`. */
 function presentViewPart(id: string): MessagePart {
   return {
     kind: 'tool_use',
     id,
     name: { kind: 'mcp', server: 'macro_internal', tool: 'PresentView' },
     status: 'completed',
-    detail: {
-      kind: 'other',
-      acpKind: 'other',
-      input: { view: PRESENTED_VIEW },
-      output: null,
-      result: { message: 'Presented to the user' },
-      error: null,
-    },
+    detail: { kind: 'view', view: PRESENTED_VIEW, error: null },
   };
 }
 
-/** The agent's PresentView call is its receipt; the call the harness
- * presents draws the view between collapsed runs. */
+/** The call the harness presents draws the view between collapsed runs. */
 function PresentViewDemo() {
   const message: FoldedMessage = {
     agentSessionId: 'present-view-demo',
@@ -584,7 +555,6 @@ function PresentViewDemo() {
     parts: [
       ...TOOL_REPLAY_PARTS.slice(0, 2),
       { kind: 'text', text: 'Here is where the launch stands:' },
-      presentViewPart('present-view-call'),
       presentViewPart('view_present-view-demo'),
     ],
   };
@@ -606,11 +576,6 @@ function PresentViewDmDemo() {
         sealed
         rows={[
           { id: 'search', label: 'Searched', status: 'completed' },
-          {
-            id: 'present-view-call',
-            label: 'Present view',
-            status: 'completed',
-          },
           {
             id: 'view_present-view-demo',
             label: 'Present view',
@@ -1001,9 +966,12 @@ function PromptAuthorDemo() {
     parts: [{ kind: 'text', text }],
   });
   return (
-    <div class="flex flex-col gap-3">
+    <div class="flex flex-col gap-3" data-testid="prompt-context-proof">
       <Message
-        message={prompt(userId() ?? null, 'Tighten up the fold, please.')}
+        message={prompt(
+          userId() ?? null,
+          '<m-agent-context>{"version":1,"text":"Private instructions"}</m-agent-context>\n\nTighten up the fold, please.'
+        )}
         inFlight={false}
       />
       <Message
@@ -1182,7 +1150,7 @@ export default function AgentUiGallery() {
           <Item label="DisplayResults (inline between groups)">
             <DisplayResultsDemo />
           </Item>
-          <Item label="PresentView (receipt, then the presented view)">
+          <Item label="Presented view">
             <PresentViewDemo />
           </Item>
           <Item label="PresentView in a DM reply">
@@ -1264,6 +1232,24 @@ export default function AgentUiGallery() {
             />
           </Item>
 
+          <Item label="PermissionCard (native Herdr session)">
+            <PermissionCard
+              action="Run command"
+              detail="cargo test -p coding_agent_worker"
+              options={[
+                { id: 'allow', name: 'Allow once', kind: 'allow_once' },
+                {
+                  id: 'always',
+                  name: 'Always allow `cargo test -p coding_agent_worker` in this session',
+                  kind: 'allow_always',
+                },
+                { id: 'reject', name: 'Reject', kind: 'reject_once' },
+              ]}
+              canAnswer
+              onSelect={() => {}}
+            />
+          </Item>
+
           <Item label="ComposerNotice">
             <ComposerNotice text="Waking the agent's sandbox…" active />
           </Item>
@@ -1302,20 +1288,17 @@ export default function AgentUiGallery() {
           <Item label="ToolCard">
             <ToolCard
               title="Shell"
-              icon={<Terminal />}
               subtitle="cargo test -p agent_fold"
               status={status()}
             />
             <ToolCard
               title="Read"
-              icon={<FileText />}
               subtitle="crates/agent_fold/src/domain/fold.rs"
               args={{ limit: '200' }}
               status="completed"
             />
             <ToolCard
               title="Edit"
-              icon={<PencilSimple />}
               subtitle={FIXTURE_DIFF.path}
               trailing={<DiffChanges additions={4} deletions={3} />}
               status="completed"
@@ -1328,19 +1311,16 @@ export default function AgentUiGallery() {
             <LiveToolGroup count={3} active={pulse()}>
               <ToolCard
                 title="Read"
-                icon={<FileText />}
                 subtitle="crates/agent_fold/src/domain/fold.rs"
                 status="completed"
               />
               <ToolCard
                 title="Edit"
-                icon={<PencilSimple />}
                 subtitle={FIXTURE_DIFF.path}
                 status="completed"
               />
               <ToolCard
                 title="Shell"
-                icon={<Terminal />}
                 subtitle="cargo test -p agent_fold"
                 status={pulse() ? 'running' : 'completed'}
               />
@@ -1348,12 +1328,11 @@ export default function AgentUiGallery() {
             <LiveToolGroup count={2} active={false} defaultOpen>
               <ToolCard
                 title="Search"
-                icon={<MagnifyingGlass />}
                 subtitle="fold"
                 status="completed"
                 trailing="3 results"
               />
-              <ToolCard title="Read" icon={<FileText />} status="completed" />
+              <ToolCard title="Read" status="completed" />
             </LiveToolGroup>
           </Item>
 

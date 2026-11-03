@@ -303,6 +303,20 @@ This entity's reference for bulk property operations.
 
 ***
 
+### readReceipts()
+
+> **readReceipts**(): `Promise`\<[`EmailReadReceipt`](../interfaces/EmailReadReceipt.md)[]\>
+
+Opens recorded for messages sent from the caller's own or delegated
+inboxes with read receipts on, newest message first. Counts are
+approximate: some mail apps prefetch images and others block them.
+
+#### Returns
+
+`Promise`\<[`EmailReadReceipt`](../interfaces/EmailReadReceipt.md)[]\>
+
+***
+
 ### removeLabel()
 
 > **removeLabel**(`label`): `Promise`\<`void`\>
@@ -485,6 +499,27 @@ Update provider-neutral read, trash, spam, or star state.
 #### Returns
 
 `Promise`\<`void`\>
+
+***
+
+### archiveMany()
+
+> `static` **archiveMany**(`client`, `threads`, `archived?`): `Promise`\<`EmailThread`[]\>
+
+Archive many threads (or unarchive with `false`), sending one request per
+100 threads. Resolves to the threads whose state could not change.
+
+#### Parameters
+
+| Parameter | Type | Default value |
+| ------ | ------ | ------ |
+| `client` | `MacroClient` | `undefined` |
+| `threads` | `EmailThread`[] | `undefined` |
+| `archived?` | `boolean` | `true` |
+
+#### Returns
+
+`Promise`\<`EmailThread`[]\>
 
 ***
 

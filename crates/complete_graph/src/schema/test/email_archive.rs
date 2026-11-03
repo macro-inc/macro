@@ -119,3 +119,36 @@ async fn archive_undo_and_redo_return_primary_state_without_reading_the_soup_rep
         ))
     );
 }
+
+#[tokio::test]
+async fn bulk_archive_returns_primary_state_for_each_thread_without_reading_the_soup_replica() {
+    let harness = harness();
+    let first = Uuid::from_u128(44);
+    let second = Uuid::from_u128(45);
+    harness
+        .thread_reader
+        .set_threads(vec![soup_email_thread(first), soup_email_thread(second)]);
+    let response = harness.execute_authenticated_mutation(&format!(
+        r#"mutation {{ setEmailThreadsArchived(input: {{threadIds: ["{first}", "{second}"], archived: true}}) {{ threads {{__typename id inboxVisible}} failedThreadIds }} }}"#
+    )).await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap()["setEmailThreadsArchived"],
+        serde_json::json!({
+            "threads": [
+                {"__typename": "GraphqlSoupEmailThread", "id": first.to_string(), "inboxVisible": false},
+                {"__typename": "GraphqlSoupEmailThread", "id": second.to_string(), "inboxVisible": false},
+            ],
+            "failedThreadIds": [],
+        })
+    );
+    assert_eq!(harness.thread_reads.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        *harness.email_service.archive_mutation_calls.lock().unwrap(),
+        [first, second].map(|thread_id| (
+            MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
+            thread_id,
+            true,
+        ))
+    );
+}

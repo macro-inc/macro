@@ -1,13 +1,16 @@
 import { UserIcon } from '@core/component/UserIcon';
 import { useUnfurl } from '@core/signal/unfurl';
+import ProjectIcon from '@icon/system/regular/cube.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
 import { usePropertyEntityDisplay } from '@property/hooks';
-import type { Property } from '@property/types';
+import type { DateRangeProperty, Property } from '@property/types';
 import {
   extractDomain,
   formatPropertyValue,
+  formatTimeRange,
   isBooleanProperty,
   isDateProperty,
+  isDateRangeProperty,
   isEntityProperty,
   isLinkProperty,
   isNumberProperty,
@@ -58,6 +61,9 @@ export const PropertyTooltip = (props: PropertyTooltipProps): JSX.Element => {
         <Match when={isDateProperty(props.property) && props.property}>
           {(property) => <DateTooltipContent property={property()} />}
         </Match>
+        <Match when={isDateRangeProperty(props.property) && props.property}>
+          {(property) => <DateRangeTooltipContent property={property()} />}
+        </Match>
         <Match when={isSelectProperty(props.property) && props.property}>
           {(property) => <SelectTooltipContent property={property()} />}
         </Match>
@@ -77,6 +83,10 @@ export const PropertyTooltip = (props: PropertyTooltipProps): JSX.Element => {
  */
 const TooltipWrapper = (props: PropertyTooltipProps) => {
   const singleSelect = () => !props.property.isMultiSelect;
+  const isProject = () =>
+    props.property.valueType === 'ENTITY' &&
+    props.property.specificEntityType === 'INITIATIVE';
+  const stacked = () => !singleSelect() || isProject();
   const hasValue = () => propertyHasValue(props.property);
   const trailingAction = children(() => props.trailingAction);
   return (
@@ -91,29 +101,36 @@ const TooltipWrapper = (props: PropertyTooltipProps) => {
     >
       <div
         classList={{
-          'flex flex-row gap-2 items-center': singleSelect(),
-          'min-w-48 max-w-72': !singleSelect(),
+          'flex flex-row gap-2 items-center': !stacked(),
+          'min-w-48 max-w-72': stacked(),
         }}
       >
         <div
           class="flex min-w-0 items-center gap-4"
           classList={{
-            'border-b border-edge pb-1.5 mb-1.5': !singleSelect(),
+            'border-b border-edge pb-1.5 mb-1.5': stacked(),
           }}
         >
           <div class="flex min-w-0 items-center gap-2 text-ink-muted">
-            <PropertyDataTypeIcon
-              property={props.property}
-              class="size-3.5 shrink-0 text-ink-muted"
-            />
+            <Show
+              when={isProject()}
+              fallback={
+                <PropertyDataTypeIcon
+                  property={props.property}
+                  class="size-3.5 shrink-0 text-ink-muted"
+                />
+              }
+            >
+              <ProjectIcon class="size-3.5 shrink-0" />
+            </Show>
             <span class="min-w-0 text-xs">{props.property.displayName}</span>
           </div>
-          <Show when={!singleSelect() && trailingAction.toArray().length > 0}>
+          <Show when={stacked() && trailingAction.toArray().length > 0}>
             <div class="ml-auto shrink-0">{trailingAction()}</div>
           </Show>
         </div>
         {props.children}
-        <Show when={singleSelect() && trailingAction.toArray().length > 0}>
+        <Show when={!stacked() && trailingAction.toArray().length > 0}>
           <div class="ml-2 shrink-0">{trailingAction()}</div>
         </Show>
       </div>
@@ -183,6 +200,18 @@ const DateTooltipContent = (props: {
     </div>
   );
 };
+
+const DateRangeTooltipContent = (props: { property: DateRangeProperty }) => (
+  <TooltipWrapper property={props.property}>
+    <div class="flex items-center gap-1.5 flex-wrap">
+      <ValueContainer>
+        <span class="truncate max-w-37.5">
+          {props.property.value ? formatTimeRange(props.property.value) : ''}
+        </span>
+      </ValueContainer>
+    </div>
+  </TooltipWrapper>
+);
 
 const SelectTooltipContent = (props: {
   property: Property & { valueType: 'SELECT_STRING' | 'SELECT_NUMBER' };

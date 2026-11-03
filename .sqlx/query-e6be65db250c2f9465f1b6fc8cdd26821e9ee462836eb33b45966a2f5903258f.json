@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT l.provider_label_id\n            FROM email_message_labels ml\n            JOIN email_labels l ON l.id = ml.label_id\n            WHERE ml.message_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "provider_label_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e6be65db250c2f9465f1b6fc8cdd26821e9ee462836eb33b45966a2f5903258f"
+}

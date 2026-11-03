@@ -273,9 +273,10 @@ function ConditionEditor(props: {
         )}
       </Show>
       <Button
+        aria-label="Remove filter"
+        tooltip="Remove filter"
         variant="ghost"
         size="icon-md"
-        label="Remove filter"
         onClick={props.onRemove}
       >
         <XIcon class="size-4 touch:size-3.5" />
@@ -296,7 +297,10 @@ function TestValue(props: {
 }) {
   const text = () => (props.test.kind === 'text' ? props.test : undefined);
   const number = () => (props.test.kind === 'number' ? props.test : undefined);
-  const date = () => (props.test.kind === 'date' ? props.test : undefined);
+  const date = () =>
+    props.test.kind === 'date' || props.test.kind === 'dateRange'
+      ? props.test
+      : undefined;
   const options = () =>
     props.test.kind === 'options' ? props.test : undefined;
   return (

@@ -34,8 +34,10 @@ pub enum StoreError {
     /// The call was invalid, like a LID lookup with a phone number JID.
     #[error("{0}")]
     InvalidArgument(String),
-    /// The backing storage failed.
-    #[error("store error: {0:?}")]
+    /// The backing storage failed. The message leaves the report out, since
+    /// storage errors can quote stored values (JIDs); read it from the field
+    /// or `Debug`.
+    #[error("store error")]
     Internal(rootcause::Report),
 }
 

@@ -125,7 +125,7 @@ export function RoutineCardView(props: {
           {(run) => (
             <Button
               size="sm"
-              variant="strong"
+              variant="primary"
               disabled={props.busy || props.state === 'running'}
               onClick={() => run()()}
             >

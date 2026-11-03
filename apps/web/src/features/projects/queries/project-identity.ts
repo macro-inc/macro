@@ -14,7 +14,12 @@ import {
   mapInitiativeDetail,
   mapInitiativeIdentity,
 } from '@service-storage/initiative';
-import { type Client, type DocumentInput, stringifyDocument } from '@urql/core';
+import {
+  type Client,
+  type DocumentInput,
+  type RequestPolicy,
+  stringifyDocument,
+} from '@urql/core';
 import { type Accessor, createMemo } from 'solid-js';
 import type { ProjectIdentity } from '../core/project';
 import { toProjectDetail } from './project-model';
@@ -78,7 +83,8 @@ function createAuthorizedProjectQuery<
   client: () => Client,
   userId: Accessor<string | undefined>,
   projectId: Accessor<string>,
-  enabled: Accessor<boolean>
+  enabled: Accessor<boolean>,
+  requestPolicy: RequestPolicy = 'cache-and-network'
 ) {
   const active = () => enabled() && Boolean(userId() && projectId());
   const authorization = createQueryAuthorization(() =>
@@ -89,7 +95,7 @@ function createAuthorizedProjectQuery<
     () => (active() ? { initiativeId: projectId() } : undefined),
     () => ({
       client: client(),
-      requestPolicy: 'cache-and-network',
+      requestPolicy,
       keepPreviousData: false,
       onResult: authorization.onResult,
       select: (data) => ({ viewerId: data.user.id, value: select(data) }),
@@ -171,7 +177,8 @@ export function createProjectIdentityQuery(
     client,
     userId,
     projectId,
-    enabled
+    enabled,
+    'cache-first'
   );
 }
 

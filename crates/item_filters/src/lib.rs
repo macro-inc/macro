@@ -435,15 +435,16 @@ impl IsEmpty for CalendarEventFilters {
 pub struct InitiativeFilters {
     /// Opt this query into initiatives at all. Initiatives are off by
     /// default — see [`crate::ast::initiative::InitiativeLiteral::Include`].
-    /// Asking for specific `initiative_ids` or `owners` also opts in.
+    /// Asking for specific `initiative_ids`, `owners` or `notification_filters`
+    /// also opts in.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub include: bool,
     /// Initiative ids to filter by. Empty to include all accessible initiatives.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub initiative_ids: Vec<String>,
-    /// Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot
-    /// ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
-    /// owner.
+    /// Filter by initiative owner principal — a user ('macro|user@example.com'), a
+    /// bot ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include
+    /// every owner.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub owners: Vec<String>,
     /// Case-insensitive name substring.
@@ -455,6 +456,9 @@ pub struct InitiativeFilters {
     /// Inclusive lower due-date bound.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub due_after: Option<chrono::DateTime<chrono::Utc>>,
+    /// Filter by initiative notification state.
+    #[serde(default, skip_serializing_if = "NotificationFilters::is_empty")]
+    pub notification_filters: NotificationFilters,
 }
 
 impl IsEmpty for InitiativeFilters {
@@ -466,6 +470,7 @@ impl IsEmpty for InitiativeFilters {
             name,
             due_before,
             due_after,
+            notification_filters,
         } = self;
         !include
             && initiative_ids.is_empty()
@@ -473,6 +478,7 @@ impl IsEmpty for InitiativeFilters {
             && name.is_none()
             && due_before.is_none()
             && due_after.is_none()
+            && notification_filters.is_empty()
     }
 }
 
@@ -678,11 +684,20 @@ pub struct PropertyFilter {
     /// Entity reference IDs to match. Multiple values are OR'd together.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub entity_ids: Vec<String>,
+    /// UTC range for Soup/search: inclusive start, exclusive end; both open matches any date.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub date_range: Option<ast::properties::DateRange>,
+    /// Flat Soup/search presence filter: true expands to an open date range, false to its negation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub has_date: Option<bool>,
 }
 
 impl IsEmpty for PropertyFilter {
     fn is_empty(&self) -> bool {
-        self.option_ids.is_empty() && self.entity_ids.is_empty()
+        self.option_ids.is_empty()
+            && self.entity_ids.is_empty()
+            && self.date_range.is_none()
+            && self.has_date.is_none()
     }
 }
 

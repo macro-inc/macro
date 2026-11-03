@@ -10,5 +10,5 @@ export type FilterTestOneOfOnethreeKind =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const FilterTestOneOfOnethreeKind = {
-  entities: 'entities',
+  options: 'options',
 } as const;

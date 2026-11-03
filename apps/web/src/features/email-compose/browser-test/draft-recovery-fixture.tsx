@@ -142,6 +142,9 @@ function RecoveryEditor() {
         Show transient notice
       </button>
       <output data-testid="save-count">{saved().length}</output>
+      <output data-testid="has-draft">
+        {String(state.context.hasDraft())}
+      </output>
       <output data-testid="saved-draft-ids">
         {JSON.stringify(saved().map((input) => input.clientHandles?.draftId))}
       </output>

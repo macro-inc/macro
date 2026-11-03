@@ -180,10 +180,12 @@ async fn test_create_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
             "PRODUCT_TEAM",
             Some(&"sub_test".parse().unwrap()),
             SeatPlan::Premium,
+            Some("user.com"),
         )
         .await?;
 
     assert!(!result.id.to_string().is_empty());
+    assert_eq!(result.auto_join_domain(), Some("user.com"));
     assert_eq!(result.name, "Product Team");
     assert_eq!(result.slug, "PRODUCT_TEAM");
     assert_eq!(result.owner_id.0.as_ref(), "macro|user3@user.com");
@@ -191,7 +193,7 @@ async fn test_create_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
     // Create team with too large a name
     let err = team_repo
-        .create_team(&user_id, "12345678901234567890123456789012345678901234567890123456789000000000000000000000000000000000000000000000", "MACRO", Some(&"sub_test".parse().unwrap()), SeatPlan::Premium)
+        .create_team(&user_id, "12345678901234567890123456789012345678901234567890123456789000000000000000000000000000000000000000000000", "MACRO", Some(&"sub_test".parse().unwrap()), SeatPlan::Premium, None)
         .await
         .err()
         .unwrap();
@@ -236,6 +238,7 @@ async fn test_move_github_app_installation_to_team_moves_existing_user_rows(
             "GITHUB_OWNER_TEAM",
             Some(&"sub_test".parse().unwrap()),
             SeatPlan::Premium,
+            None,
         )
         .await?;
     let team_id = team.id().to_string();
@@ -359,6 +362,7 @@ async fn test_move_github_app_installation_to_team_noops_when_user_has_no_rows(
             "GITHUB_OWNER_TEAM",
             Some(&"sub_test".parse().unwrap()),
             SeatPlan::Premium,
+            None,
         )
         .await?;
 
@@ -1435,6 +1439,7 @@ async fn test_patch_team_normalizes_slug_to_screaming_snake_case(
         slug: Some("my-team  slug".to_string()),
         user_role_updates: None,
         default_link_share: None,
+        language: None,
     };
 
     team_repo.patch_team(&team_id, &req).await?;
@@ -1464,6 +1469,7 @@ async fn test_patch_team_rejects_invalid_slug_without_updating_name(
         slug: Some("bad.slug".to_string()),
         user_role_updates: None,
         default_link_share: None,
+        language: None,
     };
 
     let err = team_repo.patch_team(&team_id, &req).await.err().unwrap();
@@ -1492,6 +1498,7 @@ async fn test_patch_team_rejects_too_long_slug(pool: Pool<Postgres>) -> anyhow::
         slug: Some("THIS_SLUG_IS_WAY_TOO_LONG".to_string()),
         user_role_updates: None,
         default_link_share: None,
+        language: None,
     };
 
     let err = team_repo.patch_team(&team_id, &req).await.err().unwrap();
@@ -1519,6 +1526,7 @@ async fn test_patch_team_default_link_share_round_trip(pool: Pool<Postgres>) -> 
         slug: None,
         user_role_updates: None,
         default_link_share: Some(Some(LinkShare::Public)),
+        language: None,
     };
     team_repo.patch_team(&team_id, &req).await?;
     let team = team_repo.get_team_by_id(&team_id).await?;
@@ -1530,6 +1538,7 @@ async fn test_patch_team_default_link_share_round_trip(pool: Pool<Postgres>) -> 
         slug: None,
         user_role_updates: None,
         default_link_share: None,
+        language: None,
     };
     team_repo.patch_team(&team_id, &req).await?;
     let team = team_repo.get_team_by_id(&team_id).await?;
@@ -1541,6 +1550,7 @@ async fn test_patch_team_default_link_share_round_trip(pool: Pool<Postgres>) -> 
         slug: None,
         user_role_updates: None,
         default_link_share: Some(None),
+        language: None,
     };
     team_repo.patch_team(&team_id, &req).await?;
     let team = team_repo.get_team_by_id(&team_id).await?;

@@ -14,15 +14,15 @@ import {
   Suspense,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import {
+  createPriorityCollapseController,
+  PriorityCollapseOverflowSensor,
+} from '../priority-collapse/PriorityCollapseOverflowSensor';
 import { ViewShell } from '../view-shell/ViewShell';
 import type {
   PreviewBlockTarget,
   PreviewPanelSelection,
 } from './previewTarget';
-import {
-  createPriorityCollapseController,
-  PriorityCollapseOverflowSensor,
-} from './split-layout/components/PriorityCollapseOverflowSensor';
 import {
   SplitPanelContext,
   type SplitPanelContextType,

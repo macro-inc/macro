@@ -1,6 +1,7 @@
 import { CREATE_MENU_COMMAND_SCOPE } from '@app/constants/hotkeys';
 import { useCreateMenuBlocks } from '@app/features/command/Launcher';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { t } from '@app/lib/i18n';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { setActiveScope } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -110,14 +111,17 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
             when={props.variant === 'icon'}
             fallback={
               <Dropdown.Trigger
+                aria-label={t('create.create')}
+                tooltip={{
+                  content: t('create.create'),
+                  placement: 'right',
+                  disabled: !isSlim(),
+                  hotkey: TOKENS.global.createCommand,
+                }}
                 ref={createMenuTarget}
                 as={NavRow}
                 class="center h-8 bg-ink/4 text-[13px]"
                 fullWidth
-                tooltipPlacement="right"
-                tooltipDisabled={!isSlim()}
-                label="Create"
-                hotkey={TOKENS.global.createCommand}
                 onMouseDown={(e: MouseEvent) => {
                   if (e.button !== 0) return;
                   e.preventDefault();
@@ -127,7 +131,7 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
                   <PlusIcon class="size-4" />
                 </div>
                 <span class="whitespace-nowrap group-data-[slim=true]/sidebar:hidden">
-                  Create
+                  {t('create.create')}
                 </span>
                 <Show when={open()}>
                   <div class="text-xxs text-ink-extra-muted/50 rounded-sm ml-auto border border-ink/5 px-1.5 py-px -my-1 group-data-[slim=true]/sidebar:hidden">
@@ -141,20 +145,22 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
             }
           >
             <Dropdown.Trigger
+              aria-label={t('create.create')}
+              tooltip={{
+                content: t('create.create'),
+                hotkey: TOKENS.global.createCommand,
+              }}
               ref={createMenuTarget}
               as={Button}
-              variant="outline"
+              variant="secondary"
               size="icon-sm"
-              depth={1}
-              class="size-[26px] bg-surface shadow-md shadow-drop-shadow [&_svg]:size-4!"
-              label="Create"
-              hotkey={TOKENS.global.createCommand}
+              class="size-[26px] bg-surface shadow-md shadow-drop-shadow"
               onMouseDown={(e: MouseEvent) => {
                 if (e.button !== 0) return;
                 e.preventDefault();
               }}
             >
-              <CreateIcon />
+              <CreateIcon class="size-4 shrink-0" />
             </Dropdown.Trigger>
           </Show>
         }

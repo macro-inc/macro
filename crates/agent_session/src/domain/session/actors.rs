@@ -120,7 +120,8 @@ pub(crate) struct SessionActor<Connector: AgentConnector, Logs> {
     handshake_span: Option<tracing::Span>,
     handshake_deadline: Instant,
     /// Told when the machine reports a turn over, so the harness can dispatch
-    /// its next queued prompt.
+    /// its next queued prompt, and when the runtime reports its session
+    /// deliberately closed.
     turn_observer: Arc<dyn SessionTurnObserver>,
     /// GenAI spans for the turns and tool calls this connection carries, fed
     /// every frame the effects below send or log. See [`super::telemetry`].
@@ -552,6 +553,18 @@ where
                     }
                     let _ = token.completed.send(result);
                 }
+                Effect::RuntimeClosed => {
+                    let _closed = tracing::info_span!(
+                        "agent.session.runtime_closed",
+                        agent.session.id = %self.machine.id(),
+                    )
+                    .entered();
+                    tracing::info!(
+                        id = %self.machine.id(),
+                        "agent session runtime was deliberately closed"
+                    );
+                    self.turn_observer.runtime_closed(self.machine.id());
+                }
                 Effect::Stop { reason } => {
                     self.telemetry.on_stopped(&reason);
                     // The one place a session's `disconnected` event is
@@ -800,7 +813,8 @@ where
                 | Effect::Log { .. }
                 | Effect::EstablishInitialization { .. }
                 | Effect::PersistAcpSession { .. }
-                | Effect::Initialized { .. } => {}
+                | Effect::Initialized { .. }
+                | Effect::RuntimeClosed => {}
             }
         }
         if let Some(stop) = stop {

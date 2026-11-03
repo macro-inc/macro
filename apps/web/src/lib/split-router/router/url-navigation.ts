@@ -84,7 +84,7 @@ export function createUrlNavigation(options: {
     const diff = panes.diff(decoded.panes, { same: sameVisit, adopt });
 
     const apply = (entries: readonly Entry[]): NavigationResult => {
-      panes.applyDiff(diff, entries);
+      panes.applyDiff(diff, entries, { shape: decoded.shape });
       url.write(mode, { landed: location });
       options.markReady();
 

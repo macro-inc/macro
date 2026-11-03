@@ -31,13 +31,15 @@ stacks. Process isolation belongs to
   its `review.settled` comes from the import when the write ends; only an
   import that could not start settles here.
 - `src/domain/reviews/views.rs`: a view is a review with nothing saved.
-  `PresentView` (`inbound/reviews.rs`) and `POST /agent-sessions/{id}/views`
-  (`execution.views.present`) share the review's authorization, check the view
-  with `dynamic_ui::view_problems`, and stream it as a completed `PresentView`
-  call (`view_<id>`) through `ReviewActions::present_view`.
-- `src/domain/documentation.rs`: Jev selection of generated SDK docs, rendered
-  into the per-turn prompt (top four, 48 KiB) or returned for a
-  `DescribeCodeTools` `task` (every relevant entity, 32 KiB).
+  `POST /agent-sessions/{id}/views` (`execution.views.present`) shares the
+  review's authorization, decodes the view with `dynamic_ui::decode_view`,
+  and streams it as a completed `PresentView` call (`view_<id>`) through
+  `ReviewActions::present_view`. There is no `PresentView` tool: ExecuteCode's
+  description carries the view schema and when to present one.
+- `src/domain/documentation.rs`: the generated SDK catalog (an index per
+  entity, a reference per symbol). Jev selects entity indexes for the per-turn
+  prompt (top four, 48 KiB) or a `DescribeCodeTools` `task` (every relevant
+  entity, 32 KiB); `ReadCodeDocs` reads symbol references (32 KiB).
 - `src/inbound/toolset.rs`: `toolset()` for sessions, `user_toolset()` for the
   public MCP. Tool texts are composed: host-specific parts in `toolset/session/`
   and `toolset/user/`, guidance both share in `toolset/shared/`. Edit shared

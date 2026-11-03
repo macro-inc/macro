@@ -83,7 +83,7 @@ export function SlideMasterTab(props: { master: MasterView }) {
     <>
       <RibbonGroup label="Edit Master">
         <RibbonTextButton
-          label="Insert Layout"
+          aria-label="Insert Layout"
           tooltip="Insert Layout: add a layout to the slide master"
           disabled={ro() || !m.page()}
           data-testid="pptx-master-insert-layout"
@@ -93,7 +93,7 @@ export function SlideMasterTab(props: { master: MasterView }) {
           Insert Layout
         </RibbonTextButton>
         <RibbonTextButton
-          label="Delete"
+          aria-label="Delete"
           tooltip={
             m.deleteBlocker() ??
             (layout() ? 'Delete this layout' : 'Delete this slide master')
@@ -106,7 +106,7 @@ export function SlideMasterTab(props: { master: MasterView }) {
           Delete
         </RibbonTextButton>
         <RibbonTextButton
-          label="Rename"
+          aria-label="Rename"
           tooltip={layout() ? 'Rename this layout' : 'Rename this slide master'}
           disabled={ro() || !m.page()}
           data-testid="pptx-master-rename"
@@ -174,7 +174,7 @@ export function SlideMasterTab(props: { master: MasterView }) {
         <ThemeFontsMenu />
         <BackgroundStylesMenu master={m} />
         <RibbonTextButton
-          label="Format Background"
+          aria-label="Format Background"
           tooltip="Format the background of this master or layout"
           disabled={ro()}
           data-testid="pptx-master-format-background"
@@ -200,9 +200,9 @@ export function SlideMasterTab(props: { master: MasterView }) {
       <SlideSizeGroup />
       <RibbonGroup label="Close">
         <RibbonTextButton
-          label="Close Master View"
+          aria-label="Close Master View"
           tooltip="Close Master View: back to editing slides"
-          variant="accent"
+          variant="primary"
           data-testid="pptx-master-close"
           onClick={() => fireAndForget(m.close(), 'pptx-editor')}
         >

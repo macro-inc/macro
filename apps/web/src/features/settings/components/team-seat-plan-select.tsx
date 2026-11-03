@@ -64,6 +64,7 @@ export function TeamSeatPlanSelect(props: {
         )}
       >
         <Select.Trigger
+          variant="ghost"
           as={Button}
           class="rounded-xs px-1 py-0.5 text-xs -ml-1 data-expanded:bg-ink/10"
           disabled={props.disabled}
@@ -83,7 +84,7 @@ export function TeamSeatPlanSelect(props: {
       <Show when={props.value === 'max' && props.pendingDowngrade}>
         <Button
           size="sm"
-          variant="outline"
+          variant="secondary"
           disabled={props.disabled}
           onClick={() => props.onChange('max')}
         >

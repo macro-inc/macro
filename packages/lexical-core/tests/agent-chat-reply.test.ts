@@ -1,6 +1,8 @@
+import type { SerializedElementNode } from 'lexical';
 import { describe, expect, it } from 'vitest';
 import {
   AGENT_SESSION_LINK_LABEL,
+  type AgentReplySegment,
   composeAgentChatReply,
   PENDING_REPLY_TEXT,
 } from '../utils/agent-chat-reply';
@@ -123,25 +125,39 @@ describe('composeAgentChatReply with segments', () => {
     expect(markdownToPlainText(markdown)).toBe('All tests pass.');
   });
 
-  it('keeps the session link and spinner for a thread reply still running', () => {
-    const markdown = composeAgentChatReply({
-      sessionId: SESSION,
-      body: {
-        kind: 'segments',
-        segments: [
-          { kind: 'activity', turn: 0, segment: 0, rows, sealed: false },
-        ],
-        pending: true,
-      },
-    });
-    const state = markdownToSerializedEditorStateWithIds(markdown);
-    expect(
-      state.root.children.map((child) =>
-        child.type === 'paragraph'
-          ? (child as { children: { type: string }[] }).children[0]?.type
-          : child.type
-      )
-    ).toEqual(['agent-session-mention', 'agent-activity', 'await']);
+  it('shows a running thread reply working once: by its open steps, or else the spinner', () => {
+    const check = (segments: AgentReplySegment[], expected: string[]) => {
+      const markdown = composeAgentChatReply({
+        sessionId: SESSION,
+        body: { kind: 'segments', segments, pending: true },
+      });
+      const state = markdownToSerializedEditorStateWithIds(markdown);
+      expect(
+        state.root.children.map((child) =>
+          child.type === 'paragraph'
+            ? (child as SerializedElementNode).children[0]?.type
+            : child.type
+        )
+      ).toEqual(expected);
+    };
+    check(
+      [{ kind: 'activity', turn: 0, segment: 0, rows, sealed: false }],
+      ['agent-session-mention', 'agent-activity']
+    );
+    check(
+      [
+        { kind: 'activity', turn: 0, segment: 0, rows, sealed: true },
+        { kind: 'prose', markdown: 'On it.' },
+      ],
+      ['agent-session-mention', 'agent-activity', 'text', 'await']
+    );
+    check(
+      [
+        { kind: 'prose', markdown: 'On it.' },
+        { kind: 'activity', turn: 0, segment: 1, rows, sealed: true },
+      ],
+      ['agent-session-mention', 'text', 'agent-activity', 'await']
+    );
   });
 
   it('closes with the footer the harness wrote', () => {

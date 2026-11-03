@@ -1,5 +1,5 @@
 import { TagsCard } from '@app/features/agent-cards/components/tags-card';
-import type { WidgetOf } from '../schema';
+import type { WidgetOf } from '../view';
 
 export type TagsProps = Omit<WidgetOf<'tags'>, 'type'>;
 

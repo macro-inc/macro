@@ -228,8 +228,10 @@ pub async fn run() -> anyhow::Result<()> {
 
     tracing::trace!("initialized config");
 
+    // Per task. Normally each task runs about one query at a time; a larger
+    // max only lets a slow database pile up more sessions.
     let (min_connections, max_connections): (u32, u32) = match config.environment {
-        Environment::Production => (50, 150),
+        Environment::Production => (10, 50),
         Environment::Develop => (25, 100),
         Environment::Local => (15, 50),
     };
@@ -299,6 +301,7 @@ pub async fn run() -> anyhow::Result<()> {
         .search_event_queue(&search_event_queue)
         .document_delete_queue(&document_delete_queue)
         .gmail_ops_queue(&gmail_ops_queue)
+        .gmail_label_write_batches(config.gmail_label_write_batches_enabled)
         .email_scheduled_queue(&email_scheduled_queue);
     let webhook_event_queue = webhook::outbound::SqsWebhookQueue::new(
         Arc::new(sqs_client.clone()),
@@ -651,7 +654,10 @@ pub async fn run() -> anyhow::Result<()> {
         PgGithubSyncRepo::new(db.clone()),
         GithubSyncClientImpl::default(),
         ConnectionGatewayGithubRealtime::new(conn_gateway_client.clone()),
-    );
+    )
+    .with_webhook_publisher(github::broker::BrokerGithubWebhookPublisher(
+        macro_event_broker.clone(),
+    ));
 
     let github_pull_request_index_state = PullRequestIndexRouterState {
         service: Arc::new(PullRequestIndexService::new(
@@ -1282,6 +1288,7 @@ pub async fn run() -> anyhow::Result<()> {
         SpawnedChannelEventDispatcher::new(channel_side_effects.clone()),
         PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service.clone()),
         message_realtime,
+        channels::outbound::pg_agent_creations::PgAgentCreations::new(db.clone()),
     );
     let message_service = Arc::new(
         messages::domain::service::MessageService::new(
@@ -1386,6 +1393,17 @@ pub async fn run() -> anyhow::Result<()> {
         config.enable_ai_usage_enforcement,
         config.ai_pricing(),
         ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement),
+        Some(Arc::new(
+            mcp_client::outbound::auth_service_github_tokens::AuthServiceGithubTokens::new(
+                authentication_service_client::AuthServiceClient::new(
+                    config
+                        .authentication_service_secret_key
+                        .as_ref()
+                        .to_string(),
+                    macro_service_urls::AuthServiceUrl::new()?.to_string(),
+                ),
+            ),
+        )),
     )
     .await
     .context("failed to build Macro agent tool context")?;
@@ -1396,7 +1414,9 @@ pub async fn run() -> anyhow::Result<()> {
     macro_agent_tool_context.channel_tool_context =
         ai_tools::build_channel_tool_context_with_dispatcher(
             db.clone(),
-            std::sync::Arc::new(SpawnedChannelEventDispatcher::new(channel_side_effects)),
+            std::sync::Arc::new(SpawnedChannelEventDispatcher::new(
+                channel_side_effects.clone(),
+            )),
             message_service.clone(),
         );
     let macro_agent_tools = ai_tools::tools_for(ai_tools::AiHost::ChannelBot);
@@ -1477,6 +1497,20 @@ pub async fn run() -> anyhow::Result<()> {
         entity_access_service: entity_access_service.clone(),
         authorization_state: authorization_state.clone(),
     };
+    let external_chat_state = crate::external_chat::build(crate::external_chat::Dependencies {
+        redis: redis_client.clone(),
+        static_files: static_file_service_client::StaticFileServiceClient::new(
+            config.internal_api_key.to_string(),
+            StaticFileServiceUrl::new()?.to_string(),
+        ),
+        pool: db.clone(),
+        access: entity_access_service.clone(),
+        authorization: authorization_state.clone(),
+        notifications: notification_ingress_service.clone(),
+        connection_gateway: conn_gateway_client.clone(),
+        tracker: consumer_tracker.clone(),
+        cancellation: consumer_cancellation_token.clone(),
+    });
 
     // Held by value here and behind an `Arc` in the router state: the impl is a
     // pool handle, so cloning is cheap and `SoupImpl` needs an owned service.
@@ -1580,6 +1614,10 @@ pub async fn run() -> anyhow::Result<()> {
         ),
         macro_event_broker.clone(),
         collab_surface_service.clone(),
+        static_file_service_client::StaticFileServiceClient::new(
+            config.internal_api_key.to_string(),
+            StaticFileServiceUrl::new()?.to_string(),
+        ),
     ));
 
     // Individual initiative and agent-session reads preserve read-after-write
@@ -1933,6 +1971,11 @@ pub async fn run() -> anyhow::Result<()> {
                     calendar_events::outbound::notification_notifier::NotificationCalendarJoinRequestNotifier::new(
                         (*notification_ingress_service).clone(),
                     ),
+                    crate::outbound::calendar_refresh::ConnectionGatewayCalendarRefresh::new(
+                        (*conn_gateway_client).clone(),
+                        db.clone(),
+                        event_broker_tracker.clone(),
+                    ),
                 ),
             ),
             authorization_state.clone(),
@@ -2104,7 +2147,10 @@ pub async fn run() -> anyhow::Result<()> {
         complete_graph::EntityAccessWorkFeedViewers(entity_access_service.clone()),
     );
 
+    let sync_sessions =
+        sync_router::session::SyncSessionFactory::new(SyncServiceUrl::new()?.as_ref().parse()?)?;
     let api_context = ApiContext {
+        sync_sessions,
         dictation_state,
         graphql_work_feed_context,
         contacts_ingress: contacts_ingress.clone(),
@@ -2136,6 +2182,7 @@ pub async fn run() -> anyhow::Result<()> {
             authorization_state.clone(),
         ),
         slack_state,
+        external_chat_state,
         reminders_state: RemindersRouterState::new(
             Arc::new(reminders_service),
             entity_access_service.clone(),
@@ -2152,19 +2199,27 @@ pub async fn run() -> anyhow::Result<()> {
                 entity_access_service.as_ref().clone(),
             ),
         ),
-        graphql_agent_session_entity_loader: graphql_soup::AgentSessionEntityLoader(
+        graphql_agent_session_entity_loader: graphql_soup::AgentSessionEntityLoader::new(
+            primary_entity_soup.clone(),
+            Arc::new(email_service.clone()),
+            entity_access_service.as_ref().clone(),
+        ),
+        graphql_database_rows_context: graphql_databases::DatabaseRowsGraphqlContext::new(
+            databases_sql::view_rows::DatabaseViewRows::new(
+                databases_service.clone(),
+                databases::outbound::pg_view_rows::PgViewRows::new(db.clone()),
+            ),
+            entity_access_service.clone(),
             graphql_soup::soup_item_loader(
                 primary_entity_soup.clone(),
                 Arc::new(email_service.clone()),
                 entity_access_service.as_ref().clone(),
             ),
         ),
-        graphql_primary_soup_item_loader: graphql_soup::PrimarySoupItemLoader(
-            graphql_soup::soup_item_loader_with_team_access(
-                primary_entity_soup,
-                Arc::new(email_service.clone()),
-                entity_access_service.as_ref().clone(),
-            ),
+        graphql_primary_soup_item_loader: graphql_soup::PrimarySoupItemLoader::new(
+            primary_entity_soup,
+            Arc::new(email_service.clone()),
+            entity_access_service.as_ref().clone(),
         ),
         // Ordinary single-entity GraphQL reads use the replica-backed Soup
         // and email readers. Subscription hydration, `soupEntity`, and
@@ -2174,6 +2229,9 @@ pub async fn run() -> anyhow::Result<()> {
             Arc::new(readonly_email_service),
             entity_access_service.as_ref().clone(),
         ),
+        email_focus_reader: Arc::new(email::domain::focus::FocusQueries::new(
+            email::outbound::FocusPgRepository(readonly_db.clone()),
+        )),
         graphql_crm_context: graphql_crm::CrmGraphqlContext::new(pipeline_service.clone()),
         graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext::new(
             initiative_service.clone(),

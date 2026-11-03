@@ -162,7 +162,7 @@ export const AgentsRouteView = withAuth(() => {
       >
         <Show
           when={isTouchDevice() && route()}
-          fallback={<AgentsView initialRoute={route()} />}
+          fallback={<AgentsView route={route()} />}
         >
           {(current) => (
             <RedirectSplit

@@ -100,13 +100,23 @@ fn coding_dispatch_is_available_to_every_host_but_not_internal_subagents() {
         AiHost::Mcp,
     ] {
         let tools = tools_for(host);
-        for name in ["ListCodingAgents", "DispatchCodingAgent"] {
+        for name in [
+            "ListCodingAgents",
+            "ListAgentUpdates",
+            "DispatchCodingAgent",
+        ] {
             assert!(tools.toolset.tools.contains_key(name), "{host:?}: {name}");
+        }
+        for name in ["ListCodingAgents", "DispatchCodingAgent"] {
             assert!(tools.prompt.to_string().contains(name), "{host:?}: {name}");
         }
     }
     let subagent = subagent_toolset();
-    for name in ["ListCodingAgents", "DispatchCodingAgent"] {
+    for name in [
+        "ListCodingAgents",
+        "ListAgentUpdates",
+        "DispatchCodingAgent",
+    ] {
         assert!(!subagent.tools.contains_key(name));
     }
 }
@@ -289,7 +299,7 @@ fn the_agent_session_host_keeps_chats_user_tools_with_the_review_prompt() {
                 .filter(|schema| schema.name != "DisplayResults")
                 .count()),
         "the same tools as chat except agent-session connector discovery and \
-         chat's DisplayResults, which sessions replace with the harness's PresentView"
+         chat's DisplayResults, which sessions replace with the harness's execution.views.present"
     );
 }
 
@@ -350,7 +360,15 @@ fn frontend_schemas_build() {
     }
     assert!(names.contains("QueryDatabase"));
     assert!(names.contains("DiscoverConnectors"));
+    // DisplayResults renders from the fold's decoded view, not a tool schema.
     for name in tools_for(AiHost::Chat).toolset.tools.keys() {
+        if name == "DisplayResults" {
+            assert!(
+                !names.contains(name.as_str()),
+                "DisplayResults has a frontend schema"
+            );
+            continue;
+        }
         assert!(names.contains(name.as_str()), "missing chat tool: {name}");
     }
     for name in [
@@ -773,30 +791,4 @@ fn conversation_tools_only_advertise_new_sessions() {
         }
     }
     assert!(!subagent_toolset().tools.contains_key("ReadChat"));
-}
-
-#[test]
-fn mcp_code_mode_hides_sdk_covered_tools_and_keeps_the_rest() {
-    let standard = tools_for(AiHost::Mcp).toolset;
-    let code = tools_for_mcp_code_mode().toolset;
-    for hidden in ["ReadContent", "ReadChannelMessages", "ListCalendarEvents"] {
-        assert!(standard.tools.contains_key(hidden));
-        assert!(
-            !code.tools.contains_key(hidden),
-            "{hidden} should be hidden"
-        );
-    }
-    for kept in [
-        "NameSearch",
-        "ContentSearch",
-        "ListEntities",
-        "EditDocument",
-    ] {
-        assert!(code.tools.contains_key(kept), "{kept} should stay direct");
-    }
-    assert!(
-        code.tools
-            .keys()
-            .all(|name| standard.tools.contains_key(name))
-    );
 }

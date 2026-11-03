@@ -12,6 +12,7 @@ import type { PresentViewView } from './presentViewView';
  */
 export interface PresentView {
   executionId?: PresentViewExecutionId;
-  /** A dynamic-UI view: the object the `PresentView` tool takes as `view`. */
+  /** A dynamic-UI view, in the format of the PresentView schema in
+ExecuteCode's description. */
   view: PresentViewView;
 }

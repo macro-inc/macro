@@ -22,12 +22,20 @@ import { LightboxChrome } from './LightboxChrome';
 import { LightboxToolbar } from './LightboxToolbar';
 
 const SpinnerIcon: Component<JSX.SvgSVGAttributes<SVGSVGElement>> = (p) => (
-  <Spinner {...p} class="animate-spin" />
+  <Spinner
+    {...p}
+    class={cn(
+      'size-4 touch:size-6 shrink-0 pointer-events-none animate-spin',
+      p.class
+    )}
+  />
 );
 
 type LightboxProps = {
   // Current image to display
   src: Accessor<string | undefined>;
+  // Match the source image's CORS mode when the host does not supply CORP.
+  crossOrigin?: JSX.ImgHTMLAttributes<HTMLImageElement>['crossorigin'];
   // Used for the download filename
   imageId: Accessor<string>;
   // Optional pre-fetched blob override (e.g. DSS images). Falls back to fetching `src`.
@@ -87,30 +95,41 @@ export function Lightbox(props: LightboxProps) {
       >
         <LightboxToolbar isVisible={true}>
           <Button
+            aria-label="Copy image"
+            tooltip="Copy image"
             variant="ghost"
             size="icon-md"
             onClick={images.copyToClipboard}
             disabled={images.isBusy() || images.isPrefetching()}
-            label="Copy image"
           >
-            {images.isCopying() ? <SpinnerIcon /> : <ClipboardIcon />}
+            {images.isCopying() ? (
+              <SpinnerIcon />
+            ) : (
+              <ClipboardIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+            )}
           </Button>
           <Button
+            aria-label="Download image"
+            tooltip="Download image"
             variant="ghost"
             size="icon-md"
             onClick={images.downloadImage}
             disabled={images.isBusy() || images.isPrefetching()}
-            label="Download image"
           >
-            {images.isDownloading() ? <SpinnerIcon /> : <DownloadIcon />}
+            {images.isDownloading() ? (
+              <SpinnerIcon />
+            ) : (
+              <DownloadIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+            )}
           </Button>
           <Dialog.CloseButton
+            aria-label="Close"
+            tooltip="Close"
             as={Button}
             variant="ghost"
             size="icon-md"
-            label="Close"
           >
-            <XIcon />
+            <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </Dialog.CloseButton>
         </LightboxToolbar>
 
@@ -165,6 +184,7 @@ export function Lightbox(props: LightboxProps) {
               }
             >
               <img
+                crossorigin={props.crossOrigin}
                 class="size-full sm:min-w-50 sm:max-h-[80vh] object-contain select-none"
                 style={{ '-webkit-touch-callout': 'none' }}
                 src={props.src()}

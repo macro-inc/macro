@@ -1,5 +1,5 @@
 import type { ThemeV3 } from '@theme/types/themeTypes';
-import { themeCssVars } from '@theme/utils/themeColorTokens';
+import { themeCssVars } from '@theme/utils/themeCssVars';
 import { createUniqueId, For, Show } from 'solid-js';
 
 type AppearanceMode = 'system' | 'light' | 'dark';
@@ -8,6 +8,7 @@ type AppearanceMode = 'system' | 'light' | 'dark';
 function ThemePreview(props: { theme: ThemeV3 }) {
   return (
     <div
+      data-theme-light={String(props.theme.mode === 'light')}
       class="absolute inset-0 overflow-hidden rounded-lg bg-page p-2.5"
       style={{
         ...themeCssVars(props.theme),

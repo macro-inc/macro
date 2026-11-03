@@ -1,0 +1,1 @@
+The complete task description after its title. Include all description sentences and Markdown in input order. Exclude the title and separately stated priority, status, assignee, project or due-date metadata. Null when there is no description.

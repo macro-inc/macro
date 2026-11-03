@@ -1,3 +1,4 @@
+import { analytics } from '@app/lib/analytics';
 import { getCallJoinTab } from '@channel/Call/call-tabs';
 import { useCall } from '@channel/Call/use-call';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -39,6 +40,11 @@ export function ActiveCallMessage(props: { channelId: string }) {
   );
 
   async function handleJoin() {
+    analytics.track('call_action', {
+      action: 'join_clicked',
+      channelId: props.channelId,
+      isExistingCall: true,
+    });
     try {
       await call.joinCall();
     } catch (error) {

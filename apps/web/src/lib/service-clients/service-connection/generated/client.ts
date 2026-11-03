@@ -60,6 +60,67 @@ export const batchSendMessageHandler = async (
   } as batchSendMessageHandlerResponse;
 };
 
+/**
+ * @summary Sends a message to every open connection on every instance. Delivery is
+best-effort and asynchronous, so there are no receipts.
+ */
+export type broadcastMessageHandlerResponse202 = {
+  data: void;
+  status: 202;
+};
+
+export type broadcastMessageHandlerResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type broadcastMessageHandlerResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type broadcastMessageHandlerResponseSuccess =
+  broadcastMessageHandlerResponse202 & {
+    headers: Headers;
+  };
+export type broadcastMessageHandlerResponseError = (
+  | broadcastMessageHandlerResponse401
+  | broadcastMessageHandlerResponse500
+) & {
+  headers: Headers;
+};
+
+export type broadcastMessageHandlerResponse =
+  | broadcastMessageHandlerResponseSuccess
+  | broadcastMessageHandlerResponseError;
+
+export const getBroadcastMessageHandlerUrl = () => {
+  return `/message/broadcast`;
+};
+
+export const broadcastMessageHandler = async (
+  sendMessageBody: SendMessageBody,
+  options?: RequestInit
+): Promise<broadcastMessageHandlerResponse> => {
+  const res = await fetch(getBroadcastMessageHandlerUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(sendMessageBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: broadcastMessageHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as broadcastMessageHandlerResponse;
+};
+
 export type sendMessageHandlerResponse201 = {
   data: SendMessageResponse;
   status: 201;

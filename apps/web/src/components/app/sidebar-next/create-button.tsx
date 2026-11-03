@@ -4,6 +4,7 @@ import {
 } from '@app/features/command/Launcher';
 import { APP_TOUR } from '@app/features/command/sidebar/tour';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { t } from '@app/lib/i18n';
 import { TOKENS } from '@core/hotkey/tokens';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button } from '@ui';
@@ -15,13 +16,16 @@ export const SidebarRailCreateButton = () => {
   const createMenuTarget = tourTarget(APP_TOUR.createMenu);
   return (
     <Button
+      aria-label={t('nav.create')}
+      tooltip={{
+        content: t('nav.create'),
+        placement: 'right',
+        hotkey: TOKENS.global.createCommand,
+      }}
       ref={createMenuTarget}
       variant="ghost"
-      class="size-10 [&_svg]:size-5"
+      class="size-10"
       size="icon-md"
-      label="Create"
-      tooltipPlacement="right"
-      hotkey={TOKENS.global.createCommand}
       aria-haspopup="dialog"
       aria-expanded={createMenuOpen()}
       onClick={() => {

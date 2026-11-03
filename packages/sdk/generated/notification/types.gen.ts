@@ -613,7 +613,7 @@ export type EntityAccessRequestedMetadata = {
 /**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 
 /**
  * A plain old json error response for use with axum.
@@ -625,6 +625,29 @@ export type ErrorResponse = {
      */
     message: string;
 };
+
+/**
+ * A live message in an independently shared external chat.
+ */
+export type ExternalChatMessageMetadata = {
+    /**
+     * The chat's name.
+     */
+    chatName: string;
+    /**
+     * Stable message id; retries use it as their notification id.
+     */
+    messageId: string;
+    /**
+     * The messaging service the chat lives in.
+     */
+    provider: ExternalChatProvider;
+};
+
+/**
+ * The messaging service an external chat lives in.
+ */
+export type ExternalChatProvider = 'whatsapp';
 
 /**
  * The strongly typed response for listing user notifications.
@@ -1171,6 +1194,12 @@ export type NotifEvent = {
     tag: 'reminder';
 } | {
     /**
+     * A live message in a shared external chat.
+     */
+    content: ExternalChatMessageMetadata;
+    tag: 'external_chat_message';
+} | {
+    /**
      * A calendar event alarm came due.
      */
     content: CalendarEventReminderMetadata;
@@ -1251,6 +1280,12 @@ export type NotifEvent = {
      */
     content: CalendarEventJoinRequestMetadata;
     tag: 'calendar_event_join_request';
+} | {
+    /**
+     * One of the user's routines finished a run, successfully or not.
+     */
+    content: RoutineRunFinishedMetadata;
+    tag: 'routine_run_finished';
 };
 
 /**
@@ -1451,6 +1486,30 @@ export type RepliedToDocumentCommentThreadMetadata = {
  * Permission level used by an access request, excluding ownership.
  */
 export type RequestedAccessLevel = 'view' | 'comment' | 'edit';
+
+/**
+ * One of the recipient's routines finished a run. Every run notifies,
+ * whether it succeeded or failed.
+ */
+export type RoutineRunFinishedMetadata = {
+    /**
+     * How the run ended.
+     */
+    outcome: RoutineRunOutcome;
+    /**
+     * The routine that ran.
+     */
+    routineId: string;
+    /**
+     * The routine's name when it ran.
+     */
+    routineName: string;
+};
+
+/**
+ * How a routine run ended, as its notification reports it.
+ */
+export type RoutineRunOutcome = 'succeeded' | 'failed';
 
 /**
  * Metadata for when a user is assigned to a task

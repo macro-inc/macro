@@ -15,6 +15,7 @@ export const NOTIFICATION_LABEL_BY_TYPE: Record<NotificationType, string> = {
   crm_discussion: 'COMMENT',
   channel_invite: 'INVITE',
   new_email: 'EMAIL',
+  external_chat_message: 'EXTERNAL',
   invite_to_team: 'INVITE',
   task_assigned: 'ASSIGNED',
   ai_response: 'AI',
@@ -32,4 +33,5 @@ export const NOTIFICATION_LABEL_BY_TYPE: Record<NotificationType, string> = {
   agent_session_settled: 'AGENT',
   agent_session_waiting_for_input: 'ASKING',
   agent_session_mentioned: 'MENTION',
+  routine_run_finished: 'ROUTINE',
 } as const;

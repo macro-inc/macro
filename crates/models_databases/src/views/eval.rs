@@ -59,7 +59,10 @@ fn is_empty(value: &CellValue) -> bool {
         CellValue::Options(options) => options.is_empty(),
         CellValue::Entities(references) => references.is_empty(),
         CellValue::Rows(rows) => rows.is_empty(),
-        CellValue::Number(_) | CellValue::Boolean(_) | CellValue::Date(_) => false,
+        CellValue::Number(_)
+        | CellValue::Boolean(_)
+        | CellValue::Date(_)
+        | CellValue::DateRange(_) => false,
     }
 }
 
@@ -101,6 +104,12 @@ fn condition_holds(condition: &FilterCondition, cells: &HashMap<ColumnId, CellVa
                 DateOperator::OnOrBefore => date <= value,
                 DateOperator::OnOrAfter => date >= value,
             }
+        }
+        FilterTest::DateRange { operator, value } => {
+            let CellValue::DateRange(range) = cell else {
+                return false;
+            };
+            operator.holds(range, *value)
         }
         FilterTest::Checkbox { checked } => {
             matches!(cell, CellValue::Boolean(held) if held == checked)

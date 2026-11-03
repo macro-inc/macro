@@ -1,3 +1,4 @@
+import type { PeerRecord } from '@block-md/history/author';
 import { ThrownResultError } from '@core/util/result';
 import { syncServiceClient } from '@service-sync/client';
 import { queryOptions, useQuery } from '@tanstack/solid-query';
@@ -6,10 +7,15 @@ import { syncKeys } from './keys';
 
 async function fetchDocumentPeers(
   documentId: string
-): Promise<Map<string, string>> {
+): Promise<Map<string, PeerRecord>> {
   const result = await syncServiceClient.getDocumentMetadata({ documentId });
   if (result.isErr()) throw new ThrownResultError(result.error);
-  return new Map(result.value.peers.map((p) => [String(p.peer_id), p.user_id]));
+  return new Map(
+    result.value.peers.map((p) => [
+      String(p.peer_id),
+      { userId: p.user_id, actor: p.actor ?? null },
+    ])
+  );
 }
 
 function documentPeersQueryOptions(documentId: string) {

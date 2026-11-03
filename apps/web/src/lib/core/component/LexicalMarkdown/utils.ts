@@ -27,6 +27,7 @@ import {
   EXTERNAL_TRANSFORMERS,
   INITIALIZE_LOCAL_STATUS,
   INTERNAL_TRANSFORMERS,
+  protectEmptyParagraphLines,
   stripDraftCommentMarks,
 } from '@macro-inc/lexical-core';
 import { SKIP_SCROLL_INTO_VIEW_TAG } from '@macro-inc/lexical-core/constants';
@@ -342,21 +343,17 @@ export function setEditorStateFromMarkdown(
     });
   }
   const transformers = weakTransformersByEditor.get(editor)![target];
+  const source = protectEmptyParagraphLines(markdown, transformers);
 
   if (!inUpdate) {
     editor.update(() => {
       $addUpdateTag(SKIP_DOM_SELECTION_TAG);
-      $convertFromMarkdownString(
-        markdown,
-        transformers,
-        node,
-        preserveNewLines
-      );
+      $convertFromMarkdownString(source, transformers, node, preserveNewLines);
     });
     editor.read(() => {});
     return editor.getEditorState();
   } else {
-    $convertFromMarkdownString(markdown, transformers, node, preserveNewLines);
+    $convertFromMarkdownString(source, transformers, node, preserveNewLines);
   }
 }
 
@@ -475,7 +472,10 @@ export function bindStateAs<T extends EditorState | string>(
  * wrapping and is therefore hard to query with lexical alone.
  */
 export function $getCaretRect(): DOMRect | null {
-  const domRange = window.getSelection()?.getRangeAt(0);
+  const domSelection = window.getSelection();
+  const domRange = domSelection?.rangeCount
+    ? domSelection.getRangeAt(0)
+    : undefined;
   if (domRange) {
     const rects = domRange.getClientRects();
     if (rects.length) return rects[rects.length - 1];

@@ -76,7 +76,11 @@ import {
   renameChannelHandler,
   shareWithChannelHandler,
 } from './ChannelMutations';
-import { describeCodeToolsHandler, executeCodeHandler } from './CodeMode';
+import {
+  describeCodeToolsHandler,
+  executeCodeHandler,
+  readCodeDocsHandler,
+} from './CodeMode';
 import {
   dispatchCodingAgentHandler,
   listCodingAgentsHandler,
@@ -90,6 +94,7 @@ import {
   readDiscussionHandler,
   resolveCommentHandler,
 } from './Comments';
+import { connectMcpServerHandler } from './ConnectMcpServer';
 import { createDocumentHandler } from './CreateDocument';
 import { createProjectHandler } from './CreateProject';
 import { createSkillHandler } from './CreateSkill';
@@ -106,7 +111,6 @@ import {
   readPhotoshopDocumentHandler,
 } from './DesignDocument';
 import { discoverConnectorsHandler } from './DiscoverConnectors';
-import { displayResultsHandler } from './DisplayResults';
 import { editDocumentHandler } from './EditDocument';
 import { editTagHandler } from './EditTag';
 import {
@@ -129,12 +133,18 @@ import {
 } from './ImportTools';
 import { initiativeToolHandlers } from './Initiatives';
 import { LegacyGeneratedImage } from './LegacyGeneratedImage';
+import { listAgentUpdatesHandler } from './ListAgentUpdates';
 import { listEntitiesHandler } from './ListEntities';
 import { listInboxesHandler } from './ListInboxes';
 import { listLabelsHandler } from './ListLabels';
 import { listTagsHandler } from './ListTags';
 import { listTeamMembersHandler } from './ListTeamMembers';
 import { loadToolsHandler } from './LoadTools';
+import {
+  getUserActivityHandler,
+  readMemoryHandler,
+  updateMemoryHandler,
+} from './Memory';
 import { moveToProjectHandler } from './MoveToProject';
 import {
   listNotificationsHandler,
@@ -212,8 +222,10 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ...initiativeToolHandlers,
   ExecuteCode: executeCodeHandler,
   DescribeCodeTools: describeCodeToolsHandler,
+  ReadCodeDocs: readCodeDocsHandler,
   DispatchCodingAgent: dispatchCodingAgentHandler,
   ListCodingAgents: listCodingAgentsHandler,
+  ListAgentUpdates: listAgentUpdatesHandler,
   ReadSpreadsheet: readSpreadsheetHandler,
   CalculateSpreadsheet: calculateSpreadsheetHandler,
   EditSpreadsheet: editSpreadsheetHandler,
@@ -263,6 +275,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ImportFromLinear: importFromLinearHandler,
   ImportFromJira: importFromJiraHandler,
   ImportNotionPage: importNotionPageHandler,
+  ConnectMcpServer: connectMcpServerHandler,
   GetCompany: getCompanyHandler,
   CreateCompany: createCompanyHandler,
   CreateContact: createContactHandler,
@@ -295,7 +308,6 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   RenameItem: renameItemHandler,
   UpdateSharing: updateSharingHandler,
   BashCodeExecution: bashCodeExecutionHandler,
-  DisplayResults: displayResultsHandler,
   DiscoverConnectors: discoverConnectorsHandler,
   ContentSearch: contentSearchHandler,
   CreateDocument: createDocumentHandler,
@@ -344,6 +356,9 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   SearchSkills: searchSkillsHandler,
   SearchTools: searchToolsHandler,
   SelfKnowledge: selfKnowledgeHandler,
+  ReadMemory: readMemoryHandler,
+  UpdateMemory: updateMemoryHandler,
+  GetUserActivity: getUserActivityHandler,
   SendChannelMessage: sendChannelMessageHandler,
   ShareWithChannel: shareWithChannelHandler,
   SendConfirmedEmail: sendConfirmedEmailHandler,

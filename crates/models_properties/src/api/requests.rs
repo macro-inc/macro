@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::api::error::{
     PropertyDefinitionValidationError, PropertyOptionValidationError, PropertyValueValidationError,
 };
-use crate::shared::{DataType, EntityReference, EntityType};
+use crate::shared::{DataType, DateRange, EntityReference, EntityType};
 
 // ===== Property Definition Requests =====
 
@@ -34,6 +34,8 @@ pub enum PropertyDataType {
     Boolean,
     /// Date and time values.
     Date,
+    /// A span from a start date-time to an end one.
+    DateRange,
     /// Numeric values.
     Number,
     /// String/text values.
@@ -67,6 +69,7 @@ impl PropertyDataType {
         match self {
             PropertyDataType::Boolean => DataType::Boolean,
             PropertyDataType::Date => DataType::Date,
+            PropertyDataType::DateRange => DataType::DateRange,
             PropertyDataType::Number => DataType::Number,
             PropertyDataType::String => DataType::String,
             PropertyDataType::SelectNumber { .. } => DataType::SelectNumber,
@@ -246,6 +249,8 @@ pub enum SetPropertyValue {
     Boolean { value: bool },
     /// Date and time value
     Date { value: DateTime<Utc> },
+    /// Date range value
+    DateRange { value: DateRange },
     /// Numeric value
     Number { value: f64 },
     /// String/text value
@@ -288,6 +293,16 @@ impl SetPropertyValue {
                 }
                 if is_multi_select {
                     return Err(PropertyValueValidationError::DateMultiSelect);
+                }
+                Ok(())
+            }
+
+            SetPropertyValue::DateRange { .. } => {
+                if !matches!(data_type, DataType::DateRange) {
+                    return Err(PropertyValueValidationError::DateRangeWrongType);
+                }
+                if is_multi_select {
+                    return Err(PropertyValueValidationError::DateRangeMultiSelect);
                 }
                 Ok(())
             }

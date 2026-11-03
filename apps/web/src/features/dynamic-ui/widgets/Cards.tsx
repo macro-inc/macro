@@ -1,7 +1,7 @@
 import { ItemCard } from '@app/features/agent-cards/components/item-card';
 import { cn } from '@ui';
 import { For, Show } from 'solid-js';
-import type { WidgetOf } from '../schema';
+import type { WidgetOf } from '../view';
 
 export type CardsProps = Omit<WidgetOf<'cards'>, 'type'>;
 

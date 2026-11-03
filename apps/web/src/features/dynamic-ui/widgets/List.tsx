@@ -27,7 +27,7 @@ import {
 } from '@queries/soup/items';
 import { formatDocumentName } from '@service-storage/util/filename';
 import { createMemo, For, Show, Suspense } from 'solid-js';
-import type { EntityRef, WidgetOf } from '../schema';
+import type { EntityRef, WidgetOf } from '../view';
 import { TaskResultRow } from './TaskResultRow';
 
 /**

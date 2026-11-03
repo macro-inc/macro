@@ -5,15 +5,15 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CellValueOneOfOnethreeType } from './cellValueOneOfOnethreeType';
-import type { EntityRef } from './entityRef';
+import type { OptionRef } from './optionRef';
 
 /**
- * References to Macro entities of the kind the column points at; at
-most one for a single-valued column.
+ * Options of a select or tag column; at most one for a single-valued
+column.
  */
 export type CellValueOneOfOnethree = {
   type: CellValueOneOfOnethreeType;
-  /** References to Macro entities of the kind the column points at; at
-most one for a single-valued column. */
-  value: EntityRef[];
+  /** Options of a select or tag column; at most one for a single-valued
+column. */
+  value: OptionRef[];
 };

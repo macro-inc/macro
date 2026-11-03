@@ -1,6 +1,6 @@
 # Type Alias: FilterTest
 
-> **FilterTest** = \{ `kind`: `"presence"`; `operator`: [`PresenceOperator`](PresenceOperator.md); \} \| \{ `kind`: `"text"`; `operator`: [`TextOperator`](TextOperator.md); `value`: `string`; \} \| \{ `kind`: `"number"`; `operator`: [`NumberOperator`](NumberOperator.md); `value`: `number`; \} \| \{ `kind`: `"date"`; `operator`: [`DateOperator`](DateOperator.md); `value`: `string`; \} \| \{ `checked`: `boolean`; `kind`: `"checkbox"`; \} \| \{ `kind`: `"options"`; `operator`: [`SetOperator`](SetOperator.md); `options`: `string`[]; \} \| \{ `entities`: `string`[]; `kind`: `"entities"`; `operator`: [`SetOperator`](SetOperator.md); \}
+> **FilterTest** = \{ `kind`: `"presence"`; `operator`: [`PresenceOperator`](PresenceOperator.md); \} \| \{ `kind`: `"text"`; `operator`: [`TextOperator`](TextOperator.md); `value`: `string`; \} \| \{ `kind`: `"number"`; `operator`: [`NumberOperator`](NumberOperator.md); `value`: `number`; \} \| \{ `kind`: `"date"`; `operator`: [`DateOperator`](DateOperator.md); `value`: `string`; \} \| \{ `kind`: `"dateRange"`; `operator`: [`DateRangeOperator`](DateRangeOperator.md); `value`: `string`; \} \| \{ `checked`: `boolean`; `kind`: `"checkbox"`; \} \| \{ `kind`: `"options"`; `operator`: [`SetOperator`](SetOperator.md); `options`: `string`[]; \} \| \{ `entities`: `string`[]; `kind`: `"entities"`; `operator`: [`SetOperator`](SetOperator.md); \}
 
 What a column's cell must be, by the kind of value the column holds.
 
@@ -50,6 +50,18 @@ What a column's cell must be, by the kind of value the column holds.
 | `kind` | `"date"` | - |
 | `operator` | [`DateOperator`](DateOperator.md) | How the cell compares. |
 | `value` | `string` | The date-time compared against. |
+
+***
+
+### Type Literal
+
+\{ `kind`: `"dateRange"`; `operator`: [`DateRangeOperator`](DateRangeOperator.md); `value`: `string`; \}
+
+| Name | Type | Description |
+| ------ | ------ | ------ |
+| `kind` | `"dateRange"` | - |
+| `operator` | [`DateRangeOperator`](DateRangeOperator.md) | How the cell's range stands to the day. |
+| `value` | `string` | The start of the day compared against. |
 
 ***
 

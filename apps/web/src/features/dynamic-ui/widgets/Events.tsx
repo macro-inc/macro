@@ -1,5 +1,5 @@
 import { Agenda } from '@app/features/agent-cards/components/agenda';
-import type { WidgetOf } from '../schema';
+import type { WidgetOf } from '../view';
 
 export type EventsProps = Omit<WidgetOf<'events'>, 'type'>;
 

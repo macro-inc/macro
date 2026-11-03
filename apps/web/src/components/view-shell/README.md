@@ -18,6 +18,8 @@ The control inset is derived from that center and the control's size. Never
 align trailing controls by their outer edges or offset an individual icon.
 
 - `ViewSidebar.Primary` gives create actions and toolbars the same 8px top inset.
+- `ListHeader` reserves the title's natural width and scrolls right-aligned controls
+  in the remaining space; keep switcher triggers inside the title's clip boundary.
 - `ViewSidebar.CloseButton` closes the owning split in both docked navigation and
   narrow navigation overlays. Its visibility follows the split controller, not
   the sidebar breakpoint; the last remaining list split still has no close action.
@@ -31,3 +33,14 @@ align trailing controls by their outer edges or offset an individual icon.
   row, as in Email's inbox list. Do not repeat numeric offsets in the workspace.
 
 Desktop multi-split close controls live in the outer frame corner. The inherited split controller sets `closeButtonPlacement` to `frame` to suppress duplicate header/sidebar close buttons; touch layouts retain header placement.
+
+Automatic navigation closure after the first measurable layout keeps the docked
+Resize panel mounted while its width closes over 140ms. The initial layout,
+including a view becoming measurable after mounting at zero width, settles
+without motion. Main expands alongside later sidebar closures without writing
+the saved wide preference. An explicit overlay opening or required navigation
+takes priority over the exit, and a quick return to wide reuses the docked panel.
+A single host phase (`docked`, `closing`, or `overlay`) controls mounting.
+Breakpoint transitions own host changes; pin changes only animate the active
+host and do not cancel a pending narrow exit.
+Reduced-motion and browsers without WAAPI switch hosts immediately.

@@ -1,9 +1,15 @@
+import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
+import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import DuplicateIcon from '@icon/system/regular/copy-simple.svg';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import DownloadIcon from '@icon/system/regular/download-simple.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
 import PencilIcon from '@icon/system/regular/pencil-line.svg';
+import StarIcon from '@icon/system/regular/star.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import UploadIcon from '@icon/system/regular/upload-simple.svg';
 import WebhookIcon from '@phosphor/webhooks-logo.svg';
@@ -37,9 +43,24 @@ import {
 /** A CSV that cannot become a table, or a file that could not be read at all. */
 type CsvImportFailure = DatabaseCsvFailure | { kind: 'unreadable' };
 
+/** The items every entity's "…" menu offers, supplied by the host. */
+export type DatabaseEntityActions = {
+  favorited: boolean;
+  onToggleFavorite: () => void;
+  onCopyLink: () => void;
+  onCopyId: () => void;
+  /** Whether a copy is being made; Duplicate waits for it. */
+  duplicating: boolean;
+  /** Copy the database into a new one the viewer owns, and open it. */
+  onDuplicate: () => void;
+  /** Present for the owner, who alone may file it in a folder. */
+  onMoveToFolder?: () => void;
+};
+
 export function DatabasePageActions(props: {
   detail: DatabaseDetail;
   table?: TableDetail;
+  entityActions?: DatabaseEntityActions;
   onImported: (tableId: string) => void;
   onRename: () => void;
   onDelete: () => ResultAsync<void, DatabaseEntityFailure>;
@@ -149,10 +170,11 @@ export function DatabasePageActions(props: {
       </Show>
       <Dropdown>
         <Dropdown.Trigger
+          aria-label="Database actions"
+          tooltip="Database actions"
           ref={menuButton}
           variant="ghost"
           size="icon-sm"
-          label="Database actions"
         >
           <DotsThreeIcon class="size-5" />
         </Dropdown.Trigger>
@@ -166,12 +188,55 @@ export function DatabasePageActions(props: {
             } else if (confirmDelete()) event.preventDefault();
           }}
         >
-          <Show when={editable()}>
+          <Show when={props.entityActions}>
+            {(actions) => (
+              <>
+                <Dropdown.Group>
+                  <Dropdown.Item onSelect={actions().onCopyLink}>
+                    <LinkIcon class="size-4 shrink-0" />
+                    Copy Link
+                  </Dropdown.Item>
+                  <Dropdown.Item onSelect={actions().onCopyId}>
+                    <CopyIcon class="size-4 shrink-0" />
+                    Copy ID
+                  </Dropdown.Item>
+                </Dropdown.Group>
+                <Dropdown.Group>
+                  <Dropdown.Item onSelect={actions().onToggleFavorite}>
+                    <StarIcon class="size-4 shrink-0" />
+                    {actions().favorited ? 'Unfavorite' : 'Favorite'}
+                  </Dropdown.Item>
+                  <Show when={actions().onMoveToFolder}>
+                    {(moveToFolder) => (
+                      <Dropdown.Item onSelect={moveToFolder()}>
+                        <ArrowRightIcon class="size-4 shrink-0" />
+                        {t('entityActions.moveToFolder')}
+                      </Dropdown.Item>
+                    )}
+                  </Show>
+                </Dropdown.Group>
+              </>
+            )}
+          </Show>
+          <Show when={editable() || props.entityActions}>
             <Dropdown.Group>
-              <Dropdown.Item onSelect={() => (focusTitleAfterClose = true)}>
-                <PencilIcon class="size-4 shrink-0" />
-                Rename
-              </Dropdown.Item>
+              <Show when={editable()}>
+                <Dropdown.Item onSelect={() => (focusTitleAfterClose = true)}>
+                  <PencilIcon class="size-4 shrink-0" />
+                  Rename
+                </Dropdown.Item>
+              </Show>
+              <Show when={props.entityActions}>
+                {(actions) => (
+                  <Dropdown.Item
+                    disabled={actions().duplicating}
+                    onSelect={actions().onDuplicate}
+                  >
+                    <DuplicateIcon class="size-4 shrink-0" />
+                    {t('entityActions.duplicate')}
+                  </Dropdown.Item>
+                )}
+              </Show>
             </Dropdown.Group>
           </Show>
           <Dropdown.Group>
@@ -238,12 +303,14 @@ export function DatabasePageActions(props: {
       </Show>
       <Show when={webhooksOpen() && props.table}>
         {(table) => (
-          <WebhooksDialog
-            databaseId={props.detail.database.id}
-            table={table()}
-            onClose={() => setWebhooksOpen(false)}
-            returnFocus={menuButton}
-          />
+          <Show keyed when={`${props.detail.database.id}:${table().table.id}`}>
+            <WebhooksDialog
+              databaseId={props.detail.database.id}
+              table={table()}
+              onClose={() => setWebhooksOpen(false)}
+              returnFocus={menuButton}
+            />
+          </Show>
         )}
       </Show>
       <DeleteDialog

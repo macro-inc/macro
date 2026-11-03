@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { CalendarEvent } from '../types';
 import {
   addedGuestEmails,
+  canForwardInvitation,
   eventGuestEditing,
   GUEST_INVITES_RESTRICTED,
   GUEST_LIST_HIDDEN,
@@ -161,6 +162,39 @@ describe('guestInvitesRestricted', () => {
   it('stays quiet on a snapshot, whose only guest is the viewer', () => {
     expect(
       guestInvitesRestricted({
+        ...invited({ ...GUEST, rsvp: false }),
+        isSnapshot: true,
+      })
+    ).toBe(false);
+  });
+});
+
+describe('canForwardInvitation', () => {
+  it('lets a guest who cannot invite forward instead, hidden list or not', () => {
+    expect(canForwardInvitation(invited(GUEST))).toBe(true);
+    expect(
+      canForwardInvitation({
+        ...invited(GUEST),
+        guestPolicy: {
+          canModify: false,
+          canInviteOthers: true,
+          canSeeOtherGuests: false,
+        },
+      })
+    ).toBe(true);
+  });
+
+  it('is not offered to someone who can invite, or on a copy that cannot change', () => {
+    expect(canForwardInvitation(invited(INVITING_GUEST))).toBe(false);
+    expect(canForwardInvitation(invited(ORGANIZER))).toBe(false);
+    expect(canForwardInvitation({ ...invited(GUEST), isCancelled: true })).toBe(
+      false
+    );
+    expect(canForwardInvitation({ ...invited(GUEST), isReadOnly: true })).toBe(
+      false
+    );
+    expect(
+      canForwardInvitation({
         ...invited({ ...GUEST, rsvp: false }),
         isSnapshot: true,
       })

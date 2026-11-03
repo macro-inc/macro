@@ -11,8 +11,10 @@ mod config;
 mod date_buckets;
 mod field;
 mod meta;
+mod property_date_ranges;
 
 pub use config::*;
 pub use date_buckets::*;
 pub use field::*;
 pub use meta::*;
+pub use property_date_ranges::*;

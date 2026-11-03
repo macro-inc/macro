@@ -71,10 +71,9 @@ until the backend is complete.
   if yours does, widen the constraint in a migration.
 - Regenerate every client that embeds `EntityType` (storage, cognition,
   connection, notification, properties, search): `cd apps/web && bun run gen-api`,
-  then `cd packages/sdk && just update-generated`. Run
-  `cd apps/web && bun run gen-dynamic-ui-schema` too; it regenerates
-  `crates/ai_tools/src/display_results/schema.generated.json`, which embeds
-  `EntityType`.
+  then `cd packages/sdk && just update-generated`. If views should show the
+  kind, add it to `EntityType` in `crates/dynamic_ui/src/view.rs` and run
+  `cd apps/web && just gen-dynamic-ui-types`.
 
 ## 2. Schema and migrations
 
@@ -183,8 +182,11 @@ Postgres repo.
   databases, and pipelines are not there yet, so their trash is never emptied.
 - **Favorites (optional):** `crates/favorites/src/domain/mutation_service.rs`
   `validate_favoritable` is exhaustive; recent kinds return unsupported. If you
-  enable favorites, also update `crates/graphql_favorite` and clean up `favorite`
-  rows on delete, since nothing else does.
+  enable favorites, join your table in `list_favorites`
+  (`crates/favorites/src/outbound/pg_favorites_repo.rs`) so a favorite of a
+  deleted entity stops listing, as documents, projects, and agent sessions do.
+  Nothing reaps the `favorite` rows themselves; a delete-time cleanup is still
+  worth adding when the kind is deleted in bulk.
 
 ## 6. Properties (optional)
 

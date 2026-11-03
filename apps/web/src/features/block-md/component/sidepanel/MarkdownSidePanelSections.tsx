@@ -11,12 +11,16 @@ import {
   GithubPullRequestDetailsRows,
   SidePanel,
 } from '@components/app/side-panel';
-import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
+import {
+  EntityMetadata,
+  EntityMetadataRow,
+} from '@components/app/side-panel/EntityMetadata';
+import type { SidePanelSectionLayout } from '@components/app/side-panel/SidePanel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { EntityIcon } from '@core/component/EntityIcon';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { Wordcount } from '@core/component/LexicalMarkdown/component/status/Wordcount';
 import { Notifications } from '@core/component/Notifications';
+import { References } from '@core/component/References';
 import {
   enableProjects,
   USE_MACRO_PR_SUMMARY_BLOCK,
@@ -33,6 +37,8 @@ import {
   getDefaultPinnedProperties,
   SYSTEM_PROPERTY_IDS,
 } from '@property/constants';
+import { queryReadyGate } from '@queries/gate';
+import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import {
   type GithubPullRequestWithDetails,
@@ -47,9 +53,8 @@ import { createPinnedProperties } from '../../primitives/create-pinned-propertie
 import { DispatchAgentButton } from '../DispatchAgentMenu';
 import { useMarkdownName } from '../MarkdownNameProvider';
 import { TaskDuplicateMatchesSidePanelSection } from '../TaskDuplicateMatches';
-import { MarkdownReferencesSection } from './MarkdownReferencesSection';
 
-/** Registers markdown header actions, panel sections, and metadata footer. */
+/** Registers markdown header actions, panel sections, and shared metadata. */
 export function MarkdownSidePanelSections() {
   const { documentId, kind, permissions } = useMarkdownDocument();
   const canEdit = permissions.canEdit;
@@ -71,6 +76,7 @@ export function MarkdownSidePanelSections() {
           </Show>
           <HeaderActionGroup label="Actions">
             <AskMacroButton
+              grouped
               entity={{
                 type: 'document',
                 id: documentId(),
@@ -82,10 +88,10 @@ export function MarkdownSidePanelSections() {
         </div>
       </SidePanel.HeaderActions>
       <SidePanel.Footer>
+        <DetailsSectionContent documentId={documentId()} />
         <Show when={!isTask()}>
           <StatsSectionContent />
         </Show>
-        <DetailsSectionContent documentId={documentId()} />
       </SidePanel.Footer>
       <EntityTagsSection
         entityId={documentId()}
@@ -98,14 +104,16 @@ export function MarkdownSidePanelSections() {
         title="Properties"
         defaultOpen
         order={25}
-      >
-        <PropertiesSectionContent
-          documentId={documentId()}
-          isTask={isTask()}
-          canEdit={canEdit()}
-          documentName={displayName() ?? ''}
-        />
-      </SidePanel.Section>
+        render={(renderSection) => (
+          <PropertiesSectionContent
+            documentId={documentId()}
+            isTask={isTask()}
+            canEdit={canEdit()}
+            documentName={displayName() ?? ''}
+            renderSection={renderSection}
+          />
+        )}
+      />
       <EntityActivitySectionConditional
         entityId={documentId()}
         entityType={propertiesEntityType()}
@@ -113,7 +121,7 @@ export function MarkdownSidePanelSections() {
       />
       <GithubSectionConditional documentId={documentId()} isTask={isTask()} />
       <NotificationsSectionConditional entity={entity()} />
-      <MarkdownReferencesSection documentId={documentId()} />
+      <ReferencesSectionConditional documentId={documentId()} />
       <Show when={isTask()}>
         <TaskDuplicateMatchesSidePanelSection />
       </Show>
@@ -157,10 +165,9 @@ function DetailsGrid(props: {
     >
       <Show when={props.folder()}>
         {(folder) => (
-          <div class="flex items-center gap-1">
-            Folder
+          <EntityMetadataRow label="Folder">
             <FolderLink projectId={folder().id} projectName={folder().name} />
-          </div>
+          </EntityMetadataRow>
         )}
       </Show>
     </EntityMetadata>
@@ -177,9 +184,6 @@ function FolderLink(props: { projectId: string; projectName: string }) {
       {...navHandlers}
       class="pointer-events-auto min-w-0 truncate py-0.5 rounded-xs text-link hover:text-link-hover hover:bg-hover focus:bg-active"
     >
-      <span class="relative top-[0.125em] size-[1em] inline-flex mx-1">
-        <EntityIcon targetType="project" size="fill" />
-      </span>
       <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
         {props.projectName}
       </span>
@@ -196,6 +200,7 @@ function PropertiesSectionContent(props: {
   isTask: boolean;
   canEdit: boolean;
   documentName: string;
+  renderSection: SidePanelSectionLayout;
 }) {
   const { state } = useMarkdownDocument();
   const mdData = state.editor.md;
@@ -233,6 +238,7 @@ function PropertiesSectionContent(props: {
       onPropertyPinned={mdData.editor ? pins.pin : undefined}
       onPropertyUnpinned={pins.unpin}
       showTags={false}
+      renderSection={props.renderSection}
       // A task joins a project through its Project property, edited like the others.
       defaultProperties={() =>
         props.isTask && projects().enabled
@@ -265,8 +271,13 @@ function StatsSectionContent() {
     <Show when={md.wordcountStats}>
       {(stats) => (
         <Wordcount.Root stats={stats()}>
-          <div class="mb-1">
-            <Wordcount.Words /> words · <Wordcount.Characters /> characters
+          <div class="mt-2 flex flex-col gap-2">
+            <EntityMetadataRow label="Words">
+              <Wordcount.Words />
+            </EntityMetadataRow>
+            <EntityMetadataRow label="Characters">
+              <Wordcount.Characters />
+            </EntityMetadataRow>
           </div>
         </Wordcount.Root>
       )}
@@ -303,6 +314,33 @@ function NotificationsSectionConditional(props: { entity: Entity }) {
             entity={props.entity}
             notificationSource={notificationSource}
           />
+        </div>
+      </SidePanel.Section>
+    </Show>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// References Section (conditional)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ReferencesSectionConditional(props: { documentId: string }) {
+  const references = useAttachmentReferencesQuery(
+    () => props.documentId,
+    () => 'document'
+  );
+
+  const count = () => (queryReadyGate(references) ? references.data.length : 0);
+
+  return (
+    <Show when={count() > 0}>
+      <SidePanel.Section
+        id="references"
+        title={<SidePanel.CountTitle label="References" count={count()} />}
+        order={33}
+      >
+        <div class="text-xs">
+          <References documentId={props.documentId} />
         </div>
       </SidePanel.Section>
     </Show>

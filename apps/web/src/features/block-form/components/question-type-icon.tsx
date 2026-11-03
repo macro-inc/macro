@@ -1,5 +1,6 @@
 import Calendar from '@icon/system/regular/calendar.svg';
 import CalendarBlank from '@icon/system/regular/calendar-blank.svg';
+import CalendarDots from '@icon/system/regular/calendar-dots.svg';
 import CaretCircleDown from '@icon/system/regular/caret-circle-down.svg';
 import CheckSquare from '@icon/system/regular/check-square.svg';
 import CheckSquareOffset from '@icon/system/regular/check-square-offset.svg';
@@ -32,6 +33,7 @@ const ICONS: Record<
   file: UploadSimple,
   datetime: Calendar,
   date: CalendarBlank,
+  'date-range': CalendarDots,
   url: Link,
   checkbox: CheckSquareOffset,
   person: User,

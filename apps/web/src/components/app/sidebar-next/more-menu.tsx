@@ -1,4 +1,5 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import {
   navigateToSidebarView,
@@ -59,12 +60,11 @@ export function MoreMenu(props: MoreMenuProps) {
     <>
       <Dropdown placement="right-start" gutter={6}>
         <Dropdown.Trigger
+          aria-label={t('nav.more')}
           variant="ghost"
           size="icon-md"
           class="size-10 shrink-0 cursor-default rounded-xl"
-          label="More"
-          tooltip="More options"
-          tooltipPlacement="right"
+          tooltip={{ content: t('nav.moreOptions'), placement: 'right' }}
           draggable={false}
           data-sidebar-next-item="more"
         >
@@ -103,7 +103,9 @@ export function MoreMenu(props: MoreMenuProps) {
 
           <Dropdown.Group>
             <Dropdown.Item onSelect={() => setCustomizeSidebarOpen(true)}>
-              <span class="flex-1 truncate text-ink">Customize sidebar</span>
+              <span class="flex-1 truncate text-ink">
+                {t('nav.customizeSidebar')}
+              </span>
             </Dropdown.Item>
           </Dropdown.Group>
         </Dropdown.Content>

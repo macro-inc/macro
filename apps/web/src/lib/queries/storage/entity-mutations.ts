@@ -22,7 +22,9 @@ import {
 } from '@service-storage/graphql-entity-mutations';
 import { match } from 'ts-pattern';
 import { refreshActiveGraphqlSoupQueries } from '../soup/graphql/active-queries';
+import { soupEntityKey } from '../soup/graphql/entity-input';
 import { prepareGraphqlSoupRestore } from '../soup/graphql/optimistic-deletions';
+import { soupItemKey } from '../soup/graphql/reconciliation';
 
 // Membership changes need a refresh even when the normalized cache is disabled.
 // A failed refresh must not turn a committed write into a retryable UI failure.
@@ -46,10 +48,11 @@ export async function trashEntity(entity: EntityRefInput) {
 export async function restoreEntity(entity: EntityRefInput) {
   const confirmRestore = prepareGraphqlSoupRestore();
   const result = await restoreGraphqlEntity(entity);
+  const restoredKey = soupEntityKey(entity);
   confirmRestore([
-    String(entity.id),
+    ...(restoredKey ? [restoredKey] : []),
     ...result.effects.flatMap((effect) =>
-      effect.__typename === 'SoupUpdated' ? [effect.item.id] : []
+      effect.__typename === 'SoupUpdated' ? [soupItemKey(effect.item)] : []
     ),
   ]);
   refreshSoup();
@@ -72,7 +75,10 @@ export async function duplicateEntity(
     if (
       (entity.type === 'DOCUMENT' &&
         effect.item.__typename === 'GraphqlSoupDocument') ||
-      (entity.type === 'CHAT' && effect.item.__typename === 'GraphqlSoupChat')
+      (entity.type === 'CHAT' &&
+        effect.item.__typename === 'GraphqlSoupChat') ||
+      (entity.type === 'PROJECT' &&
+        effect.item.__typename === 'GraphqlSoupProject')
     )
       return effect.item.id;
   }

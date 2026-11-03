@@ -2,6 +2,8 @@
  * @vitest-environment jsdom
  */
 
+import { agentSettingsRequest } from '@app/features/settings/agentSettingsState';
+import { botSettingsRequest } from '@channel/Bots/botSettingsState';
 import { render, screen, waitFor } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import type { JSX } from 'solid-js';
@@ -16,11 +18,21 @@ const mocks = vi.hoisted(() => ({
   onClose: vi.fn(),
   toastSuccess: vi.fn(),
   toastFailure: vi.fn(),
+  openSettings: vi.fn(),
+  agents: [] as Array<{
+    bot: {
+      id: string;
+      owner:
+        | { type: 'team'; team_id: string }
+        | { type: 'user'; user_id: string };
+    };
+  }>,
+  bots: [] as Array<{ id: string }>,
 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({
-    enabled: mocks.crmFlagEnabled,
+  useFeatureFlag: (flag: { key: string }) => () => ({
+    enabled: flag.key === 'enable-crm' ? mocks.crmFlagEnabled : true,
     payload: undefined,
   }),
 }));
@@ -78,6 +90,18 @@ vi.mock('@ui', () => ({
   ),
 }));
 
+vi.mock('@core/constant/SettingsState', () => ({
+  useSettingsState: () => ({ openSettings: mocks.openSettings }),
+}));
+
+vi.mock('@queries/agents/agents', () => ({
+  useAgentsQuery: () => ({ isSuccess: true, data: mocks.agents }),
+}));
+
+vi.mock('@queries/bots/bots', () => ({
+  useBotsQuery: () => ({ isSuccess: true, data: mocks.bots }),
+}));
+
 vi.mock('./UserIcon', () => ({
   UserIcon: () => <div data-testid="user-icon" />,
 }));
@@ -90,6 +114,9 @@ beforeEach(() => {
   mocks.onClose.mockReset();
   mocks.toastSuccess.mockReset();
   mocks.toastFailure.mockReset();
+  mocks.openSettings.mockReset();
+  mocks.agents = [];
+  mocks.bots = [];
 });
 
 describe('UserTooltip clipboard action', () => {
@@ -248,5 +275,86 @@ describe('UserTooltip CRM contact action', () => {
     expect(screen.getByText('Jane Doe')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Copy email' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
+  });
+});
+
+describe('UserTooltip settings action', () => {
+  const agentId = '0190f3a1-0000-7000-8000-00000000a9e1';
+
+  it("opens a team agent's editor in Settings", async () => {
+    const user = userEvent.setup({ skipHover: true });
+    mocks.agents = [
+      { bot: { id: agentId, owner: { type: 'team', team_id: 'team-1' } } },
+    ];
+    render(() => (
+      <UserTooltip
+        displayName="Researcher"
+        id={`bot|${agentId}`}
+        onClose={mocks.onClose}
+      />
+    ));
+
+    await user.click(screen.getByRole('button', { name: 'Settings' }));
+
+    expect(mocks.openSettings).toHaveBeenCalledWith('Agents');
+    expect(agentSettingsRequest()?.agentId).toBe(agentId);
+    expect(mocks.onClose).toHaveBeenCalledOnce();
+  });
+
+  it("opens a bot's page under Bots when it is not an agent", async () => {
+    const user = userEvent.setup({ skipHover: true });
+    mocks.bots = [{ id: agentId }];
+    render(() => (
+      <UserTooltip displayName="Deploy bot" id={`bot|${agentId}`} />
+    ));
+
+    await user.click(screen.getByRole('button', { name: 'Settings' }));
+
+    expect(mocks.openSettings).toHaveBeenCalledWith('Bots');
+    expect(botSettingsRequest()).toMatchObject({
+      type: 'detail',
+      botId: agentId,
+    });
+  });
+
+  it('opens the Agents list for Macro', async () => {
+    const user = userEvent.setup({ skipHover: true });
+    render(() => (
+      <UserTooltip
+        displayName="Macro"
+        id="bot|00000000-0000-0000-0000-00000000a1a1"
+      />
+    ));
+
+    await user.click(screen.getByRole('button', { name: 'Settings' }));
+
+    expect(mocks.openSettings).toHaveBeenCalledWith('Agents');
+  });
+
+  it("offers no settings for another user's private agent", () => {
+    mocks.agents = [
+      {
+        bot: {
+          id: agentId,
+          owner: { type: 'user', user_id: 'macro|someone@example.com' },
+        },
+      },
+    ];
+    mocks.bots = [{ id: agentId }];
+    render(() => <UserTooltip displayName="Theirs" id={`bot|${agentId}`} />);
+
+    expect(screen.queryByRole('button', { name: 'Settings' })).toBeNull();
+  });
+
+  it('offers no settings for a person', () => {
+    render(() => (
+      <UserTooltip
+        displayName="Jane Doe"
+        email="jane.doe@example.com"
+        id="macro|jane.doe@example.com"
+      />
+    ));
+
+    expect(screen.queryByRole('button', { name: 'Settings' })).toBeNull();
   });
 });

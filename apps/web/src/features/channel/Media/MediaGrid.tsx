@@ -20,6 +20,7 @@ function MessageImageTile(props: {
   item: MediaItem;
   large: boolean;
   onOpen: () => void;
+  onError?: () => void;
 }) {
   const dimensions = () =>
     constrainImageDimensions(
@@ -47,6 +48,7 @@ function MessageImageTile(props: {
         width={dimensions()?.width ?? props.item.width ?? undefined}
         height={dimensions()?.height ?? props.item.height ?? undefined}
         fallback={<MediaImage.Fallback fill={!!dimensions()} />}
+        onError={props.onError}
         style={{
           ...(dimensions()
             ? {
@@ -84,7 +86,11 @@ function AttachmentImageTile(props: { item: MediaItem; onOpen?: () => void }) {
   );
 }
 
-function MessageVideoTile(props: { item: MediaItem; onOpen: () => void }) {
+function MessageVideoTile(props: {
+  item: MediaItem;
+  onOpen: () => void;
+  onError?: () => void;
+}) {
   const download = createFileDownload(() => mediaDownloadSource(props.item));
   const [isInlinePlaying, setIsInlinePlaying] = createSignal(false);
   const src = () => props.item.src;
@@ -109,6 +115,7 @@ function MessageVideoTile(props: { item: MediaItem; onOpen: () => void }) {
                   class="block max-h-120 max-w-full"
                   width={videoWidth()}
                   height={videoHeight()}
+                  onError={props.onError}
                 />
                 <MediaVideo.PlayOverlay class="[&_svg]:size-6" />
               </button>
@@ -133,6 +140,7 @@ function MessageVideoTile(props: { item: MediaItem; onOpen: () => void }) {
             src={src()}
             width={videoWidth()}
             height={videoHeight()}
+            onError={() => props.onError?.()}
           />
         </Show>
         <div
@@ -145,13 +153,14 @@ function MessageVideoTile(props: { item: MediaItem; onOpen: () => void }) {
           <Button
             variant="ghost"
             size="icon-md"
+            aria-label="Open video viewer"
+            tooltip="Open video viewer"
             onClick={(event) => {
               event.stopPropagation();
               props.onOpen();
             }}
-            label="Open video viewer"
           >
-            <ExpandIcon />
+            <ExpandIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
         </div>
       </div>
@@ -176,6 +185,8 @@ export function MediaGrid(props: {
   items: MediaItem[];
   variant: 'message' | 'attachments';
   onOpen: (index: number) => void;
+  /** An item whose file failed to load (message tiles only). */
+  onError?: (id: string) => void;
   class?: string;
 }) {
   const hasSingleLargeImage = createMemo(
@@ -199,6 +210,7 @@ export function MediaGrid(props: {
                 item={item}
                 large={hasSingleLargeImage()}
                 onOpen={() => props.onOpen(index())}
+                onError={() => props.onError?.(item.id)}
               />
             </Match>
             <Match
@@ -213,6 +225,7 @@ export function MediaGrid(props: {
               <MessageVideoTile
                 item={item}
                 onOpen={() => props.onOpen(index())}
+                onError={() => props.onError?.(item.id)}
               />
             </Match>
             <Match when={true}>

@@ -25,7 +25,7 @@ export function NewMeetingButton(props: NewMeetingActions) {
         <Show
           when={props.presentation}
           fallback={
-            <Button variant="accent" size="sm" onClick={props.onChannelCall}>
+            <Button variant="primary" size="sm" onClick={props.onChannelCall}>
               <VideoCameraIcon class="size-3.5" />
               New call
             </Button>
@@ -62,10 +62,11 @@ function NewMeetingMenu(props: NewMeetingActions) {
           when={props.presentation}
           fallback={
             <Dropdown.Trigger
-              variant="accent"
+              aria-label="New call"
+              tooltip="New call"
+              variant="primary"
               size="sm"
               class="gap-1.5 px-2"
-              label="New call"
             >
               <VideoCameraIcon class="size-3.5" />
               <span>New call</span>

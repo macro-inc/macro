@@ -7,8 +7,27 @@ export function userColor(userId: string): string {
   return `var(--color-${color}, var(--color-pink))`;
 }
 
+/**
+ * Author sync-service records for edits no user made, such as the imported
+ * content a document starts from. Mirrors `SYSTEM_AUTHOR_ID` in sync-service.
+ */
+export const SYSTEM_AUTHOR_ID = 'system';
+
+/** Prefix of an author id for AI edits made for a user: `ai|<userId>`. */
+export const AI_AUTHOR_PREFIX = 'ai|';
+
+/** The user an `ai|<userId>` author edited for, or undefined for any other id. */
+export function aiAuthorOnBehalfOf(authorId: string): string | undefined {
+  return authorId.startsWith(AI_AUTHOR_PREFIX)
+    ? authorId.slice(AI_AUTHOR_PREFIX.length)
+    : undefined;
+}
+
 export function userLabel(userId: string): string {
   if (userId === 'unknown') return 'Unknown';
+  if (userId === SYSTEM_AUTHOR_ID) return MACRO_AGENT_NAME;
+  const onBehalfOf = aiAuthorOnBehalfOf(userId);
+  if (onBehalfOf !== undefined) return `${userLabel(onBehalfOf)} (AI)`;
   if (isMacroAgentId(userId)) return `${MACRO_AGENT_NAME} (AI)`;
   const id = tryMacroId(userId);
   return id ? macroIdToEmail(id) : userId;

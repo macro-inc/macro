@@ -6,6 +6,8 @@
  */
 import type {
   AgentConversationsDto,
+  AgentModeChoiceRequest,
+  AgentModeChoiceResponse,
   AgentRepositoriesResponse,
   AgentRepositoryBranchesResponse,
   AgentSessionChangesPatchResponse,
@@ -18,6 +20,10 @@ import type {
   AnswerToolApprovalRequest,
   AnswerToolApprovalResponse,
   AppConnectedRequest,
+  AutoArchiveOverridesBody,
+  AutoArchivePreferencesBody,
+  ClassifyInputRequest,
+  ClassifyInputResponse,
   CodingPreferencesBody,
   ControlRequest,
   ControlResponse,
@@ -28,6 +34,8 @@ import type {
   DiscoverAgentCapabilitiesResponse,
   EditQueuedActionRequest,
   ExecutionRecord,
+  ExtractInputRequest,
+  ExtractInputResponse,
   ListAgentRepositoryBranchesParams,
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
@@ -43,6 +51,7 @@ import type {
   ReviewDecision,
   ReviewRecord,
   SandboxSizeBody,
+  SessionAutoArchiveResponse,
   SessionPullRequestsResponse,
   SetAgentSessionArchivedRequest,
   SharePermissionV2,
@@ -52,6 +61,123 @@ import type {
   WarmAgentSessionRequest,
   WarmAgentSessionResponse,
 } from './schemas';
+
+/**
+ * @summary Read which triggers archive the caller's sessions by default.
+ */
+export type getAgentAutoArchivePreferencesResponse200 = {
+  data: AutoArchivePreferencesBody;
+  status: 200;
+};
+
+export type getAgentAutoArchivePreferencesResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getAgentAutoArchivePreferencesResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type getAgentAutoArchivePreferencesResponseSuccess =
+  getAgentAutoArchivePreferencesResponse200 & {
+    headers: Headers;
+  };
+export type getAgentAutoArchivePreferencesResponseError = (
+  | getAgentAutoArchivePreferencesResponse401
+  | getAgentAutoArchivePreferencesResponse500
+) & {
+  headers: Headers;
+};
+
+export type getAgentAutoArchivePreferencesResponse =
+  | getAgentAutoArchivePreferencesResponseSuccess
+  | getAgentAutoArchivePreferencesResponseError;
+
+export const getGetAgentAutoArchivePreferencesUrl = () => {
+  return `/agent-auto-archive-preferences`;
+};
+
+export const getAgentAutoArchivePreferences = async (
+  options?: RequestInit
+): Promise<getAgentAutoArchivePreferencesResponse> => {
+  const res = await fetch(getGetAgentAutoArchivePreferencesUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentAutoArchivePreferencesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentAutoArchivePreferencesResponse;
+};
+
+/**
+ * @summary Replace which triggers archive the caller's sessions by default.
+ */
+export type putAgentAutoArchivePreferencesResponse200 = {
+  data: AutoArchivePreferencesBody;
+  status: 200;
+};
+
+export type putAgentAutoArchivePreferencesResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type putAgentAutoArchivePreferencesResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type putAgentAutoArchivePreferencesResponseSuccess =
+  putAgentAutoArchivePreferencesResponse200 & {
+    headers: Headers;
+  };
+export type putAgentAutoArchivePreferencesResponseError = (
+  | putAgentAutoArchivePreferencesResponse401
+  | putAgentAutoArchivePreferencesResponse500
+) & {
+  headers: Headers;
+};
+
+export type putAgentAutoArchivePreferencesResponse =
+  | putAgentAutoArchivePreferencesResponseSuccess
+  | putAgentAutoArchivePreferencesResponseError;
+
+export const getPutAgentAutoArchivePreferencesUrl = () => {
+  return `/agent-auto-archive-preferences`;
+};
+
+export const putAgentAutoArchivePreferences = async (
+  autoArchivePreferencesBody: AutoArchivePreferencesBody,
+  options?: RequestInit
+): Promise<putAgentAutoArchivePreferencesResponse> => {
+  const res = await fetch(getPutAgentAutoArchivePreferencesUrl(), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(autoArchivePreferencesBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: putAgentAutoArchivePreferencesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as putAgentAutoArchivePreferencesResponse;
+};
 
 /**
  * @summary Probe one provider's ACP session configuration without persisting a session.
@@ -451,6 +577,81 @@ export const retryAgentConversationTurn = async (
     status: res.status,
     headers: res.headers,
   } as retryAgentConversationTurnResponse;
+};
+
+/**
+ * @summary Choose whether a composer prompt goes to a chat or a coding agent.
+ */
+export type chooseAgentModeResponse200 = {
+  data: AgentModeChoiceResponse;
+  status: 200;
+};
+
+export type chooseAgentModeResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type chooseAgentModeResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type chooseAgentModeResponse402 = {
+  data: void;
+  status: 402;
+};
+
+export type chooseAgentModeResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type chooseAgentModeResponse503 = {
+  data: void;
+  status: 503;
+};
+
+export type chooseAgentModeResponseSuccess = chooseAgentModeResponse200 & {
+  headers: Headers;
+};
+export type chooseAgentModeResponseError = (
+  | chooseAgentModeResponse400
+  | chooseAgentModeResponse401
+  | chooseAgentModeResponse402
+  | chooseAgentModeResponse403
+  | chooseAgentModeResponse503
+) & {
+  headers: Headers;
+};
+
+export type chooseAgentModeResponse =
+  | chooseAgentModeResponseSuccess
+  | chooseAgentModeResponseError;
+
+export const getChooseAgentModeUrl = () => {
+  return `/agent-mode-choice`;
+};
+
+export const chooseAgentMode = async (
+  agentModeChoiceRequest: AgentModeChoiceRequest,
+  options?: RequestInit
+): Promise<chooseAgentModeResponse> => {
+  const res = await fetch(getChooseAgentModeUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(agentModeChoiceRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: chooseAgentModeResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as chooseAgentModeResponse;
 };
 
 /**
@@ -1419,6 +1620,137 @@ export const setAgentSessionArchived = async (
     status: res.status,
     headers: res.headers,
   } as setAgentSessionArchivedResponse;
+};
+
+/**
+ * @summary Read a session's auto-archive settings and whether a trigger archived it.
+ */
+export type getAgentSessionAutoArchiveResponse200 = {
+  data: SessionAutoArchiveResponse;
+  status: 200;
+};
+
+export type getAgentSessionAutoArchiveResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getAgentSessionAutoArchiveResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type getAgentSessionAutoArchiveResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type getAgentSessionAutoArchiveResponseSuccess =
+  getAgentSessionAutoArchiveResponse200 & {
+    headers: Headers;
+  };
+export type getAgentSessionAutoArchiveResponseError = (
+  | getAgentSessionAutoArchiveResponse401
+  | getAgentSessionAutoArchiveResponse403
+  | getAgentSessionAutoArchiveResponse500
+) & {
+  headers: Headers;
+};
+
+export type getAgentSessionAutoArchiveResponse =
+  | getAgentSessionAutoArchiveResponseSuccess
+  | getAgentSessionAutoArchiveResponseError;
+
+export const getGetAgentSessionAutoArchiveUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/auto-archive`;
+};
+
+export const getAgentSessionAutoArchive = async (
+  sessionId: string,
+  options?: RequestInit
+): Promise<getAgentSessionAutoArchiveResponse> => {
+  const res = await fetch(getGetAgentSessionAutoArchiveUrl(sessionId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentSessionAutoArchiveResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentSessionAutoArchiveResponse;
+};
+
+/**
+ * @summary Replace a session's own auto-archive choices. Owner only.
+ */
+export type putAgentSessionAutoArchiveResponse200 = {
+  data: AutoArchiveOverridesBody;
+  status: 200;
+};
+
+export type putAgentSessionAutoArchiveResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type putAgentSessionAutoArchiveResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type putAgentSessionAutoArchiveResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type putAgentSessionAutoArchiveResponseSuccess =
+  putAgentSessionAutoArchiveResponse200 & {
+    headers: Headers;
+  };
+export type putAgentSessionAutoArchiveResponseError = (
+  | putAgentSessionAutoArchiveResponse401
+  | putAgentSessionAutoArchiveResponse403
+  | putAgentSessionAutoArchiveResponse500
+) & {
+  headers: Headers;
+};
+
+export type putAgentSessionAutoArchiveResponse =
+  | putAgentSessionAutoArchiveResponseSuccess
+  | putAgentSessionAutoArchiveResponseError;
+
+export const getPutAgentSessionAutoArchiveUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/auto-archive`;
+};
+
+export const putAgentSessionAutoArchive = async (
+  sessionId: string,
+  autoArchiveOverridesBody: AutoArchiveOverridesBody,
+  options?: RequestInit
+): Promise<putAgentSessionAutoArchiveResponse> => {
+  const res = await fetch(getPutAgentSessionAutoArchiveUrl(sessionId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(autoArchiveOverridesBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: putAgentSessionAutoArchiveResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as putAgentSessionAutoArchiveResponse;
 };
 
 /**
@@ -3100,4 +3432,130 @@ export const presentSessionView = async (
     status: res.status,
     headers: res.headers,
   } as presentSessionViewResponse;
+};
+
+/**
+ * @summary Classify a draft for the authenticated user.
+ */
+export type classifyResponse200 = {
+  data: ClassifyInputResponse;
+  status: 200;
+};
+
+export type classifyResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type classifyResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type classifyResponse402 = {
+  data: void;
+  status: 402;
+};
+
+export type classifyResponse503 = {
+  data: void;
+  status: 503;
+};
+
+export type classifyResponseSuccess = classifyResponse200 & {
+  headers: Headers;
+};
+export type classifyResponseError = (
+  | classifyResponse400
+  | classifyResponse401
+  | classifyResponse402
+  | classifyResponse503
+) & {
+  headers: Headers;
+};
+
+export type classifyResponse = classifyResponseSuccess | classifyResponseError;
+
+export const getClassifyUrl = () => {
+  return `/universal_input/classify`;
+};
+
+export const classify = async (
+  classifyInputRequest: ClassifyInputRequest,
+  options?: RequestInit
+): Promise<classifyResponse> => {
+  const res = await fetch(getClassifyUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(classifyInputRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: classifyResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as classifyResponse;
+};
+
+/**
+ * @summary Extract editable fields for the authenticated user.
+ */
+export type extractResponse200 = {
+  data: ExtractInputResponse;
+  status: 200;
+};
+
+export type extractResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type extractResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type extractResponse402 = {
+  data: void;
+  status: 402;
+};
+
+export type extractResponse503 = {
+  data: void;
+  status: 503;
+};
+
+export type extractResponseSuccess = extractResponse200 & {
+  headers: Headers;
+};
+export type extractResponseError = (
+  | extractResponse400
+  | extractResponse401
+  | extractResponse402
+  | extractResponse503
+) & {
+  headers: Headers;
+};
+
+export type extractResponse = extractResponseSuccess | extractResponseError;
+
+export const getExtractUrl = () => {
+  return `/universal_input/extract`;
+};
+
+export const extract = async (
+  extractInputRequest: ExtractInputRequest,
+  options?: RequestInit
+): Promise<extractResponse> => {
+  const res = await fetch(getExtractUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(extractInputRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: extractResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as extractResponse;
 };

@@ -25,7 +25,6 @@ type TouchOption = {
   key: string;
   content: () => JSX.Element;
   onSelect: () => void;
-  disabled?: () => boolean;
 };
 
 // Toolbar buttons give no touch-down feedback: the ghost variant's
@@ -51,17 +50,18 @@ const arrowButtonClass =
 export function TouchSelectionToolbar(props: {
   canEdit: boolean;
   canComment: boolean;
-  isConverting: boolean;
   /** False when the popup opened for a bare caret (inside a comment). */
   hasSelection: boolean;
-  showTasksOption: boolean;
+  showCreateTaskOption: boolean;
+  createTaskLabel: string;
+  isConverting: boolean;
   showTableOption: boolean;
   showEditWithAiOption: boolean;
   /** The caret/selection touches an existing comment thread. */
   showOpenCommentOption: boolean;
   locationCopied: boolean;
   setPopupVisible: (visible: boolean) => void;
-  onConvertToTasks: () => void;
+  onCreateTask: () => void;
   onConvertListToTable: () => void;
   onOpenComment: () => void;
   onShare: () => void;
@@ -96,20 +96,21 @@ export function TouchSelectionToolbar(props: {
       }
       return list;
     }
-    if (props.showTasksOption) {
+    if (props.showCreateTaskOption) {
       list.push({
-        key: 'tasks',
+        key: 'task',
         content: () => (
           <>
             <Dynamic
               component={props.isConverting ? LoadingIcon : CheckSquareIcon}
               class="size-4"
             />
-            {props.isConverting ? 'Converting...' : 'Tasks'}
+            {props.createTaskLabel}
           </>
         ),
-        onSelect: () => props.onConvertToTasks(),
-        disabled: () => props.isConverting,
+        onSelect: () => {
+          if (!props.isConverting) props.onCreateTask();
+        },
       });
     }
     if (props.showTableOption) {
@@ -234,7 +235,7 @@ export function TouchSelectionToolbar(props: {
   createEffect(() => {
     // Reset paging only when the option *set* changes (e.g. caret mode vs.
     // selection mode) — a cosmetic rerender of the same options (the Share
-    // icon flipping to a check, the Tasks label while converting) keeps the
+    // icon flipping to a check, the Task label while converting) keeps the
     // user's page; the clamp effect below handles any repartition.
     const keys = options()
       .map((option) => option.key)
@@ -396,24 +397,14 @@ export function TouchSelectionToolbar(props: {
         <div class="flex w-max flex-row items-center" ref={measureRowRef}>
           <For each={options()}>
             {(option) => (
-              <Button
-                size="sm"
-                class={optionButtonClass}
-                depth={3}
-                variant="ghost"
-              >
+              <Button size="sm" class={optionButtonClass} variant="ghost">
                 {option.content()}
               </Button>
             )}
           </For>
         </div>
         <div class="w-max" ref={measureArrowRef}>
-          <Button
-            size="icon-sm"
-            class={arrowButtonClass}
-            depth={3}
-            variant="ghost"
-          >
+          <Button size="icon-sm" class={arrowButtonClass} variant="ghost">
             <CaretRightIcon class="size-4" />
           </Button>
         </div>
@@ -422,7 +413,6 @@ export function TouchSelectionToolbar(props: {
         <Button
           size="icon-sm"
           class={arrowButtonClass}
-          depth={3}
           variant="ghost"
           aria-label="Previous options"
           onClick={() => page(-1)}
@@ -482,9 +472,7 @@ export function TouchSelectionToolbar(props: {
                       <Button
                         size="sm"
                         class={optionButtonClass}
-                        depth={3}
                         variant="ghost"
-                        disabled={option.disabled?.()}
                         onClick={() => option.onSelect()}
                       >
                         {option.content()}
@@ -502,7 +490,6 @@ export function TouchSelectionToolbar(props: {
         <Button
           size="icon-sm"
           class={arrowButtonClass}
-          depth={3}
           variant="ghost"
           aria-label="More options"
           onClick={() => page(1)}

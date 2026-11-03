@@ -6,6 +6,7 @@ import {
   $createPoint,
   $createRangeSelection,
   $getNodeByKey,
+  $isElementNode,
   $isNodeSelection,
   $isRangeSelection,
   $isTextNode,
@@ -263,9 +264,13 @@ function lexicalPointToCursor(
         return undefined;
       }
       cursor = textContainer.getCursor(offset);
+    } else if (container.get('children') instanceof LoroMovableList) {
+      // An element point (after a line break or an inline decorator, say)
+      // sits between children, so it is a cursor in the children list.
+      cursor = (container.get('children') as LoroMovableList).getCursor(offset);
     } else {
-      // If the container is not a text container,
-      // we use the cursor offset within the movable list instead of inside the text container
+      // An element with no children yet: its point can only be offset 0, so
+      // the element's own place in its parent list stands for it.
       const parent = getListLikeParent(container);
 
       if (!parent) {
@@ -333,14 +338,22 @@ export function $cursorToLexicalPoint(
   }
 
   let pos = posResult.value;
+  const cursorContainer = maybeContainer.value;
+  // An element point is a cursor in the element's children list; any other
+  // cursor on an element (its place in its parent list) is offset 0.
+  const isChildOffset =
+    cursorContainer instanceof LoroMovableList &&
+    cursorContainer.parent()?.id ===
+      $findLoroContainerForLexicalNode(loroManager, node, mapping);
 
   // Create a Point for the Lexical node
-  return $createPointFromKeyAndOffset(nodeKey, pos.offset);
+  return $createPointFromKeyAndOffset(nodeKey, pos.offset, isChildOffset);
 }
 
 function $createPointFromKeyAndOffset(
   nodeKey: NodeKey,
-  offset: number
+  offset: number,
+  isChildOffset: boolean
 ): Point | null {
   const node = $getNodeByKey(nodeKey);
 
@@ -348,18 +361,15 @@ function $createPointFromKeyAndOffset(
     return null;
   }
 
-  // Determine the appropriate type based on the node type
-  let type: 'text' | 'element' | 'root';
-
   if ($isTextNode(node) || node.getType() === 'inline-search') {
-    type = 'text';
-  } else {
-    type = 'element';
+    return $createPoint(nodeKey, offset, 'text');
   }
 
-  offset = type === 'text' ? offset : 0;
-
-  return $createPoint(nodeKey, offset, type);
+  const childOffset =
+    isChildOffset && $isElementNode(node)
+      ? Math.min(offset, node.getChildrenSize())
+      : 0;
+  return $createPoint(nodeKey, childOffset, 'element');
 }
 
 export function $createSelectionFromPeerAwareness(

@@ -104,9 +104,13 @@ export function QueuedSendStatus(props: {
       }
     >
       {/* Full-frame phone views leave the top inset to their content. This
-          panel sits above that content, so it takes the inset in its place. */}
+          panel sits above that content, so it takes the inset in its place.
+          The sibling rule names `html` outright: `touch:[&~*]` puts a complex
+          selector inside `:where()`, which Chrome treats as a universal
+          sibling rule, so every element inserted anywhere in the app would
+          restyle its parent's whole subtree. */}
       <div
-        class="shrink-0 border-b border-edge-muted p-3 touch:pt-[calc(var(--mobile-content-inset-top,0px)+0.75rem)] touch:[&~*]:[--mobile-content-inset-top:0px]"
+        class="shrink-0 border-b border-edge-muted p-3 touch:pt-[calc(var(--mobile-content-inset-top,0px)+0.75rem)] [html[data-touch-device=true]_&~*]:[--mobile-content-inset-top:0px]"
         aria-label="Queued email sends"
       >
         <For each={visible()}>
@@ -129,6 +133,7 @@ export function QueuedSendStatus(props: {
         </Show>
         <Show when={hasMoreServerEmailSends()}>
           <Button
+            variant="secondary"
             onClick={() =>
               fireAndForget(loadMoreServerEmailSends(), 'email-more-sends')
             }
@@ -188,6 +193,7 @@ function ServerSendStatus(props: { row: ServerEmailSend }) {
         </Show>
       </div>
       <Button
+        variant="ghost"
         disabled={working()}
         onClick={() => fireAndForget(action(), 'email-server-send')}
       >
@@ -288,6 +294,7 @@ function SendStatus(props: {
         when={status() !== 'SENDING' && status() !== 'DELIVERY_UNCONFIRMED'}
       >
         <Button
+          variant="ghost"
           disabled={
             working() ||
             (emailSendLocked(props.intent) &&
@@ -304,6 +311,7 @@ function SendStatus(props: {
         }
       >
         <Button
+          variant="ghost"
           disabled={working()}
           onClick={() =>
             fireAndForget(checkStatus(), 'email-compose-check-send')

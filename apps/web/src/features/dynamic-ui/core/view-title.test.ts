@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { View } from '../schema';
+import type { View } from '../view';
 import { titledWidgets } from './view-title';
 
 const list = (title?: string) => ({

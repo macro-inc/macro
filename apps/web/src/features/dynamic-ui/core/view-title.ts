@@ -1,4 +1,4 @@
-import type { View, Widget, WidgetType } from '../schema';
+import type { View, Widget, WidgetType } from '../view';
 
 /** Widgets that are cards with a header of their own. */
 const TITLED_TYPES: ReadonlySet<WidgetType> = new Set<WidgetType>([

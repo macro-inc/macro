@@ -72,14 +72,17 @@ pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes
     public_mcp: Router,
     listening: Option<tokio::sync::watch::Sender<bool>>,
     cognition: Router,
+    universal_input: Router,
     scheduling: Router,
     preview: Router,
     sharing: Router,
     routine_sessions: Router,
     coding_agents: Router,
     capabilities: Router,
+    mode_choice: Router,
     conversations: Router,
     pull_requests: Router,
+    auto_archive: Router,
     tool_approvals: Router,
     app_connections: Router,
     code_executions: Router,
@@ -110,14 +113,17 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
             public_mcp: Router::new(),
             listening: None,
             cognition: Router::new(),
+            universal_input: Router::new(),
             scheduling: Router::new(),
             preview: Router::new(),
             sharing: Router::new(),
             routine_sessions: Router::new(),
             coding_agents: Router::new(),
             capabilities: Router::new(),
+            mode_choice: Router::new(),
             conversations: Router::new(),
             pull_requests: Router::new(),
+            auto_archive: Router::new(),
             tool_approvals: Router::new(),
             app_connections: Router::new(),
             code_executions: Router::new(),
@@ -150,6 +156,12 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
         self
     }
 
+    /// Attach the crate-owned Command K inference router.
+    pub fn with_universal_input(mut self, router: Router) -> Self {
+        self.universal_input = router;
+        self
+    }
+
     /// Attach routine APIs with their existing scheduling middleware.
     pub fn with_scheduling(mut self, router: Router) -> Self {
         self.scheduling = router;
@@ -165,6 +177,12 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     /// Attach model-specific harness capability discovery routes.
     pub fn with_capabilities(mut self, router: Router) -> Self {
         self.capabilities = router;
+        self
+    }
+
+    /// Attach the composer's Auto mode choice.
+    pub fn with_mode_choice(mut self, router: Router) -> Self {
+        self.mode_choice = router;
         self
     }
 
@@ -201,6 +219,12 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     /// Attach the routes associating pull requests with sessions.
     pub fn with_pull_requests(mut self, router: Router) -> Self {
         self.pull_requests = router;
+        self
+    }
+
+    /// Attach the caller's auto-archive defaults and per-session choices.
+    pub fn with_auto_archive(mut self, router: Router) -> Self {
+        self.auto_archive = router;
         self
     }
 
@@ -342,12 +366,15 @@ where
         .merge(tool_actions)
         .merge(agent_sandbox_size_router(states.read.clone()))
         .merge(agent_coding_preferences_router(states.read))
+        .merge(states.auto_archive)
         .merge(agent_models_router(states.models))
         .merge(agent_repositories_router(states.repositories))
         .merge(states.routine_sessions)
         .merge(states.coding_agents)
         .merge(states.capabilities)
+        .merge(states.mode_choice)
         .merge(states.conversations)
+        .nest("/universal_input", states.universal_input)
         .nest("/runtime", runtime_gateway_router(states.gateway))
 }
 

@@ -89,6 +89,22 @@ describe('favorites GraphQL mutations', () => {
     });
   });
 
+  it('favorites an independent external chat without inventing a Soup entity', async () => {
+    await executeGraphqlSetFavoriteMutation(
+      client,
+      { entityType: 'external_chat', entityId: 'chat-1' },
+      true,
+      0
+    );
+    expect(mutationMock.mock.calls[0][1]).toMatchObject({
+      entity: { type: 'EXTERNAL_CHAT', id: 'chat-1' },
+    });
+    expect(
+      mutationMock.mock.calls[0][2].normalizedCacheOptimistic.optimisticResponse
+        .setFavorite.result.effects
+    ).toEqual([]);
+  });
+
   it.each([
     { entityType: 'email_thread', typename: 'GraphqlSoupEmailThread' },
     { entityType: 'initiative', typename: 'GraphqlSoupInitiative' },
@@ -243,18 +259,19 @@ describe('favorites GraphQL mutations', () => {
           },
         }),
       });
-      const result = await executeGraphqlReorderFavoritesMutation(client, args);
-      expect(graphqlReorderFavoritesResult(result)).toEqual({
+      const queued = {
         kind: 'queued',
         transactionId: kind === 'queued' ? 'transaction-1' : 'transaction-2',
-      });
+      };
+      const result = await executeGraphqlReorderFavoritesMutation(client, args);
+      expect(graphqlReorderFavoritesResult(result)).toEqual(queued);
       const toggle = await executeGraphqlSetFavoriteMutation(
         client,
         input,
         true,
         2
       );
-      expect(graphqlSetFavoriteResult(toggle)).toBeUndefined();
+      expect(graphqlSetFavoriteResult(toggle)).toEqual(queued);
     }
   );
 
