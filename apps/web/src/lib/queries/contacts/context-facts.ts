@@ -46,14 +46,14 @@ function commandTarget(
   channel: ContextChannel,
   overlay: CachedGraphqlChannel | undefined,
   activityViewed: number | null,
-  viewer: string | undefined
+  viewer: string
 ) {
   if (overlay && overlay.channelType !== 'direct_message') return;
   let other: string | undefined;
   for (const participant of overlay?.participantIds ?? channel.participants) {
     const id =
       typeof participant === 'string' ? participant : participant.user_id;
-    if (canonicalContactUserId(id) === viewer) continue;
+    if (id === viewer) continue;
     if (other !== undefined) return;
     other = id;
   }
@@ -82,7 +82,6 @@ export function buildContactContextFacts(input: {
   cachedChannels: readonly CachedGraphqlChannel[];
 }): ReadonlyMap<string, PersonFacts> {
   const result = new Map<string, PersonFacts>();
-  const viewer = canonicalContactUserId(input.viewer);
   const viewed = new Map(
     input.activity.map((row) => [row.channel_id, timestamp(row.viewed_at)])
   );
@@ -94,7 +93,7 @@ export function buildContactContextFacts(input: {
     // Preserve useDmActivityByUserId's source-order/first-other semantics,
     // including group-DM activity; only one-to-one DMs become command targets.
     const firstOther = channel.participants.find(
-      (person) => canonicalContactUserId(person.user_id) !== viewer
+      (person) => person.user_id !== input.viewer
     );
     const peer = firstOther && canonicalContactUserId(firstOther.user_id);
     if (!peer) continue;
@@ -107,7 +106,7 @@ export function buildContactContextFacts(input: {
       channel,
       cached.get(channel.id),
       viewed.get(channel.id) ?? null,
-      viewer
+      input.viewer
     );
     if (!target) continue;
     const commandFacts = result.get(target.userId) ?? EMPTY_PERSON_FACTS;

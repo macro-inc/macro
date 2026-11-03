@@ -1282,8 +1282,11 @@ before the result limit unless a full address was typed. The policy floor is gen
 from Rust alongside the transport schemas; older replies use bounded server fallback.
 Creation/sharing and main email recipient controls now own paged sources; email
 threads retain scoped addresses, not an address book. Remaining invitation/AI planner
-pools retain legacy sources; whole-app memory completion and bounded shared
-name storage remain pending.
+pools retain legacy sources. Universal task-property inference now uses complete
+per-label reference evidence instead of the shared pool, with ambiguous/incomplete
+names unresolved and manual properties taking precedence. Its other composer
+modes still retain that pool; whole-app memory completion and bounded shared name
+storage remain pending.
 
 ## Cached email Quick Access
 

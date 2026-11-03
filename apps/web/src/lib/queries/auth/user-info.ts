@@ -6,24 +6,16 @@ import {
 } from '@core/context/user-info-gate';
 import { hasLoginCookie } from '@core/util/cookies';
 import { fireAndForget } from '@core/util/fireAndForget';
-import {
-  catchToResult,
-  type ResultType,
-  thrownResultErrorHasCode,
-  throwOnErr,
-} from '@core/util/result';
-import { replaceCacheWriteSession } from '@graphql-cache/lifecycle';
+import { catchToResult, type ResultType, throwOnErr } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
+import { replaceCacheWriteSession } from '@graphql-cache/lifecycle';
 import { authServiceClient } from '@service-auth/client';
 import { resetGraphqlPresenceRequests } from '@service-storage/graphql-soup';
 import { queryOptions, useQuery } from '@tanstack/solid-query';
 import { resetTeamCalendarSession } from '../calendar/team-cache';
 import { queryClient, queryPersistence } from '../client';
 import { resetGraphqlSoupDoneSession } from '../soup/graphql/done-session';
-import {
-  queryAccountSessionPending,
-  resetQueryAccountSession,
-} from './account-scope';
+import { resetQueryAccountSession } from './account-scope';
 import { authKeys } from './keys';
 import { hasCachedUserIdentity } from './user-info-cache';
 
@@ -44,14 +36,6 @@ function fetchLegacyUserPermissions() {
   return throwOnErr(() => authServiceClient.getLegacyUserPermissions());
 }
 
-function identityRefreshIsTerminal(): boolean {
-  const error = queryClient.getQueryState(authKeys.userInfo.queryKey)?.error;
-  return (
-    thrownResultErrorHasCode(error, 'UNAUTHORIZED') ||
-    thrownResultErrorHasCode(error, 'FORBIDDEN')
-  );
-}
-
 // Cached callbacks stay at module scope so they never retain the caller.
 function userInfoQueryOptions(enabled: boolean) {
   return queryOptions({
@@ -67,13 +51,6 @@ function userInfoQueryOptions(enabled: boolean) {
     // launches (e.g. woken by a notification tap) while the network is fine,
     // and a paused auth check renders as "unauthenticated" at the base path.
     networkMode: 'always',
-    refetchOnReconnect: true,
-    // Recover a failed post-login identity refresh while the account gate is
-    // pending. Terminal auth failures remain the session-expiry path.
-    refetchInterval: () =>
-      queryAccountSessionPending() && !identityRefreshIsTerminal()
-        ? 5_000
-        : false,
     enabled,
   });
 }
@@ -99,6 +76,40 @@ export function invalidateUserInfo() {
 
 /** Invalidate all queries after a successful login. */
 export function invalidateAllAfterLogin() {
+   // Login may replace a session without visiting logout (including native auth).
+   // Invalidate old display-intent handles before refetching the new identity.
+   resetGraphqlSoupDoneSession();
+   resetGraphqlPresenceRequests();
+   resetTeamCalendarSession();
+-  enableUserInfoQuery();
+-  const invalidated = queryClient.invalidateQueries();
++  const invalidated = cacheSession.ready
++    .catch((error: unknown) => {
++      toast.failure('Sign-in could not finish', {
++        subtext:
++          'Local storage cleanup failed. Your queued changes are preserved. Try signing in again.',
++      });
++      throw error;
++    })
++    .then(() => {
++      if (!cacheSession.isCurrent()) return;
++      enableUserInfoQuery();
++      return queryClient.invalidateQueries();
++    });
+   // Rebind this device's push registrations once the refetches above have
+   // exercised the fresh session — registering earlier can race auth state
+   // that is still settling. Fire-and-forget so login isn't blocked on the
+   // notification service.
+   fireAndForget(
+-    invalidated.catch(() => {}).then(() => syncPushRegistrations()),
++    invalidated
++      .catch(() => {})
++      .then(() => {
++        if (cacheSession.isCurrent()) return syncPushRegistrations();
++      }),
+     'push-registration'
+   );
+   return invalidated;
   return Telemetry.anonymousSpan('auth.refresh_after_login', async (span) => {
     const cacheSession = replaceCacheWriteSession();
     try {

@@ -65,6 +65,11 @@ import { resolveRecipients } from '../core/recipients';
 import { createUniversalInput } from '../primitives/universal-input';
 import { UniversalComposer } from '../views/universal-composer';
 import { registerContactFixture } from './contact-directory-fixture';
+import {
+  seedTaskReferences,
+  TaskReferenceFixture,
+  type TaskValues,
+} from './task-reference-fixture';
 
 const [commandSubmissions, setCommandSubmissions] = createSignal<Submission[]>(
   []
@@ -412,6 +417,8 @@ export function UniversalInputFixture(
     },
   ]);
   const params = new URLSearchParams(window.location.search);
+  if (params.has('task-references')) seedTaskReferences(queryClient);
+  const [taskValues, setTaskValues] = createSignal<TaskValues>();
   if (!props.embedded) {
     useHotKeyRoot();
     attachGlobalDOMScope(document.body);
@@ -565,6 +572,16 @@ export function UniversalInputFixture(
           end: text.includes('at 7') ? '2026-10-10T20:00' : '2026-10-10T16:00',
           query: text,
           guests: [],
+          ...(intent === 'task' && params.has('task-references')
+            ? {
+                properties: [
+                  {
+                    name: 'Assignees',
+                    values: [text.replace(/^assign task to /i, '')],
+                  },
+                ],
+              }
+            : {}),
           ...(intent === 'search' ? fixtureSearchFields(text) : {}),
         },
       };
@@ -581,6 +598,11 @@ export function UniversalInputFixture(
     validateEmailDraft: () =>
       !googleConnected() ? 'Connect Google to continue' : undefined,
     validate: (input) => {
+      if (input.intent === 'task' && params.has('task-references')) {
+        const result = taskValues()?.(input.fields);
+        if (!result || result.unresolved.length)
+          return 'Choose an unambiguous assignee';
+      }
       if (input.intent === 'search') {
         const filters = resolveSearchFilters(
           input.fields.searchFilters,
@@ -718,7 +740,16 @@ export function UniversalInputFixture(
                           />
                         )
                       }
-                      taskFields={<span>Task properties</span>}
+                      taskFields={
+                        params.has('task-references') ? (
+                          <TaskReferenceFixture
+                            state={state}
+                            onValues={(values) => setTaskValues(() => values)}
+                          />
+                        ) : (
+                          <span>Task properties</span>
+                        )
+                      }
                     />
                     <Show when={!props.embedded}>
                       <output data-testid="global-search-requests">

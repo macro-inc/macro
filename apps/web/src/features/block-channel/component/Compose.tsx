@@ -20,8 +20,8 @@ import { getDestinationFromOptions } from '@core/util/destination';
 import InfoIcon from '@icon/system/regular/info.svg';
 import { useCreateChannelMutation } from '@queries/channel/channels';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
-import { useContactRecipientSource } from '@queries/contacts/recipient-source';
 import { createEffect, createMemo, createSignal, on } from 'solid-js';
+import { useContactRecipientSource } from '@queries/contacts/recipient-source';
 
 export function ChannelCompose() {
   const [channelName, setChannelName] = createSignal<string>('');

@@ -1,9 +1,6 @@
 import type { LexicalEditor } from 'lexical';
 import type { Accessor, JSX } from 'solid-js';
-import type {
-  EmailCalendarEvents,
-  EmailRecipientSourceFactory,
-} from '../context/compose-capabilities';
+import type { EmailCalendarEvents, EmailRecipientSourceFactory } from '../context/compose-capabilities';
 import type { ComposeBodyActions } from '../context/editor-capabilities';
 import type {
   EmailFormRecipients,

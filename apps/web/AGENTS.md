@@ -1,12 +1,12 @@
 ## Development Commands
 
 - Use `bun` as the package manager and script runner (`bun run build`, `bunx tsc`).
-- `bun run test`: run tests
+- `bun run test`: run tests 
 - `bun run check`: check typescript changes
 - Forward `CacheHost.people` through the app's retiring host, resolving the current host on each call even for captured methods; retired reads return unsupported and context writes reject rather than acknowledge discarded publication.
-- `CacheHost.people` contracts come from cache-core models: `bun run gen-cache-people-schema --rust` regenerates Rust JSON plus Zod/types; `--check --rust` verifies both. `bun run check` verifies JSON-to-frontend generation, while cache-core tests verify Rust-to-JSON drift. Missing native person commands mean unsupported, never permission to issue an unscoped write.
-- `bun run lint`: lint with biome
-- `bun run format`: format changes with biome
+- `CacheHost.people` contracts come from cache-core models: `bun run gen-cache-people-schema --rust` regenerates Rust JSON plus Zod/types; `--check --rust` verifies both. `bun run check` verifies JSON-to-frontend generation, while cache-core tests verify Rust-to-JSON drift. Missing native person commands mean unsupported, never permission to issue an unscoped write. 
+- `bun run lint`: lint with biome 
+- `bun run format`: format changes with biome 
 - `bun run knip`: to check for dead code
 - Run Linux native cache-plugin tests from the repository root with `nix develop .#tauri-linux --command cargo test --manifest-path apps/web/tauri/Cargo.toml -p graphql_cache_plugin`; the [Tauri platform shell](../../docs/development/running-locally.md) supplies the required desktop libraries.
 - Refresh `nix-support/node_modules-hashes.json` for Linux and Darwin when dependency manifests, the lockfile, or dependency patches change.
@@ -71,8 +71,15 @@ preserving the selected representation. Keep selection/outside dismissal synchro
 a delayed combobox close must not cancel a new query after refocus. Pass supplied
 names to option/chip avatars instead of filling the global name store. The internal
 recipient and email app-browser fixtures cover desktop/touch.
-Universal task inference still uses the existing shared-recipient pool until its
-planner resolver migrates; never substitute a suggestion page for that catalog.
+Universal task inference resolves only current person-valued fields through
+`useContactReferences` (`anyName`), not a people catalog or suggestion page.
+Keep incomplete/ambiguous evidence unresolved, preserve model term boundaries,
+and skip manually overridden fields. Snapshot resolved task values before awaiting
+creation metadata and fence the submitting account afterward. Its real adapter,
+reference reader and property controls have desktop/phone coverage in
+`features/universal-input/browser-test/task-references.browser.e2e.ts`. Other
+Universal Input recipients/search/guest pools and the Tasks filter planner still
+need migration; never replace their complete resolution inputs with suggestions.
 `CacheHost.people.resolveReferences` exposes the core's bounded full-directory
 ambiguity evidence. It needs a bound viewer and ready context only for inbox
 exclusions; callers must also check directory completeness. Missing reference

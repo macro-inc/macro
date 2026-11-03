@@ -163,10 +163,8 @@ the separate Tasks filter planner now extracts references without a personal cat
 and rejects unresolved people before applying any constraints.
 A bounded frontend reference source now combines native evidence with exact
 server stages, following empty continuations and exhausting a pass before calling
-one name unique. Labels and exact/first-name stages share an eight-page fallback
-budget; exhausting it retains partial witnesses as incomplete rather than proving
-absence or uniqueness. Explicit identities use independent lookup. It serializes
-native work with one replaceable pending input, samples completeness before scanning,
+one name unique. Explicit identities use independent lookup. It serializes native
+work with one replaceable pending input, samples completeness before scanning,
 and never turns partial/offline evidence into uniqueness. Universal task-property
 inference requests only effective person-valued labels with `anyName`, preserving
 full-name/first-name ambiguity, explicit identities and manual overrides. It snapshots

@@ -66,9 +66,6 @@ const READS: ReferenceReads = {
   lookup: resolveContactDirectory,
 };
 const UTF8 = new TextEncoder();
-// Share one fallback allowance across labels and exact/first-name stages. A
-// budget-limited scan is partial evidence, never proof of absence or uniqueness.
-const MAX_REFERENCE_SERVER_PAGES = 8;
 
 export function assertContactReferenceInput(
   request: ContactReferenceRequest
@@ -131,7 +128,7 @@ async function serverReference(
   excluded: ReadonlySet<string>,
   signal: AbortSignal,
   fetchPage: typeof fetchContactReferencePage,
-  takePage: () => boolean
+  countPage: () => void
 ): Promise<ContactReferenceMatch> {
   const stages = match(matching)
     .returnType<GraphqlContactMatching[]>()
@@ -145,13 +142,13 @@ async function serverReference(
     const people: ContactReferencePerson[] = [];
     let after: string | null = null;
     for (;;) {
-      if (!takePage()) return { complete: false, people };
       signal.throwIfAborted();
       const page = await fetchPage(
         { limit: MAX_PEOPLE_BATCH, after, search: label, matching: stage },
         signal
       );
       signal.throwIfAborted();
+      countPage();
       if (page.user.id !== viewer) throw new ContactDirectoryScopeError();
       if (page.user.contacts.nodes.length > MAX_PEOPLE_BATCH)
         throw new Error('Contact reference page exceeds its bound');
@@ -341,18 +338,12 @@ export async function resolveContactReferences(
               signal,
               reads.page,
               () => {
-                if (pages >= MAX_REFERENCE_SERVER_PAGES) return false;
                 pages++;
-                return true;
               }
             );
             resolvedNames.set(label, matched);
           }
-          const previous = matches[index];
-          matches[index] =
-            matched.complete || previous.people.length === 0
-              ? matched
-              : { complete: false, people: previous.people };
+          matches[index] = matched;
           sources.add('server');
         }
       }

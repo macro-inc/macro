@@ -135,8 +135,6 @@ const TIMED_COMMANDS: ReadonlySet<string> = new Set([
   ENTITY_FILTER_COMMAND,
   ENTITY_FILTER_RESUME_COMMAND,
   CALENDAR_RANGE_COMMAND,
-  PEOPLE_CONTEXT_COMMAND,
-  PEOPLE_SEARCH_COMMAND,
   'graphql_cache_inspect_query_variants',
   'graphql_cache_inspect_query',
 ]);

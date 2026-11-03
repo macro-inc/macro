@@ -35,6 +35,10 @@ import { useQuickAccess } from '@core/context/quickAccess';
 import { useAddInboxFlow } from '@core/email-link';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import { encodeBase64UrlUtf8 } from '@core/util/base64';
+import {
+  assertQueryAccount,
+  captureQueryAccount,
+} from '@queries/auth/account-scope';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import { useCreateCalendarEventMutation } from '@queries/calendar/mutations';
 import {
@@ -57,7 +61,7 @@ import { searchNeedsKeywords } from '../next-soup/core/search-filters';
 import { compileSearchQuery } from '../next-soup/core/search-query';
 import { createGlobalSearchOpener } from '../next-soup/open-search';
 import type { InputCapabilities } from './context/capabilities';
-import type { InputFields, Submission } from './core/input';
+import type { InputFields, Intent, Submission } from './core/input';
 import { type Recipient, resolveRecipients } from './core/recipients';
 import { parseRecurrenceDraft } from './core/recurrence';
 import { resolveSearchFilters } from './core/search';
@@ -70,6 +74,7 @@ export function createInputActions(
   userId: string,
   host: {
     navigate: (content: SplitContent) => void;
+    intent: Accessor<Intent | undefined>;
     onNoteTagsChange?: (value: string) => void;
     submitSurface?: PromptSubmitSurface;
     referredFrom?: ReferredFrom;
@@ -103,10 +108,10 @@ export function createInputActions(
       label: channel.data.name,
       kind: 'channel',
     }));
-  const taskFields = createTaskFieldSource(userId, () =>
-    combined
-      .users()
-      .flatMap((item) => (item.kind === 'user' ? [item.data] : []))
+  const taskFields = createTaskFieldSource(
+    userId,
+    fields,
+    () => host.intent() === 'task'
   );
   const noteTags = createDocumentComposerTags(
     {},
@@ -386,8 +391,13 @@ export function createInputActions(
         };
       })
       .with('task', async () => {
-        const definitions = await taskFields.createDefinitions();
+        const account = captureQueryAccount(userId);
+        assertQueryAccount(account);
+        // Snapshot resolved identities before yielding; a new inference request
+        // must not replace the submitted assignees with default values.
         const properties = taskFields.values(f).values;
+        const definitions = await taskFields.createDefinitions();
+        assertQueryAccount(account);
         const created = await createTaskWithProperties(
           f.title,
           f.body,

@@ -802,9 +802,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     let cumulativeIndex = 0;
 
     return bucketConfigs()
-      .filter(
-        (config) => (currentBins[config.id] || 0) > 0 || config.hasMore?.()
-      )
+      .filter((config) => (currentBins[config.id] || 0) > 0)
       .map((config) => {
         const bucketLimit = currentBins[config.id] || 0;
         const bucketItems: ReturnType<typeof config.getData> = [];
@@ -891,7 +889,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
               when={controller.viewAllMode()}
               fallback={
                 <Show
-                  when={visibleBuckets().length > 0}
+                  when={controller.combinedItems().length > 0}
                   fallback={
                     <div class="px-2 text-ink-extra-muted">No results</div>
                   }
@@ -1112,14 +1110,9 @@ function VirtualizedItemList(props: {
           props.items.every((item) => item.kind === 'group') && props.hasMore
         }
       >
-        <div
-          on:pointerdown={(event) => event.preventDefault()}
-          on:mousedown={(event) => event.preventDefault()}
-        >
-          <Button disabled={props.isLoadingMore} onClick={props.onEndReached}>
-            {t('viewMenus.nextOptions')}
-          </Button>
-        </div>
+        <Button disabled={props.isLoadingMore} onClick={props.onEndReached}>
+          {t('viewMenus.nextOptions')}
+        </Button>
       </Show>
     </div>
   );
