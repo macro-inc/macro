@@ -1,0 +1,30 @@
+{{- if and .Values.host (not .Values.onlyInfra) }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: macro-env
+  labels:
+    {{- include "macro-env.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- with .Values.ingress.tlsSecret }}
+  tls:
+    - hosts: [{{ $.Values.host | quote }}]
+      secretName: {{ . }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: proxy
+                port:
+                  number: 8080
+{{- end }}

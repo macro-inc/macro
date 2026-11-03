@@ -1,0 +1,140 @@
+{{- $root := . }}
+{{- range $w := .Values.workloads }}
+{{- if include "macro-env.enabled" (dict "root" $root "w" $w) }}
+{{- $ctx := dict "root" $root "w" $w }}
+{{- range $v := $w.volumes | default list }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $w.name }}-{{ $v.name }}
+  labels:
+    {{- include "macro-env.labels" $root | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with $root.Values.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $v.size | default "5Gi" }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $w.name }}
+  labels:
+    {{- include "macro-env.labels" $root | nindent 4 }}
+    app.kubernetes.io/name: {{ $w.name }}
+spec:
+  replicas: 1
+  # Single-writer volumes and singleton workers: never run two pods at once.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "macro-env.selector" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "macro-env.selector" $ctx | nindent 8 }}
+      annotations:
+        # Roll the pod when its config changes (the env Secret is applied
+        # outside the chart, so `env up` stamps its digest here).
+        macro.com/env-digest: {{ $root.Values.envDigest | default "" | quote }}
+        macro.com/config-digest: {{ toJson $w | sha256sum | trunc 16 | quote }}
+    spec:
+      enableServiceLinks: false
+      {{- with $w.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ . }}
+      {{- end }}
+      containers:
+        - name: {{ $w.name }}
+          image: {{ $w.image }}
+          imagePullPolicy: {{ $root.Values.imagePullPolicy }}
+          {{- with $w.command }}
+          command: {{ toJson . }}
+          {{- end }}
+          {{- with $w.args }}
+          args: {{ toJson . }}
+          {{- end }}
+          {{- if $w.sharedEnv }}
+          envFrom:
+            - secretRef:
+                name: {{ $root.Values.envSecret }}
+          {{- end }}
+          {{- with $w.env }}
+          env:
+            {{- range $k, $val := . }}
+            - name: {{ $k | quote }}
+              value: {{ $val | toString | quote }}
+            {{- end }}
+          {{- end }}
+          {{- with $w.ports }}
+          ports:
+            {{- range $p := . }}
+            - containerPort: {{ $p }}
+            {{- end }}
+          {{- end }}
+          {{- with $w.probe }}
+          readinessProbe:
+            exec:
+              command: {{ toJson .exec }}
+            periodSeconds: {{ .periodSeconds | default 10 }}
+            timeoutSeconds: {{ .timeoutSeconds | default 10 }}
+            failureThreshold: {{ .failureThreshold | default 3 }}
+          {{- end }}
+          {{- with $w.resources }}
+          resources: {{ toJson . }}
+          {{- end }}
+          {{- if or $w.volumes $w.files }}
+          volumeMounts:
+            {{- range $v := $w.volumes | default list }}
+            - name: vol-{{ $v.name }}
+              mountPath: {{ $v.mountPath }}
+            {{- end }}
+            {{- range $i, $f := $w.files | default list }}
+            - name: file-{{ $i }}
+              mountPath: {{ $f.mountPath }}
+              readOnly: true
+              {{- with $f.subPath }}
+              subPath: {{ . }}
+              {{- end }}
+            {{- end }}
+          {{- end }}
+      {{- if or $w.volumes $w.files }}
+      volumes:
+        {{- range $v := $w.volumes | default list }}
+        - name: vol-{{ $v.name }}
+          persistentVolumeClaim:
+            claimName: {{ $w.name }}-{{ $v.name }}
+        {{- end }}
+        {{- range $i, $f := $w.files | default list }}
+        - name: file-{{ $i }}
+          configMap:
+            name: {{ $f.configMap }}
+        {{- end }}
+      {{- end }}
+{{- if $w.ports }}
+{{- range $svc := prepend ($w.aliases | default list) $w.name }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $svc }}
+  labels:
+    {{- include "macro-env.labels" $root | nindent 4 }}
+spec:
+  selector:
+    {{- include "macro-env.selector" $ctx | nindent 4 }}
+  ports:
+    {{- range $p := $w.ports }}
+    - name: p{{ $p }}
+      port: {{ $p }}
+      targetPort: {{ $p }}
+    {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
