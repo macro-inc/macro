@@ -218,11 +218,11 @@ it.each([false, true])(
     viewport.scrollTop = 300;
     fireEvent.scroll(viewport);
     fireEvent.input(input, { target: { value: 'Keep this draft' } });
-    fireEvent.click(screen.getByRole('tab', { name: /Participants/ }));
+    fireEvent.click(screen.getByRole('radio', { name: /Participants/ }));
     expect(screen.queryByRole('textbox')).toBeNull();
     expect(input.isConnected).toBe(true);
     resize();
-    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Chat' }));
     expect(screen.getByRole('textbox')).toBe(input);
     expect(input.value).toBe('Keep this draft');
     expect(viewport.scrollTop).toBe(300);

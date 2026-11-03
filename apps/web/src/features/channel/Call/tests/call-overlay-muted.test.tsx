@@ -49,7 +49,7 @@ vi.mock('@ui', async () => ({
   Layer: (await import('@ui/components/Layer')).Layer,
   cn: (...classes: Array<string | false | null | undefined>) =>
     classes.filter(Boolean).join(' '),
-  TabSelector: (await import('@ui/components/TabSelector')).TabSelector,
+  Tabs: (await import('@ui/components/Tabs')).Tabs,
   Dropdown: (await import('@ui/components/Dropdown')).Dropdown,
   SingleSelectCheck: (await import('@ui/components/Checkbox'))
     .SingleSelectCheck,
@@ -226,7 +226,7 @@ describe('CallOverlay muted microphone badges', () => {
       });
       fireEvent.click(trigger);
       await vi.advanceTimersByTimeAsync(500);
-      fireEvent.keyDown(screen.getByRole('tab', { name: 'Chat' }), {
+      fireEvent.keyDown(screen.getByRole('radio', { name: 'Chat' }), {
         key: 'Escape',
       });
       await vi.advanceTimersByTimeAsync(500);
@@ -265,7 +265,7 @@ describe('CallOverlay muted microphone badges', () => {
       screen.getByRole('list', { name: 'In-call participants' })
     ).toBeTruthy();
     expect(
-      screen.getByRole('tab', { name: 'Chat' }).hasAttribute('disabled')
+      screen.getByRole('radio', { name: 'Chat' }).hasAttribute('disabled')
     ).toBe(true);
     expect(screen.queryByRole('textbox')).toBeNull();
     expect(screen.queryByText('call-id')).toBeNull();
@@ -285,10 +285,10 @@ describe('CallOverlay muted microphone badges', () => {
     });
     fireEvent.input(composer, { target: { value: 'Draft' } });
     expect(screen.getByText('call-id')).toBeTruthy();
-    fireEvent.click(screen.getByRole('tab', { name: /Participants/ }));
+    fireEvent.click(screen.getByRole('radio', { name: /Participants/ }));
     expect(screen.queryByRole('textbox')).toBeNull();
     expect(composer.isConnected).toBe(true);
-    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Chat' }));
     expect(screen.getByRole('textbox', { name: 'Message this call' })).toBe(
       composer
     );

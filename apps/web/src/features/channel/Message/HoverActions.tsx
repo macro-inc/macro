@@ -74,7 +74,7 @@ export function HoverActions(props: HoverActionsProps) {
     <div
       ref={toolbar}
       class={cn(
-        'absolute right-4 z-10 w-max max-w-full [&>[data-slot=toolbar]]:max-w-full [&>[data-slot=toolbar]]:flex-wrap',
+        'absolute right-4 z-10 w-max max-w-full',
         props.position === 'above' ? 'bottom-full' : 'top-0 -translate-y-1/2',
         props.persistentVisible
           ? ''

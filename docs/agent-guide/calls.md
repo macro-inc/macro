@@ -249,22 +249,24 @@ returns automatically. Focus changes keep the existing video tracks mounted.
 A talking participant has an accent-colored border above their video or avatar.
 
 Open **Chat** and **Participants** from the button beside the media controls.
-The sidebar and phone drawer share two tabs at the top. **Participants** shows
-the live attendee count and a scrollable roster, including you and connected
-guests but excluding recording agents. Rows show names, avatars, microphone and
-camera state, and a speaking indicator. Off microphones and cameras use the
-failure color. Known users use the shared user icon: hover it on desktop or tap
-it on touch to open the profile card; guests use the shared avatar fallback.
+The sidebar and phone drawer share a compact grouped section switcher at the top.
+**Participants** shows the live attendee count and a scrollable roster, including
+you and connected guests but excluding recording agents. Rows show names,
+avatars, microphone and camera state, and a speaking indicator. Off microphones
+and cameras use the failure color. Known users use the shared user icon:
+hover it on desktop or tap it on touch to open the profile card; guests use
+the shared avatar fallback.
 This is the current call roster, not the channel member list. Participant media
 controls remain read-only. The roster remains available when chat is unavailable,
 without starting message queries.
 
 On phones, the fully rounded control bar fits its buttons instead of filling the
-available width, with small gaps between controls when space allows. The sidebar
-button stays separate on the right with a 48px tap target and the row keeps its
-side gutters. On desktop, the sidebar button stays at the bottom-right and Copy
-Meeting Url stays at the bottom-left, without horizontal padding on the footer
-row. On phones, Copy Meeting Url uses the shared `CopyButton` in a standard 40px
+available width. Controls have 8px gaps, expanding to 12px in roomy bars and
+contracting on narrow phones so all controls fit. The sidebar button stays
+separate on the right with a 48px tap target and the row keeps its side gutters.
+On desktop, the sidebar button stays at the bottom-right and Copy Meeting Url
+stays at the bottom-left, without horizontal padding on the footer row. On
+phones, Copy Meeting Url uses the shared `CopyButton` in a standard 40px
 header island, without custom button colors or sizing. Media controls occupy a
 separate row below the video, never over it. Controls remain visible while idle;
 auto-hide is disabled for now. Header islands also stay visible. Check 320px
@@ -285,9 +287,10 @@ without crossing the call area. Closing returns focus to the footer button.
 Switching tabs, closing, and resizing preserve the message draft and scroll
 position. Tab changes keep keyboard focus on the selected tab instead of moving
 it into the composer; reopening retains the existing autofocus behavior.
-Message hover actions stay within the chat's scroll viewport, wrapping when the
-sidebar is narrow. Check the first and last visible messages while scrolling.
-Check both signed-in and guest calls.
+Message hover actions stay within the chat's scroll viewport. The toolbar wraps
+its action groups when the sidebar is narrow, keeping the final actions inside
+the visible surface. Check the first and last visible messages while scrolling,
+with every action available. Check both signed-in and guest calls.
 
 ### Browser call diagnostics
 

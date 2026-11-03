@@ -2,7 +2,7 @@ import { formatLocale, t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isMobile } from '@core/mobile/isMobile';
 import XIcon from '@icon/system/regular/x.svg';
-import { Button, cn, TabSelector } from '@ui';
+import { Button, cn, Tabs } from '@ui';
 import { createEffect, createSignal, type JSX, on, onCleanup } from 'solid-js';
 
 export type CallPanelTab = 'chat' | 'participants';
@@ -103,66 +103,56 @@ export function CallChatPanel(props: {
         class="flex min-h-0 flex-1 flex-col"
         onKeyDown={closeOnEscape}
       >
-        <TabSelector.Root
-          value={props.activeTab}
-          onChange={(tab) => {
-            if (tab === 'chat' || tab === 'participants')
-              props.onTabChange(tab);
-          }}
-          class="flex min-h-0 flex-1 flex-col"
+        <div class="flex h-14 shrink-0 items-center justify-between gap-2 px-3">
+          <Tabs<CallPanelTab>
+            aria-label={t('calls.panel')}
+            value={props.activeTab}
+            onChange={props.onTabChange}
+            options={[
+              {
+                value: 'chat',
+                label: t('calls.chat'),
+                disabled: !props.chatAvailable,
+              },
+              {
+                value: 'participants',
+                label: t('calls.participants'),
+                count: props.participantCount.toLocaleString(formatLocale()),
+              },
+            ]}
+          />
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t('calls.closePanel')}
+            tooltip={t('calls.closePanel')}
+            onClick={props.onClose}
+          >
+            <XIcon class="size-4" />
+          </Button>
+        </div>
+        <section
+          aria-label={t('calls.chat')}
+          hidden={props.activeTab !== 'chat'}
+          inert={props.activeTab !== 'chat'}
+          class={cn(
+            'flex min-h-0 flex-1 flex-col',
+            props.activeTab !== 'chat' && 'hidden'
+          )}
         >
-          <div class="flex h-14 shrink-0 items-center justify-between gap-2 px-3">
-            <TabSelector>
-              <TabSelector.List
-                aria-label={t('calls.panel')}
-                onKeyDown={closeOnEscape}
-              >
-                <TabSelector.Tab value="chat" disabled={!props.chatAvailable}>
-                  {t('calls.chat')}
-                </TabSelector.Tab>
-                <TabSelector.Tab value="participants">
-                  {t('calls.participants')}
-                  <span class="text-ink-muted">
-                    {props.participantCount.toLocaleString(formatLocale())}
-                  </span>
-                </TabSelector.Tab>
-              </TabSelector.List>
-            </TabSelector>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={t('calls.closePanel')}
-              tooltip={t('calls.closePanel')}
-              onClick={props.onClose}
-            >
-              <XIcon class="size-4" />
-            </Button>
-          </div>
-          <TabSelector.Panel
-            value="chat"
-            forceMount
-            hidden={props.activeTab !== 'chat'}
-            inert={props.activeTab !== 'chat'}
-            class={cn(
-              'flex min-h-0 flex-1 flex-col',
-              props.activeTab !== 'chat' && 'hidden'
-            )}
-          >
-            {props.children}
-          </TabSelector.Panel>
-          <TabSelector.Panel
-            value="participants"
-            forceMount
-            hidden={props.activeTab !== 'participants'}
-            inert={props.activeTab !== 'participants'}
-            class={cn(
-              'min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 pb-3',
-              props.activeTab !== 'participants' && 'hidden'
-            )}
-          >
-            {props.participants}
-          </TabSelector.Panel>
-        </TabSelector.Root>
+          {props.children}
+        </section>
+        <section
+          aria-label={t('calls.participants')}
+          hidden={props.activeTab !== 'participants'}
+          inert={props.activeTab !== 'participants'}
+          class={cn(
+            'min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 pb-3',
+            props.activeTab !== 'participants' && 'hidden'
+          )}
+        >
+          {props.participants}
+        </section>
       </div>
     </MobileDrawer>
   );
