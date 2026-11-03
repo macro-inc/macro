@@ -24,11 +24,7 @@ import {
   withDraftSteps,
 } from '../core/routine-draft';
 import { type RunItem, runStartLine } from '../core/run-start';
-import {
-  describeHistoryStep,
-  latestStepRun,
-  stepsForRun,
-} from '../core/step-history';
+import { describeHistoryStep, stepsForRun } from '../core/step-history';
 import {
   createRoutineDetail,
   RoutineConflictError,
@@ -127,7 +123,6 @@ export function RoutineDetailView(props: {
     onRename: (name) => props.onRename(name),
   });
   const [tab, setTab] = createSignal(props.initialTab ?? 'settings');
-  const [showRun, setShowRun] = createSignal(true);
   const back = () => props.onBack();
   const prompt = () => {
     const draft = state();
@@ -175,10 +170,6 @@ export function RoutineDetailView(props: {
                 ? 'You'
                 : getDisplayName(tryMacroId(routine().ownerId)) || 'Owner',
             runsAsDescription: 'Steps and AI act with the owner’s access.',
-            lastRun: () =>
-              latestStepRun(props.source.history(), routine().revision),
-            showRun,
-            onShowRun: setShowRun,
             unsupported: (
               <p class="text-sm text-ink-muted">
                 This routine has an unsupported task configuration.

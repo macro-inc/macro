@@ -1,38 +1,20 @@
-import { ToggleSwitch } from '@ui';
 import { Show } from 'solid-js';
 import type { StepDraft } from '../core/routine-steps';
 import type { RoutineTriggerDraft } from '../core/routine-triggers';
 import { aiCallsPerRun, runSubject } from '../core/step-headline';
 import {
-  type RoutineRunView,
   type RoutineStepsProps,
   StepList,
   StepsProvider,
 } from './routine-steps';
 
-function formatRunTime(at: string | null | undefined): string {
-  if (!at) return '';
-  const date = new Date(at);
-  return Number.isNaN(date.getTime())
-    ? ''
-    : date.toLocaleString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-      });
-}
-
 /**
- * "Show last run" and what a run costs, for the Then heading: the routine
- * page puts them on its line, as other pages put a section's controls.
+ * What a run costs, for the Steps heading: the routine page puts it on its
+ * line, as other pages put a section's controls.
  */
 export function RoutineStepsSummary(props: {
   steps: StepDraft[];
   triggers: RoutineTriggerDraft[];
-  lastRun?: RoutineRunView;
-  showRun: boolean;
-  onShowRun(show: boolean): void;
 }) {
   const subject = () => runSubject(props.triggers);
   // A trigger's AI check is a call of its own, before the steps run.
@@ -48,32 +30,9 @@ export function RoutineStepsSummary(props: {
       ? `${calls()} AI ${calls() === 1 ? 'call' : 'calls'} per ${subject() ?? 'run'}`
       : undefined;
   return (
-    <span class="flex min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-1 text-xs text-ink-muted empty:hidden">
-      <Show when={props.lastRun}>
-        {(run) => (
-          <span
-            title={`Last run ${formatRunTime(run().endedAt)}`}
-            class="flex items-center"
-          >
-            <ToggleSwitch
-              size="xs"
-              checked={props.showRun}
-              onChange={props.onShowRun}
-              label="Show last run"
-              labelClass="text-xs text-ink-muted"
-            />
-          </span>
-        )}
-      </Show>
-      <Show when={cost()}>
-        {(text) => (
-          <span>
-            <Show when={props.lastRun}>· </Show>
-            {text()}
-          </span>
-        )}
-      </Show>
-    </span>
+    <Show when={cost()}>
+      {(text) => <span class="text-xs text-ink-muted">{text()}</span>}
+    </Show>
   );
 }
 
@@ -81,7 +40,7 @@ export function RoutineStepsSummary(props: {
  * A routine's steps as numbered cards. The page puts `RoutineStepsSummary`
  * on the Steps heading.
  */
-export function RoutineSteps(props: RoutineStepsProps & { showRun: boolean }) {
+export function RoutineSteps(props: RoutineStepsProps) {
   return (
     <StepsProvider {...props}>
       <StepList steps={props.steps} onChange={props.onChange} />

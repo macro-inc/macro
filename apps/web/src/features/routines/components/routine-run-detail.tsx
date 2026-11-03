@@ -5,9 +5,14 @@ import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, cn } from '@ui';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
-import type { HistoryRecord, HistoryStep } from '../core/history';
+import { match } from 'ts-pattern';
+import type {
+  CallStatus,
+  HistoryCall,
+  HistoryRecord,
+  HistoryStep,
+} from '../core/history';
 import { failedStep, type RunOutcome, runOutcome } from '../core/step-history';
-import { CallList } from './routine-code-step';
 
 const OUTCOME_LABEL: Record<RunOutcome, string> = {
   running: 'Running',
@@ -256,5 +261,69 @@ export function RunDetail(props: {
         )}
       </Show>
     </section>
+  );
+}
+
+const STATUS_LABEL: Record<CallStatus, string> = {
+  completed: 'Done',
+  failed: 'Failed',
+  skipped: 'Would do',
+  refused: 'Not allowed',
+  unknown: 'Unknown',
+};
+
+function duration(ms: number | undefined): string {
+  if (ms === undefined) return '';
+  return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
+}
+
+/** A code step's SDK calls in one run, in the order they started. */
+function CallList(props: { calls: HistoryCall[] }) {
+  return (
+    <ol class="grid min-w-0 gap-1 text-xs">
+      <For each={props.calls}>
+        {(call) => (
+          <li class="flex min-w-0 items-center gap-2">
+            <span
+              aria-hidden="true"
+              class={cn(
+                'size-1.5 shrink-0 rounded-full',
+                match(call.status)
+                  .with('completed', () =>
+                    call.write ? 'bg-success' : 'bg-edge'
+                  )
+                  .with('failed', 'refused', () => 'bg-failure')
+                  .with('skipped', 'unknown', () => 'bg-ink-extra-muted')
+                  .exhaustive()
+              )}
+            />
+            <span
+              class={cn(
+                'min-w-0 flex-1 truncate',
+                call.write ? 'text-ink' : 'text-ink-muted'
+              )}
+              title={call.operation}
+            >
+              {call.label}
+            </span>
+            <Show when={call.status !== 'completed'}>
+              <span
+                class={cn(
+                  'shrink-0',
+                  call.status === 'failed' || call.status === 'refused'
+                    ? 'text-failure'
+                    : 'text-ink-muted'
+                )}
+              >
+                {STATUS_LABEL[call.status]}
+              </span>
+            </Show>
+            <span class="w-14 shrink-0 text-right tabular-nums text-ink-extra-muted">
+              {duration(call.durationMs)}
+            </span>
+          </li>
+        )}
+      </For>
+    </ol>
   );
 }

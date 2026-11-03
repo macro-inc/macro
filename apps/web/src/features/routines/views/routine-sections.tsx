@@ -7,7 +7,6 @@ import {
   RoutineSteps,
   RoutineStepsSummary,
 } from '../components/routine-step-editor';
-import type { RoutineRunView } from '../components/routine-steps';
 import type { RoutineEditorSlots } from '../context/routine-slots';
 import { DEFAULT_RUN_VISIBILITY, type ScheduleDraft } from '../core/draft';
 import { draftSteps } from '../core/routine-draft';
@@ -33,17 +32,12 @@ export function routineSections(props: {
   /** Who the routine runs as, and the line under it. */
   runsAs: Accessor<string>;
   runsAsDescription: string;
-  /** The latest run, to show what each step did. */
-  lastRun?: Accessor<RoutineRunView | undefined>;
-  showRun?: Accessor<boolean>;
-  onShowRun?: (show: boolean) => void;
   /** Shown in the trigger card when there is no draft to edit. */
   unsupported?: JSX.Element;
 }) {
   const triggers = () => props.draft()?.triggers ?? [];
   const setTriggers = (next: ScheduleDraft['triggers']) =>
     props.onChange((current) => ({ ...current, triggers: next }));
-  const showRun = () => props.showRun?.() ?? false;
   return {
     get hasTriggers() {
       return !props.draft() || triggers().length > 0;
@@ -72,9 +66,6 @@ export function routineSections(props: {
           <RoutineStepsSummary
             steps={draftSteps(draft())}
             triggers={triggers()}
-            lastRun={props.lastRun?.()}
-            showRun={showRun()}
-            onShowRun={(show) => props.onShowRun?.(show)}
           />
         )}
       </Show>
@@ -111,8 +102,6 @@ export function routineSections(props: {
                   }
                 }
                 slots={props.slots}
-                lastRun={props.lastRun?.()}
-                showRun={showRun()}
               />
             </Show>
           </>

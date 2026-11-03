@@ -773,8 +773,9 @@ field with − and +, its range, and Enter to save (Esc cancels); text or the
 question AI is asked open an editor with **Save**; on/off flips in place.
 Each change saves only that value, never the code. Knobs the sentence
 doesn't show are listed under **Settings**; a step without a sentence shows
-its summary. **Change this step** under a code step takes what to change in
-words: AI rewrites the step, keeping its place, output name and values, and
+its summary. **Edit** in a code step's ⋯ menu opens **Change this step**
+(Esc or **Cancel** closes it), which takes what to change in words: AI
+rewrites the step, keeping its place, output name and values, and
 type-checks it with the routine around it. The rewrite shows the sentence
 with new words marked, **Rewritten and checked** (or its errors, which block
 keeping it), changed values, **Keep**, **Undo** and **Show code changes**;

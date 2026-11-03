@@ -1112,17 +1112,18 @@ AI writes them (**Draft it**, the starter templates, or a conversation about
 the routine), and they open read-only: summary, **Can change** scopes and the
 code. **Ask AI** hands the run to a model or agent with instructions; it sees
 the triggering event and what earlier steps returned, a routine has one, and
-its required apps go to it. **Add step** (in the tray under the last step card,
-like the tray under Home's composer) offers **Ask AI** while the routine has
-none, and says that AI writes code steps.
+its required apps go to it. The tray under the last step card (like the tray
+under Home's composer) holds **Then… say what should happen next**, where AI
+adds the next step; where AI can't write steps it is **Add step**, which
+offers **Ask AI** while the routine has none.
 
 Steps are numbered, labelled groups that read as one line closed (a code step's
 title and summary with a **Code** badge; **Ask AI** and the first line of its
 instructions); click the header to open or close one. New steps and a routine's
-only step start open. On a routine's page the **Steps** heading carries **Show
-last run** (a switch) and how many AI calls a run makes (**1 AI call per
-email**); with it on, each step shows what the latest run did: a check,
-**Failed**, or a code step's call count. Each step's ⋯ menu has **Move up** /
+only step start open. On a routine's page the **Steps** heading carries how
+many AI calls a run makes (**1 AI call per email**); what runs did is on the
+**Runs** tab, not on the steps. Each step's ⋯ menu has **Edit** (code steps,
+which opens **Change this step** in the card), **Move up** /
 **Move down** (also Alt/⌥+↑/↓ on the card outside its text fields, keeping
 focus on the moved card), **Duplicate** and **Delete step**.
 
@@ -1220,7 +1221,7 @@ while a run is going or the routine can't run, with the reason in its tooltip
 and, on touch, under the line), **Owned by**
 and **Last run**, with **Compose with agent** at the right end of that line. Below are labelled sections, each on a raised surface:
 **Trigger** (with **Next run** at its right) holds the trigger sentences above;
-**Steps** (with **Show last run** and the AI calls per run at its right) holds
+**Steps** (with the AI calls per run at its right) holds
 the steps (a single **Ask AI** step for routines without other steps; it holds
 the **Who** model or agent token and the instructions; a single-agent routine
 written through the API with base instructions shows them above the step as

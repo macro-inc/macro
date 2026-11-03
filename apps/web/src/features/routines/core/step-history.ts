@@ -25,12 +25,6 @@ export function stepsForRun(
     : undefined;
 }
 
-/** How many SDK calls a code step made: "3 calls", or "128+ calls" when more ran than were kept. */
-export function callCount(count: number, truncated: boolean): string {
-  if (truncated) return `${count}+ calls`;
-  return count === 1 ? '1 call' : `${count} calls`;
-}
-
 /**
  * A short description of what a run did at one step, by the step in the
  * configuration the run used when it's known.
@@ -49,31 +43,6 @@ export function describeHistoryStep(
       return record.error ? `${title} failed: ${record.error}` : title;
     })
     .exhaustive();
-}
-
-/**
- * The most recent run that reached its steps, to show on the editor: only a
- * run of the configuration being edited, whose steps it can point at.
- */
-export function latestStepRun(
-  records: readonly HistoryRecord[],
-  revision: number
-): (HistoryRecord & { steps: HistoryStep[] }) | undefined {
-  return records
-    .filter(
-      (record): record is HistoryRecord & { steps: HistoryStep[] } =>
-        record.revision === revision &&
-        !record.skipped &&
-        Boolean(record.steps?.length) &&
-        Boolean(record.endedAt)
-    )
-    .reduce<(HistoryRecord & { steps: HistoryStep[] }) | undefined>(
-      (latest, record) =>
-        !latest || (record.startedAt ?? '') > (latest.startedAt ?? '')
-          ? record
-          : latest,
-      undefined
-    );
 }
 
 /**

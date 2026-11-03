@@ -2,13 +2,12 @@ import { IS_MAC } from '@core/constant/isMac';
 import { isEditableInput } from '@core/util/isEditableInput';
 import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
 import ArrowUpIcon from '@icon/system/regular/arrow-up.svg';
-import CheckIcon from '@icon/system/regular/check.svg';
 import CodeIcon from '@icon/system/regular/code.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import DotsIcon from '@icon/system/regular/dots-three.svg';
+import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
-import WarningIcon from '@icon/system/regular/warning-circle.svg';
 import { Badge, cn, Dropdown } from '@ui';
 import {
   type Accessor,
@@ -25,7 +24,6 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
 import type { StepAuthor } from '../context/routine-slots';
-import type { HistoryStep } from '../core/history';
 import type {
   AgentStepDraft,
   RoutineSoFar,
@@ -35,7 +33,6 @@ import type { RoutineTarget } from '../core/routine-target';
 import type { RoutineTriggerDraft } from '../core/routine-triggers';
 import { copyStep } from '../core/step-edits';
 import { stepHeadline } from '../core/step-headline';
-import { callCount } from '../core/step-history';
 import { AddStep } from './routine-add-step';
 import { CodeStepBody, StepNote } from './routine-code-step';
 import { RoutineSurface, RoutineTray } from './routine-editor';
@@ -54,13 +51,6 @@ export type RoutineStepSlots = {
   createStepAuthor?(routine: Accessor<RoutineSoFar>): StepAuthor;
 };
 
-/** A finished run to show on the steps: what each step did, by path. */
-export type RoutineRunView = {
-  steps: HistoryStep[];
-  endedAt?: string | null;
-  success?: boolean | null;
-};
-
 type StepsContextValue = {
   /** The whole routine. */
   steps: Accessor<StepDraft[]>;
@@ -68,8 +58,6 @@ type StepsContextValue = {
   slots: RoutineStepSlots;
   /** Steps added while editing, which open for their first edit. */
   fresh: Set<string>;
-  /** What the shown run did at each step path. */
-  run: Accessor<ReadonlyMap<string, HistoryStep> | undefined>;
   /** AI that adds and changes steps, when the host provides it. */
   author?: StepAuthor;
 };
@@ -88,20 +76,12 @@ export type RoutineStepsProps = {
   triggers: RoutineTriggerDraft[];
   defaultTarget: RoutineTarget;
   slots: RoutineStepSlots;
-  /** The latest run, shown on the steps it touched. */
-  lastRun?: RoutineRunView;
 };
 
-/** What every step editor reads: slots and the shown run. */
+/** What every step editor reads: slots and the AI that writes steps. */
 export function StepsProvider(
-  props: RoutineStepsProps & { showRun: boolean; children: JSX.Element }
+  props: RoutineStepsProps & { children: JSX.Element }
 ) {
-  const run = () => {
-    const lastRun = props.lastRun;
-    return lastRun && props.showRun
-      ? new Map(lastRun.steps.map((step) => [step.path, step] as const))
-      : undefined;
-  };
   const author = props.slots.createStepAuthor?.(() => ({
     triggers: props.triggers,
     steps: props.steps,
@@ -113,7 +93,6 @@ export function StepsProvider(
         defaultTarget: () => props.defaultTarget,
         slots: props.slots,
         fresh: new Set(),
-        run,
         author,
       }}
     >
@@ -152,7 +131,6 @@ export function StepList(props: {
                   number={index() + 1}
                   first={index() === 0}
                   last={index() === props.steps.length - 1}
-                  path={String(index())}
                   onChange={(next) => replace(id, next)}
                   onMove={(delta) => move(id, delta)}
                   onDuplicate={(copy) => {
@@ -208,76 +186,11 @@ export function StepIcon(props: { step: StepDraft }) {
   );
 }
 
-type RunOutcome = {
-  failed?: string;
-  /** What it did, in a few words. */
-  text?: string;
-};
-
-/** What a run did at one step: an error, its calls, or plain success. */
-export function runOutcome(record: HistoryStep): RunOutcome {
-  return match(record)
-    .returnType<RunOutcome>()
-    .with({ kind: 'agent' }, (record) =>
-      record.error ? { failed: record.error } : {}
-    )
-    .with({ kind: 'code' }, (record) =>
-      record.error
-        ? { failed: record.error }
-        : { text: callCount(record.calls.length, record.callsTruncated) }
-    )
-    .exhaustive();
-}
-
-/** What the shown run did at one step, in a few words. */
-export function RunStatus(props: { path: string }) {
-  const steps = useSteps();
-  const outcome = () => {
-    const record = steps.run()?.get(props.path);
-    return record ? runOutcome(record) : undefined;
-  };
-  return (
-    <Show when={outcome()}>
-      {(result) => (
-        <Switch
-          fallback={
-            <CheckIcon
-              class="size-3.5 shrink-0 text-success"
-              aria-label="Ran"
-            />
-          }
-        >
-          <Match when={result().failed}>
-            {(error) => (
-              <span
-                class="flex shrink-0 items-center gap-1 text-xs text-failure"
-                title={error()}
-              >
-                <WarningIcon class="size-3.5" />
-                Failed
-              </span>
-            )}
-          </Match>
-          <Match when={result().text}>
-            {(text) => (
-              <span class="flex min-w-0 shrink items-center gap-1 text-xs text-ink-muted">
-                <CheckIcon class="size-3.5 shrink-0 text-success" />
-                <span class="truncate">{text()}</span>
-              </span>
-            )}
-          </Match>
-        </Switch>
-      )}
-    </Show>
-  );
-}
-
 type StepCardProps = {
   step: StepDraft;
   number: number;
   first: boolean;
   last: boolean;
-  path: string;
   onChange(step: StepDraft): void;
   onMove(delta: number): void;
   onDuplicate(copy: StepDraft): void;
@@ -285,11 +198,13 @@ type StepCardProps = {
 };
 
 /**
- * One step: closed, a single line (its title, what it does and what the
- * shown run did); open, its settings or code under its name.
+ * One step: closed, a single line (its title and what it does); open, its
+ * settings or code under its name.
  */
 function StepCard(props: StepCardProps) {
   const steps = useSteps();
+  // Saying what to change in a code step, from its menu's Edit.
+  const [editing, setEditing] = createSignal(false);
   // Open where there is something to do; a finished routine reads as a list.
   const [open, setOpen] = createSignal(
     (steps.steps().length === 1 && steps.steps()[0]?.id === props.step.id) ||
@@ -298,10 +213,12 @@ function StepCard(props: StepCardProps) {
   );
   const headline = () => stepHeadline(props.step);
   let header: HTMLButtonElement | undefined;
+  let group: HTMLDivElement | undefined;
   return (
     <RoutineSurface>
       {/* A named group, not a landmark: a routine has many steps. */}
       <div
+        ref={group}
         role="group"
         aria-label={headline().title}
         class="@container/step group/step min-w-0"
@@ -346,16 +263,32 @@ function StepCard(props: StepCardProps) {
                 </Badge>
               )}
             </Show>
-            <RunStatus path={props.path} />
           </button>
-          <StepMenu {...props} open={open()} />
+          <StepMenu
+            {...props}
+            open={open()}
+            onEdit={
+              props.step.kind === 'code' && steps.author
+                ? () => {
+                    setOpen(true);
+                    setEditing(true);
+                  }
+                : undefined
+            }
+            onEditShown={() =>
+              group
+                ?.querySelector<HTMLInputElement>('[data-step-change]')
+                ?.focus()
+            }
+          />
         </div>
         <Show when={open()}>
           {/* Fields keep the card's padding on every side. */}
           <div class="grid min-w-0 gap-3 px-4 pb-4 pt-1">
             <StepBody
               step={props.step}
-              path={props.path}
+              editing={editing()}
+              onEditing={setEditing}
               onChange={props.onChange}
             />
           </div>
@@ -373,9 +306,17 @@ function MenuShortcut(props: { children: JSX.Element }) {
   );
 }
 
-/** Move, duplicate, or delete a step. */
-function StepMenu(props: StepCardProps & { open: boolean }) {
+/** Edit, move, duplicate, or delete a step. */
+function StepMenu(
+  props: StepCardProps & {
+    open: boolean;
+    onEdit?: () => void;
+    /** Focus what Edit opened, once the menu has let go of focus. */
+    onEditShown(): void;
+  }
+) {
   let trigger: HTMLButtonElement | undefined;
+  let editing = false;
   return (
     <Dropdown placement="bottom-end">
       <Dropdown.Trigger
@@ -394,7 +335,28 @@ function StepMenu(props: StepCardProps & { open: boolean }) {
         portalScope="local"
         mount={menuMount(trigger)}
         class="min-w-56"
+        onCloseAutoFocus={() => {
+          if (!editing) return;
+          editing = false;
+          // The menu focuses its trigger after this handler returns.
+          queueMicrotask(() => props.onEditShown());
+        }}
       >
+        <Show when={props.onEdit}>
+          {(edit) => (
+            <Dropdown.Group>
+              <Dropdown.Item
+                onSelect={() => {
+                  editing = true;
+                  edit()();
+                }}
+              >
+                <PencilIcon class="size-4" />
+                Edit
+              </Dropdown.Item>
+            </Dropdown.Group>
+          )}
+        </Show>
         <Dropdown.Group>
           <Dropdown.Item
             disabled={props.first}
@@ -430,7 +392,9 @@ function StepMenu(props: StepCardProps & { open: boolean }) {
 /** The editor for any step, wherever it sits. */
 export function StepBody(props: {
   step: StepDraft;
-  path: string;
+  /** Whether a code step shows where to say what to change. */
+  editing?: boolean;
+  onEditing?(editing: boolean): void;
   onChange(step: StepDraft): void;
 }) {
   return (
@@ -442,7 +406,8 @@ export function StepBody(props: {
         {(step) => (
           <CodeStepBody
             step={step()}
-            path={props.path}
+            editing={props.editing ?? false}
+            onEditing={(editing) => props.onEditing?.(editing)}
             onChange={props.onChange}
           />
         )}

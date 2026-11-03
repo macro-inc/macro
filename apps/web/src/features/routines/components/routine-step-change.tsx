@@ -2,7 +2,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import CheckIcon from '@icon/system/regular/check.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import { Button, cn } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { createSignal, For, onCleanup, Show } from 'solid-js';
 import type { StepAuthor } from '../context/routine-slots';
 import { type Knob, knobText, sentenceText } from '../core/knobs';
 import type { CodeStepDraft } from '../core/routine-steps';
@@ -10,23 +10,31 @@ import { type DiffPart, diffLines, diffWords } from '../core/text-diff';
 import { isComposing } from './composing';
 
 /**
- * A box under a code step where its owner says what to change. AI rewrites
- * the step and checks it; nothing changes until they keep the result.
+ * A box under a code step, opened by its Edit, where its owner says what to
+ * change. AI rewrites the step and checks it; nothing changes until they
+ * keep the result. Esc or Cancel closes it.
  */
 export function StepChange(props: {
   step: CodeStepDraft;
   author: StepAuthor;
   onRevised(step: CodeStepDraft): void;
+  onCancel(): void;
 }) {
   const [instruction, setInstruction] = createSignal('');
   const [pending, setPending] = createSignal(false);
   const [error, setError] = createSignal<string>();
+  // A rewrite that lands after Cancel is dropped.
+  let open = true;
+  onCleanup(() => {
+    open = false;
+  });
   const submit = async () => {
     const text = instruction().trim();
     if (!text || pending()) return;
     setPending(true);
     setError(undefined);
     const result = await props.author.revise(props.step, text);
+    if (!open) return;
     setPending(false);
     if (typeof result === 'string') {
       setError(result);
@@ -46,6 +54,8 @@ export function StepChange(props: {
       >
         <SparkleIcon class="size-3.5 shrink-0 text-accent" />
         <input
+          // The step's Edit focuses it once its menu has closed.
+          data-step-change
           type="text"
           class="min-w-0 flex-1 bg-transparent text-sm text-ink caret-accent outline-none placeholder:text-ink-placeholder"
           aria-label="Change this step"
@@ -57,12 +67,24 @@ export function StepChange(props: {
             // Enter that confirms an IME candidate isn't a request yet.
             if (event.key === 'Enter' && isComposing(event))
               event.preventDefault();
+            if (event.key === 'Escape' && !isComposing(event)) {
+              event.preventDefault();
+              props.onCancel();
+            }
           }}
         />
         <Button
-          type="submit"
+          type="button"
           size="sm"
           variant="ghost"
+          onClick={() => props.onCancel()}
+        >
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          size="sm"
+          variant="primary"
           disabled={pending() || !instruction().trim()}
         >
           {pending() ? 'Rewriting…' : 'Change'}

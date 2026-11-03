@@ -16,7 +16,7 @@ import {
 } from '../core/routine-steps';
 import type { RoutineTriggerDraft } from '../core/routine-triggers';
 import { RoutineSteps, RoutineStepsSummary } from './routine-step-editor';
-import type { RoutineRunView, RoutineStepSlots } from './routine-steps';
+import type { RoutineStepSlots } from './routine-steps';
 
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
@@ -41,23 +41,15 @@ const slots: RoutineStepSlots = {
 function renderSteps(options: {
   triggers: RoutineTriggerDraft[];
   steps?: StepDraft[];
-  lastRun?: RoutineRunView;
   author?: StepAuthor;
 }) {
   const [steps, setSteps] = createSignal<StepDraft[]>(
     options.steps ?? [agentStep({ kind: 'model', model: 'm' }, 'Summarize')]
   );
-  const [showRun, setShowRun] = createSignal(true);
   // As on the routine's page: the summary on the heading, then the steps.
   render(() => (
     <>
-      <RoutineStepsSummary
-        steps={steps()}
-        triggers={options.triggers}
-        lastRun={options.lastRun}
-        showRun={showRun()}
-        onShowRun={setShowRun}
-      />
+      <RoutineStepsSummary steps={steps()} triggers={options.triggers} />
       <RoutineSteps
         steps={steps()}
         onChange={setSteps}
@@ -68,8 +60,6 @@ function renderSteps(options: {
             ? { ...slots, createStepAuthor: () => options.author! }
             : slots
         }
-        lastRun={options.lastRun}
-        showRun={showRun()}
       />
     </>
   ));
@@ -101,6 +91,14 @@ function openMenu(name: string, index = 0) {
   const trigger = screen.getAllByRole('button', { name, hidden: true })[index]!;
   trigger.focus();
   fireEvent.keyDown(trigger, { key: 'Enter' });
+}
+
+/** The box Edit opens; the menu it closed can leave the page aria-hidden briefly. */
+function changeBox() {
+  return screen.getByRole('textbox', {
+    name: 'Change this step',
+    hidden: true,
+  });
 }
 
 function choose(name: string) {
@@ -156,28 +154,17 @@ describe('routine steps editor', () => {
     ).toBeTruthy();
   });
 
-  it('collapses finished steps and shows what the last run did', () => {
+  it('collapses finished steps, with what a run costs on the heading', () => {
     renderSteps({
       triggers: [{ id: 'task', kind: 'event', events: ['task.created'] }],
       steps: [
         codeStep('Set the priority'),
         agentStep({ kind: 'model', model: 'm' }, 'Write a summary'),
       ],
-      lastRun: {
-        endedAt: '2026-10-09T10:55:33Z',
-        success: true,
-        steps: [
-          { path: '0', kind: 'code', calls: [], callsTruncated: false },
-          { path: '1', kind: 'agent' },
-        ],
-      },
     });
     expect(screen.getByText('Set the priority, as AI wrote it.')).toBeTruthy();
     expect(screen.getByText('Write a summary')).toBeTruthy();
-    expect(screen.getByText('0 calls')).toBeTruthy();
-    expect(screen.getByText(/1 AI call per task/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('switch', { name: 'Show last run' }));
-    expect(screen.queryByText('0 calls')).toBeNull();
+    expect(screen.getByText('1 AI call per task')).toBeTruthy();
   });
 
   it('reorders, duplicates and deletes steps from each step’s menu', () => {
@@ -289,13 +276,23 @@ describe('routine steps editor', () => {
       steps: [before],
       author: { add: vi.fn(), revise },
     });
-    fireEvent.input(screen.getByRole('textbox', { name: 'Change this step' }), {
+    // Saying what to change starts from the step's Edit.
+    expect(
+      screen.queryByRole('textbox', { name: 'Change this step' })
+    ).toBeNull();
+    openMenu('Step actions');
+    choose('Edit');
+    fireEvent.input(changeBox(), {
       target: { value: 'also include overdue tasks' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Change' }));
+    fireEvent.submit(changeBox().closest('form')!);
     const review = await screen.findByRole('region', {
       name: 'Rewritten step',
     });
+    // The box closes while the rewrite waits to be kept.
+    expect(
+      screen.queryByRole('textbox', { name: 'Change this step', hidden: true })
+    ).toBeNull();
     expect(revise).toHaveBeenCalledWith(before, 'also include overdue tasks');
     expect(within(review).getByText('and overdue tasks').tagName).toBe('INS');
     expect(within(review).getByText('Rewritten and checked')).toBeTruthy();
@@ -315,5 +312,26 @@ describe('routine steps editor', () => {
       source: 'export async function main() { overdue(); }',
     });
     expect(screen.queryByRole('region', { name: 'Rewritten step' })).toBeNull();
+  });
+
+  it('closes the change box on Esc, and offers Edit only on code steps', () => {
+    renderSteps({
+      triggers: [email],
+      steps: [
+        codeStep('Label invoices'),
+        agentStep({ kind: 'model', model: 'm' }, 'Summarize'),
+      ],
+      author: { add: vi.fn(), revise: vi.fn() },
+    });
+    openMenu('Step actions', 1);
+    expect(screen.queryByRole('menuitem', { name: 'Edit' })).toBeNull();
+    fireEvent.keyDown(screen.getAllByRole('menu').at(-1)!, { key: 'Escape' });
+    openMenu('Step actions', 0);
+    choose('Edit');
+    const box = changeBox();
+    fireEvent.keyDown(box, { key: 'Escape' });
+    expect(
+      screen.queryByRole('textbox', { name: 'Change this step' })
+    ).toBeNull();
   });
 });

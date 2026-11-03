@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { stepsFromTask } from './routine-steps';
 import {
   describeHistoryStep,
-  latestStepRun,
   runDays,
   runOutcome,
   stepAtPath,
@@ -62,17 +61,6 @@ describe('routine step history', () => {
     expect(stepsForRun(run, routine)).toBe(steps);
     // After an edit, the same path can hold another step.
     expect(stepsForRun({ ...run, revision: 2 }, routine)).toBeUndefined();
-    const step = { path: '1', kind: 'agent' as const };
-    const ran = (revision: number, startedAt: string) => ({
-      revision,
-      startedAt,
-      endedAt: startedAt,
-      steps: [step],
-    });
-    expect(
-      latestStepRun([ran(3, '2026-10-01'), ran(2, '2026-10-02')], 3)?.startedAt
-    ).toBe('2026-10-01');
-    expect(latestStepRun([ran(2, '2026-10-02')], 3)).toBeUndefined();
   });
 });
 
