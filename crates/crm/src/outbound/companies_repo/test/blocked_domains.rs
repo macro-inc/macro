@@ -111,3 +111,28 @@ async fn blocklists_are_per_team(pool: PgPool) -> anyhow::Result<()> {
     assert!(repo.list_blocked_domains(&team_b).await?.is_empty());
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_company_stays_hidden_while_any_of_its_domains_is_blocked(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    seed_team(&pool, team_id, OWNER).await?;
+    enable_crm_for_team(&pool, team_id).await?;
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    let acme = insert_company(&pool, team_id, true, &["example.com", "example.org"]).await?;
+    let jane = insert_contact(&pool, acme, "jane@example.com").await?;
+
+    repo.block_domain(&team_id, "example.com").await?;
+    repo.block_domain(&team_id, "example.org").await?;
+    repo.unblock_domain(&team_id, "example.com").await?;
+
+    assert!(fetch_company_hidden(&pool, acme).await? == Some(true));
+    assert!(fetch_contact_hidden(&pool, jane).await? == Some(true));
+
+    repo.unblock_domain(&team_id, "example.org").await?;
+
+    assert!(fetch_company_hidden(&pool, acme).await? == Some(false));
+    assert!(fetch_contact_hidden(&pool, jane).await? == Some(false));
+    Ok(())
+}
