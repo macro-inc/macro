@@ -404,7 +404,10 @@ describe('composeRoutine', () => {
       'claude' as never
     );
     if (typeof draft === 'string') throw new Error(draft);
-    expect(clients.structuredCompletion).toHaveBeenCalledTimes(3);
+    // The draft, then three fixes, each asking the model to think briefly.
+    expect(clients.structuredCompletion).toHaveBeenCalledTimes(4);
+    for (const [request] of clients.structuredCompletion.mock.calls)
+      expect(request).toMatchObject({ thinking: 'low' });
     expect(draft.steps?.[0]).toMatchObject({
       kind: 'code',
       problems: ['TS2339 [ERROR]: no guess'],

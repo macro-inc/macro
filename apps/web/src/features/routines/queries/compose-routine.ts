@@ -46,7 +46,7 @@ export type CodeGuidance = {
 };
 
 /** Times the drafter may fix code the type checker rejects before it gives up. */
-const MAX_CODE_FIXES = 2;
+const MAX_CODE_FIXES = 3;
 
 /** A drafted code step the type checker rejects, and what to fix it with. */
 export type CodeFailure = {
@@ -365,6 +365,9 @@ async function complete(
     output_schema: compositionOutputSchema(code),
     additional_instructions: instructions,
     toolset: { type: 'none' },
+    // Thinking at length took Gemini past the request's deadline; a quick
+    // answer that the type checker corrects is faster.
+    thinking: 'low',
   });
   if (response.isErr()) return undefined;
   const outcome = response.value.outcome;
