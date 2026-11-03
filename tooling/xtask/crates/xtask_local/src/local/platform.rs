@@ -1109,7 +1109,10 @@ pub fn queue_urls(env: BTreeMap<String, String>) -> BTreeMap<String, String> {
             let bare = !v.is_empty()
                 && v.bytes()
                     .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'));
-            if (k.ends_with("_QUEUE") || k.ends_with("_QUEUE_URL")) && bare {
+            // `ENABLE_*_QUEUE` are feature switches, not queues.
+            let names_queue =
+                (k.ends_with("_QUEUE") || k.ends_with("_QUEUE_URL")) && !k.starts_with("ENABLE_");
+            if names_queue && bare {
                 let url = super::resources::queue_url(&v);
                 (k, url)
             } else {
