@@ -105,9 +105,11 @@ const emailTabSources = {
 >;
 const taskTabSources = {
   'my-tasks': 'soup',
-  'created-by-me': 'soup',
   'team-tasks': 'soup',
+  'created-by-me': 'soup',
+  'my-projects': 'project-collection',
   projects: 'project-collection',
+  'created-projects': 'project-collection',
 } as const satisfies Record<
   (typeof TASK_TABS)[number]['id'],
   'soup' | 'project-collection'
