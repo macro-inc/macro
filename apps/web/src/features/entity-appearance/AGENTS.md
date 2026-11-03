@@ -29,7 +29,7 @@ snippets, task projects (initiatives), forms, and databases.
 
 - Regenerate selectable icons with `bun tooling/icons/generate-entity-icons.ts`
   from the repository root; generation rejects unknown or duplicate section entries.
-- Generate wire types from Rust; never hand-write appearance DTOs.
+- Regenerate all service and AI-tool contracts with `bun run gen-api` from `apps/web`; never hand-write appearance DTOs.
 
 ## Checks
 
