@@ -138,3 +138,19 @@ fn calendar_skill_makes_booking_links_wait_for_a_reply_to_the_proposal() {
         assert!(text.contains(rule), "Missing booking rule: {rule}");
     }
 }
+
+#[test]
+fn channels_skill_posts_a_channel_form_as_one_live_poll_card() {
+    let text = channels::SKILL.render_content();
+    for guidance in [
+        "A form for a channel is a poll:",
+        "one required single- or multi-select question",
+        "`tallyVisible: true`",
+        "`widget: \"choice\"`",
+        "`channelGrants: []`",
+        r#"<m-document-card>{"documentId":"{form_id}","documentName":"{question}","blockName":"form","previewData":{"poll":{"optionCount":2}}}</m-document-card>"#,
+        "or a second copy.",
+    ] {
+        assert!(text.contains(guidance), "missing poll guidance: {guidance}");
+    }
+}

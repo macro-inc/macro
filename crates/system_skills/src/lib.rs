@@ -21,6 +21,7 @@ use uuid::Uuid;
 
 pub mod calendar;
 pub mod catch_me_up;
+pub mod channels;
 pub mod configure_agent;
 pub mod crm;
 pub mod databases;
@@ -98,6 +99,7 @@ pub static SYSTEM_SKILLS: &[&SystemSkill] = &[
     &crm::SKILL,
     &email::SKILL,
     &calendar::SKILL,
+    &channels::SKILL,
 ];
 
 /// Look up a system skill by its well-known id.

@@ -51,9 +51,8 @@ The agent-session prompt distinguishes typed `<m-notifications>` system facts
 from user requests and defines the notification-only `<noop/>` contract.
 In-app replies use `m-document-mention` with `blockName: "routine"` for routines;
 external MCP replies use `/app/routines/<id>` URLs.
-A form for a channel is a poll (one required select question, tally visible),
-posted once as `<m-document-card>` with `blockName: "form"`; the card's message
-reference grants the channel View, so no second message or link is needed.
+Channel polls (a form posted once as its `<m-document-card>`) are the
+`channels` built-in skill in `crates/system_skills`.
 
 - `src/privacy.rs` supplies generation/judge privacy policy; `compose` joins runtime memory sections without static lifetimes.
 
