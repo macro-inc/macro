@@ -242,7 +242,8 @@ Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '
 Remote database selections have a backend-free desktop/phone regression that
 measures every row and cell while collaborators move, share a cell, or select a
 range, and checks their name labels above the header and under it once
-scrolled: `just test-database-browser`. Keep the outline an overlay, never a
+scrolled, and keyboard (Shift+Arrow) ranges whose moving corner stays in
+view: `just test-database-browser`. Keep the outline an overlay, never a
 border on the cell. Virtual rows are transformed, so each is its own stacking
 context: a row carrying labels rises above the header only while its top edge
 is in view.
@@ -625,6 +626,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   and asserts every observed row-ID state on revisits and an OPFS reload.
   It also verifies that cold empty Mail tabs stay loading until HTTP settles.
   It also runs in `just test-cache-wasm-browser`.
+- Trace initial Soup loading through pending flow phases; aggregate incremental
+  cache activity in `cache-activity-telemetry.ts`. Never start a root span per
+  cache revision or choose a root by comparing no-op span identity.
 - Reactive GraphQL reads use `createLiveQuery` for a document and
   `useSoupAstItemsQuery` (backed by `createSoupLiveQuery`) for Soup lists; see
   [choosing a reactive read](docs/graphql-normalized-cache-plan.md#choosing-a-reactive-read).
@@ -995,3 +999,33 @@ and bot personas share one renderer; keep surface sizing in the caller.
 
 - Advertise Mail v5 capsules only for the current browser engine or a verified supported installed native build; OTA bundle version alone cannot establish native capability.
 - Bound native Mail capability discovery to 1.5 seconds and cache the legacy profile on failure or timeout so stalled IPC cannot block GraphQL transport; record the selected profile and bounded outcome in HTTP and WebSocket setup spans without error text.
+
+## Performance
+
+### Tracing
+
+- Instrument loading with the flow API in the `instrumentation` skill; read the
+  traces with the [observability guide](../../docs/agent-guide/observability.md#web-performance-traces).
+  Tracing observes readiness; never drive app behavior from trace callbacks.
+- Keep document load, snapshot and editor phases under the routed view flow and
+  pass its span explicitly to sync/AI clients; never store spans by document id
+  or end caller-owned spans in collaboration code. Acquire agent sessions in the
+  active view span.
+- Put flows at the shared owner so every host inherits them: Soup status in
+  `SoupViewListContent`; channel tabs in `ChannelTabProvider`, with each host's
+  `channel.*.view` inside the panel's Suspense and the routed detail observing
+  `detail.view().status` as `channel.detail`; form tabs and panels in
+  `FormPageView` (keep its builder/layout session alive across tabs); form
+  responding (`view.form-respond`, `form.submit`) keyed on form and preview
+  mode; CRM detail in the shared company/contact views keyed by record and
+  section; Command-K input through `beginInteraction` and a query-keyed results
+  flow with debounce/source `usePending` phases, no manual per-input signals
+  (the universal-input browser suite checks the exported traces).
+- Cancel the form-submit measurement on teardown but let its in-flight save
+  finish; late completion must not scroll or measure another view.
+- Runtime resource samples and typing bursts use the `perf` class decision
+  (`Telemetry.config.sampled('perf')`) and the shared UI-operation observer: no
+  second observer, no per-key frame sampling, no listeners for unsampled users. Typing surfaces come from
+  static `data-input-surface` categories on editor/field owners, never caller
+  labels.
+- Keep record names, addresses, answers and query text out of attributes.

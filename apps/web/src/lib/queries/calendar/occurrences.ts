@@ -272,22 +272,24 @@ export async function invalidateCalendarOccurrences(
  * a refetch that skipped the delta could reread a stale covered week.
  */
 export async function syncCalendarOccurrences() {
-  const controller = activeCalendarSyncController();
-  await Telemetry.span('calendar.occurrences_delta_sync', async (span) => {
-    span.setAttr('calendar.transport', controller ? 'graphql' : 'rest');
-    if (!controller) return;
-    try {
-      await controller.runDelta();
-      span.setAttr('calendar.delta.outcome', 'synced');
-    } catch (error) {
-      span.setAttr('calendar.delta.outcome', 'failed');
-      span.error('Calendar delta sync failed');
-      console.warn('Calendar delta sync failed', error);
-    }
+  return Telemetry.span('calendar.occurrences_sync', async (parent) => {
+    const controller = activeCalendarSyncController();
+    await parent.span('calendar.occurrences_delta_sync', async (span) => {
+      span.setAttr('calendar.transport', controller ? 'graphql' : 'rest');
+      if (!controller) return;
+      try {
+        await controller.runDelta();
+        span.setAttr('calendar.delta.outcome', 'synced');
+      } catch (error) {
+        span.setAttr('calendar.delta.outcome', 'failed');
+        span.error('Calendar delta sync failed');
+        console.warn('Calendar delta sync failed', error);
+      }
+    });
+    return parent.span('calendar.occurrences_refetch', () =>
+      queryClient.invalidateQueries({
+        queryKey: calendarKeys.occurrences._def,
+      })
+    );
   });
-  return Telemetry.span('calendar.occurrences_refetch', () =>
-    queryClient.invalidateQueries({
-      queryKey: calendarKeys.occurrences._def,
-    })
-  );
 }

@@ -159,7 +159,10 @@ to compact rows like the session's tool rows: the label, and **Failed** or
 Documents, sessions, pull requests, and contacts an agent's reply mentions are
 set in the accent color.
 Stored activity snapshots keep the status and label but omit commands and tool
-input details, in both shared threads and DMs. The line follows the session
+input details, in both shared threads and DMs. A view the agent presents
+(`execution.views.present`) is part of the reply: it is stored with its run and
+drawn after the run's line or summary, never folded into it, and each item it
+shows loads with the reader's own access. The line follows the session
 live while the run is open; the summary shows the snapshot saved in the
 message. Readers without session access always see that snapshot. Only the
 turn's last message notifies. Previews and search
@@ -1624,3 +1627,8 @@ Sending clears the composer immediately while delivery is pending. If delivery
 fails and the composer is still empty, its text, mentions, and attachments return.
 A new draft typed during delivery stays intact if the earlier send fails. Verify
 this with both the Send button on a phone and the desktop composer.
+
+For tab performance QA, switch Attachments → Calls → Participants → Messages
+in both the routed channel and a block split. Each actual selection should
+produce one `channel.tab` interaction with its `channel.*.view` child; repeat
+the current selection and confirm it does not create a new interaction.
