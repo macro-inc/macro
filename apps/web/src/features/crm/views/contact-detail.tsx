@@ -1,3 +1,4 @@
+import { TraceFlow, usePending } from '@app/observability/flow';
 import { SidePanel } from '@components/app/side-panel';
 import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
 import { CrmListSkeleton } from '../components/list-state';
@@ -26,16 +27,34 @@ import { useContactQuery, useIsTeamAdmin } from './use-crm';
  * the other sections list its emails, files, tasks and calls. Sharing and
  * references stay in the floating information panel.
  */
-export function Contact(props: {
+type ContactProps = {
   contactId: string;
   section?: ContactSection;
   headerToggle?: boolean;
   onOpenCompany?: (companyId: string) => boolean;
   onOpenPipeline?: (pipelineId: string) => void;
-}) {
+};
+
+export function Contact(props: ContactProps) {
+  return (
+    <TraceFlow
+      name="crm.contact"
+      key={() => `${props.contactId}:${props.section ?? 'overview'}`}
+      attributes={{
+        'contact.id': props.contactId,
+        'crm.section': props.section ?? 'overview',
+      }}
+    >
+      <ContactContent {...props} />
+    </TraceFlow>
+  );
+}
+
+function ContactContent(props: ContactProps) {
   const context = useCrmContext();
   const pipelinesEnabled = context.pipelinesEnabled();
   const contactQuery = useContactQuery(() => props.contactId);
+  usePending('crm.record', () => contactQuery.isLoading);
   const contact = () => contactQuery.data;
   onCleanup(
     context.registerTaskComposerRecord(() => ({

@@ -162,6 +162,7 @@ impl MacroAuthorizationService for FakeAuth {
                     let macro_user_id = MacroUserIdStr::try_from(user_id).expect("acting user id");
                     MacroUserAuthentication {
                         agent_id: None,
+                        agent_via: None,
                         origin: macro_authorization::CredentialOrigin::Bot,
                         user_context: UserContext {
                             user_id: macro_user_id.to_string(),

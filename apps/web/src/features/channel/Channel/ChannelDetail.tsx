@@ -9,6 +9,7 @@ import {
 import { ViewShell } from '@app/components/view-shell';
 import { ChatWithAgentButton } from '@app/features/chat/ChatWithAgentButton';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { TraceFlow } from '@app/observability/flow';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
 import { useChannelBotManagement } from '@channel/Bots/use-channel-bot-management';
 import { useCallContextOptional } from '@channel/Call/CallContext';
@@ -430,36 +431,46 @@ function ChannelDetailContent(props: ChannelDetailProps) {
                   name="ChannelDetail.messages"
                   fallback={<ChannelLoading />}
                 >
-                  <ChannelMessages autofocus={props.autofocus ?? false} />
+                  <TraceFlow name="channel.messages.view">
+                    <ChannelMessages autofocus={props.autofocus ?? false} />
+                  </TraceFlow>
                 </DebugSuspense>
               </Match>
               <Match when={activeTab() === 'attachments'}>
                 <DebugSuspense name="ChannelDetail.attachments">
-                  <ChannelAttachmentsTab channelId={channelId} />
+                  <TraceFlow name="channel.attachments.view">
+                    <ChannelAttachmentsTab channelId={channelId} />
+                  </TraceFlow>
                 </DebugSuspense>
               </Match>
               <Match when={activeTab() === 'calls' && ENABLE_CALLS}>
                 <DebugSuspense name="ChannelDetail.calls">
-                  <ChannelCallsTab channelId={channelId} />
+                  <TraceFlow name="channel.calls.view">
+                    <ChannelCallsTab channelId={channelId} />
+                  </TraceFlow>
                 </DebugSuspense>
               </Match>
               <Match when={activeTab() === 'participants'}>
                 <DebugSuspense name="ChannelDetail.participants">
-                  <ChannelParticipantsTab
-                    channelId={channelId}
-                    botManagementEnabled={botManagement.enabled()}
-                    onCreateBot={botManagement.openCreateBot}
-                    inviteBotFocusRequest={botManagement.inviteFocusRequest()}
-                    onOpenBot={botManagement.openBot}
-                  />
+                  <TraceFlow name="channel.participants.view">
+                    <ChannelParticipantsTab
+                      channelId={channelId}
+                      botManagementEnabled={botManagement.enabled()}
+                      onCreateBot={botManagement.openCreateBot}
+                      inviteBotFocusRequest={botManagement.inviteFocusRequest()}
+                      onOpenBot={botManagement.openBot}
+                    />
+                  </TraceFlow>
                 </DebugSuspense>
               </Match>
               <Match when={activeTab() === 'call' && canUseInlineCallTab()}>
                 <DebugSuspense name="ChannelDetail.call">
-                  <ChannelCallTab
-                    channelId={channelId}
-                    pendingJoin={pendingJoinCall}
-                  />
+                  <TraceFlow name="channel.call.view">
+                    <ChannelCallTab
+                      channelId={channelId}
+                      pendingJoin={pendingJoinCall}
+                    />
+                  </TraceFlow>
                 </DebugSuspense>
               </Match>
             </Switch>

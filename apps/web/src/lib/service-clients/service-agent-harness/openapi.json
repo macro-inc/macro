@@ -2731,6 +2731,45 @@
         }
       }
     },
+    "/agent-sessions/{session_id}/views": {
+      "post": {
+        "tags": ["agent-sessions"],
+        "summary": "Present a view in the session: a review with nothing saved.",
+        "operationId": "present_session_view",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresentView"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/universal_input/classify": {
       "post": {
         "tags": ["universal_input::inbound::axum_router"],
@@ -4205,12 +4244,12 @@
       },
       "CreateAgentSessionRequest": {
         "type": "object",
-        "description": "Request body for `POST /agent-sessions`.\n\nCarries two shapes, told apart by `workspace`. Naming one asks for an\nexternal session: the runtime is the bot operator's, so the caller has to\nsay which bot and which directory, and must own that bot. Omitting it asks\nfor a managed session, whose runtime this deployment provisions. A managed\nrequest may select an authorized persisted persona with `botId`; omitting\nit uses the deployment's default coding persona. Fields describing someone\nelse's runtime must still be omitted rather than quietly ignored. Mixing\nthe two shapes is refused rather than guessed at.\n\nClients serialize this, so both derives are used.",
+        "description": "Request body for `POST /agent-sessions`.\n\nCarries two shapes, told apart by `workspace`. Naming one asks for an\nexternal session: the runtime is the bot operator's, so the caller has to\nsay which bot and which directory, and must own that bot. Omitting it asks\nfor a managed session, whose runtime this deployment provisions. A managed\nrequest may select an authorized persisted persona with `botId`; omitting\nit uses the deployment's default coding persona, or Cursor when `repoUrl`\nis set. Fields describing someone else's runtime must still be omitted\nrather than quietly ignored. Mixing the two shapes is refused rather\nthan guessed at.\n\nClients serialize this, so both derives are used.",
         "properties": {
           "botId": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "Bot the session runs for. On a managed request this optionally selects\na persisted persona the user owns, may use through team membership, or\ncan `@` mention in a shared channel; omitting it uses the deployment's\ndefault coding persona. On an external request, bot callers may omit it\n(their own identity is used) and must not name another bot; user callers\nmust supply a bot they own."
+            "description": "Bot the session runs for. On a managed request this optionally selects\na persisted persona the user owns, may use through team membership, or\ncan `@` mention in a shared channel; omitting it uses the deployment's\ndefault coding persona, or Cursor when `repoUrl` is set. On an\nexternal request, bot callers may omit it (their own identity is used)\nand must not name another bot; user callers must supply a bot they own."
           },
           "id": {
             "type": ["string", "null"],
@@ -4257,7 +4296,7 @@
           },
           "repoUrl": {
             "type": ["string", "null"],
-            "description": "Explicit GitHub repository for a managed Cursor session, as one of the\nurls `GET /agent-repositories` lists for the caller. Access is checked\nfor the session owner. For external sessions this is informational:\ncloning it is the runtime operator's job."
+            "description": "Explicit GitHub repository for a managed Cursor session, as one of the\nurls `GET /agent-repositories` lists for the caller. Access is checked\nfor the session owner. On a managed request that names no `botId`,\nthis starts the session as Cursor — the only managed persona that\nhonors a repository. For external sessions this is informational:\ncloning it is the runtime operator's job."
           },
           "thread": {
             "oneOf": [
@@ -5186,6 +5225,29 @@
           }
         ],
         "description": "The decision carried by an [`AgentPermissionAction`]."
+      },
+      "PresentView": {
+        "type": "object",
+        "description": "A view to present.",
+        "required": ["view"],
+        "properties": {
+          "executionId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExecutionId",
+                "description": "The code execution presenting it, when one does."
+              }
+            ]
+          },
+          "view": {
+            "type": "object",
+            "description": "A dynamic-UI view, in the format of the PresentView schema in\nExecuteCode's description."
+          }
+        },
+        "additionalProperties": false
       },
       "PreviewAgentSessionsRequest": {
         "type": "object",

@@ -1,3 +1,4 @@
+import * as uiOperations from '@app/observability/ui-operation';
 import {
   cleanup,
   fireEvent,
@@ -6,14 +7,17 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
-import { errAsync } from 'neverthrow';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { errAsync, ResultAsync } from 'neverthrow';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { FormProvider } from '../context/form-context';
 import type { FormDetail } from '../core/form-model';
 import { createMockFormContext } from '../tests/mock-context';
 import { RespondView } from './respond-view';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 // jsdom has no layout, so no scrolling into view.
 beforeAll(() => {
@@ -132,6 +136,55 @@ function offsite(): FormDetail {
 }
 
 describe('RespondView', () => {
+  it('cancels only the retired view measurement while a pending submission still saves', async () => {
+    const detail = offsite();
+    detail.layout.sections = detail.layout.sections.slice(-1);
+    const { context, calls } = createMockFormContext({ detail });
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const submit = context.responses.submit;
+    context.responses.submit = (id, answers) =>
+      ResultAsync.fromSafePromise(pending).andThen(() => submit(id, answers));
+    const stopTelemetry = uiOperations.initializeUiOperationTelemetry();
+    const start = vi.spyOn(uiOperations, 'startUiOperation');
+    const scroll = vi.spyOn(Element.prototype, 'scrollIntoView');
+    const view = render(() => (
+      <FormProvider value={context}>
+        <RespondView
+          detail={detail}
+          compact={false}
+          refetch={async () => true}
+        />
+      </FormProvider>
+    ));
+    fireEvent.input(screen.getByLabelText('Dietary needs'), {
+      target: { value: 'Synthetic pending answer' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Submit/ }));
+    const operation = start.mock.results[0].value;
+    const paint = vi.spyOn(operation, 'afterPaint');
+    expect(operation.ended).toBe(false);
+    try {
+      view.unmount();
+      expect(operation.ended).toBe(true);
+      release();
+      await waitFor(() => expect(calls.submitted).toHaveLength(1));
+      expect(calls.submitted[0]).toEqual([
+        {
+          question: 'q-diet',
+          value: { type: 'text', value: 'Synthetic pending answer' },
+        },
+      ]);
+      expect(paint).not.toHaveBeenCalled();
+      expect(scroll).not.toHaveBeenCalled();
+    } finally {
+      release();
+      stopTelemetry();
+    }
+  });
+
   it('shows the owner’s logo, cover and accent, and Macro’s look when none is set', () => {
     const plain = offsite();
     const branded = offsite();

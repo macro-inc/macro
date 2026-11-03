@@ -1,3 +1,4 @@
+import { usePending } from '@app/observability/flow';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Accessor,
@@ -17,6 +18,7 @@ import {
   type EntityFilterCacheArgs,
   parseCacheRevision,
 } from '../../../graphql-cache/protocol';
+import { soupCacheTelemetry } from './cache-activity-telemetry';
 
 /** A declared source and generated fragment; no mutation-specific query updates. */
 export type PredicateQueryRequest<T> = {
@@ -112,15 +114,25 @@ export function createPredicateQuery<T extends object>(options: {
           while (pending && active) {
             pending = false;
             const observedEpoch = epoch;
+            let outcome: 'success' | 'unsupported' | 'error' | 'discarded' =
+              'discarded';
+            let upserts = 0;
+            let patches = 0;
+            let removed = 0;
+            const startedAt = performance.now();
             try {
               const result = await host.entityFilter(args());
               if (!active || epoch !== observedEpoch) continue;
               if (result.kind !== 'live-query') {
+                outcome = 'unsupported';
                 unsupported = true;
                 pending = false;
                 setStatus('unsupported');
                 continue;
               }
+              upserts = result.upserts.length;
+              patches = result.patches.length;
+              removed = result.removed.length;
               const revision = parseCacheRevision(result.revision);
               if (latest !== undefined && BigInt(revision) < BigInt(latest)) {
                 pending = true;
@@ -201,10 +213,23 @@ export function createPredicateQuery<T extends object>(options: {
                   setStatus('ready');
                 })
               );
+              outcome = 'success';
             } catch (cause) {
               if (!active || epoch !== observedEpoch) continue;
+              outcome = 'error';
               setError(() => cause);
               setStatus('error');
+            } finally {
+              soupCacheTelemetry.record('predicate', {
+                durationMs: performance.now() - startedAt,
+                rows: orderedRows.length,
+                upserts,
+                patches,
+                removed,
+                error: outcome === 'error',
+                discarded: outcome === 'discarded',
+                incomplete: outcome === 'unsupported',
+              });
             }
           }
         } finally {
@@ -254,5 +279,6 @@ export function createPredicateQuery<T extends object>(options: {
       });
     })
   );
+  usePending('soup.cache', () => status() === 'loading');
   return { data, status, error, refresh: () => requestRefresh() };
 }

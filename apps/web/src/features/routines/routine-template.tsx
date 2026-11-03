@@ -127,6 +127,7 @@ function ActivateTemplate(
         const routine = await mutation.mutateAsync({
           templateId: props.template.id,
           body,
+          parentSpan: span,
         });
         if (!routine.id) throw new Error('Activated routine has no ID');
         span.setAttr('routine.id', routine.id);

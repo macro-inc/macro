@@ -1018,9 +1018,10 @@ export type ConversationTurnState = 'queued' | 'running' | 'succeeded' | 'failed
  * say which bot and which directory, and must own that bot. Omitting it asks
  * for a managed session, whose runtime this deployment provisions. A managed
  * request may select an authorized persisted persona with `botId`; omitting
- * it uses the deployment's default coding persona. Fields describing someone
- * else's runtime must still be omitted rather than quietly ignored. Mixing
- * the two shapes is refused rather than guessed at.
+ * it uses the deployment's default coding persona, or Cursor when `repoUrl`
+ * is set. Fields describing someone else's runtime must still be omitted
+ * rather than quietly ignored. Mixing the two shapes is refused rather
+ * than guessed at.
  *
  * Clients serialize this, so both derives are used.
  */
@@ -1029,9 +1030,9 @@ export type CreateAgentSessionRequest = {
      * Bot the session runs for. On a managed request this optionally selects
      * a persisted persona the user owns, may use through team membership, or
      * can `@` mention in a shared channel; omitting it uses the deployment's
-     * default coding persona. On an external request, bot callers may omit it
-     * (their own identity is used) and must not name another bot; user callers
-     * must supply a bot they own.
+     * default coding persona, or Cursor when `repoUrl` is set. On an
+     * external request, bot callers may omit it (their own identity is used)
+     * and must not name another bot; user callers must supply a bot they own.
      */
     botId?: string | null;
     /**
@@ -1092,7 +1093,9 @@ export type CreateAgentSessionRequest = {
     /**
      * Explicit GitHub repository for a managed Cursor session, as one of the
      * urls `GET /agent-repositories` lists for the caller. Access is checked
-     * for the session owner. For external sessions this is informational:
+     * for the session owner. On a managed request that names no `botId`,
+     * this starts the session as Cursor — the only managed persona that
+     * honors a repository. For external sessions this is informational:
      * cloning it is the runtime operator's job.
      */
     repoUrl?: string | null;
@@ -1717,6 +1720,20 @@ export type PermissionAnswer = {
     optionId: string;
 } | {
     kind: 'cancelled';
+};
+
+/**
+ * A view to present.
+ */
+export type PresentView = {
+    executionId?: null | ExecutionId;
+    /**
+     * A dynamic-UI view, in the format of the PresentView schema in
+     * ExecuteCode's description.
+     */
+    view: {
+        [key: string]: unknown;
+    };
 };
 
 /**
@@ -3696,6 +3713,26 @@ export type AnswerAgentSessionToolApprovalResponses = {
 };
 
 export type AnswerAgentSessionToolApprovalResponse = AnswerAgentSessionToolApprovalResponses[keyof AnswerAgentSessionToolApprovalResponses];
+
+export type PresentSessionViewData = {
+    body: PresentView;
+    path: {
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/views';
+};
+
+export type PresentSessionViewErrors = {
+    400: unknown;
+    403: unknown;
+};
+
+export type PresentSessionViewResponses = {
+    204: void;
+};
+
+export type PresentSessionViewResponse = PresentSessionViewResponses[keyof PresentSessionViewResponses];
 
 export type ClassifyData = {
     body: ClassifyInputRequest;

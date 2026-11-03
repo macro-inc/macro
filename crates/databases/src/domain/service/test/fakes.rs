@@ -105,6 +105,7 @@ impl DatabasesRepo for FakeRepo {
             owner_id: command.owner_id.as_ref().to_string(),
             created_at: Utc::now(),
             trashed_at: None,
+            project_id: None,
         };
         let title = definition(
             first_table.title_column,
@@ -202,6 +203,23 @@ impl DatabasesRepo for FakeRepo {
             .find(|database| database.id == id)
         {
             database.trashed_at = None;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+    async fn move_database(
+        &self,
+        id: DatabaseId,
+        project_id: Option<&str>,
+    ) -> Result<bool, FakeError> {
+        let mut world = self.0.lock().unwrap();
+        if let Some(database) = world
+            .databases
+            .iter_mut()
+            .find(|database| database.id == id && database.trashed_at.is_none())
+        {
+            database.project_id = project_id.map(str::to_string);
             Ok(true)
         } else {
             Ok(false)
