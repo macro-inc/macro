@@ -35,6 +35,11 @@ export function toFormMetadata(form: Form): FormMetadata {
     responsesVisible: form.responsesVisible,
     anonymous: form.anonymous,
     confirmationMessage: form.confirmationMessage,
+    branding: {
+      logoFileId: form.branding.logoFileId ?? null,
+      coverFileId: form.branding.coverFileId ?? null,
+      accentColor: form.branding.accentColor ?? null,
+    },
     submittedColumnId: form.submittedColumnId ?? null,
     respondentColumnId: form.respondentColumnId ?? null,
   };

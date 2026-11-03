@@ -103,6 +103,7 @@ function rsvp(): FormDetail {
       responsesVisible: false,
       anonymous: false,
       confirmationMessage: '',
+      branding: { logoFileId: null, coverFileId: null, accentColor: null },
       submittedColumnId: null,
       respondentColumnId: null,
     },

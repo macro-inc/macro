@@ -30,7 +30,9 @@ use crate::domain::models::{
     Answer, Audience, ColumnId, Form, FormError, FormLayout, FormResponse, FormSection, MyResponse,
     RecordedResponse, Respondent, ResponseStatus, RowId, Submission, SubmissionOutcome,
 };
-use crate::domain::ports::{Clock, FormAccessDirectory, FormEventPublisher, FormsRepo};
+use crate::domain::ports::{
+    Clock, FormAccessDirectory, FormEventPublisher, FormImageFiles, FormsRepo,
+};
 
 /// Who a response's row is written as: the respondent, or the form's owner
 /// for an anonymous visitor or on an anonymous form, so the row's author and
@@ -175,8 +177,8 @@ fn still_passes(
         )
 }
 
-impl<Repository, Databases, Access, Events, Now, Broker, Drafts>
-    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
+impl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images>
+    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images>
 where
     Repository: FormsRepo + FormDraftRepository,
     Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
@@ -185,6 +187,7 @@ where
     Now: Clock,
     Broker: MacroEventBroker,
     Drafts: FormDraftStore,
+    Images: FormImageFiles,
 {
     /// The form, its table and layout for a respondent about to write:
     /// refused when it is closed, its table is gone, or it takes signed-in

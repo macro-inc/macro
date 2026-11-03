@@ -769,6 +769,7 @@ async fn run() -> anyhow::Result<()> {
             cognition: tool_context.cognition_tool_context.service.clone(),
             reviews: reviews_cell.clone(),
             gate: owner_tool_gate.clone(),
+            app_url: macro_service_urls::AppServiceUrl::new()?.as_str().into(),
         },
     );
     // One connector for the agent and the telemetry catalog. It pools each
@@ -1501,6 +1502,7 @@ async fn run() -> anyhow::Result<()> {
             (*harness).clone(),
             routine_sessions::PipedreamConnectedApps(PgConnectionRepo::new(pool.clone())),
         ),
+        session_repo.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     let gateway_state = RuntimeGatewayState::new(
@@ -1772,6 +1774,14 @@ async fn run() -> anyhow::Result<()> {
         }
     });
 
+    let trigger_classifier = config
+        .typesafe_api_key
+        .value()
+        .map(jev::outbound::SystemOneJev::typesafe)
+        .transpose()
+        .context("invalid TYPESAFE_API_KEY")?
+        .map(|provider| Arc::new(jev::domain::JevClassifier::new(provider, recorder.clone())));
+
     // Keep trigger generation in this deployment while retaining Kafka as the
     // boundary between channel events and harness commands.
     let mut trigger = tokio::spawn(trigger::supervise(
@@ -1780,6 +1790,7 @@ async fn run() -> anyhow::Result<()> {
         config.internal_api_key.clone(),
         config.document_storage_service_auth_key.clone(),
         trigger::TriggerServices {
+            classifier: trigger_classifier,
             recorder,
             admission,
             messages: message_service,

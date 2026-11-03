@@ -4,7 +4,7 @@
 use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAccessLevel};
 
 use super::*;
-use crate::domain::models::{FormError, UpdateForm};
+use crate::domain::models::{AccentColor, FormBranding, FormError, StoredImageFile, UpdateForm};
 use crate::domain::ports::FormsService;
 
 #[tokio::test]
@@ -285,4 +285,88 @@ async fn a_database_receipt_is_not_a_form_receipt() {
         ))
         .await;
     assert!(matches!(refused, Err(FormError::NotFound)));
+}
+
+#[tokio::test]
+async fn an_editor_brands_the_form_with_images_they_uploaded() {
+    let logo = Uuid::from_u128(0x1060);
+    let cover = Uuid::from_u128(0xc0e2);
+    let theirs = Uuid::from_u128(0x7e125);
+    let document = Uuid::from_u128(0xd0c);
+    let world = world();
+    seed_rsvp(&world, Audience::Public);
+    {
+        let mut world = world.lock().unwrap();
+        for (id, owner, content_type) in [
+            (logo, EDITOR, "image/png"),
+            (cover, EDITOR, "image/jpeg"),
+            (theirs, STRANGER, "image/png"),
+            (document, EDITOR, "application/pdf"),
+        ] {
+            world.image_files.insert(
+                id,
+                StoredImageFile {
+                    owner_id: owner.into(),
+                    content_type: content_type.into(),
+                },
+            );
+        }
+    }
+    let forms = service(&world);
+
+    let branded = forms
+        .update_form(
+            form_receipt::<EditAccessLevel>(RSVP_FORM, EDITOR, AccessLevel::Edit),
+            UpdateForm {
+                logo_file_id: Some(Some(logo)),
+                cover_file_id: Some(Some(cover)),
+                accent_color: Some(Some(AccentColor::try_from("#1F6FEB".to_string()).unwrap())),
+                ..UpdateForm::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        branded.branding,
+        FormBranding {
+            logo_file_id: Some(logo),
+            cover_file_id: Some(cover),
+            accent_color: Some(AccentColor::try_from("#1f6feb".to_string()).unwrap()),
+        }
+    );
+
+    for refused in [Uuid::from_u128(0x404), theirs, document] {
+        let result = forms
+            .update_form(
+                form_receipt::<EditAccessLevel>(RSVP_FORM, EDITOR, AccessLevel::Edit),
+                UpdateForm {
+                    logo_file_id: Some(Some(refused)),
+                    ..UpdateForm::default()
+                },
+            )
+            .await;
+        assert!(
+            matches!(result, Err(FormError::InvalidBranding(_))),
+            "{refused} was accepted: {result:?}"
+        );
+    }
+
+    // The owner keeps the editor's logo while removing the cover.
+    let kept = forms
+        .update_form(
+            form_receipt::<EditAccessLevel>(RSVP_FORM, OWNER, AccessLevel::Owner),
+            UpdateForm {
+                logo_file_id: Some(Some(logo)),
+                cover_file_id: Some(None),
+                ..UpdateForm::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(kept.branding.logo_file_id, Some(logo));
+    assert_eq!(kept.branding.cover_file_id, None);
+    assert_eq!(
+        kept.branding.accent_color,
+        Some(AccentColor::try_from("#1f6feb".to_string()).unwrap())
+    );
 }

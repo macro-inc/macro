@@ -75,7 +75,8 @@ fn default_pipedream_environment() -> String {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
-    /// Optional TypeSafe key for Command K classification.
+    /// Optional TypeSafe key for Command K classification and for routing
+    /// unmentioned thread replies to agents.
     pub typesafe_api_key: jev::outbound::TypesafeApiKey,
     /// Optional Workers AI account for Clairic extraction and Auto mode's Clef Flash.
     pub cloudflare_account_id: universal_input::outbound::clairic::CloudflareAccountId,

@@ -166,6 +166,64 @@ describe('independent email body', () => {
     expect(revoke).toHaveBeenCalledWith('blob:email');
     expect(disconnect).toHaveBeenCalled();
   });
+  it('loads Macro pixels only when the copy may count an open', async () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      }
+    );
+    const pixel = 'https://mail.test/opens/token';
+    const sources = (host: HTMLElement | undefined) =>
+      [...(host?.shadowRoot?.querySelectorAll('img[src]') ?? [])].map((image) =>
+        image.getAttribute('src')
+      );
+    const root = createRoot((dispose) => {
+      const [value, setValue] = createSignal(
+        message('tracked', {
+          body_html_sanitized: `<p>Hi</p><img src="${pixel}"><img src="https://images.test/logo.png">`,
+        })
+      );
+      const [show, setShow] = createSignal(false);
+      const body = createEmailMessageBody(
+        {
+          get message() {
+            return value();
+          },
+          ...bodyOptions,
+          get showReadReceiptPixel() {
+            return show();
+          },
+        },
+        {
+          theme: () => theme,
+          images: { remote: 'allow' },
+          readReceiptPixels: ['https://mail.test/opens/'],
+          resolveImages: async () => {},
+        }
+      );
+      return { dispose, body, setValue, setShow };
+    });
+    try {
+      await Promise.resolve();
+      expect(sources(root.body.host())).toEqual([
+        'https://images.test/logo.png',
+      ]);
+      root.setShow(true);
+      expect(sources(root.body.host())).toEqual([
+        pixel,
+        'https://images.test/logo.png',
+      ]);
+
+      root.setValue(message('plain'));
+      const plain = root.body.host();
+      root.setShow(false);
+      expect(root.body.host()).toBe(plain);
+    } finally {
+      root.dispose();
+    }
+  });
   it.each([
     { body_macro: 'A document mention' },
     {

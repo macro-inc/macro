@@ -42,6 +42,7 @@ vi.mock('@queries/storage/forms', () => ({
         responsesVisible: false,
         anonymous: false,
         confirmationMessage: '',
+        branding: { logoFileId: null, coverFileId: null, accentColor: null },
         submittedColumnId: null,
         respondentColumnId: null,
       },

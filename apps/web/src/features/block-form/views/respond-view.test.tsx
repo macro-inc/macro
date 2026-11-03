@@ -36,6 +36,7 @@ function offsite(): FormDetail {
       responsesVisible: false,
       anonymous: false,
       confirmationMessage: 'See you there!',
+      branding: { logoFileId: null, coverFileId: null, accentColor: null },
       submittedColumnId: null,
       respondentColumnId: null,
     },
@@ -133,6 +134,51 @@ function offsite(): FormDetail {
 }
 
 describe('RespondView', () => {
+  it('shows the owner’s logo, cover and accent, and Macro’s look when none is set', () => {
+    const plain = offsite();
+    const branded = offsite();
+    branded.form.branding = {
+      logoFileId: 'logo-1',
+      coverFileId: 'cover-1',
+      accentColor: '#ffd400',
+    };
+    const { context } = createMockFormContext({ detail: branded });
+    render(() => (
+      <FormProvider value={context}>
+        <RespondView
+          detail={plain}
+          compact={false}
+          refetch={async () => true}
+        />
+        <RespondView
+          detail={branded}
+          compact={false}
+          refetch={async () => true}
+        />
+      </FormProvider>
+    ));
+    const [plainPage, brandedPage] = screen
+      .getAllByRole('heading', { name: 'Q4 offsite RSVP' })
+      .map((heading) => heading.closest<HTMLElement>('[data-form-respond]'));
+    expect(plainPage!.querySelectorAll('img')).toHaveLength(0);
+    expect(plainPage!.classList.contains('form-branded')).toBe(false);
+    expect(
+      [...brandedPage!.querySelectorAll('img')].map((image) =>
+        image.getAttribute('src')
+      )
+    ).toEqual([
+      'https://static.example.com/file/cover-1?size=medium',
+      'https://static.example.com/file/logo-1?size=small',
+    ]);
+    expect(brandedPage!.classList.contains('form-branded')).toBe(true);
+    expect(brandedPage!.style.getPropertyValue('--form-accent')).toBe(
+      '#ffd400'
+    );
+    expect(brandedPage!.style.getPropertyValue('--form-accent-contrast')).toBe(
+      '#000000'
+    );
+  });
+
   it('answers section by section, submits once, and shows the confirmation with the receipt', async () => {
     const { context, calls } = createMockFormContext({ detail: offsite() });
     render(() => (

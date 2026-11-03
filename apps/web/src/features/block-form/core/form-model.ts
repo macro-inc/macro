@@ -194,6 +194,14 @@ export type FormSection = {
 /** Everything the form owns about presentation, in order. */
 export type FormLayout = { sections: FormSection[] };
 
+/** A form's logo, cover image and accent color; `null` where unset. */
+export type FormBranding = {
+  logoFileId: string | null;
+  coverFileId: string | null;
+  /** `#rrggbb`. */
+  accentColor: string | null;
+};
+
 export type FormMetadata = {
   id: string;
   name: string;
@@ -208,6 +216,7 @@ export type FormMetadata = {
   responsesVisible: boolean;
   anonymous: boolean;
   confirmationMessage: string;
+  branding: FormBranding;
   submittedColumnId: string | null;
   respondentColumnId: string | null;
 };

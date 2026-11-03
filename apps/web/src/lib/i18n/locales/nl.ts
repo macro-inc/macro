@@ -810,7 +810,6 @@ export default {
     goForward: 'Vooruitgaan',
     createNewSplit: 'Nieuw paneel maken',
     close: 'Sluiten',
-    returnToList: 'Terug naar lijst',
     previousItem: 'Vorig item',
     nextItem: 'Volgend item',
     itemNavigation: 'Itemnavigatie',
