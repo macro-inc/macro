@@ -159,7 +159,10 @@ to compact rows like the session's tool rows: the label, and **Failed** or
 Documents, sessions, pull requests, and contacts an agent's reply mentions are
 set in the accent color.
 Stored activity snapshots keep the status and label but omit commands and tool
-input details, in both shared threads and DMs. The line follows the session
+input details, in both shared threads and DMs. A view the agent presents
+(`execution.views.present`) is part of the reply: it is stored with its run and
+drawn after the run's line or summary, never folded into it, and each item it
+shows loads with the reader's own access. The line follows the session
 live while the run is open; the summary shows the snapshot saved in the
 message. Readers without session access always see that snapshot. Only the
 turn's last message notifies. Previews and search
