@@ -530,6 +530,7 @@ dependencies = [
  "ai_toolset",
  "ai_usage",
  "analytics_client",
+ "anthropic",
  "anyhow",
  "async-openai",
  "async-stream",

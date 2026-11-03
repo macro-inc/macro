@@ -15,6 +15,10 @@ execution).
   (feature `openai`) — the standard the `ai` crate builds requests against.
 - `src/toolset.rs` + `src/toolset/*.rs`: server-side tool implementations (feature `toolset`).
 - `src/types/mod.rs`: wire types for the Messages API.
+- `search_web` (`src/toolset/web_search.rs`): one admitted, metered search outside a
+  model turn, bounded to three searches; cognition's `POST /web/search` calls it.
+  Server tools fail with `ServerToolError`, so callers can tell allowance refusals
+  from provider failures.
 
 ## Scope
 
@@ -27,7 +31,7 @@ execution).
 
 - Depends on: `macro_env_var`, optionally `async-openai` (`openai` feature),
   `ai_billing`/`ai_toolset`/`ai_usage` (`toolset` feature).
-- Used by: `crates/ai_tools`.
+- Used by: `crates/ai_tools`, `services/agent_harness_service` (`/web/search`).
 
 ## Recipes
 

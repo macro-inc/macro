@@ -12,6 +12,7 @@ use crate::cognition::api::{
     structured_completion::{
         self, StructuredCompletionError, StructuredCompletionRequest, StructuredCompletionResponse,
     },
+    web_search,
 };
 use crate::cognition::model::{
     response::attachments::GetChatsForAttachmentResponse,
@@ -95,6 +96,7 @@ use utoipa::OpenApi;
             stream_stop::stop_chat_stream,
             structured_completion::structured_completion,
             decisions::decide,
+            web_search::search_web_handler,
             image_generation_api::generate_image_handler,
             database_query::generate_database_query,
             memory_api::get_memory_handler,
@@ -206,6 +208,10 @@ use utoipa::OpenApi;
                 jev::domain::DecisionRequest,
                 jev::domain::DecisionResponse,
                 decisions::DecisionErrorBody,
+                web_search::WebSearchRequest,
+                web_search::WebSearchResponse,
+                web_search::WebSearchResult,
+                web_search::WebSearchErrorBody,
                 image_generation_api::GenerateImageRequest,
                 image_generation_api::GenerateImageResponse,
                 image_generation_api::GenerateImageErrorBody,

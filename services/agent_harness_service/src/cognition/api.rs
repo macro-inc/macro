@@ -26,6 +26,7 @@ mod chats;
 mod database_query;
 pub mod structured_completion;
 pub(crate) mod tool_selection;
+mod web_search;
 
 #[cfg(test)]
 mod test;
@@ -107,6 +108,7 @@ fn api_router(api_context: ApiContext) -> Router {
             post(structured_completion::structured_completion),
         )
         .route("/decisions", decisions::route())
+        .route("/web/search", post(web_search::search_web_handler))
         .route("/chat/completions", post(completions::handler))
         .route(
             "/database-query",
