@@ -119,6 +119,7 @@ const result = await doc.edit(
   places a live answer, table or chart and never sees or writes SQL.
 - **`opts.fast`**: the worker's single-model fast mode, as `EditDocument`'s
   `fast`. It suits small, local edits.
+- **`opts.signal`**: an `AbortSignal` that cancels the edit end to end (below).
 - **Result**: `summary` (what changed, in words), `changedBlocks` (the durable
   ids of the blocks it touched, for a follow-up `structure()` read or a
   structured edit), `revision` (the document's version after the edit: the
@@ -131,29 +132,73 @@ const result = await doc.edit(
 - **Merging**: the worker edits as a live peer, so collaborators' typing during
   the edit is kept; nothing is overwritten.
 - **Time**: an edit by the full pipeline can take longer than code mode's 30 s
-  deadline. When the sandbox is killed mid-edit, DSS cancels the worker call the
-  way the tool's turn Stop does, and the document can be left part-edited, as
-  with `EditDocument` today. `opts.fast` and one edit per call keep edits inside
-  the deadline; the docs say so, and the PR measures typical durations.
+  deadline. `opts.fast` and one edit per call keep edits inside it; the docs say
+  so, and the PR measures typical durations. A sandbox killed mid-edit cancels
+  like an abort.
 
-Per type:
+#### Aborting
 
-| Type | `edit(instructions)` | Lower layer |
-| --- | --- | --- |
-| Markdown, tasks | Yes, over `EditDocument`'s pipeline | `structure()` + `applyEdits(builder)`; `insertDatabaseQuery` |
-| Canvas | Yes, over `EditCanvas`'s pipeline | `CanvasEditor` ops with `expectedRevision` (today's `ApplyCanvasEdits`) |
-| Spreadsheet | **No**: the server has no instructions editor | Typed ops with `expectedRevision`; `read`, `calculate` |
-| Word | **No** | Typed ops on block ids |
-| PowerPoint | **No** | Typed `EditOp`s; `saveAs` |
+AI edits can be aborted:
 
-For spreadsheets, Word and PowerPoint the calling agent writes the ops, as it
-does with the direct tools today. An instructions editor for them would be new
-worker work, out of scope here.
+```js
+const controller = new AbortController();
+const timer = setTimeout(() => controller.abort(), 20_000);
+try {
+  await doc.edit('Shorten every paragraph in "Background" to one sentence.', {
+    signal: controller.signal,
+  });
+} catch (error) {
+  if (error.name !== 'AbortError') throw error;
+  const structure = await doc.structure(); // see what landed before the abort
+} finally {
+  clearTimeout(timer);
+}
+```
 
-### Lower layer: structured operations
+- **What cancels.** The SDK aborts its request to DSS; DSS drops its call to
+  the worker; the worker's request signal (`enable_request_signal`) stops the
+  models, the op queue and the sync session, as `EditDocument`'s turn Stop does
+  today. The promise rejects with a `DOMException` named `AbortError`. A signal
+  already aborted rejects before anything is sent.
+- **What the document keeps.** The worker applies an edit op by op as the models
+  produce them, and each op lands whole or not at all. Ops whose updates
+  sync-service acknowledged before the abort stay, and collaborators see them;
+  ops not yet applied, or applied but not yet synced, are discarded. So the
+  document is always consistent, but an aborted multi-step edit can be left part
+  done (for example, a section rewritten and its list not yet added). Read
+  `structure()` to see what landed; never replay the instructions blindly.
+- **Structured batches** (`applyEdits`) also take `signal`: aborted before DSS
+  forwards the batch, nothing applies; once the worker has started the all-or-
+  nothing commit, the batch either lands whole or not at all, and the outcome
+  is unknown to the caller (`EditOutcomeUnknownError` semantics: read first).
 
-Structured operations are deterministic: no model, no AI cost, exact. They are
-for edits that instructions describe poorly:
+Per type, all with the same shape (`edit(instructions, { signal })` returning
+summary, what changed, the new revision and `webUrl`):
+
+| Type | Method | Server pipeline | What changed | Abort |
+| --- | --- | --- | --- | --- |
+| Markdown, tasks | `doc.edit` | `EditDocument`'s (exists) | block ids | Yes, op by op (above) |
+| Canvas | `canvas.edit` | `EditCanvas`'s (exists) | item ids | Yes; one commit, so all or nothing |
+| Spreadsheet | `sheet.edit` | New: one writer model | ranges | Yes until the commit; one commit |
+| Word | `wordDoc.edit` | New: one writer model | paragraph ids | Yes until the commit; one commit |
+| PowerPoint | `deck.edit` (with `saveAs` for a new deck) | New: one writer model | slides | Yes until the save; one version |
+
+**Spreadsheets, Word and PowerPoint have no AI edit pipeline on the server
+today.** `EditSpreadsheet`, `EditWordDocument` and `EditPresentation` take op
+arrays that the *calling* agent writes; the server only validates and commits
+them. So each of these PRs adds a small writer: a worker (or, for PowerPoint,
+`crates/documents`) endpoint that reads the content in the format the tool's
+read returns, asks one model for ops in the tool's own op schema (the tool
+description is the prompt), and commits them through the existing engine with
+the same revision checks. Each commits once, so an abort before the commit
+changes nothing and after it is too late to stop. AI admission and billing
+apply, as for `doc.edit`.
+
+### Lower layer: structured operations (markdown and canvas)
+
+Structured operations are deterministic: no model, no AI cost, exact. In this
+stack they exist only for markdown and canvas, for edits that instructions
+describe poorly:
 
 - placing a saved question at a known block:
   `doc.insertDatabaseQuery(afterBlockId, savedQuery)`;
@@ -172,27 +217,32 @@ await structure.applyEdits((editor) => {
 ```
 
 - **Reads** return the format the matching tool reads: markdown's XML view
-  (`toXml`, node ids as attributes); spreadsheet `{revision, sheets, ranges}`;
-  Word's block list; PowerPoint's `describe` outline; the canvas scene and its
-  revision.
+  (`toXml`, node ids as attributes) and the canvas scene with its revision.
 - **Revisions and conflicts** follow each engine, as typed SDK errors:
-  - Markdown and Word merge with concurrent edits. A batch is all or nothing:
+  - Markdown merges with concurrent edits. A batch is all or nothing:
     the worker applies it to a scratch copy of the live state first, and if any
     op fails (a node someone deleted, text no longer found) nothing is committed
     and `DocumentEditRejectedError` lists each failed op.
-  - Spreadsheets and canvases carry `expectedRevision` from the read and raise
-    `RevisionConflictError`; canvases rebase unrelated concurrent edits first.
-  - PowerPoint gains a revision: the read returns the version it described, and
-    an edit is refused if a newer version exists, replacing last-writer-wins.
+  - Canvases carry `expectedRevision` from the read and raise
+    `RevisionConflictError`, after rebasing unrelated concurrent edits.
   - A lost acknowledgement raises `EditOutcomeUnknownError` ("may have applied;
     read before retrying").
 - **Handles take handles.** Builder methods accept `SavedQuery`, `DatabaseTable`
   and `DatabaseView` handles (structurally: `{ toBlock() }`, `{ id }`), so the
   vendored code stays free of SDK types and the model-facing sandbox keeps
   passing strings.
-- **Typed handles** for the other types: `Document.spreadsheet()`,
-  `.wordDocument()`, `.presentation()`, `.canvas()` refuse the wrong file type;
-  each has `webUrl()`. `documents.createSpreadsheet()` joins `createCanvas()`.
+
+Typed handles for the other types, `Document.spreadsheet()`, `.wordDocument()`,
+`.presentation()` and `.canvas()`, refuse the wrong file type and each has
+`webUrl()`. `documents.createSpreadsheet()` joins `createCanvas()`.
+
+### Later option: structured editing for spreadsheets, Word and PowerPoint
+
+Not part of this stack. A typed lower layer like markdown's (vendored
+spreadsheet and Word op types, `pptx_engine` `EditOp` types generated from its
+schema, reads in the tools' formats, `expectedRevision` conflicts, and a
+PowerPoint version check replacing today's last-writer-wins) can follow if
+programs need exact cell, paragraph or shape edits without a model.
 
 ## Hiding the direct tools
 
@@ -206,23 +256,21 @@ until they move.
 ## How vendoring works
 
 The vendored library is only the structured layer's builders; instruction
-edits need nothing in the sandbox. What is vendored:
+edits need nothing in the sandbox. In this stack that is two builders:
 
-| Builder or types | Why instructions don't cover it |
+| Builder | Why instructions don't cover it |
 | --- | --- |
 | `DocumentEditor` and `DocumentOp` | Deterministic markdown edits and database blocks (above) |
 | `CanvasEditor` and `CanvasOp` | Exact geometry and batches against a revision |
-| Spreadsheet op types | No instructions editor on the server |
-| Word op types | No instructions editor on the server |
-| PowerPoint `EditOp` types (generated from the `pptx_engine` schema) | No instructions editor on the server |
+
+Spreadsheet, Word and PowerPoint types are deferred with their structured
+layer (later option, above).
 
 - **The builder lives in a package, not the worker.** The documents PR moves
   `editor/ops.ts`, `document-editor.ts` and `errors.ts` from the worker into
   `packages/editor-ops/src/document/`. The worker, its QuickJS sandbox bundle
   (`scripts/generate-sandbox.ts`) and the SDK import it from there. Canvas's
-  builder moves to `packages/editor-ops/src/canvas/` in its PR. Spreadsheet op
-  types already live in `packages/spreadsheet/src/ai-types.ts`; Word's in
-  `packages/collaboration/src/docx`.
+  builder moves to `packages/editor-ops/src/canvas/` in its PR.
 - **The SDK copies the files in at build time.** `packages/sdk` is a standalone
   package with its own lockfile, its esbuild bundle inlines everything except
   `node:*`, and `tsc` declaration emit is rooted at the package. `bun run
@@ -263,32 +311,36 @@ method documents how to use it in its TSDoc:
 
 ## PR plan
 
-Each PR is independently mergeable, adds tests first, documents every new
-method as above, and regenerates the SDK reference, the code-mode bundle and
-`documentation.json`.
+Each PR is small and independently mergeable, adds tests first, documents every
+new method as above, regenerates the SDK reference, the code-mode bundle and
+`documentation.json`, and adds the direct tool it replaces to
+`covered_by_code_sdk`.
 
 1. **This design** (docs only).
 2. **Documents and tasks** (MACRO-4588), stacked on #9333 for its database
    ops.
-   - `doc.edit(instructions, { queries, fast })`: DSS `POST
-     /documents/{id}/ai-edit` over `EditDocument`'s domain service; the worker's
-     `/edit` returns changed block ids and the revision. `EditDocument` joins
-     `covered_by_code_sdk`.
+   - `doc.edit(instructions, { queries, fast, signal })`: DSS `POST
+     /documents/{id}/ai-edit` over `EditDocument`'s domain service; the
+     worker's `/edit` returns changed block ids and the revision. Hides
+     `EditDocument`.
    - Structured layer: `packages/editor-ops` with the document builder
      (accepting `SavedQuery`, table and view handles); worker `POST
      /document-ops`, model-free and all or nothing; DSS `GET
      /documents/{id}/structure` and `POST /documents/{id}/edits`;
      `Document.structure()`, `DocumentStructure.applyEdits()`,
      `Document.insertDatabaseQuery()`.
-   - Tests for round trips, concurrent typing during an edit, refused edits and
-     batches.
-3. **Spreadsheets** (MACRO-4587). DSS routes over `SpreadsheetService` (read,
-   calculate, typed edit), `documents.createSpreadsheet()`, `Spreadsheet`
-   handle, vendored op types. No `edit(instructions)`.
-4. **Word and PowerPoint** (MACRO-4581). DSS routes over `WordDocumentService`
-   and `PresentationService`; PowerPoint version check; `saveAs` returns a
-   `Presentation` handle. No `edit(instructions)`.
-5. **Canvases** (MACRO-4584). `canvas.edit(instructions)` over `EditCanvas`;
-   `CanvasEditor` moves to `packages/editor-ops` and the worker accepts ops as
-   well as code; read, apply and render routes; render returns PNG bytes and the
-   crop it used.
+   - Tests for round trips, concurrent typing during an edit, aborts, and
+     refused edits and batches.
+3. **Spreadsheets** (MACRO-4587). `sheet.edit(instructions, { signal })` with a
+   new writer model over `SpreadsheetService`; changed ranges and the new
+   revision; `documents.createSpreadsheet()`. Hides `EditSpreadsheet`.
+4. **PowerPoint** (MACRO-4581). `deck.edit(instructions, { signal, saveAs })`
+   with a new writer model over `PresentationService`; changed slides, the new
+   version or the new `Presentation` for `saveAs`. Hides `EditPresentation`.
+5. **Word** (MACRO-4581). `wordDoc.edit(instructions, { signal })` with a new
+   writer model over `WordDocumentService`; changed paragraph ids. Hides
+   `EditWordDocument`.
+6. **Canvases** (MACRO-4584). `canvas.edit(instructions, { signal })` over
+   `EditCanvas`; the structured layer (`CanvasEditor` in `packages/editor-ops`,
+   ops with `expectedRevision`) and render. Hides `EditCanvas` and
+   `ApplyCanvasEdits`.
