@@ -280,13 +280,19 @@ describe('buildEmailQuery', () => {
     );
   });
 
-  it('leaves attachment facets to the client', () => {
-    const plain = buildEmailQuery(contextFor()).body;
-    const withAttachments = buildEmailQuery(
-      contextFor({ facets: { attachments: ['attachment-pdf'] } })
-    ).body;
+  it('filters attachment kinds on the server', () => {
+    const ef = (facets: EmailQueryContext['facets']) =>
+      serialize(buildEmailQuery(contextFor({ facets })).body.ef);
 
-    expect(withAttachments).toEqual(plain);
+    expect(
+      ef({ attachments: ['attachment-pdf', 'attachment-document'] })
+    ).toContain(serialize({ l: { Attachment: 'pdf' } }));
+    expect(
+      ef({ attachments: ['attachment-pdf', 'attachment-document'] })
+    ).toContain(serialize({ l: { Attachment: 'document' } }));
+    expect(ef({ attachments: ['attachment-image'] })).not.toContain(
+      serialize({ l: { Attachment: 'pdf' } })
+    );
   });
 
   it('refines by selected tags as a property filter', () => {

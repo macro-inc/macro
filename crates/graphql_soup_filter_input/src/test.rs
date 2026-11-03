@@ -453,3 +453,17 @@ fn email_subject_is_trimmed_and_blank_subjects_are_rejected() {
         .is_err()
     );
 }
+
+#[test]
+fn email_attachment_kinds_materialize() {
+    use item_filters::ast::email::AttachmentKind;
+
+    let ast = materialize_graphql_filter(
+        json!({"emailFilter": {"tree": {"literal": {"attachment": "PDF"}}}}),
+    )
+    .unwrap();
+    assert!(matches!(
+        ast.email_filter.tree.as_deref(),
+        Some(Expr::Literal(EmailLiteral::Attachment(AttachmentKind::Pdf)))
+    ));
+}

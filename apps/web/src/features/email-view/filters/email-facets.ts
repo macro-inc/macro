@@ -54,15 +54,22 @@ function doneOption(
   };
 }
 
-// Attachments have no server filter: the page is refined client-side from
-// each thread's attachment mime types, as the legacy mail view did.
+// The server filters on denormalized thread flags; the predicate keeps
+// loaded rows in step with each thread's attachment mime types.
 function attachmentOption(
   id: EmailFilterOptionId,
   label: string,
   iconType: EntityIconSelector,
+  kind: 'pdf' | 'image' | 'document',
   predicate: (entity: EntityData) => boolean
 ): EmailFacetOption {
-  return { id, label, iconType, predicate };
+  return {
+    id,
+    label,
+    iconType,
+    clause: { ef: clause.eq('emailAttachment', kind) },
+    predicate,
+  };
 }
 
 const EMAIL_READ_OPTIONS: EmailFacetOption[] = [
@@ -76,10 +83,17 @@ const EMAIL_DONE_OPTIONS: EmailFacetOption[] = [
 ];
 
 const EMAIL_ATTACHMENT_OPTIONS: EmailFacetOption[] = [
-  attachmentOption('attachment-pdf', 'PDFs', 'pdf', hasPdfAttachmentFilter),
+  attachmentOption(
+    'attachment-pdf',
+    'PDFs',
+    'pdf',
+    'pdf',
+    hasPdfAttachmentFilter
+  ),
   attachmentOption(
     'attachment-image',
     'Images',
+    'image',
     'image',
     hasImageAttachmentFilter
   ),
@@ -87,6 +101,7 @@ const EMAIL_ATTACHMENT_OPTIONS: EmailFacetOption[] = [
     'attachment-document',
     'Documents',
     'files',
+    'document',
     hasDocumentAttachmentFilter
   ),
 ];

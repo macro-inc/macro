@@ -2111,6 +2111,24 @@ type GraphqlAllDayEventTime {
 }
 
 """
+GraphQL input naming a kind of email attachment.
+"""
+enum GraphqlAttachmentKind {
+	"""
+	PDF files.
+	"""
+	PDF
+	"""
+	PNG, JPEG, GIF, WebP or SVG images.
+	"""
+	IMAGE
+	"""
+	Word, Excel and PowerPoint files, plain text and CSV.
+	"""
+	DOCUMENT
+}
+
+"""
 A Boolean property value.
 """
 type GraphqlBooleanPropertyValue {
@@ -4589,6 +4607,10 @@ input GraphqlEmailLiteral @oneOf {
 	The calendar only option.
 	"""
 	calendarOnly: Boolean
+	"""
+	Threads with at least one attachment of this kind.
+	"""
+	attachment: GraphqlAttachmentKind
 	"""
 	The created at option.
 	"""

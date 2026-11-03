@@ -145,6 +145,10 @@ export const FILTER_TARGETS = {
     emailImportance: { backend: 'Importance', domain: [true, false] },
     emailShared: { backend: 'Shared' },
     emailCalendarOnly: { backend: 'CalendarOnly', domain: [true, false] },
+    emailAttachment: {
+      backend: 'Attachment',
+      domain: ['pdf', 'image', 'document'],
+    },
     emailUpdatedAt: { backend: 'ua', compile: 'dateRange' },
   },
 
@@ -334,6 +338,7 @@ type FilterTargetsMeta = {
     emailImportance: boolean;
     emailShared: 'exclude' | 'include' | 'only';
     emailCalendarOnly: boolean;
+    emailAttachment: 'pdf' | 'image' | 'document';
     emailUpdatedAt: DateRangeFilter;
   };
 

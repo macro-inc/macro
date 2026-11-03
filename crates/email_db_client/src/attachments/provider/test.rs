@@ -260,3 +260,40 @@ async fn insert_attachments_sets_then_clears_calendar_flag(pool: Pool<Postgres>)
 
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("sync_thread_calendar_flag"))
+)]
+async fn insert_attachments_maintains_attachment_kind_flags(pool: Pool<Postgres>) -> Result<()> {
+    let thread_id = Uuid::parse_str("00000000-0000-0000-0000-00000000b203")?;
+    let message_id = Uuid::parse_str("00000000-0000-0000-0000-00000000b504")?;
+    let kind_flags = || async {
+        let row = sqlx::query!(
+            "SELECT has_pdf_attachment, has_image_attachment FROM email_threads WHERE id = $1",
+            thread_id
+        )
+        .fetch_one(&pool)
+        .await?;
+        Ok::<_, sqlx::Error>((row.has_pdf_attachment, row.has_image_attachment))
+    };
+
+    let mut tx = pool.begin().await?;
+    let mut attachments = vec![service_attachment(
+        "notes.pdf",
+        "application/pdf",
+        "prov-pdf-1",
+    )];
+    crate::attachments::provider::insert_attachments(&mut tx, message_id, &mut attachments).await?;
+    tx.commit().await?;
+    assert_eq!(kind_flags().await?, (true, false));
+
+    // Re-sync with only an image: the PDF is orphan-deleted.
+    let mut tx = pool.begin().await?;
+    let mut attachments = vec![service_attachment("photo.jpg", "image/jpeg", "prov-jpg-1")];
+    crate::attachments::provider::insert_attachments(&mut tx, message_id, &mut attachments).await?;
+    tx.commit().await?;
+    assert_eq!(kind_flags().await?, (false, true));
+
+    Ok(())
+}

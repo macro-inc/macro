@@ -4,7 +4,7 @@ use super::resolve::ResolvedFilters;
 use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
 use filter_ast::Expr;
 use item_filters::ast::date::DateLiteral;
-use item_filters::ast::email::{Email, EmailLiteral};
+use item_filters::ast::email::{AttachmentKind, Email, EmailLiteral};
 use item_filters::ast::properties::{PropertiesLiteral, PropertyEntityType, PropertyMatchValue};
 use recursion::CollapsibleExt;
 use uuid::Uuid;
@@ -40,6 +40,7 @@ pub(super) fn has_thread_literals(ast: &Expr<EmailLiteral>) -> bool {
             | EmailLiteral::Owner(_)
             | EmailLiteral::ProjectId(_)
             | EmailLiteral::CalendarOnly(_)
+            | EmailLiteral::Attachment(_)
             | EmailLiteral::Importance(_)
             | EmailLiteral::Read(_)
             | EmailLiteral::InboxVisible(_)
@@ -64,6 +65,7 @@ pub(super) fn has_message_literals(ast: &Expr<EmailLiteral>) -> bool {
             | EmailLiteral::ProjectId(_)
             | EmailLiteral::Shared(_)
             | EmailLiteral::CalendarOnly(_)
+            | EmailLiteral::Attachment(_)
             | EmailLiteral::Importance(_)
             | EmailLiteral::Read(_)
             | EmailLiteral::InboxVisible(_)
@@ -244,6 +246,15 @@ fn build_thread_literal_predicate(
             SqlFragment::raw(format!("{thread_alias}.has_calendar_attachment"))
         }
         EmailLiteral::CalendarOnly(false) => SqlFragment::raw("TRUE"),
+        // Denormalized flags maintained with has_calendar_attachment.
+        EmailLiteral::Attachment(kind) => SqlFragment::raw(format!(
+            "{thread_alias}.{}",
+            match kind {
+                AttachmentKind::Pdf => "has_pdf_attachment",
+                AttachmentKind::Image => "has_image_attachment",
+                AttachmentKind::Document => "has_document_attachment",
+            }
+        )),
         // Denormalized importance flag maintained by update_thread_metadata
         // (sync_thread_signal_flag) and the email_filters resync fan-out.
         EmailLiteral::Importance(true) => SqlFragment::raw(format!("{thread_alias}.is_signal")),

@@ -1976,3 +1976,19 @@ fn email_subject_literal_trims_and_bounds_its_text() {
         serde_json::from_value(json!({ "l": { "Subject": "é".repeat(200) } })).unwrap();
     assert_matches!(longest, Expr::Literal(EmailLiteral::Subject(_)));
 }
+
+#[test]
+fn email_attachment_literal_names_kinds_in_snake_case() {
+    use crate::ast::email::{AttachmentKind, EmailLiteral};
+
+    let tree: Expr<EmailLiteral> =
+        serde_json::from_value(json!({ "l": { "Attachment": "document" } })).unwrap();
+    assert_matches!(
+        tree,
+        Expr::Literal(EmailLiteral::Attachment(AttachmentKind::Document))
+    );
+    assert!(
+        serde_json::from_value::<Expr<EmailLiteral>>(json!({ "l": { "Attachment": "zip" } }))
+            .is_err()
+    );
+}

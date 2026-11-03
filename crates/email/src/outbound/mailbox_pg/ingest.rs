@@ -245,7 +245,7 @@ impl MailboxIngest for PgMailboxSync {
         )
         .await
         .map_err(db_error)?;
-        email_db_client::threads::update::sync_thread_calendar_flag(&mut tx, thread_id)
+        email_db_client::threads::update::sync_thread_attachment_flags(&mut tx, thread_id)
             .await
             .map_err(|_| MailboxError::Persistence)?;
         email_db_client::messages::replying_to_id::update_thread_messages_replying_to(

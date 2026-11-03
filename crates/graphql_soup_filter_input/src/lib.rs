@@ -31,7 +31,7 @@ use item_filters::{
         database_row::DatabaseRowLiteral,
         date::DateLiteral,
         document::DocumentLiteral,
-        email::{Email, EmailLiteral, SubjectQuery},
+        email::{AttachmentKind, Email, EmailLiteral, SubjectQuery},
         foreign_entity::ForeignEntityLiteral,
         github_pull_request::{
             GithubPullRequestLiteral, GithubPullRequestReviewStatus, GithubPullRequestState,
@@ -968,6 +968,8 @@ enum GraphqlEmailLiteral {
     Shared(GraphqlSharedEmailFilter),
     /// The calendar only option.
     CalendarOnly(bool),
+    /// Threads with at least one attachment of this kind.
+    Attachment(GraphqlAttachmentKind),
     /// The created at option.
     CreatedAt(GraphqlDateLiteral),
     /// The updated at option.
@@ -996,6 +998,7 @@ impl IntoFilterExpr<EmailLiteral> for GraphqlEmailLiteral {
             Self::InboxVisible(visible) => EmailLiteral::InboxVisible(visible),
             Self::Shared(shared) => EmailLiteral::Shared(shared.into_model()),
             Self::CalendarOnly(calendar_only) => EmailLiteral::CalendarOnly(calendar_only),
+            Self::Attachment(kind) => EmailLiteral::Attachment(kind.into_model()),
             Self::CreatedAt(date) => EmailLiteral::CreatedAt(date.into_ast()?),
             Self::UpdatedAt(date) => EmailLiteral::UpdatedAt(date.into_ast()?),
             Self::ViewedAt(date) => EmailLiteral::ViewedAt(date.into_ast()?),
@@ -1031,6 +1034,30 @@ impl GraphqlEmailValue {
             ),
             Self::Domain(value) => Email::Domain(value),
         })
+    }
+}
+
+/// GraphQL input naming a kind of email attachment.
+#[cfg_attr(feature = "server", derive(async_graphql::Enum))]
+#[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+enum GraphqlAttachmentKind {
+    /// PDF files.
+    Pdf,
+    /// PNG, JPEG, GIF, WebP or SVG images.
+    Image,
+    /// Word, Excel and PowerPoint files, plain text and CSV.
+    Document,
+}
+
+impl GraphqlAttachmentKind {
+    /// Convert this GraphQL option into the email-filter model.
+    fn into_model(self) -> AttachmentKind {
+        match self {
+            Self::Pdf => AttachmentKind::Pdf,
+            Self::Image => AttachmentKind::Image,
+            Self::Document => AttachmentKind::Document,
+        }
     }
 }
 

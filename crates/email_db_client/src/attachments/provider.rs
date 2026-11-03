@@ -97,16 +97,11 @@ pub async fn insert_attachments(
         .await?;
     }
 
-    // The thread-level flag only moves when a calendar attachment enters or
-    // leaves this message's attachment set.
-    let calendar_set_changed = orphaned_attachments
-        .iter()
-        .chain(new_attachments.iter())
-        .any(|a| is_calendar_attachment(a.filename.as_deref(), a.mime_type.as_deref()));
-
+    // The thread-level attachment flags only move when an attachment enters
+    // or leaves this message's attachment set.
     if new_attachments.is_empty() {
-        if calendar_set_changed {
-            sync_thread_calendar_flag(&mut *tx, message_id).await?;
+        if !orphaned_attachments.is_empty() {
+            sync_thread_attachment_flags(&mut *tx, message_id).await?;
         }
         return Ok(());
     }
@@ -163,24 +158,14 @@ pub async fn insert_attachments(
         .execute(&mut *tx)
         .await?;
 
-    if calendar_set_changed {
-        sync_thread_calendar_flag(&mut *tx, message_id).await?;
-    }
+    sync_thread_attachment_flags(&mut *tx, message_id).await?;
 
     Ok(())
 }
 
-/// Mirrors the SQL calendar-attachment predicate behind the CalendarOnly
-/// email filter: `filename ILIKE '%.ics' OR mime_type IN ('text/calendar',
-/// 'application/ics')`.
-fn is_calendar_attachment(filename: Option<&str>, mime_type: Option<&str>) -> bool {
-    filename.is_some_and(|f| f.to_ascii_lowercase().ends_with(".ics"))
-        || mime_type.is_some_and(|m| m == "text/calendar" || m == "application/ics")
-}
-
 /// Resolves the message's thread and recomputes its denormalized
-/// `has_calendar_attachment` flag.
-async fn sync_thread_calendar_flag(
+/// attachment flags.
+async fn sync_thread_attachment_flags(
     tx: &mut sqlx::PgConnection,
     message_id: Uuid,
 ) -> anyhow::Result<()> {
@@ -192,7 +177,7 @@ async fn sync_thread_calendar_flag(
     .await?;
 
     if let Some(thread_id) = thread_id {
-        crate::threads::update::sync_thread_calendar_flag(tx, thread_id).await?;
+        crate::threads::update::sync_thread_attachment_flags(tx, thread_id).await?;
     }
 
     Ok(())

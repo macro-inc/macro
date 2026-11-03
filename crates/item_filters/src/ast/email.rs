@@ -57,6 +57,18 @@ impl From<SubjectQuery> for String {
     }
 }
 
+/// A kind of attachment a thread's messages carry, by MIME type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AttachmentKind {
+    /// `application/pdf`.
+    Pdf,
+    /// PNG, JPEG, GIF, WebP or SVG images.
+    Image,
+    /// Word, Excel and PowerPoint files, plain text and CSV.
+    Document,
+}
+
 /// Returns true if `s` looks like a bare domain: no `@`, at least two
 /// dot-separated segments, each made of alphanumeric or `-` characters.
 fn looks_like_domain(s: &str) -> bool {
@@ -110,6 +122,8 @@ pub enum EmailLiteral {
     /// `.ics` calendar attachment (filename or `application/ics` mime type).
     /// When false, no constraint is applied.
     CalendarOnly(bool),
+    /// Threads with at least one attachment of this kind on any message.
+    Attachment(AttachmentKind),
     /// Filter by thread created_at timestamp
     #[serde(rename = "ca")]
     CreatedAt(DateLiteral),
