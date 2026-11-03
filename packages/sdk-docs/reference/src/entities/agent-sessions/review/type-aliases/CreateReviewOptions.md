@@ -1,3 +1,11 @@
 # Type Alias: CreateReviewOptions
 
-> **CreateReviewOptions** = \{ `drafts`: [`ReviewEmailDraft`](ReviewEmailDraft.md)[]; `kind`: `"email"`; `title`: `string`; \} \| \{ `drafts`: [`ReviewCalendarDraft`](ReviewCalendarDraft.md)[]; `kind`: `"calendar"`; `title`: `string`; \}
+> **CreateReviewOptions** = \{ `title`: `ReviewTitle`; \} & `ReviewDrafts_Deserialize`
+
+A review's kind and its drafts; the execution is attached by the handle.
+
+## Type Declaration
+
+| Name | Type |
+| ------ | ------ |
+| `title` | `ReviewTitle` |

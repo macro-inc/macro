@@ -4,13 +4,13 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ReviewDecisionOneOfThreeAction } from './reviewDecisionOneOfThreeAction';
+import type { ReviewDecisionOneOfFourAction } from './reviewDecisionOneOfFourAction';
 
 /**
  * Send/create selected items, or all pending items when empty.
  */
-export type ReviewDecisionOneOfThree = {
-  action: ReviewDecisionOneOfThreeAction;
+export type ReviewDecisionOneOfFour = {
+  action: ReviewDecisionOneOfFourAction;
   /** Pending items, or an empty list to select all pending items. */
   items: string[];
   /** Revision displayed by the caller. */

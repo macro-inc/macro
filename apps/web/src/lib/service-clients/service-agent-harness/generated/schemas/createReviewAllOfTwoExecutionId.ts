@@ -6,4 +6,4 @@
  */
 import type { ExecutionId } from './executionId';
 
-export type ReviewRecordExecutionId = null | ExecutionId;
+export type CreateReviewAllOfTwoExecutionId = null | ExecutionId;

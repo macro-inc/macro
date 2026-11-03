@@ -4,6 +4,8 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ExecutionId } from './executionId';
 
-export type CreateReviewExecutionId = null | ExecutionId;
+/**
+ * Component kind, drafts and per-item outcomes.
+ */
+export type ReviewRecordAllOf = { [key: string]: unknown };

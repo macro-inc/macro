@@ -1118,26 +1118,13 @@ export type CreateAgentSessionResponse = {
 };
 
 /**
- * Review creation. Drafts are validated by the action's owning adapter.
+ * Review creation. Decoding it validates every draft; creating a review only
+ * presents the drafts, and the account holder acts separately.
  */
 export type CreateReview = {
-    /**
-     * One to one hundred independent drafts. Email: {subject, body: Markdown,
-     * to: [{email, name?}], cc?: [{email, name?}], bcc?: [{email, name?}],
-     * replyingToId?, attachments?: [{documentId}]}. Calendar: {title,
-     * time: {kind: "timed", startsAt: ISO datetime, endsAt: ISO datetime,
-     * timeZone?: IANA zone} or {kind: "allDay", startDate: ISO date,
-     * endDate: exclusive ISO date}, description?, location?, attendees?:
-     * [{email, isOptional?}]}. Import: exactly one draft {source: "notion" | "linear" | "jira"},
-     * presenting the plan ImportFromNotion, ImportFromLinear or ImportFromJira staged.
-     * Creating any review only presents these drafts; the user acts separately.
-     */
-    drafts: Array<unknown>;
+    [key: string]: unknown;
+} & {
     executionId?: null | ExecutionId;
-    /**
-     * Existing UI and action to use.
-     */
-    kind: ReviewKind;
     /**
      * Stack label.
      */
@@ -2015,9 +2002,11 @@ export type RetryAgentConversationTurnRequest = {
 export type ReviewDecision = {
     action: 'edit';
     /**
-     * Replacement action arguments.
+     * Replacement action arguments, keyed by the review's kind.
      */
-    draft: unknown;
+    draft: {
+        [key: string]: unknown;
+    };
     /**
      * Pending item to update.
      */
@@ -2076,67 +2065,21 @@ export type ReviewDecisionContext = {
 export type ReviewId = string;
 
 /**
- * One editable item and its durable outcome.
- */
-export type ReviewItem = {
-    /**
-     * Validated arguments for the existing composer/action.
-     */
-    draft: unknown;
-    /**
-     * Whether the account holder edited this draft before deciding.
-     */
-    edited?: boolean;
-    /**
-     * Failure or uncertainty description.
-     */
-    error?: string | null;
-    /**
-     * Stable item identity across stack navigation and edits.
-     */
-    id: string;
-    /**
-     * Actual backend response, never a model assertion.
-     */
-    result?: unknown;
-    /**
-     * Current outcome.
-     */
-    status: ReviewItemStatus;
-};
-
-/**
- * Review item state, shared with notification consumers.
- */
-export type ReviewItemStatus = 'pending' | 'submitting' | 'completed' | 'dismissed' | 'unknown';
-
-/**
- * The component and action used to finish a review.
- */
-export type ReviewKind = 'email' | 'calendar' | 'import';
-
-/**
  * Full UI record, fetched outside the model context.
  */
 export type ReviewRecord = {
+    [key: string]: unknown;
+} & {
     /**
-     * Account whose email/calendar the drafts use; historical records use the session owner.
+     * Account whose email/calendar the drafts use.
      */
-    actingUser?: string | null;
+    actingUser: string;
     decision?: null | ReviewDecisionContext;
     executionId?: null | ExecutionId;
     /**
      * Review identity.
      */
     id: ReviewId;
-    /**
-     * Drafts and per-item outcomes.
-     */
-    items: Array<ReviewItem>;
-    /**
-     * Component kind.
-     */
-    kind: ReviewKind;
     /**
      * Durable presentation acknowledgment, separate from user decisions.
      */

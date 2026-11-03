@@ -5,10 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ReviewDecisionOneOfFiveAction =
-  (typeof ReviewDecisionOneOfFiveAction)[keyof typeof ReviewDecisionOneOfFiveAction];
+export type ReviewDecisionOneOfSixAction =
+  (typeof ReviewDecisionOneOfSixAction)[keyof typeof ReviewDecisionOneOfSixAction];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const ReviewDecisionOneOfFiveAction = {
+export const ReviewDecisionOneOfSixAction = {
   dismiss: 'dismiss',
 } as const;

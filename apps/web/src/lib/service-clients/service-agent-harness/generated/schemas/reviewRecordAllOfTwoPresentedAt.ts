@@ -6,6 +6,6 @@
  */
 
 /**
- * Failure or uncertainty description.
+ * Durable presentation acknowledgment, separate from user decisions.
  */
-export type ReviewItemError = string | null;
+export type ReviewRecordAllOfTwoPresentedAt = number | null;

@@ -4288,36 +4288,34 @@
         }
       },
       "CreateReview": {
-        "type": "object",
-        "description": "Review creation. Drafts are validated by the action's owning adapter.",
-        "required": ["kind", "title", "drafts"],
-        "properties": {
-          "drafts": {
-            "type": "array",
-            "items": {},
-            "description": "One to one hundred independent drafts. Email: {subject, body: Markdown,\nto: [{email, name?}], cc?: [{email, name?}], bcc?: [{email, name?}],\nreplyingToId?, attachments?: [{documentId}]}. Calendar: {title,\ntime: {kind: \"timed\", startsAt: ISO datetime, endsAt: ISO datetime,\ntimeZone?: IANA zone} or {kind: \"allDay\", startDate: ISO date,\nendDate: exclusive ISO date}, description?, location?, attendees?:\n[{email, isOptional?}]}. Import: exactly one draft {source: \"notion\" | \"linear\" | \"jira\"},\npresenting the plan ImportFromNotion, ImportFromLinear or ImportFromJira staged.\nCreating any review only presents these drafts; the user acts separately."
+        "allOf": [
+          {
+            "type": "object",
+            "description": "The review's kind (email, calendar, import) and its drafts: 1–100\nSendEmail or CreateCalendarEvent arguments, or exactly one import\nplan selection."
           },
-          "executionId": {
-            "oneOf": [
-              {
-                "type": "null"
+          {
+            "type": "object",
+            "required": ["title"],
+            "properties": {
+              "executionId": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ExecutionId",
+                    "description": "Optional code execution that prepared these drafts."
+                  }
+                ]
               },
-              {
-                "$ref": "#/components/schemas/ExecutionId",
-                "description": "Optional code execution that prepared these drafts."
+              "title": {
+                "type": "string",
+                "description": "Stack label."
               }
-            ]
-          },
-          "kind": {
-            "$ref": "#/components/schemas/ReviewKind",
-            "description": "Existing UI and action to use."
-          },
-          "title": {
-            "type": "string",
-            "description": "Stack label."
+            }
           }
-        },
-        "additionalProperties": false
+        ],
+        "description": "Review creation. Decoding it validates every draft; creating a review only\npresents the drafts, and the account holder acts separately."
       },
       "CreateSessionThread": {
         "type": "object",
@@ -5564,7 +5562,8 @@
                 "enum": ["edit"]
               },
               "draft": {
-                "description": "Replacement action arguments."
+                "type": "object",
+                "description": "Replacement action arguments, keyed by the review's kind."
               },
               "item": {
                 "type": "string",
@@ -5662,125 +5661,81 @@
         "format": "uuid",
         "description": "Persisted review identity."
       },
-      "ReviewItem": {
-        "type": "object",
-        "description": "One editable item and its durable outcome.",
-        "required": ["id", "draft", "status"],
-        "properties": {
-          "draft": {
-            "description": "Validated arguments for the existing composer/action."
-          },
-          "edited": {
-            "type": "boolean",
-            "description": "Whether the account holder edited this draft before deciding."
-          },
-          "error": {
-            "type": ["string", "null"],
-            "description": "Failure or uncertainty description."
-          },
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Stable item identity across stack navigation and edits."
-          },
-          "result": {
-            "description": "Actual backend response, never a model assertion."
-          },
-          "status": {
-            "$ref": "#/components/schemas/ReviewItemStatus",
-            "description": "Current outcome."
-          }
-        }
-      },
-      "ReviewItemStatus": {
-        "type": "string",
-        "description": "Review item state, shared with notification consumers.",
-        "enum": ["pending", "submitting", "completed", "dismissed", "unknown"]
-      },
-      "ReviewKind": {
-        "type": "string",
-        "description": "The component and action used to finish a review.",
-        "enum": ["email", "calendar", "import"]
-      },
       "ReviewRecord": {
-        "type": "object",
-        "description": "Full UI record, fetched outside the model context.",
-        "required": [
-          "id",
-          "sessionId",
-          "kind",
-          "title",
-          "revision",
-          "updatedAt",
-          "items"
-        ],
-        "properties": {
-          "actingUser": {
-            "type": ["string", "null"],
-            "description": "Account whose email/calendar the drafts use; historical records use the session owner."
+        "allOf": [
+          {
+            "type": "object",
+            "description": "Component kind, drafts and per-item outcomes."
           },
-          "decision": {
-            "oneOf": [
-              {
-                "type": "null"
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "sessionId",
+              "actingUser",
+              "title",
+              "revision",
+              "updatedAt"
+            ],
+            "properties": {
+              "actingUser": {
+                "type": "string",
+                "description": "Account whose email/calendar the drafts use."
               },
-              {
-                "$ref": "#/components/schemas/ReviewDecisionContext",
-                "description": "Current batch's authenticated decision, preserved for interrupted work."
-              }
-            ]
-          },
-          "executionId": {
-            "oneOf": [
-              {
-                "type": "null"
+              "decision": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ReviewDecisionContext",
+                    "description": "Current batch's authenticated decision, preserved for interrupted work."
+                  }
+                ]
               },
-              {
-                "$ref": "#/components/schemas/ExecutionId",
-                "description": "Originating code execution, absent for directly presented reviews."
+              "executionId": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ExecutionId",
+                    "description": "Originating code execution, absent for directly presented reviews."
+                  }
+                ]
+              },
+              "id": {
+                "$ref": "#/components/schemas/ReviewId",
+                "description": "Review identity."
+              },
+              "presentedAt": {
+                "type": ["integer", "null"],
+                "format": "int64",
+                "description": "Durable presentation acknowledgment, separate from user decisions."
+              },
+              "revision": {
+                "type": "integer",
+                "format": "int64",
+                "description": "Compare-and-swap revision for edits and submissions."
+              },
+              "sessionId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Owning session."
+              },
+              "title": {
+                "type": "string",
+                "description": "Stack label."
+              },
+              "updatedAt": {
+                "type": "integer",
+                "format": "int64",
+                "description": "Milliseconds since epoch of the last state change."
               }
-            ]
-          },
-          "id": {
-            "$ref": "#/components/schemas/ReviewId",
-            "description": "Review identity."
-          },
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ReviewItem"
-            },
-            "description": "Drafts and per-item outcomes."
-          },
-          "kind": {
-            "$ref": "#/components/schemas/ReviewKind",
-            "description": "Component kind."
-          },
-          "presentedAt": {
-            "type": ["integer", "null"],
-            "format": "int64",
-            "description": "Durable presentation acknowledgment, separate from user decisions."
-          },
-          "revision": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Compare-and-swap revision for edits and submissions."
-          },
-          "sessionId": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Owning session."
-          },
-          "title": {
-            "type": "string",
-            "description": "Stack label."
-          },
-          "updatedAt": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Milliseconds since epoch of the last state change."
+            }
           }
-        }
+        ],
+        "description": "Full UI record, fetched outside the model context."
       },
       "SandboxSize": {
         "type": "string",

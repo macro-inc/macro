@@ -12,7 +12,7 @@ An item handle scopes edits and decisions to its persisted review.
 
 | Parameter | Type |
 | ------ | ------ |
-| `snapshot` | [`ReviewItem`](../../../../../generated/agent-harness/types.gen/type-aliases/ReviewItem.md) |
+| `snapshot` | `ReviewItem`\<`SendEmail`, `SendEmailResponse`\> \| `ReviewItem`\<`CreateCalendarEvent_Serialize`, `ToolCalendarEvent`\> \| `ReviewItem`\<`ImportDraft`, `NotionImportReport_Serialize`\> |
 | `actions` | \{ `dismiss`: () => `Promise`\<`void`\>; `edit`: (`draft`) => `Promise`\<`void`\>; `submit`: () => `Promise`\<`void`\>; \} |
 | `actions.dismiss` | () => `Promise`\<`void`\> |
 | `actions.edit` | (`draft`) => `Promise`\<`void`\> |
@@ -28,11 +28,11 @@ An item handle scopes edits and decisions to its persisted review.
 
 #### Get Signature
 
-> **get** **draft**(): `unknown`
+> **get** **draft**(): `CreateCalendarEvent_Serialize` \| `ImportDraft` \| `SendEmail`
 
 ##### Returns
 
-`unknown`
+`CreateCalendarEvent_Serialize` \| `ImportDraft` \| `SendEmail`
 
 ***
 
@@ -52,11 +52,13 @@ An item handle scopes edits and decisions to its persisted review.
 
 #### Get Signature
 
-> **get** **result**(): `unknown`
+> **get** **result**(): `NotionImportReport_Serialize` \| `SendEmailResponse` \| `ToolCalendarEvent` \| `null`
+
+The action's confirmed response, `null` until it completes.
 
 ##### Returns
 
-`unknown`
+`NotionImportReport_Serialize` \| `SendEmailResponse` \| `ToolCalendarEvent` \| `null`
 
 ***
 
@@ -64,11 +66,11 @@ An item handle scopes edits and decisions to its persisted review.
 
 #### Get Signature
 
-> **get** **status**(): [`ReviewItemStatus`](../../../../../generated/agent-harness/types.gen/type-aliases/ReviewItemStatus.md)
+> **get** **status**(): `ItemStatus`
 
 ##### Returns
 
-[`ReviewItemStatus`](../../../../../generated/agent-harness/types.gen/type-aliases/ReviewItemStatus.md)
+`ItemStatus`
 
 ## Methods
 
@@ -86,11 +88,13 @@ An item handle scopes edits and decisions to its persisted review.
 
 > **edit**(`draft`): `Promise`\<`void`\>
 
+Replace this pending draft; `kind` must match the review's.
+
 #### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
-| `draft` | `unknown` |
+| `draft` | `ReviewDraft_Deserialize` |
 
 #### Returns
 

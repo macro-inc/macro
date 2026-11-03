@@ -6,4 +6,4 @@
  */
 import type { ReviewDecisionContext } from './reviewDecisionContext';
 
-export type ReviewRecordDecision = null | ReviewDecisionContext;
+export type ReviewRecordAllOfTwoDecision = null | ReviewDecisionContext;

@@ -6,6 +6,6 @@
  */
 
 /**
- * Durable presentation acknowledgment, separate from user decisions.
+ * Replacement action arguments, keyed by the review's kind.
  */
-export type ReviewRecordPresentedAt = number | null;
+export type ReviewDecisionOneOfDraft = { [key: string]: unknown };

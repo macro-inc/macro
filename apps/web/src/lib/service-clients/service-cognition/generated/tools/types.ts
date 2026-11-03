@@ -420,6 +420,10 @@ export type EventTimeInput =
       kind: 'allDay';
     };
 /**
+ * An address that passes [`is_valid_email`]; decoding rejects any other string.
+ */
+export type EmailAddress = string;
+/**
  * The kind of event a create tool call makes.
  */
 export type CalendarEventTypeInput = 'default' | 'out_of_office';
@@ -7353,7 +7357,7 @@ export interface CreateCalendarEvent {
    * Attach a conference supported by this calendar: Google Meet or Microsoft Teams. Check ListCalendars capabilities first.
    */
   addConference?: boolean;
-  eventType?: CalendarEventTypeInput;
+  eventType?: CalendarEventTypeInput & string;
   /**
    * Out-of-office decline behavior, used only when eventType is "out_of_office". Omit to just block the time; set `autoDeclineMode` to "decline_all" or "decline_new_only" to have the calendar integration decline conflicting meetings, optionally with a `declineMessage`.
    */
@@ -7367,10 +7371,7 @@ export interface CreateCalendarEvent {
  * An attendee supplied to a calendar tool.
  */
 export interface AttendeeInput {
-  /**
-   * The attendee's email address.
-   */
-  email: string;
+  email: EmailAddress;
   /**
    * Whether attendance is optional for this attendee. Defaults to required.
    */
@@ -7542,7 +7543,7 @@ export interface CreateConfirmedCalendarEvent {
    * Attach a conference supported by this calendar: Google Meet or Microsoft Teams. Check ListCalendars capabilities first.
    */
   addConference?: boolean;
-  eventType?: CalendarEventTypeInput;
+  eventType?: CalendarEventTypeInput & string;
   /**
    * Out-of-office decline behavior, used only when eventType is "out_of_office". Omit to just block the time; set `autoDeclineMode` to "decline_all" or "decline_new_only" to have the calendar integration decline conflicting meetings, optionally with a `declineMessage`.
    */
@@ -15315,10 +15316,7 @@ export interface SendConfirmedEmail {
  * A recipient for an email.
  */
 export interface EmailRecipient {
-  /**
-   * The recipient's email address.
-   */
-  email: string;
+  email: EmailAddress;
   /**
    * The recipient's display name (optional).
    */
