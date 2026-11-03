@@ -10,5 +10,7 @@ import type { UserNameLastName } from './userNameLastName';
 export interface UserName {
   first_name?: UserNameFirstName;
   id: string;
+  /** Whether the account is a team agent (an AI teammate). */
+  is_agent?: boolean;
   last_name?: UserNameLastName;
 }

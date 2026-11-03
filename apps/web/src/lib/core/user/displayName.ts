@@ -134,6 +134,7 @@ async function fetchDisplayNames(ids: string[]): Promise<UserNameItem[]> {
       id: name.id,
       firstName: name.first_name as string,
       lastName: name.last_name as string,
+      isAgent: name.is_agent ?? false,
       loading: false,
     };
   });
@@ -189,6 +190,12 @@ export function getDisplayName(
 ): string {
   if (!id) return '';
   return defaultNameTransform(getUserNameItem(id), options);
+}
+
+/** Whether the user is a team agent, from the shared reactive name cache. */
+export function isAgentUser(id: MacroId | undefined | null): boolean {
+  if (!id) return false;
+  return getUserNameItem(id).isAgent === true;
 }
 
 /** Resolves structured display name parts from the shared reactive cache. */

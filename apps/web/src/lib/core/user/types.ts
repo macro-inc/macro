@@ -23,6 +23,8 @@ type BaseUserName = {
   id: string;
   firstName?: string;
   lastName?: string;
+  /** Whether the account is a team agent (an AI teammate). */
+  isAgent?: boolean;
 };
 
 type UserNameLoading = { loading: true } & BaseUserName;

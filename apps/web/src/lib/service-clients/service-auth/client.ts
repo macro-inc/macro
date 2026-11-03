@@ -52,6 +52,7 @@ import type { AgentApiKey } from './generated/schemas/agentApiKey';
 import type { AppleLoginRequest } from './generated/schemas/appleLoginRequest';
 import type { CreatedTeamInviteLinkResponse } from './generated/schemas/createdTeamInviteLinkResponse';
 import type { CreateGtmInviteLinkRequest } from './generated/schemas/createGtmInviteLinkRequest';
+import type { CreateTeamAgent } from './generated/schemas/createTeamAgent';
 import type { CreateTeamRequest } from './generated/schemas/createTeamRequest';
 import type { CurrentSystemStatus } from './generated/schemas/currentSystemStatus';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
@@ -80,6 +81,7 @@ import type { StatusUpdate } from './generated/schemas/statusUpdate';
 import type { SystemStatus } from './generated/schemas/systemStatus';
 import type { SystemStatusHistory } from './generated/schemas/systemStatusHistory';
 import type { Team } from './generated/schemas/team';
+import type { TeamAgent } from './generated/schemas/teamAgent';
 import type { TeamInviteLinkResponse } from './generated/schemas/teamInviteLinkResponse';
 import type { TeamInviteLinkTeam } from './generated/schemas/teamInviteLinkTeam';
 import type { TeamInvitesResponse } from './generated/schemas/teamInvitesResponse';
@@ -1412,6 +1414,14 @@ export const authServiceClient = {
         { method: 'POST' }
       )
     ).map((result) => result);
+  },
+
+  /** Creates a team agent on the caller's team (team admins only). */
+  async createTeamAgent(args: CreateTeamAgent) {
+    return await fetchWithAuth<TeamAgent>(`${authHost}/team_agents`, {
+      method: 'POST',
+      body: JSON.stringify(args),
+    });
   },
 
   async inviteToTeam(args: InviteToTeamRequest) {

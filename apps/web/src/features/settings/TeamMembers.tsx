@@ -4,7 +4,12 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { UserIcon } from '@core/component/UserIcon';
 import { enableAiUsageBilling } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
-import { getDisplayName, macroIdToEmail, tryMacroId } from '@core/user';
+import {
+  getDisplayName,
+  isAgentUser,
+  macroIdToEmail,
+  tryMacroId,
+} from '@core/user';
 import { debouncedDependent } from '@core/util/debounce';
 import { fuzzyFilter } from '@core/util/fuzzy';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
@@ -35,6 +40,7 @@ import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
 import { Button, ConfirmDialog, ToggleSwitch, Tooltip } from '@ui';
 import { createMemo, createSignal, For, mapArray, Show } from 'solid-js';
+import { AgentChip } from '../channel/Message/AgentBadge';
 import { TeamInviteRow } from './components/team-invite-row';
 import { TeamSeatPlanSelect } from './components/team-seat-plan-select';
 import {
@@ -156,11 +162,16 @@ function MemberRow(props: {
           <UserIcon id={props.member.user_id} isDeleted={false} size="lg" />
         </div>
         <div class="min-w-0 flex-1">
-          <div class="text-sm font-medium text-ink truncate">
-            {displayName()}
-            {props.isCurrentUser && (
-              <span class="text-ink-muted font-normal"> (you)</span>
-            )}
+          <div class="flex items-center gap-1.5 min-w-0">
+            <span class="text-sm font-medium text-ink truncate">
+              {displayName()}
+              {props.isCurrentUser && (
+                <span class="text-ink-muted font-normal"> (you)</span>
+              )}
+            </span>
+            <Show when={isAgentUser(tryMacroId(props.member.user_id))}>
+              <AgentChip />
+            </Show>
           </div>
           <Show when={showEmail()}>
             <div class="text-xs text-ink-muted truncate">{email()}</div>
