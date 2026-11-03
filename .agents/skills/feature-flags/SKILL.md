@@ -1,6 +1,6 @@
 ---
 name: feature-flags
-description: Add, read, or remove a feature flag in the web app (`defineFlag`, PostHog, `ENABLE_*` env flags, `useFeatureFlag`, `isFeatureEnabled`, `ShowFeatureFlag`) or the Rust backend (`crates/feature_flags`, config switches). Use when gating, rolling out, or killing a feature, or when asked to "flag it".
+description: Add, read, or remove a feature flag in the web app (`defineFlag`, PostHog, `ENABLE_*` env flags, `useFeatureFlag`, `isFeatureEnabled`, `ShowFeatureFlag`) or the Rust backend (`crates/feature_flags`). Use when gating, rolling out, or killing a feature, or when asked to "flag it".
 ---
 
 # Feature flags
@@ -103,9 +103,11 @@ These are the mistakes past flagged launches had to fix:
   construct `PostHogFeatureFlags` once at the composition root, load one
   `FlagSnapshot` per authenticated user id, and read it synchronously. A failed
   load returns `Err`; the caller decides the fallback, explicitly. Wire the adapter and its config at the consuming service composition root.
-- **Deployment switches** (on for an environment, not per user) are
-  `MacroConfig` bools with a default, configured in Doppler (see the config
-  rule), not PostHog.
+- **Every backend rollout or feature gate**, per user or for everyone, is a
+  `crates/feature_flags` flag, never a `MacroConfig`/Doppler boolean.
+  `MacroConfig` holds real environment configuration (endpoints, credentials,
+  capacities), not switches that turn features on. Remove the gate once its
+  rollout is done.
 - Keep the backend and web flag keys identical when both gate one feature.
 
 ## 6. Remove it

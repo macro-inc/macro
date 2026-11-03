@@ -1180,7 +1180,7 @@ export type DiscoveryResult =
 /**
  * The kind of item to duplicate.
  */
-export type DuplicableEntityType = 'document' | 'chat';
+export type DuplicableEntityType = 'document' | 'database' | 'chat';
 /**
  * Targeted layout operations. Removing placements always retains response columns.
  */
@@ -8380,7 +8380,7 @@ export interface CreateProjectResponse {
   projectName: string;
 }
 /**
- * Schedule recurring or one-off work for a model or agent. To schedule yourself, use your persona/bot ID as the agent target; to delegate, select an accessible agent from ListAgents using its bot.botId. Routines run as the authenticated user after this session ends, using the selected agent’s tools and configuration. Use Once with a future RFC3339 timestamp for a single run; use Cron for repetition. Returns the saved routine ID and next firing. In Macro app replies, mention the created routine as `<m-document-mention>{"documentId":"ID","documentName":"NAME","blockName":"routine"}</m-document-mention>`, replacing ID with the returned ID and NAME with the saved routine name. In external MCP replies, follow the MCP item-linking instructions. Do not use reminders for work that should execute. Do not automatically create a new routine on every run of an existing routine.
+ * Schedule recurring or one-off work for a model or agent. To schedule yourself, use your persona/bot ID as the agent target; to delegate, select an accessible agent from ListAgents using its bot.botId: a built-in agent, or one the user owns or can use, including one on a self-hosted runtime. That runtime need not be online to save the routine; a run it cannot serve fails and shows in ReadRoutine history. Routines run as the authenticated user after this session ends, using the selected agent’s tools and configuration. Use Once with a future RFC3339 timestamp for a single run; use Cron for repetition. Returns the saved routine ID and next firing. In Macro app replies, mention the created routine as `<m-document-mention>{"documentId":"ID","documentName":"NAME","blockName":"routine"}</m-document-mention>`, replacing ID with the returned ID and NAME with the saved routine name. In external MCP replies, follow the MCP item-linking instructions. Do not use reminders for work that should execute. Do not automatically create a new routine on every run of an existing routine.
  */
 export interface CreateRoutine {
   configuration: RoutineConfiguration;
@@ -9017,7 +9017,7 @@ export interface DispatchCodingAgent {
   prompt: string;
 }
 /**
- * Make a copy of a document (including a task), owned by the user, as the Duplicate action in the app does. Requires view access to the original. Returns the copy's id.
+ * Make a copy of a document (including a task) or a database, owned by the user, as the Duplicate action in the app does. A database copy has every table, column, view and row, except relation columns into other databases the user cannot view, which it leaves out; its sharing, forms and history stay with the original. Requires view access to the original. Returns the copy's id.
  */
 export interface DuplicateItem {
   entityType: DuplicableEntityType;
@@ -9026,7 +9026,7 @@ export interface DuplicateItem {
    */
   entityId: string;
   /**
-   * Name for the copy of a document. Omit to use "<original name> copy".
+   * Name for the copy. Omit to use "<original name> copy".
    */
   name?: string | null;
 }

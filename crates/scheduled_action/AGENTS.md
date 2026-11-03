@@ -77,6 +77,10 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   `RoutineSessions::prepare` checks again on every run, then adds them to an
   agent limited to selected apps. An update that omits the key is rejected
   when the stored task has apps (`require_explicit_selection`).
+- An agent target is any agent the owner may run: built in, their own, or
+  one on a self-hosted runtime. `TargetValidation` authorizes it on save
+  without contacting the runtime; `RoutineSessions::prepare` reauthorizes on
+  every run, and an offline runtime fails that run in its history.
 - Macro events store only ids, plus the GitHub pull request and account behind
   a task status change (`change_source`), and are read again, as the owner, at
   dispatch.
