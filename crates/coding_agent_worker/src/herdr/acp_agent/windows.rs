@@ -6,6 +6,66 @@ use super::*;
 mod test;
 
 impl Adapter {
+    /// A failed launch acknowledgment can leave the native agent running. Adopt
+    /// it before the prompt's normal busy/dialog handling, without launching twice.
+    #[tracing::instrument(
+        name = "macrod.native_session_recover",
+        skip_all,
+        fields(session_id = %session.id, recovered = false),
+        err(Debug)
+    )]
+    pub(super) async fn recover_running(
+        &self,
+        herdr: &HerdrCli,
+        session: &Session,
+    ) -> Result<Option<Live>, RpcError> {
+        let name = agent_name(&session.id);
+        let mut info = match herdr.agent_info(&name).await {
+            Ok(info) => info,
+            Err(error) if error.missing_agent() => return Ok(None),
+            Err(error) => return Err(error.into()),
+        };
+        if !matches!(
+            info.status.as_str(),
+            "idle" | "done" | "working" | "blocked"
+        ) {
+            if self.options.kind.reports_status() {
+                return Err(HerdrError::NotReady.into());
+            }
+            herdr
+                .wait_ready(&name, self.options.kind.herdr_kind(), false)
+                .await?;
+            info = herdr.agent_info(&name).await?;
+        }
+        if !models::same_session(session, &info) {
+            return Err(RpcError::invalid(
+                "Herdr agent identity no longer matches this session",
+            ));
+        }
+        let record = self.store.load(&session.id).map_err(|error| {
+            RpcError::internal(format!("could not restore native session: {error}"))
+        })?;
+        let mut live = Live {
+            session: session.id.clone(),
+            cwd: session.cwd.clone(),
+            started: std::time::UNIX_EPOCH + Duration::from_secs(record.started),
+            name,
+            log: self.options.kind.log(),
+            path: record.transcript,
+            cursor: Cursor::default(),
+            pending: VecDeque::new(),
+        };
+        if lock(&session.native_id).is_none() {
+            *lock(&session.native_id) = info.session_id.clone();
+        }
+        if live.path.is_none() {
+            live.path = self.locate(&live, lock(&session.native_id).as_deref());
+        }
+        self.remember_window(session, &live, &info)?;
+        tracing::Span::current().record("recovered", true);
+        Ok(Some(live))
+    }
+
     pub(super) fn remember_window(
         &self,
         session: &Session,
@@ -66,8 +126,10 @@ impl Adapter {
         }
         *lock(&session.window) = Some(window.clone());
         if let Err(error) = self.save(session, previous) {
-            herdr.close_window(&window).await?;
             *lock(&session.window) = None;
+            if let Err(close) = herdr.close_window(&window).await {
+                tracing::warn!(%close, pane = %window.pane_id, "could not close an unsaved native window");
+            }
             return Err(error);
         }
         Ok(window)

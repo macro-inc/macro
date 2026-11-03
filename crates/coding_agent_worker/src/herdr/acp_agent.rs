@@ -715,6 +715,12 @@ impl Adapter {
         let _cancellation = PromptCancellation(&session.cancel);
 
         let mut guard = session.live.lock().await;
+        if guard.is_none() {
+            *guard = self.recover_running(herdr, session).await?;
+            if guard.is_some() {
+                self.save(session, guard.as_ref())?;
+            }
+        }
         if let Some(live) = guard.as_mut() {
             // Queued like input typed into the TUI mid-turn: the prompt waits
             // for the native turn, which streams and asks for permission

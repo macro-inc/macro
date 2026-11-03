@@ -724,6 +724,15 @@ esac
 
 #[tokio::test]
 async fn a_prompt_to_a_busy_native_session_waits_for_its_turn_then_submits() {
+    check_busy_prompt(false).await;
+}
+
+#[tokio::test]
+async fn a_prompt_recovering_an_unconfirmed_launch_waits_for_the_native_turn() {
+    check_busy_prompt(true).await;
+}
+
+async fn check_busy_prompt(recover: bool) {
     use std::io::Write as _;
     let root = tempfile::tempdir().unwrap();
     let id = uuid::Uuid::new_v4().to_string();
@@ -736,6 +745,9 @@ async fn a_prompt_to_a_busy_native_session_waits_for_its_turn_then_submits() {
         .await
         .unwrap();
     let session = adapter.session(&json!({"sessionId":id})).unwrap();
+    if recover {
+        *session.live.lock().await = None;
+    }
     session.prompt_pending.store(true, Ordering::SeqCst);
     let mut file = std::fs::OpenOptions::new()
         .append(true)

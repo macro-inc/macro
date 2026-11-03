@@ -2,6 +2,149 @@ use super::*;
 use std::os::unix::fs::PermissionsExt as _;
 
 #[tokio::test]
+async fn a_prompt_retry_adopts_the_agent_after_an_unconfirmed_first_launch() {
+    for kind in [TuiAgent::Claude, TuiAgent::Codex] {
+        let root = tempfile::tempdir().unwrap();
+        let script = root.path().join("herdr");
+        std::fs::write(&script, include_str!("herdr.sh")).unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let (mut adapter, _) = super::super::test::test_adapter(root.path());
+        let adapter_mut = Arc::get_mut(&mut adapter).unwrap();
+        adapter_mut.herdr = Some(HerdrCli::new(script, None));
+        adapter_mut.options.kind = kind;
+        let response = adapter.new_session(&json!({"cwd":root.path()})).unwrap();
+        let session = adapter
+            .session(&json!({"sessionId":response["sessionId"]}))
+            .unwrap();
+        std::fs::write(
+            root.path().join("started-agent.json"),
+            json!({"result":{"agent":{
+                "workspace_id":"w2","pane_id":"w2:p1","tab_id":"w2:t1","cwd":root.path(),
+                "agent_status":"idle","agent_session":{"value":session.id}
+            }}})
+            .to_string(),
+        )
+        .unwrap();
+        assert!(adapter.prompt(&session, "/fast").await.is_err());
+        assert!(session.live.lock().await.is_none());
+        let saved = adapter.store.load(&session.id).unwrap();
+        assert!(saved.window.is_some());
+
+        assert_eq!(adapter.prompt(&session, "/fast").await.unwrap(), "end_turn");
+        let guard = session.live.lock().await;
+        let live = guard.as_ref().unwrap();
+        assert_eq!(
+            live.started,
+            std::time::UNIX_EPOCH + Duration::from_secs(saved.started)
+        );
+        let restored = adapter.store.load(&session.id).unwrap();
+        assert_eq!(restored.window, saved.window);
+        assert_eq!(restored.native_id.as_deref(), Some(session.id.as_str()));
+        let calls = std::fs::read_to_string(root.path().join("calls")).unwrap();
+        assert_eq!(calls.matches("workspace create").count(), 1);
+        assert_eq!(calls.matches("agent start").count(), 1);
+        assert_eq!(calls.matches("agent prompt").count(), 1);
+        assert!(!calls.contains("rename"));
+        adapter.shutdown.cancel();
+    }
+}
+
+#[tokio::test]
+async fn an_uninitialized_prompt_rejects_wrong_agent_identity_and_socket_errors() {
+    let root = tempfile::tempdir().unwrap();
+    let script = root.path().join("herdr");
+    std::fs::write(&script, include_str!("herdr.sh")).unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let (mut adapter, _) = super::super::test::test_adapter(root.path());
+    Arc::get_mut(&mut adapter).unwrap().herdr = Some(HerdrCli::new(script, None));
+    let response = adapter.new_session(&json!({"cwd":root.path()})).unwrap();
+    let session = adapter
+        .session(&json!({"sessionId":response["sessionId"]}))
+        .unwrap();
+    *lock(&session.native_id) = Some("expected-native-session".to_owned());
+    for (cwd, native) in [
+        (root.path().to_owned(), "another-native-session"),
+        (root.path().join("another"), "expected-native-session"),
+    ] {
+        std::fs::write(
+            root.path().join("agent.json"),
+            json!({"result":{"agent":{
+                "cwd":cwd,"agent_status":"idle","agent_session":{"value":native}
+            }}})
+            .to_string(),
+        )
+        .unwrap();
+        let error = adapter.prompt(&session, "/model").await.unwrap_err();
+        assert!(error.message.contains("identity no longer matches"));
+        assert!(session.live.lock().await.is_none());
+    }
+    std::fs::write(root.path().join("agent-error"), "").unwrap();
+    assert!(adapter.prompt(&session, "/model").await.is_err());
+    let calls = std::fs::read_to_string(root.path().join("calls")).unwrap();
+    assert!(!calls.contains("workspace create"));
+    assert!(!calls.contains("agent start"));
+    assert!(!calls.contains("agent prompt"));
+    assert!(session.live.lock().await.is_none());
+    adapter.shutdown.cancel();
+}
+
+#[tokio::test]
+async fn recovery_preserves_readiness_and_core_support_for_agents_without_status() {
+    for core in [false, true] {
+        for kind in [TuiAgent::Claude, TuiAgent::Codex] {
+            let root = tempfile::tempdir().unwrap();
+            let script = root.path().join("herdr");
+            std::fs::write(&script, include_str!("core-recovery.sh")).unwrap();
+            std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+            let (mut adapter, _) = super::super::test::test_adapter(root.path());
+            let inner = Arc::get_mut(&mut adapter).unwrap();
+            inner.options.kind = kind;
+            inner.herdr = Some(if core {
+                HerdrCli::core(script, "t1")
+            } else {
+                HerdrCli::new(script, None)
+            });
+            let response = adapter.new_session(&json!({"cwd":root.path()})).unwrap();
+            let session = adapter
+                .session(&json!({"sessionId":response["sessionId"]}))
+                .unwrap();
+            let terminal = if core {
+                json!({
+                    "address":"t2","state":"live","cwd":root.path(),"status":null,
+                    "labels":{"macro.agent":kind.herdr_kind()},
+                    "foreground":{"pid":1,"name":kind.herdr_kind(),"argv":[],"cwd":root.path()}
+                })
+            } else {
+                json!({"result":{"agent":{"agent_status":"unknown","cwd":root.path()}}})
+            };
+            std::fs::write(root.path().join("agent.json"), terminal.to_string()).unwrap();
+            let result = adapter.prompt(&session, "/fast").await;
+            let calls = std::fs::read_to_string(root.path().join("calls")).unwrap();
+            if core && kind == TuiAgent::Codex {
+                assert_eq!(result.unwrap(), "end_turn");
+                assert!(
+                    calls
+                        .lines()
+                        .filter(|line| line.starts_with("read "))
+                        .count()
+                        >= 3
+                );
+                assert!(calls.contains(&format!("send {} /fast", agent_name(&session.id))));
+            } else {
+                assert!(result.is_err());
+                assert!(session.live.lock().await.is_none());
+                assert!(!calls.contains("send "));
+                assert!(!calls.contains("agent prompt"));
+            }
+            assert!(!calls.contains("run "));
+            assert!(!calls.contains("workspace create"));
+            assert!(!calls.contains("agent start"));
+            adapter.shutdown.cancel();
+        }
+    }
+}
+
+#[tokio::test]
 async fn a_resumed_claude_keeps_its_saved_native_identity() {
     let root = tempfile::tempdir().unwrap();
     let script = root.path().join("herdr");
@@ -207,38 +350,42 @@ async fn reload_rejects_a_registry_name_reused_by_another_native_session() {
 
 #[tokio::test]
 async fn a_failed_session_save_rolls_back_the_new_workspace() {
-    let root = tempfile::tempdir().unwrap();
-    let script = root.path().join("herdr");
-    std::fs::write(&script, include_str!("herdr.sh")).unwrap();
-    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
-    let herdr = HerdrCli::new(script, Some("w1".to_owned()));
-    let (adapter, _) = super::super::test::test_adapter(root.path());
-    let response = adapter.new_session(&json!({"cwd":root.path()})).unwrap();
-    let session = adapter
-        .session(&json!({"sessionId":response["sessionId"]}))
-        .unwrap();
-    let launch = AgentLaunch {
-        name: "macro-test",
-        kind: "codex",
-        reports_status: false,
-        cwd: root.path(),
-        label: "initial name",
-        focus: false,
-        environment: None,
-        args: &[],
-    };
-    let records = adapter.store.0.join("sessions");
-    std::fs::rename(&records, root.path().join("saved-sessions")).unwrap();
-    std::fs::write(&records, "not a directory").unwrap();
-    assert!(
-        adapter
+    for close_fails in [false, true] {
+        let root = tempfile::tempdir().unwrap();
+        let script = root.path().join("herdr");
+        std::fs::write(&script, include_str!("herdr.sh")).unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let herdr = HerdrCli::new(script, Some("w1".to_owned()));
+        let (adapter, _) = super::super::test::test_adapter(root.path());
+        let response = adapter.new_session(&json!({"cwd":root.path()})).unwrap();
+        let session = adapter
+            .session(&json!({"sessionId":response["sessionId"]}))
+            .unwrap();
+        let launch = AgentLaunch {
+            name: "macro-test",
+            kind: "codex",
+            reports_status: false,
+            cwd: root.path(),
+            label: "initial name",
+            focus: false,
+            environment: None,
+            args: &[],
+        };
+        let records = adapter.store.0.join("sessions");
+        std::fs::rename(&records, root.path().join("saved-sessions")).unwrap();
+        std::fs::write(&records, "not a directory").unwrap();
+        if close_fails {
+            std::fs::write(root.path().join("close-error"), "").unwrap();
+        }
+        let error = adapter
             .session_window(&herdr, &session, &launch, None)
             .await
-            .is_err()
-    );
-    let calls = std::fs::read_to_string(root.path().join("calls")).unwrap();
-    assert_eq!(calls.matches("workspace create").count(), 1);
-    assert!(calls.contains("workspace close w2"));
-    assert!(lock(&session.window).is_none());
-    adapter.shutdown.cancel();
+            .unwrap_err();
+        assert!(error.message.starts_with("could not save native session:"));
+        let calls = std::fs::read_to_string(root.path().join("calls")).unwrap();
+        assert_eq!(calls.matches("workspace create").count(), 1);
+        assert!(calls.contains("workspace close w2"));
+        assert!(lock(&session.window).is_none());
+        adapter.shutdown.cancel();
+    }
 }

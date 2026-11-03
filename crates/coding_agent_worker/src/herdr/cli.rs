@@ -208,6 +208,20 @@ impl HerdrCli {
         }
     }
 
+    /// Confirm an unreported agent's startup without starting it again. Legacy
+    /// Herdr must report a known status; core can also observe a settled screen.
+    pub(crate) async fn wait_ready(
+        &self,
+        name: &str,
+        kind: &str,
+        reports_status: bool,
+    ) -> Result<(), HerdrError> {
+        match &self.backend {
+            Backend::Legacy(_) => Err(HerdrError::NotReady),
+            Backend::Core(herdr) => herdr.wait_ready(name, kind, reports_status).await,
+        }
+    }
+
     /// Reuse a saved window only if it still contains an available shell in `cwd`.
     pub(crate) async fn existing_window(
         &self,

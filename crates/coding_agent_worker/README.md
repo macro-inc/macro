@@ -29,6 +29,8 @@ its instance directory, together with the session's Herdr window. Launch retries
 and daemon restarts reuse the saved window without renaming it. Existing shared
 tabs are reattached in place; only an explicitly closed window is replaced.
 An occupied pane or a connection error does not open a duplicate workspace.
+If launch confirmation fails after the native agent starts, the next prompt
+reattaches to that agent and waits for any active turn or dialog before submitting.
 ACP `session/load` replays the native transcript before
 acknowledging the load. A running Herdr agent is reattached; an explicitly missing
 agent resumes its native session on the next prompt. Socket errors do not create

@@ -165,7 +165,8 @@ impl Core {
         line.push_str("exec ");
         line.push_str(&shell_words::join(&command));
         self.run(&["send", &window.pane_id, &line]).await?;
-        self.wait_ready(launch).await?;
+        self.wait_ready(launch.name, launch.kind, launch.reports_status)
+            .await?;
         tracing::debug!(terminal = %window.pane_id, agent = launch.kind, "agent ready in herdr-core");
         Ok(())
     }
@@ -293,13 +294,18 @@ impl Core {
     /// status is ready once its screen stops changing; one that does must
     /// say so, or it is likely on a dialog (folder trust, sign-in) where a
     /// typed prompt would answer the wrong question.
-    async fn wait_ready(&self, launch: &AgentLaunch<'_>) -> Result<(), HerdrError> {
+    pub(super) async fn wait_ready(
+        &self,
+        name: &str,
+        kind: &str,
+        reports_status: bool,
+    ) -> Result<(), HerdrError> {
         let deadline = tokio::time::Instant::now() + AGENT_READY_TIMEOUT;
         let mut screen = String::new();
         let mut settled = 0u32;
         while tokio::time::Instant::now() < deadline {
             tokio::time::sleep(AGENT_READY_POLL).await;
-            let terminal = self.get(launch.name).await?;
+            let terminal = self.get(name).await?;
             if terminal.state != "live" {
                 return Err(HerdrError::Ended);
             }
@@ -309,22 +315,22 @@ impl Core {
                 }
                 continue;
             }
-            if launch.reports_status
+            if reports_status
                 || !terminal
                     .foreground
                     .as_ref()
-                    .is_some_and(|foreground| foreground.name.contains(launch.kind))
+                    .is_some_and(|foreground| foreground.name.contains(kind))
             {
                 continue;
             }
-            let current = self.read_agent(launch.name).await?;
+            let current = self.read_agent(name).await?;
             settled = if current == screen { settled + 1 } else { 0 };
             screen = current;
             if settled >= SETTLED_POLLS {
                 return Ok(());
             }
         }
-        if launch.reports_status {
+        if reports_status {
             return Err(HerdrError::NotReady);
         }
         Ok(())
