@@ -108,11 +108,11 @@ async fn connections_require_an_existing_user(pool: PgPool) {
     fixtures(path = "../../../fixtures", scripts("users"))
 )]
 async fn provider_defaults_to_pipedream_and_round_trips_connect(pool: PgPool) {
-    sqlx::query(
+    sqlx::query!(
         "INSERT INTO pipedream_mcp_connections (user_id, app_slug, server_name, account_id)
          VALUES ($1, 'linear', 'Linear', 'apn_linear')",
+        USER,
     )
-    .bind(USER)
     .execute(&pool)
     .await
     .unwrap();
