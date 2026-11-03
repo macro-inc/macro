@@ -9,7 +9,10 @@
 import { throwOnErr } from '@core/util/result';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { soupKeys } from '@queries/soup/keys';
-import { invalidateCachedCrmCompaniesAndContacts } from '@service-storage/crm-contacts';
+import {
+  invalidateCachedCrmCompanies,
+  invalidateCachedCrmContacts,
+} from '@service-storage/crm-contacts';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { BlockedDomainsSource } from '../context/crm-sources';
 import type { CrmQueryDependencies } from './dependencies';
@@ -38,7 +41,10 @@ function listCanIncludeCrm(body: unknown): boolean {
 }
 
 async function refreshBlockedDomainRecords(): Promise<void> {
-  await invalidateCachedCrmCompaniesAndContacts();
+  await Promise.all([
+    invalidateCachedCrmContacts(),
+    invalidateCachedCrmCompanies(),
+  ]);
   // REST returns no changed rows. Hidden records are absent from the search
   // index, so mounted lists must fetch their new visibility after unblocking.
   await refreshActiveGraphqlSoupQueries({ where: listCanIncludeCrm });

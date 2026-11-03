@@ -69,33 +69,40 @@ export async function fetchCrmContacts(options: {
 }
 
 /** Evict derived suggestions before reloading REST-mutated contact facts. */
-export function invalidateCachedCrmContacts(contactId?: string): Promise<void> {
-  return evictCachedCrmRecords(['crm_contact'], contactId);
-}
-
-/** Domain visibility changes affect both company rows and contact suggestions. */
-export function invalidateCachedCrmCompaniesAndContacts(): Promise<void> {
-  return evictCachedCrmRecords(['crm_company', 'crm_contact']);
-}
-
-async function evictCachedCrmRecords(
-  buckets: string[],
+export async function invalidateCachedCrmContacts(
   contactId?: string
+): Promise<void> {
+  if (contactId) {
+    try {
+      await getGraphqlSoupCacheHost()?.deleteRecords([
+        `GraphqlSoupCrmContact:${contactId}`,
+      ]);
+    } catch (error) {
+      Telemetry.error(error);
+    }
+    return;
+  }
+  // Company visibility, company names, and CRM enablement affect cached contacts.
+  await evictCachedBucket('crm_contact');
+}
+
+/** Evict cached companies whose visibility a REST mutation changed. */
+export async function invalidateCachedCrmCompanies(): Promise<void> {
+  await evictCachedBucket('crm_company');
+}
+
+async function evictCachedBucket(
+  bucket: 'crm_contact' | 'crm_company'
 ): Promise<void> {
   try {
     const host = getGraphqlSoupCacheHost();
     if (!host) return;
-    if (contactId) {
-      await host.deleteRecords([`GraphqlSoupCrmContact:${contactId}`]);
-      return;
-    }
-    // Company visibility, company names, and CRM enablement affect cached contacts.
     const keys: string[] = [];
     let cursor: SearchCursor | undefined;
     do {
       const page = await host.search({
         profile: 'quick-access-v1',
-        buckets,
+        buckets: [bucket],
         limit: 500,
         cursor,
       });

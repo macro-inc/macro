@@ -28,11 +28,13 @@ vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupCacheHost: () => ({
     search: async ({ buckets }: { buckets: string[] }) => ({
       documents: [...state.records]
-        .filter((key) =>
-          buckets.includes(
-            key.startsWith('GraphqlSoupCrmCompany:')
-              ? 'crm_company'
-              : 'crm_contact'
+        .filter((recordKey) =>
+          buckets.some((bucket) =>
+            recordKey.startsWith(
+              bucket === 'crm_company'
+                ? 'GraphqlSoupCrmCompany:'
+                : 'GraphqlSoupCrmContact:'
+            )
           )
         )
         .map((recordKey) => ({ recordKey })),
