@@ -60,8 +60,10 @@ to a day, or a bug.
 
 ## Graph throttling
 
-Graph itself throttled more than 10% of the Outlook requests that reached it
-in 15 minutes. The Redis gate (`crates/email_api_client/src/outbound/microsoft_gate.rs`)
+Graph itself throttled more than 2% (warning) or 10% (critical) of the
+Outlook requests that reached it in 15 minutes. The ratio adds 100 requests to
+the denominator, so a quiet quarter hour needs a few more 429s to alert. The
+Redis gate (`crates/email_api_client/src/outbound/microsoft_gate.rs`)
 holds every mailbox below Graph's published limits for all Microsoft mail and
 calendar callers together, and a Graph 429 cools the mailbox down, so Graph
 should not throttle.
@@ -79,8 +81,10 @@ should not throttle.
 
 ## Token failures
 
-authentication-service could not supply more than 1% of the Microsoft tokens
-Outlook sync asked for in an hour; normally about 0.1% fail.
+authentication-service could not supply more than 1% (warning) or 5%
+(critical) of the Microsoft tokens Outlook sync asked for in an hour; normally
+about 0.1% fail. The ratio adds 100 lookups to the denominator, so a quiet hour
+needs a few more failures to alert.
 
 - Group `@outlook.token_cache:* @outlook.outcome:unavailable` spans by
   `@http.response.status_code`. 503 is authentication-service's own transient
