@@ -18,7 +18,7 @@ function MobileToastStack(props: {
     <div
       ref={props.ref}
       class={cn(
-        'fixed left-1/2 -translate-x-1/2 w-full max-w-[420px] px-(--mobile-chrome-gutter) pointer-events-none flex flex-col gap-5',
+        'fixed left-1/2 -translate-x-1/2 w-full max-w-lg px-(--mobile-chrome-gutter) pointer-events-none flex flex-col gap-5',
         props.class
       )}
       style={{

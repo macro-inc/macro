@@ -97,7 +97,10 @@ function PreviewRegion(props: {
   stack?: boolean;
 }) {
   return (
-    <div class="min-h-40 w-full max-w-sm p-4">
+    <div
+      class="min-h-40 w-full p-4"
+      classList={{ 'max-w-lg': isMobile(), 'max-w-sm': !isMobile() }}
+    >
       <Toast.Region
         regionId={props.preview.regionId}
         aria-label={props.label}
@@ -487,7 +490,7 @@ function AppPositionDemo() {
           }}
           class={
             isMobile()
-              ? 'fixed left-1/2 -translate-x-1/2 w-full max-w-[420px] px-(--mobile-chrome-gutter) pointer-events-none z-toast-region flex flex-col gap-5'
+              ? 'fixed left-1/2 -translate-x-1/2 w-full max-w-lg px-(--mobile-chrome-gutter) pointer-events-none z-toast-region flex flex-col gap-5'
               : 'fixed bottom-5 right-5 m-0 w-95 max-w-[calc(100vw-32px)] pointer-events-none z-toast-region flex flex-col items-stretch gap-4'
           }
           style={
@@ -542,7 +545,7 @@ export default defineDoc({
       id: 'app-position',
       title: 'App position',
       description:
-        'Desktop toasts appear at the bottom-right; mobile toasts sit above the dock and swipe away in either direction without a close icon. These previews have their own queue, separate from real app notifications. Switching examples or leaving the page clears them.',
+        'Desktop toasts appear at the bottom-right; mobile toasts sit above the dock and swipe away in either direction without a close icon. Multi-row mobile cards use 92vw clamped between 320px and 480px, capped by the available width. Single-row notices stay content-sized, with 16px between the title and inline actions. These previews have their own queue, separate from real app notifications. Switching examples or leaving the page clears them.',
       render: AppPositionDemo,
       fill: true,
     },

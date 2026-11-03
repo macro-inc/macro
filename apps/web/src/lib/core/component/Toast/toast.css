@@ -36,13 +36,17 @@
 /* Phone notices keep content width; rich content gets a bounded card. */
 .macro-toast[data-mobile] {
   align-self: center;
-  width: 320px;
+  width: clamp(320px, 92vw, 480px);
   border-radius: 16px;
 }
 
 .macro-toast[data-mobile][data-single-row] {
   width: fit-content;
   border-radius: 9999px;
+}
+
+.macro-toast[data-mobile][data-single-row] .macro-toast-heading {
+  column-gap: 16px;
 }
 
 .macro-toast-surface {

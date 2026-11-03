@@ -348,7 +348,7 @@ export function ToastContent(props: {
                   )}
                 </Show>
                 <div class="min-w-0 flex-1">
-                  <div class="flex min-w-0 flex-wrap items-center gap-2">
+                  <div class="macro-toast-heading flex min-w-0 flex-wrap items-center gap-2">
                     <Toast.Title class="min-w-0 flex-auto text-base font-medium leading-normal text-ink wrap-anywhere">
                       {props.custom?.title ?? props.message}
                     </Toast.Title>
