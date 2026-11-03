@@ -500,10 +500,15 @@ Blocking a domain (typed, or every domain of a company picked from the menu)
 stops email sync for it and hides the company that owns it, that company's
 people, and contacts without a company at that domain; unblocking shows them
 again. A contact attached to a company follows that company's domains, so
-blocking `gmail.com` does not hide a Gmail address filed under another company. After blocking or unblocking, verify that already-cached contact suggestions refresh to the new visibility without reloading the app. Only admins and owners change either; members see them read-only.
+blocking `gmail.com` does not hide a Gmail address filed under another company.
+After blocking or unblocking, verify that already-cached company lists and
+contact suggestions refresh to the new visibility without reloading the app,
+including a previously hidden company returning after unblocking.
+Only admins and owners change either; members see them read-only.
 Contacts without a company never grant team access to email threads, but
-hiding one (by hand or by blocking its domain) keeps members out of threads it
-is on, as hiding a company's contact does.
+hiding one (by hand or by blocking its domain) suppresses that team's
+CRM-derived thread access for members. Independent ownership, delegation,
+sharing, and other eligible team grants still apply.
 
 `Export` opens options for companies. Choose Current view
 (respects filters/search) or All records across views (each visible record once), then

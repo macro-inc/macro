@@ -44,9 +44,11 @@ booleans through component props or the CRM source contract.
 
 Shared entity representations, transport clients, property editors, and
 collection mechanics remain shared. CRM owns its record queries and cache updates.
-Successful domain block and unblock mutations evict derived contact suggestions
-from the GraphQL cache before refreshing CRM and Soup queries. Failed mutations
-leave those cached records intact.
+Successful domain block and unblock mutations evict indexed company rows and
+contact suggestions from the GraphQL cache before refreshing CRM and Soup
+queries. Refresh mounted GraphQL lists that can contain CRM records too: the
+REST mutation returns no changed rows, and hidden records are absent from the
+search index. Failed mutations leave those cached records intact.
 CRM supplies row/header/empty state slots, filter choices, grouping policy, and
 its own collection state to the shared collection renderer. Shared collection code must not acquire CRM hooks or
 CRM-specific state again.

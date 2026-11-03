@@ -69,7 +69,17 @@ export async function fetchCrmContacts(options: {
 }
 
 /** Evict derived suggestions before reloading REST-mutated contact facts. */
-export async function invalidateCachedCrmContacts(
+export function invalidateCachedCrmContacts(contactId?: string): Promise<void> {
+  return evictCachedCrmRecords(['crm_contact'], contactId);
+}
+
+/** Domain visibility changes affect both company rows and contact suggestions. */
+export function invalidateCachedCrmCompaniesAndContacts(): Promise<void> {
+  return evictCachedCrmRecords(['crm_company', 'crm_contact']);
+}
+
+async function evictCachedCrmRecords(
+  buckets: string[],
   contactId?: string
 ): Promise<void> {
   try {
@@ -85,7 +95,7 @@ export async function invalidateCachedCrmContacts(
     do {
       const page = await host.search({
         profile: 'quick-access-v1',
-        buckets: ['crm_contact'],
+        buckets,
         limit: 500,
         cursor,
       });
