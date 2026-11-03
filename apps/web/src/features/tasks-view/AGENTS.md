@@ -11,7 +11,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - `primitives/create-task-saved-view-draft.ts`: confirmed filter/due-date/layout/grouping/sort/property-display snapshots, dirty state, skipped-setting diagnostics, and revision-aware reconciliation; receives only the detail source, without navigation, mutation, or dialog state.
 - `views/task-saved-views.tsx`: compound sidebar/mobile lists, filter summaries, imperative action dialogs, and request-scoped write/reload completion; the Tasks host owns selection and navigation.
 - `queries/use-tasks-query.ts`: shared list, board, Gantt, and search filtering.
-- `components/TasksViewMenu.tsx`: adapts task state to the shared `ListViewMenu`; the desktop Display menu fits its content-sized `md` layout tabs with all tab labels visible and no Layout subheading and combines grouping, sorting, and list property visibility, while touch keeps its separate Display sheet.
+- `components/TasksViewMenu.tsx`: adapts task state to the shared `ListViewMenu`; the desktop Display popover fits its content-sized `md` layout tabs, presents Group by and Sort as labeled selects, and includes list property visibility, while touch keeps its separate Display sheet.
 - `core/task-property-display.ts` and `primitives/create-task-property-display.ts`: property modes and account-scoped device preferences, separate from saved-view drafts.
 
 ## Gotchas
@@ -38,7 +38,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Pass enabled grid columns as a typed ordered array; default Project before Assignees and derive full-row spans from the same array.
 - Include each visible task cell's 8px leading inset inside its track and keep the grid's column gap at zero so hidden metadata columns reserve no space.
 - Give Priority, Due date, Project, and Assignees Show / Hide when empty / Hide modes; give Tags, Updated, and Created by Show / Hide, keep Status and title visible, and default all configurable properties to Show.
-- Arrange Display-menu properties as compact wrapping custom pills with 36px touch targets: filled for Show, dashed for Hide when empty, and muted for Hide; toggle two-state pills directly, open three-state choices by clicking the whole chevron-marked pill, and never add hover-only actions or gradient overlays.
+- Arrange Display properties as compact wrapping custom pills with 36px touch targets: filled for Show, dashed for Hide when empty, and muted for Hide; toggle two-state pills directly, open three-state choices in click-only dropdowns that stay open on pointer exit, and keep tooltips to the property name and current mode.
 - Keep empty-only hiding within the shared desktop grid track; remove that detail entirely in phone rows, and never reintroduce desktop-only metadata on phones.
 - Remember unsaved-list property visibility per account on the device, synchronize mounted task lists, and keep saved definitions and drafts isolated from those preferences; render Display-menu checkmarks in accent ink.
 - Reuse `PropertyEmptyIcon` for absent values in list rows, board cards, and group or board-column headers: 30%-opacity wide priority bars, a dashed user circle, a corner-dashed project cube, and a slashed calendar for no due date; use the regular cube for set projects.

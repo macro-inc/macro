@@ -5,9 +5,9 @@
 `Go to Tasks` → `/app/component/tasks`. Task views: `My tasks`, `All tasks`, and `Created by me`.
 The single-row desktop header contains the title, `Filter`, `Display`, `New`, and an
 expandable Search icon (`Ctrl+F` opens it). `Display` contains Layout tabs for
-`List`, `Board`, and enabled `Gantt`, plus `Group by` and `Sort` submenus showing
-the current selection. Choices apply immediately without closing Display. `S` opens
-Display; `F` opens Filter. During search, Sort explains that search controls ordering.
+`List`, `Board`, and enabled `Gantt`, plus labeled `Group by` and `Sort` select
+triggers showing the current selection. Choices apply without closing the popover.
+`S` opens Display; `F` opens Filter. Search disables Sort and explains why.
 In List layout, the Properties section controls Priority, Tags, Due date, Project,
 Assignees, Updated, and Created by. Priority, Due date, Project, and Assignees offer
 Show, Hide when empty, and Hide; the other properties offer Show and Hide. The
@@ -83,8 +83,8 @@ The sidebar has no Tags section: filter by tag from the `Tags` group of the `Fil
 and switching tabs clears it like any other filter. On mobile, the tabs
 are pills, with separate leading Filters and Display controls. Filters contains only
 filter facets (including Tags); Display opens a sheet with Group by, Sort, and Properties choices.
-On desktop, Display fits the full layout tab labels rather than a fixed menu width,
-with Group by, Sort, and Properties fitting beneath them. Layout tabs use
+On desktop, Display is a popover sized to the full layout tab labels, with labeled
+Group by and Sort selects and the Properties section beneath them. Layout tabs use
 standard-height, content-sized controls without a separate subheading.
 In Properties, compact icon pills use a wrapping row on desktop and touch.
 Shown properties have a filled pill, Hide when empty uses a dashed outline,
@@ -92,10 +92,11 @@ and hidden properties have a muted, unframed pill. Tags, Updated, and Created by
 switch directly between Show and Hide when clicked or tapped. Priority, Due date,
 Project, and Assignees have a persistent chevron; activating the whole pill opens
 Show, Hide when empty, and Hide choices without changing its current value.
-A pill tooltip explains its current mode and action. There are no hover-only
-buttons or gradient overlays. On touch, three-state pills open a small visibility
-sheet above Display; dismissing it returns focus to the pill. Mode choices keep
-Display open.
+A short pill tooltip shows only the property name and current mode. Desktop pill
+dropdowns open on click and stay open when the pointer leaves the pill. There are
+no hover-only buttons or gradient overlays. On touch, three-state pills open a
+small visibility sheet above Display; dismissing it returns focus to the pill.
+Mode choices keep Display open.
 The mobile bottom dock has **+ Task** and Search, with no floating Ask AI input.
 Project and CRM task lists use the same separate controls. Changes in either
 sheet remain part of the existing saved-view draft; its save actions stay in

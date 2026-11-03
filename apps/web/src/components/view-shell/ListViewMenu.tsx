@@ -2,12 +2,9 @@ import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { deepEqual } from '@core/util/compareUtils';
-import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import ViewIcon from '@icon/system/regular/sliders-horizontal.svg';
-import SortIcon from '@icon/system/regular/sort-ascending.svg';
-import GroupIcon from '@icon/system/regular/stack.svg';
-import { Button, ButtonGroup, Dropdown, Tabs } from '@ui';
+import { Button, ButtonGroup, Popover, Select, Tabs, Tooltip } from '@ui';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
 import type { ListControlOption, ViewLayout } from './ListDropdowns';
 
@@ -27,74 +24,62 @@ export type ListViewMenuProps<TGroup extends string, TSort extends string> = {
   children?: JSX.Element;
 };
 
-function selectionLabel<T extends string>(selection: ViewSelection<T>) {
-  return selection.options.find((option) => option.id === selection.value)
-    ?.label;
-}
-
 function DesktopSelection<T extends string>(props: {
   label: string;
-  icon: JSX.Element;
   selection: ViewSelection<T>;
   disabledReason?: string;
 }) {
-  return (
-    <Show
-      when={!props.disabledReason}
-      fallback={
-        <Dropdown.Item disabledReason={props.disabledReason}>
-          {props.icon}
-          <span class="flex-1">{props.label}</span>
-          <span class="text-ink-muted">{t('viewMenus.searchOrder')}</span>
-        </Dropdown.Item>
-      }
-    >
-      <Dropdown.Sub>
-        <Dropdown.SubTrigger>
-          {props.icon}
-          <span class="flex-1">{props.label}</span>
-          <span class="text-ink-muted">{selectionLabel(props.selection)}</span>
-          <CaretRightIcon class="size-3 shrink-0 text-ink-muted" />
-        </Dropdown.SubTrigger>
-        <Dropdown.SubContent class="min-w-48 max-w-80">
-          <Dropdown.Group>
-            <DesktopOptions selection={props.selection} />
-          </Dropdown.Group>
-        </Dropdown.SubContent>
-      </Dropdown.Sub>
-    </Show>
-  );
-}
+  const options = createMemo(() => [...props.selection.options], undefined, {
+    equals: deepEqual,
+  });
+  const selected = () =>
+    options().find((option) => option.id === props.selection.value);
 
-function DesktopOptions<T extends string>(props: {
-  selection: ViewSelection<T>;
-}) {
   return (
-    <Dropdown.RadioGroup
-      value={props.selection.value}
-      onChange={(value) => {
-        const option = props.selection.options.find(
-          (option) => option.id === value
-        );
+    <Select<ListControlOption<T>>
+      class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3"
+      options={options()}
+      value={selected()}
+      onChange={(option) => {
         if (option) props.selection.onChange(option.id);
       }}
+      optionValue="id"
+      optionTextValue="label"
+      optionDisabled="disabled"
+      disabled={!!props.disabledReason}
+      itemComponent={(props) => (
+        <Select.Item item={props.item}>
+          {props.item.rawValue.icon?.()}
+          <Select.ItemLabel>{props.item.rawValue.label}</Select.ItemLabel>
+          <Select.ItemIndicator />
+        </Select.Item>
+      )}
     >
-      <For each={props.selection.options}>
-        {(option) => (
-          <Dropdown.RadioItem
-            value={option.id}
-            disabled={option.disabled}
-            closeOnSelect={false}
+      <Select.Label class="text-sm text-ink-muted">{props.label}</Select.Label>
+      <Tooltip
+        label={props.disabledReason ?? selected()?.label ?? props.label}
+        class="min-w-0 w-full"
+      >
+        <Select.Trigger>
+          <Show
+            when={!props.disabledReason}
+            fallback={
+              <span class="min-w-0 flex-1 truncate">
+                {t('viewMenus.searchOrder')}
+              </span>
+            }
           >
-            {option.icon?.()}
-            <span class="flex-1">{option.label}</span>
-            <Dropdown.ItemIndicator>
-              <CheckIcon class="size-3.5 text-accent" />
-            </Dropdown.ItemIndicator>
-          </Dropdown.RadioItem>
-        )}
-      </For>
-    </Dropdown.RadioGroup>
+            <Select.Value<ListControlOption<T>>>
+              {(state) => state.selectedOption()?.label}
+            </Select.Value>
+          </Show>
+          <Select.Icon />
+        </Select.Trigger>
+      </Tooltip>
+      <Select.Content class="max-w-80">
+        <Select.Listbox />
+      </Select.Content>
+    </Select>
   );
 }
 
@@ -168,12 +153,12 @@ export function ListViewMenu<TGroup extends string, TSort extends string>(
     <Show
       when={isTouchDevice()}
       fallback={
-        <Dropdown
+        <Popover
           open={props.open}
           onOpenChange={props.onOpenChange}
           placement="bottom-end"
         >
-          <Dropdown.Trigger
+          <Popover.Trigger
             as={ButtonGroup.Button}
             ref={props.triggerRef}
             aria-label={t('viewMenus.viewOptions')}
@@ -182,63 +167,50 @@ export function ListViewMenu<TGroup extends string, TSort extends string>(
           >
             <ViewIcon class="size-4" />
             {t('viewMenus.view')}
-          </Dropdown.Trigger>
-          <Dropdown.Content
-            class={props.layout ? 'w-max' : 'min-w-56 max-w-96'}
+          </Popover.Trigger>
+          <Popover.Content
+            class={props.layout ? 'w-max p-0' : 'min-w-56 max-w-96 p-0'}
           >
-            <Show when={props.layout}>
-              {(layout) => (
-                <Dropdown.Group>
-                  <Dropdown.Item
-                    role="presentation"
-                    closeOnSelect={false}
-                    textValue={t('viewMenus.layout')}
-                    class="p-0 data-highlighted:bg-transparent"
-                    onFocusIn={(
-                      event: FocusEvent & { currentTarget: HTMLElement }
-                    ) => {
-                      if (event.target === event.currentTarget) {
-                        event.currentTarget
-                          .querySelector<HTMLInputElement>('input:checked')
-                          ?.focus();
-                      }
-                    }}
-                  >
+            <Popover.Title class="sr-only">
+              {t('viewMenus.viewOptions')}
+            </Popover.Title>
+            <div class="flex flex-col divide-y divide-edge-divider">
+              <Show when={props.layout}>
+                {(layout) => (
+                  <div class="p-1.5">
                     <LayoutTabs selection={layout()} />
-                  </Dropdown.Item>
-                </Dropdown.Group>
-              )}
-            </Show>
-            {/* Let only the layout tabs determine the menu's intrinsic width. */}
-            <div
-              class="flex flex-col divide-y divide-edge-divider"
-              classList={{ '[contain:inline-size]': !!props.layout }}
-            >
-              <Dropdown.Group>
-                <Show when={props.group}>
-                  {(group) => (
-                    <DesktopSelection
-                      label={t('viewMenus.groupBy')}
-                      icon={<GroupIcon class="size-4 shrink-0" />}
-                      selection={group()}
-                    />
-                  )}
-                </Show>
-                <Show when={props.sort}>
-                  {(sort) => (
-                    <DesktopSelection
-                      label={t('viewMenus.sort')}
-                      icon={<SortIcon class="size-4 shrink-0" />}
-                      selection={sort()}
-                      disabledReason={sort().disabledReason}
-                    />
-                  )}
-                </Show>
-              </Dropdown.Group>
-              {props.children}
+                  </div>
+                )}
+              </Show>
+              {/* Let only the layout tabs determine the popover's width. */}
+              <div
+                class="flex flex-col divide-y divide-edge-divider"
+                classList={{ '[contain:inline-size]': !!props.layout }}
+              >
+                <div class="flex flex-col gap-2 p-3">
+                  <Show when={props.group}>
+                    {(group) => (
+                      <DesktopSelection
+                        label={t('viewMenus.groupBy')}
+                        selection={group()}
+                      />
+                    )}
+                  </Show>
+                  <Show when={props.sort}>
+                    {(sort) => (
+                      <DesktopSelection
+                        label={t('viewMenus.sort')}
+                        selection={sort()}
+                        disabledReason={sort().disabledReason}
+                      />
+                    )}
+                  </Show>
+                </div>
+                {props.children}
+              </div>
             </div>
-          </Dropdown.Content>
-        </Dropdown>
+          </Popover.Content>
+        </Popover>
       }
     >
       <MobileDrawer

@@ -28,6 +28,8 @@ vi.mock('@ui', async () => ({
   ...(await import('../../../components/ui/components/Dropdown')),
   ...(await import('../../../components/ui/components/Tooltip')),
   ...(await import('../../../components/ui/components/Tabs')),
+  ...(await import('../../../components/ui/components/Popover')),
+  ...(await import('../../../components/ui/components/Select')),
 }));
 
 beforeEach(() => {
@@ -70,16 +72,16 @@ it('toggles two-state pills and opens three-state choices without changing their
       </ListViewMenu>
     </HeaderActionGroup>
   ));
-  const tags = screen.getByRole('menuitemcheckbox', { name: 'Tags' });
+  const tags = screen.getByRole('button', { name: 'Tags' });
   await user.click(tags);
   expect(display().tags).toBe('hide');
-  expect(tags.getAttribute('aria-checked')).toBe('false');
+  expect(tags.getAttribute('aria-pressed')).toBe('false');
   tags.focus();
-  fireEvent.keyDown(tags, { key: 'Enter' });
+  await user.keyboard('{Enter}');
   expect(display().tags).toBe('show');
-  expect(tags.getAttribute('aria-checked')).toBe('true');
+  expect(tags.getAttribute('aria-pressed')).toBe('true');
 
-  const trigger = screen.getByRole('menuitem', {
+  const trigger = screen.getByRole('button', {
     name: 'Change Due date visibility',
   });
   await user.click(trigger);
@@ -88,9 +90,9 @@ it('toggles two-state pills and opens three-state choices without changing their
   await user.click(hidden);
   expect(display().dueDate).toBe('hide');
   expect(open()).toBe(true);
-  fireEvent.keyDown(hidden, { key: 'ArrowLeft' });
+  fireEvent.keyDown(hidden, { key: 'Escape' });
   trigger.focus();
-  fireEvent.keyDown(trigger, { key: 'ArrowRight' });
+  fireEvent.keyDown(trigger, { key: 'ArrowDown' });
   const empty = await screen.findByRole('menuitemradio', {
     name: 'Hide when empty',
   });
@@ -100,7 +102,7 @@ it('toggles two-state pills and opens three-state choices without changing their
   expect(empty.getAttribute('aria-checked')).toBe('true');
 });
 
-it('opens visibility choices on click, not pointer hover', async () => {
+it('opens visibility choices only on click and keeps them open after pointer exit', async () => {
   vi.useFakeTimers();
   const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
   const [open, setOpen] = createSignal(true);
@@ -115,7 +117,7 @@ it('opens visibility choices on click, not pointer hover', async () => {
       </ListViewMenu>
     </HeaderActionGroup>
   ));
-  const trigger = screen.getByRole('menuitem', {
+  const trigger = screen.getByRole('button', {
     name: 'Change Due date visibility',
   });
   await user.hover(trigger);
@@ -127,6 +129,27 @@ it('opens visibility choices on click, not pointer hover', async () => {
   expect(
     screen.getByRole('menuitemradio', { name: 'Hide when empty' })
   ).toBeTruthy();
+  expect(open()).toBe(true);
+
+  await user.pointer({
+    target: screen.getByRole('button', { name: 'Tags' }),
+    coords: { clientX: 300, clientY: 300 },
+  });
+  await vi.advanceTimersByTimeAsync(350);
+  expect(trigger.getAttribute('aria-expanded')).toBe('true');
+  expect(
+    screen.getByRole('menuitemradio', { name: 'Hide when empty' })
+  ).toBeTruthy();
+
+  await user.click(trigger);
+  expect(trigger.getAttribute('aria-expanded')).toBe('false');
+  expect(open()).toBe(true);
+
+  await user.click(trigger);
+  const option = screen.getByRole('menuitemradio', { name: 'Hide when empty' });
+  option.focus();
+  await user.keyboard('{Escape}');
+  expect(trigger.getAttribute('aria-expanded')).toBe('false');
   expect(open()).toBe(true);
 });
 

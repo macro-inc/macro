@@ -83,16 +83,12 @@ export const TASK_DISPLAY_PROPERTIES: readonly DisplayProperty[] = [
 const DISPLAY_MODES: readonly {
   id: TaskPropertyDisplayMode;
   readonly label: string;
-  readonly description: string;
   icon: typeof VisibleIcon;
 }[] = [
   {
     id: 'show',
     get label() {
       return t('viewMenus.showProperty');
-    },
-    get description() {
-      return t('viewMenus.showPropertyDescription');
     },
     icon: VisibleIcon,
   },
@@ -101,18 +97,12 @@ const DISPLAY_MODES: readonly {
     get label() {
       return t('viewMenus.hideWhenEmpty');
     },
-    get description() {
-      return t('viewMenus.hideWhenEmptyDescription');
-    },
     icon: ConditionalIcon,
   },
   {
     id: 'hide',
     get label() {
       return t('viewMenus.hideProperty');
-    },
-    get description() {
-      return t('viewMenus.hidePropertyDescription');
     },
     icon: HiddenIcon,
   },
@@ -142,21 +132,11 @@ function TaskPropertyPill(props: {
   const hasMenu = modes.length > 2;
   const menuLabel = () =>
     t('viewMenus.propertyDisplayMenu', { property: props.property.label });
-  const tooltip = () => {
-    if (hasMenu) {
-      return t('viewMenus.propertyDisplayMenuTooltip', {
-        property: props.property.label,
-        mode: current().label,
-        description: current().description,
-      });
-    }
-    return t('viewMenus.propertyDisplayTooltip', {
+  const tooltip = () =>
+    t('viewMenus.propertyDisplayTooltip', {
       property: props.property.label,
       mode: current().label,
-      description: current().description,
-      nextMode: next().label,
     });
-  };
   const content = () => (
     <>
       <props.property.icon class="size-3 shrink-0" />
@@ -194,21 +174,7 @@ function TaskPropertyPill(props: {
     <div data-mode={props.mode} class="group/property inline-flex max-w-full">
       <Tooltip.Root>
         <Switch>
-          <Match when={!hasMenu && !isTouchDevice()}>
-            <Tooltip.Trigger
-              as={Dropdown.Item}
-              role="menuitemcheckbox"
-              aria-checked={props.mode === 'show'}
-              closeOnSelect={false}
-              onSelect={cycle}
-              textValue={props.property.label}
-              aria-label={props.property.label}
-              class="inline-flex h-6 min-w-0 w-auto items-center gap-1.5 rounded-full border border-edge-button bg-surface px-2 py-0 text-xs text-ink-muted outline-none select-none data-highlighted:bg-surface focus-visible:ring-2 focus-visible:ring-accent group-data-[mode=show]/property:bg-control group-data-[mode=show]/property:text-ink group-data-[mode=hide]/property:border-transparent group-data-[mode=hide]/property:text-ink-extra-muted touch:h-9"
-            >
-              {content()}
-            </Tooltip.Trigger>
-          </Match>
-          <Match when={!hasMenu && isTouchDevice()}>
+          <Match when={!hasMenu}>
             <Tooltip.Trigger
               as="button"
               type="button"
@@ -221,21 +187,18 @@ function TaskPropertyPill(props: {
             </Tooltip.Trigger>
           </Match>
           <Match when={hasMenu && !isTouchDevice()}>
-            <Dropdown.Sub>
-              <Tooltip.Trigger
-                as={Dropdown.SubTrigger}
+            <Dropdown placement="bottom-start" modal={false}>
+              <Dropdown.Trigger
+                as={Tooltip.Trigger}
                 aria-label={menuLabel()}
-                textValue={props.property.label}
-                onPointerMove={(event) => event.preventDefault()}
-                onPointerLeave={(event) => event.preventDefault()}
-                class="inline-flex h-6 min-w-0 w-auto items-center gap-1.5 rounded-full border border-edge-button bg-surface px-2 py-0 text-xs text-ink-muted outline-none select-none data-highlighted:bg-surface focus-visible:ring-2 focus-visible:ring-accent group-data-[mode=show]/property:bg-control group-data-[mode=show]/property:text-ink group-data-[mode=hide\_when\_empty]/property:border-dashed group-data-[mode=hide]/property:border-transparent group-data-[mode=hide]/property:text-ink-extra-muted touch:h-9"
+                class="inline-flex h-6 min-w-0 w-auto items-center gap-1.5 rounded-full border border-edge-button bg-surface px-2 py-0 text-xs text-ink-muted outline-none select-none focus-visible:ring-2 focus-visible:ring-accent group-data-[mode=show]/property:bg-control group-data-[mode=show]/property:text-ink group-data-[mode=hide\_when\_empty]/property:border-dashed group-data-[mode=hide]/property:border-transparent group-data-[mode=hide]/property:text-ink-extra-muted touch:h-9"
               >
                 {content()}
-              </Tooltip.Trigger>
-              <Dropdown.SubContent class="min-w-48 max-w-80">
+              </Dropdown.Trigger>
+              <Dropdown.Content class="min-w-48 max-w-80">
                 {options()}
-              </Dropdown.SubContent>
-            </Dropdown.Sub>
+              </Dropdown.Content>
+            </Dropdown>
           </Match>
           <Match when={hasMenu && isTouchDevice()}>
             <MobileDrawer restoreFocus>
@@ -318,10 +281,12 @@ export function TaskPropertyMenu(props: {
     <Show
       when={isTouchDevice()}
       fallback={
-        <Dropdown.Group>
-          <Dropdown.GroupLabel>{t('viewMenus.properties')}</Dropdown.GroupLabel>
+        <section aria-label={t('viewMenus.properties')} class="p-1.5">
+          <div class="flex h-7 items-center px-2 text-xs text-ink-extra-muted">
+            {t('viewMenus.properties')}
+          </div>
           {pills()}
-        </Dropdown.Group>
+        </section>
       }
     >
       <section aria-label={t('viewMenus.properties')}>

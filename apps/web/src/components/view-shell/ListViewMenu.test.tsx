@@ -21,6 +21,9 @@ vi.mock('@ui', async () => ({
   ...(await import('../ui/components/ButtonGroup')),
   ...(await import('../ui/components/Dropdown')),
   ...(await import('../ui/components/Tabs')),
+  ...(await import('../ui/components/Popover')),
+  ...(await import('../ui/components/Select')),
+  ...(await import('../ui/components/Tooltip')),
 }));
 
 let motionStyles: HTMLStyleElement;
@@ -85,23 +88,17 @@ it('applies layout and grouping from one menu without closing it', async () => {
   await user.keyboard('{ArrowRight}');
   expect(layout()).toBe('board');
   expect(open()).toBe(true);
-  const groupTrigger = screen.getByRole('menuitem', { name: /Group by/ });
-  await user.keyboard('{ArrowDown}');
+  const groupTrigger = screen.getByRole('button', { name: /^Group by/ });
+  await user.tab();
   expect(document.activeElement).toBe(groupTrigger);
-  await user.keyboard('{ArrowUp}');
-  expect(document.activeElement).toBe(
-    screen.getByRole('radio', { name: 'Board' })
-  );
   await user.keyboard('{ArrowDown}');
-  expect(document.activeElement).toBe(groupTrigger);
-  fireEvent.keyDown(groupTrigger, { key: 'ArrowRight' });
-  const status = await screen.findByRole('menuitemradio', { name: 'Status' });
-  fireEvent.keyDown(status, { key: 'Enter' });
+  const status = await screen.findByRole('option', { name: 'Status' });
+  await user.click(status);
   expect(group()).toBe('status');
   expect(layout()).toBe('board');
   expect(open()).toBe(true);
-  fireEvent.keyDown(status, { key: 'Escape' });
-  fireEvent.keyDown(groupTrigger, { key: 'Escape' });
+  await waitFor(() => expect(document.activeElement).toBe(groupTrigger));
+  await user.keyboard('{Escape}');
   await waitFor(() => expect(open()).toBe(false));
 });
 
@@ -120,11 +117,11 @@ it('keeps search ordering authoritative while other settings remain available', 
       />
     </HeaderActionGroup>
   ));
-  const sort = screen.getByRole('menuitem', { name: /Sort/ });
+  const sort = screen.getByRole('button', { name: 'Sort' });
   fireEvent.keyDown(sort, { key: 'Enter' });
   fireEvent.click(sort);
   expect(changeSort).not.toHaveBeenCalled();
-  expect(sort.getAttribute('aria-disabled')).toBe('true');
+  expect(sort.hasAttribute('disabled')).toBe(true);
 });
 
 it('applies mobile group and sort changes in a sheet and restores focus on dismiss', async () => {
