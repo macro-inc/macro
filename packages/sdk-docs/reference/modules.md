@@ -129,6 +129,7 @@
 - [src/entities/unfurls/namespace](src/entities/unfurls/namespace/README.md)
 - [src/entities/users/namespace](src/entities/users/namespace/README.md)
 - [src/entities/users/user](src/entities/users/user/README.md)
+- [src/entities/web/namespace](src/entities/web/namespace/README.md)
 - [src/entities/webhooks/namespace](src/entities/webhooks/namespace/README.md)
 - [src/entities/webhooks/webhook](src/entities/webhooks/webhook/README.md)
 - [src/entities/whatsapp/account](src/entities/whatsapp/account/README.md)

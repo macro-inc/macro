@@ -724,6 +724,18 @@ Re-exports [UserApiKey](../entities/api-keys/api-key/classes/UserApiKey.md)
 
 ***
 
+### WebSearchOptions
+
+Re-exports [WebSearchOptions](../entities/web/namespace/interfaces/WebSearchOptions.md)
+
+***
+
+### WebSearchResult
+
+Re-exports [WebSearchResult](../../generated/cognition/types.gen/type-aliases/WebSearchResult.md)
+
+***
+
 ### WhatsAppAccount
 
 Re-exports [WhatsAppAccount](../entities/whatsapp/account/classes/WhatsAppAccount.md)

@@ -61,6 +61,7 @@
 | <a id="property-teams"></a> `teams` | `readonly` | [`TeamNamespace`](../../entities/teams/namespace/classes/TeamNamespace.md) | - |
 | <a id="property-unfurls"></a> `unfurls` | `readonly` | [`UnfurlNamespace`](../../entities/unfurls/namespace/classes/UnfurlNamespace.md) | unfurls resources and operations. |
 | <a id="property-users"></a> `users` | `readonly` | [`UserNamespace`](../../entities/users/namespace/classes/UserNamespace.md) | - |
+| <a id="property-web"></a> `web` | `readonly` | [`WebNamespace`](../../entities/web/namespace/classes/WebNamespace.md) | Search the web. |
 | <a id="property-webappurl"></a> `webAppUrl` | `readonly` | `string` | Base URL of the Macro web app, used to build entity URLs. |
 | <a id="property-webhooks"></a> `webhooks` | `readonly` | [`WebhooksNamespace`](../../entities/webhooks/namespace/classes/WebhooksNamespace.md) | - |
 | <a id="property-whatsapp"></a> `whatsapp` | `readonly` | [`WhatsAppNamespace`](../../entities/whatsapp/namespace/classes/WhatsAppNamespace.md) | The current user's WhatsApp account and chat list; add chats from it. |

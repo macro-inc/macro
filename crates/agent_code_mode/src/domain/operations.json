@@ -234,6 +234,7 @@
   "cognition.sendChatMessage": "Send Chat Message",
   "cognition.stopChatStream": "Stop Chat Stream",
   "cognition.structuredCompletion": "Generate structured content",
+  "cognition.searchWeb": "Search Web",
   "contacts.getContacts": "Get Contacts",
   "contacts.addContact": "Add Contact",
   "email.getAttachment": "Get Attachment",

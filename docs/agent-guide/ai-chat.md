@@ -301,6 +301,12 @@ acting user's AI allowance first (402 when exhausted). Post the result with
 `channel.send(text, { images: [image] })`: it arrives as a sized `static/image`
 attachment in the attachment grid, not as message markdown.
 
+Code-mode agents search the web with `macro.web.search(query, { domains,
+maxResults })` (`POST /cognition/web/search`) instead of the `WebSearch` tool,
+which code-mode sessions no longer list; chat and other hosts keep `WebSearch`.
+The search is admitted against the acting user's AI allowance (402 when
+exhausted) and returns title, URL and page age, without page text.
+
 ## Ask AI entry points
 
 **Ask AI** in desktop search (including Tab) and the command menu opens
