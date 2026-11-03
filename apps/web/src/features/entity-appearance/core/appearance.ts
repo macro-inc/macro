@@ -58,10 +58,10 @@ export function readEntityAppearance(value: unknown): EntityAppearance | null {
   if (typeof value !== 'object' || value === null) return null;
   const rawColor = 'color' in value ? value.color : undefined;
   const color = APPEARANCE_COLORS.find((entry) => entry === rawColor) ?? null;
-  if (rawColor != null && color === null) return null;
   const rawIcon = 'icon' in value ? value.icon : undefined;
   if (rawIcon == null) return { icon: null, color };
-  if (typeof rawIcon !== 'object' || !('kind' in rawIcon)) return null;
+  if (typeof rawIcon !== 'object' || !('kind' in rawIcon))
+    return { icon: null, color };
   if (
     rawIcon.kind === 'macro' &&
     'name' in rawIcon &&
@@ -76,5 +76,5 @@ export function readEntityAppearance(value: unknown): EntityAppearance | null {
   ) {
     return { icon: { kind: 'emoji', value: rawIcon.value }, color };
   }
-  return null;
+  return { icon: null, color };
 }

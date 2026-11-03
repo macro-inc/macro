@@ -12,17 +12,27 @@ describe('appearance palette transport', () => {
     }
   });
 
-  it('retains named saved colors and rejects unknown wire colors', () => {
-    expect(readEntityAppearance({ icon: null, color: 'blue' })).toEqual({
-      icon: null,
-      color: 'blue',
-    });
+  it('keeps icons when newer servers add an unknown color', () => {
+    for (const icon of [
+      { kind: 'macro', name: 'star' },
+      { kind: 'emoji', value: '🚀' },
+    ]) {
+      expect(readEntityAppearance({ icon, color: 'future-color' })).toEqual({
+        icon,
+        color: null,
+      });
+    }
+    expect(appearanceColor(null)).toBeUndefined();
+  });
+
+  it('keeps colors when newer servers add an unknown icon kind', () => {
     expect(
       readEntityAppearance({
-        icon: { kind: 'macro', name: 'star' },
-        color: 'unknown',
+        icon: { kind: 'future-icon', value: 'future' },
+        color: 'blue',
       })
-    ).toBeNull();
-    expect(appearanceColor(null)).toBeUndefined();
+    ).toEqual({ icon: null, color: 'blue' });
+    expect(readEntityAppearance(null)).toBeNull();
+    expect(readEntityAppearance('invalid')).toBeNull();
   });
 });
