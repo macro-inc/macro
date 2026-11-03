@@ -270,7 +270,7 @@ impl SessionCodeMode for CodeModeService {
         if self.0.executor.is_none() {
             return Err(CodeModeError::Unavailable);
         }
-        if session.is_archived {
+        if session.is_archived() {
             return Err(CodeModeError::Forbidden);
         }
         if self.0.turns.active(session.id).await? != Some(turn) || cancel.is_cancelled() {

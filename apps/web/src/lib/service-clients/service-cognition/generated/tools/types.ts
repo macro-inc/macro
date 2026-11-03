@@ -3797,9 +3797,9 @@ export type EntityItem =
        */
       botId: string;
       /**
-       * Whether the session is archived.
+       * Who or what archived the session; absent while it is active.
        */
-      isArchived: boolean;
+      archivedBy?: SessionArchiveCause | null;
       /**
        * Runtime connection status.
        */
@@ -3932,6 +3932,13 @@ export type EntityItem =
       name: string;
       tags?: AppliedTag[];
     };
+/**
+ * Who or what archived an agent session.
+ */
+export type SessionArchiveCause =
+  | 'user'
+  | 'pull_request_merged'
+  | 'runtime_closed';
 /**
  * The caller's level on a form: view responds, edit changes questions and
  * reads responses, owner also sets the audience, closes and trashes it.
@@ -4299,6 +4306,10 @@ export type ToolActivityAction =
       };
       type: 'unknown';
     };
+/**
+ * Who or what archived a session.
+ */
+export type ArchiveCause = 'user' | 'pull_request_merged' | 'runtime_closed';
 /**
  * The two sides of a session conversation.
  */
@@ -13267,9 +13278,14 @@ export interface SessionConversation {
    */
   botId: string;
   /**
-   * Whether the session is archived and read-only.
+   * Who or what archived the session, or `None` while it is active. An archived session
+   * is read-only.
    */
-  isArchived: boolean;
+  archivedBy?: ArchiveCause | null;
+  /**
+   * When the session was archived.
+   */
+  archivedAt?: string | null;
   /**
    * Configured runtime.
    */

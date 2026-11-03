@@ -102,7 +102,8 @@ fn soup_agent_session(id: Uuid) -> SoupItem<()> {
     SoupItem::AgentSession(models_soup::agent_session::SoupAgentSession {
         id,
         name: "A session".to_string(),
-        is_archived: false,
+        archived_by: None,
+        archived_at: None,
         owner_id: Owner::from_principal_str(VALID_USER_ID).unwrap(),
         bot_id: Uuid::from_u128(99),
         harness: "claude".to_string(),

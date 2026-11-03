@@ -1,3 +1,4 @@
+import { isSessionArchived } from '@service-agent-harness/session-archive';
 import type { AgentsMode } from './mode';
 import {
   type AgentConversationEntity,
@@ -17,7 +18,7 @@ export function selectOpenPullRequests(
       (conversation) =>
         conversation.type === 'agent_session' &&
         conversation.ownerId === ownerId &&
-        !conversation.isArchived &&
+        !isSessionArchived(conversation) &&
         modeForConversation(conversation) === 'code' &&
         (conversation.pullRequestState === 'open' ||
           conversation.pullRequestState === 'draft')
