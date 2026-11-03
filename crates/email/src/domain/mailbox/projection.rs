@@ -1,5 +1,6 @@
 //! Durable downstream projection and live-mail notification policy.
 
+use super::telemetry::{claim_failed, elapsed_ms, record_deferred, record_done, record_failed};
 use super::{MailboxError, MailboxKey};
 use crate::domain::events::*;
 use crate::domain::models::calendar_invitation::CalendarInvitation;
@@ -7,7 +8,8 @@ use email_api_client::domain::models::CalendarPart;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service::{link::Link, message::Message};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, future::Future};
+use std::{collections::HashSet, future::Future, time::Instant};
+use tracing::{Instrument, Span};
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -65,6 +67,8 @@ pub struct ProjectionLease {
     pub mailbox: MailboxKey,
     pub event: ProjectionEvent,
     pub from_current_generation: bool,
+    /// Claims of this event so far, including this one.
+    pub attempts: i32,
 }
 
 pub struct ProjectedMessage {
@@ -124,10 +128,12 @@ pub trait MailboxProjectionRepository: Send + Sync + 'static {
         &self,
         lease: &ProjectionLease,
     ) -> impl Future<Output = Result<Option<ProjectionContext>, MailboxError>> + Send;
+    /// Deletes a delivered event, or with `retry_after_seconds` makes it due
+    /// again after that delay.
     fn finish_projection(
         &self,
         lease: &ProjectionLease,
-        success: bool,
+        retry_after_seconds: Option<u32>,
     ) -> impl Future<Output = Result<(), MailboxError>> + Send;
 }
 
@@ -202,18 +208,68 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
         let Some(lease) = self
             .repo
             .claim_projection(macro_uuid::generate_uuid_v7())
-            .await?
+            .await
+            .map_err(|error| claim_failed("project", error))?
         else {
             return Ok(false);
         };
-        let result =
-            super::maintain_lease(self.project(&lease), || self.repo.renew_projection(&lease))
-                .await;
-        self.repo.finish_projection(&lease, result.is_ok()).await?;
-        result.map(|()| true)
+        let span = tracing::info_span!(
+            "outlook.sync.project",
+            mailbox.link_id = %lease.mailbox.link_id,
+            mailbox.sync_generation = lease.mailbox.sync_generation,
+            outlook.event = lease.event.kind(),
+            outlook.attempts = lease.attempts,
+            outlook.crm_jobs = tracing::field::Empty,
+            outlook.refreshes = tracing::field::Empty,
+            outlook.reindex_events = tracing::field::Empty,
+            outlook.attachment_upload_ms = tracing::field::Empty,
+            outlook.outcome = tracing::field::Empty,
+            outlook.defer_reason = tracing::field::Empty,
+            outlook.defer_seconds = tracing::field::Empty,
+            otel.status_description = tracing::field::Empty,
+        );
+        self.project_leased(&lease).instrument(span).await
     }
 
-    async fn project(&self, lease: &ProjectionLease) -> Result<(), MailboxError> {
+    async fn project_leased(&self, lease: &ProjectionLease) -> Result<bool, MailboxError> {
+        let span = Span::current();
+        let mut effects = EffectCounts::default();
+        let result = super::maintain_lease(self.project(lease, &mut effects), || {
+            self.repo.renew_projection(lease)
+        })
+        .await;
+        span.record("outlook.crm_jobs", effects.crm_jobs);
+        span.record("outlook.refreshes", effects.refreshes);
+        span.record("outlook.reindex_events", effects.reindex_events);
+        span.record("outlook.attachment_upload_ms", effects.attachment_upload_ms);
+        let retry_after = result
+            .is_err()
+            .then(|| projection_retry_seconds(lease.attempts));
+        self.repo
+            .finish_projection(lease, retry_after)
+            .await
+            .inspect_err(|finish| record_failed(&span, lease.mailbox.link_id, finish))?;
+        match (result, retry_after) {
+            (Ok(()), _) => {
+                record_done(&span, "imported");
+                Ok(true)
+            }
+            (Err(error), Some(delay)) if !matches!(error, MailboxError::Stale) => {
+                record_deferred(&span, lease.mailbox.link_id, &error, delay);
+                Err(error)
+            }
+            (Err(error), _) => {
+                record_failed(&span, lease.mailbox.link_id, &error);
+                Err(error)
+            }
+        }
+    }
+
+    async fn project(
+        &self,
+        lease: &ProjectionLease,
+        effects: &mut EffectCounts,
+    ) -> Result<(), MailboxError> {
         let Some(context) = self.repo.projection_context(lease).await? else {
             return Ok(());
         };
@@ -257,11 +313,13 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
                             .with_event_id(lease.id),
                         )
                         .await?;
+                    effects.reindex_events += 1;
                 }
                 if *self_photo {
                     self.effects
                         .photo_refresh(context.link.id, &context.viewers)
                         .await?;
+                    effects.refreshes += 1;
                 }
             }
             ProjectionEvent::LinkConnected { is_new, .. } => {
@@ -288,14 +346,16 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
                         .as_ref()
                         .is_some_and(|message| message.is_present)
                 {
+                    let started = Instant::now();
                     self.effects
                         .attachments(lease.mailbox, &context, true)
                         .await?;
+                    effects.attachment_upload_ms += elapsed_ms(started);
                 }
                 return Ok(());
             }
             ProjectionEvent::Absent { thread_id, .. } => {
-                self.reindex(&context.link, *thread_id).await?;
+                self.reindex(&context.link, *thread_id, effects).await?;
             }
             ProjectionEvent::Organization {
                 thread_id,
@@ -310,7 +370,7 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
                         )
                         .await?;
                 }
-                self.reindex(&context.link, *thread_id).await?;
+                self.reindex(&context.link, *thread_id, effects).await?;
             }
             ProjectionEvent::Message {
                 actor,
@@ -336,7 +396,10 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
                                 .invitations(*message_id, &invitation_snapshots(calendar_parts))
                                 .await?;
                         }
-                        self.effects.contacts(correspondence(&context)).await?;
+                        let correspondence = correspondence(&context);
+                        let crm_jobs = correspondence.contacts.len();
+                        self.effects.contacts(correspondence).await?;
+                        effects.crm_jobs += crm_jobs;
                     }
                     if !import
                         && let Some(event) =
@@ -350,24 +413,34 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
                         }
                     }
                 }
-                self.reindex(&context.link, *thread_id).await?;
+                self.reindex(&context.link, *thread_id, effects).await?;
                 self.effects
                     .refresh(context.link.id, &context.viewers)
                     .await?;
+                effects.refreshes += 1;
                 if current.is_present {
+                    let started = Instant::now();
                     self.effects
                         .attachments(lease.mailbox, &context, import)
                         .await?;
+                    effects.attachment_upload_ms += elapsed_ms(started);
                 }
                 return Ok(());
             }
         }
         self.effects
             .refresh(context.link.id, &context.viewers)
-            .await
+            .await?;
+        effects.refreshes += 1;
+        Ok(())
     }
 
-    async fn reindex(&self, link: &Link, thread: Uuid) -> Result<(), MailboxError> {
+    async fn reindex(
+        &self,
+        link: &Link,
+        thread: Uuid,
+        effects: &mut EffectCounts,
+    ) -> Result<(), MailboxError> {
         self.effects
             .publish(EmailMacroEvent::threads_reindex_requested(
                 ThreadsReindexRequestedMetadata {
@@ -377,7 +450,42 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
                     reason: ThreadsReindexReason::ProviderChanged,
                 },
             ))
-            .await
+            .await?;
+        effects.reindex_events += 1;
+        Ok(())
+    }
+}
+
+/// Downstream effects one projection produced, for its span.
+#[derive(Default)]
+struct EffectCounts {
+    crm_jobs: usize,
+    refreshes: u32,
+    reindex_events: u32,
+    attachment_upload_ms: u64,
+}
+
+/// A failed projection backs off 30 s per attempt, up to ten minutes.
+fn projection_retry_seconds(attempts: i32) -> u32 {
+    u32::try_from(attempts)
+        .unwrap_or(1)
+        .saturating_mul(30)
+        .clamp(30, 600)
+}
+
+impl ProjectionEvent {
+    /// The event's kind, as its payload's `kind` tag names it.
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::LinkChanged => "link_changed",
+            Self::AttachmentRecheck { .. } => "attachment_recheck",
+            Self::ReauthorizationRequired => "reauthorization_required",
+            Self::ContactsChanged { .. } => "contacts_changed",
+            Self::Message { .. } => "message",
+            Self::Absent { .. } => "absent",
+            Self::Organization { .. } => "organization",
+            Self::LinkConnected { .. } => "link_connected",
+        }
     }
 }
 

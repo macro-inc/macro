@@ -292,7 +292,8 @@ impl InboxLifecycleRepository for PgMailboxSync {
                     .map_or_else(macro_uuid::generate_uuid_v7, |stream| stream.id);
                 if !in_progress || stream.is_none() {
                     sqlx::query!("INSERT INTO email_sync_streams(id,link_id,generation,kind,scope_id) VALUES ($1,$2,$3,'folder_catalog','mail') ON CONFLICT DO NOTHING",run_id,link,current.sync_generation).execute(&mut *tx).await.map_err(failed)?;
-                    sqlx::query!(r#"UPDATE email_sync_streams SET position = NULL,initial_complete = false, attachments_rechecked = false,scan_id = gen_random_uuid(),next_run_at = now(),fence = fence + 1,lease_id = NULL,lease_until = NULL
+                    sqlx::query!(r#"UPDATE email_sync_streams SET position = NULL,initial_complete = false, attachments_rechecked = false,scan_id = gen_random_uuid(),next_run_at = now(),fence = fence + 1,lease_id = NULL,lease_until = NULL,
+                            import_started_at = now(),import_completed_at = NULL
                         WHERE link_id = $1 AND generation = $2 AND kind IN ('folder_catalog','mail_folder','contacts_catalog','contacts_profile','contacts')"#,link,current.sync_generation).execute(&mut *tx).await.map_err(failed)?;
                     sqlx::query!(r#"INSERT INTO email_message_reconciliation(link_id,generation,provider_id,is_import)
                         SELECT link_id,$2,provider_id,true FROM email_messages WHERE link_id = $1 AND provider_id IS NOT NULL
@@ -305,6 +306,9 @@ impl InboxLifecycleRepository for PgMailboxSync {
             }
         };
         tx.commit().await.map_err(failed)?;
+        if current.provider == UserProvider::Outlook && !result.already_in_progress {
+            crate::domain::mailbox::progress::log_import_started(link, current.sync_generation);
+        }
         Ok(result)
     }
 

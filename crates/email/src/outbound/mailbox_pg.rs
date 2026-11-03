@@ -1,5 +1,6 @@
 //! Postgres implementation of durable mailbox stream and reconciliation leases.
 
+use crate::domain::mailbox::progress::ImportCompleted;
 use crate::domain::mailbox::*;
 use email_api_client::domain::models::{
     MailFolder, MailboxChangePage, ProviderId, StreamPosition, StreamToken,
@@ -15,6 +16,7 @@ mod drafts;
 mod gmail_history;
 mod ingest;
 mod lifecycle;
+mod progress;
 mod projection;
 mod settings;
 #[cfg(test)]
@@ -44,8 +46,37 @@ impl PgMailboxSync {
     }
 }
 
-fn db_error(_: sqlx::Error) -> MailboxError {
-    MailboxError::Persistence
+fn db_error(error: sqlx::Error) -> MailboxError {
+    MailboxError::Database(database_failure(&error))
+}
+
+/// For `email_db_client` calls, which wrap their `sqlx` errors in `anyhow`.
+fn wrapped_db_error(error: anyhow::Error) -> MailboxError {
+    error
+        .chain()
+        .find_map(|cause| cause.downcast_ref::<sqlx::Error>())
+        .map_or(MailboxError::Persistence, |error| {
+            MailboxError::Database(database_failure(error))
+        })
+}
+
+fn database_failure(error: &sqlx::Error) -> DatabaseFailure {
+    match error {
+        sqlx::Error::Database(error) => error.code().map_or(DatabaseFailure::Other, |code| {
+            DatabaseFailure::Sqlstate(code.into_owned())
+        }),
+        sqlx::Error::PoolTimedOut => DatabaseFailure::PoolTimedOut,
+        sqlx::Error::Io(_)
+        | sqlx::Error::Tls(_)
+        | sqlx::Error::Protocol(_)
+        | sqlx::Error::PoolClosed
+        | sqlx::Error::WorkerCrashed => DatabaseFailure::Connection,
+        sqlx::Error::ColumnDecode { .. }
+        | sqlx::Error::Decode(_)
+        | sqlx::Error::ColumnNotFound(_)
+        | sqlx::Error::TypeNotFound { .. } => DatabaseFailure::Decode,
+        _ => DatabaseFailure::Other,
+    }
 }
 
 impl MailboxSyncRepository for PgMailboxSync {
@@ -75,7 +106,7 @@ impl MailboxSyncRepository for PgMailboxSync {
         &self,
         lease: &CatalogLease,
         folders: &[MailFolder],
-    ) -> Result<(), MailboxError> {
+    ) -> Result<Option<ImportCompleted>, MailboxError> {
         self.commit_catalog_lease(lease, folders).await
     }
     async fn release_catalog(&self, lease: &CatalogLease, delay: u32) -> Result<(), MailboxError> {
@@ -117,7 +148,7 @@ impl MailboxSyncRepository for PgMailboxSync {
         &self,
         lease: &StreamLease,
         page: &MailboxChangePage,
-    ) -> Result<(), MailboxError> {
+    ) -> Result<CommittedPage, MailboxError> {
         let (position, complete) = match &page.position {
             StreamPosition::Continue(position) => (position, false),
             StreamPosition::Checkpoint(position) => (position, true),
@@ -157,7 +188,7 @@ impl MailboxSyncRepository for PgMailboxSync {
         if advanced.rows_affected() != 1 {
             return Err(MailboxError::Stale);
         }
-        sqlx::query!(
+        let queued = sqlx::query!(
             r#"
             INSERT INTO email_message_reconciliation (link_id,generation,provider_id,is_import)
             SELECT $1,$2,provider_id,$4 FROM unnest($3::text[]) provider_id
@@ -173,9 +204,14 @@ impl MailboxSyncRepository for PgMailboxSync {
         )
         .execute(&mut *tx)
         .await
-        .map_err(db_error)?;
-        Self::queue_attachment_recheck(&mut tx, lease.mailbox).await?;
-        tx.commit().await.map_err(db_error)
+        .map_err(db_error)?
+        .rows_affected();
+        let import_completed = Self::settle_import(&mut tx, lease.mailbox).await?;
+        tx.commit().await.map_err(db_error)?;
+        Ok(CommittedPage {
+            queued,
+            import_completed,
+        })
     }
 
     async fn reset_stream(&self, lease: &StreamLease) -> Result<(), MailboxError> {
@@ -264,7 +300,10 @@ impl MailboxSyncRepository for PgMailboxSync {
             .collect()
     }
 
-    async fn complete_message(&self, lease: &MessageLease) -> Result<(), MailboxError> {
+    async fn complete_message(
+        &self,
+        lease: &MessageLease,
+    ) -> Result<Option<ImportCompleted>, MailboxError> {
         let mut tx = self.db.begin().await.map_err(db_error)?;
         Self::lock_attachment_completion(&mut tx, lease.mailbox).await?;
         sqlx::query!(r#"
@@ -278,8 +317,9 @@ impl MailboxSyncRepository for PgMailboxSync {
             WHERE link_id = $1 AND generation = $2 AND provider_id = $3 AND lease_id = $4
         "#,lease.mailbox.link_id,lease.mailbox.sync_generation,lease.provider_id.as_str(),lease.lease_id)
             .execute(&mut *tx).await.map_err(db_error)?;
-        Self::queue_attachment_recheck(&mut tx, lease.mailbox).await?;
-        tx.commit().await.map_err(db_error)
+        let import_completed = Self::settle_import(&mut tx, lease.mailbox).await?;
+        tx.commit().await.map_err(db_error)?;
+        Ok(import_completed)
     }
 
     async fn release_message(&self, lease: &MessageLease, delay: u32) -> Result<(), MailboxError> {
@@ -332,29 +372,54 @@ impl PgMailboxSync {
         Ok(())
     }
 
-    // Called under the link lock after the final page or reconciliation. All
-    // correspondence is now ingested, regardless of folder/page delivery order.
-    async fn queue_attachment_recheck(
+    // Called under the link lock after each page or reconciliation, so one
+    // caller at a time sees the import finish.
+    async fn settle_import(
         tx: &mut sqlx::PgConnection,
         mailbox: MailboxKey,
-    ) -> Result<(), MailboxError> {
-        let ready=sqlx::query_scalar!(r#"SELECT (
-            EXISTS(SELECT 1 FROM email_sync_streams WHERE link_id=$1 AND generation=$2 AND kind='folder_catalog' AND initial_complete)
-            AND EXISTS(SELECT 1 FROM email_sync_streams WHERE link_id=$1 AND generation=$2 AND kind='mail_folder' AND NOT attachments_rechecked)
-            AND NOT EXISTS(SELECT 1 FROM email_sync_streams WHERE link_id=$1 AND generation=$2 AND kind IN ('mail_folder','folder_catalog') AND NOT initial_complete)
-            AND NOT EXISTS(SELECT 1 FROM email_message_reconciliation WHERE link_id=$1 AND generation=$2)
-        ) AS "ready!""#,mailbox.link_id,mailbox.sync_generation).fetch_one(&mut *tx).await.map_err(db_error)?;
-        if !ready {
-            return Ok(());
+    ) -> Result<Option<ImportCompleted>, MailboxError> {
+        let state = sqlx::query!(r#"SELECT
+            EXISTS(SELECT 1 FROM email_sync_streams WHERE link_id=$1 AND generation=$2 AND kind='folder_catalog' AND initial_complete) AS "catalog_complete!",
+            EXISTS(SELECT 1 FROM email_sync_streams WHERE link_id=$1 AND generation=$2 AND kind='folder_catalog' AND import_completed_at IS NULL) AS "import_open!",
+            EXISTS(SELECT 1 FROM email_sync_streams WHERE link_id=$1 AND generation=$2 AND kind='mail_folder' AND NOT attachments_rechecked) AS "recheck_pending!",
+            EXISTS(SELECT 1 FROM email_sync_streams WHERE link_id=$1 AND generation=$2 AND kind IN ('mail_folder','folder_catalog') AND NOT initial_complete) AS "streams_incomplete!",
+            EXISTS(SELECT 1 FROM email_message_reconciliation WHERE link_id=$1 AND generation=$2) AS "queued!",
+            EXISTS(SELECT 1 FROM email_message_reconciliation WHERE link_id=$1 AND generation=$2 AND is_import) AS "imports_queued!"
+        "#,mailbox.link_id,mailbox.sync_generation).fetch_one(&mut *tx).await.map_err(db_error)?;
+        let enumerated = state.catalog_complete && !state.streams_incomplete;
+        // All correspondence is now ingested, regardless of folder/page delivery order.
+        if enumerated && state.recheck_pending && !state.queued {
+            sqlx::query!(r#"
+                INSERT INTO email_projection_outbox(id,link_id,generation,payload)
+                SELECT gen_random_uuid(),m.link_id,$2,jsonb_build_object('kind','attachment_recheck','message_id',m.id)
+                FROM email_messages m WHERE m.link_id=$1 AND m.provider_id IS NOT NULL AND NOT m.is_draft
+                    AND EXISTS(SELECT 1 FROM email_attachments a WHERE a.message_id=m.id AND a.reference_url IS NULL)
+            "#,mailbox.link_id,mailbox.sync_generation).execute(&mut *tx).await.map_err(db_error)?;
+            sqlx::query!("UPDATE email_sync_streams SET attachments_rechecked=true WHERE link_id=$1 AND generation=$2 AND kind='mail_folder'",mailbox.link_id,mailbox.sync_generation)
+                .execute(&mut *tx).await.map_err(db_error)?;
         }
-        sqlx::query!(r#"
-            INSERT INTO email_projection_outbox(id,link_id,generation,payload)
-            SELECT gen_random_uuid(),m.link_id,$2,jsonb_build_object('kind','attachment_recheck','message_id',m.id)
-            FROM email_messages m WHERE m.link_id=$1 AND m.provider_id IS NOT NULL AND NOT m.is_draft
-                AND EXISTS(SELECT 1 FROM email_attachments a WHERE a.message_id=m.id AND a.reference_url IS NULL)
-        "#,mailbox.link_id,mailbox.sync_generation).execute(&mut *tx).await.map_err(db_error)?;
-        sqlx::query!("UPDATE email_sync_streams SET attachments_rechecked=true WHERE link_id=$1 AND generation=$2 AND kind='mail_folder'",mailbox.link_id,mailbox.sync_generation)
-            .execute(&mut *tx).await.map_err(db_error)?;
-        Ok(())
+        // The import run is done once every folder is enumerated and no import
+        // row is left; live changes may still be queued.
+        if !(enumerated && state.import_open && !state.imports_queued) {
+            return Ok(None);
+        }
+        let Some(run) = sqlx::query!(r#"
+            UPDATE email_sync_streams SET import_completed_at = now()
+            WHERE link_id=$1 AND generation=$2 AND kind='folder_catalog' AND import_completed_at IS NULL
+            RETURNING import_started_at, import_completed_at AS "completed_at!"
+        "#,mailbox.link_id,mailbox.sync_generation).fetch_optional(&mut *tx).await.map_err(db_error)? else {
+            return Ok(None);
+        };
+        let size = sqlx::query!(r#"SELECT
+            (SELECT count(*) FROM email_messages WHERE link_id=$1 AND provider_id IS NOT NULL) AS "messages!",
+            (SELECT count(*) FROM email_sync_streams WHERE link_id=$1 AND generation=$2 AND kind='mail_folder') AS "folders!"
+        "#,mailbox.link_id,mailbox.sync_generation).fetch_one(&mut *tx).await.map_err(db_error)?;
+        Ok(Some(ImportCompleted {
+            mailbox,
+            started_at: run.import_started_at,
+            completed_at: run.completed_at,
+            messages: size.messages,
+            folders: size.folders,
+        }))
     }
 }

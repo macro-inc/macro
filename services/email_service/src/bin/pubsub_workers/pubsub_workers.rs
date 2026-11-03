@@ -311,12 +311,21 @@ async fn main() -> anyhow::Result<()> {
     );
     let mailbox_repository = email::outbound::mailbox_pg::PgMailboxSync::new(db.clone());
     if config.outlook_sync_enabled {
-        worker_tracker.spawn(email_service::mailbox_sync_worker::run(
-            email::domain::mailbox::MailboxSyncService::new(
+        let mailbox_sync = email::domain::mailbox::MailboxSyncService::new(
+            mailbox_repository.clone(),
+            email_service::outbound::email_api::ProviderMailboxGateway(outlook_api.clone()),
+            mailbox_repository.clone(),
+        );
+        worker_tracker.spawn(email_service::mailbox_sync_worker::run_health(
+            email::domain::mailbox::progress::MailboxProgressService::new(
                 mailbox_repository.clone(),
-                email_service::outbound::email_api::ProviderMailboxGateway(outlook_api.clone()),
-                mailbox_repository.clone(),
+                mailbox_sync.import_tally(),
             ),
+            redis_client.clone(),
+            worker_cancellation_token.clone(),
+        ));
+        worker_tracker.spawn(email_service::mailbox_sync_worker::run(
+            mailbox_sync,
             worker_cancellation_token.clone(),
         ));
     }
