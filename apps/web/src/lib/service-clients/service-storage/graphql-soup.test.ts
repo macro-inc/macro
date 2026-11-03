@@ -494,6 +494,11 @@ vi.mock('./graphql-soup-websocket', () => ({
   shouldRetryGraphqlSoupWebSocket: () => false,
   waitToRetryGraphqlSoupWebSocket: vi.fn(),
   createGraphqlSoupWebSocketUrlResolver: () => () => 'ws://dss.test',
+  createGraphqlSoupWebSocketLiveness: () => ({
+    connected: vi.fn(),
+    pong: vi.fn(),
+    closed: vi.fn(),
+  }),
   createGraphqlSoupSubscriptionsLifecycle: () => ({
     replace: mocks.replaceSubscriptions,
     dispose: vi.fn(() => mocks.recordSubscriptionDisposal()),
@@ -852,6 +857,9 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(payload.query).toContain('cacheProjection');
     expect(payload.query).toContain('@include');
     expect(payload.variables).toEqual({ includeId: true });
+    expect(
+      new Headers(transport.headers).get('x-macro-mail-cache-profile')
+    ).toBe('soup-mail-v5');
     expect(new Headers(transport.headers).get('traceparent')).toBe(
       mocks.traceparent
     );
@@ -1418,14 +1426,13 @@ describe('GraphQL Soup browser cache session gate', () => {
     const { NativeCacheUpgradeRequiredError } = await import(
       '@graphql-cache/host/tauri-host'
     );
+    const { nativeUpdateRequired, resetNativeUpdateRequiredForTests } =
+      await import('@core/mobile/nativeUpdateRequired');
+    resetNativeUpdateRequiredForTests();
     const cached = soup.getGraphqlSoupClient();
     mocks.failInitialization(new NativeCacheUpgradeRequiredError());
-    expect(mocks.toastFailure).toHaveBeenCalledWith(
-      'Macro update required',
-      expect.objectContaining({
-        subtext: expect.stringContaining('queued drafts are preserved'),
-      })
-    );
+    expect(nativeUpdateRequired()).toContain('queued drafts are preserved');
+    expect(mocks.toastFailure).not.toHaveBeenCalled();
     expect(soup.graphqlCacheEnabled()).toBe(false);
     expect(soup.getGraphqlSoupClient()).not.toBe(cached);
     expect(mocks.host.dispose).toHaveBeenCalledOnce();

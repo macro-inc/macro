@@ -1393,6 +1393,17 @@ pub async fn run() -> anyhow::Result<()> {
         config.enable_ai_usage_enforcement,
         config.ai_pricing(),
         ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement),
+        Some(Arc::new(
+            mcp_client::outbound::auth_service_github_tokens::AuthServiceGithubTokens::new(
+                authentication_service_client::AuthServiceClient::new(
+                    config
+                        .authentication_service_secret_key
+                        .as_ref()
+                        .to_string(),
+                    macro_service_urls::AuthServiceUrl::new()?.to_string(),
+                ),
+            ),
+        )),
     )
     .await
     .context("failed to build Macro agent tool context")?;
@@ -1603,6 +1614,10 @@ pub async fn run() -> anyhow::Result<()> {
         ),
         macro_event_broker.clone(),
         collab_surface_service.clone(),
+        static_file_service_client::StaticFileServiceClient::new(
+            config.internal_api_key.to_string(),
+            StaticFileServiceUrl::new()?.to_string(),
+        ),
     ));
 
     // Individual initiative and agent-session reads preserve read-after-write
@@ -1956,6 +1971,11 @@ pub async fn run() -> anyhow::Result<()> {
                     calendar_events::outbound::notification_notifier::NotificationCalendarJoinRequestNotifier::new(
                         (*notification_ingress_service).clone(),
                     ),
+                    crate::outbound::calendar_refresh::ConnectionGatewayCalendarRefresh::new(
+                        (*conn_gateway_client).clone(),
+                        db.clone(),
+                        event_broker_tracker.clone(),
+                    ),
                 ),
             ),
             authorization_state.clone(),
@@ -2179,19 +2199,27 @@ pub async fn run() -> anyhow::Result<()> {
                 entity_access_service.as_ref().clone(),
             ),
         ),
-        graphql_agent_session_entity_loader: graphql_soup::AgentSessionEntityLoader(
+        graphql_agent_session_entity_loader: graphql_soup::AgentSessionEntityLoader::new(
+            primary_entity_soup.clone(),
+            Arc::new(email_service.clone()),
+            entity_access_service.as_ref().clone(),
+        ),
+        graphql_database_rows_context: graphql_databases::DatabaseRowsGraphqlContext::new(
+            databases_sql::view_rows::DatabaseViewRows::new(
+                databases_service.clone(),
+                databases::outbound::pg_view_rows::PgViewRows::new(db.clone()),
+            ),
+            entity_access_service.clone(),
             graphql_soup::soup_item_loader(
                 primary_entity_soup.clone(),
                 Arc::new(email_service.clone()),
                 entity_access_service.as_ref().clone(),
             ),
         ),
-        graphql_primary_soup_item_loader: graphql_soup::PrimarySoupItemLoader(
-            graphql_soup::soup_item_loader_with_team_access(
-                primary_entity_soup,
-                Arc::new(email_service.clone()),
-                entity_access_service.as_ref().clone(),
-            ),
+        graphql_primary_soup_item_loader: graphql_soup::PrimarySoupItemLoader::new(
+            primary_entity_soup,
+            Arc::new(email_service.clone()),
+            entity_access_service.as_ref().clone(),
         ),
         // Ordinary single-entity GraphQL reads use the replica-backed Soup
         // and email readers. Subscription hydration, `soupEntity`, and

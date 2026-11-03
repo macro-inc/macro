@@ -77,7 +77,9 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   `RoutineSessions::prepare` checks again on every run, then adds them to an
   agent limited to selected apps. An update that omits the key is rejected
   when the stored task has apps (`require_explicit_selection`).
-- Macro events store only ids and are read again, as the owner, at dispatch.
+- Macro events store only ids, plus the GitHub pull request and account behind
+  a task status change (`change_source`), and are read again, as the owner, at
+  dispatch.
   GitHub deliveries can't be read again, so their event runs keep the bounded
   payload in `event_context`; access for them is the owner's installation
   claim, which needs a linked GitHub account and, for a personal installation,
@@ -91,10 +93,16 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   (both reject unknown fields, and older clients omit it), plus every query in
   `pg_scheduled_action_repo.rs` and the event-run claim in `pg_event_run_repo.rs`,
   which builds its own `ScheduledAction`.
+- Create and update bodies are `ActionConfiguration` and
+  `ActionConfigurationUpdate`, with `trigger` required; the cron-only body with a
+  top-level `schedule` is gone. Rejections return serde's message, which names
+  the field. Cron schedules have 6 or 7 fields.
 - `template_id` is a plain pointer, not a foreign key: activated routines keep
   it after the template is unshared or its source routine is deleted.
 - `run_visibility` is copied onto each run's agent session when the run is
   prepared, so changing it affects later runs only.
+- `EventReference` rejects unknown keys, so a replica still on older code can't
+  read a run row with a new key: write a new optional key only when it is set.
 
 ## Related
 

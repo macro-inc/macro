@@ -46,15 +46,19 @@ use notification::{
     domain::service::SqsNotificationIngress, outbound::rate_limit::RedisRateLimitAdapter,
 };
 use rate_limit::domain::service::RateLimitServiceImpl;
-use referral::{
-    domain::service::ReferralServiceImpl,
-    outbound::{pg_referral_repo::PgReferralRepo, stripe_discount_client::StripeDiscountClient},
-};
+use referral::{domain::service::ReferralServiceImpl, outbound::pg_referral_repo::PgReferralRepo};
 use remote_env_var::LocalOrRemoteSecret;
 use roles_and_permissions::{
     domain::service::UserRolesAndPermissionsServiceImpl, outbound::pgpool::MacroDB,
 };
 use sqlx::PgPool;
+use system_status::{
+    domain::service::SystemStatusServiceImpl,
+    outbound::{
+        connection_gateway_broadcaster::ConnectionGatewayStatusBroadcaster,
+        pg_system_status_repo::PgSystemStatusRepo,
+    },
+};
 use tokio_util::task::TaskTracker;
 use user_hotkey_profiles::{
     domain::service::UserHotkeyProfilesServiceImpl,
@@ -110,6 +114,16 @@ pub(crate) type SubscriptionStatusServiceType =
         >,
     >;
 
+pub(crate) type DomainNoticeServiceType = teams::domain::domain_notice::DomainNoticeServiceImpl<
+    teams::outbound::colleague_directory::ContactsColleagueDirectory<
+        contacts::outbound::repository::DbContactsRepository,
+    >,
+    teams::domain::join_announcement::JoinAnnouncementServiceImpl<
+        teams::outbound::join_announcement_repo::JoinAnnouncementRepositoryImpl,
+        NotificationIngressType,
+    >,
+>;
+
 pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
     teams::outbound::team_repo::TeamRepositoryImpl,
     teams::outbound::customer_repo::CustomerRepositoryImpl,
@@ -132,15 +146,23 @@ pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
 
 pub(crate) type RateLimiter = RateLimitServiceImpl<RedisRateLimitAdapter<redis::Client>>;
 
-pub(crate) type ReferralServiceType = ReferralServiceImpl<
-    PgReferralRepo,
-    StripeDiscountClient,
-    Arc<SqsNotificationIngress<SqsQueue>>,
+pub(crate) type InviteRewardsType = crate::outbound::invite_rewards::BillingInviteRewards<
+    ai_billing::outbound::RolesTeamsEntitlementSource<
+        UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
+        teams::outbound::team_repo::TeamRepositoryImpl,
+    >,
+    ai_billing::outbound::PgCreditGrantRepo,
+    ai_billing::outbound::PgCreditGrantRepo,
 >;
+
+pub(crate) type ReferralServiceType =
+    ReferralServiceImpl<PgReferralRepo, InviteRewardsType, Arc<SqsNotificationIngress<SqsQueue>>>;
 
 pub(crate) type GtmInviteServiceType = GtmInviteServiceImpl<PgGtmInviteRepo>;
 
 pub(crate) type UserLanguageServiceType = UserLanguageServiceImpl<PgUserLanguageRepo>;
+pub(crate) type SystemStatusServiceType =
+    SystemStatusServiceImpl<PgSystemStatusRepo, ConnectionGatewayStatusBroadcaster>;
 
 pub(crate) type UserHotkeyProfilesServiceType =
     UserHotkeyProfilesServiceImpl<PgUserHotkeyProfilesRepo>;
@@ -232,6 +254,7 @@ pub(crate) struct ApiContext {
     pub user_roles_and_permissions_service:
         Arc<UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>>, // Note: since FromRef doesn't support generics we have to specify the concrete types here
     pub teams_service: Arc<TeamsServiceType>,
+    pub domain_notice_service: Arc<DomainNoticeServiceType>,
     pub channel_service: Arc<ChannelServiceType>,
     pub channel_messages: Arc<dyn messages::domain::api::MessageCommands>,
     pub favorites_service: Arc<FavoritesServiceType>,
@@ -243,6 +266,7 @@ pub(crate) struct ApiContext {
     pub gtm_invite_service: Arc<GtmInviteServiceType>,
     pub user_language_service: Arc<UserLanguageServiceType>,
     pub user_hotkey_profiles_service: Arc<UserHotkeyProfilesServiceType>,
+    pub system_status_service: Arc<SystemStatusServiceType>,
     pub rate_limit_service: RateLimiter,
     /// The stripe price ids for each paid plan's seat
     pub stripe_prices: crate::api::user::stripe::StripePrices,

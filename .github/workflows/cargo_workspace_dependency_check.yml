@@ -12,6 +12,8 @@ name: cargo workspace dependency check
     - main
     paths:
     - Cargo.toml
+    - '**/Cargo.toml'
+    - connect/**
     - crates/**/Cargo.toml
     - services/**/Cargo.toml
     - tooling/xtask/**/Cargo.toml
@@ -122,7 +124,7 @@ jobs:
         else
           echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
         fi
-    - name: generated dependency artifacts are up to date
+    - name: check Connect boundary and dependency artifacts
       run: |
         cargo run -p xtask --locked -- deps --check
     - name: Teardown Nix

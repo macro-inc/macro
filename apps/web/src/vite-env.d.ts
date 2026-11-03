@@ -16,7 +16,7 @@ interface ImportMetaEnv {
   readonly VITE_ENABLE_REMINDERS?: string;
   readonly VITE_ENABLE_HOTKEY_PROFILES?: string;
   readonly VITE_ENABLE_ROUTINE_SHARING?: string;
-  readonly VITE_ENABLE_CALENDAR_MEETING_NOTES?: string;
+  readonly VITE_ENABLE_CHAT_SIDEBAR_SECTIONS?: string;
   readonly VITE_DISABLE_BROWSER_TURSO_CACHE?: string;
   readonly VITE_ENABLE_WHATSAPP_LINKED?: string;
 }

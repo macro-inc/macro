@@ -55,28 +55,31 @@ the existing gateway prefixes.
 
 ## Gotchas
 
-- Code mode puts at most 48 KiB of SDK docs in each agent turn; a section
-  larger than that (calendar is about 78 KB) arrives as its namespace class
-  page only. Put rules an agent must follow on the namespace class or the
-  methods it lists, not only on an entity's methods, which agents read only
-  when they request the section.
+- Code mode puts each relevant entity's index in the agent turn, at most 48
+  KiB: a method's signature and the first sentence of its doc, cut at 160
+  characters. Anything else reaches an agent only through `ReadCodeDocs`, which
+  it calls for the methods a program uses and rarely for a class. Open a
+  method's doc with the rule an agent must follow, and put the detail on that
+  method, not only on the namespace class.
 - Calendar occurrences carry each copy's `inbox` and `role`; one meeting on
   several of the user's inboxes is one event per inbox. `update`,
   `inviteGuests` and `delete` take the copy's `inbox`, and an agent run that
   omits it on such a meeting is refused with `copy_choice_required`.
-- Calendar notes accept a document handle and the occurrence returned by calendar
-  reads. `CalendarNote` owns optional team sharing and unlinking; clearing its team
-  sends explicit null and never changes the document's other permissions.
-  `Document.meetingNotes()` discovers visible meeting links for readers and
-  durable grants for owners to revoke after losing
-  meeting access.
+- `inbox` is the account syncing a calendar, so it stays the user's address on
+  a colleague's calendar. Occurrences name the calendar (`calendarName`) and
+  whether it is on the user's schedule (`contributesToAvailability`); provider
+  access says nothing about whose calendar it is, and `role` counts `organize`
+  only on such a calendar, since writing someone's calendar grants it too. An
+  own attendee row marked organizer counts only on a copy the user can change
+  (`isReadOnly` false): Outlook names the mailbox owner as organizer on every
+  event of a read-only calendar. `eventRole` and `EventRole::of` must stay
+  in step.
 - Regenerate Rust OpenAPI and web service clients before `bun run sync-specs &&
   bun run generate`; do not copy deployed schemas over a local API change.
 - Regenerate `../sdk-docs/reference` after SDK source or generated type changes;
   run that package's checks because web CI verifies the reference is current.
-- Run `bun run generate` and the checks in `../code-mode-sdk` after SDK changes
-  to keep the embedded Deno bundle, agent documentation, and operation catalog current.
-  Commit `crates/agent_code_mode/src/domain/documentation.json`; CI's Typecheck
+  Also run `bun packages/code-mode-sdk/scripts/generate.ts` from the root and
+  commit `crates/agent_code_mode/src/domain/documentation.json`; CI's Typecheck
   fails when it is stale.
 - `generated/agent-fold/` is not from OpenAPI: `cargo run -p agent_fold --bin
   export_types` writes it, and `foldedLog()` casts the opaque wire schema to it.

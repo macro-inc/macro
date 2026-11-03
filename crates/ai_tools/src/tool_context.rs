@@ -64,6 +64,7 @@ use macro_event_broker::{
     NoopMacroEventBroker,
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use models_properties::service::property_change_source::PropertyChangeSource;
 use models_properties::service::property_value::PropertyValue;
 use notification::domain::service::SqsNotificationIngress;
 use notification::inbound::ai_tool::NotificationToolContext;
@@ -775,6 +776,7 @@ impl TaskPropertiesPort for NoOpTaskProperties {
         &self,
         _access: &EntityAccessReceipt<EditAccessLevel>,
         _credited_user: Option<&MacroUserIdStr<'static>>,
+        _source: Option<&PropertyChangeSource>,
         _status: &str,
     ) -> anyhow::Result<()> {
         Ok(())
@@ -833,6 +835,7 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
         credited_user: Option<&MacroUserIdStr<'static>>,
+        source: Option<&PropertyChangeSource>,
         status: &str,
     ) -> anyhow::Result<()> {
         use properties::PropertiesService as _;
@@ -858,7 +861,7 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
             matches!(access.auth(), EntityAccessAuth::Authenticated(_)),
         );
         self.properties
-            .set_entity_property(
+            .set_entity_property_with_source(
                 &access,
                 system_properties::SystemPropertyKey::STATUS_UUID,
                 Some(
@@ -866,6 +869,7 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
                         option_id: status_option.uuid(),
                     },
                 ),
+                source.cloned(),
             )
             .await
             .map(|_| ())
@@ -1973,7 +1977,7 @@ pub type ToolPipedreamConnection =
 /// server store and the Pipedream connection store. Picks which stack
 /// serves a user's tools (Pipedream connectors win; see `mcp_select`).
 pub type ToolMcpSelector = mcp_select::McpToolSelector<
-    mcp_client::outbound::pg_server_repo::PgServerRepo,
+    mcp_client::outbound::NativeServerStore,
     pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
     ToolPipedreamConnection,
 >;
@@ -1992,9 +1996,8 @@ pub type ToolImportService = import::domain::service::ImportServiceImpl<
 
 /// The custom MCP server tools, wired by hosts holding the MCP credentials
 /// key.
-pub type ToolMcpServerToolContext = mcp_client::inbound::toolset::McpServerToolContext<
-    mcp_client::outbound::pg_server_repo::PgServerRepo,
->;
+pub type ToolMcpServerToolContext =
+    mcp_client::inbound::toolset::McpServerToolContext<mcp_client::outbound::NativeServerStore>;
 
 /// Type alias for the import tool context, wired by hosts with connector access.
 pub type ToolImportToolContext = import::inbound::toolset::ImportToolContext<ToolImportService>;
@@ -2044,6 +2047,8 @@ pub fn no_op_schedule_context() -> RoutineToolContext {
 /// Individual tools should extract only the clients they need via `FromRef`.
 #[derive(Clone, FromRef)]
 pub struct ToolServiceContext {
+    /// Private explicit memory edits and current-team activity reads.
+    pub memory_tool_context: crate::memory::ToolMemoryContext,
     /// Read-only discovery of connectors the caller has not yet authorized.
     pub connector_tool_context: ToolConnectorToolContext,
     pub search_service_client: Arc<search_service_client::SearchServiceClient>,
@@ -2121,7 +2126,7 @@ pub struct ToolServiceContext {
 pub type ToolConnectorToolContext = pipedream_mcp::inbound::toolset::ConnectorToolContext<
     pipedream_mcp::outbound::api::PipedreamClient,
     pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
-    mcp_select::NativeOverlayConnections<mcp_client::outbound::pg_server_repo::PgServerRepo>,
+    mcp_select::NativeOverlayConnections<mcp_client::outbound::NativeServerStore>,
 >;
 
 /// Wire connector discovery at the composition boundary.
@@ -2131,7 +2136,7 @@ pub type ToolConnectorToolContext = pipedream_mcp::inbound::toolset::ConnectorTo
 pub fn build_connector_tool_context(
     pool: sqlx::PgPool,
     client: Option<Arc<pipedream_mcp::outbound::api::PipedreamClient>>,
-    native_servers: Option<Arc<mcp_client::outbound::pg_server_repo::PgServerRepo>>,
+    native_servers: Option<Arc<mcp_client::outbound::NativeServerStore>>,
 ) -> ToolConnectorToolContext {
     pipedream_mcp::inbound::toolset::ConnectorToolContext {
         service: Arc::new(

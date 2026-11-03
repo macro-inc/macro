@@ -881,6 +881,25 @@ use `createSoupLiveQuery`: it adds Soup's local membership, ordering, pagination
 and Mail policy through its predicate adapter. That policy remains outside
 generic cache-core.
 
+Supported Soup predicates can read indexed matches before a server response,
+using an empty baseline. `useSoupAstItemsQuery.cacheStatus` reports local
+predicate readiness separately from network loading; `ready` does not prove
+complete server membership. `fetchError` retains background failures even when
+the display-oriented `error` keeps cached results quiet. Explicit entity lookups
+pass typed identities through `graphqlCacheFirstEntities`. The single Soup owner
+keeps the full-identity cache predicate separate from a stable missing-entity
+network request, including pagination and retries. Identity includes entity type,
+so equal IDs in different entity types remain independent. Channel lookups use
+`queries/channel/by-ids` for channel identities, batching, and bounded unread
+refreshes. Soup exposes generic revalidation descriptors rather than registering
+channel notification readers. Consumers receive rows and unresolved IDs without
+coordinating query lifetimes.
+Deletion markers use the same `typename:id` identity through pending mutations,
+retention, display filtering, and restore confirmation. Deleting or restoring a
+document must not hide or restore an unrelated channel with the same ID. The
+GraphQL-enabled deletion flow also scopes REST Soup and search side-cache
+removals to the entity type, including grouped caches and partial-failure rollback.
+
 Mail list pages carry same-query server membership in the existing `baseline`
 field. The Mail adapter reconciles only baseline rows outside the indexed window,
 retaining unknown rows and rejecting confirmed nonmembers. Known read, archive,
@@ -983,6 +1002,21 @@ this work does not introduce a new server subscription engine.
 Background hydration retains its existing opt-in notification contract. Soup's
 local collection source opts in; ordinary foreground queries refresh on their
 normal affected-operation notifications.
+
+## CRM contact hydration
+
+The auxiliary lane in `src/lib/queries/soup/backfill.ts` hydrates CRM contacts
+alongside companies and foreign entities. Contacts require the explicit
+`crmContactFilter: { literal: { include: true } }` opt-in; an omitted filter
+returns no contacts. `SoupBackfill` already selects `GraphqlCrmContactFields`
+under `items @cacheOnly`, so records are persisted without materializing their
+payloads in the page. The backend scopes contacts to visible contacts in the
+viewer's accessible CRM-enabled teams.
+
+Checkpoint version 18 restarts scans saved before contacts were included. The
+lane retains normal cursor pagination, retries, cancellation, storage-generation
+checks, and `graphql_cache.backfill` telemetry. Subsequent passes refresh all
+visible contacts because the contact filter has no updated-at watermark.
 
 ## Authoritative Mail membership repair
 

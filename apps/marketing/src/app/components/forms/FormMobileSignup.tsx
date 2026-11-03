@@ -1,9 +1,8 @@
 import { useNavigate } from '@solidjs/router';
 import { createSignal, Show } from 'solid-js';
-import { analytics } from '../../utils/utilAnalytic';
 import {
-  isLikelyEmail,
   MOBILE_SIGNUP_SENT_PATH,
+  recordMobileSignupSubmitted,
   submitMobileSignup,
 } from '../../utils/utilMobileSignup';
 
@@ -46,8 +45,11 @@ export function FormMobileSignup(props: FormMobileSignupProps) {
   const submit = async () => {
     if (pending()) return;
 
-    const trimmed = email().trim();
-    if (!isLikelyEmail(trimmed)) {
+    const normalized = recordMobileSignupSubmitted(email(), {
+      buttonName: props.buttonName,
+      pageLocation: window.location.href,
+    });
+    if (!normalized) {
       setError('Enter a valid email address.');
       focusEmail();
       return;
@@ -55,12 +57,8 @@ export function FormMobileSignup(props: FormMobileSignupProps) {
 
     setError(null);
     setPending(true);
-    analytics.track('mobile_signup_submitted', {
-      page_location: window.location.href,
-      button_name: props.buttonName,
-    });
 
-    const result = await submitMobileSignup(trimmed);
+    const result = await submitMobileSignup(normalized);
     setPending(false);
 
     if (!result.ok) {
@@ -74,7 +72,7 @@ export function FormMobileSignup(props: FormMobileSignupProps) {
     // The email rides along in history state as well as session storage, so
     // the confirmation page can name the address (and dedupe its conversion
     // fire) even where storage is unavailable.
-    navigate(MOBILE_SIGNUP_SENT_PATH, { state: { email: trimmed } });
+    navigate(MOBILE_SIGNUP_SENT_PATH, { state: { email: normalized } });
   };
 
   const buttonLabel = () =>

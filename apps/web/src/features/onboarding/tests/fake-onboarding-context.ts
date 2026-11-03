@@ -55,10 +55,14 @@ export type FakeOnboardingWorld = {
   failures: Partial<
     Record<
       | 'emailAccounts'
+      | 'record'
       | 'teams'
       | 'catalog'
       | 'createTeam'
       | 'joinTeam'
+      | 'teamInviteLink'
+      | 'referralInvites'
+      | 'referralLink'
       | 'planCatalog'
       | 'trialEligibility'
       | 'checkout'
@@ -206,8 +210,7 @@ export function createFakeOnboarding(
         });
       return viewerState();
     },
-    createOnboardingRecord: () => () =>
-      settled() ? { t: 'ready', value: world.record } : { t: 'loading' },
+    createOnboardingRecord: () => () => loadable('record', () => world.record),
     createEmailAccounts: () => ({
       accounts: () => loadable('emailAccounts', () => world.emailAccounts),
       refresh: async () => {},
@@ -305,8 +308,10 @@ export function createFakeOnboarding(
       contacts: () => ({ t: 'ready', value: world.contacts }),
       retry: () => call('retryTeams'),
     }),
-    createTeam: async ({ name, invites }) => {
-      call(`createTeam:${name}:${invites.join(',')}`);
+    createTeam: async ({ name, invites, allowDomainJoin }) => {
+      call(
+        `createTeam:${name}:${invites.join(',')}${allowDomainJoin ? '' : ':closed'}`
+      );
       fail('createTeam');
       update((draft) => {
         draft.teams = [{ name }];
@@ -320,6 +325,18 @@ export function createFakeOnboarding(
         draft.invites = draft.invites.filter((item) => item.id !== inviteId);
         if (invite) draft.teams = [{ name: `${invite.invitedBy}'s team` }];
       });
+    },
+    copyTeamInviteLink: async () => {
+      call('copyTeamInviteLink');
+      fail('teamInviteLink');
+    },
+    sendReferralInvites: async (emails) => {
+      call(`sendReferralInvites:${emails.join(',')}`);
+      fail('referralInvites');
+    },
+    copyReferralLink: async () => {
+      call('copyReferralLink');
+      fail('referralLink');
     },
     createInviteOffer: () => () => ({ t: 'ready', value: world.inviteOffer }),
     createTrialEligibility: () => ({

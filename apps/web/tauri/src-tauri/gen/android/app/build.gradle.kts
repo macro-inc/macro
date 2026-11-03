@@ -98,11 +98,20 @@ android {
             )
         }
     }
+    packaging {
+        // jspecify and the OpenTelemetry exporter both ship this OSGi
+        // manifest, which Android never reads; the duplicate fails the merge.
+        resources.excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+    }
     kotlinOptions {
         jvmTarget = "1.8"
     }
     buildFeatures {
         buildConfig = true
+    }
+    packaging {
+        // JSpecify and OpenTelemetry both ship this OSGi metadata; Android does not use it.
+        resources.excludes.add("META-INF/versions/9/OSGI-INF/MANIFEST.MF")
     }
 }
 

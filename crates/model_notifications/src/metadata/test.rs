@@ -41,6 +41,18 @@ fn calendar_join_requests_name_the_requester_and_the_event() {
 }
 
 #[test]
+fn calendar_join_requests_store_the_key_their_retirement_reads() {
+    let request_id = Uuid::now_v7();
+    let stored = serde_json::to_value(CalendarEventJoinRequestMetadata {
+        request_id,
+        event_id: Uuid::nil(),
+        title: "Design review".into(),
+    })
+    .unwrap();
+    assert_eq!(stored["requestId"], request_id.to_string());
+}
+
+#[test]
 fn view_access_notifications_preserve_permission_and_format_copy() {
     let request = EntityAccessRequestedMetadata {
         request_id: Uuid::nil(),
@@ -1284,6 +1296,46 @@ fn agent_excerpt_flattens_whitespace_and_truncates() {
     let excerpt = agent_excerpt(&long);
     assert_eq!(excerpt.chars().count(), AGENT_EXCERPT_MAX_CHARS);
     assert!(excerpt.ends_with('…'));
+}
+
+#[test]
+fn agent_session_alerts_show_mentions_by_name() {
+    let settled = AgentSessionSettledMetadata {
+        session: agent_session_ref(),
+        turn: 0,
+        actor: None,
+        stop_reason: "end_turn".to_string(),
+        excerpt: Some(
+            r#"The most recent one was <m-user-mention>{"userId":"macro|user@example.com","email":"user@example.com"}</m-user-mention>, posted in <m-document-mention>{"documentId":"0195c94f-3b0c-79f0-8558-e5e509ac9dd8","documentName":"the request","blockName":"channel","blockParams":{}}</m-document-mention>; it returns Option<String>."#
+                .to_string(),
+        ),
+    };
+    assert_eq!(
+        settled.format_body(None).unwrap(),
+        "The most recent one was user@example.com, posted in the request; it returns Option<String>."
+    );
+
+    let waiting = AgentSessionWaitingForInputMetadata {
+        session: agent_session_ref(),
+        turn: 0,
+        question: r#"Should I ask <m-user-mention>{"userId":"macro|user@example.com","email":"user@example.com"}</m-user-mention>?"#.to_string(),
+    };
+    assert_eq!(
+        waiting.format_body(None).unwrap(),
+        "Should I ask user@example.com?"
+    );
+}
+
+#[test]
+fn agent_session_settled_with_only_hidden_tags_falls_back_to_the_session_name() {
+    let metadata = AgentSessionSettledMetadata {
+        session: agent_session_ref(),
+        turn: 0,
+        actor: None,
+        stop_reason: "end_turn".to_string(),
+        excerpt: Some(r#"<m-await>{"text":"thinking"}</m-await>"#.to_string()),
+    };
+    assert_eq!(metadata.format_body(None).unwrap(), "Fix the flaky test");
 }
 
 #[test]

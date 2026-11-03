@@ -1458,6 +1458,7 @@ export const SearchToolResponse = z.object({
             })
           )
           .optional(),
+        summary: z.union([z.string(), z.null()]).optional(),
       })
       .and(
         z.any().superRefine((x, ctx) => {
@@ -1898,6 +1899,39 @@ export const SearchToolResponse = z.object({
                           z.object({
                             name: z.union([z.string(), z.null()]).optional(),
                             email: z.union([z.string(), z.null()]).optional(),
+                          }),
+                          z.null(),
+                        ])
+                        .optional(),
+                      calendarName: z.union([z.string(), z.null()]).optional(),
+                      contributesToAvailability: z
+                        .union([z.boolean(), z.null()])
+                        .optional(),
+                      inbox: z.union([z.string(), z.null()]).optional(),
+                      role: z
+                        .union([
+                          z.any().superRefine((x, ctx) => {
+                            const schemas = [
+                              z.literal('organizer'),
+                              z.literal('guest'),
+                            ];
+                            const errors = schemas.reduce<z.ZodError[]>(
+                              (errors, schema) =>
+                                ((result) =>
+                                  result.error
+                                    ? [...errors, result.error]
+                                    : errors)(schema.safeParse(x)),
+                              []
+                            );
+                            if (schemas.length - errors.length !== 1) {
+                              ctx.addIssue({
+                                path: ctx.path,
+                                code: 'invalid_union',
+                                unionErrors: errors,
+                                message:
+                                  'Invalid input: Should pass single schema',
+                              });
+                            }
                           }),
                           z.null(),
                         ])
@@ -2505,7 +2539,10 @@ export const CreateChannelResponse = z.object({
   summary: z.string(),
 });
 
-export const CreateCompany = z.object({ name: z.string(), domain: z.string() });
+export const CreateCompany = z.object({
+  name: z.string(),
+  domain: z.union([z.string(), z.null()]).optional(),
+});
 
 export const CreateCompanyResponse = z.object({
   companyId: z.string().uuid(),
@@ -3514,8 +3551,14 @@ export const MutationResult = z.object({
             .union([z.string().datetime({ offset: true }), z.null()])
             .optional(),
           confirmationMessage: z.string(),
+          branding: z.object({
+            logoFileId: z.union([z.string().uuid(), z.null()]).optional(),
+            coverFileId: z.union([z.string().uuid(), z.null()]).optional(),
+            accentColor: z.union([z.string(), z.null()]).optional(),
+          }),
           createdAt: z.string().datetime({ offset: true }),
           updatedAt: z.string().datetime({ offset: true }),
+          projectId: z.union([z.string(), z.null()]).optional(),
           isHiddenInDrive: z.boolean(),
         }),
         layout: z.object({
@@ -9310,6 +9353,23 @@ export const GetThreadResponse = z.object({
   summary: z.string(),
 });
 
+export const GetUserActivity = z.object({
+  userId: z.union([z.string(), z.null()]).optional(),
+  start: z.string().date(),
+  end: z.string().date(),
+});
+
+export const ActivityReports = z.object({
+  reports: z.array(
+    z.object({
+      granularity: z.enum(['day', 'week', 'month', 'summary']),
+      periodStart: z.string().date(),
+      periodEnd: z.string().date(),
+      content: z.string(),
+    })
+  ),
+});
+
 export const ImportCompaniesCsv = z.object({
   csv: z.union([z.string(), z.null()]).optional(),
   documentId: z.union([z.string().uuid(), z.null()]).optional(),
@@ -9915,6 +9975,25 @@ export const IssueBotCredentialResponse = z.object({
   summary: z.string(),
 });
 
+export const ListAgentUpdates = z.record(z.never());
+
+export const AgentUpdates = z.object({
+  items: z.array(
+    z.object({
+      sessionId: z.string().uuid(),
+      sessionName: z.string(),
+      harness: z.string(),
+      pullRequestUrl: z.union([z.string(), z.null()]).optional(),
+      kind: z.enum(['permission', 'elicitation', 'tool_approval', 'stalled']),
+      summary: z.string(),
+      since: z.string().datetime({ offset: true }),
+      options: z.array(z.string()),
+    })
+  ),
+  truncated: z.boolean(),
+  truncationNotice: z.union([z.string(), z.null()]).optional(),
+});
+
 export const ListAgents = z.record(z.any());
 
 export const ListAgentsResponse = z.object({
@@ -10283,6 +10362,7 @@ export const ListCalendarEventsResponse = z.object({
       }),
       calendarId: z.union([z.string().uuid(), z.null()]).optional(),
       calendarName: z.union([z.string(), z.null()]).optional(),
+      contributesToAvailability: z.union([z.boolean(), z.null()]).optional(),
       inbox: z.union([z.string(), z.null()]).optional(),
       myRole: z
         .union([
@@ -10390,6 +10470,7 @@ export const ListCalendarsToolResponse = z.object({
       emailAddress: z.string(),
       isPrimary: z.boolean(),
       isWritable: z.boolean(),
+      contributesToAvailability: z.boolean(),
     })
   ),
   summary: z.string(),
@@ -10974,8 +11055,14 @@ export const ListResult = z.object({
           .union([z.string().datetime({ offset: true }), z.null()])
           .optional(),
         confirmationMessage: z.string(),
+        branding: z.object({
+          logoFileId: z.union([z.string().uuid(), z.null()]).optional(),
+          coverFileId: z.union([z.string().uuid(), z.null()]).optional(),
+          accentColor: z.union([z.string(), z.null()]).optional(),
+        }),
         createdAt: z.string().datetime({ offset: true }),
         updatedAt: z.string().datetime({ offset: true }),
+        projectId: z.union([z.string(), z.null()]).optional(),
         isHiddenInDrive: z.boolean(),
       }),
       access: z.any().superRefine((x, ctx) => {
@@ -12470,6 +12557,7 @@ export const ReadCalendarEventResponse = z.object({
   access: z.any().superRefine((x, ctx) => {
     const schemas = [
       z.literal('on_your_calendar'),
+      z.literal('on_visible_calendar'),
       z.literal('invited'),
       z.literal('snapshot'),
       z.literal('shared_with_you'),
@@ -12490,6 +12578,7 @@ export const ReadCalendarEventResponse = z.object({
       });
     }
   }),
+  calendarName: z.union([z.string(), z.null()]).optional(),
   eventId: z.union([z.string().uuid(), z.null()]).optional(),
   title: z.string(),
   start: z.string(),
@@ -13717,8 +13806,14 @@ export const ReadResult = z.any().superRefine((x, ctx) => {
             .union([z.string().datetime({ offset: true }), z.null()])
             .optional(),
           confirmationMessage: z.string(),
+          branding: z.object({
+            logoFileId: z.union([z.string().uuid(), z.null()]).optional(),
+            coverFileId: z.union([z.string().uuid(), z.null()]).optional(),
+            accentColor: z.union([z.string(), z.null()]).optional(),
+          }),
           createdAt: z.string().datetime({ offset: true }),
           updatedAt: z.string().datetime({ offset: true }),
+          projectId: z.union([z.string(), z.null()]).optional(),
           isHiddenInDrive: z.boolean(),
         }),
         layout: z.object({
@@ -14330,8 +14425,14 @@ export const ReadResult = z.any().superRefine((x, ctx) => {
             .union([z.string().datetime({ offset: true }), z.null()])
             .optional(),
           confirmationMessage: z.string(),
+          branding: z.object({
+            logoFileId: z.union([z.string().uuid(), z.null()]).optional(),
+            coverFileId: z.union([z.string().uuid(), z.null()]).optional(),
+            accentColor: z.union([z.string(), z.null()]).optional(),
+          }),
           createdAt: z.string().datetime({ offset: true }),
           updatedAt: z.string().datetime({ offset: true }),
+          projectId: z.union([z.string(), z.null()]).optional(),
           isHiddenInDrive: z.boolean(),
         }),
         access: z.any().superRefine((x, ctx) => {
@@ -14948,6 +15049,13 @@ export const ProjectActivityResult = z.object({
       z.null(),
     ])
     .optional(),
+});
+
+export const ReadMemory = z.record(z.any());
+
+export const ExplicitMemory = z.object({
+  content: z.string(),
+  revision: z.number().int(),
 });
 
 export const ReadMetadata = z.object({ documentId: z.string().uuid() });
@@ -17030,6 +17138,40 @@ export const UpdateInitiativeSharing = z.object({
       z.null(),
     ])
     .optional(),
+});
+
+export const UpdateMemory = z.object({
+  revision: z.number().int(),
+  edit: z.any().superRefine((x, ctx) => {
+    const schemas = [
+      z.object({
+        line: z.number().int().gte(0),
+        content: z.string(),
+        action: z.literal('insert'),
+      }),
+      z.object({
+        line: z.number().int().gte(0),
+        content: z.string(),
+        action: z.literal('replace'),
+      }),
+      z.object({ line: z.number().int().gte(0), action: z.literal('delete') }),
+    ];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
 });
 
 export const UpdatePipelineEntries = z.object({

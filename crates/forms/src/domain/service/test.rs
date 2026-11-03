@@ -20,8 +20,8 @@ use models_databases::{ColumnId, ColumnKind, EntityKind, OptionId, TableId};
 use uuid::Uuid;
 
 use crate::domain::models::{
-    Audience, DatabaseId, Form, FormId, FormLayout, FormQuestionId, FormSection, FormSectionId,
-    FormStatus, QuestionLayout, StoredForm, Widget,
+    Audience, DatabaseId, Form, FormBranding, FormId, FormLayout, FormQuestionId, FormSection,
+    FormSectionId, FormStatus, QuestionLayout, StoredForm, Widget,
 };
 
 mod authoring_workflow;
@@ -56,6 +56,7 @@ type Service = FormsServiceImpl<
     FixedClock,
     RecordingBroker,
     FakeDrafts,
+    FakeImageFiles,
 >;
 
 fn user(id: &'static str) -> MacroUserIdStr<'static> {
@@ -87,6 +88,7 @@ fn service(world: &Shared) -> Service {
         FixedClock(world.clone()),
         RecordingBroker(world.clone()),
         FakeDrafts(world.clone()),
+        FakeImageFiles(world.clone()),
     )
 }
 
@@ -293,8 +295,10 @@ fn seed_rsvp(world: &Shared, audience: Audience) {
             status: FormStatus::Open,
             closes_at: None,
             confirmation_message: "".into(),
+            branding: FormBranding::default(),
             created_at: now,
             updated_at: now,
+            project_id: None,
             is_hidden_in_drive: false,
         },
         trashed_at: None,

@@ -684,11 +684,20 @@ pub struct PropertyFilter {
     /// Entity reference IDs to match. Multiple values are OR'd together.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub entity_ids: Vec<String>,
+    /// UTC range for Soup/search: inclusive start, exclusive end; both open matches any date.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub date_range: Option<ast::properties::DateRange>,
+    /// Flat Soup/search presence filter: true expands to an open date range, false to its negation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub has_date: Option<bool>,
 }
 
 impl IsEmpty for PropertyFilter {
     fn is_empty(&self) -> bool {
-        self.option_ids.is_empty() && self.entity_ids.is_empty()
+        self.option_ids.is_empty()
+            && self.entity_ids.is_empty()
+            && self.date_range.is_none()
+            && self.has_date.is_none()
     }
 }
 

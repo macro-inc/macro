@@ -2,6 +2,10 @@ import {
   parseMacroAppLink,
   sanitizeCalendarDescription,
 } from '@app/features/calendar/utils/calendar-description';
+import {
+  calendarMacroCallUrl,
+  removeCalendarMacroCall,
+} from '@app/features/calendar/utils/macro-call-link';
 import { SharedEventActions } from '@app/features/calendar-view/components/SharedEventActions';
 import {
   type CalendarMentionTarget,
@@ -43,6 +47,7 @@ import { parseLocalDate } from '@core/util/local-date';
 import { matches } from '@core/util/match';
 import { buildSimpleEntityUrl, openExternalUrl } from '@core/util/url';
 import MacroEmbed from '@icon/macro-embed.svg';
+import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import CollapseInlinePreview from '@icon/system/regular/arrows-in-line-horizontal.svg';
 import ExpandInlinePreview from '@icon/system/regular/arrows-out-line-horizontal.svg';
 import CalendarCheckIcon from '@icon/system/regular/calendar-check.svg';
@@ -62,6 +67,7 @@ import TextAlignLeftIcon from '@icon/system/regular/text-align-left.svg';
 import TextTIcon from '@icon/system/regular/text-t.svg';
 import TrashSimple from '@icon/system/regular/trash-simple.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
+import VideoCameraIcon from '@icon/system/regular/video-camera.svg';
 import {
   isAccessiblePreviewItem,
   isCalendarEventPreviewItem,
@@ -331,7 +337,7 @@ const calendarTimeFormat = new Intl.DateTimeFormat(undefined, {
 
 /** One compact local-time schedule line for a calendar mention preview. */
 export function calendarPreviewSchedule(
-  event: Pick<PreviewCalendarEventAccess['event'], 'time'>
+  event: PreviewCalendarEventAccess['event']
 ): string | undefined {
   if (event.time.kind === 'allDay') {
     const start = parseLocalDate(event.time.startDate);
@@ -366,19 +372,26 @@ function heldOnCalendarLabel(
 }
 
 /** Meeting-level rows of the calendar mention hover card. */
-export function CalendarEventPreviewDetails(props: {
-  event: Omit<PreviewCalendarEventAccess['event'], 'updatedAt'>;
+function CalendarEventPreviewDetails(props: {
+  event: PreviewCalendarEventAccess['event'];
   /** The mentioned event, which a read-only share copies from. */
   mentionedEventId: string;
   /** Opens the viewer's own copy; absent where the card cannot open it. */
   onOpen?: (event: MouseEvent) => void;
-  /** Team-calendar projections have no channel-share mutation capabilities. */
-  sharedActions?: boolean;
+  /** Runs once Join has left the card; native apps join in-app, behind it. */
+  onJoin?: () => void;
 }) {
   const organizer = () =>
     props.event.organizerName ?? props.event.organizerEmail;
+  const macroMeetingUrl = () => calendarMacroCallUrl(props.event);
+  // A channel share exposes the meeting, not a way into its call.
+  const joinableMeetingUrl = () =>
+    props.event.viewerEventId ? macroMeetingUrl() : undefined;
+  const eventContent = createMemo(() =>
+    removeCalendarMacroCall(props.event, macroMeetingUrl())
+  );
   const descriptionHtml = () =>
-    sanitizeCalendarDescription(props.event.description ?? '');
+    sanitizeCalendarDescription(eventContent().description);
   // Opening a Macro link reads the split layout from context, so the handler
   // keeps this component's owner.
   const openDescriptionLink = createCallback((event: MouseEvent) => {
@@ -425,7 +438,25 @@ export function CalendarEventPreviewDetails(props: {
           </MetadataInfo>
         )}
       </Show>
-      <Show when={props.event.location}>
+      <Show when={joinableMeetingUrl()}>
+        {(url) => (
+          <MetadataInfo icon={VideoCameraIcon}>
+            <Button
+              variant="secondary"
+              size="xs"
+              onClick={(event) => {
+                event.stopPropagation();
+                openExternalUrl(url());
+                props.onJoin?.();
+              }}
+            >
+              Join Macro call
+              <ArrowSquareOutIcon class="size-3.5 shrink-0" />
+            </Button>
+          </MetadataInfo>
+        )}
+      </Show>
+      <Show when={eventContent().location.trim()}>
         {(location) => (
           <MetadataInfo icon={MapPinIcon}>
             <span class="truncate">{location()}</span>
@@ -459,9 +490,7 @@ export function CalendarEventPreviewDetails(props: {
         </MetadataInfo>
       </Show>
       <Switch>
-        <Match
-          when={!props.event.viewerEventId && props.sharedActions !== false}
-        >
+        <Match when={!props.event.viewerEventId}>
           <SharedEventActions
             eventId={props.mentionedEventId}
             title={props.event.title}
@@ -1062,6 +1091,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
                               )
                           : undefined
                       }
+                      onJoin={props.onOpened}
                     />
                   )}
                 </Show>
@@ -1142,7 +1172,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
                   </div>
                 </Show>
                 {noAccessItem().access === 'no_access' ? (
-                  <Unauthorized noun={itemNoun()} />
+                  <Unauthorized compact noun={itemNoun()} />
                 ) : (
                   <NotFound message={deletedMessage()} />
                 )}

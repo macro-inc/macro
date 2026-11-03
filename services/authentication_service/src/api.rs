@@ -151,6 +151,15 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
                 },
             ),
         )
+        .merge(
+            teams::inbound::axum_router::domain_notice::domain_notice_router(
+                teams::inbound::axum_router::domain_notice::DomainNoticeRouterState {
+                    service: state.domain_notice_service.clone(),
+                    entity_access_service: state.entity_access_service.clone(),
+                    authorization_state: state.authorization_state.clone(),
+                },
+            ),
+        )
         .nest(
             "/referral",
             referral::inbound::axum_router::referral_router(
@@ -167,6 +176,15 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
                 gtm_invite::inbound::axum_router::GtmInviteRouterState {
                     service: state.gtm_invite_service.clone(),
                     rate_limiter: state.rate_limit_service.clone(),
+                    authorization_state: state.authorization_state.clone(),
+                },
+            ),
+        )
+        .nest(
+            "/system-status",
+            system_status::inbound::axum_router::system_status_router(
+                system_status::inbound::axum_router::SystemStatusRouterState {
+                    service: state.system_status_service.clone(),
                     authorization_state: state.authorization_state.clone(),
                 },
             ),

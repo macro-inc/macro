@@ -74,9 +74,13 @@ use teams::{
 use gtm_invite::{
     domain::service::GtmInviteServiceImpl, outbound::pg_gtm_invite_repo::PgGtmInviteRepo,
 };
-use referral::{
-    domain::service::ReferralServiceImpl,
-    outbound::{pg_referral_repo::PgReferralRepo, stripe_discount_client::StripeDiscountClient},
+use referral::{domain::service::ReferralServiceImpl, outbound::pg_referral_repo::PgReferralRepo};
+use system_status::{
+    domain::service::SystemStatusServiceImpl,
+    outbound::{
+        connection_gateway_broadcaster::ConnectionGatewayStatusBroadcaster,
+        pg_system_status_repo::PgSystemStatusRepo,
+    },
 };
 use user_hotkey_profiles::{
     domain::service::UserHotkeyProfilesServiceImpl,
@@ -239,6 +243,20 @@ pub async fn run() -> anyhow::Result<()> {
         None => auth_client,
     };
     tracing::trace!("initialized auth client");
+    // Gates new Outlook connections per user (`enable-outlook`). Without a
+    // PostHog key the deployment switch alone decides.
+    let feature_flags = config
+        .posthog_api_key
+        .value()
+        .map(|key| {
+            feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+                config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
+                key.to_owned(),
+                Duration::from_secs(3),
+            )
+        })
+        .transpose()
+        .map_err(|error| anyhow!("invalid feature flag configuration: {error}"))?;
     let microsoft_auth = microsoft_token_cipher.map(|cipher| {
         use crate::{
             domain::microsoft::{MicrosoftAuth, MicrosoftAuthService},
@@ -253,7 +271,8 @@ pub async fn run() -> anyhow::Result<()> {
                 ),
                 cipher,
             )
-            .with_connections_enabled(config.outlook_connections_enabled),
+            .with_connections_enabled(config.outlook_connections_enabled)
+            .with_feature_flags(feature_flags),
         ) as Arc<dyn MicrosoftAuth>
     });
 
@@ -352,8 +371,8 @@ pub async fn run() -> anyhow::Result<()> {
                 host: config
                     .posthog_host
                     .value()
-                    .map(str::to_string)
-                    .unwrap_or_else(|| "https://us.i.posthog.com".to_string()),
+                    .unwrap_or(DEFAULT_POSTHOG_HOST)
+                    .to_string(),
             }
         }),
     }));
@@ -466,7 +485,7 @@ pub async fn run() -> anyhow::Result<()> {
                         entity_access_service_impl.clone(),
                     ),
                     messages::outbound::connection_gateway::ConnectionGatewayMessages(
-                        connection_gateway_client,
+                        connection_gateway_client.clone(),
                     ),
                     channels::outbound::pg_agent_creations::PgAgentCreations::new(db.clone()),
                 ),
@@ -517,18 +536,31 @@ pub async fn run() -> anyhow::Result<()> {
         PgUserHotkeyProfilesRepo::new(db.clone()),
     ));
 
+    // Invites that turn into teammates and referrals that sign up earn the
+    // inviter AI credit (or more free allowance).
+    let invite_rewards = crate::outbound::invite_rewards::BillingInviteRewards::new(
+        ai_billing::domain::InviteRewardService::new(
+            ai_billing::outbound::RolesTeamsEntitlementSource::new(
+                user_roles_and_permissions_service.clone(),
+                teams_repo_impl.clone(),
+            ),
+            ai_billing::outbound::PgCreditGrantRepo::new(db.clone()),
+            ai_billing::outbound::PgCreditGrantRepo::new(db.clone()),
+        ),
+    );
     let referral_service = ReferralServiceImpl {
         repo: PgReferralRepo::new(db.clone()),
-        discount_client: StripeDiscountClient::new(
-            stripe_client.clone(),
-            10000, /*100$ credit, in cents*/
-        ),
+        rewarder: invite_rewards.clone(),
         notification_ingress: notification_ingress_service.clone(),
     };
     let gtm_invite_service = GtmInviteServiceImpl {
         repo: PgGtmInviteRepo::new(db.clone()),
         config: gtm_invite_config,
     };
+    let system_status_service = Arc::new(SystemStatusServiceImpl::new(
+        PgSystemStatusRepo::new(db.clone()),
+        ConnectionGatewayStatusBroadcaster::new(connection_gateway_client.clone()),
+    ));
 
     let codex_connection = if let Some(key_id) = config.codex_oauth_kms_key_id() {
         let cipher = Arc::new(codex_connection::outbound::cipher::EnvelopeCipher::new(
@@ -650,8 +682,26 @@ pub async fn run() -> anyhow::Result<()> {
     .with_contacts_enqueuer(contacts_enqueuer)
     .with_event_broker(macro_event_broker.clone())
     .with_open_seat_release((*ai_billing_service).clone())
-    .with_owned_entity_cleanup(team_owned_entity_cleanup);
+    .with_owned_entity_cleanup(team_owned_entity_cleanup)
+    .with_invite_rewarder(Arc::new(invite_rewards));
     let teams_service = Arc::new(teams_service_impl);
+    let domain_notice_service =
+        Arc::new(teams::domain::domain_notice::DomainNoticeServiceImpl::new(
+            teams::outbound::colleague_directory::ContactsColleagueDirectory::new(
+                contacts::outbound::repository::DbContactsRepository::new(db.clone()),
+            ),
+            teams::domain::join_announcement::JoinAnnouncementServiceImpl::new(
+                teams::outbound::join_announcement_repo::JoinAnnouncementRepositoryImpl::new(
+                    db.clone(),
+                ),
+                SqsNotificationIngress {
+                    queue: SqsQueue::new(
+                        aws_sdk_sqs::Client::new(&aws_config),
+                        notification_queue.to_string(),
+                    ),
+                },
+            ),
+        ));
     // Reminds people of team invites they have not answered. Replicas claim
     // disjoint invites, so every replica sweeps.
     let invite_reminders_stop = CancellationToken::new();
@@ -754,6 +804,7 @@ pub async fn run() -> anyhow::Result<()> {
             stripe_webhook_secret,
             user_roles_and_permissions_service: Arc::new(user_roles_and_permissions_service),
             teams_service,
+            domain_notice_service,
             channel_service: Arc::new(channel_service),
             channel_messages,
             favorites_service: Arc::new(favorites_service),
@@ -762,6 +813,7 @@ pub async fn run() -> anyhow::Result<()> {
             user_language_service,
             user_hotkey_profiles_service,
             gtm_invite_service,
+            system_status_service,
             native_app_service: Arc::new(NativeAppServiceImpl {
                 bundle_fetcher: DefaultBundleFetcher::new(
                     AppServiceUrl::new_for_environment(config.environment)
@@ -828,6 +880,8 @@ pub async fn run() -> anyhow::Result<()> {
 const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 const INVITE_REMINDER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 const MICROSOFT_GRANT_CLEANUP_INTERVAL: Duration = Duration::from_secs(5 * 60);
+/// PostHog's US ingestion origin, used when `POSTHOG_HOST` is unset.
+const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
 
 // SAFETY: this is not a secret value
 const IOS_DEVELOPMENT_TEAM_ID: &str = "TY74Q77JBD";

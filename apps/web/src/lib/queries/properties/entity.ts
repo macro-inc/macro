@@ -37,6 +37,7 @@ import {
   optimisticUpdateSoupEntity,
   type SoupTransaction,
 } from '../soup/cache';
+import { refreshPropertyQueries } from '../soup/property-queries';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import {
   type AddEntityPropertyInput,
@@ -435,6 +436,9 @@ export function useDeleteEntityPropertyMutation(
         onSuccess: (_data, variables) => {
           // The removed row may have been a Companies or Contacts value.
           fireAndForget(refreshCrmAssociatedSoupQueries(), 'entity-properties');
+          invalidateSoupEntity(variables.entityId);
+          // Deletion carries an assignment ID, not its definition; refresh property-dependent lists.
+          fireAndForget(refreshPropertyQueries(), 'entity-properties');
           return invalidatePropertiesForEntity(
             variables.entityType,
             variables.entityId
@@ -618,6 +622,10 @@ function entityPropertyOptionCallbacks(
       },
       onSuccess: (_data, variables) => {
         invalidateSoupEntity(variables.entityId);
+        fireAndForget(
+          refreshPropertyQueries(getPropertyDefinitionId(variables.property)),
+          'entity-properties'
+        );
         return invalidatePropertiesForEntity(
           variables.entityType,
           variables.entityId
@@ -729,6 +737,11 @@ type BulkUpdateEntityPropertyOptionsContext = {
   soupTxn?: SoupTransaction;
 };
 
+type BulkUpdateEntityPropertyOptionsResult = {
+  selections: EntityPropertyOptionSelection[];
+  transport: 'graphql' | 'rest';
+};
+
 /**
  * Persists a complete multi-select selection across one or more properties in a
  * single transactional request, then reconciles the soup cache from the final
@@ -741,7 +754,7 @@ type BulkUpdateEntityPropertyOptionsContext = {
 export function useBulkUpdateEntityPropertyOptionsMutation(
   entityId: string,
   callbacks?: MutationCallbacks<
-    EntityPropertyOptionSelection[],
+    BulkUpdateEntityPropertyOptionsResult,
     Error,
     BulkUpdateEntityPropertyOptionsParams,
     BulkUpdateEntityPropertyOptionsContext
@@ -752,7 +765,7 @@ export function useBulkUpdateEntityPropertyOptionsMutation(
     scope: { id: `entity-property-options:${entityId}` },
     mutationFn: async (
       variables: BulkUpdateEntityPropertyOptionsParams
-    ): Promise<EntityPropertyOptionSelection[]> => {
+    ): Promise<BulkUpdateEntityPropertyOptionsResult> => {
       // The transport swaps, the mutation shell does not: the per-entity scope
       // that serializes commits and the in-flight overlay both read this
       // mutation's state, whichever cache the selection lands in.
@@ -760,7 +773,10 @@ export function useBulkUpdateEntityPropertyOptionsMutation(
         variables.entityType === 'INITIATIVE' ||
         isFeatureEnabled(enableGraphqlSoup)
       ) {
-        return updateGraphqlEntityPropertyOptions(variables);
+        return {
+          selections: await updateGraphqlEntityPropertyOptions(variables),
+          transport: 'graphql',
+        };
       }
       const response = await throwOnErr(async () =>
         propertiesServiceClient.bulkUpdateEntityPropertyOptions({
@@ -781,13 +797,16 @@ export function useBulkUpdateEntityPropertyOptionsMutation(
           },
         })
       );
-      return response.properties.map((property) => ({
-        propertyDefinitionId: property.property_id,
-        optionIds: property.option_ids,
-      }));
+      return {
+        selections: response.properties.map((property) => ({
+          propertyDefinitionId: property.property_id,
+          optionIds: property.option_ids,
+        })),
+        transport: 'rest',
+      };
     },
     ...withCallbacks<
-      EntityPropertyOptionSelection[],
+      BulkUpdateEntityPropertyOptionsResult,
       Error,
       BulkUpdateEntityPropertyOptionsParams,
       BulkUpdateEntityPropertyOptionsContext
@@ -806,7 +825,7 @@ export function useBulkUpdateEntityPropertyOptionsMutation(
           );
           return { soupTxn };
         },
-        onSuccess: (selections, variables) => {
+        onSuccess: ({ selections, transport }, variables) => {
           const propertyByDefinitionId = new Map(
             variables.properties.map((update) => [
               getPropertyDefinitionId(update.property),
@@ -835,6 +854,15 @@ export function useBulkUpdateEntityPropertyOptionsMutation(
             })
           );
           invalidateSoupEntity(variables.entityId);
+          for (const selection of selections) {
+            fireAndForget(
+              refreshPropertyQueries(selection.propertyDefinitionId, {
+                includeOptionFilters: true,
+                unmaintainedOnly: transport === 'graphql',
+              }),
+              'entity-properties'
+            );
+          }
           return invalidatePropertiesForEntity(
             variables.entityType,
             variables.entityId
@@ -948,6 +976,10 @@ function invalidatePropertySaveCaches(
     'entity-properties'
   );
   invalidateSoupEntity(item.entityId);
+  fireAndForget(
+    refreshPropertyQueries(getPropertyDefinitionId(item.property)),
+    'entity-properties'
+  );
   // CRM record lists resolve membership on the server, not from these rows.
   if (
     CRM_ASSOCIATION_PROPERTY_IDS.includes(

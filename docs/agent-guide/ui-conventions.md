@@ -48,6 +48,15 @@ Button API and composition details live in the
 [shared primitive contract](../../.agents/rules/web/ui-primitives.md#button-and-buttongroup).
 Inline calendar-invitation text actions remove the transparent border to keep alignment.
 
+## Responsive workspace navigation
+
+At the narrow breakpoint, docked ViewShell navigation closes over 140ms while
+Main expands to its narrow layout. The sidebar remains inert through the closing
+animation, then unmounts. Show navigation opens the dismissible overlay instead;
+required navigation opens that overlay immediately. Returning to wide restores
+the saved docked state without changing the sidebar preference. Reduced-motion
+settings and missing animation support skip the closing animation.
+
 ## Canonical desktop surfaces
 
 Use `not-touch:elevated` for existing desktop control surfaces other than Button
@@ -283,4 +292,4 @@ independent of glyph geometry. See the [icon guide](../../apps/web/src/component
 
 ![Joined desktop view tabs](images/joined-view-tabs.png)
 
-On desktop, multiple splits have a small close button nested into each frame’s top-left corner, outside the topbar. A lone detail view keeps its Return to list action, and touch layouts keep header controls.
+On desktop, multiple splits have a small close button nested into each frame’s top-left corner, outside the topbar. A lone split has no close button; touch layouts keep header controls.

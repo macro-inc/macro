@@ -5,6 +5,7 @@ import {
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
+import { requireNativeUpdate } from '@core/mobile/nativeUpdateRequired';
 import { hasLoginCookie } from '@core/util/cookies';
 import { fetchToken } from '@core/util/fetchWithToken';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -110,12 +111,14 @@ import { shouldRetryGraphqlMutation } from './graphql-mutation-retry';
 import { notificationReceiptExchange } from './graphql-notification-receipt';
 import {
   createGraphqlSoupSubscriptionsLifecycle,
+  createGraphqlSoupWebSocketLiveness,
   createGraphqlSoupWebSocketUrlResolver,
   publishNotificationPatch,
   SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS,
   shouldRetryGraphqlSoupWebSocket,
   waitToRetryGraphqlSoupWebSocket,
 } from './graphql-soup-websocket';
+import { mailCacheProfile } from './mail-cache-profile';
 
 export { emailThreadSortTs } from './email-thread-sort';
 
@@ -331,11 +334,16 @@ export async function dssGraphqlFetch(
       const traceHeaders: Record<string, string> = {};
       span.injectTraceHeaders(traceHeaders);
       const requestInit = graphqlSoupTransportRequest(init);
+      const mail = await mailCacheProfile();
+      span.setAttr('mail.cache_profile', mail.profile);
+      span.setAttr('mail.cache_profile_outcome', mail.outcome);
       // Links this request, and a queued mutation attempt above it, to the
       // server's request and `graphql.execute` spans.
       const transportInit: RequestInit = {
         ...requestInit,
-        headers: mergeHeaders(requestInit?.headers, traceHeaders),
+        headers: mergeHeaders(requestInit?.headers, traceHeaders, {
+          'x-macro-mail-cache-profile': mail.profile,
+        }),
       };
       span.event('request_dispatch');
       const response = await authorizedDssGraphqlFetch(input, transportInit);
@@ -415,8 +423,16 @@ function createGraphqlSoupWebSocketClient(
     getApiToken: getMacroApiToken,
     refreshCookieAuth: fetchToken,
   });
-  return createGraphqlWsClient({
+  const liveness = createGraphqlSoupWebSocketLiveness(() => client.terminate());
+  const client = createGraphqlWsClient({
     url: resolveWebSocketUrl,
+    connectionParams: () =>
+      Telemetry.span('graphql.websocket.connection_params', async (span) => {
+        const mail = await mailCacheProfile();
+        span.setAttr('mail.cache_profile', mail.profile);
+        span.setAttr('mail.cache_profile_outcome', mail.outcome);
+        return { mailCacheProfile: mail.profile };
+      }),
     // Session cookies live in the native HTTP client's jar, which the WebView's
     // own WebSocket cannot send; the native socket forwards them.
     webSocketImpl:
@@ -427,8 +443,13 @@ function createGraphqlSoupWebSocketClient(
     retryWait: waitToRetryGraphqlSoupWebSocket,
     on: {
       connecting: () => onState('connecting'),
-      closed: () => onState('disconnected'),
-      connected: () => {
+      closed: () => {
+        liveness.closed();
+        onState('disconnected');
+      },
+      pong: liveness.pong,
+      connected: (socket) => {
+        liveness.connected(socket);
         onState('connected');
         onConnected();
         connections += 1;
@@ -438,6 +459,7 @@ function createGraphqlSoupWebSocketClient(
     },
     shouldRetry: shouldRetryGraphqlSoupWebSocket,
   });
+  return client;
 }
 
 function graphqlSoupSubscriptionExchange(websocketClient: GraphqlWsClient) {
@@ -746,19 +768,16 @@ export function getGraphqlSoupClient(): Client {
       }
       reportCacheError(error, 'initialization');
       fallbackAfterInitializationFailure(error);
-      toast.failure(
-        error instanceof NativeCacheUpgradeRequiredError
-          ? 'Macro update required'
-          : 'Local cache unavailable',
-        {
+      if (error instanceof NativeCacheUpgradeRequiredError) {
+        requireNativeUpdate(error.message);
+      } else {
+        toast.failure('Local cache unavailable', {
           subtext:
-            error instanceof NativeCacheUpgradeRequiredError
-              ? error.message
-              : cacheRecovery.state() === 'unavailable'
-                ? 'Drafts remain on this device. Reconnect or retry draft synchronization.'
-                : 'Queued changes are preserved. Update or reload Macro to recover local storage.',
-        }
-      );
+            cacheRecovery.state() === 'unavailable'
+              ? 'Drafts remain on this device. Reconnect or retry draft synchronization.'
+              : 'Queued changes are preserved. Update or reload Macro to recover local storage.',
+        });
+      }
       console.warn(
         'graphql cache async init failed; using uncached client',
         error

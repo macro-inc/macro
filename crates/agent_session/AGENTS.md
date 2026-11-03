@@ -19,6 +19,8 @@ consumer talks to.
   same fold run server-side for the SDK and agents.
 - `src/domain/read.rs` and `src/inbound/toolset/read_agent_session.rs`: bounded,
   view-authorized conversation reads using the shared transcript fold.
+- `src/domain/updates.rs`: owner-scoped blocked and stalled coding-session updates,
+  capped to 25 sessions before folding their logs.
 - `src/outbound/postgres.rs`: the session repository.
 - `src/outbound/broker_lifecycle_publisher.rs` /
   `broker_log_realtime.rs`: Kafka publication of lifecycle and log events.

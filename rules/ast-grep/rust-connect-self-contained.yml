@@ -1,0 +1,14 @@
+id: rust-connect-self-contained
+language: rust
+severity: error
+message: Macro Connect code does not use Macro crates; copy what you need into a connect_* crate.
+note: |-
+  Macro Connect (connect/) is a separate product built as if it lived in its
+  own repository. It depends on connect_* crates and third-party libraries
+  only. This rule catches the common Macro crates; the Cargo dependency check
+  is the complete one. See connect/AGENTS.md#boundary.
+files:
+  - connect/**
+rule:
+  kind: use_declaration
+  regex: ^(pub(\([^)]*\))? )?use (::)?(macro_[a-z0-9_]+|mcp_client|mcp_select|pipedream_mcp|model_error_response|workspace_hack)\b

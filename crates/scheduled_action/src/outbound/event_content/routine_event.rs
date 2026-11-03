@@ -12,7 +12,8 @@ use macro_uuid::Uuid;
 use messages::domain::models::{Message, MessageThread};
 use model::document::DocumentBasic;
 use models_properties::service::{
-    property_option::PropertyOptionValue, property_value::PropertyValue,
+    property_change_source::PropertyChangeSource, property_option::PropertyOptionValue,
+    property_value::PropertyValue,
 };
 use properties::EntityPropertyInfo;
 use rootcause::Report;
@@ -20,7 +21,8 @@ use system_properties::SystemPropertyKey;
 use trigger_context::{
     CallSnapshot, CallStartedSnapshot, ChannelType, ContextAttachment, ContextMessage,
     ContextPerson, ContextThread, DiscussionContext, DiscussionSurface, DocumentSnapshot,
-    EmailSnapshot, GithubDelivery, ReplyTarget, RoutineEvent, TaskSnapshot, TranscriptLine,
+    EmailSnapshot, GithubDelivery, PullRequestChange, ReplyTarget, RoutineEvent, TaskSnapshot,
+    TranscriptLine,
 };
 
 use super::{
@@ -47,7 +49,13 @@ pub(super) fn routine_event(
             document,
             properties,
             markdown,
-        } => document_event(name, document, &properties, markdown.as_deref()),
+        } => document_event(
+            name,
+            document,
+            &properties,
+            markdown.as_deref(),
+            event.change_source(),
+        ),
         EventContent::Email(message) => match (name, message) {
             (EventName::EmailMessageReceived, Some(message)) => Ok(RoutineEvent::EmailReceived {
                 email: email_snapshot(entity_id()?, &message),
@@ -96,6 +104,7 @@ fn document_event(
     document: DocumentBasic,
     properties: &[EntityPropertyInfo],
     markdown: Option<&str>,
+    source: Option<&PropertyChangeSource>,
 ) -> Result<RoutineEvent, Report> {
     Ok(match name {
         EventName::DocumentCreated => RoutineEvent::DocumentCreated {
@@ -113,6 +122,7 @@ fn document_event(
         },
         EventName::TaskStatusChanged => RoutineEvent::TaskStatusChanged {
             task: task_snapshot(document, properties, markdown),
+            pull_request: source.map(pull_request_change),
         },
         EventName::TaskPriorityChanged => RoutineEvent::TaskPriorityChanged {
             task: task_snapshot(document, properties, markdown),
@@ -122,6 +132,15 @@ fn document_event(
         },
         name => return Err(mismatch(name)),
     })
+}
+
+fn pull_request_change(source: &PropertyChangeSource) -> PullRequestChange {
+    match source {
+        PropertyChangeSource::GithubPullRequest { url, account } => PullRequestChange {
+            url: url.clone(),
+            github_login: account.login.clone(),
+        },
+    }
 }
 
 fn channel_event(

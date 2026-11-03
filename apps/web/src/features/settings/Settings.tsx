@@ -24,6 +24,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { useOutlookAvailable } from '@queries/auth/outlook-link';
 import {
   createMemo,
   createRenderEffect,
@@ -92,6 +93,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
   // from people without a team.
   const navTabs = createMemo(() => navGroups().flatMap((group) => group.items));
   const signatures = useFeatureFlag(enableEmailSignatures);
+  const outlook = useOutlookAvailable();
 
   const activeNavigationTab = activeTabId;
 
@@ -101,6 +103,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
   const searchResults = createMemo(() =>
     searchSettings(searchGroups(), searchQuery(), {
       emailSignatures: signatures().enabled,
+      outlook: outlook(),
     })
   );
 
