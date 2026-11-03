@@ -1,8 +1,10 @@
 import { throwOnErr } from '@core/util/result';
 import { getWebOrigin } from '@core/util/webOrigin';
 import { authServiceClient } from '@service-auth/client';
-import { useMutation } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
+import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
+import { queryReadyGate } from '../gate';
 import { authKeys } from './keys';
 
 /** OAuth transport stays in the auth client, shared query orchestration here. */
@@ -23,9 +25,9 @@ export function useInitOutlookLink() {
  */
 const adminConsentReturnUrl = () => `${getWebOrigin()}/app/inbox-link-callback`;
 
-/** Fetch on opening the chooser, without suspending unrelated application UI. */
-export function fetchEmailConnectionProviders() {
-  return queryClient.fetchQuery({
+/** Per user: Outlook follows the server's `enable-outlook` flag. */
+const emailConnectionProvidersQuery = () =>
+  queryOptions({
     queryKey: authKeys.emailConnectionProviders.queryKey,
     queryFn: () =>
       throwOnErr(() =>
@@ -33,4 +35,24 @@ export function fetchEmailConnectionProviders() {
       ),
     staleTime: 0,
   });
+
+/** Fetch on opening the chooser, without suspending unrelated application UI. */
+export function fetchEmailConnectionProviders() {
+  return queryClient.fetchQuery(emailConnectionProvidersQuery());
+}
+
+/**
+ * Whether to offer a new Outlook connection. False until the server says
+ * this user may start one, so Outlook never shows while loading or after a
+ * failed read. `enabled` defers the read for surfaces mounted before they open.
+ */
+export function useOutlookAvailable(
+  enabled: Accessor<boolean> = () => true
+): Accessor<boolean> {
+  const query = useQuery(() => ({
+    ...emailConnectionProvidersQuery(),
+    enabled: enabled(),
+  }));
+  // Gate the read: a pending query's data suspends the caller's boundary.
+  return () => queryReadyGate(query) && query.data.outlook;
 }

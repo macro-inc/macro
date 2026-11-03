@@ -19,5 +19,7 @@ fn builds_with_proprietary_codecs() {
     let yaml = rendered();
     assert!(yaml.contains("proprietary_codecs=true"), "{yaml}");
     assert!(yaml.contains("ffmpeg_branding=Chrome"), "{yaml}");
+    // make_distrib takes the macOS framework from cefclient.app.
+    assert!(yaml.contains("--build-target=cefclient"), "{yaml}");
     assert!(yaml.contains("--prerelease --latest=false"), "{yaml}");
 }

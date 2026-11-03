@@ -4,6 +4,12 @@ resolver = "2"
 exclude = ["vendor"]
 
 members = [
+  "connect/crates/connect_registry",
+  "connect/crates/connect_platform",
+  "connect/crates/connect_client",
+  "connect/tests/connect_integration",
+  "connect/services/connect_api",
+  "connect/services/connect_demo",
   "crates/access_requests",
   "crates/agent_api_keys",
   "crates/routines",
@@ -13,6 +19,7 @@ members = [
   "crates/trigger_context",
   "crates/agent_preview",
   "crates/agent_code_mode",
+  "crates/dynamic_ui",
   "crates/agent_inmem",
   "crates/agent_runtime_protocol", "crates/agent_session", "crates/agent_session_realtime",
   "crates/agent_trigger",
@@ -71,6 +78,7 @@ members = [
   "crates/graphql_calendar",
   "crates/graphql_channel",
   "crates/graphql_common",
+  "crates/graphql_databases",
   "crates/graphql_email",
   "crates/graphql_entity_mutation",
   "crates/graphql_favorite",
@@ -129,6 +137,7 @@ members = [
   "crates/soup_filter_projection",
   "crates/soup_realtime",
   "crates/system_skills",
+  "crates/system_status",
   "crates/task_dedup",
   "crates/unfurl",
   "crates/upstream_error",

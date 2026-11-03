@@ -479,4 +479,6 @@ where
     }
 
     fn session_stopped(&self, _id: AgentSessionId, _reason: StopReason) {}
+
+    fn runtime_closed(&self, _id: AgentSessionId) {}
 }

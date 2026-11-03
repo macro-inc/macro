@@ -9,7 +9,9 @@ Ordinary notices dismiss after 4.5 seconds unless the caller specifies a duratio
 Persistent prompts and reminders keep their separate, single-card queues and
 remain until answered or dismissed. A new success notice does not replace a
 persistent reconnect prompt. Mobile keeps one transient notice at a time above
-the dock and preserves full descriptions and accessible close buttons.
+the dock and preserves full descriptions and accessible close buttons. On phones,
+open sheets and the pickers and menus on them cover prompts and reminders, which
+sit above the transient notice; the notice itself stays on top of sheets.
 
 All toasts place actions to the right of the message, centered vertically. The
 close button floats halfway over the top-right corner; stacked cards leave room

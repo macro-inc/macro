@@ -38,7 +38,8 @@ pub(super) fn visibility_sql(visibility: AgentSessionVisibility) -> String {
 struct AgentSessionRow {
     id: Uuid,
     name: String,
-    is_archived: bool,
+    archived_by: Option<String>,
+    archived_at: Option<DateTime<Utc>>,
     owner_id: String,
     bot_id: Uuid,
     harness: String,
@@ -101,7 +102,9 @@ pub(super) async fn cursor_soup(
     db: &PgPool,
     req: SimpleSortRequest<'_>,
 ) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
-    let parts = cursor_parts(req.cursor);
+    let Some(parts) = cursor_parts(req.cursor) else {
+        return Ok(Vec::new());
+    };
     let Some(filter) = parts.filter.as_ref().filter(|filter| opted_in(filter)) else {
         return Ok(Vec::new());
     };
@@ -195,8 +198,9 @@ pub(super) async fn by_ids(
         .collect()
 }
 
-fn cursor_parts(cursor: SimpleSortQuery) -> CursorParts {
-    match cursor {
+fn cursor_parts(cursor: SimpleSortQuery) -> Option<CursorParts> {
+    Some(match cursor {
+        SimpleSortQuery::Property(_) => return None,
         // No AST means the query never mentioned agent sessions: opt-out.
         SimpleSortQuery::NoFilter(query) => parts_from_query(&query, None, None),
         SimpleSortQuery::FilterFrecency(query) => parts_from_query(&query, None, None),
@@ -216,7 +220,7 @@ fn cursor_parts(cursor: SimpleSortQuery) -> CursorParts {
                 ast.properties_filter.as_deref().cloned(),
             )
         }
-    }
+    })
 }
 
 fn parts_from_query<F>(
@@ -255,7 +259,8 @@ const ACCESS_SQL: &str = r#" AND cp.left_at IS NULL
     SELECT
         s.id,
         s.name,
-        s.is_archived,
+        s.archived_by::TEXT AS archived_by,
+        s.archived_at,
         s.owner_id,
         s.bot_id,
         s.harness,
@@ -386,7 +391,13 @@ fn row_to_item(row: AgentSessionRow) -> Result<SoupItem<()>, sqlx::Error> {
     Ok(SoupItem::AgentSession(SoupAgentSession {
         id: row.id,
         name: row.name,
-        is_archived: row.is_archived,
+        archived_by: row
+            .archived_by
+            .as_deref()
+            .map(str::parse)
+            .transpose()
+            .map_err(super::type_err)?,
+        archived_at: row.archived_at,
         owner_id,
         bot_id: row.bot_id,
         harness: row.harness,

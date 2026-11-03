@@ -32,7 +32,14 @@ export function toFormMetadata(form: Form): FormMetadata {
     status: form.status,
     closesAt: form.closesAt ?? null,
     tallyVisible: form.tallyVisible,
+    responsesVisible: form.responsesVisible,
+    anonymous: form.anonymous,
     confirmationMessage: form.confirmationMessage,
+    branding: {
+      logoFileId: form.branding.logoFileId ?? null,
+      coverFileId: form.branding.coverFileId ?? null,
+      accentColor: form.branding.accentColor ?? null,
+    },
     submittedColumnId: form.submittedColumnId ?? null,
     respondentColumnId: form.respondentColumnId ?? null,
   };
@@ -280,6 +287,15 @@ export function toSubmitOutcome(outcome: SubmissionOutcome): SubmitOutcome {
 }
 
 export function toMyResponse(mine: WireMyResponse): MyResponse {
+  if (mine.kind === 'anonymous')
+    return {
+      status: 'submitted',
+      submittedAt: undefined,
+      answers: [],
+      booking: null,
+      anonymous: true,
+    };
+  // Before `kind`, the service sent only saved responses.
   return {
     status: mine.response.status,
     submittedAt: mine.response.submittedAt,

@@ -49,6 +49,8 @@ pub enum FormErrorCode {
     AlreadyResponded,
     /// The caller has no saved response to read or edit.
     NoResponse,
+    /// A response to an anonymous form can't be changed.
+    AnonymousResponseFinal,
     /// An answer names a question the form does not ask.
     UnknownQuestion,
     /// A question is answered twice.
@@ -70,6 +72,8 @@ pub enum FormErrorCode {
     InvalidSharing,
     /// The form's owner keeps its tallies from respondents.
     TallyHidden,
+    /// A logo or cover image is not an image the caller uploaded.
+    InvalidBranding,
     /// The table changed under the request; try again.
     Conflict,
     /// Something failed on the server.

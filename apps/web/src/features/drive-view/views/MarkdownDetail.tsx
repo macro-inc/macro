@@ -154,6 +154,7 @@ export function MarkdownDetail(props: MarkdownDetailProps) {
       entityType="md"
       label={props.kind === 'task' ? 'task' : 'document'}
       load={loadMarkdownDocument}
+      dispose={(data) => data.source.cleanup()}
     >
       {(data) => (
         <MarkdownDetailContent

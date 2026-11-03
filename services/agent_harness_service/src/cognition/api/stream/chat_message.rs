@@ -315,10 +315,10 @@ async fn send_chat_message_inner(
         .filter_map(|r| r.parts)
         .collect();
 
-    // Fetch user memory (triggers background generation if stale/missing)
+    // Compose stored user activity, explicit preferences, and current team profiles
     let user_memory = ctx
         .memory_service
-        .get_or_generate_memory((*user_id).clone())
+        .get_memory((*user_id).clone())
         .await
         .inspect_err(|e| tracing::error!(error = ?e, "failed to fetch user memory"))
         .ok()

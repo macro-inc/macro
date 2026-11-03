@@ -17,7 +17,7 @@ export type FormAudience = 'members' | 'public';
 
 export type FormStatus = 'open' | 'closed';
 
-/** What the viewer may do: view = respond; edit = build, and edit responses (edit on the linked database). */
+/** What the viewer may do: view = respond (and read shared responses); edit = build, and edit responses (edit on the linked database). */
 export type FormAccess = 'view' | 'edit' | 'owner';
 
 export type SectionKind = 'questions' | 'gate' | 'booking';
@@ -200,6 +200,14 @@ export type FormSection = {
 /** Everything the form owns about presentation, in order. */
 export type FormLayout = { sections: FormSection[] };
 
+/** A form's logo, cover image and accent color; `null` where unset. */
+export type FormBranding = {
+  logoFileId: string | null;
+  coverFileId: string | null;
+  /** `#rrggbb`. */
+  accentColor: string | null;
+};
+
 export type FormMetadata = {
   id: string;
   name: string;
@@ -211,7 +219,10 @@ export type FormMetadata = {
   status: FormStatus;
   closesAt: string | null;
   tallyVisible: boolean;
+  responsesVisible: boolean;
+  anonymous: boolean;
   confirmationMessage: string;
+  branding: FormBranding;
   submittedColumnId: string | null;
   respondentColumnId: string | null;
 };

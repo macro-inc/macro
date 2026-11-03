@@ -26,6 +26,10 @@ pub(super) struct NpmAdapter {
     /// catalogue. The value must be absolute: a bare name is looked up on the
     /// adapter's `PATH`, where its own `node_modules/.bin` comes first.
     pub(super) cli_path_env: &'static str,
+    /// Whether the adapter starts the CLI with Node's `child_process.spawn`,
+    /// which refuses Windows `.cmd` files without a shell. The variable then
+    /// names the program an npm `.cmd` shim runs instead of the shim.
+    pub(super) cli_spawned_by_node: bool,
 }
 
 impl NpmAdapter {
@@ -47,6 +51,11 @@ impl NpmAdapter {
                 missing: vec!["HOME"],
             };
         };
+        let cli_path = if self.cli_spawned_by_node {
+            crate::executable::npm_shim_target_or_self(cli_path)
+        } else {
+            cli_path.to_owned()
+        };
         let install = AdapterInstall {
             package: self.package,
             prefix: root.join(self.package),
@@ -56,7 +65,7 @@ impl NpmAdapter {
             kind: preset.kind(),
             name: preset.name(),
             launch: LaunchSpec::new(&install.bin.to_string_lossy(), [])
-                .with_env(self.cli_path_env, cli_path),
+                .with_env(self.cli_path_env, &cli_path),
             note: Some("via npm ACP adapter"),
             install: Some(install),
         })

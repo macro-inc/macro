@@ -496,6 +496,34 @@ describe('Input slots', () => {
     ).toBeNull();
   });
 
+  it('previews a collapsed draft’s attachments before its text and opens the composer from them', async () => {
+    const user = userEvent.setup();
+    device.touch = true;
+    vi.mocked(isMobile).mockReturnValue(true);
+    const { container } = render(() => (
+      <ChannelInput
+        input={{ ...baseInput, value: 'see attached' }}
+        attachmentTracker={createInputAttachmentTracker({
+          initialAttachments: [
+            { id: 'image-1', name: 'photo.png', kind: 'image' },
+            { id: 'doc-1', name: 'notes.pdf', kind: 'document' },
+            { id: 'image-2', name: 'photo-2.png', kind: 'image' },
+          ],
+        })}
+        collapsible
+      />
+    ));
+
+    const preview = screen.getByRole('img', { name: '3 attachments' });
+    expect(preview.textContent).toBe('3');
+    const collapsedInput = preview.closest('button');
+    expect(collapsedInput?.textContent).toContain('see attached');
+    expect(screen.queryByRole('button', { name: '3 attachments' })).toBeNull();
+
+    await user.click(collapsedInput as HTMLElement);
+    expect(container.querySelector('[data-composer-collapsed]')).toBeNull();
+  });
+
   it('offers Cursor and Codex within their rollouts before account setup', () => {
     editorMocks.cursorEnabled = true;
     editorMocks.codexEnabled = true;

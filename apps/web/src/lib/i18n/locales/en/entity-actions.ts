@@ -18,6 +18,13 @@ export default {
   addToFavorites: 'Add to favorites',
   archive: 'Archive',
   unarchive: 'Unarchive',
+  // An agent session's auto-archive overrides.
+  archiveWhenPullRequestsMerge: 'Archive when PRs merge',
+  archiveWhenSessionCloses: 'Archive when session closes',
+  autoArchiveUseDefaultOn: 'Use default (On)',
+  autoArchiveUseDefaultOff: 'Use default (Off)',
+  autoArchiveOn: 'On',
+  autoArchiveOff: 'Off',
   openOnGitHub: 'Open on GitHub',
   viewItemsWithTag: 'View all items with tag',
   editTag: 'Edit tag',
@@ -39,6 +46,10 @@ export default {
   markDoneCommand: 'Mark done',
   markReadCommand: 'Mark read',
   markUnreadCommand: 'Mark unread',
+  discardDraftCommand: {
+    one: 'Discard draft',
+    other: 'Discard drafts',
+  },
   copyLinkCommand: 'Copy link',
   copyBranchNameCommand: 'Copy branch name',
   copyId: 'Copy ID',
@@ -80,6 +91,7 @@ export default {
   undo: 'Undo',
 
   // Toasts.
+  toastAutoArchiveFailed: 'Could not update auto-archive',
   toastCopied: 'Copied',
   toastCopiedCount: {
     one: 'Copied {{count}} item',
@@ -101,6 +113,11 @@ export default {
     other: 'Deleted {{count}} items',
   },
   toastDeleteFailed: 'Failed to delete',
+  toastDiscardedDrafts: {
+    one: 'Draft discarded',
+    other: '{{count}} drafts discarded',
+  },
+  toastDiscardDraftFailed: 'Failed to discard draft',
   toastAddedToFavorites: 'Added to favorites',
   toastAddedCountToFavorites: {
     one: 'Added {{count}} item to favorites',

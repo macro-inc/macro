@@ -782,7 +782,6 @@ export default {
     goForward: 'Tiến tới',
     createNewSplit: 'Tạo khung mới',
     close: 'Đóng',
-    returnToList: 'Quay lại danh sách',
     previousItem: 'Mục trước',
     nextItem: 'Mục tiếp theo',
     itemNavigation: 'Điều hướng mục',

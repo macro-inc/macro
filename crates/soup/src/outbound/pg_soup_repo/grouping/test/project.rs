@@ -43,7 +43,7 @@ async fn tasks_group_by_their_project_property(pool: Pool<Postgres>) -> anyhow::
             GroupedDynamicCursorArgs {
                 user_id: user_id.copied(),
                 limit: 50,
-                cursor: Query::Sort(SimpleSortMethod::ViewedUpdated, filter.clone()),
+                cursor: Query::Sort(SimpleSortMethod::ViewedUpdated.into(), filter.clone()),
                 exclude_frecency: false,
                 grouping: GroupingConfig {
                     field: GroupByField::Project,
@@ -100,6 +100,9 @@ async fn tasks_group_by_their_project_property(pool: Pool<Postgres>) -> anyhow::
         .collect();
         let response = build_grouped_response(
             items.into_iter().map(|group| ItemGroupingInfo {
+                document_server_facts: group.document_server_facts,
+                sort_key: group.sort_key,
+                display_order: group.display_order,
                 key: group.key,
                 total_group_count: group.total_group_count,
                 index_in_group: group.index_in_group,

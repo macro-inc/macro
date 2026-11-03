@@ -5,6 +5,11 @@ export type ClientOptions = {
 };
 
 /**
+ * A color as `#rrggbb`, kept in lowercase.
+ */
+export type AccentColor = string;
+
+/**
  * Ordered from least to most access top -> bottom
  */
 export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
@@ -315,6 +320,11 @@ export type AgentMcpServers = {
  * Last synchronized state of a session's linked GitHub pull request.
  */
 export type AgentPullRequestState = 'open' | 'draft' | 'closed' | 'merged';
+
+/**
+ * Who or what archived an agent session.
+ */
+export type AgentSessionArchiveCause = 'user' | 'pull_request_merged' | 'runtime_closed';
 
 /**
  * Filters for agent sessions.
@@ -998,6 +1008,7 @@ export type ApiGroupByField = 'date' | 'entity_type' | 'project' | {
      * Group by a property value (e.g., status, priority, or custom properties)
      */
     property: {
+        bucketing?: null | PropertyBucketing;
         entity_type?: null | ApiPropertyEntityType;
         /**
          * The property definition UUID to group by
@@ -1053,7 +1064,7 @@ export type ApiParticipantRole = 'owner' | 'admin' | 'member';
 /**
  * Entity type for property lookups (API representation).
  */
-export type ApiPropertyEntityType = 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
+export type ApiPropertyEntityType = 'CALL_RECORD' | 'CALENDAR_EVENT' | 'DATABASE_ROW' | 'INITIATIVE' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
 
 /**
  * What a committed batch answers: a result per op, and the journal's change
@@ -1215,6 +1226,11 @@ export type Awareness = {
  * when the server relayed it so receivers can drop older relays.
  */
 export type AwarenessRelay = {
+    /**
+     * Whether the viewer's grant lets them edit; a viewer who cannot is
+     * shown as viewing.
+     */
+    canEdit: boolean;
     /**
      * The database the viewer is in.
      */
@@ -2779,6 +2795,11 @@ export type ChannelLabelRule = {
 };
 
 /**
+ * Requested label namespace. Omission retains the deployed automatic selection.
+ */
+export type ChannelLabelScopeSelection = 'personal' | 'team';
+
+/**
  * The authorized scope's labels in manual order.
  */
 export type ChannelLabelsList = {
@@ -2786,6 +2807,10 @@ export type ChannelLabelsList = {
      * Every label of the scope, whether or not the caller sees channels in it.
      */
     labels: Array<ChannelLabel>;
+    /**
+     * Resolved label namespace.
+     */
+    scope: ChannelLabelScopeSelection;
     /**
      * Team scope, or `None` for private labels.
      */
@@ -4081,11 +4106,12 @@ export type CreateChannelScopedBotResponse = {
  */
 export type CreateCrmCompanyRequest = {
     /**
-     * The company's email domain, e.g. "acme.com". Must be a bare
+     * Optional company domain, e.g. "acme.com". Omit for a name-only
+     * company. When supplied, must be a bare
      * domain (no scheme, path, or email) and not a generic email
      * provider domain.
      */
-    domain: string;
+    domain?: string | null;
     /**
      * Display name for the company. Team-scoped: overrides the
      * domain-directory name on every read path.
@@ -4098,8 +4124,8 @@ export type CreateCrmCompanyRequest = {
  */
 export type CreateCrmContactRequest = {
     /**
-     * The contact's email address, e.g. "jane@acme.com". Its domain
-     * must be one of the company's domains (400 otherwise).
+     * The contact's email address, including personal email providers.
+     * It need not match a company domain.
      */
     email: string;
     /**
@@ -5059,6 +5085,10 @@ export type Database = {
      */
     owner_id: string;
     /**
+     * The folder it is filed in; `null` at the root.
+     */
+    project_id: string | null;
+    /**
      * Set when trashed.
      */
     trashed_at: string | null;
@@ -6015,6 +6045,16 @@ export type DocumentUpdatedMetadata = {
      * Whether share permissions were updated.
      */
     share_permission_updated: boolean;
+};
+
+/**
+ * Request body for duplicating a database.
+ */
+export type DuplicateDatabaseRequest = {
+    /**
+     * The copy's name; left out, "<name> copy".
+     */
+    name?: string | null;
 };
 
 export type EditAnchorRequest = EditPdfAnchorRequest & {
@@ -7731,9 +7771,19 @@ export type ForeignEntityFilters = {
  */
 export type Form = {
     /**
+     * Whether nobody, the owner included, can see who gave which response.
+     * Who responded is kept apart from the responses, only so nobody
+     * responds twice. Fixed once anyone has responded.
+     */
+    anonymous: boolean;
+    /**
      * Who may respond.
      */
     audience: Audience;
+    /**
+     * Its logo, cover image and accent color.
+     */
+    branding: FormBranding;
     /**
      * When it stops taking responses, if it does.
      */
@@ -7774,10 +7824,19 @@ export type Form = {
      */
     ownerId: string;
     /**
+     * The folder it is filed in; `null` at the root.
+     */
+    projectId: string | null;
+    /**
      * The person column each signed-in submission names its respondent in;
-     * `null` once deleted.
+     * `null` once deleted, and on a form created anonymous. An anonymous
+     * form never writes it.
      */
     respondentColumnId: string | null;
+    /**
+     * Whether people with View may read individual response rows.
+     */
+    responsesVisible: boolean;
     /**
      * Whether its owner closed it.
      */
@@ -7801,10 +7860,26 @@ export type Form = {
 };
 
 /**
- * The caller's level on a form: view responds, edit changes questions and
- * reads responses, owner also sets the audience, closes and trashes it.
+ * The caller's level on a form: view responds (and reads responses when
+ * they are shared), edit changes questions and reads responses, owner
+ * also sets the audience, closes and trashes it.
  */
 export type FormAccess = 'view' | 'edit' | 'owner';
+
+/**
+ * A form's logo, cover image and accent color, each unset by default.
+ */
+export type FormBranding = {
+    accentColor: null | AccentColor;
+    /**
+     * The static file shown as a banner across the top of the page.
+     */
+    coverFileId: string | null;
+    /**
+     * The static file shown as the logo above the title.
+     */
+    logoFileId: string | null;
+};
 
 /**
  * A ready collaborative form and the result of publishing its latest draft.
@@ -7847,7 +7922,7 @@ export type FormDetail = {
 /**
  * What went wrong with a forms request.
  */
-export type FormErrorCode = 'tableAlreadyHasForm' | 'notFound' | 'forbidden' | 'ownerOnly' | 'signInRequired' | 'closed' | 'tableGone' | 'alreadyResponded' | 'noResponse' | 'unknownQuestion' | 'repeatedAnswer' | 'missingAnswer' | 'invalidAnswer' | 'widgetMismatch' | 'fileUploadNeedsSignIn' | 'invalidLayout' | 'invalidName' | 'invalidSharing' | 'tallyHidden' | 'conflict' | 'internal';
+export type FormErrorCode = 'tableAlreadyHasForm' | 'notFound' | 'forbidden' | 'ownerOnly' | 'signInRequired' | 'closed' | 'tableGone' | 'alreadyResponded' | 'noResponse' | 'anonymousResponseFinal' | 'unknownQuestion' | 'repeatedAnswer' | 'missingAnswer' | 'invalidAnswer' | 'widgetMismatch' | 'fileUploadNeedsSignIn' | 'invalidLayout' | 'invalidName' | 'invalidSharing' | 'tallyHidden' | 'invalidBranding' | 'conflict' | 'internal';
 
 /**
  * Why a forms request was refused or failed.
@@ -8116,6 +8191,11 @@ export type FormSectionDetail = {
  * Where a new form's responses go.
  */
 export type FormSource = {
+    /**
+     * Make the form anonymous from the start: its table gets no
+     * Respondent column.
+     */
+    anonymous?: boolean;
     /**
      * Keep the form, and the database made for it, out of Drive, as
      * for a channel poll.
@@ -8935,7 +9015,12 @@ export type GroupedInitialParams = {
      * Limit the number of items returned per group. Defaults to 20. Max 500.
      */
     per_group_limit?: number | null;
+    sort_direction?: null | SoupApiSortDirection;
     sort_method?: null | GroupedSoupSort;
+    /**
+     * Property definition selected for numeric property sorting.
+     */
+    sort_property_definition_id?: string | null;
 };
 
 /**
@@ -8954,7 +9039,12 @@ export type GroupedPageParams = {
      * Limit the number of items returned. Defaults to 20. Max 500.
      */
     limit?: number | null;
+    sort_direction?: null | SoupApiSortDirection;
     sort_method?: null | GroupedSoupSort;
+    /**
+     * Property definition selected for numeric property sorting.
+     */
+    sort_property_definition_id?: string | null;
 };
 
 /**
@@ -9004,7 +9094,7 @@ export type GroupedSoupPage = (GroupedSoupInitialPage & {
 /**
  * Sort method for grouped queries (frecency not supported).
  */
-export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated';
+export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'property';
 
 /**
  * Guest-safe message projection: no account identities, attachments, or entity grants.
@@ -10713,8 +10803,7 @@ export type MessageTopicEvent = {
 };
 
 /**
- * A signed-in respondent's own response, with its answers as the row
- * holds them now.
+ * A signed-in respondent's own response.
  */
 export type MyResponse = {
     /**
@@ -10723,14 +10812,17 @@ export type MyResponse = {
      */
     answers: Array<Answer>;
     /**
-     * The form's booking step, while the saved row still passes the form's
-     * current required questions and gates.
+     * The form's booking step, while the saved row still passes the
+     * form's current required questions and gates.
      */
     booking?: UnlockedBooking;
+    kind: 'saved';
     /**
      * The ledger entry.
      */
     response: FormResponse;
+} | {
+    kind: 'anonymous';
 };
 
 /**
@@ -11127,6 +11219,10 @@ export type Params = {
     limit?: number | null;
     sort_direction?: null | SoupApiSortDirection;
     sort_method?: null | SoupApiSort;
+    /**
+     * Property definition selected for numeric property sorting.
+     */
+    sort_property_definition_id?: string | null;
 };
 
 /**
@@ -11628,6 +11724,59 @@ export type ProjectPreviewData = {
 };
 
 /**
+ * Caller-defined, ordered UTC date ranges and a separate missing-value key.
+ */
+export type PropertyBucketing = PropertyDateRanges & {
+    type: 'date_ranges';
+};
+
+/**
+ * UTC timestamp interval. Lower bounds are inclusive; upper bounds are exclusive.
+ */
+export type PropertyDateFilterRange = {
+    /**
+     * Exclusive UTC upper bound, omitted for an open end.
+     */
+    end?: string | null;
+    /**
+     * Inclusive UTC lower bound, omitted for an open start.
+     */
+    start?: string | null;
+};
+
+/**
+ * A half-open UTC interval. An absent start or end extends to infinity.
+ */
+export type PropertyDateRange = {
+    /**
+     * Exclusive end, or positive infinity.
+     */
+    end?: string | null;
+    /**
+     * Unique caller-supplied group key.
+     */
+    key: string;
+    /**
+     * Inclusive start, or negative infinity.
+     */
+    start?: string | null;
+};
+
+/**
+ * A complete partition of present dates plus one bucket for absent values.
+ */
+export type PropertyDateRanges = {
+    /**
+     * Caller-supplied group key for entities with no date value.
+     */
+    missing_value_bucket_key: string;
+    /**
+     * Ordered, contiguous ranges covering every present date.
+     */
+    ranges: Array<PropertyDateRange>;
+};
+
+/**
  * Property definition model (service representation).
  */
 export type PropertyDefinition = {
@@ -11667,6 +11816,7 @@ export type PropertyDefinitionWithOptions = {
  * Multiple filters are AND'd together.
  */
 export type PropertyFilter = {
+    date_range?: null | PropertyDateFilterRange;
     /**
      * Entity reference IDs to match. Multiple values are OR'd together.
      */
@@ -11676,6 +11826,10 @@ export type PropertyFilter = {
      * When None, matches across all entity types.
      */
     entity_type?: string | null;
+    /**
+     * Flat Soup/search presence filter: true expands to an open date range, false to its negation.
+     */
+    has_date?: boolean | null;
     /**
      * Select option UUIDs to match. Multiple values are OR'd together.
      */
@@ -12953,6 +13107,11 @@ export type SoupAgentSessionSoupPropertiesField = {
     properties: Array<SoupProperty>;
 } & {
     /**
+     * When the session was archived, or `None` while it is active.
+     */
+    archivedAt?: string | null;
+    archivedBy?: null | AgentSessionArchiveCause;
+    /**
      * The bot running this session
      */
     botId: string;
@@ -12968,10 +13127,6 @@ export type SoupAgentSessionSoupPropertiesField = {
      * The agent session uuid
      */
     id: string;
-    /**
-     * Whether the session is archived and read-only.
-     */
-    isArchived: boolean;
     /**
      * The user-facing name of the session
      */
@@ -13061,7 +13216,7 @@ export type SoupApiItem = SoupItem & {
 /**
  * Sort options accepted by non-grouped soup API endpoints.
  */
-export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency' | 'touched_by_me' | 'notified_at';
+export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency' | 'touched_by_me' | 'notified_at' | 'property';
 
 /**
  * Sort direction accepted by non-grouped soup API endpoints.
@@ -14988,6 +15143,13 @@ export type TallyBucket = {
      * The value.
      */
     value: TallyValue;
+    /**
+     * Who chose it, as Macro user ids in submission order: present only
+     * for the form's editors, or its viewers when it shares its responses,
+     * and never when it hides respondents. Rows no signed-in respondent
+     * submitted count without a voter.
+     */
+    voters?: Array<string> | null;
 };
 
 /**
@@ -15809,11 +15971,20 @@ export type UpdateCrmTeamSettingsRequest = {
 };
 
 /**
- * A change to a form's facts; what is left out stays. The description and
- * confirmation message take edit, the rest owner. A form is renamed
+ * A change to a form's facts; what is left out stays. The description,
+ * confirmation message and branding take edit, the rest owner. A form is renamed
  * through the entity mutation router.
  */
 export type UpdateForm = {
+    /**
+     * A new accent color, or `null` for the default.
+     */
+    accentColor?: string | null;
+    /**
+     * Whether nobody can see who gave which response; refused once anyone
+     * has responded.
+     */
+    anonymous?: boolean;
     /**
      * Who may respond from now on.
      */
@@ -15827,9 +15998,21 @@ export type UpdateForm = {
      */
     confirmationMessage?: string;
     /**
+     * A new cover image, or `null` to remove it.
+     */
+    coverFileId?: string | null;
+    /**
      * Its new description.
      */
     description?: string;
+    /**
+     * A new logo, or `null` to remove it.
+     */
+    logoFileId?: string | null;
+    /**
+     * Whether people with View may read individual response rows.
+     */
+    responsesVisible?: boolean;
     /**
      * Open or close it.
      */
@@ -18192,7 +18375,12 @@ export type IngestTranscriptResponses = {
 export type ListChannelLabelsData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels';
 };
 
@@ -18213,7 +18401,12 @@ export type ListChannelLabelsResponse = ListChannelLabelsResponses[keyof ListCha
 export type CreateChannelLabelData = {
     body: CreateChannelLabelRequest;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels';
 };
 
@@ -18242,7 +18435,12 @@ export type SetChannelLabelData = {
          */
         channel_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels/channels/{channel_id}';
 };
 
@@ -18265,7 +18463,12 @@ export type SetChannelLabelResponse = SetChannelLabelResponses[keyof SetChannelL
 export type PreviewSmartTagData = {
     body: ChannelLabelRule;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels/preview';
 };
 
@@ -18292,7 +18495,12 @@ export type DeleteChannelLabelData = {
          */
         label_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels/{label_id}';
 };
 
@@ -18319,7 +18527,12 @@ export type RenameChannelLabelData = {
          */
         label_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels/{label_id}';
 };
 
@@ -19358,6 +19571,9 @@ export type GetContactByEmailData = {
 };
 
 export type GetContactByEmailErrors = {
+    /**
+     * Invalid email or multiple visible contacts match; choose a contact ID.
+     */
     400: ErrorResponse;
     401: ErrorResponse;
     500: ErrorResponse;
@@ -20027,6 +20243,31 @@ export type UndoDatabaseChangeResponses = {
 };
 
 export type UndoDatabaseChangeResponse = UndoDatabaseChangeResponses[keyof UndoDatabaseChangeResponses];
+
+export type DuplicateDatabaseData = {
+    body: DuplicateDatabaseRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/duplicate';
+};
+
+export type DuplicateDatabaseErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DuplicateDatabaseError = DuplicateDatabaseErrors[keyof DuplicateDatabaseErrors];
+
+export type DuplicateDatabaseResponses = {
+    201: Database;
+};
+
+export type DuplicateDatabaseResponse = DuplicateDatabaseResponses[keyof DuplicateDatabaseResponses];
 
 export type ImportDatabaseTableData = {
     body: ImportTable;
@@ -23280,20 +23521,22 @@ export type GetItemsSoupData = {
          */
         limit?: number;
         /**
-         * Sort method. Options are viewed_at, created_at, updated_at,
-         * viewed_updated, frecency, touched_by_me, notified_at. Defaults to
-         * viewed_at.
+         * Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.
+         * Missing definitions, unsupported types, and mismatched values sort as missing.
+         * Flat property sorts omit calendar events, email, channels, calls, companies, and agent sessions.
+         * Defaults to viewed_at.
          */
         sort_method?: SoupApiSort;
         /**
+         * Property definition selected for numeric property sorting.
+         */
+        sort_property_definition_id?: string;
+        /**
          * Sort direction. Options are asc, desc. Defaults to desc.
          *
-         * Re-send this with every page: it is not carried in the cursor.
-         *
-         * Applies to the timestamp sort methods only. `asc` combined with
-         * `frecency` is rejected rather than ignored: frecency pages are ordered
-         * by relevance score and the cursor comparison assumes descending, so
-         * there is no ascending frecency order to give.
+         * Timestamp sorts require this parameter again on each page. Property
+         * cursors preserve their direction and always put missing values last.
+         * Ascending frecency, touched-by-me, and notified-at sorts are unsupported.
          */
         sort_direction?: SoupApiSortDirection;
         /**

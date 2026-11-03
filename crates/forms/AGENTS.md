@@ -29,7 +29,9 @@ service.
 ## Boundaries
 
 - Depends on: `databases` (ports), `collab_surface` (outbound, ports),
-  `entity_access`, `models_forms`, `models_databases`, `macro_event_broker`.
+  `entity_access`, `models_forms`, `models_databases`, `macro_event_broker`,
+  `static_file_service_client` (feature `static_files`: branding images must
+  be the setter's own image uploads; `src/outbound/static_file_images.rs`).
 - Used by: `document_storage_service`, `ai_tools`.
 
 ## Recipes
@@ -48,6 +50,20 @@ service.
 ## Checks
 
 - `cargo test -p forms --all-features` (`SQLX_OFFLINE` unset).
+
+## Gotchas
+
+- An anonymous form (`forms.anonymous`) keeps who responded in
+  `form_submission_receipts` (no response, row or time) and writes ledger
+  entries with no respondent, a random v4 id and the day only. Nothing may
+  join the two: no span, log, event or row author names a voter next to a
+  response.
+- A form is filed in a folder on its own (`forms.project_id`, `MoveEntity`,
+  owner only); its database stays where it is. The folder's inherited grants
+  on the form reach the database through form access, like any form grant.
+- `POST /forms` attributes the creation to the SDK token's `agent_id` (code
+  mode), like the native tool, so channel delivery shares a poll an agent
+  posts; access checks still run as the plain user.
 
 ## Related
 

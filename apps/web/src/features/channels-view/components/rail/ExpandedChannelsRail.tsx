@@ -3,32 +3,15 @@ import { runCreateAction } from '@app/features/command/Launcher';
 import { SlackImportSidebar } from '@app/features/slack-import/slack-import-sidebar';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
-import { ChannelMutedIndicator } from '@channel/components/ChannelMutedIndicator';
-import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
-import { type ChannelEntity, Entity } from '@entity';
+import type { ChannelEntity } from '@entity';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
-import ChatsCircleIcon from '@icon/system/regular/chats-circle.svg';
-import CheckIcon from '@icon/system/regular/check.svg';
 import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
-import SortIcon from '@icon/system/regular/sort-ascending.svg';
 import XIcon from '@icon/system/regular/x.svg';
-import {
-  createDraggable,
-  createDroppable,
-  useDragDropContext,
-} from '@thisbeyond/solid-dnd';
-import {
-  cn,
-  Dropdown,
-  EmptyStatePanel,
-  Hotkey,
-  type TabOption,
-  Tabs,
-  Tooltip,
-} from '@ui';
+import { createDroppable } from '@thisbeyond/solid-dnd';
+import { cn, EmptyStatePanel, Hotkey, type TabOption, Tabs } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import {
   type Accessor,
@@ -43,35 +26,24 @@ import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { canLabelChannel } from '../../core/channel-label-eligibility';
 import { ChannelsLiveCallsSidebar } from '../../live-calls-sidebar';
 import { CHANNELS_TOUR } from '../../tour';
-import type {
-  ChannelListSort,
-  ChannelsGroup,
-  ChannelsSortGroup,
-  ChannelsTab,
-} from '../../types';
-import { channelMentionsUser, formatDetailedTimestamp } from '../../utils';
+import type { ChannelsGroup, ChannelsTab } from '../../types';
 import { ChannelsEmptyState } from '../ChannelsEmptyState';
 import { ConversationsCreateMenu } from '../ConversationsCreateMenu';
 import { ChannelFavoritesSection } from './ChannelFavoriteRows';
+import { ChannelLabelRow, ChannelsCreateMenu } from './ChannelLabelRows';
 import {
-  ChannelLabelMenuItems,
-  ChannelLabelRow,
-  ChannelsCreateMenu,
-} from './ChannelLabelRows';
+  ExpandedRecents,
+  ExpandedThreads,
+  RecentConversationCard,
+} from './ChannelListViews';
+import { ChannelOption } from './ChannelOption';
 import {
-  ChannelAvatar,
-  ChannelCallIndicator,
-  ChannelRailItemContextMenu,
   CONVERSATION_CARD_HEIGHT,
-  ConversationCard,
-  IncomingCallActions,
   isPrimaryMouseDown,
 } from './ChannelRailItems';
+import { ChannelSortDropdown } from './ChannelSortDropdown';
 import {
-  ALL_THREADS_ROW_ID,
-  type ChannelLabelDragData,
   type ChannelLabelDropData,
-  type ChannelRailRow,
   type ChannelSectionRow,
   domIdForRow,
   rowKeyForChannel,
@@ -87,8 +59,6 @@ import {
 } from './ChannelsRailSection';
 import {
   CHANNEL_LIST_GROUPS,
-  useChannelRailItemState,
-  useChannelRailScopeState,
   useChannelRailSectionState,
   useChannelRailVirtualizer,
 } from './hooks/useChannelRailState';
@@ -146,253 +116,6 @@ const GROUPS: GroupConfig[] = [
     onCreate: () => runCreateAction('channel'),
   },
 ];
-
-const CHANNEL_SORT_OPTIONS: {
-  value: ChannelListSort;
-  label: string;
-}[] = [
-  { value: 'viewed_at', label: 'Last viewed' },
-  { value: 'updated_at', label: 'Last updated' },
-  { value: 'created_at', label: 'Date created' },
-];
-
-function ChannelSortDropdown(props: {
-  group: ChannelsSortGroup;
-  label: string;
-}) {
-  const rail = useChannelsRail();
-  const setSort = (value: string) => {
-    const option = CHANNEL_SORT_OPTIONS.find((item) => item.value === value);
-    if (option) rail.setSortBy(props.group, option.value);
-  };
-
-  return (
-    <Dropdown placement="bottom-end">
-      <Dropdown.Trigger
-        aria-label={`Sort ${props.label.toLowerCase()}`}
-        tooltip={`Sort ${props.label.toLowerCase()}`}
-        as={ViewSidebar.Control}
-        variant="ghost"
-        size="icon-sm"
-      >
-        <SortIcon class="size-3.5" />
-      </Dropdown.Trigger>
-      <Dropdown.Content class="min-w-40">
-        <Dropdown.Group>
-          <Dropdown.RadioGroup
-            value={rail.sortBy(props.group)}
-            onChange={setSort}
-          >
-            <For each={CHANNEL_SORT_OPTIONS}>
-              {(option) => (
-                <Dropdown.RadioItem closeOnSelect value={option.value}>
-                  <span class="flex-1">{option.label}</span>
-                  <Dropdown.ItemIndicator>
-                    <CheckIcon class="size-3.5 text-accent" />
-                  </Dropdown.ItemIndicator>
-                </Dropdown.RadioItem>
-              )}
-            </For>
-          </Dropdown.RadioGroup>
-        </Dropdown.Group>
-      </Dropdown.Content>
-    </Dropdown>
-  );
-}
-
-/**
- * Drag a channel between labels. Registered once per Channels-section row: a
- * row is the drag source, and also a drop target that means "into this row's
- * label" (or "group these two" when the row is in no label).
- */
-function createChannelLabelDnd(props: {
-  channel: ChannelEntity;
-  rowId: string;
-  labelId: () => string | undefined;
-  /** Drops are refused while the team's labels are unavailable. */
-  disabled: () => boolean;
-}) {
-  const rail = useChannelsRail();
-  const draggable = createDraggable(
-    `${rail.railId}:channel-label:drag:${props.rowId}`,
-    {
-      dragType: 'channel-label',
-      dndScope: rail.railId,
-      channelId: props.channel.id,
-      get labelId() {
-        return rail
-          .labels()
-          .find(
-            (label) =>
-              !label.rule && label.channelIds.includes(props.channel.id)
-          )?.id;
-      },
-      name: props.channel.name,
-      iconType: 'channel',
-    } satisfies ChannelLabelDragData
-  );
-  const droppable = createDroppable(
-    `${rail.railId}:channel-label:channel:${props.rowId}`,
-    {
-      dragType: 'channel-label-target',
-      dndScope: rail.railId,
-      get target() {
-        const labelId = props.labelId();
-        const label = rail.labels().find((label) => label.id === labelId);
-        return labelId
-          ? {
-              kind: label?.rule ? ('smart-tag' as const) : ('label' as const),
-              labelId,
-            }
-          : { kind: 'channel' as const, channelId: props.channel.id };
-      },
-      isDropTargetDisabled: props.disabled,
-    } satisfies ChannelLabelDropData
-  );
-  return { draggable, droppable };
-}
-
-function ChannelOption(props: {
-  channel: ChannelEntity;
-  /** The list row this option stands for; defaults to the channel's own row. */
-  rowId?: ChannelRailRow['id'];
-  /** Nest under a label heading, with the branch rail. */
-  labelId?: string;
-  /** Make a team-channel row draggable between labels (Team channels section only). */
-  draggable?: boolean;
-}) {
-  const rail = useChannelsRail();
-  const rowId = () => props.rowId ?? rowKeyForChannel(props.channel.id);
-  const item = useChannelRailItemState(() => props.channel.id, rowId);
-  const timestamp = () =>
-    props.channel.latestRootMessage?.createdAt ?? props.channel.updatedAt;
-  // Whether a row participates in drag and drop is fixed per mount.
-  const dnd = props.draggable
-    ? createChannelLabelDnd({
-        channel: props.channel,
-        rowId: rowId(),
-        labelId: () => props.labelId,
-        disabled: () =>
-          !rail.labelsAvailable() || !canLabelChannel(props.channel),
-      })
-    : undefined;
-
-  // Selection belongs to a click, never the press that starts a drag.
-  let didDrag = false;
-  const [, dragActions] = useDragDropContext() ?? [];
-  dragActions?.onDragStart(({ draggable }) => {
-    if (
-      draggable.data.dndScope === rail.railId &&
-      draggable.data.channelId === props.channel.id
-    )
-      didDrag = true;
-  });
-
-  // A plain row highlights alone (dropping on it groups the two); a row in a
-  // label is highlighted as part of its whole label by ChannelsSectionRows.
-  const isGroupingTarget = () => {
-    const target = rail.activeDropTarget();
-    return target?.kind === 'channel' && target.channelId === props.channel.id;
-  };
-
-  return (
-    <div
-      ref={(element) => {
-        dnd?.draggable.ref(element);
-        dnd?.droppable.ref(element);
-      }}
-      {...(canLabelChannel(props.channel) ? dnd?.draggable.dragActivators : {})}
-      onPointerDown={(event) => {
-        didDrag = false;
-        rail.prefetchRow(rowId(), event);
-      }}
-      class={cn(
-        'min-w-0',
-        props.draggable && 'pb-0.5',
-        props.labelId !== undefined &&
-          'relative pl-(--sidebar-icon-slot) before:pointer-events-none before:absolute before:inset-y-0 before:left-(--sidebar-local-rail) before:w-px before:-translate-x-1/2 before:bg-edge-muted',
-        isGroupingTarget() &&
-          'rounded-lg bg-selected ring-1 ring-inset ring-accent',
-        dnd?.draggable.isActiveDraggable && 'opacity-50'
-      )}
-    >
-      <ChannelRailItemContextMenu
-        channel={props.channel}
-        class="block w-full"
-        extraItems={<ChannelLabelMenuItems channel={props.channel} />}
-      >
-        <ViewSidebar.Item
-          as="div"
-          ref={tourTarget(CHANNELS_TOUR.conversation)}
-          id={item().domId}
-          role="treeitem"
-          tabIndex={-1}
-          class={cn(
-            'group/channel-option relative',
-            !item().selected &&
-              !isTouchDevice() &&
-              item().focused &&
-              'bg-hover text-ink'
-          )}
-          active={item().selected && !isTouchDevice()}
-          aria-current={item().selected ? 'page' : undefined}
-          onClick={(event) => {
-            if (!isPrimaryMouseDown(event) || didDrag) return;
-            rail.activateRow(rowId(), event);
-          }}
-        >
-          <ViewSidebar.Icon>
-            <ChannelAvatar channel={props.channel} />
-          </ViewSidebar.Icon>
-          <span class="min-w-0 flex-1 truncate">{props.channel.name}</span>
-          <span class="flex shrink-0 items-center gap-2">
-            <ChannelMutedIndicator muted={item().muted} />
-            <ChannelCallIndicator
-              status={item().incomingCallId ? undefined : item().callStatus}
-            />
-            <Show when={item().unread}>
-              <span
-                aria-label="Unread"
-                class="size-2 shrink-0 rounded-full bg-accent"
-              />
-            </Show>
-            <Show when={!item().incomingCallId && timestamp()}>
-              {(value) => (
-                <span class="relative hidden shrink-0 group-hover/channel-option:block touch:hidden">
-                  <span
-                    aria-hidden="true"
-                    class="invisible whitespace-nowrap text-xs font-light"
-                  >
-                    <Entity.Timestamp
-                      entity={props.channel}
-                      overrideTimeStamp={value()}
-                    />
-                  </span>
-                  <Tooltip
-                    label={formatDetailedTimestamp(value())}
-                    placement="top"
-                    class="absolute inset-0 flex items-center"
-                  >
-                    <span class="whitespace-nowrap text-xs font-light text-ink-extra-muted">
-                      <Entity.Timestamp
-                        entity={props.channel}
-                        overrideTimeStamp={value()}
-                      />
-                    </span>
-                  </Tooltip>
-                </span>
-              )}
-            </Show>
-          </span>
-          <IncomingCallActions
-            callId={item().incomingCallId}
-            channelId={props.channel.id}
-          />
-        </ViewSidebar.Item>
-      </ChannelRailItemContextMenu>
-    </div>
-  );
-}
 
 function ExpandedHeader(props: { search: ChannelRailSearch }) {
   const rail = useChannelsRail();
@@ -923,206 +646,6 @@ function ExpandedBrowse() {
         </ViewSidebar.Content>
       </Match>
     </Switch>
-  );
-}
-
-function RecentConversationCard(props: { channel: ChannelEntity }) {
-  const rail = useChannelsRail();
-  const currentUserId = useUserId();
-  const item = useChannelRailItemState(() => props.channel.id);
-
-  return (
-    <ChannelRailItemContextMenu
-      channel={props.channel}
-      class="block w-full"
-      extraItems={<ChannelLabelMenuItems channel={props.channel} />}
-    >
-      <ConversationCard
-        id={item().domId}
-        class="border-b border-edge-muted"
-        channel={props.channel}
-        senderId={props.channel.latestRootMessage?.senderId}
-        mentionedCurrentUser={channelMentionsUser(
-          props.channel,
-          currentUserId()
-        )}
-        unread={item().unread}
-        muted={item().muted}
-        callStatus={item().callStatus}
-        incomingCallId={item().incomingCallId}
-        selected={item().selected}
-        focused={item().focused}
-        onActivate={(event) =>
-          rail.activateRow(rowKeyForChannel(props.channel.id), event)
-        }
-        onPress={(event) =>
-          rail.prefetchRow(rowKeyForChannel(props.channel.id), event)
-        }
-      />
-    </ChannelRailItemContextMenu>
-  );
-}
-
-function ExpandedRecents() {
-  const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
-  createScrollTopFade(scrollRoot);
-  const scope = useChannelRailScopeState(() => 'recents');
-  const pagination = useChannelRailVirtualizer(() => 'recents');
-  const forceEmptyState = useDebugSetting(
-    DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
-  );
-
-  return (
-    <Switch>
-      <Match
-        when={
-          !forceEmptyState() &&
-          scope().source.isLoading() &&
-          scope().items.length === 0
-        }
-      >
-        <RailListLoading />
-      </Match>
-      <Match
-        when={
-          !forceEmptyState() &&
-          scope().source.error() &&
-          scope().items.length === 0
-        }
-      >
-        <RailListError retry={scope().source.refresh} />
-      </Match>
-      <Match when={forceEmptyState() || scope().items.length === 0}>
-        <ChannelsEmptyState scope="recents" topAligned />
-      </Match>
-      <Match when={true}>
-        <div
-          ref={setScrollRoot}
-          class="scrollbar-hidden size-full min-h-0 overflow-y-auto"
-          aria-busy={scope().source.isLoadingMore()}
-        >
-          <Virtualizer
-            ref={pagination.registerVirtualizer}
-            data={scope().items}
-            scrollRef={scrollRoot()}
-            itemSize={CONVERSATION_CARD_HEIGHT}
-            bufferSize={360}
-            keepMounted={scope().keepMounted}
-            onScroll={pagination.loadMoreNearEnd}
-          >
-            {(channel) => <RecentConversationCard channel={channel} />}
-          </Virtualizer>
-          <Show when={scope().source.isLoadingMore()}>
-            <RailListLoadingMore variant="recent" />
-          </Show>
-          <Show
-            when={scope().source.error() && !scope().source.isLoadingMore()}
-          >
-            <RailListError retry={scope().source.refresh} compact />
-          </Show>
-        </div>
-      </Match>
-    </Switch>
-  );
-}
-
-function ExpandedThreads() {
-  const rail = useChannelsRail();
-  const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
-  const scope = useChannelRailScopeState(() => 'threads');
-  const pagination = useChannelRailVirtualizer(() => 'threads');
-  const allThreadsDomId = () => domIdForRow(rail.railId, ALL_THREADS_ROW_ID);
-  const allThreadsSelected = () => rail.threadsChannelId() === undefined;
-  const allThreadsFocused = () => rail.list.focus.key() === ALL_THREADS_ROW_ID;
-  const registerScrollRef = (element: HTMLDivElement) => {
-    setScrollRoot(element);
-    rail.registerScrollRef('threads', element);
-  };
-
-  return (
-    <ViewSidebar.Content class="h-full overflow-hidden">
-      <ViewSidebar.Nav aria-label="Thread filters" class="shrink-0">
-        <ViewSidebar.Item
-          as="div"
-          id={allThreadsDomId()}
-          role="treeitem"
-          tabIndex={-1}
-          class={cn(
-            !allThreadsSelected() && allThreadsFocused() && 'bg-hover text-ink'
-          )}
-          active={allThreadsSelected()}
-          aria-current={allThreadsSelected() ? 'page' : undefined}
-          onClick={(event) => {
-            if (!isPrimaryMouseDown(event)) return;
-            rail.activateRow(ALL_THREADS_ROW_ID, event);
-          }}
-        >
-          <ViewSidebar.Icon>
-            <ChatsCircleIcon class="size-4" />
-          </ViewSidebar.Icon>
-          <span class="min-w-0 flex-1 truncate">All threads</span>
-        </ViewSidebar.Item>
-      </ViewSidebar.Nav>
-      <CollapsibleSection.Root open sizing="fill">
-        <CollapsibleSection.Header focused={false} focusWithin={false}>
-          <span class="flex h-full min-w-0 flex-1 items-center px-2">
-            <span class="min-w-0 truncate">Conversations</span>
-          </span>
-          <div data-section-action="" class="flex items-center gap-0.5">
-            <ChannelSortDropdown group="threads" label="Conversations" />
-            <Show when={isTouchDevice()}>
-              <ConversationsCreateMenu />
-            </Show>
-          </div>
-        </CollapsibleSection.Header>
-        <CollapsibleSection.Content
-          open
-          contentRef={registerScrollRef}
-          class="flex min-h-0 flex-col gap-0.5"
-        >
-          <Switch>
-            <Match
-              when={scope().source.isLoading() && scope().items.length === 0}
-            >
-              <RailListLoading />
-            </Match>
-            <Match when={scope().source.error() && scope().items.length === 0}>
-              <RailListError retry={scope().source.refresh} />
-            </Match>
-            <Match when={scope().items.length > 0}>
-              <Virtualizer
-                ref={pagination.registerVirtualizer}
-                data={scope().items}
-                scrollRef={scrollRoot()}
-                itemSize={34}
-                bufferSize={240}
-                keepMounted={scope().keepMounted}
-                onScroll={pagination.loadMoreNearEnd}
-              >
-                {(channel) => (
-                  <div class="pb-0.5">
-                    <ChannelOption channel={channel} />
-                  </div>
-                )}
-              </Virtualizer>
-              <Show when={scope().source.isLoadingMore()}>
-                <RailListLoadingMore variant="channel" />
-              </Show>
-              <Show
-                when={scope().source.error() && !scope().source.isLoadingMore()}
-              >
-                <RailListError retry={scope().source.refresh} compact />
-              </Show>
-            </Match>
-            <Match when={true}>
-              <div class="px-2 py-2 text-xs text-ink-extra-muted">
-                No conversations
-              </div>
-            </Match>
-          </Switch>
-        </CollapsibleSection.Content>
-      </CollapsibleSection.Root>
-    </ViewSidebar.Content>
   );
 }
 

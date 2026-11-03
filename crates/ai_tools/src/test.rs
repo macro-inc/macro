@@ -100,13 +100,23 @@ fn coding_dispatch_is_available_to_every_host_but_not_internal_subagents() {
         AiHost::Mcp,
     ] {
         let tools = tools_for(host);
-        for name in ["ListCodingAgents", "DispatchCodingAgent"] {
+        for name in [
+            "ListCodingAgents",
+            "ListAgentUpdates",
+            "DispatchCodingAgent",
+        ] {
             assert!(tools.toolset.tools.contains_key(name), "{host:?}: {name}");
+        }
+        for name in ["ListCodingAgents", "DispatchCodingAgent"] {
             assert!(tools.prompt.to_string().contains(name), "{host:?}: {name}");
         }
     }
     let subagent = subagent_toolset();
-    for name in ["ListCodingAgents", "DispatchCodingAgent"] {
+    for name in [
+        "ListCodingAgents",
+        "ListAgentUpdates",
+        "DispatchCodingAgent",
+    ] {
         assert!(!subagent.tools.contains_key(name));
     }
 }
@@ -284,8 +294,12 @@ fn the_agent_session_host_keeps_chats_user_tools_with_the_review_prompt() {
         tools_for(AiHost::Chat)
             .toolset
             .request_schemas()
-            .map(|schemas| schemas.len()),
-        "the same tools as chat except agent-session connector discovery"
+            .map(|schemas| schemas
+                .into_iter()
+                .filter(|schema| schema.name != "DisplayResults")
+                .count()),
+        "the same tools as chat except agent-session connector discovery and \
+         chat's DisplayResults, which sessions replace with the harness's execution.views.present"
     );
 }
 
@@ -508,10 +522,11 @@ fn channel_media_uploads_are_mcp_only() {
 
 #[test]
 fn every_eager_tool_exists() {
-    let tools = tools_for(AiHost::AgentSession);
+    let session = tools_for(AiHost::AgentSession);
+    let chat = tools_for(AiHost::Chat);
     for name in EAGER_TOOLS {
         assert!(
-            tools.toolset.tools.contains_key(*name),
+            session.toolset.tools.contains_key(*name) || chat.toolset.tools.contains_key(*name),
             "{name} is not a tool"
         );
     }
@@ -605,7 +620,6 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         assert!(!direct.deferred.iter().any(|t| t.name == name), "{name}");
     }
     for name in [
-        "DisplayResults",
         "NameSearch",
         "ListEntities",
         "ContentSearch",

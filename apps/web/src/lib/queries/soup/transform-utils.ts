@@ -891,6 +891,7 @@ export const mapApiSoupItemToEntity = (
         id: item.data.channel.id,
         name: item.data.channel.name || 'Unknown Channel',
         channelType: item.data.channel.channel_type,
+        teamId: item.data.channel.team_id ?? undefined,
         ownerId: item.data.channel.owner_id,
         frecencyScore: item.frecency_score ?? 0,
         updatedAt: item.data.channel.updated_at,

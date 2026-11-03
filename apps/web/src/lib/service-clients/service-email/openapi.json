@@ -3871,6 +3871,42 @@
         }
       }
     },
+    "/email/threads/{thread_id}/read-receipts": {
+      "get": {
+        "tags": ["email"],
+        "operationId": "get_thread_read_receipts",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Authorized email thread",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadReadReceipts"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": ["Health"],
@@ -3885,6 +3921,32 @@
                   "$ref": "#/components/schemas/EmptyResponse"
                 }
               }
+            }
+          }
+        }
+      }
+    },
+    "/opens/{token}": {
+      "get": {
+        "tags": ["email"],
+        "summary": "Every request gets the same uncacheable pixel so the response reveals nothing\nabout the token, and each open reaches the server.",
+        "operationId": "get_read_receipt_pixel",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "description": "Opaque pixel token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Transparent pixel, for any token",
+            "content": {
+              "image/gif": {}
             }
           }
         }
@@ -6949,6 +7011,34 @@
           }
         }
       },
+      "MessageReadReceipt": {
+        "type": "object",
+        "description": "Open state of one tracked, sent message.",
+        "required": ["message_id", "open_count"],
+        "properties": {
+          "first_opened_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "First counted fetch."
+          },
+          "last_opened_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Latest counted fetch."
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The tracked message."
+          },
+          "open_count": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Counted pixel fetches.",
+            "minimum": 0
+          }
+        }
+      },
       "ParsedMessage": {
         "type": "object",
         "required": [
@@ -7270,6 +7360,10 @@
       "Settings": {
         "type": "object",
         "properties": {
+          "read_receipts_enabled": {
+            "type": ["boolean", "null"],
+            "description": "Whether messages sent from this inbox carry an open-tracking pixel."
+          },
           "signature": {
             "type": ["string", "null"],
             "description": "The user's email signature content (HTML). On a patch, omit or send\n`null` to leave unchanged (both deserialize to `None`); pass an empty\nstring to clear it. The column cannot be set to SQL NULL via patch."
@@ -7461,6 +7555,19 @@
           "viewedAt": {
             "type": ["string", "null"],
             "format": "date-time"
+          }
+        }
+      },
+      "ThreadReadReceipts": {
+        "type": "object",
+        "description": "Open state of the caller's tracked, sent messages in one thread.",
+        "required": ["receipts"],
+        "properties": {
+          "receipts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MessageReadReceipt"
+            }
           }
         }
       },
