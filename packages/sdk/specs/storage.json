@@ -5997,10 +5997,176 @@
         }
       }
     },
+    "/crm/blocked-domains": {
+      "get": {
+        "tags": ["crm::inbound::axum_router::blocked_domains"],
+        "summary": "List the domains the caller's team keeps out of email sync,\nalphabetically. Any team member may read.",
+        "operationId": "list_crm_blocked_domains",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CrmBlockedDomainResponse"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/blocked-domains/{domain}": {
+      "put": {
+        "tags": ["crm::inbound::axum_router::blocked_domains"],
+        "summary": "Block a domain: email sync stops creating or updating CRM records for\nit, and the company and contacts the CRM holds for it are hidden.\nIdempotent. Requires an admin/owner team role (403).",
+        "operationId": "block_crm_domain",
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "path",
+            "description": "A bare domain like acme.com",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["crm::inbound::axum_router::blocked_domains"],
+        "summary": "Unblock a domain: email sync resumes for it, and what blocking hid is\nshown again. Idempotent. Requires an admin/owner team role (403).",
+        "operationId": "unblock_crm_domain",
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "path",
+            "description": "A bare domain like acme.com",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/companies": {
       "post": {
         "tags": ["crm::inbound::axum_router::create_company"],
-        "summary": "Manually create a CRM company for the caller's team. Any team member\nmay create one. The domain must not already be tracked by the team\n(409), and the team's CRM killswitch must be on (403). Returns the\ncreated company in the same shape as `GET /crm/companies/{id}` (its\ncontact list is empty until emails populate it).",
+        "summary": "Manually create a CRM company for the caller's team. Any team member\nmay create one. A domain, when given, must not already be tracked by the team\n(409), and the team's CRM killswitch must be on (403). Returns the\ncreated company in the same shape as `GET /crm/companies/{id}` (its\ncontact list is empty until emails populate it).",
         "operationId": "create_crm_company",
         "requestBody": {
           "content": {
@@ -6551,6 +6717,83 @@
             }
           },
           "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["crm::inbound::axum_router::create_team_contact"],
+        "summary": "Manually create a contact without a company for the caller's team.\nAny team member may create one. The team must not already have a\ncompany-less contact with the email (409), and the team's CRM\nkillswitch must be on (403).",
+        "operationId": "create_crm_team_contact",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCrmTeamContactRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmContactResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
             "description": "",
             "content": {
               "application/json": {
@@ -7266,7 +7509,7 @@
       },
       "put": {
         "tags": ["crm::inbound::axum_router::team_settings"],
-        "summary": "Partially update the caller's team CRM configuration. Any team\nmember may update the views fields (`team_views`,\n`default_team_view_id`); the governance fields (permission\nthresholds, `closed_stage_ids`) require an admin/owner team role\n(403 otherwise). Omitted fields keep their current values;\n`team_views` is replaced whole. Returns the resulting settings.",
+        "summary": "Partially update the caller's team CRM configuration. Any team\nmember may update the views fields (`team_views`,\n`default_team_view_id`); the governance fields (permission\nthresholds, `closed_stage_ids`, `exclude_personal_emails`) require an admin/owner team role\n(403 otherwise). Omitted fields keep their current values;\n`team_views` is replaced whole. Returns the resulting settings.",
         "operationId": "put_crm_team_settings",
         "requestBody": {
           "content": {
@@ -26406,11 +26649,26 @@
       "CreateCrmContactRequest": {
         "type": "object",
         "description": "Request body for `POST /crm/companies/{company_id}/contacts`.",
-        "required": ["name", "email"],
+        "required": ["name"],
         "properties": {
           "email": {
+            "type": ["string", "null"],
+            "description": "The contact's email address, including personal email providers.\nIt need not match a company domain. Optional: omit it to add the\ncontact by name only."
+          },
+          "name": {
             "type": "string",
-            "description": "The contact's email address, including personal email providers.\nIt need not match a company domain."
+            "description": "Display name for the contact."
+          }
+        }
+      },
+      "CreateCrmTeamContactRequest": {
+        "type": "object",
+        "description": "Request body for `POST /crm/contacts`.",
+        "required": ["name"],
+        "properties": {
+          "email": {
+            "type": ["string", "null"],
+            "description": "The contact's email address, of any domain. Optional: omit it to\nadd the contact by name only."
           },
           "name": {
             "type": "string",
@@ -27291,6 +27549,22 @@
         ],
         "description": "The CRM record an association filter names."
       },
+      "CrmBlockedDomainResponse": {
+        "type": "object",
+        "description": "A domain the team keeps out of email sync.",
+        "required": ["domain", "created_at"],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it was added."
+          },
+          "domain": {
+            "type": "string",
+            "description": "The blocked domain, lowercase."
+          }
+        }
+      },
       "CrmCompanyFilters": {
         "type": "object",
         "description": "The crm company filters used to narrow which CRM companies appear in soup.",
@@ -27379,8 +27653,6 @@
         "description": "A CRM contact as returned by `GET /crm/companies/{company_id}/contacts`.",
         "required": [
           "id",
-          "companyId",
-          "email",
           "hidden",
           "firstInteraction",
           "lastInteraction",
@@ -27389,9 +27661,9 @@
         ],
         "properties": {
           "companyId": {
-            "type": "string",
+            "type": ["string", "null"],
             "format": "uuid",
-            "description": "The id of the company the contact belongs to."
+            "description": "The id of the company the contact belongs to; absent for a\ncontact without a company."
           },
           "createdAt": {
             "type": "string",
@@ -27399,8 +27671,8 @@
             "description": "When the contact record was created."
           },
           "email": {
-            "type": "string",
-            "description": "The contact's email address."
+            "type": ["string", "null"],
+            "description": "The contact's email address; absent for contacts added by name\nalone."
           },
           "firstInteraction": {
             "type": "string",
@@ -27522,7 +27794,8 @@
           "move_closed_deals_role",
           "delete_records_role",
           "legacy_stage_ids",
-          "team_views"
+          "team_views",
+          "exclude_personal_emails"
         ],
         "properties": {
           "closed_stage_ids": {
@@ -27544,6 +27817,10 @@
           "edit_stages_role": {
             "$ref": "#/components/schemas/CrmPermissionRole",
             "description": "Who can change the deal stage set in CRM settings."
+          },
+          "exclude_personal_emails": {
+            "type": "boolean",
+            "description": "Whether email sync keeps personal-provider addresses (gmail.com\netc.) out of the CRM."
           },
           "legacy_stage_ids": {
             "type": "object",
@@ -41740,9 +42017,6 @@
             "required": [
               "id",
               "teamId",
-              "companyId",
-              "companyName",
-              "email",
               "hidden",
               "firstInteraction",
               "lastInteraction",
@@ -41751,13 +42025,13 @@
             ],
             "properties": {
               "companyId": {
-                "type": "string",
+                "type": ["string", "null"],
                 "format": "uuid",
-                "description": "Parent company ID."
+                "description": "Parent company ID; `None` for a contact without a company."
               },
               "companyName": {
-                "type": "string",
-                "description": "Parent company's display name."
+                "type": ["string", "null"],
+                "description": "Parent company's display name; `None` without a company."
               },
               "createdAt": {
                 "type": "string",
@@ -41765,8 +42039,8 @@
                 "description": "Record creation time."
               },
               "email": {
-                "type": "string",
-                "description": "Full email address."
+                "type": ["string", "null"],
+                "description": "Full email address; `None` for a contact added by name alone."
               },
               "firstInteraction": {
                 "type": "string",
@@ -45254,6 +45528,10 @@
                 "description": "New `edit_stages_role`, if provided."
               }
             ]
+          },
+          "exclude_personal_emails": {
+            "type": ["boolean", "null"],
+            "description": "Whether email sync keeps personal-provider addresses out of the\nCRM. Admin/owner only."
           },
           "move_closed_deals_role": {
             "oneOf": [

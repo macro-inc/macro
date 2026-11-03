@@ -4590,8 +4590,39 @@ export const getChannelsResponse = zod
   .describe('A cursor-paginated channel list response.');
 
 /**
+ * @summary List the domains the caller's team keeps out of email sync,
+alphabetically. Any team member may read.
+ */
+export const listCrmBlockedDomainsResponseItem = zod
+  .object({
+    created_at: zod.iso.datetime({}).describe('When it was added.'),
+    domain: zod.string().describe('The blocked domain, lowercase.'),
+  })
+  .describe('A domain the team keeps out of email sync.');
+export const listCrmBlockedDomainsResponse = zod.array(
+  listCrmBlockedDomainsResponseItem
+);
+
+/**
+ * @summary Block a domain: email sync stops creating or updating CRM records for
+it, and the company and contacts the CRM holds for it are hidden.
+Idempotent. Requires an admin/owner team role (403).
+ */
+export const blockCrmDomainParams = zod.object({
+  domain: zod.string().describe('A bare domain like acme.com'),
+});
+
+/**
+ * @summary Unblock a domain: email sync resumes for it, and what blocking hid is
+shown again. Idempotent. Requires an admin/owner team role (403).
+ */
+export const unblockCrmDomainParams = zod.object({
+  domain: zod.string().describe('A bare domain like acme.com'),
+});
+
+/**
  * @summary Manually create a CRM company for the caller's team. Any team member
-may create one. The domain must not already be tracked by the team
+may create one. A domain, when given, must not already be tracked by the team
 (409), and the team's CRM killswitch must be on (403). Returns the
 created company in the same shape as `GET /crm/companies/{id}` (its
 contact list is empty until emails populate it).
@@ -4620,11 +4651,19 @@ export const createCrmCompanyResponse = zod
           .object({
             companyId: zod
               .uuid()
-              .describe('The id of the company the contact belongs to.'),
+              .nullish()
+              .describe(
+                'The id of the company the contact belongs to; absent for a\ncontact without a company.'
+              ),
             createdAt: zod.iso
               .datetime({})
               .describe('When the contact record was created.'),
-            email: zod.string().describe("The contact's email address."),
+            email: zod
+              .string()
+              .nullish()
+              .describe(
+                "The contact's email address; absent for contacts added by name\nalone."
+              ),
             firstInteraction: zod.iso
               .datetime({})
               .describe('Earliest known interaction with this contact.'),
@@ -4726,11 +4765,19 @@ export const getCompanyResponse = zod
           .object({
             companyId: zod
               .uuid()
-              .describe('The id of the company the contact belongs to.'),
+              .nullish()
+              .describe(
+                'The id of the company the contact belongs to; absent for a\ncontact without a company.'
+              ),
             createdAt: zod.iso
               .datetime({})
               .describe('When the contact record was created.'),
-            email: zod.string().describe("The contact's email address."),
+            email: zod
+              .string()
+              .nullish()
+              .describe(
+                "The contact's email address; absent for contacts added by name\nalone."
+              ),
             firstInteraction: zod.iso
               .datetime({})
               .describe('Earliest known interaction with this contact.'),
@@ -4826,11 +4873,19 @@ export const listCompanyContactsResponseItem = zod
   .object({
     companyId: zod
       .uuid()
-      .describe('The id of the company the contact belongs to.'),
+      .nullish()
+      .describe(
+        'The id of the company the contact belongs to; absent for a\ncontact without a company.'
+      ),
     createdAt: zod.iso
       .datetime({})
       .describe('When the contact record was created.'),
-    email: zod.string().describe("The contact's email address."),
+    email: zod
+      .string()
+      .nullish()
+      .describe(
+        "The contact's email address; absent for contacts added by name\nalone."
+      ),
     firstInteraction: zod.iso
       .datetime({})
       .describe('Earliest known interaction with this contact.'),
@@ -4874,8 +4929,9 @@ export const createCrmContactBody = zod
   .object({
     email: zod
       .string()
+      .nullish()
       .describe(
-        "The contact's email address, including personal email providers.\nIt need not match a company domain."
+        "The contact's email address, including personal email providers.\nIt need not match a company domain. Optional: omit it to add the\ncontact by name only."
       ),
     name: zod.string().describe('Display name for the contact.'),
   })
@@ -4887,11 +4943,19 @@ export const createCrmContactResponse = zod
   .object({
     companyId: zod
       .uuid()
-      .describe('The id of the company the contact belongs to.'),
+      .nullish()
+      .describe(
+        'The id of the company the contact belongs to; absent for a\ncontact without a company.'
+      ),
     createdAt: zod.iso
       .datetime({})
       .describe('When the contact record was created.'),
-    email: zod.string().describe("The contact's email address."),
+    email: zod
+      .string()
+      .nullish()
+      .describe(
+        "The contact's email address; absent for contacts added by name\nalone."
+      ),
     firstInteraction: zod.iso
       .datetime({})
       .describe('Earliest known interaction with this contact.'),
@@ -5008,11 +5072,19 @@ export const searchContactsResponse = zod
           .object({
             companyId: zod
               .uuid()
-              .describe('The id of the company the contact belongs to.'),
+              .nullish()
+              .describe(
+                'The id of the company the contact belongs to; absent for a\ncontact without a company.'
+              ),
             createdAt: zod.iso
               .datetime({})
               .describe('When the contact record was created.'),
-            email: zod.string().describe("The contact's email address."),
+            email: zod
+              .string()
+              .nullish()
+              .describe(
+                "The contact's email address; absent for contacts added by name\nalone."
+              ),
             firstInteraction: zod.iso
               .datetime({})
               .describe('Earliest known interaction with this contact.'),
@@ -5042,6 +5114,65 @@ export const searchContactsResponse = zod
   .describe('Response from searching CRM contacts.');
 
 /**
+ * @summary Manually create a contact without a company for the caller's team.
+Any team member may create one. The team must not already have a
+company-less contact with the email (409), and the team's CRM
+killswitch must be on (403).
+ */
+export const createCrmTeamContactBody = zod
+  .object({
+    email: zod
+      .string()
+      .nullish()
+      .describe(
+        "The contact's email address, of any domain. Optional: omit it to\nadd the contact by name only."
+      ),
+    name: zod.string().describe('Display name for the contact.'),
+  })
+  .describe('Request body for `POST \/crm\/contacts`.');
+
+export const createCrmTeamContactResponse = zod
+  .object({
+    companyId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'The id of the company the contact belongs to; absent for a\ncontact without a company.'
+      ),
+    createdAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was created.'),
+    email: zod
+      .string()
+      .nullish()
+      .describe(
+        "The contact's email address; absent for contacts added by name\nalone."
+      ),
+    firstInteraction: zod.iso
+      .datetime({})
+      .describe('Earliest known interaction with this contact.'),
+    hidden: zod
+      .boolean()
+      .describe(
+        'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+      ),
+    id: zod.uuid().describe('The id of the contact record.'),
+    lastInteraction: zod.iso
+      .datetime({})
+      .describe('Most recent known interaction with this contact.'),
+    name: zod
+      .string()
+      .nullish()
+      .describe('Display name observed for the contact, if any.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was last updated.'),
+  })
+  .describe(
+    'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+  );
+
+/**
  * @summary Look up a CRM contact by email in the caller's team. Returns a null
 `contact` when no visible contact exists. Any team member may resolve a
 visible contact; admin/owner callers may also resolve hidden contacts and
@@ -5063,11 +5194,19 @@ export const getContactByEmailResponse = zod
           .object({
             companyId: zod
               .uuid()
-              .describe('The id of the company the contact belongs to.'),
+              .nullish()
+              .describe(
+                'The id of the company the contact belongs to; absent for a\ncontact without a company.'
+              ),
             createdAt: zod.iso
               .datetime({})
               .describe('When the contact record was created.'),
-            email: zod.string().describe("The contact's email address."),
+            email: zod
+              .string()
+              .nullish()
+              .describe(
+                "The contact's email address; absent for contacts added by name\nalone."
+              ),
             firstInteraction: zod.iso
               .datetime({})
               .describe('Earliest known interaction with this contact.'),
@@ -5111,11 +5250,19 @@ export const getContactResponse = zod
   .object({
     companyId: zod
       .uuid()
-      .describe('The id of the company the contact belongs to.'),
+      .nullish()
+      .describe(
+        'The id of the company the contact belongs to; absent for a\ncontact without a company.'
+      ),
     createdAt: zod.iso
       .datetime({})
       .describe('When the contact record was created.'),
-    email: zod.string().describe("The contact's email address."),
+    email: zod
+      .string()
+      .nullish()
+      .describe(
+        "The contact's email address; absent for contacts added by name\nalone."
+      ),
     firstInteraction: zod.iso
       .datetime({})
       .describe('Earliest known interaction with this contact.'),
@@ -10267,6 +10414,11 @@ export const getCrmTeamSettingsResponse = zod
       .describe(
         'Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
       ),
+    exclude_personal_emails: zod
+      .boolean()
+      .describe(
+        'Whether email sync keeps personal-provider addresses (gmail.com\netc.) out of the CRM.'
+      ),
     legacy_stage_ids: zod
       .record(zod.string(), zod.uuid())
       .describe(
@@ -10291,7 +10443,7 @@ export const getCrmTeamSettingsResponse = zod
  * @summary Partially update the caller's team CRM configuration. Any team
 member may update the views fields (`team_views`,
 `default_team_view_id`); the governance fields (permission
-thresholds, `closed_stage_ids`) require an admin/owner team role
+thresholds, `closed_stage_ids`, `exclude_personal_emails`) require an admin/owner team role
 (403 otherwise). Omitted fields keep their current values;
 `team_views` is replaced whole. Returns the resulting settings.
  */
@@ -10329,6 +10481,12 @@ export const putCrmTeamSettingsBody = zod
           ),
       ])
       .optional(),
+    exclude_personal_emails: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Whether email sync keeps personal-provider addresses out of the\nCRM. Admin\/owner only.'
+      ),
     move_closed_deals_role: zod
       .union([
         zod.null(),
@@ -10371,6 +10529,11 @@ export const putCrmTeamSettingsResponse = zod
       .enum(['admin', 'owner'])
       .describe(
         'Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+      ),
+    exclude_personal_emails: zod
+      .boolean()
+      .describe(
+        'Whether email sync keeps personal-provider addresses (gmail.com\netc.) out of the CRM.'
       ),
     legacy_stage_ids: zod
       .record(zod.string(), zod.uuid())
@@ -31376,14 +31539,27 @@ export const getItemsSoupResponse = zod
                 )
                 .and(
                   zod.object({
-                    companyId: zod.uuid().describe('Parent company ID.'),
+                    companyId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        'Parent company ID; `None` for a contact without a company.'
+                      ),
                     companyName: zod
                       .string()
-                      .describe("Parent company's display name."),
+                      .nullish()
+                      .describe(
+                        "Parent company's display name; `None` without a company."
+                      ),
                     createdAt: zod.iso
                       .datetime({})
                       .describe('Record creation time.'),
-                    email: zod.string().describe('Full email address.'),
+                    email: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Full email address; `None` for a contact added by name alone.'
+                      ),
                     firstInteraction: zod.iso
                       .datetime({})
                       .describe('Earliest interaction for this team record.'),
@@ -36339,14 +36515,27 @@ export const postItemsSoupResponse = zod
                 )
                 .and(
                   zod.object({
-                    companyId: zod.uuid().describe('Parent company ID.'),
+                    companyId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        'Parent company ID; `None` for a contact without a company.'
+                      ),
                     companyName: zod
                       .string()
-                      .describe("Parent company's display name."),
+                      .nullish()
+                      .describe(
+                        "Parent company's display name; `None` without a company."
+                      ),
                     createdAt: zod.iso
                       .datetime({})
                       .describe('Record creation time.'),
-                    email: zod.string().describe('Full email address.'),
+                    email: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Full email address; `None` for a contact added by name alone.'
+                      ),
                     firstInteraction: zod.iso
                       .datetime({})
                       .describe('Earliest interaction for this team record.'),
@@ -40743,14 +40932,27 @@ export const postItemsSoupAstResponse = zod
                 )
                 .and(
                   zod.object({
-                    companyId: zod.uuid().describe('Parent company ID.'),
+                    companyId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        'Parent company ID; `None` for a contact without a company.'
+                      ),
                     companyName: zod
                       .string()
-                      .describe("Parent company's display name."),
+                      .nullish()
+                      .describe(
+                        "Parent company's display name; `None` without a company."
+                      ),
                     createdAt: zod.iso
                       .datetime({})
                       .describe('Record creation time.'),
-                    email: zod.string().describe('Full email address.'),
+                    email: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Full email address; `None` for a contact added by name alone.'
+                      ),
                     firstInteraction: zod.iso
                       .datetime({})
                       .describe('Earliest interaction for this team record.'),
@@ -45706,14 +45908,27 @@ export const postItemsSoupAstGroupedResponse = zod
                       )
                       .and(
                         zod.object({
-                          companyId: zod.uuid().describe('Parent company ID.'),
+                          companyId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'Parent company ID; `None` for a contact without a company.'
+                            ),
                           companyName: zod
                             .string()
-                            .describe("Parent company's display name."),
+                            .nullish()
+                            .describe(
+                              "Parent company's display name; `None` without a company."
+                            ),
                           createdAt: zod.iso
                             .datetime({})
                             .describe('Record creation time.'),
-                          email: zod.string().describe('Full email address.'),
+                          email: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Full email address; `None` for a contact added by name alone.'
+                            ),
                           firstInteraction: zod.iso
                             .datetime({})
                             .describe(
@@ -50077,14 +50292,27 @@ export const postItemsSoupAstGroupedResponse = zod
                       )
                       .and(
                         zod.object({
-                          companyId: zod.uuid().describe('Parent company ID.'),
+                          companyId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'Parent company ID; `None` for a contact without a company.'
+                            ),
                           companyName: zod
                             .string()
-                            .describe("Parent company's display name."),
+                            .nullish()
+                            .describe(
+                              "Parent company's display name; `None` without a company."
+                            ),
                           createdAt: zod.iso
                             .datetime({})
                             .describe('Record creation time.'),
-                          email: zod.string().describe('Full email address.'),
+                          email: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Full email address; `None` for a contact added by name alone.'
+                            ),
                           firstInteraction: zod.iso
                             .datetime({})
                             .describe(
