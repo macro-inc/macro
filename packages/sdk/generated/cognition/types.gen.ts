@@ -2324,6 +2324,68 @@ export type WebCitation = {
     url: string;
 };
 
+/**
+ * Sanitized, machine-readable failure of a web search.
+ */
+export type WebSearchErrorBody = {
+    /**
+     * Stable failure code.
+     */
+    code: string;
+    /**
+     * Human-readable explanation without provider credentials or diagnostics.
+     */
+    error: string;
+};
+
+/**
+ * What to search the web for.
+ */
+export type WebSearchRequest = {
+    /**
+     * Only return pages from these domains, such as `docs.rs`; omit to search
+     * the whole web. At most 20.
+     */
+    domains?: Array<string>;
+    /**
+     * Return at most this many results, from 1 to 30 (the default).
+     */
+    maxResults?: number | null;
+    /**
+     * The search query, up to 400 characters.
+     */
+    query: string;
+};
+
+/**
+ * Pages the search found, most relevant first.
+ */
+export type WebSearchResponse = {
+    /**
+     * Found pages, deduplicated by URL.
+     */
+    results: Array<WebSearchResult>;
+};
+
+/**
+ * One page found by a web search.
+ */
+export type WebSearchResult = {
+    /**
+     * When the page was last updated, as the search index reports it
+     * (for example "April 30, 2025"), when known.
+     */
+    pageAge?: string | null;
+    /**
+     * The page title.
+     */
+    title: string;
+    /**
+     * The page URL.
+     */
+    url: string;
+};
+
 export type WithChatId = {
     chat_id: string;
 };
@@ -3776,3 +3838,48 @@ export type StructuredCompletionResponses = {
 };
 
 export type StructuredCompletionResponse2 = StructuredCompletionResponses[keyof StructuredCompletionResponses];
+
+export type SearchWebData = {
+    body: WebSearchRequest;
+    path?: never;
+    query?: never;
+    url: '/web/search';
+};
+
+export type SearchWebErrors = {
+    /**
+     * Invalid query, domains, or result limit
+     */
+    400: WebSearchErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * AI allowance exhausted
+     */
+    402: WebSearchErrorBody;
+    /**
+     * The search provider is rate limiting searches
+     */
+    429: WebSearchErrorBody;
+    /**
+     * The search provider failed
+     */
+    502: WebSearchErrorBody;
+    /**
+     * Usage validation unavailable
+     */
+    503: WebSearchErrorBody;
+};
+
+export type SearchWebError = SearchWebErrors[keyof SearchWebErrors];
+
+export type SearchWebResponses = {
+    /**
+     * Pages found for the query
+     */
+    200: WebSearchResponse;
+};
+
+export type SearchWebResponse = SearchWebResponses[keyof SearchWebResponses];

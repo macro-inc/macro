@@ -361,6 +361,19 @@ const night = await macro.images.generate({
 });
 ```
 
+### Searching the web
+
+`macro.web.search()` searches the web, charged to the acting user's AI
+allowance, and returns the pages found (title, URL and page age, no page text),
+most relevant first. Limit it to domains or cap the result count:
+
+```ts
+const pages = await macro.web.search('tokio 1.40 release notes', {
+  domains: ['tokio.rs', 'github.com'],
+  maxResults: 5,
+});
+```
+
 ### Posting to a channel webhook
 
 The web UI can hand you a webhook URL and token for a channel. That token is a

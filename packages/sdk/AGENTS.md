@@ -28,6 +28,9 @@ enforced by the ordinary backend APIs.
   `POST /images/generate`, admitted against the user's AI allowance) returns a
   sized `GeneratedImage`; `StaticImage` handles attach to `channel.send(text,
   { images })` and `thread.reply` as `static/image` attachments.
+- `src/entities/web/`: `macro.web.search()` (cognition `POST /web/search`, the
+  Anthropic web search admitted against the user's AI allowance) returns found
+  pages; code mode lists no `WebSearch` tool because of it.
 - `services.ts`, `openapi-ts.config.ts`: generated service contract inputs.
 
 ## Boundaries

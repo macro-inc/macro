@@ -33,6 +33,7 @@ import { TeamNamespace } from './entities/teams/namespace';
 import { UnfurlNamespace } from './entities/unfurls/namespace';
 import { UserNamespace } from './entities/users/namespace';
 import type { User } from './entities/users/user';
+import { WebNamespace } from './entities/web/namespace';
 import { WebhooksNamespace } from './entities/webhooks/namespace';
 import { WhatsAppNamespace } from './entities/whatsapp/namespace';
 import { WorkspaceNamespace } from './entities/workspace/namespace';
@@ -175,6 +176,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   readonly users: UserNamespace;
 
+  /** Search the web. */
+  readonly web: WebNamespace;
+
   readonly webhooks: WebhooksNamespace;
 
   /** Browse workspace activity with type, task, time, tag and inbox filters. */
@@ -228,6 +232,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.tasks = new TaskNamespace(client);
     this.teams = new TeamNamespace(client);
     this.users = new UserNamespace(client);
+    this.web = new WebNamespace(client);
     this.webhooks = new WebhooksNamespace(client);
     this.workspace = new WorkspaceNamespace(client);
     this.events = client.events;
@@ -340,6 +345,10 @@ export { AccessRequest, EntityAccess } from './entities/sharing/access';
 export type { SharePermissionOptions } from './entities/sharing/permissions';
 export type { TaskSummary } from './entities/tasks/task';
 export { TeamInvite } from './entities/teams/invite';
+export type {
+  WebSearchOptions,
+  WebSearchResult,
+} from './entities/web/namespace';
 export { WhatsAppAccount } from './entities/whatsapp/account';
 export {
   WhatsAppChat,
