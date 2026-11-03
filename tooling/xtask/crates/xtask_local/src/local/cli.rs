@@ -59,6 +59,10 @@ enum Cmd {
     /// dev server; the proxy serves a static frontend bundle.
     #[command(subcommand)]
     Stack(StackCmd),
+    /// Full environments on Kubernetes (local kind cluster or the shared EKS
+    /// environments cluster), rendered from the same definition as the local stack.
+    #[command(subcommand)]
+    Env(super::k8s::EnvCmd),
 }
 
 #[derive(Subcommand)]
@@ -300,6 +304,7 @@ fn run(cli: Cli) -> Result<()> {
             StackCmd::Status(a) => super::stack::status(&a),
             StackCmd::Down(a) => super::stack::down(&a),
         },
+        Cmd::Env(cmd) => super::k8s::run(cmd),
     }
 }
 

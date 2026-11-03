@@ -28,6 +28,7 @@ pub mod gen_compose;
 pub mod identity;
 pub mod instance;
 pub mod inventory;
+pub mod k8s;
 pub mod kafka;
 pub mod kickstart;
 pub mod local_env;

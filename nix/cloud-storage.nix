@@ -938,6 +938,11 @@
           nsc
           parallel
           docker-compose
+          # `just env up` renders the stack into a Kubernetes namespace: kind
+          # for a local cluster, kubectl + helm for local and EKS alike.
+          kind
+          kubectl
+          kubernetes-helm
           # `just run_local` opens a quick tunnel to the agent egress proxy so
           # Cursor cloud agents can dial a local stack's MCP servers.
           cloudflared
