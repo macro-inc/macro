@@ -19,7 +19,10 @@ function Filters() {
       <button onClick={state.showOwned}>Show owned files</button>
       <button onClick={state.refineOwned}>Refine owned creator</button>
       <Show
-        when={matchMedia('(pointer: coarse)').matches}
+        when={
+          matchMedia('(pointer: coarse)').matches &&
+          state.view() !== 'companies'
+        }
         fallback={
           <>
             <UnifiedFilterDropdown />
@@ -33,6 +36,8 @@ function Filters() {
       >
         <MobileFilterDrawer />
       </Show>
+      <pre data-testid="owners">{JSON.stringify(state.owners())}</pre>
+      <pre data-testid="stages">{JSON.stringify(state.stages())}</pre>
       <pre data-testid="assignees">
         {JSON.stringify(state.assigneeFilter())}
       </pre>

@@ -5,6 +5,7 @@ import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Combobox, useComboboxContext } from '@kobalte/core/combobox';
 import { makeEventListener } from '@solid-primitives/event-listener';
+import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { cn, Layer } from '@ui';
 import { MultiSelectItemContent } from '@ui/components/MultiSelectItemContent';
 import {
@@ -243,26 +244,48 @@ const VirtualizedListbox = (props: {
   selectionIntent: ReturnType<typeof createMultiSelectIntent>;
 }) => {
   let handle: VirtualizerHandle | undefined;
+  let pendingFocus = false;
+  let active = true;
   const combobox = useComboboxContext();
   props.resetScrollRef?.(() => {
     combobox.listState().selectionManager().setFocusedKey(undefined);
     handle?.scrollToIndex(0, { align: 'start' });
   });
-  onCleanup(() => props.resetScrollRef?.(undefined));
+  onCleanup(() => {
+    active = false;
+    props.resetScrollRef?.(undefined);
+  });
   // Kobalte supplies the collection after applying the combobox search
   // filter. Use it for focus scrolling too — indexing the original options
   // array targets the wrong virtual row whenever the list is filtered.
   let visibleItems:
     | Accessor<Iterable<CollectionNode<SearchableOption>>>
     | undefined;
+  const scrollToItem = (key: string) => {
+    // Before initial measurement, "nearest" starts a corrective scroll against
+    // a zero-height viewport and can keep undoing subsequent user scrolling.
+    if (!handle?.viewportSize) {
+      pendingFocus = true;
+      return;
+    }
+    pendingFocus = false;
+    const idx = Array.from(visibleItems?.() ?? []).findIndex(
+      (item) => item.rawValue.id === key
+    );
+    if (idx !== -1) handle.scrollToIndex(idx, { align: 'nearest' });
+  };
+  const { observe } = makeResizeObserver(() => {
+    // Let the virtualizer's own observer publish its viewport measurement.
+    queueMicrotask(() => {
+      if (!active || !pendingFocus) return;
+      const key = combobox.listState().selectionManager().focusedKey();
+      if (key) scrollToItem(key);
+    });
+  });
   return (
     <Combobox.Listbox<SearchableOption>
-      scrollToItem={(key) => {
-        const idx = Array.from(visibleItems?.() ?? []).findIndex(
-          (item) => item.rawValue.id === key
-        );
-        if (idx !== -1) handle?.scrollToIndex(idx, { align: 'nearest' });
-      }}
+      ref={observe}
+      scrollToItem={scrollToItem}
       class={cn(LISTBOX_CLASS, props.class)}
     >
       {(items) => {

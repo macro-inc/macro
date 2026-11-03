@@ -1280,6 +1280,8 @@ pickers preserve selections separately. General Soup assignee/creator menus and
 chips also use lazy windows; closed-chip labels resolve explicit IDs independently,
 without directory-sized maps. Unassigned is a local value, not membership.
 Query-driven comboboxes retain typed input across page/metadata replacement.
+CRM Owner chips use the same lazy source/selected-label separation, while header
+options stay team-scoped. Local empty values never enter membership lookup.
 Native policy version 4 retains mention
 scoring and property self/domain boosts. Document/project/call discussion mentions
 also delegate to that window; channel/CRM/explicit rosters stay scoped even while

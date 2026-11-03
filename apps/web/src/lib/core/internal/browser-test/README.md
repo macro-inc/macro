@@ -42,6 +42,13 @@ whole-team selection. Picker portals remain inside their owning modal. The sourc
 unit suite additionally covers oversized rosters and cursor resets when exclusions
 beyond the native budget change.
 
+`/?soup-filters=crm` adds the real CRM filter adapter and collection-chip bridge.
+Its Owner header remains team-scoped; selected labels and paged personal chip
+suggestions use separate readers. Desktop/phone tests retain No owner, unknown IDs
+and unrelated Stage values through paging/search/Only. The chip pagination test
+also catches focus scrolling that starts before virtual viewport measurement and
+later snaps the user's wheel scroll back to the first selected item.
+
 `/?recipient-ranking` mounts the real recipient selector over small supplied
 options and stand-in identity/profile services. It verifies that exact addresses
 win over recent word matches and Enter preserves selection across searches.

@@ -92,6 +92,11 @@ Keep Unassigned outside contact lookups and restore the Owned preset when cleari
 its creator refinement. A query-driven combobox takes search edits from native input
 events; Kobalte's programmatic resets on option replacement must not clear a pending
 query. `internal/browser-test/soup-filters.browser.e2e.ts` covers both surfaces.
+CRM Owner chips use `CollectionSelectFilter.createChipSource`, with selected labels
+resolved separately; their header menu remains team-only. Keep No owner/Unassigned
+out of contact lookups through the shared empty-value adapter. Wait for the virtual
+list's initial viewport measurement before focus scrolling; otherwise the pending
+correction can snap a user's scroll back to the first selected row.
 Universal task inference resolves only current person-valued fields through
 `useContactReferences` (`anyName`), not a people catalog or suggestion page.
 Keep incomplete/ambiguous evidence unresolved, preserve model term boundaries,

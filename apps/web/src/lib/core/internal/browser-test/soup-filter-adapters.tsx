@@ -1,4 +1,5 @@
 import type { ListView } from '@app/constants/list-views';
+import { createCrmCollectionFilters } from '@app/features/crm/filter-adapter';
 import {
   type FilterContext,
   NO_ASSIGNEE,
@@ -9,15 +10,14 @@ import { createQueryStore } from '@app/features/next-soup/filters/filter-store/q
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import type { EntityData } from '@entity';
-import { createSignal } from 'solid-js';
+import { createSignal, type Signal } from 'solid-js';
 import { SELECTED, VIEWER } from './list-filter-adapters';
 
 export const [SoupFilterFixtureProvider, useSoupView] =
   createAssertedContextProvider('SoupFilterFixture', () => {
+    const mode = new URLSearchParams(location.search).get('soup-filters');
     const [view, setView] = createSignal<ListView>(
-      new URLSearchParams(location.search).get('soup-filters') === 'home'
-        ? 'home'
-        : 'tasks'
+      mode === 'crm' ? 'companies' : mode === 'home' ? 'home' : 'tasks'
     );
     const [activeTab, setActiveTab] = createSignal('all');
     const initial = getViewPreset(view(), activeTab(), {
@@ -28,9 +28,39 @@ export const [SoupFilterFixtureProvider, useSoupView] =
     const predicates = createPredicatesStore<
       EntityData,
       FilterContext,
-      (typeof SOUP_FILTERS)[number]
+      (typeof SOUP_FILTERS)[number],
+      string
     >({ configs: SOUP_FILTERS });
-    predicates.set(initial?.clientFilters ?? {});
+    predicates.set(
+      mode === 'crm'
+        ? { and: ['crm-company-active'] }
+        : (initial?.clientFilters ?? {})
+    );
+    const crm =
+      mode === 'crm'
+        ? createCrmCollectionFilters(
+            {
+              userId: () => VIEWER,
+              createTeamSource: () => ({
+                data: {
+                  team: { id: 'fixture-team', crm_enabled: true },
+                  members: [
+                    { user_id: VIEWER, role: 'member' },
+                    { user_id: 'macro|teammate@example.com', role: 'member' },
+                  ],
+                },
+                isPending: false,
+                isLoading: false,
+                isError: false,
+                isSuccess: true,
+                refetch: async () => {},
+              }),
+            },
+            { predicates },
+            () => false,
+            { stages: () => [], filterStages: () => [] }
+          )
+        : undefined;
     const [assigneeFilter, setAssigneeFilter] = createSignal<string[]>([]);
     const [sort, setSort] = createSignal([{ id: 'updated_at' }]);
     return {
@@ -44,7 +74,9 @@ export const [SoupFilterFixtureProvider, useSoupView] =
       setReadFilter: () => {},
       inboxFilter: () => undefined,
       setInboxFilter: () => {},
-      extensions: { selectFilters: [] },
+      extensions: { selectFilters: crm?.facets ?? [] },
+      owners: () => crm?.state.ownerFilter() ?? [],
+      stages: () => crm?.state.stageFilter() ?? [],
       soup: {
         predicates,
         sort: {
@@ -53,6 +85,15 @@ export const [SoupFilterFixtureProvider, useSoupView] =
         },
       },
       seedSelections: () => {
+        if (crm) {
+          crm.state.setOwnerFilter([
+            SELECTED,
+            'unavailable-person',
+            NO_ASSIGNEE,
+          ]);
+          crm.state.setStageFilter(['kept-stage']);
+          return;
+        }
         setAssigneeFilter([SELECTED, NO_ASSIGNEE, 'unavailable-person']);
         predicates.toggle({ and: ['assignee'] });
         queryFilters.set({ include: { documentOwnerId: [SELECTED] } });
@@ -82,6 +123,18 @@ export function useSplitPanelOrThrow() {
     panelRef: () => document.querySelector<HTMLElement>('main'),
   };
 }
+export function useEntryState<T>(_key: string, options: { default: T }) {
+  return createSignal(options.default);
+}
+export function makeFlaggedPersisted<T>(state: Signal<T>) {
+  return state;
+}
+export function idToDisplayName(id: string) {
+  if (id === VIEWER) return 'Viewer';
+  if (id === SELECTED) return 'Selected Person';
+  return id.slice(6);
+}
+
 export function useTagFilter() {
   return {
     hasTags: () => false,

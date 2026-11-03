@@ -16,6 +16,15 @@ export default defineConfig({
       enforce: 'pre',
       resolveId(source, importer) {
         if (
+          importer?.endsWith('/crm/filter-adapter.tsx') &&
+          [
+            '@app/preferences/make-flagged-persisted',
+            '@components/app/split-layout/entry-state',
+            '@core/user/util',
+          ].includes(source)
+        )
+          return `${directory}/soup-filter-adapters.tsx`;
+        if (
           importer?.endsWith('/queries/contacts/use-directory.ts') &&
           [
             '../auth/use-query-account',

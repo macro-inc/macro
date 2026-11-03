@@ -1,9 +1,13 @@
 import type { DriveState } from '@app/features/drive-view/core/types';
 import { createDriveState } from '@app/features/drive-view/primitives/drive-state';
 import type { SearchableOptionSourceFactory } from '@app/features/next-soup/soup-view/filters-bar/option-source';
-import { createContactFilterOptions } from '@core/user/contact-filter-options';
+import type { SearchableOption } from '@app/features/next-soup/soup-view/filters-bar/searchable-multi-select';
+import {
+  contactFilterOptionsWithEmpty,
+  createContactFilterOptions,
+} from '@core/user/contact-filter-options';
 import { createContactIdFilterSource } from '@queries/contacts/filter-source';
-import { createSignal } from 'solid-js';
+import { type Accessor, createSignal } from 'solid-js';
 
 export { useContactFilterLabels } from '../../user/use-contact-filter-options';
 
@@ -41,6 +45,21 @@ export function useFeatureFlag() {
 }
 export function useTagFilterGroup() {
   return () => ({ id: 'tags', label: 'Tags', options: [] });
+}
+
+export function useContactFilterOptionsWithEmpty(
+  selected: Accessor<readonly string[]>,
+  enabled: Accessor<boolean>,
+  empty: Accessor<SearchableOption>
+) {
+  return contactFilterOptionsWithEmpty(
+    useContactFilterOptions(
+      () => selected().filter((id) => id !== empty().id),
+      enabled
+    ),
+    () => VIEWER,
+    empty
+  );
 }
 
 export const [requests, setRequests] = createSignal(0);

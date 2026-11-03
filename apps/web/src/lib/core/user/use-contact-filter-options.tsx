@@ -1,4 +1,8 @@
-import type { SearchableOptionSourceFactory } from '@app/features/next-soup/soup-view/filters-bar/option-source';
+import type {
+  SearchableOptionSource,
+  SearchableOptionSourceFactory,
+} from '@app/features/next-soup/soup-view/filters-bar/option-source';
+import type { SearchableOption } from '@app/features/next-soup/soup-view/filters-bar/searchable-multi-select';
 import { useQueryAccount } from '@queries/auth/use-query-account';
 import {
   useContactIdFilterSource,
@@ -6,6 +10,7 @@ import {
 } from '@queries/contacts/use-directory';
 import { type Accessor, createMemo } from 'solid-js';
 import {
+  contactFilterOptionsWithEmpty,
   contactFilterRow,
   createContactFilterOptions,
 } from './contact-filter-options';
@@ -25,6 +30,18 @@ export function useContactFilterLabels(selected: Accessor<readonly string[]>) {
       ])
     );
   });
+}
+
+/** Local empty values (Unassigned/No owner) never become contact lookups. */
+export function useContactFilterOptionsWithEmpty(
+  selected: Accessor<readonly string[]>,
+  enabled: Accessor<boolean>,
+  empty: Accessor<SearchableOption>
+): SearchableOptionSource {
+  const ids = createMemo(() => selected().filter((id) => id !== empty().id));
+  const source = useContactFilterOptions(ids, enabled);
+  const account = useQueryAccount();
+  return contactFilterOptionsWithEmpty(source, () => account()?.userId, empty);
 }
 
 /** App composition for ID-valued people facets. */

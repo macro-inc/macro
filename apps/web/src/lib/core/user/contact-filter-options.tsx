@@ -1,4 +1,5 @@
 import type { SearchableOptionSource } from '@app/features/next-soup/soup-view/filters-bar/option-source';
+import type { SearchableOption } from '@app/features/next-soup/soup-view/filters-bar/searchable-multi-select';
 import { t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
 import type { ContactIdFilterSource } from '@queries/contacts/filter-source';
@@ -36,6 +37,30 @@ export function contactFilterRow(
           )
         : undefined,
     },
+  };
+}
+
+/** Keep self first and a local empty value separate from directory membership. */
+export function contactFilterOptionsWithEmpty(
+  source: SearchableOptionSource,
+  viewer: Accessor<string | undefined>,
+  empty: Accessor<SearchableOption>
+): SearchableOptionSource {
+  return {
+    ...source,
+    options: createMemo(() => {
+      const rows = source.options();
+      const self = rows.find((row) => row.id.toLowerCase() === viewer());
+      return [
+        ...(self ? [self] : []),
+        empty(),
+        ...rows.filter((row) => row !== self),
+      ];
+    }),
+    visibleIds: () =>
+      empty().label.toLowerCase().includes(source.search().trim().toLowerCase())
+        ? [empty().id, ...source.visibleIds()]
+        : source.visibleIds(),
   };
 }
 

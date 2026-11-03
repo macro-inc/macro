@@ -675,6 +675,7 @@ export function useFilterRefinements() {
               categoryLabel: filter.label,
               values: filter.chipValues,
               searchableOptions: filter.chipOptions,
+              createSource: filter.createChipSource,
               activeSearchableIds: filter.values,
               onSearchableChange: filter.changeChip,
               searchPlaceholder: filter.placeholder,
