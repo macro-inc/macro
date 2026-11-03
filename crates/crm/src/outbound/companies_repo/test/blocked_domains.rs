@@ -111,3 +111,115 @@ async fn blocklists_are_per_team(pool: PgPool) -> anyhow::Result<()> {
     assert!(repo.list_blocked_domains(&team_b).await?.is_empty());
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_company_stays_hidden_while_any_of_its_domains_is_blocked(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    seed_team(&pool, team_id, OWNER).await?;
+    enable_crm_for_team(&pool, team_id).await?;
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    let acme = insert_company(&pool, team_id, true, &["example.com", "example.org"]).await?;
+    let jane = insert_contact(&pool, acme, "jane@example.com").await?;
+
+    repo.block_domain(&team_id, "example.com").await?;
+    repo.block_domain(&team_id, "example.org").await?;
+    repo.unblock_domain(&team_id, "example.com").await?;
+
+    assert!(fetch_company_hidden(&pool, acme).await? == Some(true));
+    assert!(fetch_contact_hidden(&pool, jane).await? == Some(true));
+
+    repo.unblock_domain(&team_id, "example.org").await?;
+
+    assert!(fetch_company_hidden(&pool, acme).await? == Some(false));
+    assert!(fetch_contact_hidden(&pool, jane).await? == Some(false));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn concurrent_domain_changes_keep_company_and_contacts_consistent(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    seed_team(&pool, team_id, OWNER).await?;
+    enable_crm_for_team(&pool, team_id).await?;
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    let company = insert_company(&pool, team_id, true, &["example.com", "example.org"]).await?;
+    let contact = insert_contact(&pool, company, "contact@example.com").await?;
+    repo.block_domain(&team_id, "example.com").await?;
+    repo.block_domain(&team_id, "example.org").await?;
+
+    change_domains_while_company_locked(&pool, team_id, company, false).await?;
+
+    assert!(repo.list_blocked_domains(&team_id).await?.is_empty());
+    assert_eq!(fetch_company_hidden(&pool, company).await?, Some(false));
+    assert_eq!(fetch_contact_hidden(&pool, contact).await?, Some(false));
+
+    repo.block_domain(&team_id, "example.com").await?;
+    change_domains_while_company_locked(&pool, team_id, company, true).await?;
+
+    assert_eq!(
+        repo.list_blocked_domains(&team_id)
+            .await?
+            .into_iter()
+            .map(|entry| entry.domain)
+            .collect::<Vec<_>>(),
+        ["example.org"]
+    );
+    assert_eq!(fetch_company_hidden(&pool, company).await?, Some(true));
+    assert_eq!(fetch_contact_hidden(&pool, contact).await?, Some(true));
+    Ok(())
+}
+
+async fn change_domains_while_company_locked(
+    pool: &PgPool,
+    team_id: Uuid,
+    company_id: Uuid,
+    block_second: bool,
+) -> anyhow::Result<()> {
+    let mut barrier = pool.begin().await?;
+    sqlx::query!(
+        "SELECT id FROM crm_companies WHERE id = $1 FOR UPDATE",
+        company_id,
+    )
+    .fetch_one(&mut *barrier)
+    .await?;
+
+    let first_repo = CompaniesRepositoryImpl::new(pool.clone());
+    let first =
+        tokio::spawn(async move { first_repo.unblock_domain(&team_id, "example.com").await });
+    let second_repo = CompaniesRepositoryImpl::new(pool.clone());
+    let second = tokio::spawn(async move {
+        if block_second {
+            second_repo.block_domain(&team_id, "example.org").await
+        } else {
+            second_repo.unblock_domain(&team_id, "example.org").await
+        }
+    });
+
+    // Both operations must reach their company-row wait before either can
+    // commit. An UPDATE that starts its snapshot before this wait is stale.
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        loop {
+            let waiting = sqlx::query_scalar!(
+                r#"SELECT COUNT(*) AS "waiting!" FROM pg_stat_activity
+                   WHERE datname = current_database()
+                     AND wait_event_type = 'Lock'
+                     AND cardinality(pg_blocking_pids(pid)) > 0"#,
+            )
+            .fetch_one(pool)
+            .await?;
+            if waiting == 2 {
+                return anyhow::Ok(());
+            }
+            assert!(!first.is_finished() && !second.is_finished());
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await??;
+    barrier.commit().await?;
+    first.await??;
+    second.await??;
+    Ok(())
+}

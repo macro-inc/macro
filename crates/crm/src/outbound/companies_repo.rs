@@ -191,8 +191,9 @@ impl CompaniesRepositoryImpl {
     }
 
     /// Adds or removes a blocklist entry and sets `hidden` to match on
-    /// what the CRM holds for the domain: the owning company, its
-    /// contacts, and company-less contacts at the domain. Takes the
+    /// what the CRM holds for the domain: the owning company and its
+    /// contacts (hidden while any of the company's domains is blocked), and
+    /// company-less contacts at the domain. Takes the
     /// populate lock so a concurrent populate can't slip a visible row in.
     async fn set_domain_blocked(
         &self,
@@ -231,10 +232,40 @@ impl CompaniesRepositoryImpl {
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         }
 
+        // Different domains have different advisory locks but can share a
+        // company. Wait for its row before starting the visibility statements,
+        // so their snapshots include the previous domain writer's commit.
+        sqlx::query!(
+            r#"
+            SELECT co.id
+            FROM crm_companies co
+            JOIN crm_domains d ON d.company_id = co.id
+            WHERE co.team_id = $1
+              AND d.team_id = $1
+              AND LOWER(d.domain) = $2
+            FOR UPDATE OF co
+            "#,
+            team_id,
+            domain,
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        // A company stays hidden while any of its domains is blocked, so
+        // unblocking one of several blocked domains leaves it hidden.
         sqlx::query!(
             r#"
             UPDATE crm_companies co
-            SET hidden = $3
+            SET hidden = EXISTS (
+                SELECT 1
+                FROM crm_domains own
+                JOIN crm_blocked_domains bd
+                  ON bd.team_id = own.team_id
+                 AND bd.domain = LOWER(own.domain)
+                WHERE own.company_id = co.id
+                  AND own.team_id = $1
+            )
             FROM crm_domains d
             WHERE d.company_id = co.id
               AND d.team_id = $1
@@ -243,7 +274,6 @@ impl CompaniesRepositoryImpl {
             "#,
             team_id,
             domain,
-            blocked,
         )
         .execute(&mut *tx)
         .await
@@ -252,7 +282,18 @@ impl CompaniesRepositoryImpl {
         sqlx::query!(
             r#"
             UPDATE crm_contacts ct
-            SET hidden = $3
+            SET hidden = CASE
+                WHEN ct.company_id IS NULL THEN $3
+                ELSE EXISTS (
+                    SELECT 1
+                    FROM crm_domains own
+                    JOIN crm_blocked_domains bd
+                      ON bd.team_id = own.team_id
+                     AND bd.domain = LOWER(own.domain)
+                    WHERE own.company_id = ct.company_id
+                      AND own.team_id = $1
+                )
+            END
             WHERE ct.team_id = $1
               AND (
                   (ct.company_id IS NULL AND split_part(LOWER(ct.email), '@', 2) = $2)
@@ -822,6 +863,12 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .begin()
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        // Serialize with a concurrent block of the same domain, which would
+        // otherwise miss this row and leave it visible.
+        if let Some((_, domain)) = normalized_email.as_deref().and_then(|e| e.split_once('@')) {
+            Self::lock_team_domain(&mut tx, team_id, domain).await?;
+        }
 
         if !Self::team_crm_enabled(&mut tx, team_id).await? {
             return Err(CrmError::CrmDisabledForTeam);

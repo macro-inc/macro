@@ -499,7 +499,9 @@ toggle back on only stops future sync; contacts it already added stay.
 Blocking a domain (typed, or every domain of a company picked from the menu)
 stops email sync for it and hides the company that owns it, that company's
 people, and contacts without a company at that domain; unblocking shows them
-again. A contact attached to a company follows that company's domains, so
+again once none of the company's domains remain blocked. Contacts without a
+company reappear when their own domain is unblocked. A contact attached to a
+company follows that company's domains, so
 blocking `gmail.com` does not hide a Gmail address filed under another company.
 After blocking or unblocking, verify that already-cached company lists and
 contact suggestions refresh to the new visibility without reloading the app,

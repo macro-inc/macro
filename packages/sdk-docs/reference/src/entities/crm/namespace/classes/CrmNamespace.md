@@ -236,9 +236,10 @@ The caller's current team's CRM settings.
 > **unblockDomain**(`domain`): `Promise`\<`void`\>
 
 Unblock a domain: email sync resumes for addresses the team's
-personal-email and generic-provider filters allow, and what blocking hid
-is shown again. This clears the hidden flag on the domain's company even
-if it was hidden by hand before blocking. Requires a team admin or owner.
+personal-email and generic-provider filters allow. Contacts without a
+company at this domain are shown again. Its company and attached contacts
+stay hidden until the company's last blocked domain is removed, then are
+shown even if hidden by hand before blocking. Requires a team admin or owner.
 
 #### Parameters
 

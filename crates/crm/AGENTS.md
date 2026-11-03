@@ -78,6 +78,8 @@ tools/HTTP/GraphQL surfaces over them.
   disable/purge and team deletion cannot race creation.
 - When depopulating an email, prefer its domain-linked contact over a manual
   unfiled record so mailbox-source teardown reaches the synced contact.
+- Serialize domain visibility updates on the owning company row before reading
+  all its blocked domains; take no further domain locks after that row lock.
 - Keep ambiguous CSV contact lookups unresolved without creating records for
   them; continue valid rows, but propagate lookup storage and authorization failures.
 
@@ -92,8 +94,9 @@ tools/HTTP/GraphQL surfaces over them.
   `hidden` flag and name. Email sync files personal-provider addresses
   (`is_personal_email_domain`) as company-less contacts only when the team
   turns `exclude_personal_emails` off; `crm_blocked_domains` stops sync per
-  domain. CRM-scoped email access (`crm_scope_precheck`, thread access) still
-  goes through companies, so company-less contacts never share email threads.
+  domain. CRM-scoped previews still require a company contact. Company-less
+  contacts add no thread-access grant, but hidden ones suppress their team's
+  CRM-derived grant for members; independent access grants still apply.
 - The Sales migration (`SALES_BACKFILL.md`) is forward-only and additive —
   its down migration refuses to erase completion or user edits; never revert
   it to undo a bad migration, only the application code that reads it.
