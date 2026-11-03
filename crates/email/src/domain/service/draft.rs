@@ -10,6 +10,7 @@ use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use frecency::domain::ports::FrecencyQueryService;
 use macro_user_id::cowlike::CowLike;
+use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::EmailServiceImpl;
@@ -705,11 +706,8 @@ where
         // reply draft by a delayed save from an obsolete composer.
         if input.db_id.is_some() {
             let parent = self
-                .email_repo
-                .get_simple_message(replying_to_id, accessible_link_ids)
-                .await
-                .map_err(anyhow::Error::from)?
-                .ok_or(EmailErr::MessageNotFound(replying_to_id))?;
+                .reply_target(input.actor.as_ref(), replying_to_id, accessible_link_ids)
+                .await?;
             if parent.is_draft {
                 return Err(EmailErr::CannotReplyToDraft);
             }
@@ -729,6 +727,42 @@ where
         }
 
         Ok(())
+    }
+
+    /// A message the caller may reply to: one in their own inboxes, or one in
+    /// a thread shared with them at edit access. A shared target lives in its
+    /// owner's inbox, so the reply always starts a thread in the caller's.
+    async fn reply_target(
+        &self,
+        actor: Option<&MacroUserIdStr<'static>>,
+        replying_to_id: Uuid,
+        accessible_link_ids: &[Uuid],
+    ) -> Result<SimpleMessageInfo, EmailErr> {
+        if let Some(target) = self
+            .email_repo
+            .get_simple_message(replying_to_id, accessible_link_ids)
+            .await
+            .map_err(anyhow::Error::from)?
+        {
+            return Ok(target);
+        }
+
+        let Some(actor) = actor else {
+            return Err(EmailErr::MessageNotFound(replying_to_id));
+        };
+        let Some(shared_link_id) = self
+            .shared_thread_replies
+            .reply_target_inbox(actor, replying_to_id)
+            .await?
+        else {
+            return Err(EmailErr::MessageNotFound(replying_to_id));
+        };
+
+        self.email_repo
+            .get_simple_message(replying_to_id, &[shared_link_id])
+            .await
+            .map_err(anyhow::Error::from)?
+            .ok_or(EmailErr::MessageNotFound(replying_to_id))
     }
 
     fn apply_existing_draft(
@@ -751,11 +785,8 @@ where
         replying_to_id: Uuid,
     ) -> Result<(), EmailErr> {
         let reply_target = self
-            .email_repo
-            .get_simple_message(replying_to_id, accessible_link_ids)
-            .await
-            .map_err(anyhow::Error::from)?
-            .ok_or(EmailErr::MessageNotFound(replying_to_id))?;
+            .reply_target(input.actor.as_ref(), replying_to_id, accessible_link_ids)
+            .await?;
 
         if reply_target.is_draft {
             return Err(EmailErr::CannotReplyToDraft);
@@ -767,8 +798,8 @@ where
             input.provider_thread_id = reply_target.provider_thread_id;
         } else {
             // The target lives in a different inbox (a different provider
-            // account), so it cannot thread into that account's provider
-            // thread. Start a fresh thread in the sending inbox; the
+            // account, possibly another user's through a share), so it cannot
+            // thread into that account's provider thread. Start a fresh thread in the sending inbox; the
             // Macro-In-Reply-To header below preserves the reference.
             input.thread_db_id = None;
             input.provider_thread_id = None;
