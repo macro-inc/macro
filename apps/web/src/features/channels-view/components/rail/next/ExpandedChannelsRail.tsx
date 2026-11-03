@@ -357,6 +357,7 @@ function BrowseSection(props: {
   onMount(() => {
     const viewport = scrollRoot();
     if (viewport && !outerScroll()) viewport.scrollTop = props.savedScrollTop;
+    props.onReady();
   });
 
   createEffect(
@@ -558,6 +559,7 @@ function BrowseSection(props: {
           keys={rowIds()}
           scrollRoot={rowsScrollRoot()}
           scrollMargin={outerScroll() ? startMargin() : 0}
+          scrollPadding={CHANNEL_SECTION_ROW_HEIGHT * 2}
           estimateSize={CHANNEL_SECTION_ROW_HEIGHT}
           keepMounted={keepRows()}
           onRangeChange={loadVisibleSections}
@@ -596,8 +598,6 @@ function ExpandedBrowse() {
   const rail = useChannelsRail();
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
   const [stackContent, setStackContent] = createSignal<HTMLDivElement>();
-  const [stackVirtualizer, setStackVirtualizer] =
-    createSignal<ChannelRailVirtualizerHandle>();
   const [scrollVersion, setScrollVersion] = createSignal(0);
   const [handlesVersion, setHandlesVersion] = createSignal(0);
   const [gestureSection, setGestureSection] = createSignal<ChannelSectionKey>();
@@ -771,15 +771,6 @@ function ExpandedBrowse() {
           options,
           actorId: userId(),
         });
-        const outerRows =
-          row.kind !== 'section' &&
-          maximumHeight(section) === Number.POSITIVE_INFINITY &&
-          rail.sectionPreferences(section).height === undefined;
-        if (!outerRows) {
-          stackVirtualizer()?.scrollToIndex(keys().indexOf(section), {
-            align: 'nearest',
-          });
-        }
       },
     })
   );
@@ -810,13 +801,31 @@ function ExpandedBrowse() {
           handle.virtualizer?.scrollToIndex(currentIndex, request.options);
         }
         const container = scrollRoot();
-        if (container && handle.root && !handle.outerScroll) {
-          const bounds = handle.root.getBoundingClientRect();
+        const target =
+          currentIndex < 0
+            ? document.getElementById(domIdForRow(rail.railId, request.rowId))
+            : handle.root;
+        if (container && target && (!handle.outerScroll || currentIndex < 0)) {
+          const bounds = target.getBoundingClientRect();
           const viewport = container.getBoundingClientRect();
-          if (bounds.top < viewport.top) {
-            container.scrollTop += bounds.top - viewport.top;
-          } else if (bounds.bottom > viewport.bottom) {
-            container.scrollTop += bounds.bottom - viewport.bottom;
+          const padding = Math.min(
+            CHANNEL_SECTION_ROW_HEIGHT * 2,
+            Math.max(0, (viewport.height - bounds.height) / 2)
+          );
+          let offset = 0;
+          if (bounds.top < viewport.top + padding) {
+            offset = bounds.top - viewport.top - padding;
+          } else if (bounds.bottom > viewport.bottom - padding) {
+            offset = bounds.bottom - viewport.bottom + padding;
+          }
+          if (offset !== 0) {
+            container.scrollTo({
+              top: container.scrollTop + offset,
+              behavior: window.matchMedia('(prefers-reduced-motion: reduce)')
+                .matches
+                ? 'auto'
+                : 'smooth',
+            });
           }
         }
         setPendingScroll(undefined);
@@ -834,7 +843,6 @@ function ExpandedBrowse() {
       >
         <div ref={setStackContent}>
           <ChannelRailVirtualizer
-            ref={setStackVirtualizer}
             scrollRoot={scrollRoot()}
             keys={keys()}
             estimateSize={200}
@@ -931,6 +939,7 @@ function ExpandedSearchResults(props: { search: ChannelRailSearch }) {
         }}
         keys={[...channelsById().keys()]}
         scrollRoot={scrollRoot()}
+        scrollPadding={CHANNEL_SECTION_ROW_HEIGHT * 2}
         estimateSize={CHANNEL_SECTION_ROW_HEIGHT}
         keepMounted={keepMounted()}
         onRangeChange={loadMoreNearEnd}

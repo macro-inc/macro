@@ -7,6 +7,7 @@ import {
 } from './ChannelRailVirtualizer';
 
 const observers = new Set<MeasuredResizeObserver>();
+let viewportHeight = 200;
 
 class MeasuredResizeObserver implements ResizeObserver {
   readonly targets = new Set<Element>();
@@ -30,6 +31,7 @@ class MeasuredResizeObserver implements ResizeObserver {
 }
 
 function measure(height: number) {
+  viewportHeight = height;
   for (const observer of [...observers]) {
     const entries = [...observer.targets].map((target) => {
       const blockSize = target.hasAttribute('data-viewport') ? height : 32;
@@ -47,8 +49,22 @@ function measure(height: number) {
 }
 
 beforeEach(() => {
+  viewportHeight = 200;
   vi.useFakeTimers();
   vi.stubGlobal('ResizeObserver', MeasuredResizeObserver);
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn((media: string) => ({
+      matches: false,
+      media,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }))
+  );
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
     function (this: HTMLElement) {
       return this.hasAttribute('data-viewport') ? 200 : 32;
@@ -65,7 +81,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function mount(scrollTop: number, initialMargin = 0) {
+function mount(scrollTop: number, initialMargin = 0, scrollPadding = 0) {
   const viewport = document.createElement('div');
   viewport.setAttribute('data-viewport', '');
   document.body.append(viewport);
@@ -78,15 +94,14 @@ function mount(scrollTop: number, initialMargin = 0) {
   const [scrollRoot, setScrollRoot] = createSignal(viewport);
   let handle: ChannelRailVirtualizerHandle | undefined;
   const onRangeChange = vi.fn();
+  const scrollTo = vi.fn((options: ScrollToOptions) => {
+    viewport.scrollTop = options.top ?? 0;
+    viewport.dispatchEvent(new Event('scroll'));
+  });
   Object.defineProperties(viewport, {
-    clientHeight: { value: 200, configurable: true },
+    clientHeight: { get: () => viewportHeight, configurable: true },
     scrollHeight: { get: () => 3200 + margin() },
-    scrollTo: {
-      value: (options: ScrollToOptions) => {
-        viewport.scrollTop = options.top ?? 0;
-        viewport.dispatchEvent(new Event('scroll'));
-      },
-    },
+    scrollTo: { value: scrollTo },
   });
   const result = render(
     () =>
@@ -102,6 +117,7 @@ function mount(scrollTop: number, initialMargin = 0) {
         get scrollMargin() {
           return margin();
         },
+        scrollPadding,
         get keepMounted() {
           return retained();
         },
@@ -120,6 +136,7 @@ function mount(scrollTop: number, initialMargin = 0) {
   return {
     ...result,
     viewport,
+    scrollTo,
     setMargin,
     setKeys,
     setRetained,
@@ -173,6 +190,64 @@ describe('channel rail virtualizer', () => {
     view.handle()?.scrollToIndex(25, { align: 'nearest' });
     await vi.advanceTimersByTimeAsync(200);
     expect(view.viewport.scrollTop).toBe(732);
+  });
+
+  it('smoothly reveals two context rows above and below the focused row', async () => {
+    const view = mount(320, 0, 64);
+    measure(200);
+
+    view.handle()?.scrollToIndex(15, { align: 'nearest' });
+    await vi.advanceTimersByTimeAsync(200);
+    expect(view.scrollTo).toHaveBeenCalledWith({
+      top: 376,
+      behavior: 'smooth',
+    });
+
+    view.handle()?.scrollToIndex(10, { align: 'nearest' });
+    await vi.advanceTimersByTimeAsync(200);
+    expect(view.viewport.scrollTop).toBe(256);
+  });
+
+  it('keeps a row still when it already has enough surrounding context', async () => {
+    const view = mount(320, 0, 64);
+    measure(200);
+
+    view.handle()?.scrollToIndex(13, { align: 'nearest' });
+    await vi.advanceTimersByTimeAsync(200);
+    expect(view.viewport.scrollTop).toBe(320);
+  });
+
+  it('includes preceding sections in padded smooth scrolling', async () => {
+    const view = mount(500, 500, 64);
+    measure(600);
+
+    view.handle()?.scrollToIndex(25, { align: 'nearest' });
+    await vi.advanceTimersByTimeAsync(200);
+    expect(view.viewport.scrollTop).toBe(796);
+  });
+
+  it('reduces context padding so small viewports can show the focused row', async () => {
+    const view = mount(320, 0, 64);
+    measure(64);
+
+    view.handle()?.scrollToIndex(15, { align: 'nearest' });
+    await vi.advanceTimersByTimeAsync(200);
+    expect(view.viewport.scrollTop).toBe(464);
+  });
+
+  it('uses immediate padded scrolling when reduced motion is requested', async () => {
+    const preference = window.matchMedia('(prefers-reduced-motion: reduce)');
+    vi.spyOn(window, 'matchMedia').mockReturnValue({
+      ...preference,
+      matches: true,
+    });
+    const view = mount(320, 0, 64);
+    measure(200);
+    view.scrollTo.mockClear();
+
+    view.handle()?.scrollToIndex(15, { align: 'nearest' });
+    await vi.advanceTimersByTimeAsync(200);
+    expect(view.scrollTo).toHaveBeenCalledWith({ top: 376, behavior: 'auto' });
   });
 
   it('preserves row elements through refreshed keys and reordering', () => {

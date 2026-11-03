@@ -1,6 +1,7 @@
 import type { ListScrollHandle } from '@app/components/list';
 import { onElementConnect } from '@core/util/onElementConnect';
 import { Key } from '@solid-primitives/keyed';
+import { createResizeObserver } from '@solid-primitives/resize-observer';
 import {
   createVirtualizer,
   defaultRangeExtractor,
@@ -26,6 +27,7 @@ type ChannelRailVirtualizerProps<K extends string> = {
   keys: readonly K[];
   scrollRoot: HTMLDivElement | undefined;
   scrollMargin?: number;
+  scrollPadding?: number;
   estimateSize: number;
   overscan?: number;
   keepMounted?: readonly number[];
@@ -37,6 +39,19 @@ type ChannelRailVirtualizerProps<K extends string> = {
 function VirtualRows<K extends string>(
   props: ChannelRailVirtualizerProps<K> & { scrollRoot: HTMLDivElement }
 ) {
+  const [viewportHeight, setViewportHeight] = createSignal(
+    props.scrollRoot.clientHeight
+  );
+  createResizeObserver(
+    () => props.scrollRoot,
+    () => setViewportHeight(props.scrollRoot.clientHeight)
+  );
+  const scrollPadding = () =>
+    Math.min(
+      props.scrollPadding ?? 0,
+      Math.max(0, (viewportHeight() - props.estimateSize) / 2)
+    );
+
   const virtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
     get count() {
       return props.keys.length;
@@ -50,6 +65,12 @@ function VirtualRows<K extends string>(
     initialOffset: () => props.scrollRoot.scrollTop,
     get scrollMargin() {
       return props.scrollMargin ?? 0;
+    },
+    get scrollPaddingStart() {
+      return scrollPadding();
+    },
+    get scrollPaddingEnd() {
+      return scrollPadding();
     },
     get overscan() {
       return props.overscan ?? 6;
@@ -74,6 +95,9 @@ function VirtualRows<K extends string>(
 
       virtualizer.scrollToIndex(index, {
         align: !align || align === 'nearest' ? 'auto' : align,
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+          ? 'auto'
+          : 'smooth',
       });
     },
     visibleRange: () => {
