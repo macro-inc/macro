@@ -380,62 +380,65 @@ describe('rendersOwnView', () => {
   });
 });
 
-describe.each(['GenerateImage'])('%s grouping', (name) => {
-  it.each(['native', 'mcp'] as const)(
-    'keeps %s calls outside surrounding tool groups in every state',
-    (kind) => {
-      for (const status of [
-        'pending',
-        'running',
-        'completed',
-        'failed',
-      ] as const) {
-        const standalone = tool({
-          name:
-            kind === 'native'
-              ? { kind, name }
-              : { kind, server: 'macro', tool: name },
-          status,
-          detail:
-            kind === 'native'
-              ? { kind: 'macro', input: null, output: null, error: null }
-              : {
-                  kind: 'other',
-                  acpKind: 'other',
-                  input: null,
-                  output: null,
-                  result: null,
-                  error: null,
-                },
-        });
-        expect(rendersOwnView(standalone)).toBe(true);
-        expect(segmentParts([tool(), standalone, tool()])).toEqual([
-          { kind: 'tools', start: 0, end: 1 },
-          { kind: 'part', start: 1, end: 2 },
-          { kind: 'tools', start: 2, end: 3 },
-        ]);
+describe.each(['GenerateImage', 'DispatchCodingAgent'])(
+  '%s grouping',
+  (name) => {
+    it.each(['native', 'mcp'] as const)(
+      'keeps %s calls outside surrounding tool groups in every state',
+      (kind) => {
+        for (const status of [
+          'pending',
+          'running',
+          'completed',
+          'failed',
+        ] as const) {
+          const standalone = tool({
+            name:
+              kind === 'native'
+                ? { kind, name }
+                : { kind, server: 'macro', tool: name },
+            status,
+            detail:
+              kind === 'native'
+                ? { kind: 'macro', input: null, output: null, error: null }
+                : {
+                    kind: 'other',
+                    acpKind: 'other',
+                    input: null,
+                    output: null,
+                    result: null,
+                    error: null,
+                  },
+          });
+          expect(rendersOwnView(standalone)).toBe(true);
+          expect(segmentParts([tool(), standalone, tool()])).toEqual([
+            { kind: 'tools', start: 0, end: 1 },
+            { kind: 'part', start: 1, end: 2 },
+            { kind: 'tools', start: 2, end: 3 },
+          ]);
+        }
       }
-    }
-  );
+    );
 
-  it('keeps an unrelated MCP tool with the same name in its group', () => {
-    const external = tool({
-      name: { kind: 'mcp', server: 'external', tool: name },
-      detail: {
-        kind: 'other',
-        acpKind: 'other',
-        input: null,
-        output: null,
-        result: null,
-        error: null,
-      },
+    it('keeps an unrelated MCP tool with the same name in its group', () => {
+      const external = tool({
+        name: { kind: 'mcp', server: 'external', tool: name },
+        detail: {
+          kind: 'other',
+          acpKind: 'other',
+          input: null,
+          output: null,
+          result: null,
+          error: null,
+        },
+      });
+      expect(rendersOwnView(external)).toBe(false);
+      expect(segmentParts([tool(), external, tool()])).toEqual([
+        { kind: 'tools', start: 0, end: 3 },
+      ]);
     });
-    expect(rendersOwnView(external)).toBe(false);
-    expect(segmentParts([tool(), external, tool()])).toEqual([
-      { kind: 'tools', start: 0, end: 3 },
-    ]);
-  });
-});
+  }
+);
 
 it('keeps trusted code executions visible so their inner views stay outside collapsed groups', () => {
   const execution = tool({

@@ -1,0 +1,17 @@
+---
+title: DispatchCodingAgent
+description: >-
+  Start a new coding agent session for a task using an agent returned by
+  ListCodingAgents.
+---
+
+# DispatchCodingAgent
+
+Start a new coding agent session for a task using an agent returned by ListCodingAgents. Pass a self-contained task with the relevant repository, requirements, findings, and acceptance criteria; the coding agent does not inherit this conversation. Returns a live session reference after its first prompt is accepted, not completed code. Dispatch once per task and do not retry automatically after an uncertain failure.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `agent_id` | string | Yes | The id of the best-suited coding agent from ListCodingAgents |
+| `prompt` | string | Yes | Self-contained coding task, including the repository, relevant context, requirements, and desired outcome |

@@ -8,7 +8,7 @@ use super::*;
 #[derive(Default)]
 struct Service {
     list_callers: Mutex<Vec<MacroUserIdStr<'static>>>,
-    created: Mutex<Vec<DispatchCodingAgentRequest>>,
+    dispatched: Mutex<Vec<DispatchCodingAgentRequest>>,
 }
 
 impl CodingAgentService for Service {
@@ -36,13 +36,31 @@ impl CodingAgentService for Service {
         command: DispatchCodingAgentRequest,
     ) -> Pin<Box<dyn Future<Output = Result<DispatchedCodingAgent, CodingAgentError>> + Send + '_>>
     {
+        self.dispatch(command)
+    }
+
+    fn list(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<CodingAgent>, CodingAgentError>> + Send + '_>> {
+        Box::pin(async move {
+            self.list_callers.lock().unwrap().push(user_id);
+            Ok(Vec::new())
+        })
+    }
+
+    fn dispatch(
+        &self,
+        command: DispatchCodingAgentRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<DispatchedCodingAgent, CodingAgentError>> + Send + '_>>
+    {
         Box::pin(async move {
             let response = DispatchedCodingAgent {
                 agent_session_id: macro_uuid::generate_uuid_v7(),
                 agent_id: command.agent_id,
                 agent_name: "Coder".into(),
             };
-            self.created.lock().unwrap().push(command);
+            self.dispatched.lock().unwrap().push(command);
             Ok(response)
         })
     }
@@ -57,28 +75,44 @@ async fn tools_always_use_the_authenticated_request_identity() {
     });
     let caller = MacroUserIdStr::try_from("macro|requester@example.com".to_owned()).unwrap();
     let request = RequestContext::new(caller.clone());
+    let listed = ListCodingAgents {}
+        .call(context.clone(), request.clone())
+        .await
+        .unwrap();
+    assert!(listed.agents.is_empty());
+    assert_eq!(*service.list_callers.lock().unwrap(), vec![caller.clone()]);
+
     let updates = ListAgentUpdates {}
         .call(context.clone(), request.clone())
         .await
         .unwrap();
     assert!(updates.items.is_empty());
-    assert_eq!(*service.list_callers.lock().unwrap(), vec![caller.clone()]);
+    assert_eq!(
+        *service.list_callers.lock().unwrap(),
+        vec![caller.clone(), caller.clone()]
+    );
 
-    let tool = CreateAgentSession {
+    let tool = DispatchCodingAgent {
         agent_id: macro_uuid::generate_uuid_v7(),
         prompt: "Implement repository issue 123".into(),
     };
     let response = tool.call(context, request).await.unwrap();
-    let created = service.created.lock().unwrap();
-    assert_eq!(created.len(), 1);
-    assert_eq!(created[0].user_id, caller);
-    assert_eq!(created[0].agent_id, tool.agent_id);
-    assert_eq!(created[0].prompt, tool.prompt);
+    let dispatched = service.dispatched.lock().unwrap();
+    assert_eq!(dispatched.len(), 1);
+    assert_eq!(dispatched[0].user_id, caller);
+    assert_eq!(dispatched[0].agent_id, tool.agent_id);
+    assert_eq!(dispatched[0].prompt, tool.prompt);
     assert_eq!(response.agent_id, tool.agent_id);
 }
 
 #[test]
 fn tools_reject_an_ai_supplied_user_identity() {
+    assert!(
+        serde_json::from_value::<ListCodingAgents>(serde_json::json!({
+            "user_id": "macro|another@example.com"
+        }))
+        .is_err()
+    );
     assert!(
         serde_json::from_value::<ListAgentUpdates>(
             serde_json::json!({"user_id": "macro|another@example.com"})
@@ -86,10 +120,10 @@ fn tools_reject_an_ai_supplied_user_identity() {
         .is_err()
     );
     assert!(
-        serde_json::from_value::<CreateAgentSession>(serde_json::json!({
-            "agentId": macro_uuid::generate_uuid_v7(),
+        serde_json::from_value::<DispatchCodingAgent>(serde_json::json!({
+            "agent_id": macro_uuid::generate_uuid_v7(),
             "prompt": "Fix the bug",
-            "userId": "macro|another@example.com"
+            "user_id": "macro|another@example.com"
         }))
         .is_err()
     );

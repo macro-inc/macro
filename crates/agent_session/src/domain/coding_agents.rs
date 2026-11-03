@@ -1,4 +1,4 @@
-//! Start a session with an authorized persona and admit its first turn.
+//! Discover authorized coding personas and start their first session turn.
 
 use std::pin::Pin;
 
@@ -18,13 +18,22 @@ use super::updates::{AgentUpdates, CodingAgentUpdatesRepo, list_updates};
 #[cfg(test)]
 mod test;
 
-/// A persona a session can be started as.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Information used to choose a coding persona for a task.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
 pub struct CodingAgent {
-    /// Persona id.
+    /// Persona id to pass to dispatch.
     pub id: Uuid,
     /// User-facing persona name.
     pub name: String,
+    /// What the persona is intended to do.
+    pub description: Option<String>,
+    /// Saved guidance describing the persona's repositories and specialties.
+    pub instructions: String,
+    /// Runtime configured for the persona.
+    pub harness: String,
+    /// Persona's configured default model, absent when the provider chooses it.
+    pub model: Option<String>,
 }
 
 /// Authorized persona facts supplied by the directory capability.
@@ -32,6 +41,8 @@ pub struct CodingAgent {
 pub struct CodingAgentCandidate {
     /// Information safe for the authorized caller to see.
     pub agent: CodingAgent,
+    /// Whether the persona is configured for coding work.
+    pub is_coding: bool,
     /// Whether its required runtime connection or provider credentials exist.
     pub available: bool,
 }
@@ -50,7 +61,7 @@ pub trait CodingAgentDirectory: Send + Sync + 'static {
 pub struct DispatchCodingAgentRequest {
     /// Verified tool caller; never supplied as an AI tool argument.
     pub user_id: MacroUserIdStr<'static>,
-    /// Persona the session runs as.
+    /// Persona selected from the discovery result.
     pub agent_id: Uuid,
     /// Self-contained task and repository context for the coding agent.
     pub prompt: String,
@@ -78,8 +89,8 @@ pub enum CodingAgentError {
     /// Empty tasks cannot start sessions.
     #[error("provide a non-empty coding task")]
     InvalidPrompt,
-    /// Deleted, inaccessible, or disconnected persona.
-    #[error("this agent is unavailable; list available agents again")]
+    /// Deleted, inaccessible, non-coding, or disconnected persona.
+    #[error("this coding agent is unavailable; list available coding agents again")]
     Unavailable,
     /// The caller cannot use the requested capability.
     #[error("you do not have permission to dispatch this coding agent")]
@@ -102,17 +113,27 @@ pub enum CodingAgentError {
     },
 }
 
-/// Owner-authorized session creation shared by tool and transport adapters.
+/// Owner-authorized coding delegation shared by tool and transport adapters.
 pub trait CodingAgentService: Send + Sync + 'static {
     /// List the caller's pending coding-session updates.
     fn list_updates(
         &self,
         user_id: MacroUserIdStr<'static>,
     ) -> Pin<Box<dyn Future<Output = Result<AgentUpdates, CodingAgentError>> + Send + '_>>;
+    /// List the caller's configured, available coding personas.
+    fn list(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<CodingAgent>, CodingAgentError>> + Send + '_>>;
 
-    /// Reauthorize any available coding or chat persona the caller may use,
-    /// create a session, and admit its initial prompt once.
+    /// Start a session with any available coding or chat persona the caller may use.
     fn create(
+        &self,
+        command: DispatchCodingAgentRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<DispatchedCodingAgent, CodingAgentError>> + Send + '_>>;
+
+    /// Reauthorize a persona, create a session, and admit its initial prompt once.
+    fn dispatch(
         &self,
         command: DispatchCodingAgentRequest,
     ) -> Pin<Box<dyn Future<Output = Result<DispatchedCodingAgent, CodingAgentError>> + Send + '_>>;
@@ -151,24 +172,59 @@ where
     ) -> Pin<Box<dyn Future<Output = Result<AgentUpdates, CodingAgentError>> + Send + '_>> {
         Box::pin(list_updates(&self.updates, user_id))
     }
+    fn list(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<CodingAgent>, CodingAgentError>> + Send + '_>> {
+        Box::pin(async move {
+            Ok(self
+                .directory
+                .candidates(user_id)
+                .await?
+                .into_iter()
+                .filter(|candidate| candidate.is_coding && candidate.available)
+                .map(|candidate| candidate.agent)
+                .collect())
+        })
+    }
 
+    fn dispatch(
+        &self,
+        command: DispatchCodingAgentRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<DispatchedCodingAgent, CodingAgentError>> + Send + '_>>
+    {
+        self.dispatch_selected(command, true)
+    }
     fn create(
         &self,
         command: DispatchCodingAgentRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<DispatchedCodingAgent, CodingAgentError>> + Send + '_>>
+    {
+        self.dispatch_selected(command, false)
+    }
+}
+
+impl<Directory: CodingAgentDirectory, Sessions: RoutineSessions, Updates: CodingAgentUpdatesRepo>
+    CodingAgentServiceImpl<Directory, Sessions, Updates>
+{
+    fn dispatch_selected(
+        &self,
+        command: DispatchCodingAgentRequest,
+        coding_only: bool,
     ) -> Pin<Box<dyn Future<Output = Result<DispatchedCodingAgent, CodingAgentError>> + Send + '_>>
     {
         Box::pin(async move {
             if command.prompt.trim().is_empty() {
                 return Err(CodingAgentError::InvalidPrompt);
             }
-            // Re-read visibility and configuration at creation time. A saved
-            // tool result is not authority to use a removed or reconfigured persona.
+            // Re-read visibility and configuration at dispatch time. A saved tool
+            // result is not authority to use a removed or reconfigured persona.
             let agent = self
                 .directory
                 .candidates(command.user_id.clone())
                 .await?
                 .into_iter()
-                .filter(|candidate| candidate.available)
+                .filter(|candidate| candidate.available && (!coding_only || candidate.is_coding))
                 .map(|candidate| candidate.agent)
                 .find(|agent| agent.id == command.agent_id)
                 .ok_or(CodingAgentError::Unavailable)?;

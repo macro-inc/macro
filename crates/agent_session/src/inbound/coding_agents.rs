@@ -1,4 +1,4 @@
-//! Internal agent session creation endpoint; creation policy lives in the domain.
+//! Internal coding agent endpoints; discovery and dispatch policy live in the domain.
 
 use std::{sync::Arc, time::Duration};
 
@@ -14,17 +14,21 @@ use macro_authorization::{
     InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
     UserOrInternal,
 };
+use macro_user_id::user_id::MacroUserIdStr;
+use serde::{Deserialize, Serialize};
 
 use crate::domain::coding_agents::{
-    CodingAgentError, CodingAgentService, DispatchCodingAgentRequest, DispatchedCodingAgent,
+    CodingAgent, CodingAgentError, CodingAgentService, DispatchCodingAgentRequest,
+    DispatchedCodingAgent,
 };
 use crate::domain::updates::AgentUpdates;
 
-const CREATE_TIMEOUT: Duration = Duration::from_secs(120);
+const DISPATCH_TIMEOUT: Duration = Duration::from_secs(120);
+const LIST_TIMEOUT: Duration = Duration::from_secs(10);
 const UPDATES_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_COMMAND_BYTES: usize = 1024 * 1024;
 
-/// Independent state for the internal session creation capability.
+/// Independent state for the internal coding agent capability.
 pub struct CodingAgentsState<Service, Auth> {
     service: Arc<Service>,
     authorization: MacroAuthorizationState<Auth>,
@@ -62,12 +66,24 @@ pub fn coding_agents_router<Service: CodingAgentService, Auth: MacroAuthorizatio
     Router::new().nest(
         "/internal/coding-agents",
         Router::new()
+            .route("/list", post(list::<Service, Auth>))
             .route("/updates", get(updates::<Service, Auth>))
+            .route("/dispatch", post(dispatch::<Service, Auth>))
             .route("/create-session", post(create::<Service, Auth>))
             .layer(DefaultBodyLimit::max(MAX_COMMAND_BYTES))
             .layer(middleware::from_fn(bound_request))
             .with_state(state),
     )
+}
+
+#[derive(Deserialize)]
+struct ListRequest {
+    user_id: MacroUserIdStr<'static>,
+}
+
+#[derive(Serialize)]
+struct ListResponse {
+    agents: Vec<CodingAgent>,
 }
 
 struct ApiError(CodingAgentError);
@@ -102,17 +118,20 @@ impl IntoResponse for ApiError {
 }
 
 async fn bound_request(request: Request, next: Next) -> Response {
-    let is_create = !request.uri().path().ends_with("/updates");
-    let timeout = if is_create {
-        CREATE_TIMEOUT
-    } else {
+    let path = request.uri().path();
+    let is_dispatch = !path.ends_with("/list") && !path.ends_with("/updates");
+    let timeout = if path.ends_with("/updates") {
         UPDATES_TIMEOUT
+    } else if is_dispatch {
+        DISPATCH_TIMEOUT
+    } else {
+        LIST_TIMEOUT
     };
-    bounded_response(is_create, timeout, next.run(request)).await
+    bounded_response(is_dispatch, timeout, next.run(request)).await
 }
 
 async fn bounded_response(
-    is_create: bool,
+    is_dispatch: bool,
     timeout: Duration,
     response: impl Future<Output = Response>,
 ) -> Response {
@@ -120,7 +139,7 @@ async fn bounded_response(
         Ok(response) => response,
         Err(_) => {
             // A timeout cannot undo session creation or an accepted prompt.
-            let code = if is_create {
+            let code = if is_dispatch {
                 CodingAgentError::DispatchDeliveryUnknown
             } else {
                 CodingAgentError::OperationFailed
@@ -128,6 +147,16 @@ async fn bounded_response(
             (StatusCode::GATEWAY_TIMEOUT, Json(code)).into_response()
         }
     }
+}
+
+async fn list<Service: CodingAgentService, Auth: MacroAuthorizationService>(
+    State(state): State<CodingAgentsState<Service, Auth>>,
+    _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
+    command: Result<Json<ListRequest>, JsonRejection>,
+) -> Result<Json<ListResponse>, ApiError> {
+    Ok(Json(ListResponse {
+        agents: state.service.list(command?.0.user_id).await?,
+    }))
 }
 
 async fn updates<Service: CodingAgentService, Auth: MacroAuthorizationService>(
@@ -141,6 +170,14 @@ async fn updates<Service: CodingAgentService, Auth: MacroAuthorizationService>(
             .list_updates(user.authorization.user.macro_user_id)
             .await?,
     ))
+}
+
+async fn dispatch<Service: CodingAgentService, Auth: MacroAuthorizationService>(
+    State(state): State<CodingAgentsState<Service, Auth>>,
+    _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
+    command: Result<Json<DispatchCodingAgentRequest>, JsonRejection>,
+) -> Result<Json<DispatchedCodingAgent>, ApiError> {
+    Ok(Json(state.service.dispatch(command?.0).await?))
 }
 
 #[cfg(test)]

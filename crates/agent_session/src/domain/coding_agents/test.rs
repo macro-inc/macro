@@ -80,11 +80,11 @@ impl RoutineSessions for Sessions {
         &self,
         _: RoutineSessionAction,
     ) -> Result<RoutineActionStatus, RoutineSessionError> {
-        panic!("creation returns after admission, without waiting for completion")
+        panic!("dispatch returns after admission, without waiting for completion")
     }
 
     async fn cancel(&self, _: RoutineSessionAction) -> Result<(), RoutineSessionError> {
-        panic!("an uncertain creation must not cancel an admitted task")
+        panic!("an uncertain dispatch must not cancel an admitted task")
     }
 }
 
@@ -92,12 +92,17 @@ fn user() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from("macro|coder@example.com".to_owned()).unwrap()
 }
 
-fn candidate(available: bool) -> CodingAgentCandidate {
+fn candidate(is_coding: bool, available: bool) -> CodingAgentCandidate {
     CodingAgentCandidate {
         agent: CodingAgent {
             id: macro_uuid::generate_uuid_v7(),
             name: "Repository maintainer".into(),
+            description: Some("Maintains the web app".into()),
+            instructions: "Work in the product repository".into(),
+            harness: "macrod".into(),
+            model: Some("configured-default".into()),
         },
+        is_coding,
         available,
     }
 }
@@ -108,7 +113,7 @@ fn fixture() -> (
     Sessions,
     CodingAgentCandidate,
 ) {
-    let agent = candidate(true);
+    let agent = candidate(true, true);
     let directory = Directory::default();
     directory.candidates.lock().unwrap().push(agent.clone());
     let sessions = Sessions::default();
@@ -129,10 +134,23 @@ fn command(agent_id: Uuid) -> DispatchCodingAgentRequest {
 }
 
 #[tokio::test]
-async fn creation_prepares_and_prompts_once_with_the_callers_identity() {
+async fn discovery_only_returns_available_coding_personas_for_the_caller() {
+    let (service, directory, _, agent) = fixture();
+    directory.candidates.lock().unwrap().extend([
+        candidate(false, true),
+        candidate(true, false),
+        candidate(false, false),
+    ]);
+
+    assert_eq!(service.list(user()).await.unwrap(), vec![agent.agent]);
+    assert_eq!(*directory.callers.lock().unwrap(), vec![user()]);
+}
+
+#[tokio::test]
+async fn dispatch_prepares_and_prompts_once_with_the_callers_identity() {
     let (service, _, sessions, agent) = fixture();
     let request = command(agent.agent.id);
-    let response = service.create(request.clone()).await.unwrap();
+    let response = service.dispatch(request.clone()).await.unwrap();
 
     let prepared = sessions.prepared.lock().unwrap();
     assert_eq!(prepared.len(), 1);
@@ -140,7 +158,7 @@ async fn creation_prepares_and_prompts_once_with_the_callers_identity() {
     assert_eq!(prepared[0].selection.bot_id.as_uuid(), agent.agent.id);
     assert_eq!(prepared[0].selection.model, None);
     assert_eq!(prepared[0].session_id.as_uuid(), response.agent_session_id);
-    // Recorded as another agent's creation, and listed like the owner's own.
+    // Recorded as another agent's dispatch, and listed like the owner's own.
     assert_eq!(prepared[0].source, SessionSource::Agent);
     assert_eq!(prepared[0].visibility, SessionVisibility::Listed);
     assert_eq!(response.agent_session_id.get_version_num(), 7);
@@ -156,14 +174,29 @@ async fn creation_prepares_and_prompts_once_with_the_callers_identity() {
 }
 
 #[tokio::test]
-async fn unavailable_personas_cannot_be_started_by_id() {
-    let (service, directory, sessions, _) = fixture();
-    let rejected = candidate(false);
-    *directory.candidates.lock().unwrap() = vec![rejected.clone()];
+async fn discovery_does_not_authorize_a_later_dispatch() {
+    let (service, directory, sessions, agent) = fixture();
+    assert_eq!(service.list(user()).await.unwrap().len(), 1);
+    directory.candidates.lock().unwrap().clear();
+
     assert_eq!(
-        service.create(command(rejected.agent.id)).await,
+        service.dispatch(command(agent.agent.id)).await,
         Err(CodingAgentError::Unavailable)
     );
+    assert!(sessions.prepared.lock().unwrap().is_empty());
+    assert!(sessions.prompted.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn chat_and_unavailable_personas_cannot_be_dispatched_by_id() {
+    let (service, directory, sessions, _) = fixture();
+    for rejected in [candidate(false, true), candidate(true, false)] {
+        *directory.candidates.lock().unwrap() = vec![rejected.clone()];
+        assert_eq!(
+            service.dispatch(command(rejected.agent.id)).await,
+            Err(CodingAgentError::Unavailable)
+        );
+    }
     assert!(sessions.prepared.lock().unwrap().is_empty());
     assert!(sessions.prompted.lock().unwrap().is_empty());
 }
@@ -174,7 +207,7 @@ async fn blank_prompt_is_rejected_before_provisioning() {
     let mut request = command(agent.agent.id);
     request.prompt = " \n\t".into();
     assert_eq!(
-        service.create(request).await,
+        service.dispatch(request).await,
         Err(CodingAgentError::InvalidPrompt)
     );
     assert!(directory.callers.lock().unwrap().is_empty());
@@ -186,7 +219,7 @@ async fn authorization_failure_during_preparation_never_delivers_a_prompt() {
     let (service, _, sessions, agent) = fixture();
     *sessions.prepare_failure.lock().unwrap() = Some(RoutineSessionError::Forbidden);
 
-    let error = service.create(command(agent.agent.id)).await.unwrap_err();
+    let error = service.dispatch(command(agent.agent.id)).await.unwrap_err();
     assert!(matches!(
         error,
         CodingAgentError::DispatchFailed {
@@ -203,7 +236,7 @@ async fn uncertain_prompt_retains_session_id_and_never_retries() {
     let (service, _, sessions, agent) = fixture();
     *sessions.prompt_failure.lock().unwrap() = Some(RoutineSessionError::PromptDeliveryUnknown);
 
-    let error = service.create(command(agent.agent.id)).await.unwrap_err();
+    let error = service.dispatch(command(agent.agent.id)).await.unwrap_err();
     let session_id = sessions.prepared.lock().unwrap()[0].session_id.as_uuid();
     assert_eq!(
         error,
@@ -221,7 +254,7 @@ async fn mismatched_preparation_never_prompts_another_session() {
     let (service, _, sessions, agent) = fixture();
     *sessions.mismatched_session.lock().unwrap() = true;
     assert!(matches!(
-        service.create(command(agent.agent.id)).await,
+        service.dispatch(command(agent.agent.id)).await,
         Err(CodingAgentError::DispatchFailed {
             reason: RoutineSessionError::SessionMismatch,
             ..
@@ -231,11 +264,11 @@ async fn mismatched_preparation_never_prompts_another_session() {
 }
 
 #[tokio::test]
-async fn a_different_accepted_action_does_not_report_creation_success() {
+async fn a_different_accepted_action_does_not_report_dispatch_success() {
     let (service, _, sessions, agent) = fixture();
     *sessions.mismatched_action.lock().unwrap() = true;
     assert!(matches!(
-        service.create(command(agent.agent.id)).await,
+        service.dispatch(command(agent.agent.id)).await,
         Err(CodingAgentError::DispatchFailed {
             reason: RoutineSessionError::PromptDeliveryUnknown,
             ..
@@ -245,12 +278,22 @@ async fn a_different_accepted_action_does_not_report_creation_success() {
 }
 
 #[tokio::test]
-async fn a_persona_removed_after_creation_cannot_start_another_session() {
-    let (service, directory, sessions, agent) = fixture();
-    service.create(command(agent.agent.id)).await.unwrap();
+async fn creation_accepts_chat_personas_but_coding_dispatch_stays_scoped() {
+    let (service, directory, sessions, _) = fixture();
+    let chat = candidate(false, true);
+    directory.candidates.lock().unwrap().push(chat.clone());
+    assert!(matches!(
+        service.dispatch(command(chat.agent.id)).await,
+        Err(CodingAgentError::Unavailable)
+    ));
+    assert!(sessions.prepared.lock().unwrap().is_empty());
+    let created = service.create(command(chat.agent.id)).await.unwrap();
+    assert_eq!(created.agent_id, chat.agent.id);
+    assert_eq!(sessions.prompted.lock().unwrap().len(), 1);
+    assert_eq!(sessions.prompted.lock().unwrap()[0].action.owner, user());
     directory.candidates.lock().unwrap().clear();
     assert!(matches!(
-        service.create(command(agent.agent.id)).await,
+        service.create(command(chat.agent.id)).await,
         Err(CodingAgentError::Unavailable)
     ));
     assert_eq!(sessions.prompted.lock().unwrap().len(), 1);

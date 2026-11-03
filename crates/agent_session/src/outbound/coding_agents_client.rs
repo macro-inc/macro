@@ -1,52 +1,59 @@
-//! Bounded internal transport for agent session creation.
+//! Bounded internal transport for coding agent discovery and dispatch.
 
 use std::{future::Future, pin::Pin, time::Duration};
 
 use macro_authorization::{INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER};
 use macro_user_id::user_id::MacroUserIdStr;
 use reqwest::{Client, Response, StatusCode, Url, header::HeaderValue};
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use crate::domain::coding_agents::{
-    CodingAgentError, CodingAgentService, DispatchCodingAgentRequest, DispatchedCodingAgent,
+    CodingAgent, CodingAgentError, CodingAgentService, DispatchCodingAgentRequest,
+    DispatchedCodingAgent,
 };
 use crate::domain::updates::AgentUpdates;
 
-const CREATE_TIMEOUT: Duration = Duration::from_secs(120);
+const DISPATCH_TIMEOUT: Duration = Duration::from_secs(120);
+const LIST_TIMEOUT: Duration = Duration::from_secs(10);
 const UPDATES_TIMEOUT: Duration = Duration::from_secs(30);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
 const MAX_RESPONSE_BYTES: usize = 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Operation {
+    List,
     Updates,
+    Dispatch,
     Create,
 }
 
 impl Operation {
     fn path(self) -> &'static str {
         match self {
+            Self::List => "internal/coding-agents/list",
             Self::Updates => "internal/coding-agents/updates",
             Self::Create => "internal/coding-agents/create-session",
+            Self::Dispatch => "internal/coding-agents/dispatch",
         }
     }
 
     fn timeout(self) -> Duration {
         match self {
+            Self::List => LIST_TIMEOUT,
             Self::Updates => UPDATES_TIMEOUT,
-            Self::Create => CREATE_TIMEOUT,
+            Self::Dispatch | Self::Create => DISPATCH_TIMEOUT,
         }
     }
 
     fn uncertain_error(self) -> CodingAgentError {
         match self {
-            Self::Updates => CodingAgentError::OperationFailed,
-            Self::Create => CodingAgentError::DispatchDeliveryUnknown,
+            Self::List | Self::Updates => CodingAgentError::OperationFailed,
+            Self::Dispatch | Self::Create => CodingAgentError::DispatchDeliveryUnknown,
         }
     }
 }
 
-/// Internal service client that never redirects credentials or retries creation.
+/// Internal service client that never redirects credentials or retries dispatch.
 #[derive(Clone)]
 pub struct CodingAgentsClient {
     pub(super) client: Client,
@@ -74,7 +81,7 @@ impl CodingAgentsClient {
         internal_key.set_sensitive(true);
         let client = Client::builder()
             .connect_timeout(CONNECT_TIMEOUT)
-            .timeout(CREATE_TIMEOUT)
+            .timeout(DISPATCH_TIMEOUT)
             .redirect(reqwest::redirect::Policy::none())
             .retry(reqwest::retry::never())
             .build()?;
@@ -92,8 +99,6 @@ impl CodingAgentsClient {
         command: &impl Serialize,
         acting_user: Option<&MacroUserIdStr<'static>>,
     ) -> Result<T, CodingAgentError> {
-        // Anything short of a well-formed answer may follow an admitted prompt.
-        let uncertain = || operation.uncertain_error();
         let url = self
             .base_url
             .join(operation.path())
@@ -116,11 +121,13 @@ impl CodingAgentsClient {
             .timeout(operation.timeout())
             .send()
             .await
-            .map_err(|_| uncertain())?;
+            .map_err(|_| operation.uncertain_error())?;
         let status = response.status();
-        let body = bounded_body(response).await.map_err(|_| uncertain())?;
+        let body = bounded_body(response)
+            .await
+            .map_err(|_| operation.uncertain_error())?;
         if status.is_success() {
-            return serde_json::from_slice(&body).map_err(|_| uncertain());
+            return serde_json::from_slice(&body).map_err(|_| operation.uncertain_error());
         }
         if let Ok(error) = serde_json::from_slice::<CodingAgentError>(&body) {
             let valid_status = match &error {
@@ -131,17 +138,22 @@ impl CodingAgentsClient {
                 CodingAgentError::Unavailable => status == StatusCode::NOT_FOUND,
                 CodingAgentError::OperationFailed => {
                     status == StatusCode::INTERNAL_SERVER_ERROR
-                        || (operation == Operation::Updates
+                        || (matches!(operation, Operation::List | Operation::Updates)
                             && status == StatusCode::GATEWAY_TIMEOUT)
                 }
                 CodingAgentError::DispatchFailed { .. } => status == StatusCode::BAD_GATEWAY,
                 CodingAgentError::DispatchDeliveryUnknown => {
                     status == StatusCode::BAD_GATEWAY
-                        || (operation == Operation::Create && status == StatusCode::GATEWAY_TIMEOUT)
+                        || (matches!(operation, Operation::Dispatch | Operation::Create)
+                            && status == StatusCode::GATEWAY_TIMEOUT)
                 }
             };
-            // A contradictory envelope is not evidence that creation was refused.
-            return Err(if valid_status { error } else { uncertain() });
+            // A contradictory envelope is not evidence that dispatch was refused.
+            return Err(if valid_status {
+                error
+            } else {
+                operation.uncertain_error()
+            });
         }
         // Never expose gateway/provider bodies, which may contain private content.
         Err(match status {
@@ -149,9 +161,19 @@ impl CodingAgentsClient {
             StatusCode::BAD_REQUEST | StatusCode::UNPROCESSABLE_ENTITY => {
                 CodingAgentError::InvalidCommand
             }
-            _ => uncertain(),
+            _ => operation.uncertain_error(),
         })
     }
+}
+
+#[derive(Serialize)]
+struct ListRequest {
+    user_id: MacroUserIdStr<'static>,
+}
+
+#[derive(Deserialize)]
+struct ListResponse {
+    agents: Vec<CodingAgent>,
 }
 
 async fn bounded_body(mut response: Response) -> Result<Vec<u8>, CodingAgentError> {
@@ -182,6 +204,26 @@ impl CodingAgentService for CodingAgentsClient {
     ) -> Pin<Box<dyn Future<Output = Result<DispatchedCodingAgent, CodingAgentError>> + Send + '_>>
     {
         Box::pin(async move { self.command(Operation::Create, &command, None).await })
+    }
+
+    fn list(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<CodingAgent>, CodingAgentError>> + Send + '_>> {
+        Box::pin(async move {
+            let response: ListResponse = self
+                .command(Operation::List, &ListRequest { user_id }, None)
+                .await?;
+            Ok(response.agents)
+        })
+    }
+
+    fn dispatch(
+        &self,
+        command: DispatchCodingAgentRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<DispatchedCodingAgent, CodingAgentError>> + Send + '_>>
+    {
+        Box::pin(async move { self.command(Operation::Dispatch, &command, None).await })
     }
 }
 

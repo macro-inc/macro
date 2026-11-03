@@ -323,16 +323,27 @@ instructions or a fixed model (database chat, booking-link setup, connector impo
 still open a bare session directly, as does every action while the Agents workspace
 flag is off. These actions do not create legacy cognition chats.
 
-## Handing work to another agent
+## Dispatching coding agents from chat
 
-Agents do coding work themselves first. When you ask an agent to hand a task to
-another agent (for example "kick off an agent on acme/web"), a code-mode agent runs
-`ExecuteCode`: it picks one of your own agents from `macro.agents.list()` and starts
-the session with `macro.agentSessions.createManaged({ agent, prompt, repoUrl })`,
-omitting `agent` for the default persona. Built-in personas cannot be chosen by id
-yet. The reply links the new session. There is no dedicated
-dispatch tool; older conversations that called `DispatchCodingAgent` or
-`ListCodingAgents` show those calls as generic tool rows.
+Ask a chat agent to delegate a coding task, including the repository and branch
+when relevant. The agent uses `ListCodingAgents` to discover your available coding
+agents, chooses one using its description and runtime defaults, and calls
+`DispatchCodingAgent` with that agent's ID and a self-contained task prompt.
+The available-agents tool row expands to show the returned names and descriptions.
+
+A successful dispatch starts a separate coding session and displays its live
+Magic Chip directly in the reply, outside collapsed tool groups. The chip follows
+the dispatched turn, including progress, output, permission requests, and a linked
+pull request. **Open session** opens the coding conversation in another split so
+you can follow up there. Reloading the chat restores the same session card.
+Failed dispatches do not show a successful session card. If no coding agents are
+available, configure one in Agents before retrying.
+
+Code-mode sessions do not get these two tools. They do the coding work themselves
+first and, when asked to hand a task off, run `ExecuteCode`: pick one of your own
+agents from `macro.agents.list()` and start it with
+`macro.agentSessions.createManaged({ agent, prompt, repoUrl })`, omitting `agent`
+for the default persona. Built-in personas cannot be chosen by id there yet.
 
 Ask a chat agent what your coding agents need from you and it calls
 `ListAgentUpdates`: your non-archived coding sessions waiting on a permission,

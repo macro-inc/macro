@@ -1,5 +1,4 @@
 use super::*;
-use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::{Value, json};
 use std::{
     collections::VecDeque,
@@ -157,27 +156,42 @@ async fn internal_auth_and_domain_commands_preserve_gateway_prefixes() {
             agent_id: command.agent_id,
             agent_name: "Repository maintainer".into(),
         };
-        let server = server(vec![Reply::json(200, json!(output))]).await;
+        let server = server(vec![
+            Reply::json(200, json!({"agents":[]})),
+            Reply::json(200, json!(output)),
+        ])
+        .await;
         let client = CodingAgentsClient::new(&format!("{}{prefix}/", server.url), KEY).unwrap();
-        assert_eq!(client.create(command.clone()).await.unwrap(), output);
-        let requests = server.requests.lock().unwrap();
-        assert_eq!(requests.len(), 1);
-        let request = &requests[0];
-        assert!(request.head.starts_with(&format!(
-            "POST {prefix}/internal/coding-agents/create-session HTTP/1.1\r\n"
-        )));
         assert!(
-            request
-                .head
-                .contains(&format!("{INTERNAL_API_KEY_HEADER}: {KEY}\r\n"))
+            client
+                .list(command.user_id.clone())
+                .await
+                .unwrap()
+                .is_empty()
         );
-        assert!(!request.head.contains("authorization:"));
-        assert_eq!(request.body, json!(command));
+        assert_eq!(client.dispatch(command.clone()).await.unwrap(), output);
+        let requests = server.requests.lock().unwrap();
+        assert_eq!(requests.len(), 2);
+        for (request, (operation, expected)) in requests.iter().zip([
+            ("list", json!({"user_id":USER})),
+            ("dispatch", json!(command)),
+        ]) {
+            assert!(request.head.starts_with(&format!(
+                "POST {prefix}/internal/coding-agents/{operation} HTTP/1.1\r\n"
+            )));
+            assert!(
+                request
+                    .head
+                    .contains(&format!("{INTERNAL_API_KEY_HEADER}: {KEY}\r\n"))
+            );
+            assert!(!request.head.contains("authorization:"));
+            assert_eq!(request.body, expected);
+        }
     }
 }
 
 #[tokio::test]
-async fn ambiguous_creation_responses_do_not_replay_or_hide_the_uncertainty() {
+async fn ambiguous_dispatch_responses_do_not_replay_or_hide_the_uncertainty() {
     for (status, body) in [
         (200, "not JSON"),
         (200, "{}"),
@@ -190,7 +204,7 @@ async fn ambiguous_creation_responses_do_not_replay_or_hide_the_uncertainty() {
         }])
         .await;
         let client = CodingAgentsClient::new(&server.url, KEY).unwrap();
-        let error = client.create(command()).await.unwrap_err();
+        let error = client.dispatch(command()).await.unwrap_err();
         assert_eq!(error, CodingAgentError::DispatchDeliveryUnknown);
         assert!(!error.to_string().contains("private upstream body"));
         assert_eq!(server.requests.lock().unwrap().len(), 1);
@@ -198,19 +212,19 @@ async fn ambiguous_creation_responses_do_not_replay_or_hide_the_uncertainty() {
 }
 
 #[tokio::test]
-async fn domain_creation_failure_preserves_the_session_for_followup() {
+async fn domain_dispatch_failure_preserves_the_session_for_followup() {
     let error = CodingAgentError::DispatchFailed {
         agent_session_id: Uuid::now_v7(),
         reason: crate::domain::routines::RoutineSessionError::PromptDeliveryUnknown,
     };
     let server = server(vec![Reply::json(502, json!(error))]).await;
     let client = CodingAgentsClient::new(&server.url, KEY).unwrap();
-    assert_eq!(client.create(command()).await.unwrap_err(), error);
+    assert_eq!(client.dispatch(command()).await.unwrap_err(), error);
     assert_eq!(server.requests.lock().unwrap().len(), 1);
 }
 
 #[tokio::test]
-async fn contradictory_status_and_error_envelopes_keep_creation_uncertain() {
+async fn contradictory_status_and_error_envelopes_keep_dispatch_uncertain() {
     for (status, error) in [
         (307, CodingAgentError::Unavailable),
         (500, CodingAgentError::InvalidPrompt),
@@ -227,7 +241,7 @@ async fn contradictory_status_and_error_envelopes_keep_creation_uncertain() {
         let server = server(vec![Reply::json(status, json!(error))]).await;
         let client = CodingAgentsClient::new(&server.url, KEY).unwrap();
         assert_eq!(
-            client.create(command()).await.unwrap_err(),
+            client.dispatch(command()).await.unwrap_err(),
             CodingAgentError::DispatchDeliveryUnknown,
         );
         assert_eq!(server.requests.lock().unwrap().len(), 1);
@@ -247,14 +261,29 @@ async fn matching_domain_errors_and_gateway_timeouts_are_preserved() {
     ] {
         let server = server(vec![Reply::json(status, json!(error))]).await;
         let client = CodingAgentsClient::new(&server.url, KEY).unwrap();
-        assert_eq!(client.create(command()).await.unwrap_err(), error);
+        assert_eq!(client.dispatch(command()).await.unwrap_err(), error);
         assert_eq!(server.requests.lock().unwrap().len(), 1);
     }
+    let server = server(vec![
+        Reply::json(504, json!(CodingAgentError::OperationFailed)),
+        Reply::json(504, json!(CodingAgentError::DispatchDeliveryUnknown)),
+    ])
+    .await;
+    let client = CodingAgentsClient::new(&server.url, KEY).unwrap();
+    assert_eq!(
+        client.list(command().user_id).await.unwrap_err(),
+        CodingAgentError::OperationFailed,
+    );
+    assert_eq!(
+        client.list(command().user_id).await.unwrap_err(),
+        CodingAgentError::OperationFailed,
+    );
+    assert_eq!(server.requests.lock().unwrap().len(), 2);
 }
 
 #[tokio::test]
-async fn redirects_never_forward_credentials_or_replay_creation() {
-    let sink = server(vec![Reply::json(200, Value::Null)]).await;
+async fn redirects_never_forward_credentials_or_replay_dispatch() {
+    let sink = server(vec![Reply::json(200, json!({"agents":[]}))]).await;
     let server = server(vec![Reply {
         headers: format!("Location: {}/other\r\n", sink.url),
         ..Reply::json(307, Value::Null)
@@ -262,7 +291,7 @@ async fn redirects_never_forward_credentials_or_replay_creation() {
     .await;
     let client = CodingAgentsClient::new(&server.url, KEY).unwrap();
     assert_eq!(
-        client.create(command()).await.unwrap_err(),
+        client.dispatch(command()).await.unwrap_err(),
         CodingAgentError::DispatchDeliveryUnknown
     );
     assert_eq!(server.requests.lock().unwrap().len(), 1);
@@ -270,7 +299,7 @@ async fn redirects_never_forward_credentials_or_replay_creation() {
 }
 
 #[tokio::test]
-async fn oversized_success_body_keeps_creation_uncertainty() {
+async fn oversized_success_body_keeps_dispatch_uncertainty() {
     let server = server(vec![Reply {
         body: " ".repeat(MAX_RESPONSE_BYTES + 1),
         ..Reply::json(200, Value::Null)
@@ -278,20 +307,20 @@ async fn oversized_success_body_keeps_creation_uncertainty() {
     .await;
     let client = CodingAgentsClient::new(&server.url, KEY).unwrap();
     assert_eq!(
-        client.create(command()).await.unwrap_err(),
+        client.dispatch(command()).await.unwrap_err(),
         CodingAgentError::DispatchDeliveryUnknown
     );
 }
 
 #[tokio::test]
-async fn timed_out_creation_does_not_replay() {
+async fn timed_out_dispatch_does_not_replay() {
     let server = server(vec![Reply {
         delay: Duration::from_secs(240),
         ..Reply::json(200, Value::Null)
     }])
     .await;
     let client = CodingAgentsClient::new(&server.url, KEY).unwrap();
-    let request = tokio::spawn(async move { client.create(command()).await });
+    let request = tokio::spawn(async move { client.dispatch(command()).await });
     tokio::time::timeout(Duration::from_secs(2), async {
         while server.requests.lock().unwrap().is_empty() {
             tokio::task::yield_now().await;
@@ -300,7 +329,7 @@ async fn timed_out_creation_does_not_replay() {
     .await
     .unwrap();
     tokio::time::pause();
-    tokio::time::advance(CREATE_TIMEOUT + Duration::from_secs(1)).await;
+    tokio::time::advance(DISPATCH_TIMEOUT + Duration::from_secs(1)).await;
     assert_eq!(
         request.await.unwrap().unwrap_err(),
         CodingAgentError::DispatchDeliveryUnknown
