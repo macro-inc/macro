@@ -56,13 +56,6 @@ export function useSuperhumanHotkeys(options: UseSuperhumanHotkeysOptions) {
         setTab('important');
         return true;
       },
-      // Superhuman's "no reply" split: threads waiting on someone else.
-      showFollowUps: () => {
-        if (!isVisible('focus')) return false;
-        setTab('focus');
-        setFacets({ focus: ['focus-follow-up'] });
-        return true;
-      },
       showReminders: () => {
         if (!isVisible('reminders')) return false;
         setTab('reminders');

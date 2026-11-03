@@ -72,10 +72,9 @@ With **Superhuman shortcuts in Email** on (Settings → Keyboard shortcuts, flag
 `enable-hotkey-profiles`), Superhuman's keys take over Macro's on the same keys
 while Email is focused: `C` composes instead of opening the Create menu,
 `Shift+C` composes in a new split, `Shift+U` shows unread only,
-`Shift+S`/`Shift+I` go to Favorites/Signal, `Shift+R` shows Focus follow-ups
-(only while the Focus tab is on),
-`L` edits tags, `V` moves to a folder, `g h` goes to Reminders, `Ctrl+1`–`9`
-shows one account and `Ctrl+/` copies the link. `?` labels the profile's keys
+`Shift+S`/`Shift+I` go to Favorites/Signal, `L` edits tags, `V` moves to a
+folder, `g h` goes to Reminders, `Ctrl+1`–`9` shows one account and `Ctrl+/`
+copies the link. `?` labels the profile's keys
 and lists what they replaced. Turn it off and every key is Macro's again.
 In every composer `Cmd+Shift+O` and `Cmd+Shift+S` focus To and Subject (a
 reply shows its Subject row for it), and `Escape`, even while typing, closes

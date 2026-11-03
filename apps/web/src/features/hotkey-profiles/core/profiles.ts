@@ -87,7 +87,6 @@ export type SuperhumanAction =
   | 'showUnread'
   | 'showFavorites'
   | 'showSignal'
-  | 'showFollowUps'
   | 'showReminders'
   | 'showAccount';
 
@@ -137,12 +136,6 @@ export const SUPERHUMAN = {
       keys: ['shift+i'],
       description: () => t('hotkeyProfiles.showSignal'),
       target: { action: 'showSignal' },
-    },
-    {
-      section: SECTION.filters,
-      keys: ['shift+r'],
-      description: () => t('hotkeyProfiles.showFollowUps'),
-      target: { action: 'showFollowUps' },
     },
     {
       section: SECTION.folders,

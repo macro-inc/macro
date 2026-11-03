@@ -45,7 +45,6 @@ export default {
   showUnread: 'Show unread only',
   showFavorites: 'Go to Favorites',
   showSignal: 'Go to Signal',
-  showFollowUps: 'Show follow-ups',
   goToReminders: 'Go to Reminders',
   attachFile: 'Attach file',
   showAccount: 'Show only account 1–9',
