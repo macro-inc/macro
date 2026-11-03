@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT payload FROM dialpad_sync_events\n            WHERE connection_id = $1 AND call_id = $2 ORDER BY occurred_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "payload",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5c19e551f1dc07a7e774aaa607858168beb634c43eb1d0fc074f0fea645f3347"
+}

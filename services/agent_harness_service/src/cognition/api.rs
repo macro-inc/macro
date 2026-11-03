@@ -153,6 +153,9 @@ fn api_router(api_context: ApiContext) -> Router {
         .merge(pipedream_mcp::inbound::pipedream_mcp_router(
             api_context.pipedream_state.clone(),
         ))
+        .merge(dialpad_sync::inbound::dialpad_router(
+            api_context.dialpad_state.clone(),
+        ))
         .with_state(api_context.clone());
 
     // Pipedream calls this one itself, so it sits outside the authenticated
@@ -164,6 +167,9 @@ fn api_router(api_context: ApiContext) -> Router {
         .merge(mcp_client::inbound::mcp_oauth_callback_router(mcp_state))
         .merge(granola_sync::inbound::webhook_router(
             api_context.granola_sync.clone(),
+        ))
+        .merge(dialpad_sync::inbound::webhook_router(
+            api_context.dialpad_sync.clone(),
         ));
 
     match api_context.config.pipedream_webhook_secret.value() {

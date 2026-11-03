@@ -1,0 +1,117 @@
+use super::models::*;
+use async_trait::async_trait;
+use chrono::{DateTime, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
+use uuid::Uuid;
+
+pub type Result<T> = std::result::Result<T, rootcause::Report>;
+
+/// Storage owns enrollment, setup leases, durable delivery deduplication and
+/// delivery leases.
+#[async_trait]
+pub trait SyncRepository: Send + Sync {
+    async fn by_user(&self, user: &MacroUserIdStr<'static>) -> Result<Option<Connection>>;
+    async fn by_id(&self, id: Uuid) -> Result<Option<Connection>>;
+    /// Start or resume a user's enrollment. A running sync keeps running and
+    /// only clears its issue; anything else restarts as pending with
+    /// `backfill_since`.
+    async fn enroll(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        backfill_since: Option<DateTime<Utc>>,
+    ) -> Result<()>;
+    /// Syncs waiting for setup: pending, or failed setup due for a retry, and
+    /// not leased by another instance.
+    async fn awaiting_setup(&self, limit: i64) -> Result<Vec<Connection>>;
+    /// Lease setup and store the new signing secret. False when another
+    /// instance holds the lease or the sync is no longer waiting.
+    async fn begin_setup(&self, id: Uuid, secret: &SigningSecret) -> Result<bool>;
+    /// Record the registration and start delivering. False when the sync was
+    /// removed or restarted meanwhile; the caller must retire `registration`.
+    async fn activate(
+        &self,
+        id: Uuid,
+        dialpad_user: DialpadId,
+        registration: Registration,
+    ) -> Result<bool>;
+    /// Stop delivering and record why; pending deliveries are dropped.
+    async fn stop(&self, id: Uuid, issue: SyncIssue) -> Result<()>;
+    /// Record an issue on a running sync without stopping it.
+    async fn flag(&self, id: Uuid, issue: SyncIssue) -> Result<()>;
+    async fn delete(&self, id: Uuid) -> Result<()>;
+    /// Running syncs with past calls left to import.
+    async fn backfilling(&self, limit: i64) -> Result<Vec<Connection>>;
+    /// Queue one page of past calls and save where the import resumes;
+    /// `None` finishes it.
+    async fn advance_backfill(
+        &self,
+        id: Uuid,
+        calls: Vec<CallEvent>,
+        cursor: Option<String>,
+    ) -> Result<()>;
+    /// Persist a verified delivery once; repeats are ignored.
+    async fn enqueue(&self, id: Uuid, event: CallEvent, traceparent: Option<String>) -> Result<()>;
+    async fn claim(&self) -> Result<Option<Job>>;
+    /// Every stored event for one call, oldest first.
+    async fn events(&self, id: Uuid, call: DialpadId) -> Result<Vec<CallEvent>>;
+    async fn finish(&self, job: &Job, success: bool) -> Result<()>;
+}
+
+/// The user's Dialpad grant, held by Macro Connect.
+#[async_trait]
+pub trait Grants: Send + Sync {
+    async fn grant(&self, user: &MacroUserIdStr<'static>) -> Result<Grant>;
+    /// A Macro Connect URL where the user approves Dialpad, returning to
+    /// `redirect_url`.
+    async fn connect_url(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        redirect_url: &str,
+    ) -> Result<String>;
+    /// Remove the Dialpad connection from Macro Connect. Does not revoke the
+    /// grant at Dialpad.
+    async fn disconnect(&self, user: &MacroUserIdStr<'static>) -> Result<()>;
+}
+
+/// Dialpad's REST API, called with the user's token.
+#[async_trait]
+pub trait Dialpad: Send + Sync {
+    async fn me(&self, token: &AccessToken) -> Result<DialpadUser>;
+    async fn create_webhook(
+        &self,
+        token: &AccessToken,
+        url: &str,
+        secret: &SigningSecret,
+    ) -> Result<DialpadId>;
+    async fn subscribe(
+        &self,
+        token: &AccessToken,
+        webhook: DialpadId,
+        user: DialpadId,
+    ) -> Result<DialpadId>;
+    /// Delete the subscription, then the webhook. Already-gone is success.
+    async fn unregister(&self, token: &AccessToken, registration: Registration) -> Result<()>;
+    async fn delete_webhook(&self, token: &AccessToken, webhook: DialpadId) -> Result<()>;
+    /// `None` when the call has no transcript.
+    async fn transcript(
+        &self,
+        token: &AccessToken,
+        call: DialpadId,
+    ) -> Result<Option<Vec<TranscriptLine>>>;
+    /// `None` when the call has no recap.
+    async fn recap(&self, token: &AccessToken, call: DialpadId) -> Result<Option<Recap>>;
+    /// The user's concluded calls started at or after `since`, newest first.
+    async fn calls(
+        &self,
+        token: &AccessToken,
+        user: DialpadId,
+        since: DateTime<Utc>,
+        cursor: Option<&str>,
+    ) -> Result<CallPage>;
+}
+
+/// Checks a delivery's signature before anything reads it.
+pub trait DeliveryVerifier: Send + Sync {
+    /// The event a delivery carries, when `secret` signed it.
+    fn verify(&self, secret: &SigningSecret, body: &[u8]) -> Option<CallEvent>;
+}

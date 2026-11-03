@@ -1,0 +1,277 @@
+//! Dialpad's REST API, called with the user's token from Macro Connect.
+use crate::domain::{
+    models::*,
+    ports::{Dialpad, Result},
+};
+use async_trait::async_trait;
+use chrono::{DateTime, Utc};
+use reqwest::{Method, StatusCode};
+use serde::Deserialize;
+use serde_json::{Value, json};
+
+/// Production Dialpad. Its sandbox is a separate account system.
+pub const DIALPAD_API: &str = "https://dialpad.com/api/v2";
+
+pub struct DialpadApi {
+    http: reqwest::Client,
+    base_url: String,
+}
+
+/// Dialpad's answer, whatever its status. Never log the body: it carries call
+/// details and, for webhook registration, the signing secret.
+struct Reply {
+    status: StatusCode,
+    body: Value,
+}
+
+impl DialpadApi {
+    pub fn new(base_url: impl Into<String>) -> Result<Self> {
+        let http = reqwest::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(10))
+            .timeout(std::time::Duration::from_secs(30))
+            .build()?;
+        Ok(Self {
+            http,
+            base_url: base_url.into(),
+        })
+    }
+
+    async fn send(
+        &self,
+        token: &AccessToken,
+        method: Method,
+        path: &str,
+        query: &[(&str, String)],
+        body: Option<Value>,
+    ) -> Result<Reply> {
+        let mut request = self
+            .http
+            .request(method, format!("{}{path}", self.base_url))
+            .bearer_auth(token.0.as_str())
+            .query(query);
+        if let Some(body) = body {
+            request = request.json(&body);
+        }
+        let response = request.send().await?;
+        let status = response.status();
+        let text = response.text().await?;
+        let body = if text.trim().is_empty() {
+            Value::Null
+        } else {
+            serde_json::from_str(&text).unwrap_or(Value::Null)
+        };
+        Ok(Reply { status, body })
+    }
+
+    /// The body on success, `None` when the resource does not exist.
+    async fn request(
+        &self,
+        token: &AccessToken,
+        method: Method,
+        path: &str,
+        query: &[(&str, String)],
+        body: Option<Value>,
+    ) -> Result<Option<Value>> {
+        let reply = self.send(token, method, path, query, body).await?;
+        match reply.status {
+            status if status.is_success() => Ok(Some(reply.body)),
+            StatusCode::NOT_FOUND => Ok(None),
+            StatusCode::UNAUTHORIZED => {
+                Err(rootcause::report!("Dialpad rejected the access token"))
+            }
+            status => Err(rootcause::report!("Dialpad API returned HTTP {status}")),
+        }
+    }
+
+    async fn created_id(&self, token: &AccessToken, path: &str, body: Value) -> Result<DialpadId> {
+        #[derive(Deserialize)]
+        struct Created {
+            id: DialpadId,
+        }
+        let body = self
+            .request(token, Method::POST, path, &[], Some(body))
+            .await?
+            .ok_or_else(|| rootcause::report!("Dialpad has no {path} endpoint for this account"))?;
+        Ok(serde_json::from_value::<Created>(body)?.id)
+    }
+
+    async fn delete(&self, token: &AccessToken, path: &str) -> Result<()> {
+        self.request(token, Method::DELETE, path, &[], None).await?;
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl Dialpad for DialpadApi {
+    async fn me(&self, token: &AccessToken) -> Result<DialpadUser> {
+        #[derive(Deserialize)]
+        struct Me {
+            id: DialpadId,
+        }
+        let body = self
+            .request(token, Method::GET, "/users/me", &[], None)
+            .await?
+            .ok_or_else(|| rootcause::report!("Dialpad did not return the connected user"))?;
+        let me: Me = serde_json::from_value(body)?;
+        Ok(DialpadUser { id: me.id })
+    }
+
+    async fn create_webhook(
+        &self,
+        token: &AccessToken,
+        url: &str,
+        secret: &SigningSecret,
+    ) -> Result<DialpadId> {
+        self.created_id(
+            token,
+            "/webhooks",
+            json!({ "hook_url": url, "secret": secret.0 }),
+        )
+        .await
+    }
+
+    async fn subscribe(
+        &self,
+        token: &AccessToken,
+        webhook: DialpadId,
+        user: DialpadId,
+    ) -> Result<DialpadId> {
+        let states: Vec<&str> = CallState::SUBSCRIBED.iter().map(AsRef::as_ref).collect();
+        self.created_id(
+            token,
+            "/subscriptions/call",
+            json!({
+                "endpoint_id": webhook,
+                "call_states": states,
+                "enabled": true,
+                "target_type": "user",
+                "target_id": user,
+            }),
+        )
+        .await
+    }
+
+    async fn unregister(&self, token: &AccessToken, registration: Registration) -> Result<()> {
+        self.delete(
+            token,
+            &format!("/subscriptions/call/{}", registration.subscription_id),
+        )
+        .await?;
+        self.delete_webhook(token, registration.webhook_id).await
+    }
+
+    async fn delete_webhook(&self, token: &AccessToken, webhook: DialpadId) -> Result<()> {
+        self.delete(token, &format!("/webhooks/{webhook}")).await
+    }
+
+    async fn transcript(
+        &self,
+        token: &AccessToken,
+        call: DialpadId,
+    ) -> Result<Option<Vec<TranscriptLine>>> {
+        #[derive(Deserialize)]
+        struct Transcript {
+            #[serde(default)]
+            lines: Vec<TranscriptLine>,
+        }
+        let Some(body) = self
+            .request(
+                token,
+                Method::GET,
+                &format!("/transcripts/{call}"),
+                &[],
+                None,
+            )
+            .await?
+        else {
+            return Ok(None);
+        };
+        Ok(Some(serde_json::from_value::<Transcript>(body)?.lines))
+    }
+
+    async fn recap(&self, token: &AccessToken, call: DialpadId) -> Result<Option<Recap>> {
+        #[derive(Deserialize)]
+        struct Item {
+            content: Option<String>,
+        }
+        #[derive(Deserialize)]
+        struct Summary {
+            content: Option<String>,
+            #[serde(default)]
+            null_summary: bool,
+        }
+        #[derive(Deserialize)]
+        struct AiRecap {
+            summary: Option<Summary>,
+            #[serde(default)]
+            action_items: Vec<Item>,
+        }
+        let reply = self
+            .send(
+                token,
+                Method::GET,
+                &format!("/call/{call}/ai_recap"),
+                &[],
+                None,
+            )
+            .await?;
+        // No recap, or AI recaps are off for the company: import without one.
+        if matches!(reply.status, StatusCode::NOT_FOUND | StatusCode::FORBIDDEN) {
+            return Ok(None);
+        }
+        if !reply.status.is_success() {
+            return Err(rootcause::report!(
+                "Dialpad API returned HTTP {}",
+                reply.status
+            ));
+        }
+        let recap: AiRecap = serde_json::from_value(reply.body)?;
+        Ok(Some(Recap {
+            summary: recap
+                .summary
+                .filter(|summary| !summary.null_summary)
+                .and_then(|summary| summary.content),
+            action_items: recap
+                .action_items
+                .into_iter()
+                .filter_map(|item| item.content)
+                .collect(),
+        }))
+    }
+
+    async fn calls(
+        &self,
+        token: &AccessToken,
+        user: DialpadId,
+        since: DateTime<Utc>,
+        cursor: Option<&str>,
+    ) -> Result<CallPage> {
+        #[derive(Deserialize)]
+        struct Page {
+            #[serde(default)]
+            items: Vec<CallEvent>,
+            cursor: Option<String>,
+        }
+        // Without a target, an admin's token lists the whole company's calls.
+        let mut query = vec![
+            ("started_after", since.timestamp_millis().to_string()),
+            ("target_type", "user".to_owned()),
+            ("target_id", user.to_string()),
+        ];
+        if let Some(cursor) = cursor {
+            query.push(("cursor", cursor.to_owned()));
+        }
+        let body = self
+            .request(token, Method::GET, "/call", &query, None)
+            .await?
+            .ok_or_else(|| rootcause::report!("Dialpad call listing is unavailable"))?;
+        let page: Page = serde_json::from_value(body)?;
+        Ok(CallPage {
+            calls: page.items,
+            cursor: page.cursor.filter(|cursor| !cursor.is_empty()),
+        })
+    }
+}
+
+#[cfg(test)]
+mod test;

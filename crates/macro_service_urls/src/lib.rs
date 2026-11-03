@@ -524,6 +524,12 @@ service_url! {
             dev: "https://dev-gateway.macro.com/search-processing",
             prod: "https://gateway.macro.com/search-processing",
         },
+        /// Macro Connect API URL: users' third-party grants (Dialpad).
+        pub ConnectApiUrl {
+            local: "http://localhost:8080",
+            dev: "https://connect-dev.macro.com",
+            prod: "https://connect.macro.com",
+        },
         /// Connection gateway HTTP API URL.
         pub ConnectionGatewayUrl {
             local: "http://localhost:8082",

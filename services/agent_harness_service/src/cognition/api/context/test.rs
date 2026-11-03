@@ -818,6 +818,11 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             Arc::new(redis::Client::open("redis://127.0.0.1:6379/").expect("valid redis url")),
         ),
         granola_sync: None,
+        dialpad_sync: None,
+        dialpad_state: dialpad_sync::inbound::DialpadRouterState::new(
+            None,
+            authorization_state.clone(),
+        ),
         pipedream_state: pipedream_mcp::inbound::PipedreamRouterState::new(
             pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool.clone()),
             None,

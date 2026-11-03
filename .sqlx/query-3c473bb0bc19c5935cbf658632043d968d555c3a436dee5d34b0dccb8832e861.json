@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE dialpad_sync_connections\n                SET last_synced_at = CASE WHEN $2 THEN now() ELSE last_synced_at END,\n                    -- A reconnect prompt outranks a generic retry notice.\n                    last_error = CASE WHEN $2 THEN NULL\n                        WHEN last_error = $4 THEN last_error ELSE $3 END\n                WHERE id = $1 AND enabled",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3c473bb0bc19c5935cbf658632043d968d555c3a436dee5d34b0dccb8832e861"
+}

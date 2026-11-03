@@ -1527,6 +1527,191 @@
         }
       }
     },
+    "/integrations/dialpad/connection": {
+      "get": {
+        "tags": ["dialpad"],
+        "summary": "The authenticated user's Dialpad call sync.",
+        "operationId": "get_dialpad_connection",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DialpadConnectionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["dialpad"],
+        "summary": "Start connecting Dialpad through Macro Connect.",
+        "operationId": "connect_dialpad",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectDialpadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectDialpadResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["dialpad"],
+        "summary": "Stop syncing Dialpad calls and remove the Dialpad connection. Imported\ncalls stay; the grant at Dialpad is not revoked.",
+        "operationId": "disconnect_dialpad",
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/integrations/dialpad/connection/complete": {
+      "post": {
+        "tags": ["dialpad"],
+        "summary": "Finish connecting after the user approved Dialpad in Macro Connect.",
+        "operationId": "complete_dialpad_connection",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DialpadConnectionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/mcp/servers": {
       "get": {
         "tags": ["mcp"],
@@ -3461,6 +3646,26 @@
           }
         }
       },
+      "ConnectDialpadRequest": {
+        "type": "object",
+        "description": "Start connecting Dialpad.",
+        "properties": {
+          "backfill": {
+            "$ref": "#/components/schemas/DialpadBackfill",
+            "description": "How far back to import calls; defaults to new calls only."
+          }
+        }
+      },
+      "ConnectDialpadResponse": {
+        "type": "object",
+        "description": "Where to send the user to approve Dialpad.",
+        "required": ["connectUrl"],
+        "properties": {
+          "connectUrl": {
+            "type": "string"
+          }
+        }
+      },
       "ConnectedServer": {
         "type": "object",
         "description": "One of the user's MCP server connections, as the setup page sees it.",
@@ -3700,6 +3905,52 @@
             }
           }
         }
+      },
+      "DialpadBackfill": {
+        "type": "string",
+        "description": "How far back to import calls when a user first connects.",
+        "enum": ["none", "week", "month", "quarter"]
+      },
+      "DialpadConnectionResponse": {
+        "type": "object",
+        "description": "The user's Dialpad call sync.",
+        "required": ["state"],
+        "properties": {
+          "issue": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DialpadSyncIssue"
+              }
+            ]
+          },
+          "lastSyncedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When a call last synced."
+          },
+          "state": {
+            "$ref": "#/components/schemas/DialpadConnectionState"
+          }
+        }
+      },
+      "DialpadConnectionState": {
+        "type": "string",
+        "description": "Where the user's Dialpad call sync stands.",
+        "enum": [
+          "unavailable",
+          "not_connected",
+          "connecting",
+          "connected",
+          "failed"
+        ]
+      },
+      "DialpadSyncIssue": {
+        "type": "string",
+        "description": "Why Dialpad sync needs attention.",
+        "enum": ["stopped", "needs_reauth", "setup_failed", "call_sync_failed"]
       },
       "DismissedPrompts": {
         "type": "object",

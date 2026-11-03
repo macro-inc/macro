@@ -1,0 +1,94 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, namespace, user_id, enabled, dialpad_user_id, webhook_id, subscription_id,\n                signing_secret, backfill_since, backfill_cursor, enrolled_at, last_synced_at, last_error\n            FROM dialpad_sync_connections WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "namespace",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "dialpad_user_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "webhook_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "subscription_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "signing_secret",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 8,
+        "name": "backfill_since",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "backfill_cursor",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "enrolled_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "last_synced_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "last_error",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "45efd76f7a603510fc3af9b6757809e012a5f666300d47fc0022053142058a41"
+}

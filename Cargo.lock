@@ -553,6 +553,7 @@ dependencies = [
  "codex_cloud_agents",
  "codex_connection",
  "cognition",
+ "connect_client",
  "connection_gateway",
  "connection_gateway_client",
  "contacts",
@@ -564,6 +565,7 @@ dependencies = [
  "database_env_vars",
  "databases",
  "databases_sql",
+ "dialpad_sync",
  "document_storage_service_client",
  "document_sub_type",
  "documents",
@@ -6500,6 +6502,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "dialpad_sync"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "base64 0.22.1",
+ "call",
+ "chrono",
+ "connect_client",
+ "jsonwebtoken 10.3.0",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_tower_layers",
+ "macro_user_id",
+ "macro_uuid",
+ "model-error-response",
+ "phone_number",
+ "rand 0.9.4",
+ "reqwest 0.13.4",
+ "rootcause",
+ "row_cipher",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "wiremock",
+ "workspace-hack",
+ "zeroize",
+]
+
+[[package]]
 name = "dictation"
 version = "0.1.0"
 dependencies = [
@@ -9181,7 +9220,6 @@ dependencies = [
 name = "granola_sync"
 version = "0.1.0"
 dependencies = [
- "aes-gcm 0.10.3",
  "anyhow",
  "async-trait",
  "axum",
@@ -9195,6 +9233,7 @@ dependencies = [
  "macro_uuid",
  "pipedream_mcp",
  "rootcause",
+ "row_cipher",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -15313,6 +15352,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "phone_number"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "workspace-hack",
+]
+
+[[package]]
 name = "pin-project"
 version = "1.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -17117,6 +17165,16 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "row_cipher"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm 0.10.3",
+ "thiserror 2.0.18",
  "uuid",
  "workspace-hack",
 ]
