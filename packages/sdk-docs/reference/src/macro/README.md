@@ -598,6 +598,12 @@ Re-exports [ReviewCalendarDraft](../entities/agent-sessions/review/type-aliases/
 
 ***
 
+### ReviewDraft
+
+Re-exports [ReviewDraft](../entities/agent-sessions/review/type-aliases/ReviewDraft.md)
+
+***
+
 ### ReviewEmailDraft
 
 Re-exports [ReviewEmailDraft](../entities/agent-sessions/review/type-aliases/ReviewEmailDraft.md)

@@ -58,7 +58,9 @@ impl AsyncTool<ReviewToolContext> for PresentReview {
                 description: error.to_string(),
                 internal_error: anyhow::anyhow!(error.to_string()),
             })?;
-        Ok(json!({"reviewId": record.id, "kind": record.kind, "message": "Presented to the user"}))
+        Ok(
+            json!({"reviewId": record.id, "kind": record.kind(), "message": "Presented to the user"}),
+        )
     }
 }
 

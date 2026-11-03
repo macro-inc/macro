@@ -269,6 +269,7 @@ export {
 export type {
   CreateReviewOptions,
   ReviewCalendarDraft,
+  ReviewDraft,
   ReviewEmailDraft,
 } from './entities/agent-sessions/review';
 export { ReviewItem, SessionReview } from './entities/agent-sessions/review';

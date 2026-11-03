@@ -10,7 +10,7 @@ use super::models::{CalendarAttendee, CalendarEvent, CalendarProvider, EventStat
 /// do. Google omits a switch from the payload while it holds its default.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema, specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct GuestPolicy {
     /// Whether guests may change the event, including its guest list.
