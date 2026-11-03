@@ -1162,6 +1162,7 @@ dependencies = [
  "entity_registry",
  "entity_registry_db_utils",
  "favorites",
+ "feature_flags",
  "foreign_entity",
  "forms",
  "frecency",

@@ -128,6 +128,11 @@ fn catalog_entry(app: &wire::CatalogEntry, app_slug: &str, api_url: &Url) -> Cat
 }
 
 impl MacroConnect for ConnectAdapter {
+    /// The adapter is Connect itself.
+    async fn connect_only(&self, _user_id: &MacroUserIdStr<'static>) -> bool {
+        true
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn app_for_slug(&self, app_slug: &str) -> anyhow::Result<Option<ConnectApp>> {
         Ok(self
@@ -273,6 +278,7 @@ impl ConnectorDirectory for ConnectAdapter {
     #[tracing::instrument(skip(self), err)]
     async fn search(
         &self,
+        _user_id: &MacroUserIdStr<'static>,
         search: Option<&str>,
         cursor: Option<&str>,
         limit: u32,
@@ -301,7 +307,11 @@ impl ConnectorDirectory for ConnectAdapter {
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn retrieve(&self, app_slug: &str) -> anyhow::Result<Option<CatalogEntry>> {
+    async fn retrieve(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        app_slug: &str,
+    ) -> anyhow::Result<Option<CatalogEntry>> {
         Ok(self
             .catalog()
             .await?

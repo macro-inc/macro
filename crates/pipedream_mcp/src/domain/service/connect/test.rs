@@ -98,6 +98,10 @@ impl FakePipedream {
 }
 
 impl MacroConnect for FakePipedream {
+    async fn connect_only(&self, _user_id: &MacroUserIdStr<'static>) -> bool {
+        true
+    }
+
     async fn app_for_slug(&self, app_slug: &str) -> anyhow::Result<Option<ConnectApp>> {
         Ok(self.connect_apps.get(app_slug).cloned())
     }
@@ -566,14 +570,9 @@ async fn recovering_an_overlaid_app_is_refused_and_its_account_deleted() {
 async fn connect_session_starts_for_an_app_connect_serves() {
     let pd = FakePipedream::default().with_connect_app("linear", "linear");
 
-    let url = start_connect_session(
-        &NoOverlays,
-        &pd,
-        &user("macro|user-1@example.com"),
-        "linear",
-    )
-    .await
-    .unwrap();
+    let url = start_connect_session(&pd, &user("macro|user-1@example.com"), "linear")
+        .await
+        .unwrap();
 
     assert_eq!(
         url.as_deref(),
@@ -582,20 +581,20 @@ async fn connect_session_starts_for_an_app_connect_serves() {
 }
 
 #[tokio::test]
-async fn apps_connect_lacks_overlaid_or_pipedream_only_stay_on_pipedream() {
+async fn connect_serves_overlaid_apps_and_granola_and_nothing_it_lacks() {
     let pd = FakePipedream::default()
         .with_connect_app("sentry", "sentry")
         .with_connect_app("granola", "granola");
     let user = user("macro|user-1@example.com");
 
-    for (overlays, slug) in [(false, "notion"), (true, "sentry"), (false, "granola")] {
-        let url = if overlays {
-            start_connect_session(&SentryOverlay, &pd, &user, slug).await
-        } else {
-            start_connect_session(&NoOverlays, &pd, &user, slug).await
-        };
-        assert_eq!(url.unwrap(), None, "{slug}");
+    for slug in ["sentry", "granola"] {
+        let url = start_connect_session(&pd, &user, slug).await.unwrap();
+        assert!(url.is_some_and(|url| url.contains(slug)), "{slug}");
     }
+    assert_eq!(
+        start_connect_session(&pd, &user, "notion").await.unwrap(),
+        None
+    );
 }
 
 #[tokio::test]
@@ -607,7 +606,6 @@ async fn completing_through_connect_stores_a_connect_record() {
 
     let record = complete_connect_connection(
         &store,
-        &NoOverlays,
         &pd,
         &user("macro|user-1@example.com"),
         "airtable_oauth",
@@ -639,7 +637,6 @@ async fn completing_through_connect_before_connect_confirms_is_not_found() {
 
     let err = complete_connect_connection(
         &store,
-        &NoOverlays,
         &pd,
         &user("macro|user-1@example.com"),
         "linear",
@@ -672,7 +669,6 @@ async fn completing_through_connect_revokes_the_pipedream_grant_it_replaces() {
 
     let record = complete_connect_connection(
         &store,
-        &NoOverlays,
         &pd,
         &user("macro|user-1@example.com"),
         "linear",

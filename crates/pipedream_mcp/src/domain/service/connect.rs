@@ -222,48 +222,32 @@ async fn revoke<P: PipedreamConnect + MacroConnect>(backends: &P, record: &Piped
     }
 }
 
-/// Apps whose integrations need a Pipedream grant even when Connect serves
-/// them: Granola sync calls Granola's REST API, which takes API keys only,
-/// through Pipedream's proxy.
-const PIPEDREAM_ONLY_APPS: &[&str] = &["granola"];
-
-/// The Connect app to connect `app_slug` through, or `None` when it stays on
-/// Pipedream: Connect does not serve it, it is overlaid onto the native MCP
-/// stack, or an integration needs its Pipedream grant.
+/// The Connect app to connect `app_slug` through, or `None` when Connect does
+/// not serve it.
 ///
-/// Callers check the `macro-connect` rollout first; this is the per-app half
-/// of the choice.
-#[tracing::instrument(skip(overlays, connect), err)]
-pub async fn connect_app_for<O, C>(
-    overlays: &O,
-    connect: &C,
-    app_slug: &str,
-) -> anyhow::Result<Option<ConnectApp>>
+/// Only for users on Connect alone (callers check
+/// [`MacroConnect::connect_only`]), for whom Connect serves every app it
+/// lists, overlaid or not, Granola included: nothing falls back to Pipedream.
+#[tracing::instrument(skip(connect), err)]
+pub async fn connect_app_for<C>(connect: &C, app_slug: &str) -> anyhow::Result<Option<ConnectApp>>
 where
-    O: ConnectorOverlays,
     C: MacroConnect,
 {
-    if PIPEDREAM_ONLY_APPS.contains(&app_slug) || overlays.overlay(app_slug).await?.is_some() {
-        return Ok(None);
-    }
     connect.app_for_slug(app_slug).await
 }
 
 /// Start connecting `app_slug` through Connect. Returns the URL for the
-/// user's browser, or `None` when the app stays on Pipedream (see
-/// [`connect_app_for`]).
-#[tracing::instrument(skip(overlays, connect), err)]
-pub async fn start_connect_session<O, C>(
-    overlays: &O,
+/// user's browser, or `None` when Connect does not serve the app.
+#[tracing::instrument(skip(connect), err)]
+pub async fn start_connect_session<C>(
     connect: &C,
     user_id: &MacroUserIdStr<'static>,
     app_slug: &str,
 ) -> anyhow::Result<Option<String>>
 where
-    O: ConnectorOverlays,
     C: MacroConnect,
 {
-    let Some(app) = connect_app_for(overlays, connect, app_slug).await? else {
+    let Some(app) = connect_app_for(connect, app_slug).await? else {
         return Ok(None);
     };
     connect
@@ -278,10 +262,9 @@ where
 /// Nothing the browser reports is trusted: Connect itself must list an
 /// active connection for this user before a record is written. A Pipedream
 /// grant the record replaces is revoked, so only one backend holds the app.
-#[tracing::instrument(skip(store, overlays, backends), err)]
-pub async fn complete_connect_connection<S, O, P>(
+#[tracing::instrument(skip(store, backends), err)]
+pub async fn complete_connect_connection<S, P>(
     store: &S,
-    overlays: &O,
     backends: &P,
     user_id: &MacroUserIdStr<'static>,
     app_slug: &str,
@@ -289,11 +272,10 @@ pub async fn complete_connect_connection<S, O, P>(
 ) -> Result<PipedreamConnection, PipedreamConnectError>
 where
     S: ConnectionStore,
-    O: ConnectorOverlays,
     P: PipedreamConnect + MacroConnect,
     anyhow::Error: From<S::Err>,
 {
-    let app = connect_app_for(overlays, backends, app_slug)
+    let app = connect_app_for(backends, app_slug)
         .await?
         .ok_or(PipedreamConnectError::NotFound)?;
     if !backends.is_connected(user_id, &app.app_id).await? {

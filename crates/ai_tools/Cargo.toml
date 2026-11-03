@@ -8,6 +8,7 @@ version = "0.1.0"
 test-support = []
 
 [dependencies]
+feature_flags = { path = "../feature_flags" }
 import_linear = { path = "../import_linear" }
 import_jira = { path = "../import_jira" }
 

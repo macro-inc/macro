@@ -494,11 +494,18 @@ async fn run() -> anyhow::Result<()> {
         allowed_origins: Vec::new(),
     })
     .context("failed to build Pipedream client")?;
-    // Grants held by Macro Connect are reached through its MCP gateway.
-    let connectors = ConnectorBackends::new(
+    // Grants held by Macro Connect are reached through its MCP gateway; a
+    // user on Connect alone gets no Pipedream grant.
+    let mut connectors = ConnectorBackends::new(
         Arc::new(pipedream),
         ai_tools::connect_adapter(config.connect_customer_key.value())?,
     );
+    if let Some(rollout) = ai_tools::macro_connect_rollout(
+        config.posthog_api_key.value(),
+        config.posthog_host.value(),
+    )? {
+        connectors = connectors.with_rollout(rollout);
+    }
 
     // Every session's MCP servers: Macro's own under the reserved `macro`
     // slug, the owner's custom servers by URL key, then the owner's Pipedream

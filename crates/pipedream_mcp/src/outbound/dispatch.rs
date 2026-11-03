@@ -3,8 +3,8 @@ use crate::domain::models::{
     McpServer, PipedreamAccount, PipedreamConnection,
 };
 use crate::domain::ports::{
-    ConnectedAppProxy, ConnectorCapabilities, ConnectorDirectory, MacroConnect, McpConnection,
-    PipedreamConnect, ProxyResponse,
+    ConnectRollout, ConnectedAppProxy, ConnectorCapabilities, ConnectorDirectory, MacroConnect,
+    McpConnection, PipedreamConnect, ProxyResponse,
 };
 use crate::domain::service::discovery::ConnectorTool;
 use crate::outbound::api::{McpUpstream, McpUpstreamCall, PipedreamClient};
@@ -17,21 +17,33 @@ mod test;
 /// Every connector backend behind one set of ports: Pipedream, plus Macro
 /// Connect when configured.
 ///
-/// Calls about a stored connection go to the backend its record names
-/// (`provider`). Calls about an app with no record yet stay on Pipedream,
-/// except where Connect can answer for a user who holds a Connect
-/// connection. Choosing Connect for a new connection is the connect flow's
-/// job (the `macro-connect` rollout, see
-/// [`start_connect_session`](crate::domain::service::start_connect_session)).
+/// A user the `macro-connect` rollout is on for is on Connect alone
+/// ([`MacroConnect::connect_only`]): directory, tool listings, and every
+/// stored connection go through Connect, and a Pipedream connection they
+/// still hold is refused until they reconnect the app through Connect.
+/// Nothing falls back to Pipedream. Everyone else stays on Pipedream, except
+/// that a stored Connect connection always reaches Connect.
 pub struct ConnectorBackends<P = PipedreamClient, C = ConnectAdapter> {
     pipedream: Arc<P>,
     connect: Option<Arc<C>>,
+    rollout: Option<ConnectRollout>,
 }
 
 impl<P, C> ConnectorBackends<P, C> {
-    /// Pipedream alone, or with Connect when `connect` is set.
+    /// Pipedream alone, or with Connect when `connect` is set. Nobody is on
+    /// Connect alone until [`with_rollout`](Self::with_rollout).
     pub fn new(pipedream: Arc<P>, connect: Option<Arc<C>>) -> Self {
-        Self { pipedream, connect }
+        Self {
+            pipedream,
+            connect,
+            rollout: None,
+        }
+    }
+
+    /// Put users `rollout` answers `true` for on Connect alone.
+    pub fn with_rollout(mut self, rollout: ConnectRollout) -> Self {
+        self.rollout = Some(rollout);
+        self
     }
 
     /// The Pipedream backend.
@@ -39,14 +51,44 @@ impl<P, C> ConnectorBackends<P, C> {
         &self.pipedream
     }
 
-    fn connect_for(&self, record: &PipedreamConnection) -> anyhow::Result<&C> {
-        self.connect.as_deref().ok_or_else(|| {
-            anyhow::anyhow!(
-                "{} is connected through Macro Connect, which is not configured",
-                record.app_slug
-            )
-        })
+    /// Connect, when `user_id` is on Connect alone.
+    async fn connect_for_user(&self, user_id: &MacroUserIdStr<'static>) -> Option<&C> {
+        let (Some(connect), Some(rollout)) = (&self.connect, &self.rollout) else {
+            return None;
+        };
+        rollout(user_id.clone()).await.then_some(connect.as_ref())
     }
+
+    /// The backend `record` names. A Pipedream record of a user on Connect
+    /// alone is refused rather than used.
+    async fn backend_for(&self, record: &PipedreamConnection) -> anyhow::Result<Backend<'_, P, C>> {
+        match record.provider {
+            ConnectionProvider::Connect => self
+                .connect
+                .as_deref()
+                .map(Backend::Connect)
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "{} is connected through Macro Connect, which is not configured",
+                        record.app_slug
+                    )
+                }),
+            ConnectionProvider::Pipedream => {
+                if self.connect_for_user(&record.user_id).await.is_some() {
+                    anyhow::bail!(
+                        "{} is connected through Pipedream; reconnect it through Macro Connect",
+                        record.app_slug
+                    );
+                }
+                Ok(Backend::Pipedream(&self.pipedream))
+            }
+        }
+    }
+}
+
+enum Backend<'a, P, C> {
+    Pipedream(&'a P),
+    Connect(&'a C),
 }
 
 impl<P: McpConnection, C: McpConnection> McpConnection for ConnectorBackends<P, C> {
@@ -55,18 +97,18 @@ impl<P: McpConnection, C: McpConnection> McpConnection for ConnectorBackends<P, 
     }
 
     async fn connect(&self, record: &PipedreamConnection) -> anyhow::Result<McpServer> {
-        match record.provider {
-            ConnectionProvider::Pipedream => self.pipedream.connect(record).await,
-            ConnectionProvider::Connect => self.connect_for(record)?.connect(record).await,
+        match self.backend_for(record).await? {
+            Backend::Pipedream(pipedream) => pipedream.connect(record).await,
+            Backend::Connect(connect) => connect.connect(record).await,
         }
     }
 }
 
 impl<P: McpUpstream, C: McpUpstream> McpUpstream for ConnectorBackends<P, C> {
     async fn upstream(&self, record: &PipedreamConnection) -> anyhow::Result<McpUpstreamCall> {
-        match record.provider {
-            ConnectionProvider::Pipedream => self.pipedream.upstream(record).await,
-            ConnectionProvider::Connect => self.connect_for(record)?.upstream(record).await,
+        match self.backend_for(record).await? {
+            Backend::Pipedream(pipedream) => pipedream.upstream(record).await,
+            Backend::Connect(connect) => connect.upstream(record).await,
         }
     }
 }
@@ -80,21 +122,21 @@ impl<P: ConnectedAppProxy, C: ConnectedAppProxy> ConnectedAppProxy for Connector
         headers: &http::HeaderMap,
         body: Option<&serde_json::Value>,
     ) -> anyhow::Result<ProxyResponse> {
-        match connection.provider {
-            ConnectionProvider::Pipedream => {
-                self.pipedream
+        match self.backend_for(connection).await? {
+            Backend::Pipedream(pipedream) => {
+                pipedream
                     .proxy(connection, method, url, headers, body)
                     .await
             }
-            ConnectionProvider::Connect => {
-                self.connect_for(connection)?
-                    .proxy(connection, method, url, headers, body)
-                    .await
+            Backend::Connect(connect) => {
+                connect.proxy(connection, method, url, headers, body).await
             }
         }
     }
 }
 
+/// Pipedream's own account API, for users still on Pipedream; callers check
+/// [`MacroConnect::connect_only`] first.
 impl<P: PipedreamConnect, C: Send + Sync + 'static> PipedreamConnect for ConnectorBackends<P, C> {
     async fn create_connect_token(&self, external_user_id: &str) -> anyhow::Result<ConnectToken> {
         self.pipedream.create_connect_token(external_user_id).await
@@ -120,58 +162,56 @@ impl<P: PipedreamConnect, C: Send + Sync + 'static> PipedreamConnect for Connect
 }
 
 impl<P: ConnectorDirectory, C: ConnectorDirectory> ConnectorDirectory for ConnectorBackends<P, C> {
-    /// Pipedream's directory: a superset of Connect's catalog under the same
-    /// slugs, ranked by popularity and categorized.
+    /// Connect's catalog for a user on Connect alone, else Pipedream's
+    /// directory.
     async fn search(
         &self,
+        user_id: &MacroUserIdStr<'static>,
         search: Option<&str>,
         cursor: Option<&str>,
         limit: u32,
     ) -> anyhow::Result<CatalogPage> {
-        self.pipedream.search(search, cursor, limit).await
+        match self.connect_for_user(user_id).await {
+            Some(connect) => connect.search(user_id, search, cursor, limit).await,
+            None => self.pipedream.search(user_id, search, cursor, limit).await,
+        }
     }
 
-    /// Pipedream's entry, else Connect's, so a Connect-only slug still
-    /// verifies.
-    async fn retrieve(&self, app_slug: &str) -> anyhow::Result<Option<CatalogEntry>> {
-        if let Some(entry) = self.pipedream.retrieve(app_slug).await? {
-            return Ok(Some(entry));
-        }
-        match &self.connect {
-            Some(connect) => connect.retrieve(app_slug).await,
-            None => Ok(None),
+    /// From the same directory as [`search`](Self::search).
+    async fn retrieve(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        app_slug: &str,
+    ) -> anyhow::Result<Option<CatalogEntry>> {
+        match self.connect_for_user(user_id).await {
+            Some(connect) => connect.retrieve(user_id, app_slug).await,
+            None => self.pipedream.retrieve(user_id, app_slug).await,
         }
     }
 }
 
-impl<P, C> ConnectorCapabilities for ConnectorBackends<P, C>
-where
-    P: ConnectorCapabilities,
-    C: ConnectorCapabilities + MacroConnect,
+impl<P: ConnectorCapabilities, C: ConnectorCapabilities> ConnectorCapabilities
+    for ConnectorBackends<P, C>
 {
-    /// The app's tools through Connect's gateway when the user holds a
-    /// Connect connection to it, otherwise Pipedream's listing, which needs
-    /// no connection.
+    /// Connect's gateway listing for a user on Connect alone (which needs
+    /// their Connect connection), else Pipedream's, which needs none.
     async fn tools(
         &self,
         user_id: &MacroUserIdStr<'static>,
         app_slug: &str,
     ) -> anyhow::Result<Vec<ConnectorTool>> {
-        if let Some(connect) = &self.connect
-            && matches!(connect.app_for_slug(app_slug).await, Ok(Some(_)))
-        {
-            match connect.tools(user_id, app_slug).await {
-                Ok(tools) => return Ok(tools),
-                Err(error) => {
-                    tracing::debug!(error = ?error, app_slug, "no Connect tool listing; using Pipedream's");
-                }
-            }
+        match self.connect_for_user(user_id).await {
+            Some(connect) => connect.tools(user_id, app_slug).await,
+            None => self.pipedream.tools(user_id, app_slug).await,
         }
-        self.pipedream.tools(user_id, app_slug).await
     }
 }
 
 impl<P: Send + Sync + 'static, C: MacroConnect> MacroConnect for ConnectorBackends<P, C> {
+    async fn connect_only(&self, user_id: &MacroUserIdStr<'static>) -> bool {
+        self.connect_for_user(user_id).await.is_some()
+    }
+
     async fn app_for_slug(&self, app_slug: &str) -> anyhow::Result<Option<ConnectApp>> {
         match &self.connect {
             Some(connect) => connect.app_for_slug(app_slug).await,

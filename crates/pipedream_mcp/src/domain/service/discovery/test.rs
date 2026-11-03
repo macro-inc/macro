@@ -21,6 +21,7 @@ fn entry() -> CatalogEntry {
 impl ConnectorDirectory for Directory {
     async fn search(
         &self,
+        _user_id: &MacroUserIdStr<'static>,
         search: Option<&str>,
         _cursor: Option<&str>,
         limit: u32,
@@ -32,7 +33,11 @@ impl ConnectorDirectory for Directory {
             next_cursor: Some("next".into()),
         })
     }
-    async fn retrieve(&self, slug: &str) -> anyhow::Result<Option<CatalogEntry>> {
+    async fn retrieve(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        slug: &str,
+    ) -> anyhow::Result<Option<CatalogEntry>> {
         Ok((slug == "linear").then(entry))
     }
 }

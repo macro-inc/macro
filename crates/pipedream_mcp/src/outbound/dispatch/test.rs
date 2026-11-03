@@ -28,6 +28,11 @@ fn backends(connect: Option<Fake>) -> ConnectorBackends<Fake, Fake> {
     ConnectorBackends::new(Arc::new(PIPEDREAM), connect.map(Arc::new))
 }
 
+/// Pipedream and Connect, with the rollout answering `on` for everyone.
+fn rolled_out(on: bool) -> ConnectorBackends<Fake, Fake> {
+    backends(Some(connect(true))).with_rollout(Arc::new(move |_| Box::pin(async move { on })))
+}
+
 fn user() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("caller@example.com").unwrap()
 }
@@ -72,14 +77,28 @@ impl ConnectorCapabilities for Fake {
 impl ConnectorDirectory for Fake {
     async fn search(
         &self,
+        _user_id: &MacroUserIdStr<'static>,
         _search: Option<&str>,
         _cursor: Option<&str>,
         _limit: u32,
     ) -> anyhow::Result<CatalogPage> {
-        Ok(CatalogPage::default())
+        Ok(CatalogPage {
+            entries: vec![CatalogEntry {
+                app_slug: self.name.to_owned(),
+                display_name: self.name.to_owned(),
+                description: None,
+                icon_url: None,
+                categories: Vec::new(),
+            }],
+            next_cursor: None,
+        })
     }
 
-    async fn retrieve(&self, app_slug: &str) -> anyhow::Result<Option<CatalogEntry>> {
+    async fn retrieve(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        app_slug: &str,
+    ) -> anyhow::Result<Option<CatalogEntry>> {
         Ok(self.apps.contains(&app_slug).then(|| CatalogEntry {
             app_slug: app_slug.to_owned(),
             display_name: self.name.to_owned(),
@@ -91,6 +110,10 @@ impl ConnectorDirectory for Fake {
 }
 
 impl MacroConnect for Fake {
+    async fn connect_only(&self, _user_id: &MacroUserIdStr<'static>) -> bool {
+        self.name == "connect"
+    }
+
     async fn app_for_slug(&self, app_slug: &str) -> anyhow::Result<Option<ConnectApp>> {
         Ok(self.apps.contains(&app_slug).then(|| ConnectApp {
             app_id: app_slug.to_owned(),
@@ -154,42 +177,91 @@ async fn a_connect_record_without_connect_configured_is_an_error() {
 }
 
 #[tokio::test]
-async fn tools_come_from_connect_only_for_a_connect_connection() {
+async fn a_user_on_connect_alone_never_reaches_pipedream() {
     let user = user();
+    let backends = rolled_out(true);
 
-    let connected = backends(Some(connect(true)));
-    let not_connected = backends(Some(connect(false)));
-    let unconfigured = backends(None);
-
+    assert!(backends.connect_only(&user).await);
     assert_eq!(
-        connected.tools(&user, "linear").await.unwrap()[0].name,
+        backends
+            .search(&user, None, None, 10)
+            .await
+            .unwrap()
+            .entries[0]
+            .app_slug,
+        "connect"
+    );
+    assert_eq!(
+        backends
+            .retrieve(&user, "airtable_oauth")
+            .await
+            .unwrap()
+            .unwrap()
+            .display_name,
+        "connect"
+    );
+    // Pipedream serves Notion; Connect does not, and nothing falls back.
+    assert_eq!(backends.retrieve(&user, "notion").await.unwrap(), None);
+    assert_eq!(
+        backends.tools(&user, "linear").await.unwrap()[0].name,
         "connect_linear"
     );
-    assert_eq!(
-        not_connected.tools(&user, "linear").await.unwrap()[0].name,
-        "pipedream_linear"
+    let error = backends
+        .upstream(&record(ConnectionProvider::Pipedream))
+        .await
+        .unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("reconnect it through Macro Connect"),
+        "{error}"
     );
-    // Connect does not serve Notion, so it is never asked.
     assert_eq!(
-        connected.tools(&user, "notion").await.unwrap()[0].name,
-        "pipedream_notion"
-    );
-    assert_eq!(
-        unconfigured.tools(&user, "linear").await.unwrap()[0].name,
-        "pipedream_linear"
+        backends
+            .upstream(&record(ConnectionProvider::Connect))
+            .await
+            .unwrap()
+            .bearer_token,
+        "connect"
     );
 }
 
 #[tokio::test]
-async fn retrieve_prefers_pipedream_and_falls_back_to_connect() {
-    let backends = backends(Some(connect(false)));
+async fn with_the_rollout_off_everything_stays_on_pipedream() {
+    let user = user();
 
-    let linear = backends.retrieve("linear").await.unwrap().unwrap();
-    let airtable = backends.retrieve("airtable_oauth").await.unwrap().unwrap();
-
-    assert_eq!(linear.display_name, "pipedream");
-    assert_eq!(airtable.display_name, "connect");
-    assert_eq!(backends.retrieve("unknown").await.unwrap(), None);
+    for backends in [
+        rolled_out(false),
+        backends(Some(connect(true))),
+        backends(None),
+    ] {
+        assert!(!backends.connect_only(&user).await);
+        assert_eq!(
+            backends
+                .search(&user, None, None, 10)
+                .await
+                .unwrap()
+                .entries[0]
+                .app_slug,
+            "pipedream"
+        );
+        assert_eq!(
+            backends.tools(&user, "linear").await.unwrap()[0].name,
+            "pipedream_linear"
+        );
+        assert_eq!(
+            backends.retrieve(&user, "airtable_oauth").await.unwrap(),
+            None
+        );
+        assert_eq!(
+            backends
+                .upstream(&record(ConnectionProvider::Pipedream))
+                .await
+                .unwrap()
+                .bearer_token,
+            "pipedream"
+        );
+    }
 }
 
 #[tokio::test]

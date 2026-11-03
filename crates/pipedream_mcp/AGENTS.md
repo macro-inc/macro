@@ -4,9 +4,10 @@
 
 Part of the AI agent tools feature. Lets users connect third-party apps
 through Pipedream Connect (Pipedream owns grants/tokens/refresh), and the
-AI loop calls their tools through Pipedream's remote MCP server. Apps Macro
-Connect serves can connect through Connect instead (Macro's own OAuth apps;
-Connect owns grants and refresh), behind the `macro-connect` flag.
+AI loop calls their tools through Pipedream's remote MCP server. A user the
+`macro-connect` flag is on for is on Macro Connect alone (Macro's own OAuth
+apps; Connect owns grants and refresh): directory, connect flow, tool
+listings, and calls all go through Connect, with no Pipedream fallback.
 
 ## Start here
 
@@ -30,11 +31,14 @@ Connect owns grants and refresh), behind the `macro-connect` flag.
   MCP gateway, app API calls with an exported access token, catalog apps
   addressed by the Pipedream slugs they replace.
 - `src/outbound/dispatch.rs`: `ConnectorBackends`, the one type hosts wire:
-  each record reaches the backend its `provider` names; directory search and
-  pre-connect tool listings stay on Pipedream.
+  it holds the host's `ConnectRollout` (the `macro-connect` PostHog flag,
+  read by `ai_tools::macro_connect_rollout`). A user on Connect alone gets
+  Connect's directory and tool listings, and their Pipedream rows are
+  refused; everyone else stays on Pipedream. A Connect row always reaches
+  Connect.
 - `src/domain/service/connect.rs`: `start_connect_session` and
-  `complete_connect_connection` decide and record Connect connections; the
-  host's `ConnectRollout` (the `macro-connect` PostHog flag) gates them.
+  `complete_connect_connection` record Connect connections; the router only
+  calls them for users on Connect alone (`MacroConnect::connect_only`).
 
 ## Scope
 
@@ -56,8 +60,10 @@ Connect owns grants and refresh), behind the `macro-connect` flag.
 
 - A `provider = connect` row stores Connect's app id in `account_id` and keeps
   the Pipedream slug in `app_slug`, so `mcp_select` and agent egress need no
-  changes. Granola stays on Pipedream (`PIPEDREAM_ONLY_APPS`): its sync uses
-  Granola's API-key REST API through Pipedream's proxy.
+  changes. Granola connects through Connect like any app (an MCP grant).
+  Granola meeting sync still reads Granola's API-key REST API, so it only
+  syncs Pipedream-held Granola accounts; sync over Granola's MCP server is
+  follow-up work.
 - The Connect consent redirect (`/pipedream/mcp/connect/callback`) is public
   and records nothing; the app polls `/pipedream/mcp/connect/complete`, which
   trusts only Connect's own connection list.

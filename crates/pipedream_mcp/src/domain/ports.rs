@@ -143,6 +143,11 @@ pub trait PipedreamConnect: Send + Sync + 'static {
 /// the grant, and refresh, like Pipedream Connect, but Macro owns the OAuth
 /// apps. Apps are addressed by the Pipedream slug they replace.
 pub trait MacroConnect: Send + Sync + 'static {
+    /// Whether every connector call for `user_id` goes through Connect, with
+    /// no Pipedream at all: Connect is configured and the `macro-connect`
+    /// rollout is on for them. Otherwise everything stays on Pipedream.
+    fn connect_only(&self, user_id: &MacroUserIdStr<'static>) -> impl Future<Output = bool> + Send;
+
     /// The Connect app standing in for `app_slug`, or `None` when Connect
     /// does not serve it (or is not configured).
     fn app_for_slug(
@@ -173,7 +178,9 @@ pub trait MacroConnect: Send + Sync + 'static {
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
-/// Port for browsing the directory of connectable apps.
+/// Port for browsing the directory of connectable apps. Lookups are for a
+/// user because the directory is theirs: Connect's catalog for a user on
+/// Connect (see [`MacroConnect::connect_only`]), Pipedream's otherwise.
 pub trait ConnectorDirectory: Send + Sync + 'static {
     /// Search the directory.
     ///
@@ -184,6 +191,7 @@ pub trait ConnectorDirectory: Send + Sync + 'static {
     /// action to expose as a tool) and that the catalog doesn't hide.
     fn search(
         &self,
+        user_id: &MacroUserIdStr<'static>,
         search: Option<&str>,
         cursor: Option<&str>,
         limit: u32,
@@ -197,6 +205,7 @@ pub trait ConnectorDirectory: Send + Sync + 'static {
     /// miss.
     fn retrieve(
         &self,
+        user_id: &MacroUserIdStr<'static>,
         app_slug: &str,
     ) -> impl Future<Output = anyhow::Result<Option<CatalogEntry>>> + Send;
 }
@@ -257,3 +266,12 @@ pub trait ConnectedAppProxy: Send + Sync + 'static {
         body: Option<&serde_json::Value>,
     ) -> impl Future<Output = anyhow::Result<ProxyResponse>> + Send;
 }
+
+/// Whether the `macro-connect` rollout is on for a user: every connector
+/// call for them goes through Macro Connect instead of Pipedream. Hosts read
+/// the feature flag here; a failed read must answer `false`.
+pub type ConnectRollout = std::sync::Arc<
+    dyn Fn(MacroUserIdStr<'static>) -> std::pin::Pin<Box<dyn Future<Output = bool> + Send>>
+        + Send
+        + Sync,
+>;

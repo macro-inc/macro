@@ -664,15 +664,22 @@ pub async fn build(
             None
         }
     };
-    // Macro Connect, beside Pipedream rather than instead of it: connections
-    // reach the backend their row names, and the `macro-connect` rollout
-    // decides which one a new connection goes through.
+    // Macro Connect beside Pipedream: a user the `macro-connect` rollout is
+    // on for is on Connect alone; everyone else stays on Pipedream.
     let connect_adapter = ai_tools::connect_adapter(config.connect_customer_key.value())?;
+    let rollout = ai_tools::macro_connect_rollout(
+        config.posthog_api_key.value(),
+        config.posthog_host.value(),
+    )?;
     let connectors: ai_tools::ToolPipedreamConnection = pipedream_client.as_ref().map(|client| {
-        Arc::new(pipedream_mcp::outbound::dispatch::ConnectorBackends::new(
+        let backends = pipedream_mcp::outbound::dispatch::ConnectorBackends::new(
             client.clone(),
             connect_adapter.clone(),
-        ))
+        );
+        Arc::new(match &rollout {
+            Some(rollout) => backends.with_rollout(rollout.clone()),
+            None => backends,
+        })
     });
     let pipedream_repo =
         pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone());
@@ -1088,25 +1095,13 @@ pub async fn build(
                 Box::pin(async {})
             },
         );
-    let mut pipedream_state = pipedream_mcp::inbound::PipedreamRouterState::new(
+    let pipedream_state = pipedream_mcp::inbound::PipedreamRouterState::new(
         pipedream_repo,
         connectors,
         authorization_state.clone(),
     )
     .with_auth_completed_hook(pipedream_auth_hook)
     .with_disconnected_hook(pipedream_disconnected_hook);
-    if let (Some(_), Some(key)) = (&connect_adapter, config.posthog_api_key.value()) {
-        let flags = feature_flags::outbound::posthog::PostHogFeatureFlags::new(
-            config
-                .posthog_host
-                .value()
-                .unwrap_or("https://us.i.posthog.com"),
-            key.to_owned(),
-            std::time::Duration::from_secs(3),
-        )
-        .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
-        pipedream_state = pipedream_state.with_connect_rollout(macro_connect_rollout(flags));
-    }
 
     let cancellation = tokio_util::sync::CancellationToken::new();
     super::refresh::start(
@@ -1176,29 +1171,5 @@ pub async fn build(
         router,
         workers,
         cancellation,
-    })
-}
-
-/// The PostHog flag that routes a user's new connections through Macro
-/// Connect. Keep in sync with the web flag of the same key.
-const MACRO_CONNECT_FLAG: &str = "macro-connect";
-
-/// Reads `macro-connect` for each user; a failed read keeps them on
-/// Pipedream.
-fn macro_connect_rollout<F>(flags: F) -> pipedream_mcp::inbound::ConnectRollout
-where
-    F: feature_flags::FeatureFlags + Clone + 'static,
-{
-    Arc::new(move |user_id| {
-        let flags = flags.clone();
-        Box::pin(async move {
-            match flags.load(&user_id).await {
-                Ok(snapshot) => snapshot.is_enabled(MACRO_CONNECT_FLAG),
-                Err(error) => {
-                    tracing::warn!(error = ?error, "could not read the macro-connect flag; using Pipedream");
-                    false
-                }
-            }
-        })
     })
 }

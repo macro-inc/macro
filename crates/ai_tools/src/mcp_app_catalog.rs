@@ -8,12 +8,15 @@ use anyhow::Context;
 use bots::domain::ports::{BotError, McpAppCatalog};
 use macro_env::Environment;
 use macro_env_var::maybe_env_var;
-use pipedream_mcp::domain::ports::ConnectorDirectory;
+use pipedream_mcp::domain::ports::ConnectRollout;
 use pipedream_mcp::outbound::api::{
     DEFAULT_API_URL, DEFAULT_MCP_URL, PipedreamClient, PipedreamConfig,
 };
 use pipedream_mcp::outbound::connect::{ConnectAdapter, ConnectConfig};
+
 use pipedream_mcp::outbound::dispatch::ConnectorBackends;
+use std::collections::HashMap;
+use std::sync::Mutex;
 
 maybe_env_var! {
     struct PipedreamCatalogEnv {
@@ -31,6 +34,10 @@ maybe_env_var! {
         PipedreamMcpUrl,
         /// Macro's customer key for the Macro Connect API.
         ConnectCustomerKey,
+        /// PostHog project token; reads the `macro-connect` rollout.
+        PosthogApiKey,
+        /// Regional PostHog origin; defaults to the US origin.
+        PosthogHost,
     }
 }
 
@@ -68,7 +75,73 @@ pub fn connector_backends_from_env() -> anyhow::Result<Option<Arc<ConnectorBacke
             .as_ref()
             .and_then(|value| value.value()),
     )?;
-    Ok(Some(Arc::new(ConnectorBackends::new(pipedream, connect))))
+    let mut backends = ConnectorBackends::new(pipedream, connect);
+    if let Some(rollout) = macro_connect_rollout(
+        env.posthog_api_key.as_ref().and_then(|value| value.value()),
+        env.posthog_host.as_ref().and_then(|value| value.value()),
+    )? {
+        backends = backends.with_rollout(rollout);
+    }
+    Ok(Some(Arc::new(backends)))
+}
+
+/// The PostHog flag that puts a user on Macro Connect alone. Keep in sync
+/// with the web flag of the same key.
+pub const MACRO_CONNECT_FLAG: &str = "macro-connect";
+
+/// How long one user's flag answer is reused: every MCP connection asks.
+const ROLLOUT_TTL: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// The `macro-connect` rollout read from PostHog, or `None` without a
+/// PostHog key (nobody on Connect alone). Answers are cached per user for
+/// [`ROLLOUT_TTL`]; a failed read answers `false`, keeping the user on
+/// Pipedream.
+pub fn macro_connect_rollout(
+    api_key: Option<&str>,
+    host: Option<&str>,
+) -> anyhow::Result<Option<ConnectRollout>> {
+    let Some(api_key) = api_key.filter(|key| !key.is_empty()) else {
+        return Ok(None);
+    };
+    let flags = feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+        host.unwrap_or("https://us.i.posthog.com"),
+        api_key.to_owned(),
+        std::time::Duration::from_secs(3),
+    )
+    .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
+    Ok(Some(rollout_from(flags)))
+}
+
+fn rollout_from<F>(flags: F) -> ConnectRollout
+where
+    F: feature_flags::FeatureFlags + Clone + 'static,
+{
+    type Cache = HashMap<String, (bool, std::time::Instant)>;
+    let cache: Arc<Mutex<Cache>> = Arc::default();
+    Arc::new(move |user_id| {
+        let flags = flags.clone();
+        let cache = cache.clone();
+        Box::pin(async move {
+            let key = user_id.as_ref().to_owned();
+            if let Some((on, at)) = cache.lock().ok().and_then(|cache| cache.get(&key).copied())
+                && at.elapsed() < ROLLOUT_TTL
+            {
+                return on;
+            }
+            let on = match flags.load(&user_id).await {
+                Ok(snapshot) => snapshot.is_enabled(MACRO_CONNECT_FLAG),
+                Err(error) => {
+                    tracing::warn!(error = ?error, "could not read the macro-connect flag; using Pipedream");
+                    return false;
+                }
+            };
+            if let Ok(mut cache) = cache.lock() {
+                cache.retain(|_, (_, at)| at.elapsed() < ROLLOUT_TTL);
+                cache.insert(key, (on, std::time::Instant::now()));
+            }
+            on
+        })
+    })
 }
 
 /// A Pipedream client when this process has the credentials, otherwise `None`.
@@ -156,7 +229,7 @@ impl McpAppCatalog for PipedreamMcpAppCatalog {
                 "cannot verify MCP app {slug}: Pipedream is not configured"
             )));
         };
-        match client.retrieve(slug).await {
+        match client.retrieve_app(slug).await {
             Ok(Some(_)) => Ok(true),
             Ok(None) => Ok(false),
             Err(error) => {

@@ -40,17 +40,6 @@ pub type PipedreamAuthCompletedHook = Arc<
 /// was before removal. Implementations must be quick or spawn.
 pub type PipedreamDisconnectedHook = PipedreamAuthCompletedHook;
 
-/// Whether the `macro-connect` rollout is on for a user: new connections to
-/// apps Macro Connect serves go through Connect instead of Pipedream. Hosts
-/// read the feature flag here; a failed read must answer `false`.
-pub type ConnectRollout = Arc<
-    dyn Fn(
-            macro_user_id::user_id::MacroUserIdStr<'static>,
-        ) -> std::pin::Pin<Box<dyn Future<Output = bool> + Send>>
-        + Send
-        + Sync,
->;
-
 /// Shared state for the MCP router.
 ///
 /// `pipedream` is the single connect path. When it is `None` (deployment not
@@ -62,7 +51,6 @@ pub struct PipedreamRouterState<S, P, Auth> {
     authorization_state: MacroAuthorizationState<Auth>,
     on_auth_completed: Option<PipedreamAuthCompletedHook>,
     on_disconnected: Option<PipedreamDisconnectedHook>,
-    connect_rollout: Option<ConnectRollout>,
 }
 
 impl<S, P, Auth> Clone for PipedreamRouterState<S, P, Auth> {
@@ -73,7 +61,6 @@ impl<S, P, Auth> Clone for PipedreamRouterState<S, P, Auth> {
             authorization_state: self.authorization_state.clone(),
             on_auth_completed: self.on_auth_completed.clone(),
             on_disconnected: self.on_disconnected.clone(),
-            connect_rollout: self.connect_rollout.clone(),
         }
     }
 }
@@ -104,16 +91,7 @@ where
             authorization_state,
             on_auth_completed: None,
             on_disconnected: None,
-            connect_rollout: None,
         }
-    }
-
-    /// Route new connections through Macro Connect for users `rollout`
-    /// answers `true` for (see [`ConnectRollout`]). Without it, every new
-    /// connection goes through Pipedream.
-    pub fn with_connect_rollout(mut self, rollout: ConnectRollout) -> Self {
-        self.connect_rollout = Some(rollout);
-        self
     }
 
     /// Invoke `hook` whenever a connect flow completes (see
@@ -139,6 +117,18 @@ where
         self.pipedream
             .as_ref()
             .ok_or(PipedreamHandlerErr::PipedreamNotConfigured)
+    }
+
+    /// Whether `user_id` is on Macro Connect alone (see
+    /// [`MacroConnect::connect_only`]).
+    async fn connect_only(
+        &self,
+        user_id: &macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> bool {
+        match &self.pipedream {
+            Some(backends) => backends.connect_only(user_id).await,
+            None => false,
+        }
     }
 }
 
@@ -520,6 +510,9 @@ pub enum PipedreamHandlerErr {
     /// The app connects through its own MCP server, never Pipedream.
     #[error("{0}")]
     Overlaid(String),
+    /// The user is on Macro Connect alone, which this request would bypass.
+    #[error("{0}")]
+    ConnectOnly(&'static str),
     /// An internal error occurred.
     #[error("{0}")]
     Internal(#[from] anyhow::Error),
@@ -543,6 +536,7 @@ impl IntoResponse for PipedreamHandlerErr {
             PipedreamHandlerErr::NotFound => StatusCode::NOT_FOUND,
             PipedreamHandlerErr::PipedreamNotConfigured => StatusCode::NOT_IMPLEMENTED,
             PipedreamHandlerErr::Overlaid(_) => StatusCode::CONFLICT,
+            PipedreamHandlerErr::ConnectOnly(_) => StatusCode::CONFLICT,
             PipedreamHandlerErr::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (
@@ -586,10 +580,14 @@ where
         .list(&user.macro_user_id)
         .await
         .map_err(anyhow::Error::from)?;
+    // Pipedream connections are unusable to a user on Connect alone; the
+    // app shows as not connected until they reconnect it through Connect.
+    let connect_only = state.connect_only(&user.macro_user_id).await;
 
     Ok(Json(
         records
             .iter()
+            .filter(|record| !connect_only || record.provider == ConnectionProvider::Connect)
             .map(PipedreamConnectionResponse::from_record)
             .collect(),
     ))
@@ -721,16 +719,15 @@ where
     let user = &authorization.authorization.user;
     let pipedream = state.pipedream()?;
     let app_slug = body.and_then(|Json(body)| body.app_slug);
-    if let (Some(app_slug), Some(rollout)) = (&app_slug, &state.connect_rollout)
-        && rollout(user.macro_user_id.clone()).await
-        && let Some(connect_url) = start_connect_session(
-            state.store.as_ref(),
-            pipedream.as_ref(),
-            &user.macro_user_id,
-            app_slug,
-        )
-        .await?
-    {
+    // A user on Connect alone gets a Connect URL or a 404, never a
+    // Pipedream token.
+    if state.connect_only(&user.macro_user_id).await {
+        let app_slug = app_slug.ok_or(PipedreamHandlerErr::ConnectOnly(
+            "name the app to connect through Macro Connect",
+        ))?;
+        let connect_url = start_connect_session(pipedream.as_ref(), &user.macro_user_id, &app_slug)
+            .await?
+            .ok_or(PipedreamHandlerErr::NotFound)?;
         return Ok(Json(PipedreamTokenResponse {
             provider: PipedreamProviderResponse::Connect,
             token: None,
@@ -784,8 +781,10 @@ where
     anyhow::Error: From<S::Err>,
 {
     let user = &authorization.authorization.user;
+    if !state.connect_only(&user.macro_user_id).await {
+        return Err(PipedreamHandlerErr::NotFound);
+    }
     let record = complete_connect_connection(
-        state.store.as_ref(),
         state.store.as_ref(),
         state.pipedream()?.as_ref(),
         &user.macro_user_id,
@@ -834,6 +833,11 @@ where
     anyhow::Error: From<S::Err>,
 {
     let user = &authorization.authorization.user;
+    if state.connect_only(&user.macro_user_id).await {
+        return Err(PipedreamHandlerErr::ConnectOnly(
+            "this account connects apps through Macro Connect, not Pipedream",
+        ));
+    }
     let record = complete_pipedream_connection(
         state.store.as_ref(),
         state.store.as_ref(),
@@ -885,6 +889,9 @@ where
     anyhow::Error: From<S::Err>,
 {
     let user = &authorization.authorization.user;
+    if state.connect_only(&user.macro_user_id).await {
+        return Err(PipedreamHandlerErr::NotFound);
+    }
     let record = recover_pipedream_connection(
         state.store.as_ref(),
         state.store.as_ref(),
@@ -923,7 +930,7 @@ where
 #[tracing::instrument(skip_all, err)]
 pub async fn browse_catalog_handler<S, P, Auth>(
     State(state): State<PipedreamRouterState<S, P, Auth>>,
-    _authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Query(params): Query<PipedreamCatalogParams>,
 ) -> Result<Json<PipedreamCatalogResponse>, PipedreamHandlerErr>
 where
@@ -931,8 +938,10 @@ where
     P: PipedreamConnect + ConnectorDirectory + MacroConnect,
     Auth: MacroAuthorizationService,
 {
+    // Connect's catalog for a user on Connect alone (see the directory).
     let page = browse_catalog(
         state.pipedream()?.as_ref(),
+        &authorization.authorization.user.macro_user_id,
         params.search.as_deref(),
         params.cursor.as_deref(),
         params.limit,
@@ -963,13 +972,27 @@ where
 #[tracing::instrument(skip_all, err)]
 pub async fn list_overlays<S, P, Auth>(
     State(state): State<PipedreamRouterState<S, P, Auth>>,
-    _authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
 ) -> Result<Json<Vec<PipedreamOverlayResponse>>, PipedreamHandlerErr>
 where
     S: ConnectionStore + ConnectorOverlays,
     P: PipedreamConnect + ConnectorDirectory + MacroConnect,
     Auth: MacroAuthorizationService,
 {
-    let overlays = state.store.overlays().await?;
+    let mut overlays = state.store.overlays().await?;
+    // Connect serves its apps to a user on Connect alone, overlaid or not.
+    if let Ok(backends) = state.pipedream()
+        && backends
+            .connect_only(&authorization.authorization.user.macro_user_id)
+            .await
+    {
+        let mut kept = Vec::with_capacity(overlays.len());
+        for overlay in overlays {
+            if backends.app_for_slug(&overlay.app_slug).await?.is_none() {
+                kept.push(overlay);
+            }
+        }
+        overlays = kept;
+    }
     Ok(Json(overlays.into_iter().map(Into::into).collect()))
 }

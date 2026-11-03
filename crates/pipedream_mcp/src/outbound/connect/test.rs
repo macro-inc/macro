@@ -82,12 +82,19 @@ async fn maps_pipedream_slugs_to_connect_apps_from_one_cached_catalog() {
     );
     assert_eq!(connect.app_for_slug("airtable").await.unwrap(), None);
 
-    let entry = connect.retrieve("airtable_oauth").await.unwrap().unwrap();
+    let entry = connect
+        .retrieve(&user(), "airtable_oauth")
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(
         entry.icon_url.as_deref(),
         Some(format!("{}/v1/catalog/airtable/icon.svg", server.uri()).as_str())
     );
-    let page = connect.search(Some("sla"), None, 10).await.unwrap();
+    let page = connect
+        .search(&user(), Some("sla"), None, 10)
+        .await
+        .unwrap();
     assert_eq!(page.entries.len(), 1);
     assert_eq!(page.entries[0].app_slug, "slack");
     // `expect(1)` on the catalog mock checks the cache on drop.
