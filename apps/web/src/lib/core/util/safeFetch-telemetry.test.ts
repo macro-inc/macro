@@ -9,14 +9,18 @@ const mocks = vi.hoisted(() => ({
     error: vi.fn(),
     end: vi.fn(),
   },
-  clientSpan: vi.fn(),
+  startSpan: vi.fn(),
 }));
-vi.mock('@core/constant/servers', () => ({
+vi.mock('@core/constant/servers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/servers')>()),
   SERVER_HOSTS: { calls: 'https://gateway.example' },
   SYNC_SERVICE_HOSTS: { worker: 'https://sync.example' },
 }));
 vi.mock('@macro-inc/observability', () => ({
-  Telemetry: { clientSpan: mocks.clientSpan },
+  Telemetry: {
+    span: mocks.startSpan,
+    captureContext: () => ({ run: <T>(work: () => T) => work() }),
+  },
 }));
 vi.mock('./platformFetch', () => ({ platformFetch: mocks.fetch }));
 
@@ -24,7 +28,7 @@ import { safeFetch } from './safeFetch';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.clientSpan.mockReturnValue(mocks.span);
+  mocks.startSpan.mockReturnValue(mocks.span);
 });
 
 describe('safeFetch capability URL privacy', () => {
@@ -39,11 +43,12 @@ describe('safeFetch capability URL privacy', () => {
     expect(mocks.fetch.mock.calls[0][1].headers.Authorization).toBe(
       'Bearer scoped-token'
     );
-    expect(mocks.clientSpan).toHaveBeenCalledWith(
-      'http POST /dss/call/join/:shareToken/leave'
+    expect(mocks.startSpan).toHaveBeenCalledWith(
+      'http POST /dss/call/join/:shareToken/leave',
+      { kind: 'client' }
     );
     const telemetry = JSON.stringify([
-      mocks.clientSpan.mock.calls,
+      mocks.startSpan.mock.calls,
       mocks.span.setAttr.mock.calls,
       mocks.span.error.mock.calls,
     ]);

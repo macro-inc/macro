@@ -899,6 +899,7 @@ function InlineEditor(props: {
           when={renderTextEditor}
           fallback={
             <input
+              data-input-surface="grid-cell"
               ref={(element) => {
                 input = element;
                 props.onEditorReady?.(focus);

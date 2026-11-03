@@ -1,6 +1,7 @@
 import { displaySubject } from '@app/features/email-compose/core/subject-text';
 import { createEmailThreadSource } from '@app/features/email-thread/queries/thread-source';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
+import { usePending } from '@app/observability/flow';
 import { ContentLoading } from '@components/app/ContentLoading';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useBlockId } from '@core/block';
@@ -23,6 +24,7 @@ export default function BlockEmail() {
   const threadQuery = useThreadQuery(threadId, () => ({
     enabled: !!threadId(),
   }));
+  usePending('email.thread', () => threadQuery.isLoading);
   const source = createEmailThreadSource(threadId, threadQuery);
   const threadData = source.thread;
 
