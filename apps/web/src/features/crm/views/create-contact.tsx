@@ -109,7 +109,7 @@ export function CreateContactModal(props: {
       setError('Enter a name');
       return;
     }
-    if (contactName().length > MAX_NAME_CHARS) {
+    if (Array.from(contactName()).length > MAX_NAME_CHARS) {
       setError(NAME_TOO_LONG);
       return;
     }

@@ -134,6 +134,8 @@ companies); without one the person is added with no company. The email is
 optional: personal addresses and different domains are accepted, and leaving it
 empty adds the person by name alone. Contacts without a company show no company
 pill. **Add contact** on a company's Team tab skips the company pill.
+Contact names allow up to 200 characters. A longer name keeps the form open
+with an error; shortening it allows submission without re-entering other fields.
 **New company** requires a name; its domain is optional. If supplied, it must be
 a company domain, not a personal email provider. The company, contact and pipeline dialogs share the
 task/project composer layout: name on the first row beside **Close**, details
