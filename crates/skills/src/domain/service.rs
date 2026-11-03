@@ -44,6 +44,7 @@ fn system_skill_summaries() -> impl Iterator<Item = SkillSummary> {
         .map(|skill| SkillSummary {
             document_id: skill.id(),
             name: skill.name.to_string(),
+            description: Some(skill.description.to_string()),
             updated_at: None,
         })
 }

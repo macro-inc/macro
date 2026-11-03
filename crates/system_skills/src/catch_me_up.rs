@@ -42,5 +42,9 @@ pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUC
 pub static SKILL: SystemSkill = SystemSkill {
     slug: "catch-me-up",
     name: "Catch Me Up",
+    description: "Use when the user asks to catch up on what they missed: unread messages, notifications or activity while they were away.",
+    visibility: crate::Visibility::Listed,
+    tools: &["ListNotifications", "MarkNotificationsSeen"],
+    sdk_entities: &[],
     content: &PROMPT,
 };

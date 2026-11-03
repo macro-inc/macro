@@ -5,10 +5,11 @@ use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService
 
 use crate::domain::models::{SystemSkillSummary, SystemSkillsResponse};
 
-/// Lists the built-in system skills. System skills are static, code-defined
-/// AI instructions (see the `system_skills` crate); they surface in the
-/// skills menu and AI skill tools like user skills, but have no document
-/// behind them, so clients must not offer to open them.
+/// Lists the built-in system skills offered in the skills menu. System skills
+/// are static, code-defined AI instructions (see the `system_skills` crate);
+/// they surface in the skills menu and AI skill tools like user skills, but
+/// have no document behind them, so clients must not offer to open them.
+/// Agent-only skills are left out.
 #[utoipa::path(
     tag = "document",
     get,
@@ -23,8 +24,7 @@ pub async fn get_system_skills_handler<Auth: MacroAuthorizationService>(
     _user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
 ) -> Json<SystemSkillsResponse> {
     Json(SystemSkillsResponse {
-        skills: system_skills::SYSTEM_SKILLS
-            .iter()
+        skills: system_skills::listed()
             .map(|skill| SystemSkillSummary {
                 id: skill.id(),
                 name: skill.name.to_string(),

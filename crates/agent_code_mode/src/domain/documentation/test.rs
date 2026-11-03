@@ -253,3 +253,16 @@ fn symbol_references_stay_within_one_result_budget() {
     );
     assert!(result.unknown.is_empty());
 }
+
+#[test]
+fn system_skill_entities_are_sdk_entities() {
+    for skill in system_skills::SYSTEM_SKILLS {
+        for entity in skill.sdk_entities {
+            assert!(
+                sdk_documentation().iter().any(|doc| doc.name == *entity),
+                "{} names SDK entity {entity}, which the SDK reference lacks",
+                skill.slug
+            );
+        }
+    }
+}

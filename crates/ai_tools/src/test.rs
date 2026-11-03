@@ -797,3 +797,22 @@ fn conversation_tools_only_advertise_new_sessions() {
     }
     assert!(!subagent_toolset().tools.contains_key("ReadChat"));
 }
+
+#[test]
+fn system_skill_tools_are_deferred_session_tools() {
+    let session = tools_for(AiHost::AgentSession);
+    for skill in system_skills::SYSTEM_SKILLS {
+        for tool in skill.tools {
+            assert!(
+                session.toolset.tools.contains_key(*tool),
+                "{} names {tool}, which agent sessions do not have",
+                skill.slug
+            );
+            assert!(
+                session.deferred.iter().any(|deferred| deferred.name == *tool),
+                "{} names {tool}, which is eager; skills cover deferred tools",
+                skill.slug
+            );
+        }
+    }
+}

@@ -98,6 +98,7 @@ models_pagination = { path = "../models_pagination" }
 models_permissions = { path = "../models_permissions" }
 notification = { path = "../notification", features = ["ai_tool"] }
 prompt = { path = "../prompt" }
+system_skills = { path = "../system_skills" }
 models_properties = { path = "../models_properties" }
 models_search = { path = "../models_search" }
 models_soup = { path = "../models_soup" }

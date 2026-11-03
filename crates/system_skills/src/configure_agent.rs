@@ -53,5 +53,9 @@ pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUC
 pub static SKILL: SystemSkill = SystemSkill {
     slug: "configure-agent",
     name: "Configure Agent",
+    description: "Use when the user wants to change an agent's instructions, model, runtime, channels, connected apps or permissions; not for a bot's profile alone.",
+    visibility: crate::Visibility::Listed,
+    tools: &["ListAgents", "ConfigureAgent", "ConfigureBot"],
+    sdk_entities: &["agents"],
     content: &PROMPT,
 };

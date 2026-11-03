@@ -42,5 +42,9 @@ pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUC
 pub static SKILL: SystemSkill = SystemSkill {
     slug: "what-i-did-yesterday",
     name: "What I Did Yesterday",
+    description: "Use when the user asks what they did yesterday or on another given day, for a standup, a work log or their own recall.",
+    visibility: crate::Visibility::Listed,
+    tools: &[],
+    sdk_entities: &[],
     content: &PROMPT,
 };

@@ -98,6 +98,7 @@ fn skill(id: u128, name: &str, updated_at_secs: Option<i64>) -> SkillSummary {
     SkillSummary {
         document_id: uuid::Uuid::from_u128(id),
         name: name.to_string(),
+        description: None,
         updated_at: updated_at_secs.map(|secs| Utc.timestamp_opt(secs, 0).unwrap()),
     }
 }
@@ -150,6 +151,7 @@ async fn search_includes_matching_system_skills() {
         vec![SkillSummary {
             document_id: system_skills::catch_me_up::SKILL.id(),
             name: "Catch Me Up".to_string(),
+            description: Some(system_skills::catch_me_up::SKILL.description.to_string()),
             updated_at: None,
         }]
     );
@@ -472,4 +474,21 @@ async fn discovery_and_reading_work_through_json_tool_dispatch() {
             .await
             .is_err()
     );
+}
+
+#[tokio::test]
+async fn listing_describes_system_skills_and_not_user_skills() {
+    let service = discovery_service(
+        FakeSearcher::unused(),
+        FakeLister::returning(vec![skill(1, "release notes", Some(100))]),
+    );
+
+    let results = service.list_skills(&user()).await.unwrap();
+
+    for result in &results {
+        match system_skills::system_skill(result.document_id) {
+            Some(system) => assert_eq!(result.description.as_deref(), Some(system.description)),
+            None => assert_eq!(result.description, None),
+        }
+    }
 }
