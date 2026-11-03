@@ -42,6 +42,7 @@ field and mutate.
 - [`Notification`](../../notifications/notification/classes/Notification.md)
 - [`Routine`](../../routines/routine/classes/Routine.md)
 - [`AccessRequest`](../../sharing/access/classes/AccessRequest.md)
+- [`TeamInvite`](../../teams/invite/classes/TeamInvite.md)
 - [`Team`](../../teams/team/classes/Team.md)
 - [`Webhook`](../../webhooks/webhook/classes/Webhook.md)
 - [`WhatsAppAccount`](../../whatsapp/account/classes/WhatsAppAccount.md)

@@ -1,6 +1,6 @@
 use crate::domain::models::{
-    CatalogEntry, CatalogPage, ConnectToken, McpServer, PipedreamAccount, PipedreamConnection,
-    client_info,
+    CatalogEntry, CatalogPage, ConnectToken, MacroUserIdStr, McpServer, PipedreamAccount,
+    PipedreamConnection, client_info,
 };
 use crate::domain::ports::{
     ConnectedAppProxy, ConnectorDirectory, McpConnection, PipedreamConnect, ProxyResponse,
@@ -267,9 +267,10 @@ impl PipedreamConnect for PipedreamClient {
     }
 }
 
-impl ConnectorDirectory for PipedreamClient {
+impl PipedreamClient {
+    /// Pipedream's connectable app under `app_slug`, whoever asks.
     #[tracing::instrument(skip(self), err, fields(app = %app_slug))]
-    async fn retrieve(&self, app_slug: &str) -> anyhow::Result<Option<CatalogEntry>> {
+    pub async fn retrieve_app(&self, app_slug: &str) -> anyhow::Result<Option<CatalogEntry>> {
         // The slug is interpolated into the path. Anything outside Pipedream's
         // app-slug charset is not an app, and is not requested.
         if !is_app_slug(app_slug) {
@@ -298,10 +299,21 @@ impl ConnectorDirectory for PipedreamClient {
         let app: AppResponse = serde_json::from_value(app).context("parsing Pipedream app")?;
         Ok(connectable_catalog_entry(app_slug, app))
     }
+}
+
+impl ConnectorDirectory for PipedreamClient {
+    async fn retrieve(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        app_slug: &str,
+    ) -> anyhow::Result<Option<CatalogEntry>> {
+        self.retrieve_app(app_slug).await
+    }
 
     #[tracing::instrument(skip(self), err)]
     async fn search(
         &self,
+        _user_id: &MacroUserIdStr<'static>,
         search: Option<&str>,
         cursor: Option<&str>,
         limit: u32,

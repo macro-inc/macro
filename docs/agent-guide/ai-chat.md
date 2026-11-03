@@ -1111,6 +1111,14 @@ External coding harnesses keep their own tool selection. A runner that fails
 after its tools were advertised still produces an execution failure, not an
 automatic retry through a direct tool.
 
+Team and referral invites exist only in the SDK: `team.invite(emails)` on
+`macro.teams.current()` (resolves `false` when every address was already a
+member or invited), `team.invites()` and `invite.revoke()` for team admins, and
+`macro.referrals.link()` / `macro.referrals.invite(email)`. Invites send email
+immediately, with no review card, so test them on a team and addresses you
+control. The standard toolset and the standard MCP have no direct tool for
+either.
+
 Ask the agent to discover SDK entities and write a JavaScript module exporting
 `async function main({macro, session, execution})`. These are actual public SDK
 handles; for example, `macro.documents.search(...)` is an async iterator and

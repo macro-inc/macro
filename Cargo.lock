@@ -1165,6 +1165,7 @@ dependencies = [
  "entity_registry",
  "entity_registry_db_utils",
  "favorites",
+ "feature_flags",
  "foreign_entity",
  "forms",
  "frecency",
@@ -1241,6 +1242,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "unicode-segmentation",
+ "url",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -4877,6 +4879,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ca0197aee26d1ae37445ee532fefce43251d24cc7c166799f4d46817f1d3973"
 dependencies = [
  "crossbeam-utils",
+]
+
+[[package]]
+name = "connect_client"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "macro_tower_layers",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "url",
+ "utoipa",
+ "wiremock",
+ "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]
@@ -15308,6 +15331,7 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "chrono",
+ "connect_client",
  "futures",
  "http 1.4.0",
  "macro_authorization",
