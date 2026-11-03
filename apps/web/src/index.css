@@ -1497,7 +1497,8 @@ html[data-platform='ios'][data-touch-device='true'] :is(
     oklch(from var(--color-ink) l c h / 0.08),
     transparent
   );
-  animation: skeleton-shimmer 1.4s infinite;
+  /* Signal arrival once; pending geometry stays still during long requests. */
+  animation: skeleton-shimmer 1.4s;
 }
 
 @media (prefers-reduced-motion: reduce) {

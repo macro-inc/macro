@@ -52,6 +52,8 @@ Components, styling, and interaction conventions.
 
 - Place skeletons at the loaded content's position and dimensions; use the shared
   Macro `LoadingSpinner` when that geometry is unknown.
+- Skeletons shimmer once on entrance, then stay still while their request is
+  pending; never loop the sweep.
 - Prefer composition over configurability. Follow slot-based patterns (see
   src/features/channel, src/features/entity, or Kobalte).
 - Keep reusable components small, atomic, and decoupled from queries/complex
