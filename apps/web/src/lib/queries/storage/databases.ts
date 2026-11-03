@@ -383,6 +383,21 @@ export function createDatabase(params: {
     });
 }
 
+/** Copy a database into a new one the caller owns, answering the copy's id. */
+export function duplicateDatabase(params: {
+  id: string;
+  name: string;
+}): ResultAsync<string, ResultError<DatabaseSchemaErrorCode>[]> {
+  return storageServiceClient.databases
+    .duplicate({ id: params.id, name: params.name })
+    .map(({ id }) => {
+      queryClient.invalidateQueries({
+        queryKey: databasesKeys.list.queryKey,
+      });
+      return id;
+    });
+}
+
 /** Native sharing adapters retain Result so the shared dialog can render failures. */
 export function getDatabaseSharePermissions(id: string) {
   return storageServiceClient.databases.getPermissions({ id });

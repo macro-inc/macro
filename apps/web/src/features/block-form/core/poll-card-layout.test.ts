@@ -1,10 +1,10 @@
 import { expect, it } from 'vitest';
 import { pollCardHeight } from './poll-card-layout';
 
-it('reserves count-dependent space and bounds large polls', () => {
-  expect(pollCardHeight({ poll: { optionCount: 2 } })).toBe('18.25rem');
-  expect(pollCardHeight({ poll: { optionCount: 4 } })).toBe('24.75rem');
-  expect(pollCardHeight({ poll: { optionCount: 20 } })).toBe('40rem');
+it('reserves count-dependent space', () => {
+  expect(pollCardHeight({ poll: { optionCount: 2 } })).toBe('17rem');
+  expect(pollCardHeight({ poll: { optionCount: 4 } })).toBe('23.5rem');
+  expect(pollCardHeight({ poll: { optionCount: 20 } })).toBe('75.5rem');
 });
 
 it.each([

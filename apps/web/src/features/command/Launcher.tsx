@@ -12,11 +12,6 @@ import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { raiseKeyboardForNewTaskTitle } from '@app/features/task-composer/new-task-title-focus';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
-import {
-  endTrackedDocumentSpan,
-  registerDocumentSpan,
-  startDocumentSpan,
-} from '@block-md/observability';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
@@ -162,7 +157,7 @@ const createBlock = async (spec: {
   loading?: boolean;
   shouldInsert?: boolean;
   openCreated?: OpenCreatedItem;
-  /** Active creation span; registered by document id after creation. */
+  /** Active creation span, owned by the creation operation. */
   span?: Span;
 }) => {
   const { openWithSplit } = useSplitLayout();
@@ -185,13 +180,11 @@ const createBlock = async (spec: {
   const id = await createFn();
   if (!id) {
     span?.setAttr('error', true);
-    span?.end();
     split?.goBack();
     return;
   }
 
   span?.setAttr('document.id', id);
-  if (span) registerDocumentSpan(id, span);
 
   if (openCreated?.({ blockName, id })) {
     span?.event('doc.navigated');
@@ -286,7 +279,7 @@ export function runCreateAction(
 
   switch (blockName) {
     case 'md': {
-      const span = startDocumentSpan('doc.create');
+      const span = Telemetry.span('doc.create');
       span.setAttr('doc.type', 'md');
       span.setAttr('doc.source', source);
       span
@@ -308,9 +301,9 @@ export function runCreateAction(
         )
         .catch((error) => {
           span.error(error);
-          endTrackedDocumentSpan(span);
           reportCreateBlockError(error);
-        });
+        })
+        .finally(() => span.end());
       return;
     }
     case 'spreadsheet':

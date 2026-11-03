@@ -17,6 +17,8 @@ pub struct MacroUserAuthentication {
     pub origin: CredentialOrigin,
     /// Signed agent attribution for user-authorized SDK messages, not a bot credential.
     pub agent_id: Option<BotId>,
+    /// Signed label of the client the user drives `agent_id` through.
+    pub agent_via: Option<String>,
     /// The user's parsed Macro identifier.
     pub macro_user_id: MacroUserIdStr<'static>,
     /// The authenticated user context.
@@ -278,6 +280,8 @@ pub struct InternalAuthConfig {
 pub struct ValidatedIdentity {
     /// Agent attribution from a cryptographically verified Macro API token.
     pub agent_id: Option<BotId>,
+    /// Client label signed with `agent_id`, such as "Claude Code".
+    pub agent_via: Option<String>,
     /// The user's Macro identifier.
     pub user_id: String,
     /// The user's FusionAuth or root identifier.
@@ -304,6 +308,7 @@ impl ValidatedCredential {
             origin: CredentialOrigin::Session,
             identity: ValidatedIdentity {
                 agent_id: None,
+                agent_via: None,
                 user_id: context.user_id,
                 fusion_user_id: context.fusion_user_id,
                 organization_id: context.organization_id,

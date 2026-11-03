@@ -31,6 +31,9 @@ pub mod sharing;
 #[cfg(feature = "ports")]
 pub mod transfer;
 
+#[cfg(feature = "ports")]
+pub mod duplicate;
+
 /// Retry-safe first database provisioning.
 #[cfg(feature = "ports")]
 pub mod starter;

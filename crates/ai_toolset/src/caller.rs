@@ -23,10 +23,11 @@ pub enum ToolCaller {
 }
 
 impl ToolCaller {
-    /// The label a write made for this caller is shown "via", if any.
+    /// The client a write made for this caller is shown under, if any. An
+    /// MCP client that registered no name is shown as a generic one.
     pub fn via(&self) -> Option<&str> {
         match self {
-            Self::McpClient { name } => name.as_deref(),
+            Self::McpClient { name } => Some(name.as_deref().unwrap_or("MCP client")),
             Self::Agent(_) | Self::ApiKey => None,
         }
     }

@@ -1799,6 +1799,24 @@ enum GraphqlAgentPullRequestState {
 }
 
 """
+Who or what archived an agent session.
+"""
+enum GraphqlAgentSessionArchiveCause {
+	"""
+	A person archived it.
+	"""
+	USER
+	"""
+	Every pull request linked to it closed, with at least one merged.
+	"""
+	PULL_REQUEST_MERGED
+	"""
+	The runtime session backing it was deliberately closed.
+	"""
+	RUNTIME_CLOSED
+}
+
+"""
 The two operands of a recursive `AgentSessionFilterExpr` binary expression.
 """
 input GraphqlAgentSessionBinaryExpr {
@@ -7732,7 +7750,16 @@ type GraphqlSoupAgentSession implements GraphqlSoupEntity {
 	"""
 	Whether the session is archived and read-only.
 	"""
-	isArchived: Boolean!
+	isArchived: Boolean! @deprecated(reason: "Use archivedBy. Remove after 2026-12-03.")
+	"""
+	Who or what archived the session, or null while it is active. An archived session is
+	read-only.
+	"""
+	archivedBy: GraphqlAgentSessionArchiveCause
+	"""
+	When the session was archived, or null while it is active.
+	"""
+	archivedAt: String
 	"""
 	The principal identifier of the owner.
 	"""

@@ -14,6 +14,9 @@ use crate::domain::{
 #[cfg(test)]
 mod test;
 
+// The same lease bounds read-time recovery and processing-claim replacement.
+const PROCESSING_LEASE_SECONDS: f64 = 15.0 * 60.0;
+
 /// The AiProjectionRepositoryImpl is a wrapper around a sqlx::PgPool connected
 /// to macrodb.
 #[derive(Clone)]
@@ -111,9 +114,9 @@ impl AiProjectionRepository for AiProjectionRepositoryImpl {
         // A request for a projection bumps `last_requested_at` so the background
         // refresh handler can tell active instances apart from abandoned ones
         // (which it eventually deletes once they fall outside their expiry
-        // window). An instance created for an older prompt version is reset to
-        // cold — its previous result stays visible until regeneration
-        // overwrites it — while a same-version instance keeps its status.
+        // window). Revised or abandoned in-flight instances become cold; retained
+        // results remain visible until a new generation overwrites them.
+        let mut transaction = self.pool.begin().await.map_err(sqlx_err)?;
         sqlx::query!(
             r#"
             INSERT INTO user_ai_projection (ai_projection_id, target_id, prompt_hash, status)
@@ -134,9 +137,35 @@ impl AiProjectionRepository for AiProjectionRepositoryImpl {
             prompt_hash,
             ProjectionStatus::Cold.to_string(),
         )
-        .execute(&self.pool)
+        .execute(&mut *transaction)
         .await
         .map_err(sqlx_err)?;
+
+        // The upsert holds the instance row lock. Inspect its claim in a fresh
+        // statement snapshot: ON CONFLICT can observe a row committed after
+        // its original snapshot, so checking the claim inside it could miss
+        // the worker that just marked that instance loading.
+        sqlx::query!(
+            r#"
+            UPDATE user_ai_projection instance
+            SET status = 'cold'
+            WHERE instance.ai_projection_id = $1 AND instance.target_id = $2
+              AND instance.status = 'loading'
+              AND NOT EXISTS (
+                  SELECT 1 FROM processing_ai_projections processing
+                  WHERE processing.ai_projection_id = instance.ai_projection_id
+                    AND processing.target_id = instance.target_id
+                    AND processing.created_at >= NOW() - make_interval(secs => $3)
+              )
+            "#,
+            ai_projection_id,
+            target_id,
+            PROCESSING_LEASE_SECONDS,
+        )
+        .execute(&mut *transaction)
+        .await
+        .map_err(sqlx_err)?;
+        transaction.commit().await.map_err(sqlx_err)?;
 
         self.get_target_projection(ai_projection_id, target_id)
             .await
@@ -209,13 +238,14 @@ impl AiProjectionRepository for AiProjectionRepositoryImpl {
         target_id: &str,
     ) -> Result<bool, AiProjectionError> {
         // Reclaim claims left behind by crashed/stuck workers so they do not
-        // block reprocessing forever. The threshold is a SQL literal because
-        // `query!` binds parameters as typed values, not as an interval string.
+        // block reprocessing forever. Reads use this same processing lease
+        // when recovering an abandoned loading instance.
         sqlx::query!(
             r#"
             DELETE FROM processing_ai_projections
-            WHERE created_at < NOW() - INTERVAL '15 minutes'
+            WHERE created_at < NOW() - make_interval(secs => $1)
             "#,
+            PROCESSING_LEASE_SECONDS,
         )
         .execute(&self.pool)
         .await

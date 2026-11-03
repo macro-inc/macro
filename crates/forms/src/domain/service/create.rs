@@ -38,9 +38,13 @@ pub(super) const RESPONDENT_COLUMN: &str = "Respondent";
 /// Where a new form's table came from.
 #[derive(Clone, Copy)]
 enum Provenance {
-    /// A database made for the form, which goes by its name and may stay
-    /// out of Drive with it.
-    OwnDatabase { is_hidden_in_drive: bool },
+    /// A database made for the form, which goes by its name, may stay out
+    /// of Drive with it, and has no Respondent column when the form starts
+    /// anonymous.
+    OwnDatabase {
+        is_hidden_in_drive: bool,
+        anonymous: bool,
+    },
     /// A table of a database the creator already had.
     ExistingTable,
 }
@@ -159,8 +163,15 @@ where
         };
         let name = validated_name(&command.name)?;
         match command.source {
-            CreateSource::NewDatabase { is_hidden_in_drive } => {
-                self.create_over_new_database(creator, name, is_hidden_in_drive, id, status, policy)
+            CreateSource::NewDatabase {
+                is_hidden_in_drive,
+                anonymous,
+            } => {
+                let provenance = Provenance::OwnDatabase {
+                    is_hidden_in_drive,
+                    anonymous,
+                };
+                self.create_over_new_database(creator, name, provenance, id, status, policy)
                     .await
             }
             CreateSource::Table { receipt, table_id } => {
@@ -177,7 +188,7 @@ where
         &self,
         creator: Viewer,
         name: String,
-        is_hidden_in_drive: bool,
+        provenance: Provenance,
         id: FormId,
         status: FormStatus,
         policy: CreationPolicy,
@@ -196,7 +207,7 @@ where
                 &creator,
                 database.name,
                 database.id,
-                is_hidden_in_drive,
+                provenance,
                 id,
                 status,
                 policy,
@@ -219,14 +230,14 @@ where
 
     #[expect(
         clippy::too_many_arguments,
-        reason = "Attaching carries the new form's identity, status and Drive visibility"
+        reason = "Attaching carries the new form's identity, status and provenance"
     )]
     async fn attach_to_new_database(
         &self,
         creator: &Viewer,
         name: String,
         database_id: DatabaseId,
-        is_hidden_in_drive: bool,
+        provenance: Provenance,
         id: FormId,
         status: FormStatus,
         policy: CreationPolicy,
@@ -263,9 +274,16 @@ where
             id: ColumnId::new(),
             name: SUBMITTED_COLUMN.to_string(),
         };
-        let respondent = ManagedColumn::New {
-            id: ColumnId::new(),
-            name: RESPONDENT_COLUMN.to_string(),
+        let respondent = match provenance {
+            Provenance::OwnDatabase {
+                anonymous: true, ..
+            } => None,
+            Provenance::OwnDatabase { .. } | Provenance::ExistingTable => {
+                Some(ManagedColumn::New {
+                    id: ColumnId::new(),
+                    name: RESPONDENT_COLUMN.to_string(),
+                })
+            }
         };
         let mut ops = vec![DatabaseOp::Table {
             table: table.table.id,
@@ -277,7 +295,9 @@ where
         ops.extend(
             [
                 create_op(&table, &submitted, submitted_kind()),
-                create_op(&table, &respondent, respondent_kind()),
+                respondent
+                    .as_ref()
+                    .and_then(|respondent| create_op(&table, respondent, respondent_kind())),
             ]
             .into_iter()
             .flatten(),
@@ -315,10 +335,10 @@ where
         self.store_new_form(
             creator,
             name,
-            (submitted.id(), respondent.id()),
+            (submitted.id(), respondent.as_ref().map(ManagedColumn::id)),
             layout,
             &table,
-            Provenance::OwnDatabase { is_hidden_in_drive },
+            provenance,
             id,
             status,
         )
@@ -421,7 +441,7 @@ where
         self.store_new_form(
             &creator,
             name,
-            (submitted.id(), respondent.id()),
+            (submitted.id(), Some(respondent.id())),
             layout,
             &table,
             Provenance::ExistingTable,
@@ -442,7 +462,7 @@ where
         &self,
         creator: &Viewer,
         name: String,
-        (submitted, respondent): (ColumnId, ColumnId),
+        (submitted, respondent): (ColumnId, Option<ColumnId>),
         layout: FormLayout,
         table: &TableDetail,
         provenance: Provenance,
@@ -459,7 +479,7 @@ where
             database_id,
             table_id: table.table.id,
             submitted_column_id: Some(submitted),
-            respondent_column_id: Some(respondent),
+            respondent_column_id: respondent,
             audience: Audience::Members,
             tally_visible: false,
             status,
@@ -468,10 +488,20 @@ where
             branding: FormBranding::default(),
             created_at: now,
             updated_at: now,
+            project_id: None,
             is_hidden_in_drive: matches!(
                 provenance,
                 Provenance::OwnDatabase {
-                    is_hidden_in_drive: true
+                    is_hidden_in_drive: true,
+                    ..
+                }
+            ),
+            responses_visible: false,
+            anonymous: matches!(
+                provenance,
+                Provenance::OwnDatabase {
+                    anonymous: true,
+                    ..
                 }
             ),
         };

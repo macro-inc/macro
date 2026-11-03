@@ -16,6 +16,9 @@ import type {
   AgentSessionResponse,
   AnswerToolApprovalResponse,
   AppConnectedRequest,
+  ArchiveCause,
+  AutoArchiveOverridesBody,
+  AutoArchivePreferencesBody,
   CodingPreferencesBody,
   ControlRequest,
   ControlResponse,
@@ -31,6 +34,7 @@ import type {
   PullRequestsSessionsResponse,
   SandboxSize,
   SandboxSizeBody,
+  SessionAutoArchiveResponse,
   SessionPullRequestsResponse,
   SharePermissionV2,
   ToolApprovalAnswerDto,
@@ -38,7 +42,15 @@ import type {
   WarmAgentSessionResponse,
 } from './generated/schemas';
 
-export type { CodingPreferencesBody, SandboxSize, SandboxSizeBody };
+export type {
+  ArchiveCause,
+  AutoArchiveOverridesBody,
+  AutoArchivePreferencesBody,
+  CodingPreferencesBody,
+  SandboxSize,
+  SandboxSizeBody,
+  SessionAutoArchiveResponse,
+};
 
 const agentHarnessHost = SERVER_HOSTS['agent-harness'];
 
@@ -209,13 +221,13 @@ export const agentHarnessServiceClient = {
     ).then((result) => result.map(() => undefined));
   },
 
-  setArchived(sessionId: string, isArchived: boolean) {
+  setArchived(sessionId: string, archived: boolean) {
     return fetchWithToken<Record<string, never>>(
       `${agentHarnessHost}/agent-sessions/${sessionId}/archived`,
       {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isArchived }),
+        body: JSON.stringify({ archived }),
         errorResponseHandler: sessionError,
       }
     ).then((result) => result.map(() => undefined));
@@ -328,6 +340,48 @@ export const agentHarnessServiceClient = {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(preferences),
+      }
+    );
+  },
+
+  getAutoArchivePreferences() {
+    return fetchWithToken<AutoArchivePreferencesBody>(
+      `${agentHarnessHost}/agent-auto-archive-preferences`,
+      { method: 'GET' }
+    );
+  },
+
+  setAutoArchivePreferences(preferences: AutoArchivePreferencesBody) {
+    return fetchWithToken<AutoArchivePreferencesBody>(
+      `${agentHarnessHost}/agent-auto-archive-preferences`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(preferences),
+      }
+    );
+  },
+
+  /** The session's own auto-archive choices, its owner's defaults, and the archive a trigger made. */
+  getSessionAutoArchive(sessionId: string) {
+    return fetchWithToken<SessionAutoArchiveResponse>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/auto-archive`,
+      { method: 'GET', errorResponseHandler: sessionError }
+    );
+  },
+
+  /** Owner only; `null` follows the owner's default. */
+  setSessionAutoArchive(
+    sessionId: string,
+    overrides: AutoArchiveOverridesBody
+  ) {
+    return fetchWithToken<AutoArchiveOverridesBody>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/auto-archive`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(overrides),
+        errorResponseHandler: sessionError,
       }
     );
   },
