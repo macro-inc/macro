@@ -12,6 +12,7 @@ import type { SyncServiceSource } from '@macro-inc/collaboration/sync-service/so
 import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
 import { Telemetry } from '@macro-inc/observability';
 import type { LanguageModel } from 'ai';
+import type { LoroDoc } from 'loro-crdt';
 import { fastEditor, supervisor } from './ai-editing/agents';
 import { PeerPool } from './ai-editing/awareness';
 import type { DocumentOp } from './ai-editing/editor';
@@ -20,7 +21,6 @@ import type { UsageEntry } from './ai-editing/token-tracker';
 import type { CoderRunCode, DispatchEditTrace } from './ai-editing/tools';
 import { serializeWithXml } from './ai-editing/utils';
 import { EditingWorkspace } from './editing-workspace';
-import { loroRevision } from './revision';
 import { buildTraceSession, type TraceSession } from './trace-log';
 
 export type Provider = 'anthropic' | 'cerebras' | 'openai' | 'google';
@@ -102,13 +102,9 @@ export type RunEditResult = {
   /** Structured trace of the session; stored as JSON, rendered to markdown on demand. */
   session: TraceSession;
   clarification?: string;
-  /** Top-level blocks the applied ops touched or created, in document order. */
-  changedBlockIds: string[];
   /** The acknowledged version, encoded like sync-service's revisions. Without
    *  propagation nothing is committed, so it is the version the edit started from. */
   revision: string;
-  /** A short factual account of the applied changes, built from the document. */
-  summary: string;
 };
 
 export async function runEditSession(
@@ -238,7 +234,6 @@ export async function runEditSession(
           `sync service did not acknowledge ${dirty} document update(s); the edit may have applied`
         );
     });
-    const { changedBlockIds, summary } = workspace.changeReport();
     const revision = shouldPropagate
       ? loroRevision(manager.doc)
       : startRevision;
@@ -267,9 +262,7 @@ export async function runEditSession(
       ops: allOps,
       session,
       clarification,
-      changedBlockIds,
       revision,
-      summary,
     };
   } finally {
     workspace.dispose();
@@ -277,4 +270,9 @@ export async function runEditSession(
     manager.dispose();
     source.cleanup();
   }
+}
+
+/** The doc's version as sync-service reports a revision: base64 of the encoded oplog version. */
+function loroRevision(doc: LoroDoc): string {
+  return btoa(String.fromCharCode(...doc.oplogVersion().encode()));
 }

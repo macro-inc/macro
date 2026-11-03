@@ -27783,15 +27783,8 @@
       "DocumentAiEdited": {
         "type": "object",
         "description": "A completed edit by instructions.",
-        "required": ["summary", "changedBlockIds", "revision"],
+        "required": ["revision"],
         "properties": {
-          "changedBlockIds": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Durable ids of the blocks the edit touched."
-          },
           "clarification": {
             "type": ["string", "null"],
             "description": "What the editor needs to know to finish, when it applied part of the\nedit and stopped; the applied part stays."
@@ -27799,10 +27792,6 @@
           "revision": {
             "type": "string",
             "description": "The document's version after the edit, as sync-service encodes it."
-          },
-          "summary": {
-            "type": "string",
-            "description": "What changed, in words."
           }
         }
       },

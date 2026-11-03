@@ -5450,10 +5450,6 @@ export type DocumentAiEditRequest = {
  */
 export type DocumentAiEdited = {
     /**
-     * Durable ids of the blocks the edit touched.
-     */
-    changedBlockIds: Array<string>;
-    /**
      * What the editor needs to know to finish, when it applied part of the
      * edit and stopped; the applied part stays.
      */
@@ -5462,10 +5458,6 @@ export type DocumentAiEdited = {
      * The document's version after the edit, as sync-service encodes it.
      */
     revision: string;
-    /**
-     * What changed, in words.
-     */
-    summary: string;
 };
 
 /**

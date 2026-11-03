@@ -21,10 +21,6 @@ mod test;
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentAiEdited {
-    /// What changed, in words.
-    pub summary: String,
-    /// Durable ids of the blocks the edit touched.
-    pub changed_block_ids: Vec<String>,
     /// The document's version after the edit, as sync-service encodes it.
     pub revision: String,
     /// What the editor needs to know to finish, when it applied part of the
@@ -144,20 +140,18 @@ pub async fn edit_with_instructions<Worker: EditingWorkerService>(
             AiEditError::Worker(error) => DocumentAiEditError::Failed(error),
         })?;
     // A clarification with applied ops is a partial edit, not a refusal: the
-    // caller must see what changed so a retry doesn't apply it twice.
+    // caller must know part of it landed so a retry doesn't apply it twice.
     if result.edits_applied == 0
         && let Some(reason) = result.clarification
     {
         return Err(DocumentAiEditError::Refused(reason));
     }
-    let (Some(summary), Some(revision)) = (result.summary, result.revision) else {
+    let Some(revision) = result.revision else {
         return Err(DocumentAiEditError::Failed(anyhow::anyhow!(
-            "editing worker reported no summary or revision"
+            "editing worker reported no revision"
         )));
     };
     Ok(DocumentAiEdited {
-        summary,
-        changed_block_ids: result.changed_block_ids,
         revision,
         clarification: result.clarification,
     })

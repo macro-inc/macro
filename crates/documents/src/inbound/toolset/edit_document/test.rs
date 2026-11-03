@@ -643,9 +643,7 @@ impl EditingWorkerService for FakeEditingWorker {
             edits_applied: 1,
             usage: Vec::new(),
             clarification: None,
-            changed_block_ids: Vec::new(),
             revision: None,
-            summary: None,
         })
     }
 

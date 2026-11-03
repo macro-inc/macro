@@ -73,7 +73,7 @@ fn ai_editing(
 }
 
 #[tokio::test]
-async fn instructions_run_editdocuments_pipeline_and_return_what_changed() {
+async fn instructions_run_editdocuments_pipeline_and_return_the_revision() {
     let mut worker = MockEditingWorkerService::new();
     worker
         .expect_edit()
@@ -94,9 +94,7 @@ async fn instructions_run_editdocuments_pipeline_and_return_what_changed() {
                     edits_applied: 1,
                     usage: Vec::new(),
                     clarification: None,
-                    changed_block_ids: vec!["k3Fq".to_string()],
                     revision: Some("AQID".to_string()),
-                    summary: Some("Changed Q3 to Q4.".to_string()),
                 })
             })
         });
@@ -118,8 +116,6 @@ async fn instructions_run_editdocuments_pipeline_and_return_what_changed() {
     assert_eq!(
         edited,
         DocumentAiEdited {
-            summary: "Changed Q3 to Q4.".to_string(),
-            changed_block_ids: vec!["k3Fq".to_string()],
             revision: "AQID".to_string(),
             clarification: None,
         }
@@ -207,9 +203,7 @@ async fn a_clarification_is_a_refused_edit() {
                 edits_applied: 0,
                 usage: Vec::new(),
                 clarification: Some("Which of the two plans?".to_string()),
-                changed_block_ids: Vec::new(),
                 revision: None,
-                summary: None,
             })
         })
     });
@@ -243,9 +237,7 @@ async fn a_clarification_after_applied_ops_keeps_what_changed() {
                 edits_applied: 2,
                 usage: Vec::new(),
                 clarification: Some("Which of the two plans?".to_string()),
-                changed_block_ids: vec!["k3Fq".to_string()],
                 revision: Some("AQID".to_string()),
-                summary: Some("Edited 1 block.".to_string()),
             })
         })
     });
@@ -267,8 +259,6 @@ async fn a_clarification_after_applied_ops_keeps_what_changed() {
     assert_eq!(
         edited,
         DocumentAiEdited {
-            summary: "Edited 1 block.".to_string(),
-            changed_block_ids: vec!["k3Fq".to_string()],
             revision: "AQID".to_string(),
             clarification: Some("Which of the two plans?".to_string()),
         }
@@ -371,9 +361,7 @@ async fn bot_instructions_carry_the_user_and_bot_in_the_token_and_the_bot_name_o
                     edits_applied: 1,
                     usage: Vec::new(),
                     clarification: None,
-                    changed_block_ids: vec!["k3Fq".to_string()],
                     revision: Some("AQID".to_string()),
-                    summary: Some("Changed Q3 to Q4.".to_string()),
                 })
             })
         });

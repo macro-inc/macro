@@ -538,16 +538,16 @@ editing at the same time. Say where (name the section or quote the text) and
 describe the outcome:
 
 ```ts
-const { summary, changedBlocks, webUrl } = await document.edit(
+const { revision, webUrl } = await document.edit(
   'Rewrite the "Summary" section as three bullet points. Keep the heading.',
   { fast: true },
 );
 ```
 
-`options.queries` takes saved database questions (`SavedQuery` handles) to
-place; `options.signal` cancels the edit, keeping what was applied before the
-abort. A refused edit throws `DocumentEditRefusedError` with the editor's
-reason; `EditOutcomeUnknownError` means read the document before retrying.
+It returns the new revision, not a diff; read `content()` to see what changed.
+`options.signal` cancels the edit, keeping what was applied before the abort. A
+refused edit throws `DocumentEditRefusedError` with the editor's reason;
+`EditOutcomeUnknownError` means read the document before retrying.
 
 ### Document lifecycle and other resources
 

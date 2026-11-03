@@ -153,7 +153,7 @@ async fn word_document_requests_carry_the_token_and_surface_agent_errors() {
 
 #[cfg(feature = "ai_tools")]
 #[tokio::test]
-async fn edit_reports_what_the_worker_changed() {
+async fn edit_reports_the_revision_the_worker_left() {
     use axum::{Json, Router, routing::post};
 
     let app = Router::new().route(
@@ -162,8 +162,6 @@ async fn edit_reports_what_the_worker_changed() {
             Json(serde_json::json!({
                 "ops": [{}, {}],
                 "usage": [{ "model": "gemini-3.8-flash", "inputTokens": 12, "outputTokens": 3 }],
-                "changedBlockIds": ["k3Fq", "p9Zx"],
-                "summary": "Changed Q3 to Q4.",
                 "revision": "AQID",
             }))
         }),
@@ -189,7 +187,5 @@ async fn edit_reports_what_the_worker_changed() {
 
     assert_eq!(result.edits_applied, 2);
     assert_eq!(result.clarification, None);
-    assert_eq!(result.changed_block_ids, vec!["k3Fq", "p9Zx"]);
-    assert_eq!(result.summary.as_deref(), Some("Changed Q3 to Q4."));
     assert_eq!(result.revision.as_deref(), Some("AQID"));
 }

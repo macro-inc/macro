@@ -360,17 +360,7 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
             edits_applied: body["ops"].as_array().map(|a| a.len()).unwrap_or(0),
             usage,
             clarification: body["clarification"].as_str().map(str::to_owned),
-            changed_block_ids: body["changedBlockIds"]
-                .as_array()
-                .map(|ids| {
-                    ids.iter()
-                        .filter_map(serde_json::Value::as_str)
-                        .map(str::to_owned)
-                        .collect()
-                })
-                .unwrap_or_default(),
             revision: body["revision"].as_str().map(str::to_owned),
-            summary: body["summary"].as_str().map(str::to_owned),
         })
     }
 

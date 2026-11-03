@@ -95,9 +95,7 @@ async fn admitted_edit_keeps_worker_arguments_and_each_models_usage() {
                 Ok(EditResult {
                     edits_applied: 0,
                     clarification: Some("Which paragraph?".into()),
-                    changed_block_ids: Vec::new(),
                     revision: None,
-                    summary: None,
                     usage: vec![
                         EditUsage {
                             model: "model-a".into(),

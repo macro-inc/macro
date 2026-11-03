@@ -3,12 +3,6 @@ import type { MacroClient } from '../../utils/client';
 import { MacroApiError, unwrap } from '../../utils/unwrap';
 import type { Document } from './document';
 
-/** A saved database question, such as the `SavedQuery` a table's `saveQuery` returns. */
-export interface SavedQueryBlock {
-  /** The question's `<m-db-query>` block: its query id and presentation, never its SQL. */
-  toBlock(): string;
-}
-
 /**
  * An edit was sent but its outcome is unknown: the service reported a failure
  * after the edit started (HTTP 502), timed out (504), or the connection broke
@@ -27,14 +21,6 @@ export class EditOutcomeUnknownError extends MacroApiError {
 /** Options for `Document.edit`. */
 export interface DocumentEditOptions {
   /**
-   * Saved database questions to place, such as the `SavedQuery` a table's
-   * `saveQuery` returns. Their blocks are passed to the editor verbatim; say in
-   * the instructions where each goes and how to show it. The SQL never leaves
-   * the server.
-   */
-  queries?: SavedQueryBlock[];
-
-  /**
    * One fast model instead of the full pipeline: quicker and cheaper, for
    * small, local edits such as a sentence or a list.
    */
@@ -49,12 +35,8 @@ export interface DocumentEditOptions {
   signal?: AbortSignal;
 }
 
-/** What an instructions edit did. */
+/** What an instructions edit left; read the document to see what changed. */
 export interface DocumentEditResult {
-  /** What the editor changed, in words. */
-  summary: string;
-  /** Durable ids of the blocks it changed or created, in the document's XML view. */
-  changedBlocks: string[];
   /** The document's version after the edit (base64 Loro version vector). */
   revision: string;
   /** Link to the document in the Macro web app. */
@@ -92,15 +74,9 @@ export async function editWithInstructions(
 ): Promise<DocumentEditResult> {
   options.signal?.throwIfAborted();
 
-  const blocks = (options.queries ?? []).map((query) => query.toBlock());
-  const withQueries =
-    blocks.length === 0
-      ? instructions
-      : `${instructions}\n\nSaved database questions to place, verbatim:\n${blocks.join('\n')}`;
-
   const result = await client.storage.editDocumentWithAi({
     path: { document_id: document.id },
-    body: { instructions: withQueries, fast: options.fast ?? false },
+    body: { instructions, fast: options.fast ?? false },
     signal: options.signal,
   });
   // The client reports a cancelled fetch as an error result; surface the abort.
@@ -113,10 +89,8 @@ export async function editWithInstructions(
   if (result.error !== undefined && result.response === undefined)
     throw new EditOutcomeUnknownError(result.error, 0);
 
-  const { summary, changedBlockIds, revision, clarification } = unwrap(result);
+  const { revision, clarification } = unwrap(result);
   return {
-    summary,
-    changedBlocks: changedBlockIds,
     revision,
     webUrl: document.webUrl(),
     clarification: clarification ?? undefined,

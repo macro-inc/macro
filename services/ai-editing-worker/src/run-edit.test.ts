@@ -82,7 +82,7 @@ async function paragraphId(snapshot: Uint8Array): Promise<string> {
 }
 
 describe('runEditSession', () => {
-  it('reports the changed blocks, a summary and the acknowledged revision', async () => {
+  it('reports the revision the server acknowledged', async () => {
     const snapshot = (await markdownToLoroSnapshot('Ship in Q3.'))!;
     const { source, server } = syncService(snapshot);
     const paragraph = await paragraphId(snapshot);
@@ -112,8 +112,6 @@ describe('runEditSession', () => {
       runner: () => ops,
     });
 
-    expect(result.changedBlockIds).toEqual([paragraph, 'next-steps']);
-    expect(result.summary).toBe('Edited 1 block, inserted 1 heading.');
     expect(
       VersionVector.decode(Buffer.from(result.revision, 'base64')).compare(
         server.oplogVersion()

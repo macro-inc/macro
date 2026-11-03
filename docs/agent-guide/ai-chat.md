@@ -1202,8 +1202,8 @@ execution and verify its saved status does not claim unfinished work succeeded.
 For AI and templates, use the documented actual SDK methods with supplied fixture
 text, bounded parallel Jev classifications and a local Handlebars import. Check
 probabilities and per-item errors rather than assuming every branch succeeded.
-Check an AI edit separately with `document.edit(instructions)`: its result
-lists the summary, changed blocks, revision and web URL. Already dispatched
+Check an AI edit separately with `document.edit(instructions)`: it returns the
+new revision and web URL; read `content()` to see what changed. Already dispatched
 provider usage and completed writes may remain after cancellation.
 
 ## Code mode on the public MCP

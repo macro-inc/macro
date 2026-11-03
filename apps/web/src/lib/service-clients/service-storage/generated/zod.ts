@@ -18924,9 +18924,6 @@ export const editDocumentWithAiBody = zod
 
 export const editDocumentWithAiResponse = zod
   .object({
-    changedBlockIds: zod
-      .array(zod.string())
-      .describe('Durable ids of the blocks the edit touched.'),
     clarification: zod
       .string()
       .nullish()
@@ -18938,7 +18935,6 @@ export const editDocumentWithAiResponse = zod
       .describe(
         "The document's version after the edit, as sync-service encodes it."
       ),
-    summary: zod.string().describe('What changed, in words.'),
   })
   .describe('A completed edit by instructions.');
 

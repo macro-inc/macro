@@ -652,12 +652,6 @@ Re-exports [SavedFormResponse](../entities/forms/form/type-aliases/SavedFormResp
 
 ***
 
-### SavedQueryBlock
-
-Re-exports [SavedQueryBlock](../entities/documents/ai-edit/interfaces/SavedQueryBlock.md)
-
-***
-
 ### SessionAutoArchive
 
 Re-exports [SessionAutoArchive](../entities/agent-sessions/agent-session/type-aliases/SessionAutoArchive.md)

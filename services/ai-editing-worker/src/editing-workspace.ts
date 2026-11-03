@@ -23,7 +23,7 @@ import {
   PeerPool,
   realAwarenessSource,
 } from './ai-editing/awareness';
-import { type BlockChangeReport, BlockChanges, Doc } from './ai-editing/doc';
+import { Doc } from './ai-editing/doc';
 import type { Writer } from './ai-editing/tools';
 import { createWorkerAwareness } from './sources';
 
@@ -37,7 +37,6 @@ export class EditingWorkspace {
   private chain: Promise<void> = Promise.resolve();
   private readonly outstanding = new Map<Peer, AwarenessSource>();
   private readonly pool: PeerPool;
-  private readonly changes = new BlockChanges();
 
   constructor(
     private readonly manager: LoroManager<typeof MARKDOWN_LORO_SCHEMA>,
@@ -80,11 +79,7 @@ export class EditingWorkspace {
    *  `release` (on the returned writer) clears the cursor and returns the peer. */
   async borrowWriter(): Promise<Writer> {
     const peer = await this.pool.borrow();
-    const doc = new Doc(
-      this.session,
-      () => this.propagate(peer.peerId),
-      (change) => this.changes.record(change)
-    );
+    const doc = new Doc(this.session, () => this.propagate(peer.peerId));
     const awarenessSource = realAwarenessSource({
       mirror: this.manager.mirror!,
       doc: this.manager.doc,
@@ -99,11 +94,6 @@ export class EditingWorkspace {
       this.pool.release(peer);
     };
     return { doc, awarenessSource, release };
-  }
-
-  /** The top-level blocks writers' applied ops changed so far, and a summary. */
-  changeReport(): BlockChangeReport {
-    return this.changes.report(this.session);
   }
 
   /** Perform one final catch-all sync and wait for all queued propagation to finish. */

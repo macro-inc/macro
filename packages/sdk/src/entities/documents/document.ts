@@ -344,9 +344,9 @@ export class Document
    * - One coherent edit per call; split unrelated changes into separate calls.
    *
    * It can rewrite, insert, delete, move and format text, headings, lists,
-   * tables, links, mentions and dates, and place saved database questions
-   * passed in `options.queries`. It cannot read or write other documents, see
-   * comments or history, or change a saved question's SQL.
+   * tables, links, mentions and dates. It cannot read or write other
+   * documents or see comments or history. It returns the new revision, not a
+   * diff: read `content()` afterwards to see what changed.
    *
    * Throws `DocumentEditRefusedError` with the editor's reason when it can't do
    * the edit (nothing changed), `EditOutcomeUnknownError` when the outcome is
@@ -361,20 +361,11 @@ export class Document
    *
    * @example Rewrite a section.
    * ```js
-   * const result = await document.edit(
+   * const { webUrl } = await document.edit(
    *   'Rewrite the "Summary" section as three short bullet points covering ' +
    *     'scope, timeline and owners. Keep the "Summary" heading.',
    * );
-   * return { data: { summary: result.summary, url: result.webUrl } };
-   * ```
-   *
-   * @example Insert a saved database question as a live chart.
-   * ```js
-   * const query = await table.saveQuery({ sql, title: 'Pipeline', display: 'bar' });
-   * await document.edit(
-   *   'Insert the saved pipeline chart right after the "Results" heading.',
-   *   { queries: [query] },
-   * );
+   * return { data: { markdown: await document.content(), url: webUrl } };
    * ```
    *
    * @example Fix formatting.

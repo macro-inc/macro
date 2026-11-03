@@ -16,32 +16,19 @@ const macro = () =>
     hosts: { storage: 'https://storage.example.test' },
   });
 
-test('edit sends the instructions with each saved question block and returns what changed', async () => {
+test('edit sends the instructions and returns the revision', async () => {
   const requests: Request[] = [];
   globalThis.fetch = (async (input, init) => {
     const request = input instanceof Request ? input : new Request(input, init);
     requests.push(request);
-    return Response.json({
-      summary: 'Inserted a bar chart after "Results".',
-      changedBlockIds: ['q9'],
-      revision: 'AQID',
-    });
+    return Response.json({ revision: 'AQID' });
   }) as typeof fetch;
-  const query = {
-    toBlock: () =>
-      '<m-db-query>{"queryId":"q-1","prompt":"Pipeline","displayMode":"bar"}</m-db-query>',
-  };
 
   const result = await macro()
     .documents.byId('doc-1')
-    .edit('Insert the pipeline chart after "Results".', {
-      queries: [query],
-      fast: true,
-    });
+    .edit('Replace "Q3" with "Q4" in the "Timeline" section.', { fast: true });
 
   expect(result).toEqual({
-    summary: 'Inserted a bar chart after "Results".',
-    changedBlocks: ['q9'],
     revision: 'AQID',
     webUrl: 'https://macro.com/app/md/doc-1',
   });
@@ -49,8 +36,7 @@ test('edit sends the instructions with each saved question block and returns wha
   expect(requests[0].method).toBe('POST');
   expect(new URL(requests[0].url).pathname).toBe('/documents/doc-1/ai-edit');
   expect(await requests[0].json()).toEqual({
-    instructions:
-      'Insert the pipeline chart after "Results".\n\nSaved database questions to place, verbatim:\n<m-db-query>{"queryId":"q-1","prompt":"Pipeline","displayMode":"bar"}</m-db-query>',
+    instructions: 'Replace "Q3" with "Q4" in the "Timeline" section.',
     fast: true,
   });
 });
@@ -143,19 +129,15 @@ test('a timed-out or broken edit is reported as an unknown outcome', async () =>
   ).rejects.toMatchObject({ name: 'EditOutcomeUnknownError', status: 0 });
 });
 
-test('a partial edit returns what changed with the clarification', async () => {
+test('a partial edit returns the clarification', async () => {
   globalThis.fetch = (async (_input) =>
     Response.json({
-      summary: 'Edited 1 block.',
-      changedBlockIds: ['k3Fq'],
       revision: 'AQID',
       clarification: 'Which of the two plans?',
     })) as typeof fetch;
 
   expect(await macro().documents.byId('doc-1').edit('Fix both plans.')).toEqual(
     {
-      summary: 'Edited 1 block.',
-      changedBlocks: ['k3Fq'],
       revision: 'AQID',
       webUrl: 'https://macro.com/app/md/doc-1',
       clarification: 'Which of the two plans?',

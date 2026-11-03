@@ -9,7 +9,6 @@
 
 - [DocumentEditOptions](interfaces/DocumentEditOptions.md)
 - [DocumentEditResult](interfaces/DocumentEditResult.md)
-- [SavedQueryBlock](interfaces/SavedQueryBlock.md)
 
 ## Functions
 

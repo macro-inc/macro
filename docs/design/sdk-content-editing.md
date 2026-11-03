@@ -106,24 +106,24 @@ const result = await doc.edit(
   'In the "Risks" section, replace the paragraph starting "We expect" with two ' +
     'bullet points: supplier delay and hiring. Keep the heading unchanged.',
 );
-// { summary, changedBlocks: ['k3Fq', 'a9Lm'], revision, webUrl }
+// { revision, webUrl }, plus clarification after a partial edit
 ```
 
 - **Instructions** are natural language. The TSDoc says how to write good ones:
   name the section or quote the text to change, describe the outcome rather
   than the steps, and say what must stay as it is.
-- **`opts.queries`**: `SavedQuery` handles to place. `Table.saveQuery({ sql,
-  title, display })` (separate task) returns a handle whose `toBlock()` is the
-  saved question's `<m-db-query>` block. The SDK appends the blocks to the
-  instructions verbatim, as #9333's `EditDocument` path expects, so the model
-  places a live answer, table or chart and never sees or writes SQL.
+- **`opts.queries`** (with #9333's database ops): `SavedQuery` handles to
+  place. `Table.saveQuery({ sql, title, display })` (separate task) returns a
+  handle whose `toBlock()` is the saved question's `<m-db-query>` block. The SDK
+  appends the blocks to the instructions verbatim, so the model places a live
+  answer, table or chart and never sees or writes SQL.
 - **`opts.fast`**: the worker's single-model fast mode, as `EditDocument`'s
   `fast`. It suits small, local edits.
 - **`opts.signal`**: an `AbortSignal` that cancels the edit end to end (below).
-- **Result**: `summary` (what changed, in words), `changedBlocks` (the durable
-  ids of the blocks it touched, for a follow-up `structure()` read or a
-  structured edit), `revision` (the document's version after the edit: the
-  base64 Loro version vector, as sync-service encodes it) and `webUrl`.
+- **Result**: `revision` (the document's version after the edit: the base64
+  Loro version vector, as sync-service encodes it) and `webUrl`, plus
+  `clarification` when the editor applied part of the edit and stopped. No
+  diff: the program reads the document again to see what changed.
 - **Errors**: `DocumentEditRefusedError` with the editor's reason when it
   can't do the edit (the worker's clarification, an invalid block, a saved
   question without a query id); nothing changed. `EditOutcomeUnknownError` when
@@ -178,15 +178,15 @@ await Promise.allSettled(
   is unknown to the caller (`EditOutcomeUnknownError` semantics: read first).
 
 Per type, all with the same shape (`edit(instructions, { signal })` returning
-summary, what changed, the new revision and `webUrl`):
+the new revision, or the new document for `saveAs`, and `webUrl`):
 
-| Type | Method | Server pipeline | What changed | Abort |
-| --- | --- | --- | --- | --- |
-| Markdown, tasks | `doc.edit` | `EditDocument`'s (exists) | block ids | Yes, op by op; no rollback (above) |
-| Canvas | `canvas.edit` | `EditCanvas`'s (exists) | item ids | Yes; one commit, so all or nothing |
-| Spreadsheet | `sheet.edit` | New: one writer model | ranges | Yes until the commit; one commit |
-| Word | `wordDoc.edit` | New: one writer model | paragraph ids | Yes until the commit; one commit |
-| PowerPoint | `deck.edit` (with `saveAs` for a new deck) | New: one writer model | slides | Yes until the save; one version |
+| Type | Method | Server pipeline | Abort |
+| --- | --- | --- | --- |
+| Markdown, tasks | `doc.edit` | `EditDocument`'s (exists) | Yes, op by op; no rollback (above) |
+| Canvas | `canvas.edit` | `EditCanvas`'s (exists) | Yes; one commit, so all or nothing |
+| Spreadsheet | `sheet.edit` | New: one writer model | Yes until the commit; one commit |
+| Word | `wordDoc.edit` | New: one writer model | Yes until the commit; one commit |
+| PowerPoint | `deck.edit` (with `saveAs` for a new deck) | New: one writer model | Yes until the save; one version |
 
 **Spreadsheets, Word and PowerPoint have no AI edit pipeline on the server
 today.** `EditSpreadsheet`, `EditWordDocument` and `EditPresentation` take op
@@ -307,8 +307,8 @@ method documents how to use it in its TSDoc:
 - `edit` says how to write good instructions (be specific, quote the text to
   change, describe the outcome), what it can and cannot do (it can't run or
   change a saved question's SQL, see comments or history, or edit other
-  documents), and has worked examples: rewrite a section, insert a saved query
-  passed in `opts.queries`, fix formatting.
+  documents), and has worked examples: rewrite a section, fix formatting, abort
+  sibling edits.
 - Every structured method has a short worked `@example`: read, edit, and handle
   the conflict error where it has one.
 - Each method appears in a code-mode docs topic, checked by the documentation
@@ -322,12 +322,11 @@ new method as above, regenerates the SDK reference, the code-mode bundle and
 `covered_by_code_sdk`.
 
 1. **This design** (docs only).
-2. **Documents and tasks** (MACRO-4588), stacked on #9333 for its database
-   ops.
-   - `doc.edit(instructions, { queries, fast, signal })`: DSS `POST
+2. **Documents and tasks** (MACRO-4588).
+   - `doc.edit(instructions, { fast, signal })`: DSS `POST
      /documents/{id}/ai-edit` over `EditDocument`'s domain service; the
-     worker's `/edit` returns changed block ids and the revision. Hides
-     `EditDocument`.
+     worker's `/edit` returns the revision. Hides `EditDocument`.
+   - With #9333: `opts.queries` and the structured layer below.
    - Structured layer: `packages/editor-ops` with the document builder
      (accepting `SavedQuery`, table and view handles); worker `POST
      /document-ops`, model-free and all or nothing; DSS `GET
