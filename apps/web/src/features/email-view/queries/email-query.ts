@@ -10,7 +10,11 @@ import {
 } from '@app/features/soup';
 import type { SoupAstBody, SoupAstItemsQueryArgs } from '@queries/soup/items';
 import { match } from 'ts-pattern';
-import { EMAIL_FACETS, type EmailFacetContext } from '../filters/email-facets';
+import {
+  EMAIL_ATTACHMENT_KINDS,
+  EMAIL_FACETS,
+  type EmailFacetContext,
+} from '../filters/email-facets';
 import type {
   EmailParticipantField,
   EmailTab,
@@ -126,8 +130,15 @@ function participantsClause(scope: EmailSavedViewScope): TargetExpr {
   return balancedOr(leaves) ?? clause.eq('threadId', NIL_UUID);
 }
 
+const isAttachmentFilter = (
+  id: string
+): id is keyof typeof EMAIL_ATTACHMENT_KINDS => id in EMAIL_ATTACHMENT_KINDS;
+
 /** Each condition narrows the view; alternatives within one are OR'd. */
-function savedViewClause(scope: EmailSavedViewScope): TargetExpr {
+function savedViewClause(
+  scope: EmailSavedViewScope,
+  facets: EmailQueryContext['facets']
+): TargetExpr {
   const { conditions } = scope;
   const expressions: TargetExpr[] = [clause.eq('emailShared', 'exclude')];
   if (conditions.importance)
@@ -142,6 +153,13 @@ function savedViewClause(scope: EmailSavedViewScope): TargetExpr {
   if (subject) expressions.push(subject);
   if (scope.receivedSince)
     expressions.push(clause.eq('emailUpdatedAt', { gte: scope.receivedSince }));
+  // Pages would come back short if attachments only refined them locally.
+  const attachments = balancedOr(
+    (facets.attachments ?? [])
+      .filter(isAttachmentFilter)
+      .map((id) => clause.eq('emailAttachment', EMAIL_ATTACHMENT_KINDS[id]))
+  );
+  if (attachments) expressions.push(attachments);
   return clause.and(...expressions);
 }
 
@@ -210,7 +228,9 @@ export function buildEmailQuery(
   admittedIds?: readonly string[]
 ): SoupAstItemsQueryArgs {
   const expressions = [
-    context.savedView ? savedViewClause(context.savedView) : tabClause(context),
+    context.savedView
+      ? savedViewClause(context.savedView, context.facets)
+      : tabClause(context),
   ];
   if (admittedIds) {
     expressions.push(threadIdsClause(admittedIds));

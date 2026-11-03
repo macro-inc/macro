@@ -54,22 +54,23 @@ function doneOption(
   };
 }
 
-// The server filters on denormalized thread flags; the predicate keeps
-// loaded rows in step with each thread's attachment mime types.
+/** The server's attachment kind for each attachment filter. */
+export const EMAIL_ATTACHMENT_KINDS = {
+  'attachment-pdf': 'pdf',
+  'attachment-image': 'image',
+  'attachment-document': 'document',
+} as const;
+
+// Built-in tabs refine loaded pages client-side from each thread's attachment
+// mime types, as the legacy mail view did. Saved views add the server's
+// attachment-kind filter (`email-query.ts`), which needs backfilled thread flags.
 function attachmentOption(
-  id: EmailFilterOptionId,
+  id: keyof typeof EMAIL_ATTACHMENT_KINDS,
   label: string,
   iconType: EntityIconSelector,
-  kind: 'pdf' | 'image' | 'document',
   predicate: (entity: EntityData) => boolean
 ): EmailFacetOption {
-  return {
-    id,
-    label,
-    iconType,
-    clause: { ef: clause.eq('emailAttachment', kind) },
-    predicate,
-  };
+  return { id, label, iconType, predicate };
 }
 
 const EMAIL_READ_OPTIONS: EmailFacetOption[] = [
@@ -83,17 +84,10 @@ const EMAIL_DONE_OPTIONS: EmailFacetOption[] = [
 ];
 
 const EMAIL_ATTACHMENT_OPTIONS: EmailFacetOption[] = [
-  attachmentOption(
-    'attachment-pdf',
-    'PDFs',
-    'pdf',
-    'pdf',
-    hasPdfAttachmentFilter
-  ),
+  attachmentOption('attachment-pdf', 'PDFs', 'pdf', hasPdfAttachmentFilter),
   attachmentOption(
     'attachment-image',
     'Images',
-    'image',
     'image',
     hasImageAttachmentFilter
   ),
@@ -101,7 +95,6 @@ const EMAIL_ATTACHMENT_OPTIONS: EmailFacetOption[] = [
     'attachment-document',
     'Documents',
     'files',
-    'document',
     hasDocumentAttachmentFilter
   ),
 ];

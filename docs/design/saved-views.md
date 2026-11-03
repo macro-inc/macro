@@ -513,3 +513,8 @@ Email is the second consumer (`kind: "email"`, `version: 1`), behind the
 - Sidebar rows show an unread dot from each view's first unread page (presence,
   never a count), drag to reorder on desktop, and offer Move up/Move down in
   every list, including the mobile picker.
+- Rollout: apply the `saved_view_position` and attachment-flag migrations,
+  deploy the backend (reorder mutation, `Subject` and `Attachment` literals),
+  and run `email_service`'s `backfill_attachment_flags` before turning on the
+  flag. Only saved views send the attachment-kind filter; built-in tabs keep
+  refining attachments on the client, so they don't depend on the backfill.
