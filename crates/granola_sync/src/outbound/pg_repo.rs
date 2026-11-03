@@ -2,55 +2,34 @@ use crate::domain::{
     models::*,
     ports::{Result, SyncRepository},
 };
-use aes_gcm::{
-    Aes256Gcm, KeyInit,
-    aead::{Aead, AeadCore, OsRng, Payload},
-};
 use async_trait::async_trait;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use row_cipher::RowCipher;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 /// Signing secrets are encrypted at rest and bound to their connection ID.
 pub struct PgSyncRepository {
     pool: PgPool,
-    cipher: Aes256Gcm,
+    cipher: RowCipher,
 }
 
 impl PgSyncRepository {
     pub fn new(pool: PgPool, key: &[u8; 32]) -> Self {
         Self {
             pool,
-            cipher: Aes256Gcm::new(key.into()),
+            cipher: RowCipher::new(key),
         }
     }
     fn encrypt(&self, id: Uuid, secret: SigningSecret) -> Result<Vec<u8>> {
-        let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
-        let ciphertext = self
-            .cipher
-            .encrypt(
-                &nonce,
-                Payload {
-                    msg: secret.0.as_bytes(),
-                    aad: id.as_bytes(),
-                },
-            )
-            .map_err(|_| rootcause::report!("could not encrypt webhook secret"))?;
-        Ok([&nonce[..], &ciphertext].concat())
+        self.cipher
+            .seal(id, secret.0.as_bytes())
+            .map_err(|_| rootcause::report!("could not encrypt webhook secret"))
     }
     fn decrypt(&self, id: Uuid, data: Vec<u8>) -> Result<SigningSecret> {
-        if data.len() < 12 {
-            return Err(rootcause::report!("invalid encrypted webhook secret"));
-        }
         let plaintext = self
             .cipher
-            .decrypt(
-                data[..12].into(),
-                Payload {
-                    msg: &data[12..],
-                    aad: id.as_bytes(),
-                },
-            )
+            .open(id, &data)
             .map_err(|_| rootcause::report!("could not decrypt webhook secret"))?;
         Ok(SigningSecret(String::from_utf8(plaintext)?))
     }
