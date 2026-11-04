@@ -15,6 +15,7 @@ use macro_event_topics::MacroDocumentsTopic;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::FileType;
 use model_owner::Owner;
+use models_entity_access_management::EntityAccessSource;
 use serde::{Deserialize, Serialize};
 
 use super::models::FileTypeUpdate;
@@ -189,6 +190,14 @@ impl DocumentSyncContentUpdatedMetadata {
 pub struct DocumentPurgedMetadata {
     /// The id of the hard-deleted document.
     pub document_id: String,
+    /// Grants the document had before the purge removed them, so realtime
+    /// consumers can still reach the people they covered. Grants, not users, so
+    /// a document shared with a whole team stays one entry. Empty when the
+    /// purge did not read them. Internal routing data: webhooks never deliver
+    /// purges, so the published schema leaves it out.
+    #[cfg_attr(feature = "schema", schema(ignore))]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub audience: Vec<EntityAccessSource>,
 }
 
 /// Why a document interaction was reported.

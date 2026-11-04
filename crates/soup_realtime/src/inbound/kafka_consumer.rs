@@ -153,6 +153,15 @@ fn patches_from_document_event(event: &DocumentTopicEvent) -> Vec<SoupRealtimePa
         {
             push_unique_update(&mut updates, EntityType::Document, &metadata.document_id);
         }
+        // The purge removed the access recipients resolve from, so it carries the
+        // users who had it. A purge without them follows a soft delete that was
+        // already announced.
+        DocumentTopicEvent::Purged(metadata) if !metadata.audience.is_empty() => {
+            updates.push(
+                delete(EntityType::Document, &metadata.document_id)
+                    .with_audience(metadata.audience.clone()),
+            );
+        }
         DocumentTopicEvent::Interaction(_)
         | DocumentTopicEvent::ContentUploaded(_)
         | DocumentTopicEvent::SyncContentUpdated(_)
@@ -166,8 +175,13 @@ fn patches_from_initiative_event(event: &InitiativeTopicEvent) -> Vec<SoupRealti
         InitiativeTopicEvent::Created(change) | InitiativeTopicEvent::Updated(change) => {
             vec![update(EntityType::Initiative, change.initiative_id)]
         }
-        InitiativeTopicEvent::Purged { initiative_id } => {
-            vec![delete(EntityType::Initiative, initiative_id)]
+        // The delete removed the access recipients resolve from, so the event
+        // carries the users who had it.
+        InitiativeTopicEvent::Purged {
+            initiative_id,
+            audience,
+        } => {
+            vec![delete(EntityType::Initiative, initiative_id).with_audience(audience.clone())]
         }
     }
 }

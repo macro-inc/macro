@@ -10,13 +10,14 @@ use crate::domain::{
     },
     ports::{
         AccessRepository, AccessibleDatabases, AccessibleForms, AccessiblePipelines,
-        EntityAccessService, ScheduledActionGrants,
+        EntityAccessService, EntityAccessSources, ScheduledActionGrants,
     },
 };
 use futures::{StreamExt, stream};
 use macro_user_id::{
     cowlike::CowLike, lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr,
 };
+use models_entity_access_management::EntityAccessSource;
 use tracing::Level;
 use uuid::Uuid;
 
@@ -866,6 +867,32 @@ where
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Option<UserTeamInfo>, AccessError> {
         self.repo.get_user_team(user_id).await
+    }
+}
+
+impl<R: AccessRepository> EntityAccessSources for EntityAccessServiceImpl<R> {
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
+    async fn access_sources(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Result<Vec<EntityAccessSource>, AccessError> {
+        let entity_id = Uuid::parse_str(entity_id)
+            .map_err(|_| AccessError::BadRequest("invalid entity_id for access_sources"))?;
+        self.repo
+            .get_entity_access_sources(&entity_id, entity_type)
+            .await
+    }
+
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self, sources), fields(source_count = sources.len()))]
+    async fn users_for_sources(
+        &self,
+        sources: &[EntityAccessSource],
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        if sources.is_empty() {
+            return Ok(Vec::new());
+        }
+        self.repo.get_users_for_sources(sources).await
     }
 }
 

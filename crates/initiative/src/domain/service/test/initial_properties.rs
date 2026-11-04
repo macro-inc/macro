@@ -46,6 +46,12 @@ impl InitiativeResources for RecordingResources {
             }
         })
     }
+    fn audience(
+        &self,
+        _id: InitiativeId,
+    ) -> ResourceFuture<'_, Vec<entity_access::domain::models::EntityAccessSource>> {
+        panic!("a create never reads an audience")
+    }
     fn purge(&self, _receipt: EntityAccessReceipt<EditAccessLevel>) -> ResourceFuture<'_, ()> {
         panic!("a create never purges through a receipt")
     }

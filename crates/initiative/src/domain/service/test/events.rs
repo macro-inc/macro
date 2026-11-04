@@ -79,6 +79,64 @@ impl InitiativeEventPublisher for Events {
     }
 }
 
+/// The owner's grant and a team's, as a delete would read them.
+fn grants() -> Vec<entity_access::domain::models::EntityAccessSource> {
+    use entity_access::domain::models::{EntityAccessSource, EntityAccessSourceType};
+    vec![
+        EntityAccessSource {
+            source_type: EntityAccessSourceType::User,
+            source_id: OWNER.to_owned(),
+        },
+        EntityAccessSource {
+            source_type: EntityAccessSourceType::Team,
+            source_id: "00000000-0000-0000-0000-0000000000aa".to_owned(),
+        },
+    ]
+}
+
+#[tokio::test]
+async fn deletion_announces_the_audience_read_before_access_is_removed() {
+    let audience_read = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let read_before_delete = audience_read.clone();
+    let mut repo = MockInitiativeRepo::new();
+    repo.expect_delete().times(1).return_once(move |_| {
+        assert!(read_before_delete.load(std::sync::atomic::Ordering::SeqCst));
+        Box::pin(async { Ok(()) })
+    });
+    let events = Arc::new(Events::default());
+    InitiativeServiceImpl::new(
+        repo,
+        deleting_surfaces(),
+        Arc::new(reads::FakeResources::with_audience(grants(), audience_read)),
+    )
+    .with_event_publisher(events.clone())
+    .delete(owner_receipt())
+    .await
+    .unwrap();
+    let recorded = events.0.lock().unwrap();
+    let [InitiativeTopicEvent::Purged { audience, .. }] = recorded.as_slice() else {
+        panic!("one purge")
+    };
+    assert_eq!(audience, &grants());
+}
+
+#[tokio::test]
+async fn audience_failure_keeps_the_initiative_and_publishes_nothing() {
+    let mut repo = MockInitiativeRepo::new();
+    repo.expect_delete().never();
+    let events = Arc::new(Events::default());
+    let result = InitiativeServiceImpl::new(
+        repo,
+        MockInitiativeDescriptionSurfaces::new(),
+        Arc::new(reads::FakeResources::failing_audience()),
+    )
+    .with_event_publisher(events.clone())
+    .delete(owner_receipt())
+    .await;
+    assert!(result.is_err());
+    assert!(events.0.lock().unwrap().is_empty());
+}
+
 #[tokio::test]
 async fn committed_deletion_purges_activity_even_when_description_cleanup_fails() {
     let mut repo = MockInitiativeRepo::new();

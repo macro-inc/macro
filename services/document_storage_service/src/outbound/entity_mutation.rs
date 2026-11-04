@@ -10,6 +10,7 @@ use crate::{
         entity_mutation::{EntityLifecycleService, LifecycleError},
     },
 };
+use documents_hex::domain::purge::DocumentAudience;
 use entity_mutation::EntityMutationActor;
 use macro_event_broker::MacroEventBroker;
 use macro_sha_count_client::Redis;
@@ -33,26 +34,37 @@ fn row_error(error: sqlx::Error) -> LifecycleError {
 }
 
 /// Production lifecycle adapter backed by the legacy persistence clients.
-pub struct DssEntityLifecycleAdapter<B: MacroEventBroker> {
+pub struct DssEntityLifecycleAdapter<B: MacroEventBroker, A: DocumentAudience> {
     db: PgPool,
     redis: Arc<Redis>,
     sqs: Arc<sqs_client::SQS>,
     event_broker: B,
+    audience: A,
 }
 
-impl<B: MacroEventBroker> DssEntityLifecycleAdapter<B> {
-    /// Construct the adapter from concrete outbound dependencies.
-    pub fn new(db: PgPool, redis: Arc<Redis>, sqs: Arc<sqs_client::SQS>, event_broker: B) -> Self {
+impl<B: MacroEventBroker, A: DocumentAudience> DssEntityLifecycleAdapter<B, A> {
+    /// Construct the adapter from concrete outbound dependencies and the
+    /// documents' audience, read before a permanent delete removes it.
+    pub fn new(
+        db: PgPool,
+        redis: Arc<Redis>,
+        sqs: Arc<sqs_client::SQS>,
+        event_broker: B,
+        audience: A,
+    ) -> Self {
         Self {
             db,
             redis,
             sqs,
             event_broker,
+            audience,
         }
     }
 }
 
-impl<B: MacroEventBroker> EntityLifecycleService for DssEntityLifecycleAdapter<B> {
+impl<B: MacroEventBroker, A: DocumentAudience> EntityLifecycleService
+    for DssEntityLifecycleAdapter<B, A>
+{
     async fn update_thread_share_policy(
         &self,
         _actor: &EntityMutationActor,
@@ -117,6 +129,12 @@ impl<B: MacroEventBroker> EntityLifecycleService for DssEntityLifecycleAdapter<B
         let document = macro_db_client::document::get_basic_document(&self.db, &entity.entity_id)
             .await
             .map_err(row_error)?;
+        // The row delete below removes the access realtime recipients resolve from.
+        let audience = self
+            .audience
+            .sources(&entity.entity_id)
+            .await
+            .map_err(|error| internal!(error))?;
         if document.file_type.as_deref() == Some("docx") {
             let bom_parts = macro_db_client::document::get_bom_parts(&self.db, &entity.entity_id)
                 .await
@@ -143,7 +161,7 @@ impl<B: MacroEventBroker> EntityLifecycleService for DssEntityLifecycleAdapter<B
             .enqueue_document_delete(&owner, &entity.entity_id)
             .await
             .map_err(|error| internal!(error))?;
-        publish_document_purged_event(&self.event_broker, &entity.entity_id)
+        publish_document_purged_event(&self.event_broker, &entity.entity_id, audience)
             .map_err(|error| internal!(error))?;
         Ok(document
             .project_id

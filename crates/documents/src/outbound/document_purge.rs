@@ -3,8 +3,13 @@
 use super::super::domain::{
     models::DocumentError,
     purge::{
-        DocumentPurgeQueue, DocumentPurgeRepository, DocxPartReferences, PurgeTarget, PurgedRows,
+        DocumentAudience, DocumentPurgeQueue, DocumentPurgeRepository, DocxPartReferences,
+        PurgeTarget, PurgedRows,
     },
+};
+use entity_access::domain::{
+    models::{EntityAccessSource, EntityType},
+    ports::EntityAccessSources,
 };
 use model_owner::Owner;
 use std::sync::Arc;
@@ -105,6 +110,33 @@ impl DocxPartReferences for RedisDocxPartReferences {
             .release_shas(shas)
             .await
             .map_err(DocumentError::Internal)
+    }
+}
+
+/// A document's grants as the entity access service reads them.
+pub struct EntityAccessDocumentAudience<S> {
+    access: Arc<S>,
+}
+
+impl<S> EntityAccessDocumentAudience<S> {
+    /// Compose from the application's entity access service.
+    pub fn new(access: Arc<S>) -> Self {
+        Self { access }
+    }
+}
+
+impl<S: EntityAccessSources> DocumentAudience for EntityAccessDocumentAudience<S> {
+    #[tracing::instrument(skip(self), err)]
+    async fn sources(&self, document_id: &str) -> Result<Vec<EntityAccessSource>, DocumentError> {
+        // Entity access keys grants by UUID. A legacy document id has none to read,
+        // and realtime could not resolve recipients for it either.
+        if uuid::Uuid::parse_str(document_id).is_err() {
+            return Ok(Vec::new());
+        }
+        self.access
+            .access_sources(document_id, EntityType::Document)
+            .await
+            .map_err(|error| DocumentError::Internal(error.into()))
     }
 }
 

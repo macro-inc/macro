@@ -22,6 +22,12 @@ impl InitiativeResources for VisibleResources {
     ) -> ResourceFuture<'_, ()> {
         panic!("read-only fixture")
     }
+    fn audience(
+        &self,
+        _: InitiativeId,
+    ) -> ResourceFuture<'_, Vec<entity_access::domain::models::EntityAccessSource>> {
+        panic!("read-only fixture")
+    }
     fn purge(&self, _: EntityAccessReceipt<EditAccessLevel>) -> ResourceFuture<'_, ()> {
         panic!("read-only fixture")
     }

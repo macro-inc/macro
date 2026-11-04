@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT\n            source_type AS \"source_type!: EntityAccessSourceType\",\n            source_id\n        FROM entity_access\n        WHERE entity_id = $1\n          AND entity_type = $2\n          AND source_type IN ('user', 'channel', 'team')\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_type!: EntityAccessSourceType",
+        "type_info": {
+          "Custom": {
+            "name": "entity_access_source_type",
+            "kind": {
+              "Enum": [
+                "channel",
+                "team",
+                "user",
+                "bot"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "source_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "8bd83227842caa48237c9659715421632d77380be664dcd649b0c6a7b5c0f5bf"
+}

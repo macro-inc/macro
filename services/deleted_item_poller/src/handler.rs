@@ -42,6 +42,7 @@ async fn publish_document_purge_events<B: MacroEventBroker>(
                 document_id.clone(),
                 DocumentPurgedMetadata {
                     document_id: document_id.clone(),
+                    audience: Vec::new(),
                 },
             )
         })

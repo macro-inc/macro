@@ -6,14 +6,16 @@ use model_owner::Owner;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use super::LegacyDocumentPurgeRepository;
+use super::{EntityAccessDocumentAudience, LegacyDocumentPurgeRepository};
 use crate::domain::{
     models::DocumentError,
     purge::{
-        DocumentPurgeQueue, DocumentPurgeRepository, DocumentPurgeService, DocumentPurger,
-        DocxPartReferences,
+        DocumentAudience, DocumentPurgeQueue, DocumentPurgeRepository, DocumentPurgeService,
+        DocumentPurger, DocxPartReferences,
     },
 };
+use entity_access::domain::models::EntityAccessSource;
+use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 
 const DOCX: &str = "93000000-0000-0000-0000-000000000011";
 
@@ -48,6 +50,15 @@ impl DocxPartReferences for Arc<RecordingPartReferences> {
     }
 }
 
+/// The audience is the entity access service's to resolve; these tests cover the rows.
+struct NoAudience;
+
+impl DocumentAudience for NoAudience {
+    async fn sources(&self, _: &str) -> Result<Vec<EntityAccessSource>, DocumentError> {
+        Ok(Vec::new())
+    }
+}
+
 struct Fixture {
     queue: Arc<CapturingQueue>,
     part_references: Arc<RecordingPartReferences>,
@@ -55,6 +66,7 @@ struct Fixture {
         LegacyDocumentPurgeRepository,
         Arc<CapturingQueue>,
         Arc<RecordingPartReferences>,
+        NoAudience,
         NoopMacroEventBroker,
     >,
 }
@@ -72,6 +84,7 @@ fn fixture(pool: &PgPool) -> Fixture {
         LegacyDocumentPurgeRepository::new(pool.clone()),
         queue.clone(),
         part_references.clone(),
+        NoAudience,
         NoopMacroEventBroker,
     );
     Fixture {
@@ -154,4 +167,16 @@ async fn purge_of_a_missing_document_is_ok(pool: PgPool) {
     let fixture = fixture(&pool);
     fixture.purger.purge(Uuid::now_v7()).await.unwrap();
     assert!(fixture.queue.documents.lock().unwrap().is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_legacy_document_id_has_an_empty_audience_instead_of_an_error(pool: PgPool) {
+    let audience = EntityAccessDocumentAudience::new(Arc::new(EntityAccessServiceImpl::new(
+        PgAccessRepository::new(pool),
+    )));
+
+    assert_eq!(
+        audience.sources("legacy-document").await.unwrap(),
+        Vec::new()
+    );
 }

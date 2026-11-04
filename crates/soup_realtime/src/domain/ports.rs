@@ -4,6 +4,7 @@ use std::future::Future;
 
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
+use models_entity_access_management::EntityAccessSource;
 use rootcause::Report;
 
 use super::models::{Patch, SoupRealtimeMessage, SoupRealtimePatch};
@@ -70,6 +71,13 @@ pub trait UserAccessExpander: Send + Sync + 'static {
     fn expand_user_access(
         &self,
         entity: &Entity<'static>,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
+
+    /// Returns the users `sources` reach now: user grants themselves, channel
+    /// participants and team members. Duplicates are allowed here too.
+    fn expand_sources(
+        &self,
+        sources: &[EntityAccessSource],
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
 }
 

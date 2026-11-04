@@ -319,6 +319,7 @@ fn team_creation_prefers_explicit_actor_then_on_behalf_of_then_system() {
 fn purge_requests_entity_deletion() {
     let event = envelope(DocumentTopicEvent::Purged(DocumentPurgedMetadata {
         document_id: DOCUMENT_ID.to_string(),
+        audience: Vec::new(),
     }));
 
     assert_eq!(

@@ -31,7 +31,8 @@ fn unattributable_mutations_are_ignored_but_purges_are_applied() {
     );
     assert_eq!(
         InitiativeTopicEvent::Purged {
-            initiative_id: id(1)
+            initiative_id: id(1),
+            audience: Vec::new(),
         }
         .ingest(uuid::Uuid::from_u128(9)),
         Ingest::Purge(vec![(activity::EntityType::Initiative, id(1).to_string())])

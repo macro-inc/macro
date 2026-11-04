@@ -673,6 +673,21 @@ impl AccessRepository for MockRepo {
         Ok(self.channel_users.lock().await.clone())
     }
 
+    async fn get_entity_access_sources(
+        &self,
+        _entity_id: &Uuid,
+        _entity_type: EntityType,
+    ) -> Result<Vec<models_entity_access_management::EntityAccessSource>, AccessError> {
+        unimplemented!("grant sources are covered by the repository tests")
+    }
+
+    async fn get_users_for_sources(
+        &self,
+        _sources: &[models_entity_access_management::EntityAccessSource],
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        unimplemented!("grant sources are covered by the repository tests")
+    }
+
     async fn get_call_channel(
         &self,
         _call_id: &Uuid,

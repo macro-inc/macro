@@ -5,6 +5,7 @@ use super::{
     events::{DocumentMacroEvent, DocumentPurgedMetadata},
     models::DocumentError,
 };
+use entity_access::domain::models::EntityAccessSource;
 use macro_event_broker::MacroEventBroker;
 use model_owner::Owner;
 use rootcause::{Report, prelude::*};
@@ -67,6 +68,17 @@ pub trait DocumentPurgeQueue: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 }
 
+/// Who can currently see a document, as its grants.
+pub trait DocumentAudience: Send + Sync + 'static {
+    /// The document's user, channel and team grants. A purge reads them before
+    /// the row delete removes them, so realtime consumers can still reach the
+    /// people they cover.
+    fn sources(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<Vec<EntityAccessSource>, DocumentError>> + Send;
+}
+
 /// Reference counts of stored docx parts, which documents share by SHA.
 pub trait DocxPartReferences: Send + Sync + 'static {
     /// Drop one reference per entry in `shas`. A part left without references
@@ -75,31 +87,34 @@ pub trait DocxPartReferences: Send + Sync + 'static {
 }
 
 /// Shared lifecycle orchestration for permanent document cleanup.
-pub struct DocumentPurger<R, Q, S, B> {
+pub struct DocumentPurger<R, Q, S, A, B> {
     repository: R,
     queue: Q,
     part_references: S,
+    audience: A,
     broker: B,
 }
 
-impl<R, Q, S, B> DocumentPurger<R, Q, S, B> {
-    /// Compose persistence, cleanup delivery, docx part references and the
-    /// shared event broker.
-    pub fn new(repository: R, queue: Q, part_references: S, broker: B) -> Self {
+impl<R, Q, S, A, B> DocumentPurger<R, Q, S, A, B> {
+    /// Compose persistence, cleanup delivery, docx part references, the
+    /// document's audience and the shared event broker.
+    pub fn new(repository: R, queue: Q, part_references: S, audience: A, broker: B) -> Self {
         Self {
             repository,
             queue,
             part_references,
+            audience,
             broker,
         }
     }
 }
 
-impl<R, Q, S, B> DocumentPurger<R, Q, S, B>
+impl<R, Q, S, A, B> DocumentPurger<R, Q, S, A, B>
 where
     R: DocumentPurgeRepository,
     Q: DocumentPurgeQueue,
     S: DocxPartReferences,
+    A: DocumentAudience,
     B: MacroEventBroker + 'static,
 {
     /// Every failure before the row delete leaves the document findable, so
@@ -110,6 +125,9 @@ where
         document_id: String,
         target: PurgeTarget,
     ) -> Result<(), DocumentError> {
+        // Read before anything is removed: without it no client hears about the purge,
+        // and failing here leaves the document for a retry like every step below.
+        let audience = self.audience.sources(&document_id).await?;
         self.queue
             .enqueue(document_id.clone(), target.owner.clone())
             .await?;
@@ -117,6 +135,7 @@ where
             document_id.clone(),
             DocumentPurgedMetadata {
                 document_id: document_id.clone(),
+                audience,
             },
         );
         self.broker
@@ -135,11 +154,12 @@ where
     }
 }
 
-impl<R, Q, S, B> DocumentPurgeService for DocumentPurger<R, Q, S, B>
+impl<R, Q, S, A, B> DocumentPurgeService for DocumentPurger<R, Q, S, A, B>
 where
     R: DocumentPurgeRepository,
     Q: DocumentPurgeQueue,
     S: DocxPartReferences,
+    A: DocumentAudience,
     B: MacroEventBroker + 'static,
 {
     #[tracing::instrument(skip(self), err)]
@@ -152,11 +172,12 @@ where
     }
 }
 
-impl<R, Q, S, B> PurgeOwnedEntity for DocumentPurger<R, Q, S, B>
+impl<R, Q, S, A, B> PurgeOwnedEntity for DocumentPurger<R, Q, S, A, B>
 where
     R: DocumentPurgeRepository,
     Q: DocumentPurgeQueue,
     S: DocxPartReferences,
+    A: DocumentAudience,
     B: MacroEventBroker + 'static,
 {
     #[tracing::instrument(
