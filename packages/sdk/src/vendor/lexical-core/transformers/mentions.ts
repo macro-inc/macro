@@ -1,0 +1,821 @@
+// Vendored from packages/lexical-core/transformers/mentions.ts by `bun run vendor`; edit the source, not this copy.
+import type {
+  ElementTransformer,
+  TextMatchTransformer,
+} from '@lexical/markdown';
+import type { ElementNode, LexicalNode, TextNode } from 'lexical';
+import {
+  $createAgentSessionMentionNode,
+  AgentSessionMentionNode,
+  buildAgentSessionMentionMarkdown,
+} from '../nodes/AgentSessionMentionNode';
+import {
+  $createBookingLinkMentionNode,
+  BookingLinkMentionNode,
+  isMacroBookingUrl,
+} from '../nodes/BookingLinkMentionNode';
+import {
+  CONNECT_APP_TAG,
+  ConnectAppNode,
+  DEFAULT_CONNECT_APP_TARGET,
+  isConnectAppSlug,
+  isConnectAppTarget,
+} from '../nodes/ConnectAppNode';
+import { ContactMentionNode } from '../nodes/ContactMentionNode';
+import { DateMentionNode } from '../nodes/DateMentionNode';
+import { DocumentCardNode } from '../nodes/DocumentCardNode';
+import { DocumentMentionNode } from '../nodes/DocumentMentionNode';
+import { GroupMentionNode } from '../nodes/GroupMentionNode';
+import {
+  isGithubPullRequestUrl,
+  PullRequestMentionNode,
+} from '../nodes/PullRequestMentionNode';
+import { TagMentionNode } from '../nodes/TagMentionNode';
+import { ThemeMentionNode } from '../nodes/ThemeMentionNode';
+import { UserMentionNode } from '../nodes/UserMentionNode';
+import {
+  replaceElementWithUnknownMention,
+  replaceTextWithUnknownMention,
+  UnknownMentionNode,
+} from './unknownFallback';
+
+// NOTE: If you are changing this file, you may need to update `crates/mention_utils` as well. Please notify @hutch should you update this file.
+
+// Internal User Mentions
+export const I_USER_MENTION: TextMatchTransformer = {
+  dependencies: [UserMentionNode, UnknownMentionNode],
+  type: 'text-match',
+  regExp: /<m-user-mention>(.*?)<\/m-user-mention>/,
+  importRegExp: /<m-user-mention>(.*?)<\/m-user-mention>/,
+  export: (node) => {
+    if (!(node instanceof UserMentionNode)) return null;
+    const data = JSON.stringify({
+      userId: node.getUserId(),
+      email: node.getEmail(),
+      displayName: node.getDisplayName(),
+    });
+    return `<m-user-mention>${data}</m-user-mention>`;
+  },
+  replace: (node: TextNode, match: RegExpMatchArray) => {
+    try {
+      const data = JSON.parse(match[1]);
+      if (typeof data?.userId !== 'string' || !data.userId.trim()) {
+        throw new Error('Missing or invalid userId');
+      }
+      let email = typeof data.email === 'string' ? data.email : '';
+      if (!email && data.userId.startsWith('macro|')) {
+        email = data.userId.slice('macro|'.length);
+      }
+
+      const displayName =
+        typeof data.displayName === 'string' ? data.displayName : undefined;
+      if (!email && !displayName?.trim()) {
+        throw new Error('Missing user mention label');
+      }
+      const userMentionNode = new UserMentionNode(data.userId, email, {
+        displayName,
+      });
+      node.replace(userMentionNode);
+    } catch (e) {
+      console.error('Error in I_USER_MENTION replace:', e);
+      replaceTextWithUnknownMention(node, 'Unknown User');
+    }
+  },
+};
+
+// External User Mentions
+export const E_USER_MENTION: ElementTransformer = {
+  dependencies: [UserMentionNode],
+  type: 'element',
+  regExp: /$^/,
+  export: (node) => {
+    if (!(node instanceof UserMentionNode)) return null;
+
+    const userId = node.getUserId();
+    if (!userId) {
+      return null;
+    }
+
+    return `${userId}`;
+  },
+  replace: (
+    _parentNode: ElementNode,
+    _children: Array<LexicalNode>,
+    _match: Array<string>,
+    _isImport: boolean
+  ) => {
+    return false;
+  },
+};
+
+// Internal Contact Mentions
+export const I_CONTACT_MENTION: TextMatchTransformer = {
+  dependencies: [ContactMentionNode, UnknownMentionNode],
+  type: 'text-match',
+  regExp: /<m-contact-mention>(.*?)<\/m-contact-mention>/,
+  importRegExp: /<m-contact-mention>(.*?)<\/m-contact-mention>/,
+  export: (node) => {
+    if (!(node instanceof ContactMentionNode)) return null;
+    const data = JSON.stringify({
+      contactId: node.getContactId(),
+      name: node.getName(),
+      emailOrDomain: node.getEmailOrDomain(),
+      isCompany: node.getIsCompany(),
+    });
+    return `<m-contact-mention>${data}</m-contact-mention>`;
+  },
+  replace: (node: TextNode, match: RegExpMatchArray) => {
+    try {
+      const data = JSON.parse(match[1]);
+      for (const field of ['contactId', 'name', 'emailOrDomain', 'isCompany']) {
+        if (!(field in data)) throw new Error(`Missing field ${field}`);
+      }
+      const contactMentionNode = new ContactMentionNode(
+        data.contactId,
+        data.name,
+        data.emailOrDomain,
+        data.isCompany
+      );
+      node.replace(contactMentionNode);
+    } catch (e) {
+      console.error('Error in I_CONTACT_MENTION replace:', e);
+      replaceTextWithUnknownMention(node, 'Unknown Contact');
+    }
+  },
+};
+
+// External Contact Mentions
+export const E_CONTACT_MENTION: ElementTransformer = {
+  dependencies: [ContactMentionNode],
+  type: 'element',
+  regExp: /$^/,
+  export: (node) => {
+    if (!(node instanceof ContactMentionNode)) return null;
+
+    const name = node.getName();
+    const emailOrDomain = node.getEmailOrDomain();
+
+    if (!name || !emailOrDomain) {
+      return null;
+    }
+
+    // For external representation, just show the email/domain
+    return emailOrDomain;
+  },
+  replace: (
+    _parentNode: ElementNode,
+    _children: Array<LexicalNode>,
+    _match: Array<string>,
+    _isImport: boolean
+  ) => {
+    return false;
+  },
+};
+
+// Internal Date Mentions
+export const I_DATE_MENTION: TextMatchTransformer = {
+  dependencies: [DateMentionNode, UnknownMentionNode],
+  type: 'text-match',
+  regExp: /<m-date-mention>(.*?)<\/m-date-mention>/,
+  importRegExp: /<m-date-mention>(.*?)<\/m-date-mention>/,
+  export: (node) => {
+    if (!(node instanceof DateMentionNode)) return null;
+    const data = JSON.stringify({
+      date: node.getDate(),
+      displayFormat: node.getDisplayFormat(),
+      mentionUuid: node.getMentionUuid(),
+    });
+    return `<m-date-mention>${data}</m-date-mention>`;
+  },
+  replace: (node: TextNode, match: RegExpMatchArray) => {
+    try {
+      const data = JSON.parse(match[1]);
+      for (const field of ['date', 'displayFormat']) {
+        if (!(field in data)) throw new Error(`Missing field ${field}`);
+      }
+      const dateMentionNode = new DateMentionNode(
+        data.date,
+        data.displayFormat,
+        data.mentionUuid
+      );
+      node.replace(dateMentionNode);
+    } catch (e) {
+      console.error('Error in I_DATE_MENTION replace:', e);
+      replaceTextWithUnknownMention(node, 'Unknown Date');
+    }
+  },
+};
+
+// External Date Mentions
+export const E_DATE_MENTION: ElementTransformer = {
+  dependencies: [DateMentionNode],
+  type: 'element',
+  regExp: /$^/,
+  export: (node) => {
+    if (!(node instanceof DateMentionNode)) return null;
+
+    const displayFormat = node.getDisplayFormat();
+    if (!displayFormat) {
+      return null;
+    }
+
+    // For external representation, just show the display format
+    return displayFormat;
+  },
+  replace: (
+    _parentNode: ElementNode,
+    _children: Array<LexicalNode>,
+    _match: Array<string>,
+    _isImport: boolean
+  ) => {
+    return false;
+  },
+};
+
+// Internal Document Mentions
+
+export const I_DOCUMENT_MENTION: TextMatchTransformer = {
+  dependencies: [DocumentMentionNode, UnknownMentionNode],
+  type: 'text-match',
+  regExp: /<m-document-mention>(.*?)<\/m-document-mention>/,
+  importRegExp: /<m-document-mention>(.*?)<\/m-document-mention>/,
+  export: (node) => {
+    if (!(node instanceof DocumentMentionNode)) return null;
+    const data = JSON.stringify({
+      documentId: node.getDocumentId(),
+      blockName: node.getBlockName(),
+      documentName: node.getDocumentName(),
+      blockParams: node.getBlockParams(),
+      collapsed: node.getCollapsed(),
+    });
+    return `<m-document-mention>${data}</m-document-mention>`;
+  },
+  replace: (node: TextNode, match: RegExpMatchArray) => {
+    try {
+      const data = JSON.parse(match[1]);
+      if (!('documentId' in data)) throw new Error('Missing field documentId');
+      // documentName only caches the label; the chip loads the real name.
+      const documentMentionNode = new DocumentMentionNode(
+        data.documentId,
+        data.documentName ?? '',
+        data.blockName ?? 'unknown',
+        data.blockParams,
+        undefined,
+        data.collapsed
+      );
+      node.replace(documentMentionNode);
+    } catch (e) {
+      console.error('Error in I_DOCUMENT_MENTION replace:', e);
+      replaceTextWithUnknownMention(node, 'Unknown Item');
+    }
+  },
+};
+
+// External Document Mentions
+
+function cleanHostname(rawHostname: string): string {
+  const hostname = rawHostname.replace('www.', '').toLowerCase();
+  if (hostname === 'localhost') {
+    return 'dev.macro.com';
+  }
+  return hostname;
+}
+
+function currentBrowserHostname(): string | null {
+  if (
+    typeof window === 'undefined' ||
+    !window.location ||
+    !window.location.hostname
+  ) {
+    return null;
+  }
+  return cleanHostname(window.location.hostname);
+}
+
+export const E_DOCUMENT_MENTION: ElementTransformer = {
+  dependencies: [DocumentMentionNode],
+  type: 'element',
+  regExp: /$^/,
+  export: (node) => {
+    if (!(node instanceof DocumentMentionNode)) return null;
+
+    const documentName = node.getDocumentName();
+    const documentId = node.getDocumentId();
+    const blockType = node.getBlockName();
+
+    if (!documentName || !documentId || !blockType) {
+      return null;
+    }
+
+    const hostname = cleanHostname(window.location.hostname);
+    const path =
+      blockType === 'routine' || blockType === 'automation'
+        ? 'routines'
+        : blockType;
+    const documentUrl = `https://${hostname}/app/${path}/${documentId}`;
+    return `[${documentName}](${documentUrl})`;
+  },
+  replace: (
+    _parentNode: ElementNode,
+    _children: Array<LexicalNode>,
+    _match: Array<string>,
+    _isImport: boolean
+  ) => {
+    return false;
+  },
+};
+
+// Internal Pull Request Mentions
+
+export const I_PR_MENTION: TextMatchTransformer = {
+  dependencies: [PullRequestMentionNode, UnknownMentionNode],
+  type: 'text-match',
+  regExp: /<m-pr-mention>(.*?)<\/m-pr-mention>/,
+  importRegExp: /<m-pr-mention>(.*?)<\/m-pr-mention>/,
+  export: (node) => {
+    if (!(node instanceof PullRequestMentionNode)) return null;
+    const data = JSON.stringify({
+      id: node.getId(),
+      label: node.getLabel(),
+      mentionUuid: node.getMentionUuid(),
+      url: node.getUrl(),
+    });
+    return `<m-pr-mention>${data}</m-pr-mention>`;
+  },
+  replace: (node: TextNode, match: RegExpMatchArray) => {
+    try {
+      const data = JSON.parse(match[1]);
+      // Agents often know only a PR's GitHub URL; the decorator resolves the
+      // Macro entity from it, so either field identifies the PR.
+      const id = typeof data.id === 'string' ? data.id : '';
+      const url =
+        typeof data.url === 'string' && isGithubPullRequestUrl(data.url)
+          ? data.url
+          : undefined;
+      if (!id && !url) {
+        throw new Error('Missing field id or url');
+      }
+      const prMentionNode = new PullRequestMentionNode(
+        id,
+        typeof data.label === 'string' ? data.label : undefined,
+        typeof data.mentionUuid === 'string' ? data.mentionUuid : undefined,
+        url
+      );
+      node.replace(prMentionNode);
+    } catch (e) {
+      console.error('Error in I_PR_MENTION replace:', e);
+      replaceTextWithUnknownMention(node, 'Unknown Pull Request');
+    }
+  },
+};
+
+// External Pull Request Mentions
+
+export const E_PR_MENTION: ElementTransformer = {
+  dependencies: [PullRequestMentionNode],
+  type: 'element',
+  regExp: /$^/,
+  export: (node) => {
+    if (!(node instanceof PullRequestMentionNode)) return null;
+
+    const id = node.getId();
+    const label = node.getLabel() || 'Pull request';
+    if (!id) {
+      const url = node.getUrl();
+      return url ? `[${label}](${url})` : null;
+    }
+
+    const hostname = currentBrowserHostname();
+    if (!hostname) return label;
+
+    const prUrl = `https://${hostname}/app/pr/${id}`;
+    return `[${label}](${prUrl})`;
+  },
+  replace: (
+    _parentNode: ElementNode,
+    _children: Array<LexicalNode>,
+    _match: Array<string>,
+    _isImport: boolean
+  ) => {
+    return false;
+  },
+};
+
+// Internal Agent Session Mentions
+
+export const I_AGENT_SESSION_MENTION: TextMatchTransformer = {
+  dependencies: [AgentSessionMentionNode, UnknownMentionNode],
+  type: 'text-match',
+  regExp: /<m-agent-session-mention>(.*?)<\/m-agent-session-mention>/,
+  importRegExp: /<m-agent-session-mention>(.*?)<\/m-agent-session-mention>/,
+  export: (node) => {
+    if (!(node instanceof AgentSessionMentionNode)) return null;
+    return buildAgentSessionMentionMarkdown({
+      id: node.getId(),
+      label: node.getLabel(),
+      mentionUuid: node.getMentionUuid(),
+      ...(node.isExpanded() ? { expanded: true } : {}),
+    });
+  },
+  replace: (node: TextNode, match: RegExpMatchArray) => {
+    try {
+      const data = JSON.parse(match[1]);
+      if (!('id' in data) || typeof data.id !== 'string') {
+        throw new Error('Missing field id');
+      }
+      node.replace(
+        $createAgentSessionMentionNode({
+          id: data.id,
+          label: typeof data.label === 'string' ? data.label : undefined,
+          mentionUuid:
+            typeof data.mentionUuid === 'string' ? data.mentionUuid : undefined,
+          expanded: data.expanded === true,
+        })
+      );
+    } catch (e) {
+      console.error('Error in I_AGENT_SESSION_MENTION replace:', e);
+      replaceTextWithUnknownMention(node, 'Unknown Agent Session');
+    }
+  },
+};
+
+/** Expanded session references serialize as blocks while preserving their identity. */
+export const I_AGENT_SESSION_CARD: ElementTransformer = {
+  dependencies: [AgentSessionMentionNode],
+  type: 'element',
+  regExp: /$^/,
+  export: (node) => {
+    if (!(node instanceof AgentSessionMentionNode) || !node.isExpanded())
+      return null;
+    return buildAgentSessionMentionMarkdown(node.exportComponentProps());
+  },
+  replace: () => false,
+};
+
+// External Agent Session Mentions
+
+export const E_AGENT_SESSION_MENTION: ElementTransformer = {
+  dependencies: [AgentSessionMentionNode],
+  type: 'element',
+  regExp: /$^/,
+  export: (node) => {
+    if (!(node instanceof AgentSessionMentionNode)) return null;
+
+    const id = node.getId();
+    if (!id) return null;
+
+    const label = node.getLabel() || 'Agent session';
+    const hostname = currentBrowserHostname();
+    if (!hostname) return label;
+
+    const prUrl = `https://${hostname}/app/agent/${id}`;
+    return `[${label}](${prUrl})`;
+  },
+  replace: (
+    _parentNode: ElementNode,
+    _children: Array<LexicalNode>,
+    _match: Array<string>,
+    _isImport: boolean
+  ) => {
+    return false;
+  },
+};
+
+// Internal Group Mentions (e.g., @here)
+export const I_GROUP_MENTION: TextMatchTransformer = {
+  dependencies: [GroupMentionNode, UnknownMentionNode],
+  type: 'text-match',
+  regExp: /<m-group-mention>(.*?)<\/m-group-mention>/,
+  importRegExp: /<m-group-mention>(.*?)<\/m-group-mention>/,
+  export: (node) => {
+    if (!(node instanceof GroupMentionNode)) return null;
+    const data = JSON.stringify({
+      groupAlias: node.getGroupAlias(),
+    });
+    return `<m-group-mention>${data}</m-group-mention>`;
+  },
+  replace: (node: TextNode, match: RegExpMatchArray) => {
+    try {
+      const data = JSON.parse(match[1]);
+      if (!('groupAlias' in data)) {
+        throw new Error('Missing field groupAlias');
+      }
+      const groupMentionNode = new GroupMentionNode(data.groupAlias);
+      node.replace(groupMentionNode);
+    } catch (e) {
+      console.error('Error in I_GROUP_MENTION replace:', e);
+      replaceTextWithUnknownMention(node, 'Unknown Group');
+    }
+  },
+};
+
+// External Group Mentions
+export const E_GROUP_MENTION: ElementTransformer = {
+  dependencies: [GroupMentionNode],
+  type: 'element',
+  regExp: /$^/,
+  export: (node) => {
+    if (!(node instanceof GroupMentionNode)) return null;
+
+    const groupAlias = node.getGroupAlias();
+    if (!groupAlias) {
+      return null;
+    }
+
+    return `@${groupAlias}`;
+  },
+  replace: (
+    _parentNode: ElementNode,
+    _children: Array<LexicalNode>,
+    _match: Array<string>,
+    _isImport: boolean
+  ) => {
+    return false;
+  },
+};
+
+// Internal Document Cards
+
+export const I_DOCUMENT_CARD: ElementTransformer = {
+  dependencies: [DocumentCardNode, UnknownMentionNode],
+  type: 'element',
+  regExp: /<m-document-card>(.*?)<\/m-document-card>/,
+  export: (node) => {
+    if (!(node instanceof DocumentCardNode)) return null;
+    const data = JSON.stringify({
+      documentId: node.getDocumentId(),
+      blockName: node.getBlockName(),
+      documentName: node.getDocumentName(),
+      blockParams: node.getBlockParams(),
+      previewBox: node.getPreviewBox(),
+      previewData: node.getPreviewData(),
+      mentionUuid: node.getMentionUuid(),
+    });
+    return `<m-document-card>${data}</m-document-card>`;
+  },
+  replace: (
+    parentNode: ElementNode,
+    _children: Array<LexicalNode>,
+    match: Array<string>
+  ) => {
+    try {
+      const data = JSON.parse(match[1]);
+      for (const field of ['documentId', 'blockName']) {
+        if (!(field in data)) throw new Error(`Missing field ${field}`);
+      }
+      const documentCardNode = new DocumentCardNode(
+        data.documentId,
+        data.documentName ?? '',
+        data.blockName,
+        data.blockParams,
+        data.previewBox,
+        data.previewData,
+        data.mentionUuid
+      );
+      parentNode.replace(documentCardNode);
+    } catch (e) {
+      console.error('Error in I_DOCUMENT_CARD replace:', e);
+      replaceElementWithUnknownMention(parentNode, 'Unknown Item');
+    }
+  },
+};
+
+// Internal Theme Mentions
+export const I_THEME_MENTION: TextMatchTransformer = {
+  dependencies: [ThemeMentionNode, UnknownMentionNode],
+  type: 'text-match',
+  regExp: /<m-theme-mention>(.*?)<\/m-theme-mention>/,
+  importRegExp: /<m-theme-mention>(.*?)<\/m-theme-mention>/,
+  export: (node) => {
+    if (!(node instanceof ThemeMentionNode)) return null;
+    const data = JSON.stringify({
+      name: node.getThemeName(),
+      data: node.getThemeData(),
+    });
+    return `<m-theme-mention>${data}</m-theme-mention>`;
+  },
+  replace: (node: TextNode, match: RegExpMatchArray) => {
+    try {
+      const parsed = JSON.parse(match[1]);
+      if (
+        typeof parsed !== 'object' ||
+        parsed === null ||
+        typeof parsed.name !== 'string'
+      ) {
+        throw new Error('Invalid theme mention JSON');
+      }
+      const themeMentionNode = new ThemeMentionNode(parsed.name, parsed.data);
+      node.replace(themeMentionNode);
+    } catch (e) {
+      console.error('Error in I_THEME_MENTION replace:', e);
+      replaceTextWithUnknownMention(node, 'Unknown Theme');
+    }
+  },
+};
+
+// Connect-app chips: an agent's "this app is not connected, here is how"
+// affordance. Same JSON-in-body shape as every other m-* tag.
+export const I_CONNECT_APP: TextMatchTransformer = {
+  dependencies: [ConnectAppNode, UnknownMentionNode],
+  type: 'text-match',
+  regExp: new RegExp(`<${CONNECT_APP_TAG}>(.*?)</${CONNECT_APP_TAG}>`),
+  importRegExp: new RegExp(`<${CONNECT_APP_TAG}>(.*?)</${CONNECT_APP_TAG}>`),
+  export: (node) => {
+    if (!(node instanceof ConnectAppNode)) return null;
+    const target = node.getTarget();
+    const data = JSON.stringify({
+      appSlug: node.getAppSlug(),
+      name: node.getName(),
+      // Older payloads carry no target and mean the default; keep emitting
+      // them that way so a chip written before targets existed round-trips
+      // unchanged.
+      ...(target === DEFAULT_CONNECT_APP_TARGET ? {} : { target }),
+    });
+    return `<${CONNECT_APP_TAG}>${data}</${CONNECT_APP_TAG}>`;
+  },
+  replace: (node: TextNode, match: RegExpMatchArray) => {
+    try {
+      const parsed: unknown = JSON.parse(match[1]);
+      if (typeof parsed !== 'object' || parsed === null) {
+        throw new Error('Invalid connect-app JSON');
+      }
+      const { appSlug, name, target } = parsed as Record<string, unknown>;
+      // The slug ends up in a URL and is model-authored: only the charset the
+      // proxy routes on is accepted, anything else falls back to the
+      // unknown-mention chip rather than being repaired.
+      if (!isConnectAppSlug(appSlug) || typeof name !== 'string' || !name) {
+        throw new Error('Invalid connect-app payload');
+      }
+      const resolvedTarget =
+        target === undefined ? DEFAULT_CONNECT_APP_TARGET : target;
+      if (!isConnectAppTarget(resolvedTarget)) {
+        throw new Error('Invalid connect-app target');
+      }
+      node.replace(new ConnectAppNode(appSlug, name, resolvedTarget));
+    } catch (e) {
+      console.error('Error in I_CONNECT_APP replace:', e);
+      replaceTextWithUnknownMention(node, 'Connect app');
+    }
+  },
+};
+
+// Internal Tag Mentions
+export const I_TAG_MENTION: TextMatchTransformer = {
+  dependencies: [TagMentionNode, UnknownMentionNode],
+  type: 'text-match',
+  regExp: /<m-tag>(.*?)<\/m-tag>/,
+  importRegExp: /<m-tag>(.*?)<\/m-tag>/,
+  export: (node) => {
+    if (!(node instanceof TagMentionNode)) return null;
+    const data = JSON.stringify({
+      optionId: node.getOptionId(),
+      propertyDefinitionId: node.getPropertyDefinitionId(),
+      scope: node.getScope(),
+      name: node.getName(),
+      color: node.getColor(),
+    });
+    return `<m-tag>${data}</m-tag>`;
+  },
+  replace: (node: TextNode, match: RegExpMatchArray) => {
+    try {
+      const data = JSON.parse(match[1]);
+      for (const field of [
+        'optionId',
+        'propertyDefinitionId',
+        'scope',
+        'name',
+      ]) {
+        if (!(field in data)) throw new Error(`Missing field ${field}`);
+      }
+      if (data.scope !== 'user' && data.scope !== 'team') {
+        throw new Error('Invalid tag scope');
+      }
+      const tagMentionNode = new TagMentionNode(
+        data.optionId,
+        data.propertyDefinitionId,
+        data.scope,
+        data.name,
+        typeof data.color === 'string' ? data.color : undefined
+      );
+      node.replace(tagMentionNode);
+    } catch (e) {
+      console.error('Error in I_TAG_MENTION replace:', e);
+      replaceTextWithUnknownMention(node, 'Unknown Tag');
+    }
+  },
+};
+
+// External Tag Mentions
+export const E_TAG_MENTION: ElementTransformer = {
+  dependencies: [TagMentionNode],
+  type: 'element',
+  regExp: /$^/,
+  export: (node) => {
+    if (!(node instanceof TagMentionNode)) return null;
+    const name = node.getName();
+    return name ? `#${name}` : null;
+  },
+  replace: (
+    _parentNode: ElementNode,
+    _children: Array<LexicalNode>,
+    _match: Array<string>,
+    _isImport: boolean
+  ) => {
+    return false;
+  },
+};
+
+// External Document Cards
+export const E_DOCUMENT_CARD: ElementTransformer = {
+  dependencies: [DocumentCardNode],
+  type: 'element',
+  regExp: /$^/,
+  export: (node) => {
+    if (!(node instanceof DocumentCardNode)) return null;
+
+    const documentName = node.getDocumentName();
+    const documentId = node.getDocumentId();
+    const blockType = node.getBlockName();
+
+    if (!documentName || !documentId || !blockType) {
+      return null;
+    }
+
+    const hostname = cleanHostname(window.location.hostname);
+    const documentUrl = `https://${hostname}/app/${blockType}/${documentId}`;
+    return `[${documentName}](${documentUrl})`;
+  },
+  replace: (
+    _parentNode: ElementNode,
+    _children: Array<LexicalNode>,
+    _match: Array<string>,
+    _isImport: boolean
+  ) => {
+    return false;
+  },
+};
+
+// Internal Booking Link Mentions
+export const I_BOOKING_LINK_MENTION: TextMatchTransformer = {
+  dependencies: [BookingLinkMentionNode, UnknownMentionNode],
+  type: 'text-match',
+  regExp: /<m-booking-link-mention>(.*?)<\/m-booking-link-mention>/,
+  importRegExp: /<m-booking-link-mention>(.*?)<\/m-booking-link-mention>/,
+  export: (node) => {
+    if (!(node instanceof BookingLinkMentionNode)) return null;
+    const data = JSON.stringify({
+      profileId: node.getProfileId(),
+      slug: node.getSlug(),
+      label: node.getLabel(),
+      url: node.getUrl(),
+    });
+    return `<m-booking-link-mention>${data}</m-booking-link-mention>`;
+  },
+  replace: (node: TextNode, match: RegExpMatchArray) => {
+    try {
+      const data = JSON.parse(match[1]);
+      const profileId =
+        typeof data.profileId === 'string' ? data.profileId : '';
+      const url =
+        typeof data.url === 'string' && isMacroBookingUrl(data.url)
+          ? data.url
+          : undefined;
+      if (!profileId && !url) {
+        throw new Error('Missing field profileId or url');
+      }
+      const bookingMentionNode = $createBookingLinkMentionNode({
+        profileId,
+        slug: typeof data.slug === 'string' ? data.slug : undefined,
+        label: typeof data.label === 'string' ? data.label : undefined,
+        url: url || `https://macro.com/app/book/${profileId}`,
+      });
+      node.replace(bookingMentionNode);
+    } catch (e) {
+      console.error('Error in I_BOOKING_LINK_MENTION replace:', e);
+      replaceTextWithUnknownMention(node, 'Unknown Booking Link');
+    }
+  },
+};
+
+// External Booking Link Mentions
+export const E_BOOKING_LINK_MENTION: ElementTransformer = {
+  dependencies: [BookingLinkMentionNode],
+  type: 'element',
+  regExp: /$^/,
+  export: (node) => {
+    if (!(node instanceof BookingLinkMentionNode)) return null;
+
+    const url = node.getUrl();
+    const label = node.getLabel() || node.getSlug() || 'Booking link';
+
+    return `[${label}](${url})`;
+  },
+  replace: (
+    _parentNode: ElementNode,
+    _children: Array<LexicalNode>,
+    _match: Array<string>,
+    _isImport: boolean
+  ) => {
+    return false;
+  },
+};
