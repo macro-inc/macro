@@ -254,7 +254,8 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
     if (
       !isMobile() &&
       !isNativeMobilePlatform() &&
-      userInfoQuery.data?.tutorialComplete === false
+      userInfoQuery.data?.tutorialComplete === false &&
+      !userInfoQuery.data.isAgent
     ) {
       navigate(onboardingPathWithStep(searchParams.step), { replace: true });
       return;

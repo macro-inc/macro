@@ -23,6 +23,11 @@ before its backend. Memory-backed hosts keep their original behavior.
   coherent `pose` register: local matrix, geometry, coordinate
   parent ID, and a captured world matrix. Fill and stroke are separate registers,
   so moving and restyling the same shape can merge independently.
+- Node kinds are open. A client skips a kind it does not know (with its subtree)
+  when projecting, and writes it back untouched after the sibling that preceded
+  it, so a new kind can ship without breaking or deleting through older clients.
+  Geometry is validated per known kind at projection, not by the schema. Deleting
+  or ungrouping a group in an older client still removes unknown children.
 - Ordered Loro children project to unique core sort keys. These keys are derived,
   not CRDT fields; concurrent key collisions are handled by Loro's ordered tree.
   Core commands become moves of affected tree nodes, not full-list replacements.
@@ -161,6 +166,9 @@ finished edits become one backend transaction. Tests cover conflicting strings,
 text-versus-move, new labels versus moves, and local undo preserving remote moves.
 
 Image, video and document references use the existing shape geometry mapping.
+Artifact HTML and presentation order use their own `html` and `presentOrder`
+registers, so content edits and moves merge independently. Like text, HTML is one
+whole-string register: concurrent edits to the same artifact keep one version.
 Their source bytes, resolved URLs, loading state and playback are host concerns.
 
 ### Canvas host integration

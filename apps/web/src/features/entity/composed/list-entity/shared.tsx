@@ -5,6 +5,7 @@ import {
   type Accessor,
   createContext,
   createEffect,
+  createMemo,
   createSignal,
   type JSX,
   onCleanup,
@@ -54,6 +55,8 @@ export interface BaseListEntityProps<E extends EntityData = EntityData>
   meta?: JSX.Element;
   /** Caller-owned metadata after the entity's own, in wide rows only. */
   metaEnd?: JSX.Element;
+  /** Caller-owned marker ahead of the preview, in stacked email rows only. */
+  previewLeading?: JSX.Element;
   hideContentHits?: boolean;
   /** Resolved app display name for a linked GitHub PR author, when available. */
   authorDisplayName?: string;
@@ -95,6 +98,7 @@ export interface LayoutProps {
   titleTrailing?: JSX.Element;
   meta?: JSX.Element;
   metaEnd?: JSX.Element;
+  previewLeading?: JSX.Element;
   /** Stored reference values alongside the existing property pills. */
   referenceProperties?: JSX.Element;
   checked?: boolean;
@@ -140,18 +144,23 @@ const ListLayoutContext = createContext<ListLayoutContextValue>();
 export function ListLayoutProvider(props: {
   ref: Accessor<HTMLElement | undefined>;
   narrowLayout?: NarrowLayoutVariant;
+  /** The list width, in px, from which rows use columns. */
+  wideBreakpoint?: number;
   /** Responsive rows have a nonzero width and their layout can be restored. */
   onMeasured?: () => void;
   children: JSX.Element;
 }) {
-  const [isWide, setIsWide] = createSignal(true);
+  const [listWidth, setListWidth] = createSignal(Number.POSITIVE_INFINITY);
+  const isWide = createMemo(
+    () => listWidth() >= (props.wideBreakpoint ?? WIDE_BREAKPOINT)
+  );
 
   createEffect(() => {
     const el = props.ref();
     if (!el) return;
     const observer = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect.width ?? 0;
-      setIsWide(width >= WIDE_BREAKPOINT);
+      setListWidth(width);
       if (width > 0) props.onMeasured?.();
     });
     observer.observe(el);

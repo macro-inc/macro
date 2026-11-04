@@ -13,6 +13,10 @@ import type {
   CallStatus as StorageCallStatus,
 } from '@service-storage/generated/schemas';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
+import type {
+  GraphqlEmailFocusCategory,
+  GraphqlEmailImportanceTrend,
+} from '@service-storage/graphql/generated/graphql';
 
 export type EntityBase = {
   id: string;
@@ -301,10 +305,12 @@ export type EmailAttachment = {
 
 /** A thread's Focus classification; present only on Focus list rows. */
 export type EmailFocus = {
+  category: GraphqlEmailFocusCategory;
   /** 0 to 100. */
   importance: number;
   needsReply: boolean;
   needsFollowUp: boolean;
+  importanceTrend: GraphqlEmailImportanceTrend;
 };
 
 // We spread ApiThreadPreviewCursor into the email entity, should we explcitly include all those fields here, or only add them as needed?

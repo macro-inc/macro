@@ -158,6 +158,7 @@ it('suppresses review events only when their trusted card is in the thread', () 
   ];
   const card: FoldedMessage = {
     agentSessionId: 'session',
+    key: '0:agent',
     turn: 0,
     author: { kind: 'agent' },
     requestId: null,

@@ -11,6 +11,11 @@ import { type SimilarTask, Task, type TaskSummary } from './task';
  * `summaries` call reads many names (`name()` loads each whole document).
  * Creating a task needs only what the request states; don't research what it
  * describes unless asked.
+ *
+ * @routing Use when creating, assigning or updating tasks, or reporting on tasks such as open or overdue ones; not reminders, which are routines.
+ *
+ * @agent
+ * Never edit, merge or delete the tasks `findSimilar` matches unless the user asks.
  */
 export class TaskNamespace {
   constructor(private readonly client: MacroClient) {}

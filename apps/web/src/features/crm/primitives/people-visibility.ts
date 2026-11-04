@@ -11,6 +11,11 @@ import type {
   CrmWorkspace,
   PeopleVisibility,
 } from '../context/workspace-context';
+import { isCrmActivityTab, pipelineIdOfTab } from '../core/navigation';
+
+function recordList(tab: string | undefined): boolean {
+  return !!tab && !isCrmActivityTab(tab) && !pipelineIdOfTab(tab);
+}
 
 /** A local, explicit choice. Shared links and saved filters cannot enable it. */
 export function createPeopleVisibility(scope: {
@@ -24,16 +29,23 @@ export function createPeopleVisibility(scope: {
       ? JSON.stringify([scope.userId(), scope.teamId()])
       : undefined
   );
-  const [requested, setRequested] = createSignal<string>();
-  const people = () => scope.activeTab() === 'people';
+  const [requested, setRequested] = createSignal<string | undefined>(
+    scope.activeTab() === 'hidden' ? identity() : undefined
+  );
+  const isList = () => recordList(scope.activeTab());
   const canShowRemoved = () => !!identity();
   const showRemoved = () =>
-    people() && !!identity() && requested() === identity();
+    isList() && !!identity() && requested() === identity();
 
   // Synchronize the local choice with the host session/navigation lifecycle.
   // Comparing the identity also closes the gate before this effect runs.
   createRenderEffect(
-    on([identity, people], () => setRequested(undefined), { defer: true })
+    on(
+      [identity, scope.activeTab],
+      () =>
+        setRequested(scope.activeTab() === 'hidden' ? identity() : undefined),
+      { defer: true }
+    )
   );
 
   return {
@@ -41,7 +53,7 @@ export function createPeopleVisibility(scope: {
     showRemoved,
     removedTeamId: () => (showRemoved() ? scope.teamId() : undefined),
     setShowRemoved(value: boolean) {
-      const next = value && people() ? identity() : undefined;
+      const next = value && isList() ? identity() : undefined;
       if (next === requested()) return;
       const operation = startUiOperation('crm.people_visibility', {
         attributes: { 'crm.hidden': !!next },
@@ -63,6 +75,10 @@ export function bindPeopleVisibility(
     on(
       () => ({
         people: view.activeTab() === 'people',
+        companies:
+          view.activeTab() !== 'people' && recordList(view.activeTab()),
+        companyHidden: view.queryFilters.state.include.crmCompanyHidden,
+        excludedCompanyHidden: view.queryFilters.state.exclude.crmCompanyHidden,
         showRemoved: visibility.showRemoved(),
         removedTeamId: visibility.removedTeamId(),
         includedHidden: view.queryFilters.state.include.crmContactHidden,
@@ -74,6 +90,9 @@ export function bindPeopleVisibility(
       }),
       ({
         people,
+        companies,
+        companyHidden,
+        excludedCompanyHidden,
         showRemoved,
         removedTeamId,
         includedHidden,
@@ -85,9 +104,6 @@ export function bindPeopleVisibility(
       }) => {
         const hidden = people && showRemoved;
         const teamId = hidden ? removedTeamId : undefined;
-        const expected = hidden ? 'crm-contact-hidden' : 'crm-contact-active';
-        const isVisibility = (id: string) =>
-          id === 'crm-contact-active' || id === 'crm-contact-hidden';
         batch(() => {
           if (
             includedHidden !== (people ? hidden : undefined) ||
@@ -108,26 +124,40 @@ export function bindPeopleVisibility(
               },
             });
           }
-          if (
-            people &&
-            (!and.includes(expected) ||
+          const companyVisibility = (id: string) =>
+            id === 'crm-company-active' || id === 'crm-company-hidden';
+          const contactVisibility = (id: string) =>
+            id === 'crm-contact-active' || id === 'crm-contact-hidden';
+          if (people || companies) {
+            const expected = people
+              ? hidden
+                ? 'crm-contact-hidden'
+                : 'crm-contact-active'
+              : showRemoved
+                ? 'crm-company-hidden'
+                : 'crm-company-active';
+            const isVisibility = (id: string) =>
+              companyVisibility(id) || contactVisibility(id);
+            if (
+              !and.includes(expected) ||
               and.some((id) => isVisibility(id) && id !== expected) ||
-              or.some(isVisibility))
-          ) {
-            view.soup.predicates.set({
-              and: [...and.filter((id) => !isVisibility(id)), expected],
-              or: or.filter((id) => !isVisibility(id)),
-            });
-          } else if (
-            !people &&
-            (and.includes('crm-contact-hidden') ||
-              or.includes('crm-contact-hidden'))
-          ) {
-            view.soup.predicates.set({
-              and: and.filter((id) => id !== 'crm-contact-hidden'),
-              or: or.filter((id) => id !== 'crm-contact-hidden'),
-            });
+              or.some(isVisibility)
+            ) {
+              view.soup.predicates.set({
+                and: [...and.filter((id) => !isVisibility(id)), expected],
+                or: or.filter((id) => !isVisibility(id)),
+              });
+            }
           }
+          if (
+            companies &&
+            (companyHidden !== showRemoved ||
+              excludedCompanyHidden !== undefined)
+          )
+            view.queryFilters.set({
+              include: { crmCompanyHidden: showRemoved },
+              exclude: { crmCompanyHidden: undefined },
+            });
         });
       }
     )

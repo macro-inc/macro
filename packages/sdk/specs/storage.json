@@ -3419,7 +3419,7 @@
       },
       "patch": {
         "tags": ["channel_labels"],
-        "summary": "Rename a label of the caller's authorized scope.",
+        "summary": "Update a label, optionally moving it to another authorized scope.",
         "operationId": "rename_channel_label",
         "parameters": [
           {
@@ -7052,6 +7052,70 @@
         }
       }
     },
+    "/crm/pipelines/{id}/stage-requirements": {
+      "get": {
+        "tags": ["crm::inbound::pipelines"],
+        "summary": "Read requirements by stable stage and field identities.",
+        "operationId": "get_crm_pipeline_stage_requirements",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/StageRequirement"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["crm::inbound::pipelines"],
+        "summary": "Replace the required fields for one stage. An empty list removes its rule.",
+        "operationId": "set_crm_pipeline_stage_requirement",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StageRequirement"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/crm/pipelines/{id}/table": {
       "get": {
         "tags": ["crm::inbound::pipelines"],
@@ -9742,7 +9806,7 @@
     "/documents/create_skill": {
       "post": {
         "tags": ["document"],
-        "summary": "Creates a skill document with initialized markdown content in one\nbackend-owned lifecycle. Skills are markdown documents containing\ninstructions that AI reads and follows when the skill is referenced in an\nAI input.",
+        "summary": "Creates a skill document with initialized markdown content and its\nrouting description in one backend-owned lifecycle. Skills are markdown documents containing\ninstructions that AI reads and follows when the skill is referenced in an\nAI input.",
         "operationId": "create_skill_handler",
         "requestBody": {
           "content": {
@@ -9774,7 +9838,7 @@
             }
           },
           "400": {
-            "description": "",
+            "description": "The description is blank, longer than one line or 300 characters, or does not start \"Use when\"",
             "content": {
               "application/json": {
                 "schema": {
@@ -10850,6 +10914,116 @@
         }
       }
     },
+    "/documents/{document_id}/ai-edit": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Edit a markdown document or task by instructions with the caller's edit\naccess. Runs EditDocument's pipeline as a live collaborator, with its AI\nadmission and billing.",
+        "description": "A client that disconnects aborts the edit: axum drops this handler's\nfuture, which drops the in-flight request to the editing worker, and the\nworker aborts on its request signal. Steps already acknowledged stay.",
+        "operationId": "edit_document_with_ai",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentAiEditRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentAiEdited"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a markdown document, or empty instructions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "402": {
+            "description": "AI allowance exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Document edit access denied"
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "422": {
+            "description": "The editor could not do the edit; nothing changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentAiEditRefused"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The edit could not start",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The edit failed and may have partly applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentAiEditFailed"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI usage validation unavailable; retry later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/{document_id}/branch_name": {
       "get": {
         "tags": ["document"],
@@ -11705,6 +11879,144 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/skill_description": {
+      "get": {
+        "tags": ["document"],
+        "summary": "Gets when to use a skill. `description` is absent for a skill created\nbefore descriptions existed.",
+        "operationId": "get_skill_description",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Skill document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillDescriptionBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["document"],
+        "summary": "Sets when to use a skill: one line starting \"Use when\", at most 300\ncharacters. Agents choose skills for a request by it.",
+        "operationId": "set_skill_description",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Skill document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSkillDescriptionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillDescriptionBody"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The document is not a skill, or the description is invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -20783,6 +21095,21 @@
         "description": "What a typing agent is doing.",
         "enum": ["thinking", "writing", "working", "waiting"]
       },
+      "AiAdmissionErrorBody": {
+        "type": "object",
+        "description": "Public admission error payload. Handlers with additional fields can reuse the\ndomain error's code and message and [`admission_status`].",
+        "required": ["error", "code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable denial or unavailability code."
+          },
+          "error": {
+            "type": "string",
+            "description": "Human-readable explanation, without internal billing diagnostics."
+          }
+        }
+      },
       "Anchor": {
         "oneOf": [
           {
@@ -24094,7 +24421,7 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time",
-            "description": "When the label was last renamed or reordered."
+            "description": "When the label's name, rule, scope, or order last changed."
           }
         }
       },
@@ -26667,8 +26994,12 @@
       "CreateSkillRequest": {
         "type": "object",
         "description": "Request body for creating a skill — a markdown document containing\ninstructions that AI reads and follows when the skill is referenced in an\nAI input.",
-        "required": ["skillName"],
+        "required": ["skillName", "description"],
         "properties": {
+          "description": {
+            "type": "string",
+            "description": "When to use the skill, in one line starting \"Use when\", e.g. \"Use when\ndrafting release notes; not changelog entries\". Agents choose skills\nfor a request by it."
+          },
           "markdown": {
             "type": ["string", "null"],
             "description": "Markdown source text. Defaults to an empty skill document."
@@ -27915,6 +28246,77 @@
           "userId": {
             "type": "string",
             "description": "Recipient."
+          }
+        }
+      },
+      "DocumentAiEditFailed": {
+        "type": "object",
+        "description": "The edit failed after it started, so it may have partly applied. Read the\ndocument before retrying.",
+        "required": ["error", "message"],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/DocumentAiEditFailedCode",
+            "description": "Always `edit_failed`."
+          },
+          "message": {
+            "type": "string",
+            "description": "What to do next; the cause is logged, never returned."
+          }
+        }
+      },
+      "DocumentAiEditFailedCode": {
+        "type": "string",
+        "description": "Error code of an edit that failed after it started.",
+        "enum": ["edit_failed"]
+      },
+      "DocumentAiEditRefused": {
+        "type": "object",
+        "description": "The editor could not do the edit; nothing changed.",
+        "required": ["error", "reason"],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/DocumentAiEditRefusedCode",
+            "description": "Always `edit_refused`."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why, in the editor's words: what it needs to know or cannot do."
+          }
+        }
+      },
+      "DocumentAiEditRefusedCode": {
+        "type": "string",
+        "description": "Error code of an edit the editor refused.",
+        "enum": ["edit_refused"]
+      },
+      "DocumentAiEditRequest": {
+        "type": "object",
+        "description": "What to change, in words.",
+        "required": ["instructions"],
+        "properties": {
+          "fast": {
+            "type": "boolean",
+            "description": "Run the single-model fast pipeline, for one small, contained edit."
+          },
+          "instructions": {
+            "type": "string",
+            "description": "Natural-language instructions. Name the section or quote the text to\nchange, describe the outcome, and say what must stay as it is.",
+            "minLength": 1
+          }
+        }
+      },
+      "DocumentAiEdited": {
+        "type": "object",
+        "description": "A completed edit by instructions.",
+        "required": ["revision"],
+        "properties": {
+          "clarification": {
+            "type": ["string", "null"],
+            "description": "What the editor needs to know to finish, when it applied part of the\nedit and stopped; the applied part stays."
+          },
+          "revision": {
+            "type": "string",
+            "description": "The document's version after the edit, as sync-service encodes it."
           }
         }
       },
@@ -32625,6 +33027,10 @@
                 },
                 "description": "Its questions, in order."
               },
+              "showWhen": {
+                "$ref": "#/components/schemas/FilterGroup",
+                "description": "When to show it: the rules answers of earlier shown sections must\npass, naming only their columns. A section whose rules fail is\nskipped: its questions are not required and their answers are\nnot written. Absent, it is always shown."
+              },
               "title": {
                 "type": "string",
                 "description": "Its title; may be empty."
@@ -32727,6 +33133,10 @@
                   "$ref": "#/components/schemas/FormQuestionDetail"
                 },
                 "description": "Its questions, in order."
+              },
+              "showWhen": {
+                "$ref": "#/components/schemas/FilterGroup",
+                "description": "When to show it, from earlier shown sections' answers; absent,\nit is always shown. Sent to every caller so a respondent's page\ncan skip it."
               },
               "title": {
                 "type": "string",
@@ -35293,6 +35703,37 @@
               "kind": {
                 "type": "string",
                 "enum": ["gateRule"]
+              },
+              "reason": {
+                "type": "string",
+                "description": "Why."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A section's show-when rules test a column no earlier section asks.",
+            "required": ["column", "kind"],
+            "properties": {
+              "column": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The column."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["conditionNamesLaterColumn"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A section's show-when rule does not fit its column.",
+            "required": ["reason", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["conditionRule"]
               },
               "reason": {
                 "type": "string",
@@ -39088,7 +39529,7 @@
       },
       "RenameChannelLabelRequest": {
         "type": "object",
-        "description": "Request body for renaming a label.",
+        "description": "Request body for updating a label's name, smart rule, or sharing scope.",
         "required": ["name"],
         "properties": {
           "name": {
@@ -39103,6 +39544,17 @@
               {
                 "$ref": "#/components/schemas/ChannelLabelRule",
                 "description": "Automatic name-matching rule; omitted for manual labels or a name-only rename."
+              }
+            ]
+          },
+          "targetScope": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChannelLabelScopeSelection",
+                "description": "Destination namespace; omitted to preserve the current scope."
               }
             ]
           }
@@ -40444,6 +40896,17 @@
         ],
         "description": "Type-safe enum for setting entity property values - provides compile-time validation."
       },
+      "SetSkillDescriptionRequest": {
+        "type": "object",
+        "description": "Request body for setting a skill's routing description.",
+        "required": ["description"],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "When to use the skill, in one line starting \"Use when\", at most 300\ncharacters."
+          }
+        }
+      },
       "Sha256Digest": {
         "type": "string",
         "description": "SHA-256 encoded as exactly 64 lowercase hexadecimal characters."
@@ -40593,6 +41056,16 @@
           "entity_type": {
             "type": "string",
             "description": "Mentioned entity type."
+          }
+        }
+      },
+      "SkillDescriptionBody": {
+        "type": "object",
+        "description": "A skill's routing description.",
+        "properties": {
+          "description": {
+            "type": ["string", "null"],
+            "description": "When to use the skill, in one line starting \"Use when\". Absent for a\nskill created before descriptions existed."
           }
         }
       },
@@ -43166,6 +43639,32 @@
           }
         ],
         "description": "The statement that ran: a read, or the table (and for a type change, the\ncolumn) it wrote."
+      },
+      "StageRequirement": {
+        "type": "object",
+        "description": "Fields required when a deal enters a particular option of a stage column.",
+        "required": ["stageColumnId", "stageId", "requiredColumnIds"],
+        "properties": {
+          "requiredColumnIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Fields that must be present. Empty removes the rule for this stage."
+          },
+          "stageColumnId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Single-select column identifying the stage, independent of its name."
+          },
+          "stageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable option identity; renaming the stage preserves the rule."
+          }
+        },
+        "additionalProperties": false
       },
       "StarterDatabase": {
         "type": "object",

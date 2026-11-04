@@ -2,7 +2,11 @@ import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { UserApiKey } from './api-key';
 
-/** User API key management. */
+/**
+ * User API key management.
+ *
+ * @routing Use when creating, listing or revoking the user's API keys; not bot credentials.
+ */
 export class ApiKeyNamespace {
   constructor(private readonly client: MacroClient) {}
 

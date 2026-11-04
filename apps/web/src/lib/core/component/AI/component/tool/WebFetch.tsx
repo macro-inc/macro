@@ -12,7 +12,7 @@ const handler = createToolRenderer({
         href={ctx.tool.data.input}
         target="_blank"
         rel="noopener noreferrer"
-        class="italic text-ink underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2 hover:decoration-current"
+        class="italic text-link hover:text-link-hover visited:text-link-visited underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2 hover:decoration-current"
       >
         {ctx.tool.data.input}
       </a>

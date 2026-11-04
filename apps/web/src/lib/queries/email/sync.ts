@@ -52,6 +52,7 @@ function asRefreshEmailEvent(payload: unknown): RefreshEmailEvent | undefined {
  * `SYNCING`, with a toast. The legacy `backfill` event now only signals
  * failure. `photo_synced` refetches the links list so the inbox's derived
  * `photo_url` lands once its self-contact photo finishes uploading.
+ * `focus_updated` belongs to the mounted Focus list (see `useEmailFocusQuery`).
  */
 export function handleRefreshEmail(payload: unknown): void {
   const event = asRefreshEmailEvent(payload);

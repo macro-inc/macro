@@ -317,11 +317,14 @@ dependencies = [
  "calendar_events",
  "chrono",
  "code_execution",
+ "code_mode_assets",
  "cognition",
  "dynamic_ui",
  "email",
  "entity_access",
+ "futures",
  "import",
+ "jev",
  "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
@@ -446,9 +449,11 @@ dependencies = [
  "base64 0.22.1",
  "bot_id",
  "bots",
+ "calendar_events",
  "channel_sender",
  "channels",
  "chrono",
+ "chrono-tz",
  "codex_cloud_agents",
  "codex_connection",
  "cursor_api_key",
@@ -553,6 +558,7 @@ dependencies = [
  "axum-extra",
  "bot_id",
  "bots",
+ "calendar_events",
  "call",
  "channel_sender",
  "channels",
@@ -727,6 +733,7 @@ dependencies = [
  "genai_telemetry",
  "http 1.4.0",
  "http-body-util",
+ "jev",
  "macro_user_id",
  "macro_uuid",
  "mcp_select",
@@ -746,6 +753,7 @@ dependencies = [
  "schemars 1.2.1",
  "serde",
  "serde_json",
+ "skills",
  "sqlx",
  "sse-stream",
  "thiserror 2.0.18",
@@ -755,6 +763,7 @@ dependencies = [
  "tracing-opentelemetry",
  "tracing-subscriber",
  "url",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -2145,6 +2154,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "attention_feed"
+version = "0.1.0"
+dependencies = [
+ "activity",
+ "async-stream",
+ "base64 0.22.1",
+ "chrono",
+ "cowlike",
+ "email",
+ "entity_access",
+ "futures",
+ "item_filters",
+ "macro_user_id",
+ "model-entity",
+ "model_notifications",
+ "models_soup",
+ "notification",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "soup",
+ "soup_realtime",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "authentication_service"
 version = "0.1.0"
 dependencies = [
@@ -2233,6 +2272,7 @@ dependencies = [
  "model_notifications",
  "models_email",
  "models_permissions",
+ "models_sfs",
  "native_app_service",
  "non_empty",
  "notification",
@@ -2256,6 +2296,7 @@ dependencies = [
  "sha2 0.10.9",
  "sqlx",
  "sqs_client",
+ "static_file_service_client",
  "strum 0.27.2",
  "system_status",
  "teams",
@@ -2270,6 +2311,7 @@ dependencies = [
  "upstream_error",
  "url",
  "urlencoding",
+ "user_api_key",
  "user_language",
  "user_quota",
  "utoipa",
@@ -4521,6 +4563,7 @@ name = "code_execution"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "code_mode_assets",
  "futures",
  "rootcause",
  "serde",
@@ -4532,6 +4575,13 @@ dependencies = [
  "tracing",
  "url",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "code_mode_assets"
+version = "0.1.0"
+dependencies = [
  "workspace-hack",
 ]
 
@@ -4790,6 +4840,7 @@ dependencies = [
  "apollo-compiler",
  "async-graphql",
  "async-stream",
+ "attention_feed",
  "axum",
  "bot_id",
  "bots",
@@ -4813,6 +4864,7 @@ dependencies = [
  "graphql_favorite",
  "graphql_initiative",
  "graphql_notification",
+ "graphql_notification_inbox",
  "graphql_permission",
  "graphql_properties",
  "graphql_scheduled_action",
@@ -4830,6 +4882,7 @@ dependencies = [
  "models_properties",
  "models_soup",
  "notification",
+ "notification_inbox",
  "predicate-index",
  "rootcause",
  "saved_views",
@@ -6551,6 +6604,7 @@ dependencies = [
  "async-graphql",
  "async-graphql-axum",
  "async-trait",
+ "attention_feed",
  "authentication_service_client",
  "aws-sdk-dynamodb",
  "aws-sdk-s3",
@@ -6666,6 +6720,7 @@ dependencies = [
  "models_properties",
  "models_soup",
  "notification",
+ "notification_inbox",
  "opensearch_client",
  "opentelemetry",
  "opentelemetry_sdk",
@@ -7411,17 +7466,23 @@ version = "0.1.0"
 dependencies = [
  "ai_usage",
  "chrono",
+ "connection_gateway_client",
  "doppler-config",
  "email",
  "jev",
  "kafka_util",
+ "macro_auth",
  "macro_config",
+ "macro_db_migrator",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
  "macro_event_broker",
+ "macro_service_urls",
  "macro_user_id",
  "memory",
+ "models_email",
+ "opentelemetry",
  "rdkafka",
  "rootcause",
  "serde",
@@ -7430,7 +7491,9 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "tracing-opentelemetry",
  "uuid",
+ "wiremock",
  "workspace-hack",
 ]
 
@@ -9362,6 +9425,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "graphql_notification_inbox"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "async-stream",
+ "attention_feed",
+ "futures",
+ "graphql_common",
+ "graphql_notification",
+ "graphql_soup",
+ "macro_user_id",
+ "notification_inbox",
+ "soup",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "graphql_permission"
 version = "0.1.0"
 dependencies = [
@@ -9483,22 +9564,14 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "async-stream",
- "chrono",
- "entity_access",
+ "attention_feed",
  "futures",
  "graphql_common",
  "graphql_notification",
  "graphql_soup",
  "macro_user_id",
- "model-entity",
- "model_notifications",
- "notification",
- "rootcause",
- "serde_json",
  "soup",
- "tokio",
  "tracing",
- "uuid",
  "work_feed",
  "workspace-hack",
 ]
@@ -13907,6 +13980,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "notification_inbox"
+version = "0.1.0"
+dependencies = [
+ "attention_feed",
+ "chrono",
+ "filter_ast",
+ "item_filters",
+ "macro_user_id",
+ "model-entity",
+ "model_notifications",
+ "notification",
+ "rootcause",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "notification_retention_handler"
 version = "0.1.0"
 dependencies = [
@@ -14505,11 +14599,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "hyper 1.9.0",
  "macro_entrypoint",
  "models_opensearch",
  "models_search_cursor",
  "opensearch",
  "opensearch_query_builder",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "strum 0.27.2",
@@ -18662,18 +18758,21 @@ dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
+ "cognition",
  "cowlike",
  "document_sub_type",
  "documents",
  "email",
  "entity_access",
  "filter_ast",
+ "futures",
  "item_filters",
  "lexical_client",
  "macro_user_id",
  "models_pagination",
  "models_search",
  "models_soup",
+ "rootcause",
  "schemars 1.2.1",
  "search_service_client",
  "serde",
@@ -18682,6 +18781,7 @@ dependencies = [
  "system_skills",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-util",
  "tracing",
  "uuid",
  "workspace-hack",
@@ -22851,27 +22951,18 @@ dependencies = [
 name = "work_feed"
 version = "0.1.0"
 dependencies = [
- "activity",
- "base64 0.22.1",
+ "attention_feed",
  "chrono",
- "cowlike",
  "document_sub_type",
- "email",
- "entity_access",
  "filter_ast",
- "futures",
  "item_filters",
  "macro_user_id",
  "model-entity",
  "model_notifications",
- "models_soup",
  "notification",
  "rootcause",
  "serde",
  "serde_json",
- "soup",
- "soup_realtime",
- "thiserror 2.0.18",
  "tokio",
  "tracing",
  "uuid",

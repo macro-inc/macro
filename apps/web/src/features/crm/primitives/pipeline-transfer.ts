@@ -13,6 +13,7 @@ import {
   encodePipelineCsv,
   type PipelineCsvRow,
   type PipelineImportPlan,
+  PipelineImportRefusal,
   pipelineImportMessage,
   pipelineRecordCell,
   planPipelineImport,
@@ -95,6 +96,8 @@ export type PipelineImportResult = {
   present: number;
   /** Records that could not be found or created, such as gmail.com companies. */
   unresolved: number;
+  /** Refused entries, identified by record and position in the import. */
+  invalid?: { entry: number; key: string; reason: string }[];
 };
 
 /**
@@ -121,17 +124,24 @@ export async function addPipelineRows(input: {
   );
   const present = recordIds(pipeline, table.rows);
   const rows: CellWrite[][] = [];
+  const entries: { entry: number; key: string }[] = [];
   const outcome: PipelineImportResult = { added: 0, present: 0, unresolved: 0 };
-  for (const row of plan.rows) {
+  for (const [index, row] of plan.rows.entries()) {
     const id = ids.get(row.record.key);
     if (!id) outcome.unresolved++;
     else if (present.has(id)) outcome.present++;
-    else rows.push([pipelineRecordCell(pipeline, id), ...row.cells]);
+    else {
+      rows.push([pipelineRecordCell(pipeline, id), ...row.cells]);
+      entries.push({ entry: index + 1, key: row.record.key });
+    }
   }
   await span.span('crm.pipeline.insert_rows', () =>
-    transfer.insertRows(rows, table.columns)
+    transfer.insertRows(rows, table.columns, (index, reason) => {
+      outcome.invalid ??= [];
+      outcome.invalid.push({ ...entries[index], reason });
+    })
   );
-  outcome.added = rows.length;
+  outcome.added = rows.length - (outcome.invalid?.length ?? 0);
   return outcome;
 }
 
@@ -214,7 +224,9 @@ export function createPipelineImport(
     } catch (cause) {
       span.error(cause);
       setError(
-        'Could not finish the import. Retry to add the rows that are still missing.'
+        cause instanceof PipelineImportRefusal
+          ? cause.message
+          : 'Could not finish the import. Retry to add the rows that are still missing.'
       );
     }
     try {

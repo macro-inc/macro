@@ -36,7 +36,7 @@ tools — hexagonal, heavily feature-gated.
   `crm`, `frecency`, `item_filters`, `lexical_client`, `macro_event_broker`,
   `calendar_events` (optional, feature `calendar_invitations`).
 - Used by: many crates and services, including `ai_tools`, `graphql_email`,
-  `teams`, `databases_sql`, `work_feed`, `calendar_service`, `email_service`,
+  `teams`, `databases_sql`, `attention_feed`, `calendar_service`, `email_service`,
   `email_scheduled_handler`, `search_processing_service`.
 
 ## Recipes
@@ -54,6 +54,31 @@ tools — hexagonal, heavily feature-gated.
 
 ## Gotchas
 
+- Focus's `decide` and `signals` are versioned: bump `FOCUS_RULE_VERSION` in
+  `domain/focus/rule.rs` when either changes, or stored rows keep the old verdict
+  until new mail arrives. The worker's sweep re-decides older rows from their
+  stored `scores`, without calling Jev. `rule/experiment.csv` holds the expected
+  verdicts for 643 real threads; report how far a rule change moves them. A new
+  question's answer is `#[serde(default)]`, so stored `scores` still decode, and
+  needs no bump when it decides nothing at 0.
+- Nothing reclassifies a Focus thread as it ages, so `focus_pg` applies the wait
+  and the calendar hold when it reads: `awaiting_reply` and `calendar_hold_until`
+  are stored, `FOLLOW_UP_AFTER_DAYS` and the time are passed in. `focus_thread_ids`
+  and `focus_for_threads` restate the same tests; change both.
+- `focus_for_threads` also moves importance when it reads, with
+  `domain/focus/importance.rs`: `importance_rate` is stored and the clock starts at
+  `classified_message_ts`. The stored `importance` is the base, and the floors in
+  `domain/focus/rule.rs` only set that base. Importance never decides membership,
+  so `focus_thread_ids` doesn't read it.
+- In Focus, Calendar only means a change whose event isn't over: the read sets it
+  from `calendar_hold_until`, and the stored `category` is what the thread reads as
+  afterwards. A stored Calendar is a new invite or RSVP left out, and
+  `NEW_INVITES_STAY_OUT` in `domain/focus/rule.rs` is the switch for new invites.
+  `stale_threads` restates `domain/focus/calendar.rs`'s test for a change in SQL;
+  change both.
+- A thread holding only the owner's sent mail stays out of Focus on purpose:
+  it has `inbox_visible` false, which the client reads as Done, Mark Done cannot
+  change it, and there is no inbound mail for the rule to judge.
 - Treat DATE property literals as non-matches; apply ordinary boolean negation and keep non-date email filtering unchanged.
 - All Mail excludes present messages in spam/junk or trash before pagination;
   canonical cached previews and non-draft baselines use the same rule for Gmail

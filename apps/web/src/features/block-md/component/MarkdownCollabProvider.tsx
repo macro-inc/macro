@@ -55,7 +55,6 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
       syncSource={syncSource}
       sourceReady={() => documentSource().type === 'sync'}
       canEdit={permissions.canEdit}
-      canComment={permissions.canComment}
       editorError={state.editor.error}
       span={flow.span}
     />

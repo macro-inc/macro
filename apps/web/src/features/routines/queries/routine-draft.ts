@@ -5,6 +5,7 @@ import {
 } from '../core/routine-draft';
 import {
   onceFromCron,
+  onceTrigger,
   parseRoutineTriggers,
   serializeTriggers,
 } from './routine-trigger-mapping';
@@ -234,16 +235,7 @@ function triggerFromDraft(
   timezone = getDefaultTimezone()
 ) {
   if (draft.triggers) return serializeTriggers(draft.triggers);
-  if (draft.frequency === 'once') {
-    const date = new Date(draft.onceAt ?? '');
-    if (Number.isNaN(date.getTime()))
-      throw new Error('Choose a valid date and time.');
-    return {
-      type: 'cron' as const,
-      timezone: 'UTC',
-      schedule: `${date.getUTCSeconds()} ${date.getUTCMinutes()} ${date.getUTCHours()} ${date.getUTCDate()} ${date.getUTCMonth() + 1} * ${date.getUTCFullYear()}`,
-    };
-  }
+  if (draft.frequency === 'once') return onceTrigger(draft.onceAt ?? '');
   return {
     type: 'cron' as const,
     timezone: draft.timezone ?? timezone,

@@ -13,6 +13,7 @@ import {
 } from '@queries/auth/user-info';
 import { queryReadyGate } from '@queries/gate';
 import { detect } from 'detect-browser';
+import { match } from 'ts-pattern';
 import type { AuthContext, AuthSession } from './context/auth-context';
 import {
   exchangeSessionCode,
@@ -28,6 +29,7 @@ export function createAppAuthContext(): AuthContext {
   const { initEmailLink } = useEmailLinks();
   const loginSso = useSsoLogin();
   const signupSso = useSsoLogin({ signupMode: true });
+  const agentSignupSso = useSsoLogin({ signupMode: true, isAgent: true });
   const sendWelcomeEmail = useSendMobileWelcomeEmail();
 
   const session = (): AuthSession => {
@@ -47,6 +49,7 @@ export function createAppAuthContext(): AuthContext {
         id: data.userId,
         email: data.email ?? undefined,
         tutorialComplete: data.tutorialComplete === true,
+        isAgent: data.isAgent === true,
       },
     };
   };
@@ -67,10 +70,14 @@ export function createAppAuthContext(): AuthContext {
 
   return {
     session,
-    startSso: (provider, intent) =>
-      (intent === 'signup' ? signupSso : loginSso)(
-        provider === 'google' ? GOOGLE_GMAIL_IDP : 'Apple'
-      ),
+    startSso: (provider, intent) => {
+      const startSsoFor = match(intent)
+        .with('login', () => loginSso)
+        .with('signup', () => signupSso)
+        .with('agent-signup', () => agentSignupSso)
+        .exhaustive();
+      return startSsoFor(provider === 'google' ? GOOGLE_GMAIL_IDP : 'Apple');
+    },
     sendEmailCode,
     verifyEmailCode,
     redeemSessionToken: async (token) => {

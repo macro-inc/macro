@@ -21,6 +21,7 @@ import { GithubPullRequestNamespace } from './entities/github-pull-requests/name
 import { HarnessNamespace } from './entities/harnesses/namespace';
 import { ImagesNamespace } from './entities/images/namespace';
 import { InitiativeNamespace } from './entities/initiatives/namespace';
+import { MeNamespace } from './entities/me/namespace';
 import { MeetingNamespace } from './entities/meetings/namespace';
 import { NotificationNamespace } from './entities/notifications/namespace';
 import { PinsNamespace } from './entities/pins/namespace';
@@ -157,6 +158,8 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   /** Generate images with AI and attach them to messages. */
   readonly images: ImagesNamespace;
+  /** Your own profile: set your name and profile picture. */
+  readonly me: MeNamespace;
 
   readonly notifications: NotificationNamespace;
 
@@ -199,6 +202,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.agents = new AgentNamespace(client);
     this.initiatives = new InitiativeNamespace(client);
     this.apiKeys = new ApiKeyNamespace(client);
+    this.me = new MeNamespace(client);
     this.harnesses = new HarnessNamespace(client);
     this.meetings = new MeetingNamespace(client);
     this.githubPullRequests = new GithubPullRequestNamespace(client);
@@ -279,6 +283,7 @@ export {
   CrmPipeline,
   PipelineColumn,
   PipelineRow,
+  type PipelineStageRequirement,
   PipelineTable,
   PipelineView,
 } from './entities/crm/pipeline';
@@ -290,6 +295,12 @@ export type {
   QueryStatement,
   QueryTableVersion,
 } from './entities/databases/query';
+export {
+  type DocumentEditOptions,
+  DocumentEditRefusedError,
+  type DocumentEditResult,
+  EditOutcomeUnknownError,
+} from './entities/documents/ai-edit';
 export { DocumentAnchor } from './entities/documents/anchor';
 export { DocumentVersion } from './entities/documents/version';
 export {
@@ -323,6 +334,11 @@ export {
   type InitiativeOptions,
 } from './entities/initiatives/initiative';
 export type { InitiativeSummary } from './entities/initiatives/namespace';
+export {
+  MeNamespace,
+  type UpdateMeOptions,
+  type UploadProfilePictureOptions,
+} from './entities/me/namespace';
 export { Meeting } from './entities/meetings/meeting';
 export type { TimelineOptions } from './entities/messages/thread';
 export { type MessageParent, MessageThread } from './entities/messages/thread';
