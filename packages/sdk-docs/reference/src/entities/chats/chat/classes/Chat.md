@@ -240,18 +240,21 @@ value when `value` is omitted.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`ChatResponse`](../../../../../generated/cognition/types.gen/type-aliases/ChatResponse.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`ChatResponse`](../../../../../generated/cognition/types.gen/type-aliases/ChatResponse.md); `id`: `string`; `url`: `string`; \}
+
+Identity, loaded detail and [webUrl](#weburl), so serialized handles carry their link.
 
 #### Returns
 
-\{ `detail?`: [`ChatResponse`](../../../../../generated/cognition/types.gen/type-aliases/ChatResponse.md); `id`: `string`; \}
+\{ `detail?`: [`ChatResponse`](../../../../../generated/cognition/types.gen/type-aliases/ChatResponse.md); `id`: `string`; `url`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`ChatResponse`](../../../../../generated/cognition/types.gen/type-aliases/ChatResponse.md) |
 | `id` | `string` |
+| `url` | `string` |
 
-#### Inherited from
+#### Overrides
 
 [`PropertiedEntity`](../../../entity/classes/PropertiedEntity.md).[`toJSON`](../../../entity/classes/PropertiedEntity.md#tojson)
 

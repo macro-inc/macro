@@ -7,6 +7,7 @@
 mod extract;
 mod one_of;
 mod recursive;
+mod ref_loop;
 
 #[cfg(test)]
 mod test;
@@ -17,6 +18,7 @@ use schemars::Schema;
 
 pub use one_of::ValidateNoOneOf;
 pub use recursive::RecursiveValidate;
+pub use ref_loop::{required_ref_loop, validate_no_required_ref_loop};
 
 /// A validating visitor similar to [`Transform`](schemars::transform::Transform)
 ///
@@ -30,12 +32,13 @@ pub trait Validate {
 }
 
 /// Validates a tool's input schema against the strict-mode requirements of
-/// both OpenAI and Anthropic.
+/// both OpenAI and Anthropic, and the schemas Gemini accepts.
 ///
 /// Returns the tool's name and description extracted from the schema
 /// metadata. Requires an object root without `oneOf`, `anyOf`, or `allOf`,
 /// and rejects residual `oneOf` throughout the schema. Nested `anyOf` is
-/// supported, so tagged variants belong under a named property.
+/// supported, so tagged variants belong under a named property. Rejects a
+/// `$ref` loop made only of required fields, which Gemini refuses.
 ///
 /// See:
 /// * <https://platform.claude.com/docs/en/agents-and-tools/tool-use/strict-tool-use>
@@ -58,6 +61,7 @@ pub fn validate_tool_schema(schema: &Schema) -> Result<(String, String), Validat
     }
 
     RecursiveValidate(ValidateNoOneOf).validate(schema)?;
+    validate_no_required_ref_loop(schema)?;
 
     Ok((name, description))
 }

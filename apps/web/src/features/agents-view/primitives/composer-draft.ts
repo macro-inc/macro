@@ -19,6 +19,12 @@ export const NEW_CONVERSATION_ATTACHMENTS_KEY = createPersistenceKey(
   0
 );
 
+/** Home owns its attachments separately from the Agents page composer. */
+export const HOME_CONVERSATION_ATTACHMENTS_KEY = createPersistenceKey(
+  'attachment-tracker-home-agent-conversation',
+  0
+);
+
 /** Keep a composer draft after the New conversation page remounts. */
 export function createPersistedComposerDraft(
   name = NEW_CONVERSATION_DRAFT_KEY,

@@ -317,8 +317,8 @@ method documents how to use it in its TSDoc:
 ## PR plan
 
 Each PR is small and independently mergeable, adds tests first, documents every
-new method as above, regenerates the SDK reference, the code-mode bundle and
-`documentation.json`, and adds the direct tool it replaces to
+new method as above (the SDK reference, code-mode bundle and documentation are
+generated at build time), and adds the direct tool it replaces to
 `covered_by_code_sdk`.
 
 1. **This design** (docs only).

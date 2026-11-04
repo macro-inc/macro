@@ -91,6 +91,39 @@ fn every_host_toolset_passes_schema_validation() {
     }
 }
 
+/// Gemini rejects a whole request when one tool schema has a `$ref` loop of
+/// required fields, so every turn advertising that tool fails.
+#[test]
+fn no_tool_schema_has_a_ref_loop_of_required_fields() {
+    let mut schemas = Vec::new();
+    for tools in [
+        tools_for(AiHost::Chat),
+        tools_for(AiHost::AgentSession),
+        tools_for(AiHost::ChannelBot),
+        tools_for(AiHost::Mcp),
+        tools_for_agent_code_mode(),
+    ] {
+        let advertised = tools.toolset.request_schemas().unwrap_or_default();
+        schemas.extend(advertised.into_iter().map(|tool| (tool.name, tool.schema)));
+        schemas.extend(
+            tools
+                .deferred
+                .iter()
+                .map(|tool| (tool.name.clone(), tool.schema.clone())),
+        );
+    }
+    let subagent = subagent_toolset().request_schemas().unwrap_or_default();
+    schemas.extend(subagent.into_iter().map(|tool| (tool.name, tool.schema)));
+    assert!(schemas.iter().any(|(name, _)| name == "DisplayResults"));
+    for (name, schema) in schemas {
+        assert_eq!(
+            ai_toolset::schema::required_ref_loop(schema.as_value()),
+            None,
+            "{name}"
+        );
+    }
+}
+
 #[test]
 fn coding_dispatch_is_available_to_every_host_but_not_internal_subagents() {
     for host in [
