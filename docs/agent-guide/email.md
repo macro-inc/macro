@@ -898,6 +898,12 @@ edit, an attachment upload completing during another local save, and Discard
 while an attachment snapshot is still being saved. A snapshot based on an older
 local revision must fail without replacing newer content or files, including
 when another tab saves first. Reopen the draft to use the latest version.
+Then open one reply in two tabs, type in the first, wait for its queued save to
+reach the server, and send from the second. The first tab's composer must clear
+without "Your newer text was kept as a new draft", Drafts must not gain a copy
+of the sent reply, and the thread must not reopen it as a draft. Text typed
+after the server last acknowledged the draft is still kept as a new draft;
+each such move logs `email_draft.kept_as_new` with its reason.
 A completed discard must not resurrect on reload. A clean,
 fully synchronized local copy must not hide newer server edits or sent state.
 While online, create a disposable reply, wait for its server identity, discard
