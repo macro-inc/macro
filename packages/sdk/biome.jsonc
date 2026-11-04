@@ -7,6 +7,8 @@
       "!generated",
       "!dist",
       "!specs",
+      // Copied from packages/lexical-core by `bun run vendor`.
+      "!src/vendor",
       "!node_modules"
     ]
   },
