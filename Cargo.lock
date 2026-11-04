@@ -4864,6 +4864,7 @@ dependencies = [
  "graphql_favorite",
  "graphql_initiative",
  "graphql_notification",
+ "graphql_notification_inbox",
  "graphql_permission",
  "graphql_properties",
  "graphql_scheduled_action",
@@ -4881,6 +4882,7 @@ dependencies = [
  "models_properties",
  "models_soup",
  "notification",
+ "notification_inbox",
  "predicate-index",
  "rootcause",
  "saved_views",
@@ -6718,6 +6720,7 @@ dependencies = [
  "models_properties",
  "models_soup",
  "notification",
+ "notification_inbox",
  "opensearch_client",
  "opentelemetry",
  "opentelemetry_sdk",
@@ -9418,6 +9421,24 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "graphql_notification_inbox"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "async-stream",
+ "attention_feed",
+ "futures",
+ "graphql_common",
+ "graphql_notification",
+ "graphql_soup",
+ "macro_user_id",
+ "notification_inbox",
+ "soup",
+ "tracing",
  "workspace-hack",
 ]
 
@@ -13955,6 +13976,27 @@ dependencies = [
  "serde",
  "serde_json",
  "sqlx",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "notification_inbox"
+version = "0.1.0"
+dependencies = [
+ "attention_feed",
+ "chrono",
+ "filter_ast",
+ "item_filters",
+ "macro_user_id",
+ "model-entity",
+ "model_notifications",
+ "notification",
+ "rootcause",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
  "tracing",
  "uuid",
  "workspace-hack",

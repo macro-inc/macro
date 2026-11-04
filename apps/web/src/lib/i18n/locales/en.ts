@@ -13,6 +13,7 @@ import entityActions from './en/entity-actions';
 import localRuntime from './en/local-runtime';
 import mobile from './en/mobile';
 import nav from './en/nav';
+import notificationsInbox from './en/notifications-inbox';
 import runtimeSharing from './en/runtime-sharing';
 import settingsLanguage from './en/settings-language';
 import settingsMobileApp from './en/settings-mobile-app';
@@ -41,6 +42,7 @@ export default {
   localRuntime,
   mobile,
   nav,
+  notificationsInbox,
   runtimeSharing,
   settingsLanguage,
   settingsMobileApp,
