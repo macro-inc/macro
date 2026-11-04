@@ -234,7 +234,7 @@ describe('routine steps editor', () => {
     const steps = renderSteps({
       triggers: [email],
       steps: [codeStep('Label invoices')],
-      author: { add, revise: vi.fn() },
+      author: { code: () => true, add, revise: vi.fn() },
     });
     const box = screen.getByRole('textbox', { name: 'Add a step' });
     fireEvent.input(box, { target: { value: 'escalate blocking tasks' } });
@@ -273,7 +273,7 @@ describe('routine steps editor', () => {
     const steps = renderSteps({
       triggers: [email],
       steps: [before],
-      author: { add: vi.fn(), revise },
+      author: { code: () => true, add: vi.fn(), revise },
     });
     // Saying what to change starts from the step's Edit.
     expect(
@@ -320,7 +320,7 @@ describe('routine steps editor', () => {
         codeStep('Label invoices'),
         agentStep({ kind: 'model', model: 'm' }, 'Summarize'),
       ],
-      author: { add: vi.fn(), revise: vi.fn() },
+      author: { code: () => true, add: vi.fn(), revise: vi.fn() },
     });
     openMenu('Step actions', 1);
     expect(screen.queryByRole('menuitem', { name: 'Edit' })).toBeNull();
@@ -361,5 +361,27 @@ describe('routine steps editor', () => {
     openMenu('Step actions', 0);
     choose('Hide code');
     expect(screen.queryByLabelText('Code', { selector: 'pre' })).toBeNull();
+  });
+
+  it('offers no way to make an added step code when code steps are off', async () => {
+    const add = vi.fn<StepAuthor['add']>().mockResolvedValue({
+      step: agentStep({ kind: 'model', model: 'm' }, 'Post a summary'),
+      reason: 'it needs judgment',
+    });
+    renderSteps({
+      triggers: [email],
+      steps: [codeStep('Label invoices')],
+      author: { code: () => false, add, revise: vi.fn() },
+    });
+    fireEvent.input(screen.getByRole('textbox', { name: 'Add a step' }), {
+      target: { value: 'post a summary' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect((await screen.findByRole('status')).textContent).toContain(
+      'Added as Ask AI'
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Write it once instead' })
+    ).toBeNull();
   });
 });

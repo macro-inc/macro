@@ -904,6 +904,15 @@ export const enableRoutineStarterTemplates = defineFlag({
   default: onInDev,
 });
 
+// AI writes routine steps as code (Draft it, the add-step box, code starter
+// templates). Off, it writes Ask AI steps only; code steps a routine already
+// has still show, run and change.
+export const enableRoutineCodeSteps = defineFlag({
+  key: 'enable-routine-code-steps',
+  env: 'ENABLE_ROUTINE_CODE_STEPS',
+  default: onInDev,
+});
+
 // Templates are not ready for general use. Follow PostHog even in development
 // so the UI and the server's per-user rollout agree.
 export const enableRoutineSharing = defineFlag({

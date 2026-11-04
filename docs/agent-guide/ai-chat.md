@@ -827,7 +827,10 @@ email, channel or task event adds **Open item**. Each code step has
 Runs recorded before this change have neither, and runs recorded with the
 removed tool or decision steps show their outcome without per-step detail.
 
-**Draft it** on a new routine writes code and Ask AI steps. It reads the same
+**Draft it** on a new routine writes code and Ask AI steps. Code steps are
+behind `enable-routine-code-steps` (PostHog, on in development builds): with it
+off, Draft it, the add-step box and the built-in templates write Ask AI steps
+only, and code steps a routine already has still show, run and change. It reads the same
 code-step guide CreateRoutine does, plus SDK signatures relevant to the
 description and the starter routines as worked examples, then type-checks the
 routine's code steps together (a step that misreads an earlier step's output

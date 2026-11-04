@@ -132,9 +132,14 @@ export async function composeStep(opts: {
     if (opts.kind === 'agent' && hasAgent)
       return 'This routine already has its Ask AI step. Change that one instead.';
     const code: CodeGuidance | undefined =
-      opts.kind === 'agent' ? undefined : await codeGuidance(opts.description);
+      opts.kind === 'agent' || !opts.context.codeSteps
+        ? undefined
+        : await codeGuidance(opts.description);
     if (opts.kind === 'code' && !code)
       return 'Code steps can’t be written here right now.';
+    // Without code, the only step left to add is the Ask AI it already has.
+    if (hasAgent && !code)
+      return 'This routine already has its Ask AI step. Change that one instead.';
     const only: StepKind | undefined =
       opts.kind ?? (hasAgent ? 'code' : code ? undefined : 'agent');
     const instructions = `${compositionInstructions(opts.context, code)}

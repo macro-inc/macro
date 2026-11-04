@@ -161,6 +161,7 @@ describe('routine composition', () => {
       people: [{ name: 'Ada', id: 'macro|ada@example.com' }],
       agents: [],
       decisions: false,
+      codeSteps: true,
     });
     expect(instructions).toContain('"Finance"');
     expect(instructions).toContain('"billing"');
@@ -231,6 +232,7 @@ const composerContext = {
   people: [],
   agents: [],
   decisions: true,
+  codeSteps: true,
 };
 
 const failing: CodeFailure = {
@@ -433,5 +435,26 @@ describe('composeRoutine', () => {
       request.output_schema.schema.properties.steps.items.properties.type.enum
     ).not.toContain('code');
     expect(clients.checkCode).not.toHaveBeenCalled();
+  });
+
+  it('drafts Ask AI steps only, without asking for code, when code steps are off', async () => {
+    clients.structuredCompletion.mockResolvedValue(
+      completed({
+        name: 'Summary',
+        triggers: [],
+        steps: [{ type: 'agent', model: 'claude', instructions: 'Summarize' }],
+      })
+    );
+    const draft = await composeRoutine(
+      'label my invoices',
+      { ...composerContext, codeSteps: false },
+      'claude' as never
+    );
+    if (typeof draft === 'string') throw new Error(draft);
+    expect(clients.codeGuide).not.toHaveBeenCalled();
+    const [request] = clients.structuredCompletion.mock.calls[0] ?? [];
+    expect(
+      request.output_schema.schema.properties.steps.items.properties.type.enum
+    ).not.toContain('code');
   });
 });

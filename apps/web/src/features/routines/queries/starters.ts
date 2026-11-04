@@ -1,3 +1,5 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { enableRoutineCodeSteps } from '@core/constant/featureFlags';
 import { throwOnErr } from '@core/util/result';
 import { scheduledActionClient } from '@service-scheduled-action/client';
 import { queryOptions, useQuery } from '@tanstack/solid-query';
@@ -35,8 +37,15 @@ export function starterStepsQueryOptions() {
   });
 }
 
-/** Starter code steps; empty until they load, so templates never wait on them. */
+/**
+ * Starter code steps; empty until they load, so templates never wait on them,
+ * and without code steps, so templates start as Ask AI.
+ */
 export function useStarterSteps(): () => StarterSteps {
-  const query = useQuery(() => starterStepsQueryOptions());
-  return () => (query.isSuccess ? query.data : {});
+  const codeSteps = useFeatureFlag(enableRoutineCodeSteps);
+  const query = useQuery(() => ({
+    ...starterStepsQueryOptions(),
+    enabled: codeSteps().enabled,
+  }));
+  return () => (codeSteps().enabled && query.isSuccess ? query.data : {});
 }

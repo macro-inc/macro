@@ -29,6 +29,8 @@ export type ComposerContext = {
   people: { name: string; id: string }[];
   agents: { name: string; botId: string }[];
   decisions: boolean;
+  /** Whether AI may write code steps; otherwise it writes Ask AI steps. */
+  codeSteps: boolean;
 };
 
 const MAX_CONTEXT_ITEMS = 60;
@@ -410,7 +412,9 @@ export async function composeRoutine(
   return await Telemetry.span('routine.compose', async (span) => {
     span.setAttr('gen_ai.request.model', model);
     span.setAttr('routine.compose.decisions', context.decisions);
-    const code = await codeGuidance(description);
+    const code = context.codeSteps
+      ? await codeGuidance(description)
+      : undefined;
     span.setAttr('routine.compose.code_available', Boolean(code));
     const instructions = compositionInstructions(context, code);
     let output = await complete(

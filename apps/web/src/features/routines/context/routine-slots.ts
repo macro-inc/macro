@@ -40,6 +40,8 @@ export type RoutineEditorSlots = {
 
 /** AI that writes one step at a time for a routine being edited. */
 export type StepAuthor = {
+  /** Whether it may write code steps; otherwise only Ask AI. */
+  code(): boolean;
   /** Draft a step to add at the end; `kind` overrides AI's choice. */
   add(description: string, kind?: StepKind): Promise<AddedStep | string>;
   /** Rewrite a code step as `instruction` says, checked like a save. */

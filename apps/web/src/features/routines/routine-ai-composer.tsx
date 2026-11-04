@@ -1,5 +1,7 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHasPaidAccess } from '@core/auth';
 import { databaseModelForPlan } from '@core/component/AI/constant';
+import { enableRoutineCodeSteps } from '@core/constant/featureFlags';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { getDefaultTimezone } from '@core/util/cron';
@@ -29,6 +31,7 @@ export function useComposerContext(options: {
   const roster = createAgentRosterSource();
   const folders = useQuickAccessEntities(() => 'PROJECT');
   const people = useQuickAccessEntities(() => 'USER');
+  const codeSteps = useFeatureFlag(enableRoutineCodeSteps);
   const named = (
     items: readonly { id: string; data: { name?: string | null } }[]
   ) =>
@@ -59,6 +62,7 @@ export function useComposerContext(options: {
         agent.botId ? [{ name: agent.name, botId: agent.botId }] : []
       ),
     decisions: options.decisionsEnabled(),
+    codeSteps: codeSteps().enabled,
   });
 }
 

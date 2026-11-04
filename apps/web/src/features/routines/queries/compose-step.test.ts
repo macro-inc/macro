@@ -40,6 +40,7 @@ const context = {
   people: [],
   agents: [],
   decisions: true,
+  codeSteps: true,
 };
 
 const guidance = {
@@ -206,6 +207,44 @@ describe('adding one step with AI', () => {
       kind: 'agent',
     });
     expect(refused).toMatch(/already has its Ask AI step/);
+  });
+});
+
+describe('adding a step with code steps off', () => {
+  it('writes Ask AI without asking for code, and nothing once the routine has one', async () => {
+    clients.structuredCompletion.mockResolvedValue(
+      completed({
+        step: { type: 'agent', model: 'claude', instructions: 'Post it' },
+        reason: 'needs judgment',
+      })
+    );
+    const off = { ...context, codeSteps: false };
+    const added = await composeStep({
+      description: 'post a summary',
+      routine: { triggers: [daily], steps: [escalate] },
+      context: off,
+      model: 'claude' as never,
+    });
+    if (typeof added === 'string') throw new Error(added);
+    expect(added.step.kind).toBe('agent');
+    expect(clients.codeGuide).not.toHaveBeenCalled();
+    expect(
+      await composeStep({
+        description: 'post it too',
+        routine: { triggers: [daily], steps: [escalate, added.step] },
+        context: off,
+        model: 'claude' as never,
+      })
+    ).toMatch(/already has its Ask AI step/);
+    expect(
+      await composeStep({
+        description: 'post it as code',
+        routine: { triggers: [daily], steps: [escalate] },
+        context: off,
+        model: 'claude' as never,
+        kind: 'code',
+      })
+    ).toMatch(/can’t be written/);
   });
 });
 

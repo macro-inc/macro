@@ -4,7 +4,10 @@ import {
   databaseModelForPlan,
   defaultModelForPlan,
 } from '@core/component/AI/constant';
-import { enableRoutineConditions } from '@core/constant/featureFlags';
+import {
+  enableRoutineCodeSteps,
+  enableRoutineConditions,
+} from '@core/constant/featureFlags';
 import type { Accessor } from 'solid-js';
 import type { StepAuthor } from './context/routine-slots';
 import type { RoutineSoFar } from './core/routine-steps';
@@ -20,12 +23,14 @@ export function createRoutineStepAuthor(
 ): StepAuthor {
   const hasPaidAccess = useHasPaidAccess();
   const decisions = useFeatureFlag(enableRoutineConditions);
+  const codeSteps = useFeatureFlag(enableRoutineCodeSteps);
   const context = useComposerContext({
     defaultModel: () => defaultModelForPlan(hasPaidAccess()),
     decisionsEnabled: () => decisions().enabled,
   });
   const model = () => databaseModelForPlan(hasPaidAccess());
   return {
+    code: () => codeSteps().enabled,
     add: (description, kind) =>
       composeStep({
         description,

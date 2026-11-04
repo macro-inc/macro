@@ -164,7 +164,9 @@ function AddStepBox(props: {
                 : 'Added as Ask AI, which decides each run'}
               {step().reason ? `: ${step().reason}` : '.'}
             </span>
-            <Show when={step().kind === 'agent' || !hasAgent()}>
+            <Show
+              when={step().kind === 'agent' ? props.author.code() : !hasAgent()}
+            >
               <LinkButton
                 disabled={pending()}
                 onClick={() => fireAndForget(switchKind(step()), 'routines')}
