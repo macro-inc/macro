@@ -83,6 +83,12 @@ otherwise); its backend-free regression opens it, scrolls to the last group,
 searches, and picks by keyboard:
 `bunx playwright test --config src/lib/core/component/Emoji/browser-test/playwright.config.ts`.
 
+Focus rows have a backend-free browser regression over the real row and mapping
+at wide, one-line, stacked, phone, and tablet widths: one reason per row, no
+extra height or lost subject, touch rows of at least 44px, and the importance
+meter only under its sort:
+`bunx playwright test --config src/features/email-view/browser-test/playwright.config.ts`.
+
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 

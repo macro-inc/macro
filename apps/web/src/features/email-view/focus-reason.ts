@@ -1,7 +1,7 @@
 import type { EmailFocus } from '@entity';
 import { match } from 'ts-pattern';
 
-export type EmailFocusReason = {
+type EmailFocusReason = {
   label: string;
   /**
    * Dot color. Only a reason asking the owner to act has one. Follow up is

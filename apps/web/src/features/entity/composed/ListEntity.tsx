@@ -270,6 +270,7 @@ export function ListEntity(props: ListEntityProps) {
         {
           'min-h-10': !isMobile() && !usesCondensedNarrowLayout(),
           'min-h-9': !isMobile() && usesCondensedNarrowLayout(),
+          'touch:min-h-[44px]': isEmailEntity(props.entity),
           'mx-(--soup-row-gutter)': !isMobile() && !isNarrowEmail(),
           'bg-list-selected [--avatar-group-separator:var(--color-list-selected)]':
             props.checked,

@@ -23,7 +23,13 @@ const ALL_REASONS = [
 const WIDTHS = [
   { name: 'wide row', width: 1280, height: 800, touch: false, stacked: false },
   // The narrowest row that keeps the subject and reason on one line.
-  { name: 'one-line row', width: 640, height: 800, touch: false, stacked: false },
+  {
+    name: 'one-line row',
+    width: 640,
+    height: 800,
+    touch: false,
+    stacked: false,
+  },
   { name: 'stacked row', width: 639, height: 800, touch: false, stacked: true },
   { name: 'narrow row', width: 420, height: 800, touch: false, stacked: true },
   { name: 'phone', width: 390, height: 844, touch: true, stacked: true },
@@ -35,7 +41,10 @@ async function open(page: Page) {
   await page.route('**/*', async (route) => {
     const url = new URL(route.request().url());
     // The dev server proxies this prefix to the hosted dev backend.
-    if (url.hostname !== 'localhost' || url.pathname.startsWith('/__macro_dev/')) {
+    if (
+      url.hostname !== 'localhost' ||
+      url.pathname.startsWith('/__macro_dev/')
+    ) {
       await route.abort();
       return;
     }
@@ -48,6 +57,11 @@ async function open(page: Page) {
     timeout: 180_000,
   });
 }
+
+// A route still fetching as a test ends must not fail it.
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+});
 
 for (const size of WIDTHS) {
   test.describe(size.name, () => {
@@ -89,7 +103,8 @@ for (const size of WIDTHS) {
 
       // A pill adds no height, whatever the row's layout.
       expect(await rowHeight('reply')).toBe(await rowHeight('other'));
-      if (size.touch) expect(await rowHeight('reply')).toBeGreaterThanOrEqual(44);
+      if (size.touch)
+        expect(await rowHeight('reply')).toBeGreaterThanOrEqual(44);
 
       // Stacked rows have the subject's own line: the pill can't take from it.
       if (size.stacked) {

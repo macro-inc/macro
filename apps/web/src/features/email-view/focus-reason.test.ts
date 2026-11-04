@@ -47,8 +47,8 @@ describe('emailFocusReason', () => {
 
   it('keeps a flag working when the category is unknown', () => {
     const fromNewerServer = JSON.parse('{"category":"NEWLY_ADDED"}');
-    expect(label({ category: fromNewerServer.category, needsReply: true })).toBe(
-      'Reply needed'
-    );
+    expect(
+      label({ category: fromNewerServer.category, needsReply: true })
+    ).toBe('Reply needed');
   });
 });

@@ -3,8 +3,10 @@ import '@app/index.css';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { ItemDndProvider } from '@components/app/ItemDragAndDrop';
+import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { UserContextProvider } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   EntityProvider,
   ListEntity,
@@ -17,14 +19,14 @@ import { mapEmailFocus } from '@queries/email/focus';
 import type { EmailFocusQuery } from '@service-storage/graphql/generated/graphql';
 import { createSignal, For, type JSX } from 'solid-js';
 import { render } from 'solid-js/web';
+import { macroDarkTheme } from '../../theme/themes/macro-dark';
+import { macroLightTheme } from '../../theme/themes/macro-light';
 import {
   EMAIL_FOCUS_WIDE_BREAKPOINT,
   EmailFocusPreviewLeading,
   EmailFocusReason,
   EmailFocusScore,
 } from '../components/EmailFocusBadges';
-import { macroDarkTheme } from '../../theme/themes/macro-dark';
-import { macroLightTheme } from '../../theme/themes/macro-light';
 import type { EmailFocusSort } from '../constants';
 
 const VIEWER_ID = 'macro|focus-rows@example.test';
@@ -35,6 +37,7 @@ queryClient.setQueryData(authKeys.userInfo.queryKey, {
   authenticated: true,
 });
 
+document.documentElement.dataset.touchDevice = String(isTouchDevice());
 const search = new URLSearchParams(window.location.search);
 const dark = search.get('theme') !== 'light';
 document.documentElement.dataset.themeLight = String(!dark);
@@ -88,7 +91,6 @@ function thread(
     emailName: subject,
     participants: [
       {
-        __typename: 'GraphqlEmailThreadParticipant',
         contactId: `${id}-contact`,
         linkId: 'inbox',
         name: sender,
@@ -100,6 +102,10 @@ function thread(
     labels: [],
     properties: [],
     notifications: [],
+    mailDraftState: null,
+    mailAllPreview: null,
+    mailDraftPreview: null,
+    mailSentPreview: null,
     focus: {
       category: 'OTHER',
       importance: 50,
@@ -186,21 +192,23 @@ function Fixture() {
           narrowLayout="inbox"
           wideBreakpoint={EMAIL_FOCUS_WIDE_BREAKPOINT}
         >
-          <For each={ROWS}>
-            {(entity) => (
-              <div data-testid={`row-${entity.id}`}>
-                {/* Mounted as EmailList mounts them. */}
-                <ListEntity
-                  entity={entity}
-                  meta={<EmailFocusReason entity={entity} />}
-                  metaEnd={<EmailFocusScore entity={entity} sort={sort()} />}
-                  previewLeading={
-                    <EmailFocusPreviewLeading entity={entity} sort={sort()} />
-                  }
-                />
-              </div>
-            )}
-          </For>
+          <SwipableRowProvider container={list}>
+            <For each={ROWS}>
+              {(entity) => (
+                <div data-testid={`row-${entity.id}`}>
+                  {/* Mounted as EmailList mounts them. */}
+                  <ListEntity
+                    entity={entity}
+                    meta={<EmailFocusReason entity={entity} />}
+                    metaEnd={<EmailFocusScore entity={entity} sort={sort()} />}
+                    previewLeading={
+                      <EmailFocusPreviewLeading entity={entity} sort={sort()} />
+                    }
+                  />
+                </div>
+              )}
+            </For>
+          </SwipableRowProvider>
         </ListLayoutProvider>
       </div>
     </main>
