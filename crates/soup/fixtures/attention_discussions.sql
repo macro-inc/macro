@@ -8,6 +8,8 @@
 --   T43  discussion on contact-1 (company-1)                 -> listed
 --   T44  discussion on contact-2 (company-1, hidden contact) -> not listed
 --   T45  discussion on project-1 (shared with user-1)        -> listed
+--   T46  discussion on contact-3 (no company, same team)     -> listed
+--   T47  discussion on contact-4 (company-2, hidden company) -> not listed
 
 SET session_replication_role = 'replica';
 
@@ -28,9 +30,11 @@ VALUES ('88888888-0000-0000-0000-000000000001', '77777777-aaaa-aaaa-aaaa-aaaaaaa
        ('88888888-0000-0000-0000-000000000002', '77777777-aaaa-aaaa-aaaa-aaaaaaaaaaaa', TRUE, '2024-06-01 09:00:00+00', '2024-06-01 09:00:00+00', 'Company 2'),
        ('88888888-0000-0000-0000-000000000003', '77777777-bbbb-bbbb-bbbb-bbbbbbbbbbbb', FALSE, '2024-06-01 09:00:00+00', '2024-06-01 09:00:00+00', 'Company 3');
 
-INSERT INTO public.crm_contacts ("id", "company_id", "email", "hidden", "first_interaction", "last_interaction")
-VALUES ('88888888-1111-0000-0000-000000000001', '88888888-0000-0000-0000-000000000001', 'contact1@company1.test', FALSE, '2024-06-01 09:00:00+00', '2024-06-01 09:00:00+00'),
-       ('88888888-1111-0000-0000-000000000002', '88888888-0000-0000-0000-000000000001', 'contact2@company1.test', TRUE, '2024-06-01 09:00:00+00', '2024-06-01 09:00:00+00');
+INSERT INTO public.crm_contacts ("id", "team_id", "company_id", "email", "hidden", "first_interaction", "last_interaction")
+VALUES ('88888888-1111-0000-0000-000000000001', '77777777-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '88888888-0000-0000-0000-000000000001', 'contact1@company1.test', FALSE, '2024-06-01 09:00:00+00', '2024-06-01 09:00:00+00'),
+       ('88888888-1111-0000-0000-000000000002', '77777777-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '88888888-0000-0000-0000-000000000001', 'contact2@company1.test', TRUE, '2024-06-01 09:00:00+00', '2024-06-01 09:00:00+00'),
+       ('88888888-1111-0000-0000-000000000003', '77777777-aaaa-aaaa-aaaa-aaaaaaaaaaaa', NULL, 'contact3@example.test', FALSE, '2024-06-01 09:00:00+00', '2024-06-01 09:00:00+00'),
+       ('88888888-1111-0000-0000-000000000004', '77777777-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '88888888-0000-0000-0000-000000000002', 'contact4@company2.test', FALSE, '2024-06-01 09:00:00+00', '2024-06-01 09:00:00+00');
 
 INSERT INTO public.initiative ("id", "name", "owner_user_id", "share_permission_id")
 VALUES ('66666666-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Project 1', 'macro|user-2@example.com', 'sp-project-1');
@@ -45,7 +49,9 @@ VALUES
 ('0190b000-0000-7000-8000-000000000042', 'crm_discussion', '88888888-0000-0000-0000-000000000003', 'crm_company', 'test', '2024-06-01 10:42:00', '{}', 'macro|user-2@example.com', NULL, NULL),
 ('0190b000-0000-7000-8000-000000000043', 'crm_discussion', '88888888-1111-0000-0000-000000000001', 'crm_contact', 'test', '2024-06-01 10:43:00', '{}', 'macro|user-2@example.com', NULL, NULL),
 ('0190b000-0000-7000-8000-000000000044', 'crm_discussion', '88888888-1111-0000-0000-000000000002', 'crm_contact', 'test', '2024-06-01 10:44:00', '{}', 'macro|user-2@example.com', NULL, NULL),
-('0190b000-0000-7000-8000-000000000045', 'initiative_discussion', '66666666-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'initiative', 'test', '2024-06-01 10:45:00', '{}', 'macro|user-2@example.com', NULL, NULL);
+('0190b000-0000-7000-8000-000000000045', 'initiative_discussion', '66666666-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'initiative', 'test', '2024-06-01 10:45:00', '{}', 'macro|user-2@example.com', NULL, NULL),
+('0190b000-0000-7000-8000-000000000046', 'crm_discussion', '88888888-1111-0000-0000-000000000003', 'crm_contact', 'test', '2024-06-01 10:46:00', '{}', 'macro|user-2@example.com', NULL, NULL),
+('0190b000-0000-7000-8000-000000000047', 'crm_discussion', '88888888-1111-0000-0000-000000000004', 'crm_contact', 'test', '2024-06-01 10:47:00', '{}', 'macro|user-2@example.com', NULL, NULL);
 
 INSERT INTO public.user_notification ("user_id", "notification_id", "created_at", "sent", "seen_at", "deleted_at", "state", "is_important_v0")
 VALUES
@@ -54,6 +60,8 @@ VALUES
 ('macro|user-1@example.com', '0190b000-0000-7000-8000-000000000042', '2024-06-01 10:42:00', TRUE, NULL, NULL, 'unseen', FALSE),
 ('macro|user-1@example.com', '0190b000-0000-7000-8000-000000000043', '2024-06-01 10:43:00', TRUE, NULL, NULL, 'unseen', FALSE),
 ('macro|user-1@example.com', '0190b000-0000-7000-8000-000000000044', '2024-06-01 10:44:00', TRUE, NULL, NULL, 'unseen', FALSE),
-('macro|user-1@example.com', '0190b000-0000-7000-8000-000000000045', '2024-06-01 10:45:00', TRUE, NULL, NULL, 'unseen', FALSE);
+('macro|user-1@example.com', '0190b000-0000-7000-8000-000000000045', '2024-06-01 10:45:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@example.com', '0190b000-0000-7000-8000-000000000046', '2024-06-01 10:46:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@example.com', '0190b000-0000-7000-8000-000000000047', '2024-06-01 10:47:00', TRUE, NULL, NULL, 'unseen', FALSE);
 
 SET session_replication_role = 'origin';
