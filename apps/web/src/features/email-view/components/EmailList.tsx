@@ -8,6 +8,7 @@ import {
   type ListKey,
   useListInteractions,
 } from '@app/components/list';
+import { StickyVirtualizer } from '@app/components/list/StickyVirtualizer';
 import { CommandState } from '@app/features/command/state';
 import {
   resolveEntityActionViewContext,
@@ -63,7 +64,7 @@ import {
   Switch,
 } from 'solid-js';
 import type { CacheSnapshot } from 'virtua';
-import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
+import type { VirtualizerHandle } from 'virtua/solid';
 import { canMarkNotDone } from '../../next-soup/actions/can-mark-not-done';
 import {
   persistSoupNavigationTouchHighlight,
@@ -124,6 +125,9 @@ const savedLayouts = new Map<
   }
 >();
 const MAX_SAVED_LAYOUTS = 20;
+
+const isGroupHeaderRow = (row: EmailDataSourceItem) =>
+  row.kind === 'group-header';
 
 export function EmailList(props: EmailListProps) {
   const {
@@ -209,8 +213,12 @@ export function EmailList(props: EmailListProps) {
       activeTab: state.tab,
     });
 
+  // Focus's day headers stay pinned while its chronological list scrolls.
+  const pinsDateHeaders = () =>
+    state.tab === 'focus' && state.focusSort === 'recent';
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
-  createScrollTopFade(viewport);
+  // The top-edge fade would wash out a pinned header.
+  createScrollTopFade(() => (pinsDateHeaders() ? undefined : viewport()));
   const [topSpacer, setTopSpacer] = createSignal<HTMLDivElement>();
   const topSpacerSize = createElementSize(topSpacer);
   // The virtualizer's item offsets exclude this; its scroll offset includes it.
@@ -544,7 +552,13 @@ export function EmailList(props: EmailListProps) {
     const top = listStartMargin() + handle.getItemOffset(focused);
     const bottom = top + handle.getItemSize(focused);
     const viewTop = handle.scrollOffset;
-    if (top < viewTop || bottom > viewTop + handle.viewportSize) {
+    // A pinned header can cover a row within these bounds; the sticky handle
+    // allows for it and leaves a row that is really in view alone.
+    if (
+      pinsDateHeaders() ||
+      top < viewTop ||
+      bottom > viewTop + handle.viewportSize
+    ) {
       handle.scrollToIndex(focused, { align: 'nearest' });
     }
   }
@@ -776,12 +790,16 @@ export function EmailList(props: EmailListProps) {
                   {/* A row subtree that suspends (the project crumb's preview query, say)
                       detaches only itself, not the list and its scroll position. */}
                   <Suspense>
-                    <Virtualizer
+                    <StickyVirtualizer
                       ref={registerVirtualizer}
                       cache={initialCache}
                       data={rows()}
                       scrollRef={viewport()}
                       startMargin={listStartMargin()}
+                      isSticky={
+                        pinsDateHeaders() ? isGroupHeaderRow : undefined
+                      }
+                      stickyInset={listStartMargin()}
                       bufferSize={500}
                       itemSize={44}
                       keepMounted={
@@ -1046,7 +1064,7 @@ export function EmailList(props: EmailListProps) {
                           </Match>
                         </Switch>
                       )}
-                    </Virtualizer>
+                    </StickyVirtualizer>
                   </Suspense>
                   <Show when={isTouchDevice()}>
                     <div

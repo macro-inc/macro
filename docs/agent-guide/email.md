@@ -164,7 +164,12 @@ With `enable-email-focus` and `enable-graphql-soup` on, a `Focus` tab leads the
 desktop Inbox tabs and the mobile pills. It lists inbox
 threads from the last 30 days that the email focus worker
 (`services/email_focus_worker`) classified as worth attention, including inboxes
-linked to the account, newest first by latest message in either direction. Key
+linked to the account, newest first by the thread's latest message in either
+direction, so a thread the owner replied to last sorts and dates by that reply.
+Day headers group the list and stay pinned while it scrolls: Today, Yesterday,
+the weekday for the rest of the last week, then the date. These are Focus's own
+(`focusDateBucket`); Signal keeps the shared date sections, drops a leading
+Today, and does not pin. Key
 mail stays in whatever its score: mail waiting on the owner's reply, and mail from
 someone the owner wrote to in the last 90 days, unless it reads as outreach or
 automated. A calendar change (a reschedule, update, cancellation or proposed new
@@ -182,9 +187,9 @@ importance score with a five-bar meter just before the date, and from 56rem also
 `Reply needed` and `Follow up` tag pills ahead of it. Narrower rows drop both;
 without a touch screen the score moves before the subject, and touch screens
 show neither. The desktop header's sort dropdown (`Sort Focus`, among the view
-options) switches between **Priority**,
-**Importance** and **Most recent**; touch layouts have no dropdown and keep the
-saved order (Priority by default). The filter menu adds a Focus group (Reply
+options) switches between **Most recent**, the default, and **Importance**, which
+is flat with no day headers; touch layouts have no dropdown and keep the saved
+order. A saved order that no longer exists restores as Most recent. The filter menu adds a Focus group (Reply
 needed, Follow up) on this tab only and has no Status or Done group there. The
 list is one `user.emailFocus` GraphQL read filtered on the client. New mail
 reaches an open Focus tab within seconds: when the worker stores a
@@ -195,7 +200,8 @@ passing stores nothing and pushes nothing, so a follow-up coming due or a
 calendar change whose event ends shows at the tab's next read. Mark
 Done hides the row at once and archives the thread; Undo brings it back. The
 worker classifies only inboxes on its `FOCUS_ENABLED_EMAIL_DOMAINS` allowlist, so
-other accounts see the empty state `Nothing needs you`.
+other accounts see the empty state `You're caught up`, whose **See the rest of
+your inbox** opens Signal.
 
 `Archived`, between All mail and Shared in the desktop Library section, lists
 your own archived (Mail Done) threads: the
