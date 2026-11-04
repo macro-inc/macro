@@ -132,3 +132,34 @@ fn test_unsupported_constraints_stripped_into_description() {
     // `uuid` is on both providers' format whitelist and survives.
     assert_eq!(property(&json, "id")["format"], "uuid");
 }
+
+// Flattening a tagged enum puts its variants at the schema root, which
+// Anthropic rejects for every request that carries the tool.
+#[derive(Debug, JsonSchema, Deserialize, Clone)]
+#[serde(tag = "kind", content = "drafts", rename_all = "snake_case")]
+#[allow(dead_code)]
+enum KindTaggedDrafts {
+    Email(Vec<String>),
+    Calendar(Vec<String>),
+}
+
+#[derive(Debug, JsonSchema, Deserialize, Clone)]
+#[schemars(
+    description = "Flattens a tagged enum into the root",
+    title = "FlattenedEnumRoot"
+)]
+#[allow(dead_code)]
+struct FlattenedEnumRoot {
+    pub title: String,
+    #[serde(flatten)]
+    pub drafts: KindTaggedDrafts,
+}
+
+#[test]
+fn rejects_a_union_at_the_root() {
+    let result = generate_validated_input_schema::<FlattenedEnumRoot>();
+    assert!(
+        matches!(result, Err(ValidationError::RootComposition("anyOf"))),
+        "{result:?}"
+    );
+}

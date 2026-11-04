@@ -52,6 +52,10 @@ deliberately stable and widely depended on.
 
 - Every tool must declare MCP annotations; a tool without them fails to
   compile/register (see `src/annotations.rs`).
+- A tool input's schema root must be a plain object: no `anyOf`/`allOf`.
+  Anthropic rejects the whole request otherwise, so registration panics.
+  `#[serde(flatten)]` of an enum causes it; advertise a flat schema with
+  `#[schemars(with = ...)]` instead (see `PresentReview` in `agent_code_mode`).
 
 ## Related
 

@@ -41,4 +41,11 @@ pub enum ValidationError {
     /// The root of a tool input schema must be an object.
     #[error("tool input schema root must have type \"object\"")]
     RootNotObject,
+    /// The root of a tool input schema carries `anyOf` or `allOf`, which
+    /// Anthropic rejects for the whole request. `#[serde(flatten)]` of an enum
+    /// produces this; give the tool a flat schema instead.
+    #[error(
+        "tool input schema root must not have {0} — Anthropic rejects top-level unions; do not #[serde(flatten)] an enum into a tool input"
+    )]
+    RootComposition(&'static str),
 }

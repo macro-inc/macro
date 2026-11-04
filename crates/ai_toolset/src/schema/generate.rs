@@ -46,7 +46,7 @@ pub struct ValidatedSchema {
 ///    every object (both providers require it)
 ///
 /// Validation then rejects what cannot be transformed: missing
-/// title/description, a non-object root, recursive types (surviving
+/// title/description, a non-object root, a root `anyOf`/`allOf`, recursive types (surviving
 /// `$ref`s), map types (`additionalProperties` schemas), non-primitive
 /// enums, and residual `oneOf`. Never panics — failures are returned as
 /// [`ValidationError`]s.

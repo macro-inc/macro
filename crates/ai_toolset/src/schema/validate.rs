@@ -47,6 +47,12 @@ pub fn validate_tool_schema(schema: &Schema) -> Result<(String, String), Validat
         return Err(ValidationError::RootNotObject);
     }
 
+    for keyword in ["anyOf", "allOf"] {
+        if schema.get(keyword).is_some() {
+            return Err(ValidationError::RootComposition(keyword));
+        }
+    }
+
     RecursiveValidate(ValidateNoOneOf).validate(schema)?;
 
     Ok((name, description))

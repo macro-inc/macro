@@ -39,3 +39,10 @@ fn present_review_still_decodes_kind_tagged_drafts() {
     }));
     assert!(mismatched.is_err());
 }
+
+/// Building the collection validates every review tool's provider schema.
+#[test]
+fn review_tools_pass_provider_schema_validation() {
+    let tools = super::toolset();
+    assert_eq!(tools.tools.len(), 3);
+}
