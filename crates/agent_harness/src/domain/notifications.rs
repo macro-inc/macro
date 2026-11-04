@@ -10,7 +10,7 @@
 //!
 //! | fact | notification | recipients |
 //! | --- | --- | --- |
-//! | `settled` | [`AgentSessionSettledMetadata`] | the session's audience: owner plus everyone who has driven it - unless the turn was a chat agent's announced reply, whose patched message already notifies the thread, or the turn a routine prompted, when it ended normally |
+//! | `settled` | [`AgentSessionSettledMetadata`] | the session's audience: owner plus everyone who has driven it - unless the turn was a chat agent's announced reply, whose patched message already notifies the thread, or the turn a routine prompted |
 //! | `waiting_for_input` | [`AgentSessionWaitingForInputMetadata`] | the same audience - anyone with edit access may answer, and these are the people already driving it - with the same exception for a chat agent's announced turn, whose reply is patched to say it is waiting |
 //! | `mentioned` | [`AgentSessionMentionedMetadata`] | the users the prompt named, who can now open the session - unless the prompt was posted as a channel or document message, whose own mention notification already reached them |
 //!
@@ -39,12 +39,11 @@
 //! session. A prompt typed into the session view has no message to have
 //! spoken for it, so it keeps its notification.
 //!
-//! A routine runs unattended, often many times a day, so a run finishing is
-//! not news: its result is in the routine's history, and whatever the
-//! routine is meant to tell someone it tells them through its own tools. The
-//! turn a routine prompted plans nothing when it ended normally; one that
-//! failed or was cut short still notifies, and so do its questions and
-//! mentions, which need somebody whether or not a routine asked. A turn the
+//! The turn a routine prompted plans nothing however it ended: the
+//! scheduler reports every routine run itself (`routine_run_finished`, with
+//! its outcome), including runs that never reached an agent. Its questions
+//! and mentions still notify, since they need somebody whether or not a
+//! routine asked. A turn the
 //! owner prompts afterwards, from the session itself, notifies as in any
 //! other session.
 //!
@@ -85,9 +84,6 @@ use notification::domain::models::{Notification, SendNotificationRequest};
 /// forever: changing it would orphan every retraction of a notification
 /// created before the change.
 const NOTIFICATION_ID_NAMESPACE: Uuid = Uuid::from_u128(0x6d61_6372_6f2d_6167_656e_742d_6e6f_7469);
-
-/// The ACP stop reason of a turn that ended normally.
-const END_TURN_STOP_REASON: &str = "end_turn";
 
 /// The turn a routine's own prompt opens: a routine run's session accepts
 /// that prompt only while it has no other.
@@ -198,11 +194,9 @@ fn plan_settled(settled: &SessionSettledMetadata, is_coding: bool) -> Vec<Planne
     if !is_coding && has_discussion_reply(&settled.identity, turn.announcement_message_id) {
         return Vec::new();
     }
-    // A routine run that did its job is in the routine's history.
-    if settled.identity.source == SessionSource::Routine
-        && turn.turn == ROUTINE_TURN
-        && turn.stop_reason == END_TURN_STOP_REASON
-    {
+    // The routine's own turn ends its run: the run is in the routine's
+    // history, and the scheduler notifies the owner when it fails.
+    if settled.identity.source == SessionSource::Routine && turn.turn == ROUTINE_TURN {
         return Vec::new();
     }
     let (entity, secondary_entity) = entities(&settled.identity);

@@ -30,10 +30,18 @@ async fn stored_receipt(pool: &PgPool, message: &str) -> (i32, Option<DateTime<U
 )]
 async fn tracking_follows_the_inbox_setting(pool: Pool<Postgres>) -> Result<(), Report> {
     let repo = ReadReceiptPgRepository(pool.clone());
+    assert!(repo.tracking_enabled(id(LINK)).await?);
+
+    sqlx::query!(
+        "INSERT INTO email_settings (link_id, read_receipts_enabled) VALUES ($1, FALSE)",
+        id(LINK)
+    )
+    .execute(&pool)
+    .await?;
     assert!(!repo.tracking_enabled(id(LINK)).await?);
 
     sqlx::query!(
-        "INSERT INTO email_settings (link_id, read_receipts_enabled) VALUES ($1, TRUE)",
+        "UPDATE email_settings SET read_receipts_enabled = TRUE WHERE link_id = $1",
         id(LINK)
     )
     .execute(&pool)

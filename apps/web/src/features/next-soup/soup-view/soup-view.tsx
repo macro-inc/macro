@@ -50,7 +50,6 @@ import { ResponsiveTaskListHeader } from '@app/features/next-soup/soup-view/view
 import { TaskGroupHeader } from '@app/features/next-soup/soup-view/views/tasks/task-group-header';
 import {
   markChannelNotificationsSeenOnOpen,
-  markRowNotificationsSeenOnOpen,
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
   restoreSoupFocus,
@@ -60,6 +59,7 @@ import {
   SoupEntityContextMenu,
 } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
+import { usePending } from '@app/observability/flow';
 import { usePreference } from '@app/preferences/use-preference';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
@@ -102,6 +102,7 @@ import CheckIcon from '@icon/system/regular/check.svg';
 import InfoIcon from '@icon/system/regular/info.svg';
 import Spinner from '@icon/system/regular/spinner.svg';
 import { Telemetry } from '@macro-inc/observability';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn, Layer } from '@ui';
@@ -610,6 +611,9 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     isFetchingGroupPage,
     groupPageError,
   } = useSoupView();
+  usePending('list.items', source.isLoading);
+  usePending('list.search.remote', isSearchServiceLoading);
+  usePending('list.search.local', isLocalSearchSettling);
   const { hasActiveRefinements, hasHiddenItems, resetToTabDefaults } =
     useFilterRefinements();
 

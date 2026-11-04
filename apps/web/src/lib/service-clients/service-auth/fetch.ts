@@ -7,6 +7,7 @@ import {
   safeFetch,
   type TextResponse,
 } from '@core/util/safeFetch';
+import { Telemetry } from '@macro-inc/observability';
 import { err, ok, type Result } from 'neverthrow';
 import { authServiceClient, getExpiresAt } from './client';
 
@@ -36,7 +37,8 @@ function requestMacroApiToken() {
   return promise;
 }
 
-export async function getMacroApiToken() {
+export async function getMacroApiToken(): Promise<string> {
+  const parent = Telemetry.captureContext();
   if (LOCAL_ONLY) {
     const apiToken = import.meta.env.__LOCAL_JWT__;
     if (apiToken) {
@@ -46,7 +48,7 @@ export async function getMacroApiToken() {
 
   const cachedPromise = macroApiTokenPromise;
   if (!cachedPromise) {
-    return requestMacroApiToken();
+    return parent.run(requestMacroApiToken);
   }
 
   const apiToken = await cachedPromise;
@@ -58,10 +60,10 @@ export async function getMacroApiToken() {
   // caller was suspended awaiting it. Reuse that replacement instead of
   // issuing a duplicate request.
   if (macroApiTokenPromise !== cachedPromise) {
-    return getMacroApiToken();
+    return parent.run(getMacroApiToken);
   }
 
-  return requestMacroApiToken();
+  return parent.run(requestMacroApiToken);
 }
 
 type TextContentType = `text/${string}`;
@@ -92,7 +94,8 @@ export async function fetchWithAuth<
   input: RequestInfo,
   init?: fetchWithAuthOptions<T, CustomErrorCode>
 ): Promise<Result<T, ResultError<BaseFetchErrorCode | CustomErrorCode>[]>> {
-  const apiToken = await getMacroApiToken();
+  const parentSpan = init?.trace?.parentSpan ?? Telemetry.captureContext();
+  const apiToken = await parentSpan.run(getMacroApiToken);
   if (!apiToken) {
     return err([
       { code: 'UNAUTHORIZED', message: 'No access and/or refresh token found' },
@@ -101,6 +104,7 @@ export async function fetchWithAuth<
 
   const safeFetchInit = {
     ...init,
+    trace: { ...init?.trace, parentSpan },
     headers: {
       ...init?.headers,
       Authorization: `Bearer ${apiToken}`,

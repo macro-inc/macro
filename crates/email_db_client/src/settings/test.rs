@@ -27,7 +27,7 @@ fn patch(link_id: Uuid) -> SettingsPatch {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn read_receipts_default_off_and_patch_independently(
+async fn read_receipts_default_on_and_patch_independently(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let link_id = insert_link(&pool).await;
@@ -40,18 +40,18 @@ async fn read_receipts_default_off_and_patch_independently(
         },
     )
     .await?;
-    assert!(!created.read_receipts_enabled);
+    assert!(created.read_receipts_enabled);
 
-    let enabled = patch_settings(
+    let disabled = patch_settings(
         &pool,
         SettingsPatch {
-            read_receipts_enabled: Some(true),
+            read_receipts_enabled: Some(false),
             ..patch(link_id)
         },
     )
     .await?;
-    assert!(enabled.read_receipts_enabled);
-    assert_eq!(enabled.signature.as_deref(), Some("<p>sig</p>"));
+    assert!(!disabled.read_receipts_enabled);
+    assert_eq!(disabled.signature.as_deref(), Some("<p>sig</p>"));
 
     let untouched = patch_settings(
         &pool,
@@ -61,8 +61,8 @@ async fn read_receipts_default_off_and_patch_independently(
         },
     )
     .await?;
-    assert!(untouched.read_receipts_enabled);
-    assert!(fetch_settings(&pool, link_id).await?.read_receipts_enabled);
+    assert!(!untouched.read_receipts_enabled);
+    assert!(!fetch_settings(&pool, link_id).await?.read_receipts_enabled);
 
     Ok(())
 }

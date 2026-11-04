@@ -1,6 +1,6 @@
 # Type Alias: TeamInviteDetails
 
-> **TeamInviteDetails** = \{ `created_at`: `string`; `email`: `string`; `id`: `string`; `invited_by`: `string`; `last_sent_at`: `string`; `team_id`: `string`; `team_role`: [`TeamRole`](TeamRole.md); \}
+> **TeamInviteDetails** = \{ `created_at`: `string`; `email`: `string`; `id`: `string`; `invited_by`: `string`; `is_agent`: `boolean`; `last_sent_at`: `string`; `team_id`: `string`; `team_role`: [`TeamRole`](TeamRole.md); \}
 
 Detailed information about a team invite
 
@@ -12,6 +12,7 @@ Detailed information about a team invite
 | <a id="property-email"></a> `email` | `string` | The invited email |
 | <a id="property-id"></a> `id` | `string` | The invite id |
 | <a id="property-invited_by"></a> `invited_by` | `string` | The user who sent the invitation |
+| <a id="property-is_agent"></a> `is_agent` | `boolean` | Whether the invite creates an agent account |
 | <a id="property-last_sent_at"></a> `last_sent_at` | `string` | When the invite was last sent |
 | <a id="property-team_id"></a> `team_id` | `string` | The team id |
 | <a id="property-team_role"></a> `team_role` | [`TeamRole`](TeamRole.md) | The role being invited as |

@@ -3,6 +3,7 @@
 
 mod casts;
 mod column_types;
+mod duplicate;
 mod infer_column_type;
 mod metadata;
 mod ops;
@@ -435,6 +436,32 @@ where
             return Err(DatabaseError::NotFound);
         }
         Ok((database, tables))
+    }
+
+    /// File a live database in a folder, or at the root, answering the
+    /// folder it left.
+    #[cfg(feature = "entity_mutation")]
+    pub(super) async fn move_database(
+        &self,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        project_id: Option<&str>,
+    ) -> Result<Option<String>, DatabaseError> {
+        let database = self.database_by_receipt(&receipt).await?;
+        if database.trashed_at.is_some()
+            || !self
+                .repository
+                .move_database(database.id, project_id)
+                .await
+                .map_err(repository_error)?
+        {
+            return Err(DatabaseError::NotFound);
+        }
+        // The move has committed; a missed liveness ping must not turn it
+        // into a failed write.
+        let _ = self.events.database_changed(database.id).await.inspect_err(|error| {
+            tracing::warn!(error = ?error, database_id = %database.id, "failed to publish database change");
+        });
+        Ok(database.project_id)
     }
 
     /// One column as the client sees it.

@@ -1,5 +1,6 @@
 import type {
   CreateCrmCompanyRequest,
+  CreateCrmTeamContactRequest,
   CrmStagesResponse,
   CrmTeamSettingsResponse,
   ReplaceCrmStagesRequest,
@@ -64,6 +65,46 @@ export class CrmNamespace {
       this.client,
       unwrap(await this.client.storage.createCrmCompany({ body: opts })),
     );
+  }
+
+  /**
+   * Create a contact without a company for the caller's current team. The
+   * email is optional and may be at any domain. To add someone to a company,
+   * use {@link Company.createContact}.
+   */
+  async createContact(opts: CreateCrmTeamContactRequest): Promise<Contact> {
+    return Contact.from(
+      this.client,
+      unwrap(await this.client.storage.createCrmTeamContact({ body: opts })),
+    );
+  }
+
+  /** The domains the caller's current team keeps out of email sync. */
+  async blockedDomains(): Promise<string[]> {
+    return unwrap(await this.client.storage.listCrmBlockedDomains()).map(
+      (blocked) => blocked.domain,
+    );
+  }
+
+  /**
+   * Block a domain (like `acme.com`): email sync skips it, and the company
+   * that owns it, that company's contacts, and contacts without a company at
+   * the domain are hidden. A contact attached to another company follows that
+   * company's domains. Requires a team admin or owner.
+   */
+  async blockDomain(domain: string): Promise<void> {
+    unwrap(await this.client.storage.blockCrmDomain({ path: { domain } }));
+  }
+
+  /**
+   * Unblock a domain: email sync resumes for addresses the team's
+   * personal-email and generic-provider filters allow. Contacts without a
+   * company at this domain are shown again. Its company and attached contacts
+   * stay hidden until the company's last blocked domain is removed, then are
+   * shown even if hidden by hand before blocking. Requires a team admin or owner.
+   */
+  async unblockDomain(domain: string): Promise<void> {
+    unwrap(await this.client.storage.unblockCrmDomain({ path: { domain } }));
   }
 
   /** The caller's current team's CRM settings. */

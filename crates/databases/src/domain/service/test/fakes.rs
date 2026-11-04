@@ -58,6 +58,8 @@ pub(super) struct World {
     pub(super) positions: HashMap<ViewId, Vec<CardPosition>>,
     /// The change journal, oldest first.
     pub(super) journal: Vec<JournaledChange>,
+    /// Shared definitions nobody may bind into a database.
+    pub(super) unbindable: Vec<PropertyDefinitionId>,
 }
 
 /// One change the fake cell store journaled.
@@ -105,6 +107,7 @@ impl DatabasesRepo for FakeRepo {
             owner_id: command.owner_id.as_ref().to_string(),
             created_at: Utc::now(),
             trashed_at: None,
+            project_id: None,
         };
         let title = definition(
             first_table.title_column,
@@ -202,6 +205,23 @@ impl DatabasesRepo for FakeRepo {
             .find(|database| database.id == id)
         {
             database.trashed_at = None;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+    async fn move_database(
+        &self,
+        id: DatabaseId,
+        project_id: Option<&str>,
+    ) -> Result<bool, FakeError> {
+        let mut world = self.0.lock().unwrap();
+        if let Some(database) = world
+            .databases
+            .iter_mut()
+            .find(|database| database.id == id && database.trashed_at.is_none())
+        {
+            database.project_id = project_id.map(str::to_string);
             Ok(true)
         } else {
             Ok(false)
@@ -563,6 +583,34 @@ impl CellStore for FakeCells {
     }
 }
 
+impl crate::domain::duplicate::DatabaseDuplicateRepo for FakeCells {
+    type Error = FakeError;
+    async fn duplicate_database(
+        &self,
+        database: &Database,
+        writes: &Writes,
+    ) -> Result<WritesOutcome, FakeError> {
+        {
+            let mut world = self.0.lock().unwrap();
+            world.databases.push(database.clone());
+            world
+                .grants
+                .entry(database.owner_id.clone())
+                .or_default()
+                .push((database.id, AccessLevel::Owner));
+        }
+        let outcome = self.apply_writes(writes).await;
+        if !matches!(outcome, Ok(WritesOutcome::Applied { .. })) {
+            let mut world = self.0.lock().unwrap();
+            world.databases.retain(|stored| stored.id != database.id);
+            if let Some(grants) = world.grants.get_mut(&database.owner_id) {
+                grants.retain(|(id, _)| *id != database.id);
+            }
+        }
+        outcome
+    }
+}
+
 impl ColumnDefinitionStore for FakeDefinitions {
     type Error = FakeError;
     async fn bindable_definition(
@@ -571,13 +619,8 @@ impl ColumnDefinitionStore for FakeDefinitions {
         _viewer: &Viewer,
         id: PropertyDefinitionId,
     ) -> Result<Option<PropertyDefinitionId>, FakeError> {
-        Ok(self
-            .0
-            .lock()
-            .unwrap()
-            .definitions
-            .contains_key(&id)
-            .then_some(id))
+        let world = self.0.lock().unwrap();
+        Ok((world.definitions.contains_key(&id) && !world.unbindable.contains(&id)).then_some(id))
     }
     async fn create_typed_definition(
         &self,

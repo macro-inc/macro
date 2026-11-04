@@ -1,8 +1,10 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { MOBILE_WEB_SIGNUP_LEAD_VALUE } from '@app/lib/analytics/leadValues';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { adAttributionForCapture } from '@app/lib/analytics/signupAttribution';
 import { GOOGLE_GMAIL_IDP } from '@core/auth/email';
 import { toast } from '@core/component/Toast/Toast';
+import { enableAgentSignup } from '@core/constant/featureFlags';
 import { deriveIsAuthenticated } from '@core/context/user';
 import { useEmailLinks } from '@core/email-link';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
@@ -47,6 +49,7 @@ export function createAppAuthContext(): AuthContext {
         id: data.userId,
         email: data.email ?? undefined,
         tutorialComplete: data.tutorialComplete === true,
+        isAgent: data.isAgent === true,
       },
     };
   };
@@ -65,12 +68,15 @@ export function createAppAuthContext(): AuthContext {
     );
   };
 
+  const agentSignupFlag = useFeatureFlag(enableAgentSignup);
+
   return {
     session,
     startSso: (provider, intent) =>
       (intent === 'signup' ? signupSso : loginSso)(
         provider === 'google' ? GOOGLE_GMAIL_IDP : 'Apple'
       ),
+    agentSignupEnabled: () => agentSignupFlag().enabled === true,
     sendEmailCode,
     verifyEmailCode,
     redeemSessionToken: async (token) => {

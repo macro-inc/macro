@@ -90,7 +90,7 @@ async function handleCrmMention(
     documentId: entity.id,
     documentName:
       entity.type === 'crm_contact'
-        ? entity.name || entity.email
+        ? entity.name || entity.email || ''
         : entityDisplayName(item),
     blockName: entity.type === 'crm_contact' ? 'contact' : 'company',
     ...(mentionUuid ? { mentionUuid } : {}),
@@ -250,7 +250,7 @@ async function handleRoutineMention(
         const { publishRoutineTemplate } = await import(
           '@app/features/routines/queries/templates'
         );
-        await publishRoutineTemplate(routine.id);
+        await span.run(() => publishRoutineTemplate(routine.id));
         return true;
       } catch {
         span.error('Sharing the routine failed');

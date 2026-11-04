@@ -13,7 +13,7 @@ fn candidate(state: UpdateTurnState, harness: &str, archived: bool) -> UpdateCan
         harness: harness.into(),
         pull_request_url: Some("https://github.com/example/repo/pull/1".into()),
         turn_state: state,
-        is_archived: archived,
+        archived,
         last_activity: Utc::now() - Duration::minutes(21),
     }
 }

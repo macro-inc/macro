@@ -174,6 +174,7 @@ const FIELD_CONFIG: Record<
   crmCompanyId: { target: 'ccf', field: 'id' },
   crmCompanyHidden: { target: 'ccf', field: 'hidden' },
   crmContactHidden: { target: 'crmf', field: 'hidden' },
+  crmContactTeamId: { target: 'crmf', field: 'team_id' },
   crmContactSearch: { target: 'crmf', field: 'search' },
   agentSessionId: { target: 'asf', field: 'id' },
   agentSessionOwnerId: { target: 'asf', field: 'o' },

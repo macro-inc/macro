@@ -49,6 +49,12 @@ pub enum FromPeer<'raw> {
     PeerRegisterId {
         peerid: u64,
     },
+
+    /// Discriminator 6
+    PeerCommentUpdate {
+        updates: ::std::vec::Vec<::bebop::SliceWrapper<'raw, u8>>,
+        id: &'raw str,
+    },
 }
 
 impl<'raw> ::bebop::SubRecord<'raw> for FromPeer<'raw> {
@@ -90,6 +96,14 @@ impl<'raw> ::bebop::SubRecord<'raw> for FromPeer<'raw> {
             }
             => {
                 _peerid.serialized_size()
+            }
+            Self::PeerCommentUpdate {
+                updates: ref _updates,
+                id: ref _id,
+            }
+            => {
+                _updates.serialized_size() +
+                _id.serialized_size()
             }
         }
     }
@@ -136,6 +150,15 @@ impl<'raw> ::bebop::SubRecord<'raw> for FromPeer<'raw> {
                 5u8._serialize_chained(dest)?;
                 _peerid._serialize_chained(dest)?;
             }
+            Self::PeerCommentUpdate {
+                updates: ref _updates,
+                id: ref _id,
+            }
+            => {
+                6u8._serialize_chained(dest)?;
+                _updates._serialize_chained(dest)?;
+                _id._serialize_chained(dest)?;
+            }
         }
         Ok(size)
     });
@@ -180,6 +203,17 @@ impl<'raw> ::bebop::SubRecord<'raw> for FromPeer<'raw> {
 
                 FromPeer::PeerRegisterId {
                     peerid: v0,
+                }
+            }
+            6 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                FromPeer::PeerCommentUpdate {
+                    updates: v0,
+                    id: v1,
                 }
             }
             _ => {
@@ -909,6 +943,12 @@ pub mod owned {
         PeerRegisterId {
             peerid: u64,
         },
+
+        /// Discriminator 6
+        PeerCommentUpdate {
+            updates: ::std::vec::Vec<::std::vec::Vec<u8>>,
+            id: String,
+        },
     }
 
     impl<'raw> ::core::convert::From<super::FromPeer<'raw>> for FromPeer {
@@ -957,6 +997,16 @@ pub mod owned {
                         peerid: _peerid,
                     }
                 }
+                super::FromPeer::PeerCommentUpdate {
+                    updates: _updates,
+                    id: _id,
+                }
+                => {
+                    Self::PeerCommentUpdate {
+                        updates: _updates.into_iter().map(|value| value.iter().map(|value| value).collect()).collect(),
+                        id: _id.into(),
+                    }
+                }
             }
         }
 
@@ -1000,6 +1050,14 @@ pub mod owned {
                 }
                 => {
                     _peerid.serialized_size()
+                }
+                Self::PeerCommentUpdate {
+                    updates: ref _updates,
+                    id: ref _id,
+                }
+                => {
+                    _updates.serialized_size() +
+                    _id.serialized_size()
                 }
             }
         }
@@ -1046,6 +1104,15 @@ pub mod owned {
                     5u8._serialize_chained(dest)?;
                     _peerid._serialize_chained(dest)?;
                 }
+                Self::PeerCommentUpdate {
+                    updates: ref _updates,
+                    id: ref _id,
+                }
+                => {
+                    6u8._serialize_chained(dest)?;
+                    _updates._serialize_chained(dest)?;
+                    _id._serialize_chained(dest)?;
+                }
             }
             Ok(size)
         });
@@ -1090,6 +1157,17 @@ pub mod owned {
 
                     FromPeer::PeerRegisterId {
                         peerid: v0,
+                    }
+                }
+                6 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    FromPeer::PeerCommentUpdate {
+                        updates: v0,
+                        id: v1,
                     }
                 }
                 _ => {
