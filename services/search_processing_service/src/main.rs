@@ -21,6 +21,7 @@ use macro_authorization::{
     PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
 use macro_entrypoint::MacroEntrypoint;
+use macro_entrypoint::PgPoolOptionsExt as _;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use opensearch_client::OpensearchClient;
 #[cfg(feature = "pdf")]
@@ -71,7 +72,7 @@ async fn resolve_readonly_pool(read_only_db_url: DatabaseUrlReadonly) -> Option<
         match PgPoolOptions::new()
             .min_connections(1)
             .max_connections(10)
-            .connect(url)
+            .connect_as(url, "readonly")
             .await
         {
             Ok(pool) => Some(pool),
@@ -171,7 +172,7 @@ async fn main() -> anyhow::Result<()> {
     let db = PgPoolOptions::new()
         .min_connections(min_connections)
         .max_connections(max_connections)
-        .connect(config.database_url.as_ref())
+        .connect_as(config.database_url.as_ref(), "primary")
         .await
         .context("could not connect to db")?;
 
@@ -238,7 +239,7 @@ async fn main() -> anyhow::Result<()> {
     // Waiting advisory locks must not exhaust the pool used to read ACP logs.
     let session_lock_pool = PgPoolOptions::new()
         .max_connections(10)
-        .connect_lazy(config.database_url.as_ref())?;
+        .connect_lazy_as(config.database_url.as_ref(), "session-lock")?;
     let agent_session_indexer = Arc::new(AgentSessionIndexer::new(
         agent_session::domain::search::indexing::SearchSnapshotServiceImpl::new(
             agent_session::outbound::postgres::search::PgSearchIndexingRepo::new(

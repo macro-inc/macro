@@ -5,6 +5,7 @@ use documents::outbound::pg_document_repo::PgDocumentRepo;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use lexical_client::LexicalClient;
+use macro_entrypoint::PgPoolOptionsExt as _;
 use macro_env_var::env_vars;
 use macro_service_urls::{LexicalServiceUrl, SyncServiceUrl};
 use sqlx::postgres::PgPoolOptions;
@@ -53,7 +54,7 @@ impl AppContext {
 
         let db_pool = PgPoolOptions::new()
             .max_connections(5)
-            .connect(database_url.as_ref())
+            .connect_as(database_url.as_ref(), "primary")
             .await
             .context("failed to connect to postgres")?;
 

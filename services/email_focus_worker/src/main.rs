@@ -23,6 +23,7 @@ use std::{sync::Arc, time::Duration};
 use connection_gateway_client::ConnectionGatewayClient;
 use email::{domain::focus::FocusService, outbound::FocusPgRepository};
 use jev::{domain::JevClassifier, outbound::SystemOneJev};
+use macro_entrypoint::PgPoolOptionsExt as _;
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_service_urls::ConnectionGatewayUrl;
 use memory::outbound::pg_memory_repo::PgMemoryRepo;
@@ -65,7 +66,7 @@ async fn main() -> Result<(), Report> {
     let db = PgPoolOptions::new()
         .min_connections(1)
         .max_connections(5)
-        .connect(config.macro_db_url.as_ref())
+        .connect_as(config.macro_db_url.as_ref(), "primary")
         .await?;
     let shutdown = CancellationToken::new();
     let notifications = TaskTracker::new();

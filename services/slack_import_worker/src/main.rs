@@ -8,6 +8,7 @@ mod config;
 use chrono::{DateTime, Utc};
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use import::outbound::pg_import_repo::PgImportRepo;
+use macro_entrypoint::PgPoolOptionsExt as _;
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_queues::{SlackImportDlq, SlackImportQueue};
 use macro_service_urls::SearchProcessingServiceUrl;
@@ -57,7 +58,7 @@ async fn run() -> Result<(), rootcause::Report> {
         // Leave capacity for lease heartbeats while imports hold transactions.
         .max_connections(12)
         .acquire_timeout(std::time::Duration::from_secs(20))
-        .connect(config.database_url.as_ref())
+        .connect_as(config.database_url.as_ref(), "primary")
         .await
         .map_err(|_| ImportError::Retryable)?;
     let repo = PgSlackImportRepo::new(pool.clone(), limits);

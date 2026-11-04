@@ -34,6 +34,7 @@ use jev::domain::JevClassifier;
 use jev::outbound::SystemOneJev;
 use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer, consumer_span, record_span_error};
 use lexical_client::LexicalClient;
+use macro_entrypoint::PgPoolOptionsExt as _;
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_event_broker::{
     KafkaConsumerAdapter, KafkaEventPublisher, MacroEventBrokerService, MacroEventCollection,
@@ -132,7 +133,7 @@ async fn run() -> anyhow::Result<()> {
     let pool = PgPoolOptions::new()
         .min_connections(1)
         .max_connections(5)
-        .connect(config.database_url.as_ref())
+        .connect_as(config.database_url.as_ref(), "primary")
         .await
         .context("failed to connect to macrodb")?;
 

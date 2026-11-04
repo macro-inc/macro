@@ -8,6 +8,7 @@ use email_service::outbound::email_api::{
 };
 use email_service::pubsub::CrmMetadataResolver;
 use email_service::util::redis::RedisClient;
+use macro_entrypoint::PgPoolOptionsExt as _;
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_env::Environment;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
@@ -80,14 +81,14 @@ async fn main() -> anyhow::Result<()> {
     let db = PgPoolOptions::new()
         .min_connections(min_connections)
         .max_connections(max_connections)
-        .connect(&config.macro_db_url)
+        .connect_as(&config.macro_db_url, "primary")
         .await
         .context("could not connect to db")?;
 
     let db_backfill = PgPoolOptions::new()
         .min_connections(min_connections_backfill)
         .max_connections(max_connections_backfill)
-        .connect(&config.macro_db_url)
+        .connect_as(&config.macro_db_url, "backfill")
         .await
         .context("could not connect to backfill db")?;
 

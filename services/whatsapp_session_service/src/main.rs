@@ -5,6 +5,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use macro_entrypoint::PgPoolOptionsExt as _;
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_env::Environment;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
@@ -41,7 +42,7 @@ async fn run() -> Result<(), rootcause::Report> {
     let pool = PgPoolOptions::new()
         .max_connections(20)
         .acquire_timeout(Duration::from_secs(10))
-        .connect(config.database_url.as_ref())
+        .connect_as(config.database_url.as_ref(), "primary")
         .await?;
     let lock_options: PgConnectOptions = config.database_url.as_ref().parse()?;
     let dialer: Arc<dyn Dialer> =

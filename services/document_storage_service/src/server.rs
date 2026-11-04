@@ -128,6 +128,7 @@ use macro_authorization::{
     MacroAuthorizationState, PgBotAuthorizationRepo, PgBotAuthorizer, PgHarnessAuthorizationRepo,
     PgHarnessAuthorizer, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
+use macro_entrypoint::PgPoolOptionsExt as _;
 use macro_env_var::maybe_env_vars;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use macro_service_urls::{
@@ -238,7 +239,7 @@ pub async fn run() -> anyhow::Result<()> {
     let db = PgPoolOptions::new()
         .min_connections(min_connections)
         .max_connections(max_connections)
-        .connect(&config.database_url)
+        .connect_as(&config.database_url, "primary")
         .await
         .context("could not connect to db")?;
 
@@ -259,7 +260,7 @@ pub async fn run() -> anyhow::Result<()> {
     let readonly_db = match PgPoolOptions::new()
         .min_connections(readonly_min_connections)
         .max_connections(readonly_max_connections)
-        .connect(&config.database_url_readonly)
+        .connect_as(&config.database_url_readonly, "readonly")
         .await
     {
         Ok(pool) => {

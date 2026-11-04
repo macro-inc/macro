@@ -18,19 +18,24 @@ nearly every Rust service's `main.rs` calls.
   for prod/develop trace-log correlation.
 - `src/grafana.rs`: a second, best-effort span exporter that mirrors spans to
   Grafana in `develop` without affecting the primary (Datadog) exporter.
+- `src/postgres.rs`: `PgPoolOptionsExt::connect_as` / `pg_connect_options`
+  set each Postgres session's `application_name` to `<DD_SERVICE>:<pool>`
+  (the executable name when `DD_SERVICE` is unset), so `pg_stat_activity` and
+  Datadog DBM attribute connections. A URL or `PGAPPNAME` value wins.
 - `src/shutdown.rs`: `shutdown_signal` — the standard graceful-shutdown
   future every service awaits on.
 
 ## Scope
 
-- Owns: the tracing/logging/OTel subscriber setup and graceful shutdown
-  signal shared by every service's composition root.
+- Owns: the tracing/logging/OTel subscriber setup, graceful shutdown signal,
+  and Postgres session naming shared by every service's composition root.
 - Not here: per-service span content or business instrumentation — this
   crate only wires the pipeline.
 
 ## Boundaries
 
-- Depends on: `macro_env`, `macro_env_var`, `rootcause`/`rootcause-tracing`.
+- Depends on: `macro_env`, `macro_env_var`, `rootcause`/`rootcause-tracing`,
+  `sqlx` (connect options only).
 - Used by: nearly every service in `services/` plus a few crates with their
   own binaries (`documents`, `entity_access`, `memory`, `opensearch_client`,
   `task_dedup`, `teams`).

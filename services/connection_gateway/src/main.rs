@@ -38,6 +38,7 @@ use macro_authorization::{
     PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
 use macro_entrypoint::MacroEntrypoint;
+use macro_entrypoint::PgPoolOptionsExt as _;
 use macro_env::Environment;
 use macro_tower_layers::MacroRequestIdAndTracingLayer;
 use service::dynamodb::create_dynamo_db_connection_manager;
@@ -109,7 +110,7 @@ async fn main() -> Result<()> {
     let pgpool = PgPoolOptions::new()
         .min_connections(3)
         .max_connections(20)
-        .connect(config.macro_db_url.as_ref())
+        .connect_as(config.macro_db_url.as_ref(), "primary")
         .await?;
 
     let stream_service = RedisPostgresStreamRepo::new((*redis_client).clone(), pgpool.clone());

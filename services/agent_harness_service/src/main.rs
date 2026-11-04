@@ -144,6 +144,7 @@ use macro_authorization::{
     MacroAuthorizationState, PgBotAuthorizationRepo, PgBotAuthorizer, PgHarnessAuthorizationRepo,
     PgHarnessAuthorizer, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
+use macro_entrypoint::PgPoolOptionsExt as _;
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_event_broker::{
     KafkaConsumerAdapter, KafkaEventPublisher, MacroEvent as _, MacroEventBrokerService,
@@ -264,7 +265,7 @@ async fn run() -> anyhow::Result<()> {
     let pool = PgPoolOptions::new()
         .min_connections(1)
         .max_connections(config.database_max_connections)
-        .connect(config.database_url.as_ref())
+        .connect_as(config.database_url.as_ref(), "primary")
         .await
         .context("failed to connect to macrodb")?;
 
