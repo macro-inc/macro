@@ -4,6 +4,7 @@ import { isLiveTurn, liveTurnMessage } from './live-turn';
 
 const agent = (turn: number, stop: FoldedMessage['stop']): FoldedMessage => ({
   agentSessionId: 'session',
+  key: `${turn}:agent`,
   pending: false,
   segments: [],
   phase: null,
@@ -16,6 +17,7 @@ const agent = (turn: number, stop: FoldedMessage['stop']): FoldedMessage => ({
 });
 const user = (turn: number): FoldedMessage => ({
   agentSessionId: 'session',
+  key: `${turn}:user`,
   pending: false,
   segments: [],
   phase: null,
@@ -28,6 +30,7 @@ const user = (turn: number): FoldedMessage => ({
 });
 const control = (turn: number): FoldedMessage => ({
   agentSessionId: 'session',
+  key: `${turn}:user`,
   pending: false,
   segments: [],
   phase: null,

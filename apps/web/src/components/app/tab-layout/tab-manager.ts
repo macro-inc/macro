@@ -436,6 +436,23 @@ export function createTabManager(options: TabManagerOptions) {
       fireAndForget(activateTab(id), SURFACE);
     },
 
+    /**
+     * Brings up the background tab holding a parked split, focused on that
+     * split. False when no background tab holds it, so the split is live.
+     */
+    revealSplit(id: SplitId): boolean {
+      const holder = untrack(tabs).find(
+        (tab) =>
+          tab.id !== untrack(activeTabId) &&
+          parkedPanes(tab).some((pane) => (pane as string) === id)
+      );
+      if (holder?.stored.kind !== 'parked') return false;
+
+      setTab({ ...holder, stored: { ...holder.stored, activeSplit: id } });
+      fireAndForget(activateTab(holder.id), SURFACE);
+      return true;
+    },
+
     closeTab(id: DesktopTabId): void {
       const list = untrack(tabs);
       if (list.length <= 1) return;

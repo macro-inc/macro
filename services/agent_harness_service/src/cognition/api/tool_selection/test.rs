@@ -108,3 +108,15 @@ fn tool_free_completions_do_not_receive_a_database_catalog() {
     assert!(prompt.ends_with("Summarize."));
     assert!(!prompt.contains("Registered database tools"));
 }
+
+#[test]
+fn the_database_host_carries_how_databases_work_and_no_other_area() {
+    let prompt = choose_tools_prompt(&ToolSet::Databases, &"Unrelated tools").to_string();
+    assert!(prompt.starts_with(&prompt::BASE_PROMPT.to_string()));
+    assert!(prompt.contains("check every database's tables"));
+    assert!(prompt.contains("Never invent a person or an id"));
+    assert!(!prompt.contains("How CRM pipelines work"));
+    // BASE_PROMPT's Markdown note mentions email bodies without granting an
+    // email tool; the scoped prompt must omit its action rules.
+    assert!(!prompt.contains("MUST use the `SendEmail` tool"));
+}

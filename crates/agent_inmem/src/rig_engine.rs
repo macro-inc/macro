@@ -39,6 +39,7 @@ use tracing::Instrument as _;
 
 use crate::domain::auto_model::{AutoModelSelector, DefaultAutoModel, JevAutoModel};
 use crate::domain::engine::{AgentIdentity, ReplyDelivery, TurnEngine, TurnRequest};
+use crate::domain::entity_routing::{EntityRoutingPolicy, NoEntityRouting};
 use crate::domain::tool_gate::{NativeToolGate, NativeToolVerdict, UngatedNativeTools};
 use crate::domain::tool_mode::{StandardTools, ToolMode, ToolModeSelector};
 use crate::inbound::ask_user::{AskUser, AskUserContext};
@@ -80,6 +81,7 @@ pub struct RigTurnEngine {
     code_mode_tools: Arc<NativeTools>,
     tool_mode: Arc<dyn ToolModeSelector>,
     auto_model: Arc<dyn AutoModelSelector>,
+    entity_routing: Arc<dyn EntityRoutingPolicy>,
     tool_context: ToolServiceContext,
     gate: Arc<dyn NativeToolGate>,
 }
@@ -105,6 +107,7 @@ impl RigTurnEngine {
                 Some(cognition) => Arc::new(JevAutoModel::new(Arc::clone(cognition))),
                 None => Arc::new(DefaultAutoModel),
             },
+            entity_routing: Arc::new(NoEntityRouting),
             tool_context,
             gate: Arc::new(UngatedNativeTools),
         }
@@ -121,6 +124,13 @@ impl RigTurnEngine {
     #[must_use]
     pub fn with_tool_mode(mut self, selector: Arc<dyn ToolModeSelector>) -> Self {
         self.tool_mode = selector;
+        self
+    }
+
+    /// Decide per turn whether the owner's code-mode turns route SDK entities.
+    #[must_use]
+    pub fn with_entity_routing(mut self, policy: Arc<dyn EntityRoutingPolicy>) -> Self {
+        self.entity_routing = policy;
         self
     }
 }
@@ -273,6 +283,9 @@ struct NativeTools {
     with_user_input: Arc<AsyncToolCollection<InMemToolContext>>,
     without_user_input: Arc<AsyncToolCollection<InMemToolContext>>,
     prompt: String,
+    /// [`Self::prompt`] without area guidance, for turns that route SDK
+    /// entities.
+    routed_prompt: String,
     code_mode: bool,
     deferred: Arc<[ai_toolset::SearchableTool]>,
     /// Every native tool's name, for the opening line's model to guess the
@@ -304,6 +317,7 @@ impl NativeTools {
             without_user_input: Arc::new(tools_for_turn(other_tools, false)),
             code_mode,
             prompt: tools.prompt.to_string(),
+            routed_prompt: tools.routed_prompt.to_string(),
             deferred: tools.deferred,
             tool_names,
         }
@@ -330,6 +344,7 @@ impl TurnEngine for RigTurnEngine {
         let code_mode_tools = Arc::clone(&self.code_mode_tools);
         let tool_mode = Arc::clone(&self.tool_mode);
         let auto_model = Arc::clone(&self.auto_model);
+        let entity_routing = Arc::clone(&self.entity_routing);
         let tool_context = self.tool_context.clone();
         let gate = Arc::clone(&self.gate);
         let metering = agent::MeteringContext::current();
@@ -340,7 +355,11 @@ impl TurnEngine for RigTurnEngine {
                     return;
                 };
                 request.model = model;
-                let Some(selected) = select_tool_mode(tool_mode.as_ref(), &request).await else {
+                let (selected, routes) = tokio::join!(
+                    select_tool_mode(tool_mode.as_ref(), &request),
+                    routes_entities(entity_routing.as_ref(), &request),
+                );
+                let Some(selected) = selected else {
                     return;
                 };
                 let native_tools = match selected {
@@ -354,6 +373,7 @@ impl TurnEngine for RigTurnEngine {
                 let turn = Box::pin(drive_turn(
                     &memory,
                     &native_tools,
+                    routes,
                     tool_context,
                     gate,
                     request,
@@ -412,6 +432,15 @@ async fn select_auto_model(
     }
 }
 
+// Only a user's conversation turns route SDK entities; summaries read none.
+async fn routes_entities(policy: &dyn EntityRoutingPolicy, request: &TurnRequest) -> bool {
+    let Owner::User(owner) = &request.owner else {
+        return false;
+    };
+    request.purpose == crate::domain::engine::TurnPurpose::Conversation
+        && policy.routes(owner).await
+}
+
 // A failed/missing code-mode MCP connection must never leave a turn with only the
 // small direct set. Summaries neither evaluate flags nor advertise tools.
 async fn select_tool_mode(
@@ -441,6 +470,7 @@ async fn select_tool_mode(
 async fn drive_turn(
     memory: &MemoryServiceImpl<PgMemoryRepo>,
     native_tools: &NativeTools,
+    routes_entities: bool,
     base_context: ToolServiceContext,
     gate: Arc<dyn NativeToolGate>,
     request: TurnRequest,
@@ -554,12 +584,20 @@ async fn drive_turn(
             .find(|message| message.role == agent::types::Role::User)
             .and_then(|message| message.content.user_message_text())
             .unwrap_or_default();
+        // Routed turns leave area guidance out of the prompt; the entities the
+        // request needs bring theirs, with their indexes, in the turn's part.
+        let routed = native_tools.code_mode && routes_entities;
         let docs = async {
             if native_tools.code_mode {
                 agent_code_mode::domain::select_documentation(
                     &owner,
                     &requested,
                     base_context.cognition_tool_context.service.as_ref(),
+                    if routed {
+                        agent_code_mode::domain::Guidance::Selected
+                    } else {
+                        agent_code_mode::domain::Guidance::Inline
+                    },
                     &cancel,
                 )
                 .await
@@ -569,7 +607,11 @@ async fn drive_turn(
         };
         let (user_memory, sdk_docs) = tokio::join!(fetch_user_memory(memory, &owner), docs);
         let prompt = system_prompt(
-            &native_tools.prompt,
+            if routed {
+                &native_tools.routed_prompt
+            } else {
+                &native_tools.prompt
+            },
             &sdk_docs,
             session_id,
             delivery,

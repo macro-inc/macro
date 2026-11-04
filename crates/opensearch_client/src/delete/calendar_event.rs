@@ -1,6 +1,9 @@
 use models_opensearch::SearchIndex;
 
-use crate::{Result, error::OpensearchClientError};
+use crate::{
+    Result,
+    error::{OpensearchClientError, OpensearchOperation},
+};
 
 /// Deletes a calendar event doc by id. The calendar events index is flat with
 /// `_id` = event id, so this is a direct delete. A missing-doc 404 is a no-op
@@ -17,9 +20,11 @@ pub async fn delete_calendar_event_by_id(
         .delete(opensearch::DeleteParts::IndexId(index, event_id))
         .send()
         .await
-        .map_err(|err| OpensearchClientError::Unknown {
-            details: err.to_string(),
-            method: Some("delete_calendar_event_by_id".to_string()),
+        .map_err(|err| {
+            OpensearchClientError::request_failed(
+                OpensearchOperation::DeleteCalendarEventById,
+                &err,
+            )
         })?;
 
     let status_code = response.status_code();
@@ -27,14 +32,12 @@ pub async fn delete_calendar_event_by_id(
         return Ok(());
     }
 
-    let body =
-        response
-            .text()
-            .await
-            .map_err(|err| OpensearchClientError::DeserializationFailed {
-                details: err.to_string(),
-                method: Some("delete_calendar_event_by_id".to_string()),
-            })?;
+    let body = response.text().await.map_err(|err| {
+        OpensearchClientError::deserialization_failed(
+            OpensearchOperation::DeleteCalendarEventById,
+            &err,
+        )
+    })?;
 
     if status_code.as_u16() == 404 {
         let result = serde_json::from_str::<serde_json::Value>(&body)
@@ -54,6 +57,6 @@ pub async fn delete_calendar_event_by_id(
 
     Err(OpensearchClientError::Unknown {
         details: body,
-        method: Some("delete_calendar_event_by_id".to_string()),
+        operation: OpensearchOperation::DeleteCalendarEventById,
     })
 }

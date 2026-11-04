@@ -52,6 +52,10 @@ pub enum DocumentFilterCombination {
         clauses: Vec<DocumentFilterExpression>,
     },
     Not {
+        // Gemini rejects a schema whose `$ref` loop runs only through required
+        // fields, so the model's schema negates a single clause. Decoding still
+        // takes any expression, as the web's query does.
+        #[schemars(with = "DocumentFilterClause")]
         clause: Box<DocumentFilterExpression>,
     },
 }

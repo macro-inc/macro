@@ -295,6 +295,12 @@ export type {
   QueryStatement,
   QueryTableVersion,
 } from './entities/databases/query';
+export {
+  type DocumentEditOptions,
+  DocumentEditRefusedError,
+  type DocumentEditResult,
+  EditOutcomeUnknownError,
+} from './entities/documents/ai-edit';
 export { DocumentAnchor } from './entities/documents/anchor';
 export { DocumentVersion } from './entities/documents/version';
 export {

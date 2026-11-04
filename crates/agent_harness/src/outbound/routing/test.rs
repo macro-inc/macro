@@ -226,6 +226,14 @@ impl AgentSessionRepo for FixedBotSessions {
         unimplemented!("this adapter does not dispatch turns")
     }
 
+    async fn add_follower(
+        &self,
+        _id: AgentSessionId,
+        _user: &MacroUserIdStr<'static>,
+    ) -> SessionResult<()> {
+        unimplemented!("this adapter does not dispatch turns")
+    }
+
     async fn turn_prompter(
         &self,
         _id: AgentSessionId,
