@@ -127,6 +127,17 @@ them back. The DM remains in Channels/DMs; authorized direct session links and
 explicitly saved favorites still open their context. Verify this alongside an
 ordinary standalone session, which remains listed.
 
+A session started from a thread (a mention in a channel, document or call, or a
+task assignment) stays out of Home, Recent and the Agents sidebar for everyone,
+owner included, whichever agent runs it; the thread is where it is reached.
+Follow-up mentions in that thread list it for nobody either. A person who
+prompts the session from the session view itself (after **Open session**)
+follows it: from then on it lists for them in Home, Recent and Agents while they
+can still open it, and nobody else's lists change. Prompting never changes
+anyone's access. Verify with two accounts: mention an agent in a document
+thread and check neither lists it, then have the second account open the
+session, send a prompt, and check the row appears for that account only.
+
 The Agents workspace uses a single left dot for activity and unread state in
 place of the sparkle. Clicking a session row in Home or the Agents sidebar
 clears the row's loaded unread dot immediately; a failed read write restores

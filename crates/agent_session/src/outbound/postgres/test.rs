@@ -1,5 +1,6 @@
 use super::*;
 mod auto_archive;
+mod follower;
 mod list_activity;
 mod queue;
 mod recovery;
@@ -1290,37 +1291,35 @@ async fn create_records_the_session_in_the_owners_history(pool: PgPool) {
     assert_eq!(history[0].item_type, "agent_session");
 }
 
-/// Inline `@macro` (the agent-session Macro bot, born on a thread) starts
-/// hidden from lists. The same bot started with no thread, and any other
-/// bot, is listed immediately.
+/// A session born on a thread (a mention in a channel, document or call)
+/// starts hidden from lists, whichever agent runs it: the thread is where it
+/// is reached. The same bots started with no thread are listed immediately.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn inline_macro_sessions_start_hidden(pool: PgPool) {
+async fn thread_sessions_start_hidden_for_every_agent(pool: PgPool) {
     let repo = test_repo(&pool);
-    create_test_bot(&pool).await;
+    let other_bot = create_test_bot(&pool).await;
     let (_channel_id, thread_id, originating_message_id) =
         insert_originating_thread_fixture(&pool).await;
 
-    let inline = create_session(
-        &repo,
-        new_session(
-            bot_id::MACRO_NEW_BOT_ID,
-            Some(thread_id),
-            Some(originating_message_id),
-        ),
-    )
-    .await;
-    let composer = create_session(&repo, new_session(bot_id::MACRO_NEW_BOT_ID, None, None)).await;
+    for bot in [bot_id::MACRO_NEW_BOT_ID, other_bot] {
+        let inline = create_session(
+            &repo,
+            new_session(bot, Some(thread_id), Some(originating_message_id)),
+        )
+        .await;
+        let composer = create_session(&repo, new_session(bot, None, None)).await;
 
-    assert_eq!(
-        inline.visibility,
-        SessionVisibility::Hidden,
-        "the thread session starts hidden"
-    );
-    assert_eq!(
-        composer.visibility,
-        SessionVisibility::Listed,
-        "a composer session is listed"
-    );
+        assert_eq!(
+            inline.visibility,
+            SessionVisibility::Hidden,
+            "{bot}: the thread session starts hidden"
+        );
+        assert_eq!(
+            composer.visibility,
+            SessionVisibility::Listed,
+            "{bot}: a composer session is listed"
+        );
+    }
 }
 
 /// Replicas still on code that knows only `list_hidden` keep reading and

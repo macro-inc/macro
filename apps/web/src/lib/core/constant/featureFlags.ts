@@ -546,6 +546,13 @@ export const enableProjects = defineFlag({
   default: onInDev,
 });
 
+/** Prefill the editable Source property from contextual task actions. */
+export const enableTaskSourceProperty = defineFlag({
+  key: 'enable-task-source-property',
+  env: 'ENABLE_TASK_SOURCE_PROPERTY',
+  default: onInDev,
+});
+
 // Email snooze: the "Remind me" action, its 'h' shortcut, and the shared
 // time-selection command menu.
 // Every surface routes through `makeCreateReminderAction().canExecute`, so this
