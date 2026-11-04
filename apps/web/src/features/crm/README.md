@@ -63,8 +63,13 @@ its own collection state to the shared collection renderer. Shared collection co
 CRM-specific state again.
 
 Visible contact and company toolbars put the archive-system icon beside Copy link.
-Archived identities group one Archived chip with a standard secondary Restore button; on
-phones the group wraps beneath the name and Restore retains a 44px touch target.
+Archived identities group one Archived chip with a flat secondary Restore button;
+on phones the group wraps beneath the name. Keep identity actions and metadata at
+the compact property scale: 24px visible height, 12px text and 12px icons.
+Interactive controls reserve 10px above and below their touch faces for separate
+44px targets; transparent extensions receive those taps without enlarging the paint.
+Use flat controls here because the glass finish owns its own press pseudo-elements.
+Top-toolbar controls retain their separate navigation scale.
 The chip owns hover/focus/tap explanation; Restore does not trigger that explanation.
 `RecordVisibilityAction` handles confirmation, pending, cancellation and retry.
 Only admins/owners can change visibility. Company archive cascades to all people
