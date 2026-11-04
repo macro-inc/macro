@@ -10,6 +10,14 @@ import type {
   Step,
   UpdateSequenceRequest,
 } from '@service-email/generated/schemas';
+import {
+  addDays,
+  addMinutes,
+  isWeekend,
+  roundToNearestMinutes,
+  setHours,
+  startOfDay,
+} from 'date-fns';
 
 /** Limits the server enforces; the editor stops at them. */
 export const SEQUENCE_LIMITS = {
@@ -21,6 +29,33 @@ export const SEQUENCE_LIMITS = {
   delayDays: 365,
   contacts: 50,
 } as const;
+
+/**
+ * Most sequence emails one inbox sends in any 24 hours; the server holds back
+ * the rest. Mirrors `DAILY_LIMIT` in `crates/email_sequences/src/domain/sweep.rs`.
+ */
+export const DAILY_SENDS = 100;
+
+/** Local hours the default start falls within: 9:00 to 17:00. */
+const WORK_HOURS = { start: 9, end: 17 } as const;
+
+/**
+ * When added people start by default: in a few minutes during working hours
+ * on a weekday, otherwise when the next working day starts.
+ */
+export function defaultStart(now: Date): Date {
+  const soon = roundToNearestMinutes(addMinutes(now, 5), {
+    nearestTo: 5,
+    roundingMethod: 'ceil',
+  });
+  const hour = soon.getHours();
+  if (!isWeekend(soon) && hour >= WORK_HOURS.start && hour < WORK_HOURS.end) {
+    return soon;
+  }
+  let day = startOfDay(hour < WORK_HOURS.start ? soon : addDays(soon, 1));
+  while (isWeekend(day)) day = addDays(day, 1);
+  return setHours(day, WORK_HOURS.start);
+}
 
 /** Personalization the server fills in for each person. */
 export const PERSONALIZATION_TOKENS = [

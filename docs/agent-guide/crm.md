@@ -619,8 +619,10 @@ CRM on for the team, the section and its links behave the same way.
   paused sequence; edits reach everyone who hasn't been sent an email yet. A
   save over a copy changed elsewhere asks to **Reload**.
 - **Add people:** **Add people** searches CRM People (up to 50 at a time) and
-  takes a start time in your time zone. Each inbox sends up to 100 sequence
-  emails a day; more wait for the next day. People can be added before activating;
+  takes a start time in your time zone, by default in a few minutes during
+  working hours (9:00 to 17:00 on weekdays) or else 9:00 the next working day.
+  Each inbox sends up to 100 sequence emails a day; more wait for the next
+  day. People can be added before activating;
   nothing sends until the sequence is active. Selected People or
   Companies rows also offer **Add to sequence** in their right-click and
   selection command menus; a company brings all its people, so filter or group
