@@ -7,30 +7,30 @@ use soup_realtime::domain::{
     ports::SoupRealtimePublisher,
 };
 
-use crate::domain::ports::WorkFeedSignals;
+use crate::domain::ports::FeedSignals;
 
 /// Publishes an entity patch addressed to the viewer alone, which every
-/// one of their sessions' work feed subscriptions recomputes from.
-pub struct SoupRealtimeWorkFeedSignals<P> {
+/// one of their sessions' feed subscriptions recomputes from.
+pub struct SoupRealtimeFeedSignals<P> {
     publisher: P,
 }
 
-impl<P> SoupRealtimeWorkFeedSignals<P> {
+impl<P> SoupRealtimeFeedSignals<P> {
     /// Create the adapter over a Soup realtime publisher.
     pub fn new(publisher: P) -> Self {
         Self { publisher }
     }
 }
 
-impl<P> WorkFeedSignals for SoupRealtimeWorkFeedSignals<P>
+impl<P> FeedSignals for SoupRealtimeFeedSignals<P>
 where
     P: SoupRealtimePublisher,
 {
-    async fn items_changed(&self, user: MacroUserIdStr<'static>, entities: Vec<Entity<'static>>) {
+    async fn changed(&self, user: MacroUserIdStr<'static>, entities: Vec<Entity<'static>>) {
         for entity in entities {
             let message = SoupRealtimeMessage::new(user.clone(), Patch::Updated(entity));
             if let Err(error) = self.publisher.publish(message).await {
-                tracing::warn!(error = ?error, "failed to publish work feed change");
+                tracing::warn!(error = ?error, "failed to publish feed change");
             }
         }
     }

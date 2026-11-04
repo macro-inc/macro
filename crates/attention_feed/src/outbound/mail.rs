@@ -7,21 +7,21 @@ use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use uuid::Uuid;
 
-use crate::domain::ports::WorkFeedMail;
+use crate::domain::ports::FeedMail;
 
 /// Archives threads through [`EmailService`].
-pub struct EmailWorkFeedMail<E> {
+pub struct EmailFeedMail<E> {
     email: Arc<E>,
 }
 
-impl<E> EmailWorkFeedMail<E> {
+impl<E> EmailFeedMail<E> {
     /// Create the adapter over the email service.
     pub fn new(email: Arc<E>) -> Self {
         Self { email }
     }
 }
 
-impl<E> WorkFeedMail for EmailWorkFeedMail<E>
+impl<E> FeedMail for EmailFeedMail<E>
 where
     E: EmailService,
 {

@@ -226,10 +226,12 @@ kinds introduced by a newer backend.
 
 ## 7. Server-built feeds (when relevant)
 
-- **Home work feed:** `crates/work_feed/src/domain/stacking.rs` attributes channel
-  notifications to thread roots and stacks comment events. A new kind defaults to
-  a standalone stack (`_ => None`); add it to the thread-root and
-  `is_channel_event` / `is_comment_event` matches if it belongs to a conversation.
+- **Home work feed:** `crates/attention_feed/src/domain/keying.rs`
+  (`channel_thread_root`) attributes channel notifications to thread roots, and
+  `crates/work_feed/src/domain/stacking.rs` stacks channel and comment events. A
+  new kind defaults to a standalone stack (`_ => None`); add it to the thread-root
+  and `is_channel_event` / `is_comment_event` matches if it belongs to a
+  conversation.
 - **Channel unread scoping:** channel thread SQL in
   `crates/notification/src/outbound/entity_notifications.rs` lists event types by
   name. Add a channel-scoped kind there, with tests beside it.

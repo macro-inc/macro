@@ -15,21 +15,32 @@ use notification::domain::{
 use rootcause::Report;
 use uuid::Uuid;
 
-use crate::domain::{models::FeedNotification, ports::WorkFeedNotifications};
+use crate::domain::{
+    models::FeedNotification,
+    ports::{FeedNotifications, NotificationTransition},
+};
 
 /// Reads and acknowledges notifications through [`NotificationReader`].
-pub struct ReaderWorkFeedNotifications<R> {
+pub struct ReaderFeedNotifications<R> {
     reader: Arc<R>,
 }
 
-impl<R> ReaderWorkFeedNotifications<R> {
+impl<R> ReaderFeedNotifications<R> {
     /// Create the adapter over a notification reader.
     pub fn new(reader: Arc<R>) -> Self {
         Self { reader }
     }
 }
 
-impl<R> WorkFeedNotifications for ReaderWorkFeedNotifications<R>
+impl<R> Clone for ReaderFeedNotifications<R> {
+    fn clone(&self) -> Self {
+        Self {
+            reader: Arc::clone(&self.reader),
+        }
+    }
+}
+
+impl<R> FeedNotifications for ReaderFeedNotifications<R>
 where
     R: NotificationReader,
 {
@@ -52,18 +63,22 @@ where
             .collect())
     }
 
-    async fn set_done(
+    async fn transition(
         &self,
         user: MacroUserIdStr<'static>,
         notification_ids: Vec<Uuid>,
-        done: bool,
+        transition: NotificationTransition,
     ) -> Result<Vec<Uuid>, Report> {
         Ok(self
             .reader
             .update_notifications_and_return::<serde_json::Value>(UpdateNotificationsRequest {
                 user_id: user,
                 notification_ids: &notification_ids,
-                status: NotificationStatus::Done(done),
+                status: match transition {
+                    NotificationTransition::Seen => NotificationStatus::Seen,
+                    NotificationTransition::Done => NotificationStatus::Done(true),
+                    NotificationTransition::Undone => NotificationStatus::Done(false),
+                },
             })
             .await?
             .into_iter()
