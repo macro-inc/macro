@@ -235,6 +235,11 @@ and nudge to the minimum height, and closing hands the column back:
 Keep panes in one keyed list positioned by the layout tree; nesting a
 `Resize.Zone` per split remounts a pane whenever its split changes.
 
+One document open in two desktop tabs has a backend-free browser regression over
+the real router, tab manager, split layout, and orchestrator: each tab mounts its
+own instance and keeps its own state, and reopening within a tab reuses it:
+`bunx playwright test --config src/components/app/tab-layout/browser-test/playwright.config.ts`.
+
 Desktop app switches open the requested list in the target split when the
 retained detail is claimed by another pane or preview. Keep this check in view
 restoration and preserve entity deduplication and native dock stack restoration;
