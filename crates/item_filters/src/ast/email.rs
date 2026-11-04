@@ -53,6 +53,10 @@ pub enum EmailLiteral {
     Owner(Uuid),
     /// This value filters by project ID
     ProjectId(String),
+    /// A provider label by its display name: a Gmail label or an Outlook
+    /// category. Matches threads where any message carries a label of that
+    /// name in the thread's own inbox, so one name covers every inbox.
+    Label(String),
     /// Filters by email importance, evaluated against the denormalized
     /// `email_threads.is_signal` flag: true matches signal threads, false
     /// matches noise threads.

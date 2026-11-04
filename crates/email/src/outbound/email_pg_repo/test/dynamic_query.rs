@@ -412,6 +412,56 @@ async fn test_dynamic_query_user_label_view(pool: Pool<Postgres>) -> anyhow::Res
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
 )]
+async fn test_dynamic_query_label_filter_matches_threads_by_label_name(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let work_thread = Uuid::parse_str("20000006-0000-0000-0000-000000000006")?;
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let run = |filter: Expr<EmailLiteral>| {
+        let query = Query::new(None, SimpleSortMethod::UpdatedAt, Arc::new(filter));
+        let pool = pool.clone();
+        let view = view.clone();
+        async move {
+            dynamic::dynamic_email_thread_cursor(&pool, &[link_id], 50, &view, query, "", None)
+                .await
+                .map(|rows| rows.into_iter().map(|row| row.id).collect::<Vec<_>>())
+        }
+    };
+
+    let labeled = run(Expr::Literal(EmailLiteral::Label("Work".to_string()))).await?;
+    assert_eq!(labeled, vec![work_thread]);
+
+    let all = run(Expr::Literal(EmailLiteral::CalendarOnly(false))).await?;
+    let unlabeled = run(Expr::is_not(Expr::Literal(EmailLiteral::Label(
+        "Work".to_string(),
+    ))))
+    .await?;
+    assert!(!unlabeled.contains(&work_thread));
+    assert_eq!(unlabeled.len(), all.len() - 1);
+
+    // Names match exactly, as the provider spells them.
+    assert!(
+        run(Expr::Literal(EmailLiteral::Label("work".to_string())))
+            .await?
+            .is_empty()
+    );
+    let combined = run(Expr::and(
+        Expr::Literal(EmailLiteral::Label("Work".to_string())),
+        Expr::Literal(EmailLiteral::Sender(Email::Partial(
+            "example.com".to_string(),
+        ))),
+    ))
+    .await?;
+    assert_eq!(combined, vec![work_thread]);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
+)]
 async fn test_dynamic_query_with_sender_filter(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);

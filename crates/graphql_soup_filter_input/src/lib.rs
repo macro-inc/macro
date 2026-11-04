@@ -954,6 +954,8 @@ enum GraphqlEmailLiteral {
     Owner(ID),
     /// The project id option.
     ProjectId(String),
+    /// A provider label (Gmail label or Outlook category) by display name.
+    Label(String),
     /// The importance option.
     Importance(bool),
     /// Exact notification state for the requester.
@@ -985,6 +987,7 @@ impl IntoFilterExpr<EmailLiteral> for GraphqlEmailLiteral {
             Self::ThreadId(id) => EmailLiteral::ThreadId(parse_id(id, "threadId")?),
             Self::Owner(id) => EmailLiteral::Owner(parse_id(id, "owner")?),
             Self::ProjectId(id) => EmailLiteral::ProjectId(id),
+            Self::Label(name) => EmailLiteral::Label(name),
             Self::Importance(importance) => EmailLiteral::Importance(importance),
             Self::NotificationState(state) => EmailLiteral::NotificationState(state.into()),
             Self::Read(read) => EmailLiteral::Read(read),

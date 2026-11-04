@@ -35,6 +35,7 @@ pub(super) fn has_thread_literals(ast: &Expr<EmailLiteral>) -> bool {
             EmailLiteral::ThreadId(_)
             | EmailLiteral::Owner(_)
             | EmailLiteral::ProjectId(_)
+            | EmailLiteral::Label(_)
             | EmailLiteral::CalendarOnly(_)
             | EmailLiteral::Importance(_)
             | EmailLiteral::Read(_)
@@ -58,6 +59,7 @@ pub(super) fn has_message_literals(ast: &Expr<EmailLiteral>) -> bool {
             EmailLiteral::ThreadId(_)
             | EmailLiteral::Owner(_)
             | EmailLiteral::ProjectId(_)
+            | EmailLiteral::Label(_)
             | EmailLiteral::Shared(_)
             | EmailLiteral::CalendarOnly(_)
             | EmailLiteral::Importance(_)
@@ -223,6 +225,22 @@ fn build_thread_literal_predicate(
         EmailLiteral::ProjectId(id) => {
             let mut f = SqlFragment::raw(format!("{thread_alias}.project_id = "));
             f.extend(SqlFragment::bind_string(id.clone()));
+            f
+        }
+        // Driven by the thread's messages so the effective-labels view is
+        // probed by message id, like the user-label mailbox view.
+        EmailLiteral::Label(name) => {
+            let mut f = SqlFragment::raw(format!(
+                r#"EXISTS (
+                SELECT 1 FROM email_messages label_m
+                JOIN email_effective_message_labels label_ml ON label_ml.message_id = label_m.id
+                JOIN email_labels label_l ON label_l.id = label_ml.label_id
+                WHERE label_m.thread_id = {thread_alias}.id
+                AND label_l.link_id = {thread_alias}.link_id
+                AND label_l.name = "#
+            ));
+            f.extend(SqlFragment::bind_string(name.clone()));
+            f.push_raw(")");
             f
         }
         // Denormalized flag maintained at attachment ingest — deriving this
