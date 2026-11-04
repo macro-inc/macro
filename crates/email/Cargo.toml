@@ -29,7 +29,9 @@ apollo = ["dep:reqwest", "ports"]
 ai_tools = [
   "dep:ai_toolset",
   "dep:async-trait",
+  "dep:email_validator",
   "dep:schemars",
+  "dep:specta",
   "ports",
 ]
 axum = [
@@ -64,6 +66,7 @@ async-trait = { workspace = true, optional = true }
 aws-sdk-s3 = { workspace = true, optional = true }
 base64 = { workspace = true }
 lexical_client = { path = "../lexical_client" }
+email_validator = { path = "../email_validator", optional = true }
 entity_access = { path = "../entity_access" }
 entity_access_management = { path = "../entity_access_management", default-features = false, features = [
   "ports",
@@ -101,6 +104,7 @@ recursion = { workspace = true }
 reqwest = { workspace = true, optional = true }
 rootcause = { workspace = true }
 schemars = { workspace = true, optional = true, features = ["uuid1"] }
+specta = { workspace = true, optional = true, features = ["uuid"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_with = { workspace = true }

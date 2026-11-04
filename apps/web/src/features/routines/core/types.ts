@@ -8,6 +8,8 @@ export type RoutineRow = {
   targetModel?: string;
   schedule: string;
   status: 'Active' | 'Paused' | 'Running' | 'Completed';
+  /** The latest finished run failed. */
+  lastRunFailed: boolean;
   editable: boolean;
   enabled: boolean;
 };

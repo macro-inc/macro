@@ -10,14 +10,14 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 /// Resolve the access level a user has for a CRM contact, together with the
-/// owning `team_id` (the contact's parent company's team).
+/// owning `team_id`.
 ///
-/// Joins `crm_contacts` through its parent `crm_companies` row to the user's
-/// `team_user` membership on the owning team, so the returned `team_id` is
-/// the team that owns the contact *and* that the user belongs to. Returns
-/// `None` when the user is not on that team, or when the contact (or its
-/// parent company) is hidden and the user is a plain member — hiding a
-/// company cascades to its contacts, so either flag suppresses access.
+/// Joins `crm_contacts` to the user's `team_user` membership on the
+/// contact's team, so the returned `team_id` is the team that owns the
+/// contact *and* that the user belongs to. Returns `None` when the user is
+/// not on that team, or when the contact (or its parent company, if it has
+/// one) is hidden and the user is a plain member — hiding a company
+/// cascades to its contacts, so either flag suppresses access.
 #[tracing::instrument(err, skip(pool))]
 pub async fn get_crm_contact_access(
     pool: &PgPool,
@@ -27,14 +27,14 @@ pub async fn get_crm_contact_access(
     let row = sqlx::query!(
         r#"
         SELECT
-            (ct.hidden OR c.hidden) AS "hidden!",
-            c.team_id AS "team_id!",
+            (ct.hidden OR c.hidden IS TRUE) AS "hidden!",
+            ct.team_id AS "team_id!",
             tu.team_role AS "role!: TeamRole"
         FROM crm_contacts ct
-        JOIN crm_companies c
+        LEFT JOIN crm_companies c
             ON c.id = ct.company_id
         JOIN team_user tu
-            ON tu.team_id = c.team_id
+            ON tu.team_id = ct.team_id
            AND tu.user_id = $1
         WHERE ct.id = $2
         "#,
@@ -67,15 +67,15 @@ pub async fn get_team_crm_contact_access(
         r#"
         SELECT
             'view'::"AccessLevel" AS "access_level!: AccessLevel",
-            c.team_id AS "team_id!",
+            ct.team_id AS "team_id!",
             'member'::team_role AS "team_role!: TeamRole"
         FROM crm_contacts ct
-        JOIN crm_companies c
+        LEFT JOIN crm_companies c
           ON c.id = ct.company_id
         WHERE ct.id = $1
-          AND c.team_id = $2
+          AND ct.team_id = $2
           AND ct.hidden = false
-          AND c.hidden = false
+          AND c.hidden IS NOT TRUE
         "#,
         contact_id,
         team_id,

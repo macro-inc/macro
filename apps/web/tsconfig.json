@@ -137,6 +137,9 @@
       "@service-agent-fold/*": [
         "./src/lib/service-clients/service-agent-fold/*"
       ],
+      "@service-agent-reviews/*": [
+        "./src/lib/service-clients/service-agent-reviews/*"
+      ],
       "@block-chat/*": [
         "./src/features/block-chat/*"
       ],

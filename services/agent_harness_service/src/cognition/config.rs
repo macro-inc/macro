@@ -68,6 +68,9 @@ maybe_env_vars!(
     pub struct PosthogApiKey;
     /// PostHog ingestion origin. Falls back to the US origin when unset.
     pub struct PosthogHost;
+    /// Macro's customer key for the Macro Connect API. When unset, Connect
+    /// is off and every connection goes through Pipedream.
+    pub struct ConnectCustomerKey;
 );
 
 /// The configuration parameters for the application.
@@ -152,6 +155,9 @@ pub struct Config {
     pub posthog_api_key: PosthogApiKey,
     /// PostHog ingestion origin for integration analytics.
     pub posthog_host: PosthogHost,
+    /// Customer key for Macro Connect, which serves the apps it has in its
+    /// catalog to users in the `macro-connect` rollout.
+    pub connect_customer_key: ConnectCustomerKey,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
     /// AI editing worker URL
@@ -255,6 +261,7 @@ impl Config {
             pipedream_webhook_secret: PipedreamWebhookSecret::Unset,
             posthog_api_key: PosthogApiKey::Unset,
             posthog_host: PosthogHost::Unset,
+            connect_customer_key: ConnectCustomerKey::Unset,
             internal_api_key: InternalApiKey::Comptime(""),
             ai_editing_worker_url: AiEditingWorkerUrl::unwrap_new().to_string(),
             document_permission_jwt: DocumentPermissionJwt::Comptime("DOCUMENT_PERMISSION_JWT"),

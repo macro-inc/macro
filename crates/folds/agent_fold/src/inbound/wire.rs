@@ -26,6 +26,10 @@ mod test;
 pub struct FoldedMessage {
     /// Session that scopes this message id.
     agent_session_id: String,
+    /// The message's identity within its session, `<turn>:<author kind>`
+    /// (`3:agent`): stable across streaming updates, rebases, and pending
+    /// flipping off, so a reader can key and reconcile rows by it.
+    key: String,
     /// The turn within the session, assigned in log order from zero.
     turn: u32,
     /// Who produced the message.
@@ -58,6 +62,7 @@ impl FoldedMessage {
     /// Build the browser form of `message`, keyed to `session`.
     #[must_use]
     pub fn new(session: AgentSessionId, message: ModelFoldedMessage) -> Self {
+        let id = message.id();
         let parts = message.parts.into_inner();
         let closed = message.stop.is_some();
         let (segments, phase) = if matches!(message.author, Author::Agent) {
@@ -70,6 +75,7 @@ impl FoldedMessage {
         };
         Self {
             agent_session_id: session.to_string(),
+            key: format!("{}:{}", id.turn.0, id.author),
             turn: message.id.0,
             author: message.author,
             request_id: message.request_id.map(|id| id.to_string()),

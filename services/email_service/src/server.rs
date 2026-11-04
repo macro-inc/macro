@@ -394,7 +394,7 @@ pub async fn run() -> anyhow::Result<()> {
         person_profiles: crate::composition::person_profiles(
             db.clone(),
             config.use_apollo_person_enrichment,
-            config.apollo_api_key.as_ref(),
+            config.apollo_api_key.as_str(),
         )?,
         invitation_snapshots: email::outbound::invitation_pg::InvitationPgRepository(db.clone()),
         // calendar_service's sync kill switch rejects RSVP writes itself.

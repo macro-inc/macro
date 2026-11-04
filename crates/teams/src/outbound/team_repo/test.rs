@@ -180,10 +180,12 @@ async fn test_create_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
             "PRODUCT_TEAM",
             Some(&"sub_test".parse().unwrap()),
             SeatPlan::Premium,
+            Some("user.com"),
         )
         .await?;
 
     assert!(!result.id.to_string().is_empty());
+    assert_eq!(result.auto_join_domain(), Some("user.com"));
     assert_eq!(result.name, "Product Team");
     assert_eq!(result.slug, "PRODUCT_TEAM");
     assert_eq!(result.owner_id.0.as_ref(), "macro|user3@user.com");
@@ -191,7 +193,7 @@ async fn test_create_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
     // Create team with too large a name
     let err = team_repo
-        .create_team(&user_id, "12345678901234567890123456789012345678901234567890123456789000000000000000000000000000000000000000000000", "MACRO", Some(&"sub_test".parse().unwrap()), SeatPlan::Premium)
+        .create_team(&user_id, "12345678901234567890123456789012345678901234567890123456789000000000000000000000000000000000000000000000", "MACRO", Some(&"sub_test".parse().unwrap()), SeatPlan::Premium, None)
         .await
         .err()
         .unwrap();
@@ -236,6 +238,7 @@ async fn test_move_github_app_installation_to_team_moves_existing_user_rows(
             "GITHUB_OWNER_TEAM",
             Some(&"sub_test".parse().unwrap()),
             SeatPlan::Premium,
+            None,
         )
         .await?;
     let team_id = team.id().to_string();
@@ -359,6 +362,7 @@ async fn test_move_github_app_installation_to_team_noops_when_user_has_no_rows(
             "GITHUB_OWNER_TEAM",
             Some(&"sub_test".parse().unwrap()),
             SeatPlan::Premium,
+            None,
         )
         .await?;
 
@@ -413,7 +417,7 @@ async fn test_invite_users_to_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
 
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, false)
         .await?;
 
     assert_eq!(invited.len(), 1);
@@ -426,7 +430,7 @@ async fn test_invite_users_to_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
 
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, false)
         .await?;
 
     assert!(invited.is_empty());
@@ -529,7 +533,7 @@ async fn test_invite_existing_user_within_rate_limit(pool: Pool<Postgres>) -> an
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
 
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, false)
         .await?;
 
     // Rate limit blocks re-send, no new invite created either
@@ -561,7 +565,7 @@ async fn test_invite_existing_user_inside_email_rate_limit(
     let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, false)
         .await?;
 
     assert!(invited.is_empty());
@@ -592,7 +596,7 @@ async fn test_invite_existing_user_after_rate_limit(pool: Pool<Postgres>) -> any
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
 
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, false)
         .await?;
 
     assert_eq!(invited.len(), 1);
@@ -627,7 +631,7 @@ async fn test_invite_mix_new_and_existing(pool: Pool<Postgres>) -> anyhow::Resul
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
 
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, false)
         .await?;
 
     assert_eq!(invited.len(), 2);
@@ -662,7 +666,7 @@ async fn test_reinvite_updates_last_sent_at(pool: Pool<Postgres>) -> anyhow::Res
     let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, false)
         .await?;
     assert_eq!(invited.len(), 1);
 
@@ -674,7 +678,7 @@ async fn test_reinvite_updates_last_sent_at(pool: Pool<Postgres>) -> anyhow::Res
     let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, false)
         .await?;
     assert!(invited.is_empty());
 
@@ -704,7 +708,7 @@ async fn test_resend_without_mark_sent_stays_eligible(pool: Pool<Postgres>) -> a
     let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, false)
         .await?;
     assert_eq!(invited.len(), 1);
 
@@ -714,7 +718,7 @@ async fn test_resend_without_mark_sent_stays_eligible(pool: Pool<Postgres>) -> a
     let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, false)
         .await?;
     assert_eq!(invited.len(), 1);
 
@@ -764,7 +768,7 @@ async fn test_mark_invites_sent(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, false)
         .await?;
     assert!(invited.is_empty());
 
@@ -1107,6 +1111,14 @@ async fn test_rollback_accept_team_invite(pool: Pool<Postgres>) -> anyhow::Resul
     let team_invite_id = macro_uuid::string_to_uuid("22222222-2222-2222-2222-222222222222")?;
     let user_id = MacroUserIdStr::parse_from_str("macro|user3@user.com")?;
 
+    // A rolled-back agent invite must stay one, or the retry never joins.
+    sqlx::query!(
+        "UPDATE team_invite SET is_agent = TRUE WHERE id = $1",
+        team_invite_id
+    )
+    .execute(&pool)
+    .await?;
+
     let accepted_invite = team_repo
         .accept_team_invite(&team_invite_id, &user_id)
         .await?;
@@ -1130,7 +1142,7 @@ async fn test_rollback_accept_team_invite(pool: Pool<Postgres>) -> anyhow::Resul
 
     let invite = sqlx::query(
         r#"
-        SELECT email, team_role
+        SELECT email, team_role, is_agent
         FROM team_invite
         WHERE id = $1
         "#,
@@ -1138,6 +1150,7 @@ async fn test_rollback_accept_team_invite(pool: Pool<Postgres>) -> anyhow::Resul
     .bind(team_invite_id)
     .fetch_one(&pool)
     .await?;
+    assert!(invite.try_get::<bool, _>("is_agent")?);
     assert_eq!(invite.try_get::<String, _>("email")?, "user3@user.com");
     assert_eq!(
         invite.try_get::<TeamRole, _>("team_role")?,
@@ -2083,5 +2096,45 @@ async fn invite_reminder_claims_respect_the_limit(pool: Pool<Postgres>) -> anyho
         claimed_emails(&team_repo).await?,
         vec![("invite@macro.com".to_string(), 1)]
     );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn agent_invites_are_visible_to_the_invitee(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let macro_user_id = uuid::Uuid::new_v4();
+    sqlx::query!(
+        r#"INSERT INTO "macro_user" (id, username, email, stripe_customer_id)
+           VALUES ($1, 'owner@example.com', 'owner@example.com', 'cus_owner')"#,
+        macro_user_id,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO "User" ("id", "email", "macro_user_id")
+           VALUES ('macro|owner@example.com', 'owner@example.com', $1)"#,
+        macro_user_id,
+    )
+    .execute(&pool)
+    .await?;
+
+    let team_repo = TeamRepositoryImpl::new(pool);
+    let user_id = MacroUserIdStr::parse_from_str("macro|owner@example.com")?;
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+    let invites = vec![Email::parse_from_str("agent@example.com")?.lowercase()];
+    let invites = non_empty::NonEmpty::new(invites.as_slice())?;
+
+    let invited = team_repo
+        .invite_users_to_team(&team_id, &user_id, invites, true)
+        .await?;
+    assert!(invited[0].is_agent);
+
+    let invitee = MacroUserIdStr::parse_from_str("macro|agent@example.com")?;
+    let pending = team_repo.get_user_team_invites(&invitee).await?;
+    assert_eq!(pending.len(), 1);
+    assert!(pending[0].is_agent);
+
     Ok(())
 }

@@ -57,6 +57,16 @@ export class User extends PropertiedEntity<UserName> implements Mentionable {
   }
 
   /**
+   * Whether this user is an agent account rather than a person.
+   *
+   * @returns `true` for an agent account.
+   */
+  async isAgent(): Promise<boolean> {
+    const entry = await this.detail.get();
+    return entry.is_agent === true;
+  }
+
+  /**
    * This user's email address. Macro user ids encode it as `macro|<email>`,
    * so this reads straight off the id — no auth-service endpoint returns
    * emails for arbitrary users.

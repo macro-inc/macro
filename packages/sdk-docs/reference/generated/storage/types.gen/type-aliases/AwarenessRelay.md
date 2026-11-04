@@ -1,6 +1,6 @@
 # Type Alias: AwarenessRelay
 
-> **AwarenessRelay** = \{ `databaseId`: `string`; `relayedAt`: `number`; `state`: [`Awareness`](Awareness.md); `userId`: `string`; \}
+> **AwarenessRelay** = \{ `canEdit`: `boolean`; `databaseId`: `string`; `relayedAt`: `number`; `state`: [`Awareness`](Awareness.md); `userId`: `string`; \}
 
 The [`AWARENESS_MESSAGE_TYPE`] payload: one viewer's awareness, stamped
 when the server relayed it so receivers can drop older relays.
@@ -9,6 +9,7 @@ when the server relayed it so receivers can drop older relays.
 
 | Property | Type | Description |
 | ------ | ------ | ------ |
+| <a id="property-canedit"></a> `canEdit` | `boolean` | Whether the viewer's grant lets them edit; a viewer who cannot is shown as viewing. |
 | <a id="property-databaseid"></a> `databaseId` | `string` | The database the viewer is in. |
 | <a id="property-relayedat"></a> `relayedAt` | `number` | When the server relayed it, in milliseconds since the Unix epoch. |
 | <a id="property-state"></a> `state` | [`Awareness`](Awareness.md) | Where the viewer is. |

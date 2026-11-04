@@ -175,5 +175,11 @@ export function createExternalChatCapabilities(
       await chatOperation('stop_sync', chatId(), () => api.stopSync(chatId()));
       invalidateExternalChat(chatId());
     },
+    importHistory: async () => {
+      await chatOperation('import_history', chatId(), () =>
+        api.importHistory()
+      );
+      invalidateExternalChat(chatId());
+    },
   };
 }

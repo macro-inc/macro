@@ -21,6 +21,25 @@
    failure does not block the remaining content; signup retries repair tags
    without resetting task priorities. The guide waits until its tag IDs resolve.
 
+## Agent accounts
+
+The email step shows an **I'm an agent** toggle when the `enable-agent-signup`
+PostHog flag is on (on in dev; in production it targets the Experimental
+Features cohort, which matches on email, so signed-out visitors don't match). Turning it on, or redeeming an invite sent with
+`team.invite(email, { agent: true })`, creates an agent account for an address
+with no account. An existing account keeps its type; the toggle does nothing.
+
+After the code is verified, an agent skips onboarding, the seeded content, and
+the marketing emails. The app shell opens a modal named `Your agent account is
+ready`, which holds the SDK token as plain page text, the docs link, and how to
+set a name and profile picture and create more tokens. An invited agent also
+joins the inviting team at this point; if that fails, the modal says so and the invite
+stays pending: reloading tries again, and the emailed invite link still works
+after confirming. Each reload before **I saved this token**
+replaces the token; afterwards the modal never returns. Requesting a code without
+the toggle, or signing in with SSO, reverts the account to a person unless it holds
+a token, has confirmed setup, or has a pending agent invite.
+
 Production Google/SSO and inbox/calendar connections may return to either
 `https://macro.com` or `https://www.macro.com`. Verify connections from both hosts;
 the web inbox link flow returns to `/app/inbox-link-callback` on the originating host.
@@ -137,6 +156,14 @@ normalized cache and live-update session, and clear the login hints. Repeat with
 retained user-info data from an earlier successful request. A network failure or
 5xx must not end the session; successful sign-in must re-enable eligible caching.
 
+## Native sign-out
+
+In the desktop, iOS, and Android apps, Sign out reloads the webview onto the
+sign-in screen. The reloaded document must start on `#/login`, never on the
+route it signed out from: that route has no session left to load and shows
+loading placeholders indefinitely. Sign out from Settings → Account and from
+Home, and check that `native_webview_started` reports a `#/login` URL.
+
 ## Native Android
 
 If a signed-out page shows the bottom `Login` / `Sign Up` banner, both buttons
@@ -244,12 +271,37 @@ with native preference for known overlapping providers and Slack alias deduplica
 Connection status failures have an explicit retry; they must not prevent
 independent providers such as native GitHub from connecting. Verify unknown
 status never launches a duplicate OAuth flow and continuation remains possible.
-Team setup retains existing membership, invite acceptance, domain suggestions,
-and editable invite recipients; submitting the form sends real invitations.
+Someone already on a team when they leave the tools step (joined by invite
+link or by domain) never sees the team step: Continue goes to the plan step, or
+finishes for a licensed member, and Back from plan returns to tools. Pending
+email invites still show on the team step for acceptance, and a team created
+there shows the **You're on <team>** confirmation. Team setup retains invite
+acceptance, domain suggestions, and editable invite recipients; submitting the
+form sends real invitations.
 On the create-team form, type a workspace name and edit a teammate address,
 then allow onboarding/contacts queries to refresh. The same inputs must retain
 their values and focus as suggestions arrive or a background request fails.
 Pending queries must show local loading states without suspending the flow.
+When the server suggests a work domain, the create form has no Skip button and
+shows an **Allow @domain emails to join** switch, on by default. Creating the
+team with it on sets the team's auto-join domain and, after the invites, emails
+up to 25 of the creator's same-domain contacts who are not on Macro, invited,
+or already sent a notice (`POST /team/domain-notice`). Creating the team does not leave the step: it
+switches to the **You're on <team>** confirmation, the same panel members who
+were already on a team (auto-joined or invite-accepted) see. That panel has
+**Copy invite link** beside **Continue**; it copies the team's
+`/app/team-invite?link=` URL, creating the link when the team has none. Members
+who may invite (admins and owners, or anyone when non-admin invites are on) can
+create the first link; when they can't, the button shows an error toast.
+
+Personal-domain accounts (no suggested work domain) never see the create-team
+form. The step shows an **Invite friends.** referral screen instead ("Get $10 of
+AI credit for each person who signs up."), with friend email rows, **Copy
+referral link** (`/app/signup?referral_code=`), **Send N invites** (one referral
+invite per address, then the plan step; no team is created), and **Skip for
+now**. Send stays disabled until an address is valid; if none of the invites
+can be sent, the addresses stay on screen. On phones, the paired buttons stack
+full width.
 
 Members with an active or trialing license, including a license from their team,
 finish directly from the team step without visiting the plan page. The Continue

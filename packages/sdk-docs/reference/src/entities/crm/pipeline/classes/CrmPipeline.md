@@ -188,6 +188,24 @@ Update sharing grants.
 
 ***
 
+### viewPositions()
+
+> **viewPositions**(`view`): `Promise`\<[`CardPosition`](../../../../../generated/storage/types.gen/type-aliases/CardPosition.md)[]\>
+
+Saved card order through this pipeline's authorization boundary.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `view` | [`PipelineView`](PipelineView.md) |
+
+#### Returns
+
+`Promise`\<[`CardPosition`](../../../../../generated/storage/types.gen/type-aliases/CardPosition.md)[]\>
+
+***
+
 ### byId()
 
 > `static` **byId**(`client`, `id`): `CrmPipeline`

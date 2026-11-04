@@ -20,7 +20,6 @@ import {
 } from '../../mentions';
 import { MacroApiError, mapConcurrently, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
-import { CalendarNote } from '../calendar/note';
 import { PropertiedEntity } from '../entity';
 import {
   MessageThread,
@@ -56,20 +55,6 @@ export class Document
   extends PropertiedEntity<DocumentDetail>
   implements Mentionable
 {
-  /** Meeting links visible to the reader. Owners also receive unavailable grants and may unlink them to revoke meeting/team access. */
-  async meetingNotes(): Promise<
-    Array<{ note: CalendarNote; eventTitle: string }>
-  > {
-    const links = unwrap(
-      await this.client.calendar.documentNoteLinks({
-        path: { document_id: this.id },
-      }),
-    );
-    return links.map((link) => ({
-      note: CalendarNote.fromDocumentLink(this.client, this, link),
-      eventTitle: link.eventTitle,
-    }));
-  }
   /** PDF annotations in this document. */
   async anchors(): Promise<DocumentAnchor[]> {
     return unwrap(
@@ -500,6 +485,11 @@ export class Document
   /** The document's URL in the Macro web app. */
   webUrl(): string {
     return `${this.client.webAppUrl}/app/md/${this.id}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
   }
 
   /** Search documents by name and content, most relevant first, auto-paginated. */

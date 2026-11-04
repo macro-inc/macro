@@ -9,6 +9,7 @@ import { buildMessageLink } from '@channel/Thread/utils/message-actions';
 import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { thrownResultErrorHasCode } from '@core/util/result';
 import {
   useDeleteMessageMutation,
   usePatchMessageMutation,
@@ -24,6 +25,7 @@ import type {
   MessageThread as ThreadData,
 } from '@service-storage/messages';
 import { createEffect, createSignal, Show } from 'solid-js';
+import { MessageLoadError } from './MessageLoadError';
 import type { MessageActionHandler, MessageData } from './types';
 
 export function threadListItem(thread: ThreadData): MessageListItem {
@@ -223,16 +225,24 @@ export function MessageThreadById(
     () => props.parent,
     () => props.rootId
   );
+  const missing = () => thrownResultErrorHasCode(query.error, 'NOT_FOUND');
   return (
     <Show
       when={query.isSuccess && !query.data.state.deleted_at}
       fallback={
         <Show when={query.isError}>
-          <button
-            onClick={() => fireAndForget(query.refetch(), 'message-thread')}
+          <MessageLoadError
+            retrying={query.isFetching}
+            onRetry={
+              missing()
+                ? undefined
+                : () => fireAndForget(query.refetch(), 'message-thread')
+            }
           >
-            Could not load thread. Retry
-          </button>
+            {missing()
+              ? 'This thread is unavailable.'
+              : 'Could not load thread.'}
+          </MessageLoadError>
         </Show>
       }
     >

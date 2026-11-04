@@ -6,9 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  ActionConfiguration,
+  ActionConfigurationUpdate,
   ActionExecutionRecord,
   AiAdmissionErrorBody,
-  CreateScheduledAction,
   EmptyResponse,
   InProgressExecution,
   ListScheduledActionsParams,
@@ -16,7 +17,6 @@ import type {
   ScheduledActionResponse,
   SetScheduledActionEnabled,
   ShareRoutineTemplate,
-  UpdateScheduledAction,
 } from './schemas';
 
 export type scheduledActionHealthResponse200 = {
@@ -178,14 +178,14 @@ export const getCreateScheduledActionUrl = () => {
 };
 
 export const createScheduledAction = async (
-  createScheduledAction: CreateScheduledAction,
+  actionConfiguration: ActionConfiguration,
   options?: RequestInit
 ): Promise<createScheduledActionResponse> => {
   const res = await fetch(getCreateScheduledActionUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(createScheduledAction),
+    body: JSON.stringify(actionConfiguration),
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
@@ -313,14 +313,14 @@ export const getUpdateScheduledActionUrl = (id: string) => {
 
 export const updateScheduledAction = async (
   id: string,
-  updateScheduledAction: UpdateScheduledAction,
+  actionConfigurationUpdate: ActionConfigurationUpdate,
   options?: RequestInit
 ): Promise<updateScheduledActionResponse> => {
   const res = await fetch(getUpdateScheduledActionUrl(id), {
     ...options,
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(updateScheduledAction),
+    body: JSON.stringify(actionConfigurationUpdate),
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
@@ -864,14 +864,14 @@ export const getActivateScheduledActionTemplateUrl = (id: string) => {
 
 export const activateScheduledActionTemplate = async (
   id: string,
-  createScheduledAction: CreateScheduledAction,
+  actionConfiguration: ActionConfiguration,
   options?: RequestInit
 ): Promise<activateScheduledActionTemplateResponse> => {
   const res = await fetch(getActivateScheduledActionTemplateUrl(id), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(createScheduledAction),
+    body: JSON.stringify(actionConfiguration),
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();

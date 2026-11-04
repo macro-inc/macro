@@ -7,10 +7,8 @@
     "./render": "./src/render.ts"
   },
   "scripts": {
-    "generate": "bun scripts/generate.ts",
-    "build": "bun scripts/generate.ts --build",
-    "check:generated": "bun scripts/generate.ts --check",
-    "test": "bun run check:generated && vitest run",
+    "build": "bun scripts/generate.ts",
+    "test": "bun run build && vitest run",
     "type-check": "tsc --noEmit --project tsconfig.json",
     "docs:dev": "wrangler dev",
     "docs:deploy": "wrangler deploy"

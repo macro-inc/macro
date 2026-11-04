@@ -35,18 +35,21 @@ Delete this initiative.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`InitiativeDetail`](../../../../../generated/storage/types.gen/type-aliases/InitiativeDetail.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`InitiativeDetail`](../../../../../generated/storage/types.gen/type-aliases/InitiativeDetail.md); `id`: `string`; `url`: `string`; \}
+
+Identity, loaded detail and [webUrl](#weburl), so serialized handles carry their link.
 
 #### Returns
 
-\{ `detail?`: [`InitiativeDetail`](../../../../../generated/storage/types.gen/type-aliases/InitiativeDetail.md); `id`: `string`; \}
+\{ `detail?`: [`InitiativeDetail`](../../../../../generated/storage/types.gen/type-aliases/InitiativeDetail.md); `id`: `string`; `url`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`InitiativeDetail`](../../../../../generated/storage/types.gen/type-aliases/InitiativeDetail.md) |
 | `id` | `string` |
+| `url` | `string` |
 
-#### Inherited from
+#### Overrides
 
 [`MacroEntity`](../../../entity/classes/MacroEntity.md).[`toJSON`](../../../entity/classes/MacroEntity.md#tojson)
 
@@ -70,6 +73,18 @@ Update the name, membership or sharing configuration.
 #### Returns
 
 `Promise`\<`void`\>
+
+***
+
+### webUrl()
+
+> **webUrl**(): `string`
+
+The initiative's URL in the Macro web app; hand it to users as the link.
+
+#### Returns
+
+`string`
 
 ***
 

@@ -7209,6 +7209,8 @@
               "drafts",
               "starred",
               "all",
+              "spam",
+              "trash",
               "important",
               "other"
             ]
@@ -7228,6 +7230,8 @@
           "drafts",
           "starred",
           "all",
+          "spam",
+          "trash",
           "important",
           "other"
         ]
@@ -7356,6 +7360,24 @@
               "total_threads": {
                 "type": "integer",
                 "format": "int32"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A Focus classification was stored for a thread in `link_id`, so its\nreaders read their Focus list again. `traceparent` is the W3C trace\ncontext of the classification, for that read to join. Coalesced by the\nsender; carries nothing about the mail.",
+            "required": ["link_id", "event"],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": ["focus_updated"]
+              },
+              "link_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "traceparent": {
+                "type": ["string", "null"]
               }
             }
           }

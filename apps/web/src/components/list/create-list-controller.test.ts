@@ -1,4 +1,4 @@
-import { createRoot, createSignal } from 'solid-js';
+import { createComputed, createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { createListController } from './create-list-controller';
 
@@ -335,6 +335,50 @@ describe('createListController', () => {
       expect(() => list.navigate.by(1.5)).toThrow(
         'List navigation offset must be a finite integer'
       );
+    });
+  });
+
+  it('notifies only rows whose selected state changes', () => {
+    withRoot(() => {
+      const list = createListController({
+        items: () => [item('a'), item('b')],
+        getKey: (value: Item) => value.id,
+      });
+      const first = vi.fn(() => list.selection.isSelected('a'));
+      const second = vi.fn(() => list.selection.isSelected('b'));
+      createComputed(first);
+      createComputed(second);
+      first.mockClear();
+      second.mockClear();
+
+      list.selection.select('a');
+      expect(first).toHaveBeenCalledOnce();
+      expect(second).not.toHaveBeenCalled();
+      expect(list.selection.count()).toBe(1);
+    });
+  });
+
+  it('updates only the previous and next focused rows', () => {
+    withRoot(() => {
+      const list = createListController({
+        items: () => [item('a'), item('b'), item('c')],
+        getKey: (value: Item) => value.id,
+      });
+      list.focus.set('a');
+      const first = vi.fn(() => list.focus.isFocused('a'));
+      const second = vi.fn(() => list.focus.isFocused('b'));
+      const third = vi.fn(() => list.focus.isFocused('c'));
+      createComputed(first);
+      createComputed(second);
+      createComputed(third);
+      first.mockClear();
+      second.mockClear();
+      third.mockClear();
+
+      list.navigate.down();
+      expect(first).toHaveBeenCalledOnce();
+      expect(second).toHaveBeenCalledOnce();
+      expect(third).not.toHaveBeenCalled();
     });
   });
 

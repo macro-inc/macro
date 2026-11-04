@@ -80,11 +80,13 @@ export const staticFileClient = {
     url: string;
     blob: Blob | File;
     contentType?: string;
+    signal?: AbortSignal;
   }) {
     const result = await platformFetch(args.url, {
       method: 'PUT',
       body: args.blob,
       headers: args.contentType ? { 'Content-Type': args.contentType } : {},
+      signal: args.signal,
     });
     return { success: result.ok };
   },

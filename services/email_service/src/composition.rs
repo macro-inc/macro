@@ -87,16 +87,15 @@ pub type PersonProfiles = email::domain::person_profiles::PersonProfileService<
 pub fn person_profiles(
     db: sqlx::PgPool,
     enabled: bool,
-    apollo_api_key: &str,
+    apollo_api_key: Option<&str>,
 ) -> anyhow::Result<PersonProfiles> {
-    let resolver = if enabled && !apollo_api_key.is_empty() {
-        Some(
+    let resolver = match apollo_api_key.filter(|key| enabled && !key.is_empty()) {
+        Some(key) => Some(
             email::outbound::apollo_person_resolver::ApolloPersonProfileResolver::new(
-                apollo_api_key.to_string(),
+                key.to_string(),
             )?,
-        )
-    } else {
-        None
+        ),
+        None => None,
     };
     Ok(email::domain::person_profiles::PersonProfileService::new(
         email::outbound::person_profiles_pg::PersonProfilePgRepository(db),

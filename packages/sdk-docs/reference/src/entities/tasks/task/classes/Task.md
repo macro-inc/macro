@@ -259,22 +259,6 @@ GitHub pull requests associated with the document.
 
 ***
 
-### meetingNotes()
-
-> **meetingNotes**(): `Promise`\<\{ `eventTitle`: `string`; `note`: [`CalendarNote`](../../../calendar/note/classes/CalendarNote.md); \}[]\>
-
-Meeting links visible to the reader. Owners also receive unavailable grants and may unlink them to revoke meeting/team access.
-
-#### Returns
-
-`Promise`\<\{ `eventTitle`: `string`; `note`: [`CalendarNote`](../../../calendar/note/classes/CalendarNote.md); \}[]\>
-
-#### Inherited from
-
-[`Document`](../../../documents/document/classes/Document.md).[`meetingNotes`](../../../documents/document/classes/Document.md#meetingnotes)
-
-***
-
 ### messageThreadById()
 
 > **messageThreadById**(`id`): [`MessageThread`](../../../messages/thread/classes/MessageThread.md)
@@ -606,16 +590,19 @@ A mixed message and activity timeline page.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`DocumentMetadataWithContent`](../../../../../generated/storage/types.gen/type-aliases/DocumentMetadataWithContent.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`DocumentMetadataWithContent`](../../../../../generated/storage/types.gen/type-aliases/DocumentMetadataWithContent.md); `id`: `string`; `url`: `string`; \}
+
+Identity, loaded detail and [webUrl](../../../documents/document/classes/Document.md#weburl), so serialized handles carry their link.
 
 #### Returns
 
-\{ `detail?`: [`DocumentMetadataWithContent`](../../../../../generated/storage/types.gen/type-aliases/DocumentMetadataWithContent.md); `id`: `string`; \}
+\{ `detail?`: [`DocumentMetadataWithContent`](../../../../../generated/storage/types.gen/type-aliases/DocumentMetadataWithContent.md); `id`: `string`; `url`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`DocumentMetadataWithContent`](../../../../../generated/storage/types.gen/type-aliases/DocumentMetadataWithContent.md) |
 | `id` | `string` |
+| `url` | `string` |
 
 #### Inherited from
 

@@ -1,5 +1,8 @@
-import type { ChannelType } from '../../../generated/storage/types.gen';
-import { unwrap } from '../../utils';
+import type {
+  ApiChannelWithLatest,
+  ChannelType,
+} from '../../../generated/storage/types.gen';
+import { paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { SearchOpts } from '../search';
 import type { Team } from '../teams/team';
@@ -7,6 +10,9 @@ import type { User } from '../users/user';
 import { ChannelActivity } from './activity';
 import { Channel } from './channel';
 import { ChannelLabelsNamespace } from './labels';
+
+/** The largest page `GET /comms/channels` serves. */
+const CHANNEL_PAGE_SIZE = 100;
 
 export class ChannelNamespace {
   /** Recent channel activity, with channel and user handles. */
@@ -53,27 +59,41 @@ export class ChannelNamespace {
     return Channel.create(this.client, opts);
   }
 
-  /** All channels the authenticated user is a member of. */
-  async list(): Promise<Channel[]> {
-    const { items } = unwrap(await this.client.storage.getChannels());
-    return items.map((ch) => Channel.byId(this.client, ch.id.toString()));
+  /**
+   * Every channel the authenticated user is a member of, auto-paginated.
+   * Iterate with `for await`; collect with `Array.fromAsync`.
+   */
+  async *list(): AsyncGenerator<Channel> {
+    for await (const record of this.records()) {
+      yield Channel.byId(this.client, record.id);
+    }
   }
 
   /**
-   * Search channels by name (client-side fuzzy filter on the full channel list)
-   * or by content (server-side unified search).
+   * Search channels by name (case-insensitive substring match over every
+   * channel the user is a member of) or by content (server-side unified search).
    */
   async *search(query: string, opts?: SearchOpts): AsyncGenerator<Channel> {
     if (!opts?.searchOn || opts.searchOn === 'name') {
-      const { items } = unwrap(await this.client.storage.getChannels());
       const lower = query.toLowerCase();
-      for (const ch of items) {
-        if (ch.name?.toLowerCase().includes(lower)) {
-          yield Channel.byId(this.client, ch.id.toString());
+      for await (const record of this.records()) {
+        if (record.name?.toLowerCase().includes(lower)) {
+          yield Channel.byId(this.client, record.id);
         }
       }
     } else {
       yield* Channel.search(this.client, query, opts);
     }
+  }
+
+  private records(): AsyncGenerator<ApiChannelWithLatest> {
+    return paginate(async (cursor) => {
+      const page = unwrap(
+        await this.client.storage.getChannels({
+          query: { limit: CHANNEL_PAGE_SIZE, ...(cursor ? { cursor } : {}) },
+        }),
+      );
+      return { items: page.items, nextCursor: page.next_cursor };
+    });
   }
 }

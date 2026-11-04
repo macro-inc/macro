@@ -152,7 +152,7 @@ impl AgentSessionRepo for FixedBotSessions {
             repo_url: None,
             workspace: "/workspace".to_owned(),
             name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
-            is_archived: false,
+            archived: None,
             sandbox_size: SandboxSize::Default,
             instructions: None,
             mcp_servers: Default::default(),
@@ -226,6 +226,14 @@ impl AgentSessionRepo for FixedBotSessions {
         unimplemented!("this adapter does not dispatch turns")
     }
 
+    async fn add_follower(
+        &self,
+        _id: AgentSessionId,
+        _user: &MacroUserIdStr<'static>,
+    ) -> SessionResult<()> {
+        unimplemented!("this adapter does not dispatch turns")
+    }
+
     async fn turn_prompter(
         &self,
         _id: AgentSessionId,
@@ -249,7 +257,7 @@ impl AgentSessionRepo for FixedBotSessions {
         unimplemented!("naming sessions is the session actor's job")
     }
 
-    async fn set_archived(&self, _id: AgentSessionId, _is_archived: bool) -> SessionResult<()> {
+    async fn set_archived(&self, _id: AgentSessionId, _archived: bool) -> SessionResult<()> {
         unimplemented!("archiving sessions is the harness service's job")
     }
 

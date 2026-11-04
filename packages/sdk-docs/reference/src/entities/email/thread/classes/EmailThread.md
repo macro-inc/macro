@@ -424,18 +424,21 @@ The thread's subject, from its first message with one.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`ApiThread`](../../../../../generated/email/types.gen/type-aliases/ApiThread.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`ApiThread`](../../../../../generated/email/types.gen/type-aliases/ApiThread.md); `id`: `string`; `url`: `string`; \}
+
+Identity, loaded detail and [webUrl](#weburl), so serialized handles carry their link.
 
 #### Returns
 
-\{ `detail?`: [`ApiThread`](../../../../../generated/email/types.gen/type-aliases/ApiThread.md); `id`: `string`; \}
+\{ `detail?`: [`ApiThread`](../../../../../generated/email/types.gen/type-aliases/ApiThread.md); `id`: `string`; `url`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`ApiThread`](../../../../../generated/email/types.gen/type-aliases/ApiThread.md) |
 | `id` | `string` |
+| `url` | `string` |
 
-#### Inherited from
+#### Overrides
 
 [`PropertiedEntity`](../../../entity/classes/PropertiedEntity.md).[`toJSON`](../../../entity/classes/PropertiedEntity.md#tojson)
 
@@ -514,6 +517,18 @@ Update provider-neutral read, trash, spam, or star state.
 #### Returns
 
 `Promise`\<`void`\>
+
+***
+
+### webUrl()
+
+> **webUrl**(): `string`
+
+The thread's URL in the Macro web app; hand it to users as the link.
+
+#### Returns
+
+`string`
 
 ***
 

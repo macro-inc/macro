@@ -9,8 +9,12 @@ use macro_middleware::tracking::ClientIp;
 use std::borrow::Cow;
 
 use crate::{
-    api::{context::ApiContext, signup_policy::signup_forbidden_response},
+    api::{
+        context::ApiContext, signup_policy::signup_forbidden_response,
+        webhooks::user::create_user_webhook::revert_unconfirmed_agent,
+    },
     generate_password::generate_random_password,
+    service::user::agent_signup::AGENT_SIGNUP_DATA_KEY,
 };
 use fusionauth::error::FusionAuthClientError;
 use macro_user_id::user_id::MacroUserId;
@@ -97,7 +101,16 @@ pub async fn handler(
     // We may have a user that has linked an email but they don't have a FusionAuth user to handle
     // sending the passwordless login.
     match ctx.auth_client.get_user_id_by_email(&lowercase_email).await {
-        Ok(_) => (),
+        Ok(_) => {
+            if !req.is_agent {
+                revert_unconfirmed_agent(
+                    &ctx,
+                    &format!("macro|{lowercase_email}"),
+                    &lowercase_email,
+                )
+                .await;
+            }
+        }
         Err(e) => {
             match e {
                 FusionAuthClientError::UserDoesNotExist => {
@@ -116,6 +129,9 @@ pub async fn handler(
                                 email: (&lowercase_email).into(),
                                 password: generate_random_password().into(),
                                 username: None,
+                                data: req.is_agent.then(|| {
+                                    serde_json::json!({ AGENT_SIGNUP_DATA_KEY: true })
+                                }),
                             },
                             true,
                             ip_context.origin_ip(),

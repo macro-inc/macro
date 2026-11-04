@@ -148,7 +148,11 @@ export function createRespond(options: RespondOptions) {
     );
   // Signed in, on either audience, a respondent keeps their identity and can
   // edit while the form is open; anonymous visitors cannot.
-  const canEdit = () => options.signedIn() && availability().kind === 'open';
+  // A response to an anonymous form is final.
+  const canEdit = () =>
+    options.signedIn() &&
+    availability().kind === 'open' &&
+    !options.detail().form.anonymous;
 
   const firstSectionIndex = () => {
     const step = nextStep(layout(), -1, answers());

@@ -8,6 +8,7 @@ import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { useEmail, useUserId } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import DeviceMobileDownloadIcon from '@icon/device-mobile-download.svg';
 import GearFillIcon from '@icon/system/fill/gear-fill.svg';
 import GearIcon from '@icon/system/regular/gear.svg';
@@ -37,8 +38,9 @@ const isSettingsActive = () => {
 
 /**
  * Get the mobile app: opens the Mobile App settings page, which carries the
- * App Store QR code. Hidden inside the native app, where that page shows the
- * installed app's version instead, and wherever the page is unavailable.
+ * App Store and Google Play links. Hidden inside the native app, where that
+ * page shows the installed app's version instead, and wherever the page is
+ * unavailable.
  */
 const MobileAppButton = () => {
   const analytics = useAnalytics();
@@ -115,7 +117,7 @@ export const FooterActions = (props: {
   return (
     <div class="flex w-full shrink-0 flex-col items-center gap-1">
       {/* Keyed by id: a new update remounts the button, so its popover opens again. */}
-      <Show when={update()?.id} keyed>
+      <Show when={!isTouchDevice() && update()?.id} keyed>
         {(_id) => (
           <Show when={update()}>
             {(current) => <UpdateButton update={current} />}
