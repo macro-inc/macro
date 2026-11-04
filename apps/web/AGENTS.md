@@ -412,6 +412,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Record search fills the row beside filters with header spacing; section creation
   replaces the default floating dock action through FloatRegion. See
   `src/features/crm/README.md` and `docs/agent-guide/crm.md` at the repo root.
+  Keep record Remove/Restore actions out of the information panel: contact Sharing
+  is absent, and company Sharing contains only permission-gated Sync Emails.
   Company Team lists exclude hidden contacts for every role; keep authorized
   detail/restore access and invalidate embedded company contacts on hide/restore.
   People display options expose removed records only after an explicit admin/owner
