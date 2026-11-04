@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
   referencedChannels: [] as ChannelEntity[],
   sectionsEnabled: true,
   activityChannels: (): readonly ChannelEntity[] => [],
+  additionalActivityChannels: (): readonly ChannelEntity[] => [],
   fetchGroupIds:
     vi.fn<typeof import('../../queries')['fetchChannelGroupIds']>(),
   hydrate:
@@ -290,8 +291,13 @@ vi.mock('./SmartTagDialog', () => ({ promptSmartTag: vi.fn() }));
 vi.mock('./ExpandedChannelsRail', () => ({ ExpandedChannelsRail: () => null }));
 vi.mock('./hooks/useChannelCalls', () => ({ useChannelCalls: () => ({}) }));
 vi.mock('./hooks/useChannelRailActivity', () => ({
-  useChannelRailActivity: (channels: () => readonly ChannelEntity[]) => {
+  useChannelRailActivity: (
+    channels: () => readonly ChannelEntity[],
+    _calls: unknown,
+    additionalChannels: () => readonly ChannelEntity[] = () => []
+  ) => {
     mocks.activityChannels = channels;
+    mocks.additionalActivityChannels = additionalChannels;
     return { unreadChannelIds: () => new Set<string>() };
   },
 }));
@@ -521,9 +527,12 @@ it.each([false, true])(
 
     mount();
 
-    expect(mocks.activityChannels().map(({ id }) => id)).toContain(
+    expect(mocks.additionalActivityChannels().map(({ id }) => id)).toContain(
       'outside-page'
     );
+    expect(
+      mocks.activityChannels().some(({ id }) => id === 'outside-page')
+    ).toBe(enabled);
   }
 );
 

@@ -102,14 +102,20 @@ describe('bounded channel unread indicators', () => {
         createdAt: '2026-01-01',
         sortOrder: 0,
       });
-      const item = createRoot((cleanup) => {
+      const { item, activity } = createRoot((cleanup) => {
         dispose = cleanup;
-        const activity = useChannelRailActivity(channels, calls);
+        const activity = useChannelRailActivity(
+          () => channels().filter((channel) => channel.id === 'other'),
+          calls,
+          channels
+        );
         rail.channelActivity = activity;
-        return useChannelRailFavoriteItemState(favorite);
+        return { item: useChannelRailFavoriteItemState(favorite), activity };
       });
 
       expect(item().unread).toBe(true);
+      expect(activity.unreadCount('channels')).toBe(0);
+      expect(activity.targetChannelId('channels')).toBeUndefined();
       setLocalState(state);
       expect(item().unread).toBe(false);
       setLocalState(undefined);
