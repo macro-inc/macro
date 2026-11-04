@@ -85,7 +85,7 @@ rec {
     # are separate files, and the JVM then fails to bind "::".
     find $out/bin $out/lib -type f \( -name '*.so' -o -perm -u+x \) | while read -r f; do
       rpath=$(patchelf --print-rpath "$f" 2>/dev/null) || continue
-      patchelf --set-rpath "''${rpath//${pkgs.jdk21_headless}\/lib\/openjdk/$out}" "$f"
+      patchelf --set-rpath "$(echo "$rpath" | sed "s|${pkgs.jdk21_headless}/lib/openjdk|$out|g")" "$f"
     done
     sed -i -E '/^.*disallowAlg.*xmldsig.*$/d' $out/conf/security/java.security
   '';
