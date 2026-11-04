@@ -439,6 +439,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   fence in-flight pre-write responses and refresh only affected CRM readers.
   Declare CRM membership dependencies from each Soup query's initial filter scope
   on every page so empty late responses are fenced without refreshing excluded types.
+  Recover missing dependencies before forwarding durable/imperative revalidations;
+  a later observer may share an in-flight request without forwarding its context.
   Preserve company cascade semantics and require company restoration before a person.
   Run desktop/phone controls with `bunx playwright test --config src/features/crm/browser-test/archive/playwright.config.ts`;
   `browser-test/people` and `browser-test/team` additionally cover synthetic query adapters.

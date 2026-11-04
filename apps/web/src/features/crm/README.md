@@ -89,6 +89,9 @@ Pre-write REST reads are cancelled; the normalized exchange fences older respons
 containing or declaring the affected CRM types before publication, hydration or
 persistence. Flat and grouped Soup pages retain their initial filter dependencies
 on continuations, so old empty pages cannot briefly hide a restored record.
+Imperative and durable revalidations recover these dependencies at dispatch, before
+urql can share them with a later mounted reader. Unknown opaque continuation scopes
+conservatively fence both CRM types; known initial scopes retain explicit exclusions.
 Refreshes target CRM-capable readers, leaving unrelated lists alone. A refresh
 failure is logged separately and never misreports a committed save as rejected.
 Session identity is captured before dispatch so a late response cannot populate a
