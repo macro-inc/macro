@@ -122,7 +122,9 @@ async fn agent_graphql(
         return StatusCode::UNAUTHORIZED.into_response();
     };
     let request = graphql_query_context_data(request.into_inner(), &state, None, None, None)
-        .data(graphql_external_agent::GraphqlAgentPrincipal(bot.bot_id));
+        .data(graphql_external_agent::GraphqlAgentPrincipal(bot.bot_id))
+        // User fields authorize through these parts and refuse the bot.
+        .data(GraphqlRequestParts::new(request_parts));
     graphql_response(state.graphql_soup_schema.execute(request).await)
 }
 
