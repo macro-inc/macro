@@ -3,8 +3,8 @@ import {
   formatTimeLabel,
   getDefaultTimezone,
 } from '@core/util/cron';
-import { format } from 'date-fns';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
+import { format } from 'date-fns';
 import { match } from 'ts-pattern';
 import { z } from 'zod';
 
