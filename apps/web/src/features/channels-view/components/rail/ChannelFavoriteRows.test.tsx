@@ -584,16 +584,16 @@ describe('section reordering', () => {
 });
 
 describe('resizable chat sections', () => {
-  it('caps every section to its available height while preserving manual heights', () => {
-    const [maximum, setMaximum] = createSignal(400);
+  it('grows the last All channels list to its content while preserving manual heights', () => {
+    const [maximum, setMaximum] = createSignal(Number.POSITIVE_INFINITY);
     const [savedHeight, setSavedHeight] = createSignal<number>();
     rail.sectionPreferences = () => ({ sort: 'manual', height: savedHeight() });
     measurements.contentHeight = () => 1360;
     let viewport!: HTMLDivElement;
     render(() => (
       <ResizableRailSection
-        section="team_channels"
-        label="Team channels"
+        section="channels"
+        label="All channels"
         open
         maxHeight={maximum()}
         itemCount={40}
@@ -607,22 +607,23 @@ describe('resizable chat sections', () => {
       </ResizableRailSection>
     ));
 
-    expect(viewport.style.height).toBe('400px');
+    expect(viewport.style.height).toBe('1360px');
     setMaximum(252);
     expect(viewport.style.height).toBe('252px');
 
     setSavedHeight(180);
+    setMaximum(Number.POSITIVE_INFINITY);
     expect(viewport.style.height).toBe('180px');
-    setMaximum(400);
+    setMaximum(252);
     expect(viewport.style.height).toBe('180px');
 
+    setMaximum(Number.POSITIVE_INFINITY);
     setSavedHeight(1100);
-    expect(viewport.style.height).toBe('400px');
+    expect(viewport.style.height).toBe('1100px');
     expect(clampChannelSectionHeight(1100)).toBe(1100);
-    setSavedHeight(180);
     fireEvent.keyDown(screen.getByRole('separator'), { key: 'ArrowDown' });
-    expect(rail.setSectionPreferences).toHaveBeenCalledWith('team_channels', {
-      height: 200,
+    expect(rail.setSectionPreferences).toHaveBeenCalledWith('channels', {
+      height: 1120,
     });
   });
 

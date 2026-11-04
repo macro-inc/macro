@@ -116,11 +116,13 @@ test('blocks network requests', async ({ page }) => {
   expect(sent).toEqual([]);
 });
 
-test('removes a frame that navigates away', async ({ page }) => {
+test('returns a frame that navigates away to its own document', async ({
+  page,
+}) => {
   await page.route('https://example.com/**', (route) =>
     route.fulfill({ contentType: 'text/html', body: '<p>Remote page</p>' })
   );
-  const frame = await renderArtifact(page, '<p>Hi</p>');
+  const frame = await renderArtifact(page, '<p id="own">Own page</p>');
 
   await frame
     .evaluate(() => {
@@ -128,10 +130,26 @@ test('removes a frame that navigates away', async ({ page }) => {
     })
     .catch(() => {});
 
+  const replaced = page
+    .locator('iframe[data-canvas-artifact-frame]')
+    .contentFrame();
+  await expect(replaced.locator('#own')).toHaveText('Own page');
+  await expect(replaced.getByText('Remote page')).toHaveCount(0);
+});
+
+test('stops an artifact that keeps navigating away', async ({ page }) => {
+  await page.route('https://example.com/**', (route) =>
+    route.fulfill({ contentType: 'text/html', body: '<p>Remote page</p>' })
+  );
+  await renderArtifact(
+    page,
+    '<script>window.location.href = "https://example.com/leave";</script>'
+  );
+
+  await expect(page.getByText('tried to leave its page')).toBeVisible();
   await expect(page.locator('iframe[data-canvas-artifact-frame]')).toHaveCount(
     0
   );
-  await expect(page.getByText('tried to leave its page')).toBeVisible();
 });
 
 test('expands shared styles and components', async ({ page }) => {

@@ -12,6 +12,7 @@ import {
   ARTIFACT_SANDBOX,
   artifactThemeTokens,
   composeArtifactDocument,
+  isArtifactLoadMarker,
 } from '../core/artifact-document';
 
 /**
@@ -35,21 +36,48 @@ export function ArtifactFrame(props: {
   const artifacts = useArtifactLibrary();
   const [size, setSize] = createSignal({ width: 0, height: 0 });
   const [visible, setVisible] = createSignal(!!props.eager);
+  const [generation, setGeneration] = createSignal(0);
   const [navigatedAway, setNavigatedAway] = createSignal(false);
+  let restarts: number[] = [];
 
   const scale = () =>
     Math.min(
       size().width / props.designWidth,
       size().height / props.designHeight
     );
+  const loadToken = crypto.randomUUID();
   const srcdoc = createMemo(() =>
     composeArtifactDocument(
       props.html,
       artifactThemeTokens(document.documentElement),
-      artifacts.library()
+      artifacts.library(),
+      loadToken
     )
   );
-  createEffect(on(srcdoc, () => setNavigatedAway(false)));
+  const mounted = createMemo(() => ({
+    content: srcdoc(),
+    generation: generation(),
+  }));
+  createEffect(
+    on(srcdoc, () => {
+      restarts = [];
+      setNavigatedAway(false);
+    })
+  );
+
+  /**
+   * The policy cannot follow a navigation to another page, so a load that was not
+   * announced with this frame's token replaces the frame with the artifact's
+   * own document. Moving a frame in the DOM, which a layer reorder does, reloads it
+   * and announces again, so it needs no restart. An artifact that keeps leaving is
+   * stopped.
+   */
+  const restart = () => {
+    const now = Date.now();
+    restarts = [...restarts.filter((at) => now - at < 10_000), now];
+    if (restarts.length > 3) setNavigatedAway(true);
+    else setGeneration((value) => value + 1);
+  };
 
   onMount(() => {
     const forwardKey = (event: MessageEvent) => {
@@ -90,9 +118,26 @@ export function ArtifactFrame(props: {
           </div>
         }
       >
-        <Show when={visible() ? srcdoc() : undefined} keyed>
-          {(content) => {
+        <Show when={visible() ? mounted() : undefined} keyed>
+          {(frame) => {
+            let element: HTMLIFrameElement | undefined;
             let loads = 0;
+            let announced = 0;
+            let checkLoad: ReturnType<typeof setTimeout> | undefined;
+            const onMessage = (event: MessageEvent) => {
+              if (
+                element &&
+                event.source === element.contentWindow &&
+                isArtifactLoadMarker(event.data, loadToken)
+              )
+                announced += 1;
+            };
+            window.addEventListener('message', onMessage);
+            onCleanup(() => {
+              window.removeEventListener('message', onMessage);
+              clearTimeout(checkLoad);
+            });
+
             return (
               <iframe
                 ref={frame}
@@ -101,13 +146,16 @@ export function ArtifactFrame(props: {
                 sandbox={ARTIFACT_SANDBOX}
                 allow=""
                 referrerPolicy="no-referrer"
-                srcdoc={content}
+                srcdoc={frame.content}
                 tabIndex={props.interactive ? 0 : -1}
-                // The policy cannot follow a navigation to another page, so a
-                // second load removes the frame.
+                ref={element}
                 onLoad={() => {
+                  // The message and the load event can arrive in either order.
                   loads += 1;
-                  if (loads > 1) setNavigatedAway(true);
+                  clearTimeout(checkLoad);
+                  checkLoad = setTimeout(() => {
+                    if (loads > announced) restart();
+                  }, 250);
                 }}
                 class="absolute left-1/2 top-1/2 border-0"
                 style={{
