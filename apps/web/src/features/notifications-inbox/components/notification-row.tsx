@@ -36,7 +36,8 @@ export type NotificationRowProps = {
  * paper edges, and its own button unfolds them below the card, which they
  * continue. With a pointer, the time and Mark done appear on hover; touch shows
  * the time and marks done by swiping the row. A phone runs the card edge to edge
- * with larger text.
+ * with larger text, and a read card gives up its fill and fades, so unread ones
+ * stand out at a glance.
  */
 export function NotificationRow(props: NotificationRowProps) {
   const isStack = () => props.count > 1;
@@ -51,8 +52,8 @@ export function NotificationRow(props: NotificationRowProps) {
       data-unfolded={isOpen() ? '' : undefined}
       class={cn(
         'group/notification relative w-full min-w-0 flex-1 px-3 mobile:px-0',
-        isStack() && !props.unfolded && 'pb-5 mobile:pb-4.5',
-        !isStack() && 'pb-2.5 mobile:pb-2'
+        isStack() && !props.unfolded && 'pb-5 mobile:pb-5.5',
+        !isStack() && 'pb-2.5 mobile:pb-3'
       )}
       onMouseMove={() => props.onHover()}
       onClick={(event) => props.onClick(event)}
@@ -64,11 +65,17 @@ export function NotificationRow(props: NotificationRowProps) {
           isOpen() ? 'rounded-t-xl border-b-0' : 'rounded-xl',
           props.highlighted
             ? 'border-edge-frame bg-control-raised'
-            : 'border-edge-button bg-control not-touch:hover:bg-surface-3'
+            : 'border-edge-button bg-control not-touch:hover:bg-surface-3',
+          // A tap leaves the card focused, which mustn't look like unread.
+          'mobile:border-edge-button',
+          props.unseen ? 'mobile:bg-control' : 'mobile:bg-transparent'
         )}
       >
         <div class="flex gap-2.5 px-3 py-3 touch:min-h-[44px]">
-          <span class="shrink-0" data-card-avatar="">
+          <span
+            class={cn('shrink-0', !props.unseen && 'mobile:opacity-60')}
+            data-card-avatar=""
+          >
             {props.icon}
           </span>
           <div class="min-w-0 flex-1">
@@ -78,7 +85,9 @@ export function NotificationRow(props: NotificationRowProps) {
                 data-card-title=""
                 class={cn(
                   'min-w-0 flex-1 truncate text-sm mobile:text-base',
-                  props.unseen ? 'font-medium text-ink' : 'text-ink-muted'
+                  props.unseen
+                    ? 'font-medium text-ink'
+                    : 'text-ink-muted mobile:text-ink-extra-muted'
                 )}
               >
                 {/* Message and comment text carries mention and link markup. */}
@@ -92,7 +101,7 @@ export function NotificationRow(props: NotificationRowProps) {
                 <span
                   aria-label={t('notificationsInbox.unread')}
                   data-unread-dot=""
-                  class="size-1.5 shrink-0 rounded-full bg-accent not-touch:group-hover/notification:hidden"
+                  class="size-1.5 shrink-0 rounded-full bg-accent not-touch:group-hover/notification:hidden mobile:size-2"
                 />
               </Show>
             </div>
@@ -100,7 +109,7 @@ export function NotificationRow(props: NotificationRowProps) {
               class={cn(
                 'mt-[3px] flex min-w-0 items-center gap-2 text-xs mobile:text-[13px] mobile:leading-[18px]',
                 props.unseen
-                  ? 'text-ink-extra-muted'
+                  ? 'text-ink-extra-muted mobile:text-ink-muted'
                   : 'text-ink-extra-muted/80'
               )}
             >
@@ -177,12 +186,18 @@ export function NotificationRow(props: NotificationRowProps) {
         <div
           aria-hidden="true"
           data-stack-edge=""
-          class="absolute inset-x-[19px] h-[5px] rounded-b-[9px] border border-t-0 border-edge-button bg-control/60 mobile:inset-x-[7px]"
+          class={cn(
+            'absolute inset-x-[19px] h-[5px] rounded-b-[9px] border border-t-0 border-edge-button bg-control/60 mobile:inset-x-[7px]',
+            !props.unseen && 'mobile:bg-transparent'
+          )}
         />
         <div
           aria-hidden="true"
           data-stack-edge=""
-          class="absolute inset-x-[26px] mt-[5px] h-[5px] rounded-b-[9px] border border-t-0 border-edge-button bg-control/30 mobile:inset-x-[14px]"
+          class={cn(
+            'absolute inset-x-[26px] mt-[5px] h-[5px] rounded-b-[9px] border border-t-0 border-edge-button bg-control/30 mobile:inset-x-[14px]',
+            !props.unseen && 'mobile:bg-transparent'
+          )}
         />
       </Show>
     </div>
