@@ -166,7 +166,7 @@ it('fills an untouched new event with values suggested after it opened', async (
     <EventComposerSplit initialValues={OPENED} suggestedValues={pending} />
   ));
   expect(
-    screen.getByText('Reading the email for a time and place…')
+    screen.getByText('Reading the email for a time and place')
   ).toBeTruthy();
 
   resolve({
@@ -184,7 +184,7 @@ it('fills an untouched new event with values suggested after it opened', async (
   );
   expect(screen.getByLabelText('Start').textContent).toBe('2030-01-08T14:00');
   expect(
-    screen.queryByText('Reading the email for a time and place…')
+    screen.queryByText('Reading the email for a time and place')
   ).toBeNull();
 });
 
@@ -202,7 +202,7 @@ it('keeps what the user changed before suggestions arrived', async () => {
 
   await waitFor(() =>
     expect(
-      screen.queryByText('Reading the email for a time and place…')
+      screen.queryByText('Reading the email for a time and place')
     ).toBeNull()
   );
   expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe(
