@@ -298,8 +298,9 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   only guard against a guess. UpdateCalendarEvent and DeleteCalendarEvent check
   every call; the update, invite-guests and delete routes check agent runs and
   any request naming `inbox` through `CalendarCopyConfirmation`, answering 409
-  `copy_choice_required`. An agent run is a token with `agent_id` (in-app code
-  mode) or a request carrying `x-macro-code-execution`, which
+  `copy_choice_required`. An agent run (`macro_authorization::is_agent_run`)
+  is a token with `agent_id` (in-app code mode) or a request carrying
+  `x-macro-code-execution`, which
   `code_execution`'s bootstrap sets on every code-mode program's SDK requests,
   public MCP clients' included. Code-mode agents never see the calendar tools
   (`agent_code_mode::covered_by_code_sdk`), so the routes and the SDK docs are

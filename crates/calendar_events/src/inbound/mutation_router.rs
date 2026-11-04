@@ -17,7 +17,8 @@ use axum::{
     routing::{get, patch, post, put},
 };
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    UserOrInternal, is_agent_run,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -457,17 +458,6 @@ impl From<CopyRefusal> for CalendarMutationApiError {
             status: StatusCode::CONFLICT,
         }
     }
-}
-
-/// Set by the code-mode runtime (`code_execution`'s `bootstrap.mjs`) on every
-/// authenticated SDK request a program makes, in agent sessions and for
-/// public MCP clients alike.
-const CODE_EXECUTION_HEADER: &str = "x-macro-code-execution";
-
-/// Whether a request comes from an agent's program rather than a person in
-/// the app: a code-mode run, or a token carrying an agent's attribution.
-fn is_agent_run(agent_attributed: bool, headers: &HeaderMap) -> bool {
-    agent_attributed || headers.contains_key(CODE_EXECUTION_HEADER)
 }
 
 /// Make an agent run name the copy it changes when the meeting is on several
