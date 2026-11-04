@@ -64,7 +64,7 @@ session presentation. Never replay an uncertain submitted action.
 
 ## Tool contracts
 
-- Keep native `NameSearch` and `ListEntities` available for session-aware discovery; agent SDK documentation excludes legacy chats and workspace feeds.
+- `ContentSearch`, `NameSearch`, `ListEntities` and `ReadChat` are covered by the SDK's `search` entity (`macro.search`, `macro.workspace`, `macro.chats`), which carries the search guide; keep their filters in step.
 
 Reviews write `review.decided` and `review.settled` through the injected
 transaction-aware notification writer in the same revision-checked transaction.

@@ -150,18 +150,6 @@ describe('TypeDoc documentation packaging', () => {
     expect(symbols['other.Child']).toBe('# Child\nAnother service');
   });
 
-  it('omits legacy namespaces without removing adjacent current session methods', () => {
-    const pages = fixturePages();
-    pages.set(
-      'src/macro/classes/Macro.md',
-      '# Class: Macro\n\n## Methods\n\n### chats()\n[Chats](../../entities/chats/namespace/classes/Chats.md)\n\n### agentSessions()\n\nCurrent sessions\n\n### workspace()\n\nLegacy feed'
-    );
-    const { symbols } = pack(pages);
-    expect(symbols['Macro.agentSessions']).toContain('Current sessions');
-    expect(symbols['Macro.chats']).toBeUndefined();
-    expect(symbols['Macro.workspace']).toBeUndefined();
-  });
-
   it('fails generation on a missing referenced contract or missing namespace', () => {
     const pages = fixturePages();
     pages.delete('generated/example/types.gen/type-aliases/Child.md');
@@ -229,10 +217,15 @@ describe('TypeDoc documentation packaging', () => {
     );
     expect(guide('channels')).toContain('A form for a channel is a poll:');
     expect(guide('tasks')).toContain('Never edit, merge or delete');
-    expect(guide('agentSessions')).toContain('macro.agentSessions.createManaged');
+    expect(guide('agentSessions')).toContain(
+      'macro.agentSessions.createManaged'
+    );
     expect(guide('routines')).toContain('never sees this conversation');
     expect(guide('documents')).toContain('<m-document-mention>');
-    expect(guide('core')).toContain('macro.documents.search');
+    expect(guide('search')).toContain('macro.search.all');
+    expect(guide('search')).toContain('macro.documents.search');
+    expect(guide('search')).toContain('macro.workspace.page');
+    expect(guide('core')).toBe('');
     expect(docs.symbols.DatabaseNamespace).toContain('## Agent guidance');
   });
 
@@ -252,17 +245,26 @@ describe('TypeDoc documentation packaging', () => {
     expect(entity('documents')).toContain('`Document.content`');
     expect(entity('core')).toContain('### Macro');
     expect(docs.symbols.Macro).toContain('`agentSessions`');
-    expect(docs.symbols.Macro).not.toContain('property-chats');
-    expect(docs.symbols.Macro).not.toContain('property-workspace');
+    expect(docs.symbols.Macro).toContain('`search`');
+    expect(docs.symbols.Macro).toContain('`workspace`');
+    expect(docs.symbols.Macro).toContain('`chats`');
     expect(entity('routines')).toContain('`RoutineOptions`');
     expect(entity('agents')).toContain('### HarnessNamespace');
     expect(entity('apiKeys')).toContain('### UserApiKey');
     expect(entity('entityMentions')).toContain('EntityMentionNamespace');
     expect(entity('githubPullRequests')).toContain('PullRequestChangeset');
     expect(entity('core')).toContain('`SharePermissionOptions`');
-    expect(
-      docs.entities.some((doc) => ['chats', 'workspace'].includes(doc.name))
-    ).toBe(false);
+    // Searching, browsing the workspace and reading AI chats share one entity.
+    expect(entity('search')).toContain('### SearchNamespace (`macro.search`)');
+    expect(entity('search')).toContain('`SearchNamespace.all`');
+    expect(entity('search')).toContain(
+      '### WorkspaceNamespace (`macro.workspace`)'
+    );
+    expect(entity('search')).toContain('### ChatNamespace (`macro.chats`)');
+    expect(entity('search')).toContain('`Chat.history`');
+    expect(entity('core')).not.toContain('SearchNamespace');
+    expect(docs.symbols.SearchOptions).toContain('agentSessions');
+    expect(docs.symbols.WorkspaceType).toContain('agent_session');
     expect(docs.entities.length).toBeLessThanOrEqual(32);
     for (const doc of docs.entities)
       expect(Buffer.byteLength(doc.index)).toBeLessThan(16 * 1024);

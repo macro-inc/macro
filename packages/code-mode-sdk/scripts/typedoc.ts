@@ -64,37 +64,14 @@ export function packageEntityDocs(
   directories: readonly string[],
   notes: readonly AgentNotes[]
 ): SdkDocs {
-  // The public SDK retains deployed legacy APIs. Native discovery tools cover
-  // current sessions; omit the legacy chat and workspace namespaces here.
-  // Only the `Macro` class loses these members; other classes keep methods
-  // with the same names, such as `WhatsAppNamespace.chats()`.
-  const hiddenNamespace = (path: string) =>
-    /^src\/entities\/(chats|workspace)\//.test(path);
-  const withoutLegacyMembers = (markdown: string) =>
-    markdown
-      .replace(
-        /^### (?:chats|workspace)\b[^\n]*\n[\s\S]*?(?=^### |^## |(?![\s\S]))/gm,
-        ''
-      )
-      .replace(/^\| <a id="property-(?:chats|workspace)"[^\n]*\n/gm, '');
   const pages = new Map(
-    [...sourcePages]
-      .filter(
-        ([path]) => !hiddenNamespace(path) && !path.endsWith('/README.md')
-      )
-      .map(([path, markdown]) => [
-        path,
-        path.startsWith('src/macro/')
-          ? withoutLegacyMembers(markdown)
-          : markdown,
-      ])
+    [...sourcePages].filter(([path]) => !path.endsWith('/README.md'))
   );
   const core = [
     'src/macro/',
     'src/config/',
     'src/mentions/',
     'src/entities/entity/',
-    'src/entities/search/',
     'src/entities/sharing/',
     'src/entities/messages/',
     'src/entities/reference/',
@@ -110,8 +87,9 @@ export function packageEntityDocs(
               letter.toUpperCase()
             ),
       // Agent and host setup share one discovery topic, as do AI calls and
-      // image generation, keeping the classifier request within its
-      // 32-question contract as the public API grows.
+      // image generation, and searching, browsing and AI chats, keeping the
+      // classifier request within its 32-question contract as the public API
+      // grows.
       prefixes: (directory === 'agents'
         ? ['agents', 'harnesses']
         : directory === 'channels'
@@ -120,7 +98,9 @@ export function packageEntityDocs(
             ? ['ai', 'images']
             : directory === 'users'
               ? ['users', 'me']
-              : [directory]
+              : directory === 'search'
+                ? ['search', 'workspace', 'chats']
+                : [directory]
       ).map((value) => `src/entities/${value}/`),
     })),
     { name: 'core', prefixes: core },
@@ -180,7 +160,6 @@ export function packageEntityDocs(
     for (const path of reached) {
       for (const match of (pages.get(path) ?? '').matchAll(LINK)) {
         const target = resolve(path, match[2] ?? '');
-        if (hiddenNamespace(target)) continue;
         if (!pages.has(target))
           throw new Error(`Broken TypeDoc link: ${path} -> ${target}`);
         if (target.startsWith('generated/')) reached.add(target);
@@ -235,7 +214,9 @@ export function packageEntityDocs(
     }
     const { header, methods } = splitClass(markdown);
     const guide = guideByPage.get(path);
-    symbols[symbol] = guide ? `${header}\n\n${GUIDE_HEADING}\n\n${guide}` : header;
+    symbols[symbol] = guide
+      ? `${header}\n\n${GUIDE_HEADING}\n\n${guide}`
+      : header;
     for (const method of methods)
       symbols[`${symbol}.${method.name}`] = method.markdown;
   }

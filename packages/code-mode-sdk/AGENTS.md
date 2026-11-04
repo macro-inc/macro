@@ -14,7 +14,9 @@ HTML worker belong to `packages/sdk-docs`.
   per-symbol references (classes, methods, types).
 - `scripts/catalog.ts`: the entity directories agents discover; agent and
   harness docs share a topic, as do native channels, external chats and
-  WhatsApp.
+  WhatsApp, and cross-type search, workspace browsing and AI chats
+  (`search`, whose guide is the `search` topic). Keep the catalog at 32
+  entities or fewer: Jev ranks them in one 32-question call.
 - Each entity's description is its one `@routing` sentence ("Use when …; not
   …") and its `guide` every `@agent` block, both from the SDK's TSDoc and
   collected by `packages/sdk-docs/src/render.ts`. Generation fails for an
@@ -26,7 +28,6 @@ HTML worker belong to `packages/sdk-docs`.
 ## Tool contracts
 
 - External chat sends/uploads use only the credential owner's connection and accept their session or own API token (including signed agent attribution); bots never send. Pairing and account/access controls require the person's session.
-- Agent documentation excludes the legacy chats/workspace namespaces and their Macro properties; public SDK APIs remain compatible for existing callers.
 
 ## Checks
 
