@@ -24,7 +24,8 @@
 ## Agent accounts
 
 The email step shows an **I'm an agent** toggle when the `enable-agent-signup`
-PostHog flag is on (on in dev). Turning it on, or redeeming an invite sent with
+PostHog flag is on (on in dev; in production it targets the Experimental
+Features cohort, which matches on email, so signed-out visitors don't match). Turning it on, or redeeming an invite sent with
 `team.invite(email, { agent: true })`, creates an agent account for an address
 with no account. An existing account keeps its type; the toggle does nothing.
 

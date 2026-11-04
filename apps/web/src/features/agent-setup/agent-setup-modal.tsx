@@ -38,10 +38,15 @@ function Snippet(props: { code: string }) {
 export function AgentSetupModal() {
   const userInfoQuery = useUserInfoQuery();
 
-  const open = () =>
-    userInfoQuery.data?.authenticated === true &&
-    userInfoQuery.data.isAgent === true &&
-    userInfoQuery.data.tutorialComplete === false;
+  // A pending read would suspend the chrome; wait for the user instead.
+  const open = () => {
+    const data = userInfoQuery.isSuccess ? userInfoQuery.data : undefined;
+    return (
+      data?.authenticated === true &&
+      data.isAgent === true &&
+      data.tutorialComplete === false
+    );
+  };
 
   return (
     <Show when={open()}>
