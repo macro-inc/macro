@@ -51,7 +51,7 @@ export function NotificationStackItem(props: NotificationStackItemProps) {
       >
         <div
           class={cn(
-            'flex gap-2.5 px-3 py-2.5 touch:min-h-[44px] mobile:py-2',
+            'flex gap-2.5 px-3 py-2.5 touch:min-h-[44px]',
             props.highlighted
               ? 'bg-control-raised'
               : 'not-touch:hover:bg-surface-3'

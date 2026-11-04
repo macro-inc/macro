@@ -632,7 +632,7 @@ export function NotificationsView(props: NotificationsViewProps) {
           </div>
           <For each={[0, 1, 2, 3, 4]}>
             {() => (
-              <ListSkeleton.Row class="mb-2.5 h-[63px] gap-2.5 rounded-xl px-[13px] mobile:mb-2 mobile:h-[63px] mobile:rounded-none mobile:px-3">
+              <ListSkeleton.Row class="mb-2.5 h-[63px] gap-2.5 rounded-xl px-[13px] mobile:mb-2 mobile:h-[71px] mobile:rounded-none mobile:px-3">
                 <ListSkeleton.Bar class="size-6 shrink-0 rounded-full mobile:size-10" />
                 <div class="flex min-w-0 flex-1 flex-col gap-2">
                   <ListSkeleton.Bar class="w-1/2" />

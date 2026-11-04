@@ -36,7 +36,7 @@ export type NotificationRowProps = {
  * paper edges, and its own button unfolds them below the card, which they
  * continue. With a pointer, the time and Mark done appear on hover; touch shows
  * the time and marks done by swiping the row. A phone runs the card edge to edge
- * with less padding, and larger text.
+ * with larger text.
  */
 export function NotificationRow(props: NotificationRowProps) {
   const isStack = () => props.count > 1;
@@ -67,7 +67,7 @@ export function NotificationRow(props: NotificationRowProps) {
             : 'border-edge-button bg-control not-touch:hover:bg-surface-3'
         )}
       >
-        <div class="flex gap-2.5 px-3 py-3 touch:min-h-[44px] mobile:py-2">
+        <div class="flex gap-2.5 px-3 py-3 touch:min-h-[44px]">
           <span class="shrink-0" data-card-avatar="">
             {props.icon}
           </span>

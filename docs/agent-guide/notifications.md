@@ -82,7 +82,7 @@ at all (including push and email).
 On touch devices the dock's bell (**Notifications**) opens this view with the
 flag on, as the list alone under a floating **Notifications** header with
 the All and Unread toggle and a filter drawer (Type). Cards keep the same anatomy with 44px targets
-and inline row buttons; at phone width they run edge to edge with less padding, a larger avatar and
+and inline row buttons; at phone width they run edge to edge with a larger avatar and
 slightly larger text, and keep their paper edges, while a tablet keeps the desktop's card
 spacing. Tapping a card or an unfolded notification opens it
 full-screen in place, tapping a stack's count unfolds it, a left swipe marks it
