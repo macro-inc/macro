@@ -91,3 +91,8 @@ deploy repo, which Argo CD syncs.
   thresholds misfire on a shared pool. big-pickle sets absolute ones.
 - CI jobs reach the forge through a fixed ClusterIP on the ingress Service, mapped
   with `--add-host`, because `git.localhost` is loopback.
+- A copied store path keeps RUNPATHs to the original. On a Nix host the files are
+  hardlinks and `ld.so` merges them; in an image they load twice. `fusionauthJdk`
+  rewrites its RUNPATH for this reason.
+- A StatefulSet with a crash-looping pod does not roll: delete the pod once after
+  fixing the image (forge runners).

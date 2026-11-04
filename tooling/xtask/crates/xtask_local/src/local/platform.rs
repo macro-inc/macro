@@ -697,23 +697,34 @@ fn nix_build(stage: &Stage, label: &str, expr: &str) -> Result<Vec<String>> {
     Ok(out.unwrap_or_default().lines().map(str::to_owned).collect())
 }
 
+/// Wrap every binary in one Nix build: one flake evaluation, parallel builds.
 fn wrap_binaries(stage: &Stage, bins: &[&str]) -> Result<BTreeMap<String, String>> {
-    let mut out = BTreeMap::new();
+    let mut by_dir: BTreeMap<PathBuf, Vec<&str>> = BTreeMap::new();
     for bin in bins {
         let path = binary_path(bin);
         ensure!(path.is_file(), "missing {}", path.display());
-        let dir = path.parent().context("binary has no parent")?;
-        let expr = format!("(p.wrapBinaries \"{}\" [ \"{bin}\" ]).{bin}", dir.display());
-        let paths = nix_build(stage, &format!("Wrapping {bin} as a store path"), &expr)?;
-        out.insert(
-            (*bin).to_owned(),
-            paths
-                .into_iter()
-                .next()
-                .context("nix build printed no path")?,
-        );
+        let dir = path.parent().context("binary has no parent")?.to_path_buf();
+        by_dir.entry(dir).or_default().push(bin);
     }
-    Ok(out)
+    let wrapped = by_dir
+        .iter()
+        .map(|(dir, names)| {
+            let names = names
+                .iter()
+                .map(|n| format!("\"{n}\""))
+                .collect::<Vec<_>>()
+                .join(" ");
+            format!("(p.wrapBinaries \"{}\" [ {names} ])", dir.display())
+        })
+        .collect::<Vec<_>>()
+        .join(" // ");
+    let expr = format!(
+        "(import f.inputs.nixpkgs {{ system = \"x86_64-linux\"; }}).writeText \
+         \"wrapped-binaries.json\" (builtins.toJSON ({wrapped}))"
+    );
+    let paths = nix_build(stage, "Wrapping binaries as store paths", &expr)?;
+    let listing = paths.first().context("nix build printed no path")?;
+    serde_json::from_str(&std::fs::read_to_string(listing)?).context("parsing wrapped binaries")
 }
 
 fn store_dir(stage: &Stage, name: &str, dir: &Path) -> Result<String> {

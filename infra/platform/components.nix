@@ -499,8 +499,14 @@ in
             --config extenddb.toml > init.log 2>&1 || { cat init.log; exit 1; }
           grep -oE 'Password: [A-Za-z0-9]+' init.log | head -1 | cut -d' ' -f2 > admin-password
         fi
+        # Started in the same sync wave as Postgres, and exits if it is not up.
+        until nc -z postgres 5432; do sleep 1; done
         extenddb serve --config extenddb.toml --foreground &
-        until extenddb healthcheck --config extenddb.toml >/dev/null 2>&1; do sleep 1; done
+        server=$!
+        until extenddb healthcheck --config extenddb.toml >/dev/null 2>&1; do
+          kill -0 "$server" 2>/dev/null || exit 1
+          sleep 1
+        done
         # Idempotent, so every start converges on the account, user, key, and
         # policy the services sign with.
         (

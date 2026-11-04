@@ -33,6 +33,8 @@ const ROOT_APPLICATION: &str = "apps";
 /// Applications `cluster` applies directly the first time, before Argo CD and
 /// the repo it syncs from exist. After that, Argo CD manages them too.
 const BOOTSTRAP_APPLICATIONS: &[&str] = &["traefik", "argocd", "forge"];
+/// Everything the cluster environment deploys (`cluster.nix`).
+const CLUSTER_APPLICATIONS: &[&str] = &["traefik", "argocd", "forge", "forge-runners"];
 
 /// Generated files for the cluster itself, not any one instance.
 fn cluster_dir() -> PathBuf {
@@ -79,6 +81,9 @@ pub fn ensure_cluster(stage: &Stage, rendered: &Path) -> Result<()> {
         apply_items(stage, "root application", &[root_application()])?;
     }
     wait_synced(stage, ROOT_APPLICATION, &revision)?;
+    for app in CLUSTER_APPLICATIONS {
+        wait_synced(stage, app, &revision)?;
+    }
     Ok(())
 }
 
@@ -667,7 +672,18 @@ pub fn wait_synced(stage: &Stage, name: &str, revision: &str) -> Result<()> {
                             .unwrap_or("no message")
                     );
                 }
-                last = unhealthy_resources(&app);
+                let waiting = unhealthy_resources(&app);
+                if waiting != last {
+                    eprintln!(
+                        "  {name}: {} waiting{}",
+                        waiting.len(),
+                        waiting
+                            .first()
+                            .map(|r| format!(", first {r}"))
+                            .unwrap_or_default()
+                    );
+                }
+                last = waiting;
             }
             refresh(name).ok();
             ensure!(

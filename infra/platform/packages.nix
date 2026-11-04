@@ -76,9 +76,17 @@ rec {
   # FusionAuth's start.sh deletes the xmldsig `disallowAlg` lines from the
   # JDK's java.security at every boot (SAML with SHA-1 signatures). The store
   # is read-only, so make that edit once, on a JDK of its own.
-  fusionauthJdk = pkgs.runCommand "fusionauth-jdk" { } ''
+  fusionauthJdk = pkgs.runCommand "fusionauth-jdk" { nativeBuildInputs = [ pkgs.patchelf ]; } ''
     cp -r ${pkgs.jdk21_headless}/lib/openjdk $out
-    chmod -R u+w $out/conf
+    chmod -R u+w $out
+    # The copy must load its own libraries. Otherwise libnio links the original
+    # libnet beside this one, and only one of them learns IPv6 is available.
+    # On a Nix host the two are hardlinks, which ld.so merges; in an image they
+    # are separate files, and the JVM then fails to bind "::".
+    find $out/bin $out/lib -type f \( -name '*.so' -o -perm -u+x \) | while read -r f; do
+      rpath=$(patchelf --print-rpath "$f" 2>/dev/null) || continue
+      patchelf --set-rpath "''${rpath//${pkgs.jdk21_headless}\/lib\/openjdk/$out}" "$f"
+    done
     sed -i -E '/^.*disallowAlg.*xmldsig.*$/d' $out/conf/security/java.security
   '';
 

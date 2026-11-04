@@ -44,11 +44,11 @@ let
         set -e
         cd /data
         # Registers once; the token only matters until `.runner` exists.
-        [ -f .runner ] || act_runner register --no-interactive \
+        [ -f .runner ] || gitea-runner register --no-interactive \
           --instance http://gitea-http:3000 --token "$REGISTRATION_TOKEN" \
           --name "$POD_NAME" --labels ${runnerLabel}
         until [ -S /var/run/docker.sock ]; do sleep 1; done
-        exec act_runner daemon --config ${runnerConfig}
+        exec gitea-runner daemon --config ${runnerConfig}
       ''
     ];
   };

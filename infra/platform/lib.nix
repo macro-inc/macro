@@ -110,7 +110,7 @@ rec {
       name,
       binary,
     }:
-    pkgs.runCommand name { nativeBuildInputs = [ pkgs.patchelf ]; } ''
+    pkgs.runCommand name { nativeBuildInputs = [ pkgs.patchelf pkgs.binutils ]; } ''
       install -Dm755 ${binary} $out/bin/${name}
       # Debug info is most of a debug build's size. Panics and traces keep
       # their symbol names; only line numbers go.
