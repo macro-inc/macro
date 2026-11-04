@@ -2,7 +2,7 @@ import type { UnifiedNotification } from '@notifications/types';
 import { describe, expect, it } from 'vitest';
 import type { NotificationInboxRow } from '../context/notifications-inbox-context';
 import type { InboxActor } from '../core/inbox-row';
-import { describeInboxRow } from './describe-row';
+import { describeInboxCard, describeInboxRow } from './describe-row';
 
 const taskAssigned = {
   id: 'n-1',
@@ -82,5 +82,208 @@ describe('describeInboxRow', () => {
       action: 'Dana sent you an email',
       subject: 'Quarterly numbers',
     });
+  });
+});
+
+const sent = (
+  id: string,
+  tag: string,
+  sender: string,
+  content: Record<string, unknown>
+) =>
+  ({
+    id,
+    entity_type: 'channel',
+    entity_id: 'channel-a',
+    sender_id: sender,
+    created_at: '2026-03-01T10:00:00Z',
+    notification_metadata: { tag, content },
+  }) as unknown as UnifiedNotification;
+
+const stack = (
+  type: NotificationInboxRow['type'],
+  notifications: UnifiedNotification[],
+  threadId?: string
+): NotificationInboxRow => ({
+  id: 'stack',
+  type,
+  threadId,
+  revision: 'rev',
+  latestAt: 1,
+  actions: [],
+  unseen: true,
+  count: notifications.length,
+  content: {
+    entity: { type: 'channel', id: 'entity', name: 'The entity' } as never,
+    notifications,
+  },
+});
+
+const people: Names = {
+  userName: (id) => id,
+  senderName: () => undefined,
+};
+
+const channel = { channelType: 'public', channelName: 'launch' };
+
+describe('describeInboxCard', () => {
+  it('says what a single notification is about and who did it', () => {
+    const card = describeInboxCard(
+      stack('channel_messages', [
+        sent('1', 'channel_message_send', 'Sam', {
+          ...channel,
+          messageContent: 'Ship it',
+        }),
+      ]),
+      people
+    );
+    expect(card).toMatchObject({
+      title: 'Ship it',
+      detail: 'Sam sent a message in #launch',
+      items: [],
+    });
+  });
+
+  it('titles a thread stack with its top-level message', () => {
+    const card = describeInboxCard(
+      stack(
+        'channel_thread',
+        [
+          sent('3', 'channel_message_reply', 'Ana', {
+            ...channel,
+            messageId: 'reply',
+            threadId: 'root',
+            messageContent: 'On it',
+          }),
+          sent('2', 'channel_message_reaction', 'Leo', {
+            ...channel,
+            messageId: 'root',
+            messageContent: 'Can we ship Friday?',
+            emoji: '+1',
+          }),
+        ],
+        'root'
+      ),
+      people
+    );
+    expect(card.title).toBe('Can we ship Friday?');
+    expect(card.detail).toBe('Ana and Leo in #launch');
+    expect(card.items.map((item) => item.by)).toEqual([
+      'Ana replied',
+      'Leo reacted',
+    ]);
+  });
+
+  it('falls back to the newest message when no notification carries the root', () => {
+    const card = describeInboxCard(
+      stack(
+        'channel_thread',
+        [
+          sent('2', 'channel_message_reply', 'Ana', {
+            ...channel,
+            messageId: 'b',
+            threadId: 'root',
+            messageContent: 'Newest',
+          }),
+          sent('1', 'channel_message_reply', 'Sam', {
+            ...channel,
+            messageId: 'a',
+            threadId: 'root',
+            messageContent: 'Older',
+          }),
+        ],
+        'root'
+      ),
+      people
+    );
+    expect(card.title).toBe('Newest');
+  });
+
+  it('titles a channel stack with the channel and names who posted', () => {
+    const card = describeInboxCard(
+      stack(
+        'channel_messages',
+        ['Sam', 'Noor', 'Sam', 'Mara', 'Leo'].map((sender, index) =>
+          sent(String(index), 'channel_message_send', sender, {
+            ...channel,
+            messageId: `m-${index}`,
+            messageContent: `Message ${index}`,
+          })
+        )
+      ),
+      people
+    );
+    expect(card.title).toBe('#launch');
+    expect(card.detail).toBe('Sam, Noor and 2 others posted');
+    expect(card.items.map((item) => item.text)).toContain('Message 3');
+  });
+
+  it('titles a direct message stack with the person and shows the newest message', () => {
+    const card = describeInboxCard(
+      stack('channel_messages', [
+        sent('2', 'channel_message_send', 'Dana', {
+          channelType: 'directMessage',
+          messageContent: 'Newest',
+        }),
+        sent('1', 'channel_message_send', 'Dana', {
+          channelType: 'directMessage',
+          messageContent: 'Older',
+        }),
+      ]),
+      people
+    );
+    expect(card).toMatchObject({ title: 'Dana', detail: 'Newest' });
+  });
+
+  it('titles a document stack with the document', () => {
+    const comment = (id: string, sender: string) =>
+      sent(id, 'commented_on_document', sender, {
+        documentName: 'Launch plan',
+        commentId: id,
+        threadId: id,
+        text: `Comment ${id}`,
+      });
+    const card = describeInboxCard(
+      stack('discussion_messages', [comment('2', 'Sam'), comment('1', 'Ana')]),
+      people
+    );
+    expect(card.title).toBe('Launch plan');
+    expect(card.detail).toBe('Sam and Ana commented');
+    expect(card.items.map((item) => item.by)).toEqual([
+      'Sam commented',
+      'Ana commented',
+    ]);
+  });
+
+  it('titles an agent stack with its session', () => {
+    const settled = (id: string) =>
+      ({
+        id,
+        entity_type: 'agent_session',
+        entity_id: 'session',
+        sender_id: null,
+        created_at: '2026-03-01T10:00:00Z',
+        notification_metadata: {
+          tag: 'agent_session_settled',
+          content: {
+            sessionName: 'Build the tracker',
+            botName: 'Macro',
+            excerpt: `Update ${id}`,
+          },
+        },
+      }) as unknown as UnifiedNotification;
+    const card = describeInboxCard(
+      {
+        ...stack('agent', [settled('2'), settled('1')]),
+        actor: { kind: 'agent', name: 'Macro' },
+      },
+      people
+    );
+    expect(card.title).toBe('Build the tracker');
+    expect(card.detail).toBe('Macro finished');
+    expect(card.items.map((item) => item.text)).toEqual([
+      'Update 2',
+      'Update 1',
+    ]);
   });
 });

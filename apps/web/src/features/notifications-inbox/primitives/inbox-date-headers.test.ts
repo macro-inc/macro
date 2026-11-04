@@ -101,10 +101,10 @@ describe('createInboxListItems', () => {
   });
 
   it('keeps its objects as the clock ticks, and moves rows between sections', () => {
-    const { items, dispose, recent } = createRoot((dispose) => {
+    const { items, dispose } = createRoot((dispose) => {
       const recent = row('a', todayAt(19, 58));
       const items = createInboxListItems(() => [recent]);
-      return { items, dispose, recent };
+      return { items, dispose };
     });
     const before = items();
     expect(shape(before)).toEqual(['Last few minutes', 'a']);
@@ -113,11 +113,31 @@ describe('createInboxListItems', () => {
     const after = items();
     expect(after).not.toBe(before);
     expect(after[0]).toBe(before[0]);
-    expect(after[1]).toBe(recent);
+    expect(after[1]).toBe(before[1]);
 
     vi.advanceTimersByTime(4 * 60_000);
     expect(shape(items())).toEqual(['Last hour', 'a']);
-    expect(items()[1]).toBe(recent);
+    expect(items()[1]).toBe(before[1]);
     dispose();
+  });
+
+  it('keeps a row’s place when its data changes or it moves', () => {
+    createRoot((dispose) => {
+      const [rows, setRows] = createSignal([
+        row('a', todayAt(19, 58)),
+        row('b', todayAt(19, 57)),
+      ]);
+      const items = createInboxListItems(rows);
+      const [, placeOfA, placeOfB] = items();
+
+      setRows([
+        { ...row('b', todayAt(19, 59)), count: 2 },
+        row('a', todayAt(19, 58)),
+      ]);
+      const [, movedB, movedA] = items();
+      expect(movedB).toBe(placeOfB);
+      expect(movedA).toBe(placeOfA);
+      dispose();
+    });
   });
 });

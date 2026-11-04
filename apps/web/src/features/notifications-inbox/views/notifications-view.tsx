@@ -41,12 +41,14 @@ import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, EmptyStatePanel } from '@ui';
 import {
+  createComputed,
   createEffect,
   createMemo,
   createSignal,
   For,
   type JSX,
   Match,
+  on,
   onCleanup,
   onMount,
   Show,
@@ -66,7 +68,7 @@ import {
 } from '../context/notifications-inbox-context';
 import { statusIncludes } from '../core/inbox-filters';
 import type { InboxDecision } from '../core/inbox-row';
-import { describeInboxRow } from '../primitives/describe-row';
+import { describeInboxCard } from '../primitives/describe-row';
 import {
   createInboxListItems,
   dateHeaderLabel,
@@ -89,6 +91,8 @@ export type NotificationsViewProps = {
 
 /** Distance from the end of the list, in pixels, that loads the next page. */
 const LOAD_MORE_DISTANCE_PX = 300;
+/** Frames a visible row is held in place after a live change above it. */
+const ANCHOR_HOLD_FRAMES = 12;
 
 const decisionOutcome = (decision: InboxDecision) =>
   match(decision)
@@ -157,12 +161,13 @@ function ListStatus(props: { children: JSX.Element }) {
 }
 
 /**
- * The unified notifications list beside a preview of the chosen row: one row
+ * The unified notifications list beside a preview of the chosen row: one card
  * per thing that needs the viewer, newest first under Home's date dividers.
- * `j`/`k` move (and follow in an open preview), Enter previews, `e` marks the
- * focused row done. Touch
- * shows the list alone: a tap opens the row in place, a left swipe marks it
- * done, and pulling down refreshes.
+ * Several notifications about one thing show as a stack, which unfolds when
+ * chosen. `j`/`k` move (and follow in an open preview), Enter previews, `e`
+ * marks the focused row done. Touch shows the list alone: a tap opens the row
+ * in place, its count unfolds a stack, a left swipe marks it done, and pulling
+ * down refreshes.
  */
 export function NotificationsView(props: NotificationsViewProps) {
   const panel = useSplitPanelOrThrow();
@@ -219,6 +224,11 @@ export function NotificationsView(props: NotificationsViewProps) {
     return current.t === 'ready' ? current.rows : [];
   };
   const listItems = createInboxListItems(rows);
+  const rowsById = createMemo(
+    () => new Map(rows().map((row) => [row.id, row] as const))
+  );
+  const rowOf = (item: InboxListItem | undefined) =>
+    item && isInboxRow(item) ? rowsById().get(item.id) : undefined;
 
   const orchestrator = useGlobalBlockOrchestrator();
   const guard = createPreviewSelectionGuard();
@@ -228,6 +238,12 @@ export function NotificationsView(props: NotificationsViewProps) {
     const entity = row && previewSelection(row.content.entity);
     return entity && previewBlockTarget(entity);
   });
+
+  // Held by row id, not on the row: a live change replaces the row's object
+  // and a stack stays open through it.
+  const [unfolded, setUnfolded] = createSignal<string>();
+  const toggleStack = (id: string) =>
+    setUnfolded((open) => (open === id ? undefined : id));
 
   const markSeen = (row: NotificationInboxRow) => {
     if (!row.unseen) return;
@@ -256,20 +272,26 @@ export function NotificationsView(props: NotificationsViewProps) {
     isNavigable: isInboxRow,
     isSelectable: isInboxRow,
     onActivate: ({ item, metadata }) => {
-      if (!isInboxRow(item)) return;
+      const row = rowOf(item);
+      if (!row) return;
       previewAfterMove.clear();
       // Phones show one pane: open in place.
       if (isTouchDevice()) {
-        markSeen(item);
-        props.onOpen(item, { newSplit: false });
+        markSeen(row);
+        props.onOpen(row, { newSplit: false });
         return;
       }
       if (metadata?.newSplit === true || metadata?.event?.shiftKey === true) {
-        markSeen(item);
-        props.onOpen(item, { newSplit: true });
+        markSeen(row);
+        props.onOpen(row, { newSplit: true });
         return;
       }
-      preview(item);
+      // Choosing a stack unfolds it; choosing it again while shown folds it.
+      if (row.count > 1) {
+        const shown = selection.selected()?.id === row.id;
+        setUnfolded((open) => (open === row.id && shown ? undefined : row.id));
+      }
+      preview(row);
     },
   });
 
@@ -308,6 +330,54 @@ export function NotificationsView(props: NotificationsViewProps) {
 
   const loadMore = () => fireAndForget(inbox.loadMore(), 'notifications-inbox');
 
+  // A live change above what's being read shouldn't move it: note where the
+  // first visible row is before the list changes, and put it back after. At the
+  // top of the list new cards simply appear.
+  let anchor: { id: string; top: number } | undefined;
+  createComputed(
+    on(
+      listItems,
+      () => {
+        anchor = undefined;
+        const container = viewport();
+        if (!container || container.scrollTop <= 0) return;
+        const edge = container.getBoundingClientRect().top;
+        for (const row of container.querySelectorAll(
+          '[data-notification-row]'
+        )) {
+          const { top, bottom } = row.getBoundingClientRect();
+          if (bottom > edge) {
+            anchor = { id: row.id, top };
+            return;
+          }
+        }
+      },
+      { defer: true }
+    )
+  );
+  createEffect(
+    on(
+      listItems,
+      () => {
+        const noted = anchor;
+        const container = viewport();
+        if (!noted || !container) return;
+        // A new card is measured a moment after it mounts, so hold the row
+        // in place for a few frames rather than correcting once.
+        let frames = ANCHOR_HOLD_FRAMES;
+        let frame = requestAnimationFrame(function hold() {
+          const row = document.getElementById(noted.id);
+          if (!row) return;
+          container.scrollTop += row.getBoundingClientRect().top - noted.top;
+          frames -= 1;
+          if (frames > 0) frame = requestAnimationFrame(hold);
+        });
+        onCleanup(() => cancelAnimationFrame(frame));
+      },
+      { defer: true }
+    )
+  );
+
   useListInteractions({
     controller: list,
     scopeId: panel.splitHotkeyScope,
@@ -316,13 +386,8 @@ export function NotificationsView(props: NotificationsViewProps) {
     navigation: {
       onNavigate: (event) => {
         // An open preview follows the keyboard.
-        if (
-          event.result &&
-          selection.selected() &&
-          isInboxRow(event.result.item)
-        ) {
-          previewAfterMove(event.result.item);
-        }
+        const moved = rowOf(event.result?.item);
+        if (moved && selection.selected()) previewAfterMove(moved);
         if (event.kind !== 'move' || event.direction !== 1) return;
         if (!event.result || list.items.count() - event.result.index <= 4) {
           loadMore();
@@ -343,8 +408,8 @@ export function NotificationsView(props: NotificationsViewProps) {
     condition: () => panel.isPanelActive() && list.focus.item() !== undefined,
     keyDownHandler: (event) => {
       if (event?.repeat) return true;
-      const row = list.focus.item();
-      if (!row || !isInboxRow(row)) return false;
+      const row = rowOf(list.focus.item());
+      if (!row) return false;
       markDone([row]);
       return true;
     },
@@ -373,8 +438,6 @@ export function NotificationsView(props: NotificationsViewProps) {
     onCleanup(() => cancelAnimationFrame(frame));
   });
 
-  const display = (row: NotificationInboxRow) => describeInboxRow(row, context);
-
   /** On touch, a left swipe marks the row done. */
   const SwipeToDone = (swipe: {
     row: NotificationInboxRow;
@@ -391,19 +454,65 @@ export function NotificationsView(props: NotificationsViewProps) {
     </Show>
   );
 
+  const RowCard = (card: { row: () => NotificationInboxRow }) => {
+    const display = createMemo(() => describeInboxCard(card.row(), context));
+    return (
+      <SwipeToDone row={card.row()}>
+        <NotificationRow
+          id={card.row().id}
+          title={display().title}
+          detail={display().detail}
+          time={formatTimestamp(new Date(card.row().latestAt))}
+          count={card.row().count}
+          items={display().items}
+          formatTime={(at) => formatTimestamp(at)}
+          unfolded={unfolded() === card.row().id}
+          unseen={card.row().unseen}
+          highlighted={
+            list.focus.key() === card.row().id ||
+            selection.selected()?.id === card.row().id
+          }
+          onHover={() => list.focus.set(card.row().id, { reason: 'hover' })}
+          onClick={(event) =>
+            list.activate.key(card.row().id, {
+              reason: 'pointer',
+              metadata: { event },
+            })
+          }
+          onDone={() => markDone([card.row()])}
+          onToggleStack={() => toggleStack(card.row().id)}
+          actions={
+            rowButtons(card.row()).length > 0 ? (
+              <RowActionButtons
+                actions={rowButtons(card.row())}
+                pending={rowActions.pending(card.row().id)}
+                onChoose={(action) =>
+                  fireAndForget(
+                    rowActions.run(card.row(), action),
+                    'notifications-inbox'
+                  )
+                }
+              />
+            ) : undefined
+          }
+        />
+      </SwipeToDone>
+    );
+  };
+
   const listBody = () => (
     <Switch>
       <Match when={!filters.showsNothing() && view().t === 'loading'}>
         <ListSkeleton.Root
           label={t('notificationsInbox.loading')}
-          class="px-(--sidebar-gutter) touch:pt-(--mobile-content-inset-top)"
+          class="px-3 touch:pt-(--mobile-content-inset-top)"
         >
-          <div class="flex h-7 items-center px-2">
+          <div class="flex h-7 items-center px-[13px]">
             <ListSkeleton.Bar class="h-2 w-16" />
           </div>
           <For each={[0, 1, 2, 3, 4]}>
             {() => (
-              <ListSkeleton.Row class="h-16 flex-col items-start justify-center gap-2">
+              <ListSkeleton.Row class="mb-2.5 h-[63px] flex-col items-start justify-center gap-2 rounded-xl px-[13px]">
                 <ListSkeleton.Bar class="w-1/2" />
                 <ListSkeleton.Bar class="w-4/5" />
               </ListSkeleton.Row>
@@ -470,7 +579,7 @@ export function NotificationsView(props: NotificationsViewProps) {
               scrollRef={viewport()}
               startMargin={isTouchDevice() ? (topSpacerSize.height ?? 0) : 0}
               bufferSize={500}
-              itemSize={64}
+              itemSize={73}
               keepMounted={
                 list.focus.index() >= 0 ? [list.focus.index()] : undefined
               }
@@ -478,45 +587,9 @@ export function NotificationsView(props: NotificationsViewProps) {
             >
               {(item) =>
                 isInboxRow(item) ? (
-                  <SwipeToDone row={item}>
-                    <NotificationRow
-                      id={item.id}
-                      type={item.type}
-                      action={display(item).action}
-                      subject={display(item).subject}
-                      time={formatTimestamp(new Date(item.latestAt))}
-                      count={item.count}
-                      unseen={item.unseen}
-                      highlighted={
-                        list.focus.key() === item.id ||
-                        selection.selected()?.id === item.id
-                      }
-                      onHover={() =>
-                        list.focus.set(item.id, { reason: 'hover' })
-                      }
-                      onClick={(event) =>
-                        list.activate.key(item.id, {
-                          reason: 'pointer',
-                          metadata: { event },
-                        })
-                      }
-                      onDone={() => markDone([item])}
-                      actions={
-                        rowButtons(item).length > 0 ? (
-                          <RowActionButtons
-                            actions={rowButtons(item)}
-                            pending={rowActions.pending(item.id)}
-                            onChoose={(action) =>
-                              fireAndForget(
-                                rowActions.run(item, action),
-                                'notifications-inbox'
-                              )
-                            }
-                          />
-                        ) : undefined
-                      }
-                    />
-                  </SwipeToDone>
+                  <Show when={rowsById().get(item.id)}>
+                    {(row) => <RowCard row={row} />}
+                  </Show>
                 ) : (
                   <InboxDateHeader
                     id={item.id}

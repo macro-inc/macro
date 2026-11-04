@@ -8,7 +8,6 @@ import {
   getGithubSenderLogin,
   isGithubNotificationType,
 } from '@entity/extractors-notification/notification-description-helpers';
-import { isEntityDiscussionEvent } from '@notifications/entity-discussion';
 import { setDoneOverride } from '@notifications/notification-source';
 import type { UnifiedNotification } from '@notifications/types';
 import { useRespondToCalendarJoinRequestMutation } from '@queries/calendar/join-requests';
@@ -39,7 +38,11 @@ function userName(userId: string): string | undefined {
 
 function senderName(notification: UnifiedNotification): string | undefined {
   const metadata = notification.notification_metadata;
-  if (isEntityDiscussionEvent(metadata) && metadata.content.senderDisplayName) {
+  // Bots and agents have no user id; they name themselves in the metadata.
+  if (
+    'senderDisplayName' in metadata.content &&
+    metadata.content.senderDisplayName
+  ) {
     return metadata.content.senderDisplayName;
   }
   // GitHub senders keep their GitHub login, even when linked to Macro.

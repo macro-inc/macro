@@ -20,10 +20,17 @@ type InboxDateHeaderItem = {
   bucket: { key: string; label: string };
 };
 
-export type InboxListItem = NotificationInboxRow | InboxDateHeaderItem;
+/**
+ * A row's place in the list, one object per row id. The virtual list keys items
+ * by object and a live change replaces a row's data, so the place stays and the
+ * card reads the row's latest data by id: nothing remounts as rows change.
+ */
+type InboxRowItem = { type: 'row'; id: string };
 
-export const isInboxRow = (item: InboxListItem): item is NotificationInboxRow =>
-  item.type !== 'date_header';
+export type InboxListItem = InboxRowItem | InboxDateHeaderItem;
+
+export const isInboxRow = (item: InboxListItem): item is InboxRowItem =>
+  item.type === 'row';
 
 export const dateHeaderLabel = (header: InboxDateHeaderItem) =>
   match(header.bucket.key)
@@ -44,9 +51,9 @@ export const dateHeaderLabel = (header: InboxDateHeaderItem) =>
     .otherwise(() => header.bucket.label);
 
 /**
- * The rows with a divider above each date section. Rows arrive newest first,
- * so a section is one run of rows. Dividers are derived from the rows shown, so
- * a section whose rows are filtered out or done has none.
+ * A place for each row, with a divider above each date section. Rows arrive
+ * newest first, so a section is one run of rows. Dividers are derived from the
+ * rows shown, so a section whose rows are filtered out or done has none.
  */
 export function createInboxListItems(
   rows: Accessor<readonly NotificationInboxRow[]>
@@ -72,9 +79,12 @@ export function createInboxListItems(
     return header;
   };
 
+  let places = new Map<string, InboxRowItem>();
+
   return createMemo(() => {
     const reference = new Date(now());
     const items: InboxListItem[] = [];
+    const shown = new Map<string, InboxRowItem>();
     let section: string | undefined;
     for (const row of rows()) {
       const bucket = homeDateBucket(row.latestAt, reference);
@@ -82,8 +92,11 @@ export function createInboxListItems(
         items.push(headerFor(bucket));
         section = bucket.key;
       }
-      items.push(row);
+      const place = places.get(row.id) ?? { type: 'row', id: row.id };
+      shown.set(row.id, place);
+      items.push(place);
     }
+    places = shown;
     return items;
   });
 }

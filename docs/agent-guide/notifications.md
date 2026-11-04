@@ -9,19 +9,26 @@ first. The flag is on in dev and comes from PostHog elsewhere;
 route redirects to Home once flags load, and `g i` stays on Home; with it on,
 Home keeps `g h`.
 
-Each row is one row of the server's notification inbox
-(`user.notificationInbox`): an email thread, a channel's top-level messages, one thread, one
-top-level mention, an entity's comments, one comment thread, a task
-assignment, a pull request, a calendar event, an access request or grant, or
-an agent session. A message that mentions you appears once,
-in its mention row. Rows show a type glyph, a muted line saying who did what
-(for example **&lt;first name&gt; assigned you a task**), the subject (email subject,
-message or comment text, task name, PR or event title), a count when the row
-stands for several notifications, the time, and an unread dot. The author is
+Each card is one row of the server's notification inbox
+(`user.notificationInbox`): an email thread, a channel's top-level messages, one
+top-level message with everything about it (its replies, mentions and reactions,
+once there is more than one thing), an entity's comments, a task assignment, a
+pull request, a calendar event, an access request or grant, or an agent session.
+A top-level message that mentions you has its own card, with its thread; an
+entity's comments stay on one card even when one mentions you. The server decides
+all of this (`crates/notification_inbox/src/domain/rows.rs`), so live updates and
+reads stack the same way. A card says what it is about, then who did what (for
+example **&lt;first name&gt; assigned you a task**), with an unread dot. Several
+notifications on a row make a stack, with paper edges and a count: its title is
+what they share (the top-level message when a notification carries it, else the
+newest message; the channel, person, session, document or thread) and its second
+line names who. Choosing a stack also unfolds it in place into its notifications;
+choosing it again folds it, and its count folds or unfolds it without opening it.
+It stays open as new notifications land. The time shows on hover. The author is
 the row's actor: a Macro user by first name, an agent by its bot name, or
 **Macro**; a row from outside Macro names its email sender, and GitHub rows
 keep the GitHub login. A row type, author kind, or button this build doesn't
-know yet shows as a plain row with a bell glyph, no author, and no button.
+know yet shows as a plain card with no author and no button.
 Date dividers split the list into Home's sections (**Last hour**, **This
 morning**, **Yesterday**, and so on), by each row's newest notification; `j`/`k`
 skip them.
@@ -39,8 +46,7 @@ open preview moves to the next row. A toast offers **Undo**, as does
 reads **You’re all caught up**; with nothing chosen the pane reads **No
 notification selected**.
 
-Rows carry the buttons the server lists for them under the subject, the first
-one highlighted. An access request offers **Approve** (grants the level asked
+Rows carry the buttons the server lists for them under their text. An access request offers **Approve** (grants the level asked
 for) and **Deny**; a request to join an event you shared offers **Accept** and
 **Decline**. Deciding disables the buttons until it finishes, shows a toast
 (**Access granted**, **Access request denied**, **Added to the event**,
@@ -64,15 +70,23 @@ at all (including push and email).
 
 On touch devices the dock's bell (**Notifications**) opens this view with the
 flag on, as the list alone under a floating **Notifications** header with a
-filter drawer (Status and Type). Rows keep the same anatomy with 44px targets
-and inline row buttons; tapping a row opens it full-screen in place, a left
-swipe marks it done (with the same Undo), and pulling down refreshes. Hover
-controls and the preview pane are desktop-only. The dock keeps the bell active
-while the view shows.
+filter drawer (Status and Type). Cards keep the same anatomy with 44px targets
+and inline row buttons; tapping a card opens it full-screen in place, tapping a
+stack's count unfolds it, a left swipe marks it done (with the same Undo), and
+pulling down refreshes. Hover controls and the preview pane are desktop-only. The
+dock keeps the bell active while the view shows.
 
-Verify with two accounts: a reply in a thread you're in, a top-level mention,
-and a document comment each add their own row; marking one done leaves the
-others, and Undo restores it in place.
+The list updates live, without a reload, and a live change never remounts a card:
+list items are one object per row id and each card reads its row's latest data
+(`primitives/inbox-date-headers.ts`). Scrolled down, a card landing above what
+you're reading doesn't move it.
+
+Verify with two accounts and the inbox left open: two top-level messages in a
+channel stack on it; two reactions to your message, or a reaction and a reply, stack
+on that message and leave the channel's card; comments in different threads of a
+document share one card. Each appears within a second with no reload. Marking one
+done leaves the others, Undo restores it in place, and a new notification in a done
+row brings it back with only what's new.
 
 ## Notifications
 

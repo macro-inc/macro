@@ -163,6 +163,35 @@ describe('createNotificationInboxSource', () => {
     ]);
   });
 
+  it('keeps the object of a row a live change did not touch', async () => {
+    vi.useFakeTimers();
+    const { fake, row } = await loaded();
+    const untouched = row('document:doc-a#top_level');
+
+    fake.subscriptions[0].next({
+      notificationInboxUpdates: [
+        upsertedPatch(
+          inboxEntry({
+            docId: 'doc-b',
+            sortAt: '2026-03-01T00:00:00Z',
+            rows: [
+              {
+                id: 'document:doc-b#top_level',
+                latestAt: '2026-03-01T00:00:00Z',
+                revision: 'rev-b-2',
+                notificationIds: ['n-b-1', 'n-b-2'],
+              },
+            ],
+          })
+        ),
+      ],
+    });
+    await flush();
+
+    expect(row('document:doc-b#top_level').count).toBe(2);
+    expect(row('document:doc-a#top_level')).toBe(untouched);
+  });
+
   it('marks one row done at its revision and hides only that row', async () => {
     vi.useFakeTimers();
     const { fake, feed, row, rowIds, overrideNotificationsDone } =

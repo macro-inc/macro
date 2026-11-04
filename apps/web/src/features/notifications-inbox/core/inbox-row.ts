@@ -53,6 +53,8 @@ export type InboxRow<Content> = {
   revision: string;
   /** When the row's newest notification was created, epoch milliseconds. */
   latestAt: number;
+  /** For a thread row, the top-level message it is about. */
+  threadId?: string;
   /** Absent when the row is from no one in Macro, such as an email sender. */
   actor?: InboxActor;
   /** What the viewer can do from the row, in button order. */

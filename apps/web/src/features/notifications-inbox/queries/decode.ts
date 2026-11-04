@@ -132,39 +132,55 @@ function rowEntity(
     : { ...entity, notifications: read };
 }
 
+/** Rows decoded by an earlier read, with the wire data each came from. */
+export type InboxRowMemo = {
+  previous: ReadonlyMap<string, { wire: string; row: NotificationInboxRow }>;
+  next: Map<string, { wire: string; row: NotificationInboxRow }>;
+};
+
 /**
  * Project one inbox entry into rows. Each row's entity carries only that
  * row's notifications, so entity-based helpers (icons, preview targets) see
  * what the row shows. An entity the app does not list, or an entry without a
- * valid place, is dropped.
+ * valid place, is dropped. With a memo, a row that did not change keeps its
+ * object.
  */
 export function toInboxGroup(
-  entry: NotificationInboxEntryFieldsFragment
+  entry: NotificationInboxEntryFieldsFragment,
+  memo?: InboxRowMemo
 ): NotificationInboxGroup | null {
   const sortAt = Date.parse(entry.sortAt);
   const soupItem = attentionFeedSoupItem(entry.entity);
   if (!soupItem || Number.isNaN(sortAt)) return null;
   const entity = mapApiSoupItemToEntity(soupItem);
+  const entityWire = memo ? JSON.stringify(entry.entity) : '';
   return {
     groupId: entry.groupId,
     sortAt,
     rows: entry.rows.flatMap((row) => {
       const latestAt = Date.parse(row.latestAt);
       if (Number.isNaN(latestAt)) return [];
+      const wire = memo ? `${entityWire}${JSON.stringify(row)}` : '';
+      const known = memo?.previous.get(row.id);
+      if (memo && known?.wire === wire) {
+        memo.next.set(row.id, known);
+        return [known.row];
+      }
       const notifications = row.notifications.map(mapGraphqlNotification);
-      return [
-        {
-          id: row.id,
-          type: toRowType(row.rowType),
-          revision: row.revision,
-          latestAt,
-          actor: toActor(row.actor),
-          actions: toActions(row.actions),
-          unseen: row.unseen,
-          count: row.count,
-          content: { entity: rowEntity(entity, notifications), notifications },
-        },
-      ];
+      const decoded: NotificationInboxRow = {
+        id: row.id,
+        type: toRowType(row.rowType),
+        threadId: row.threadId ?? undefined,
+        revision: row.revision,
+        latestAt,
+        actor: toActor(row.actor),
+        actions: toActions(row.actions),
+        unseen: row.unseen,
+        count: row.count,
+        content: { entity: rowEntity(entity, notifications), notifications },
+      };
+      memo?.next.set(row.id, { wire, row: decoded });
+      return [decoded];
     }),
   };
 }

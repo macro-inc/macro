@@ -16,9 +16,9 @@ const actionLabel = (action: InboxRowAction) =>
     .exhaustive();
 
 /**
- * What the viewer can do from a notification, the primary action first.
- * While a decision is in flight every button is disabled and the chosen one
- * says so.
+ * What the viewer can do from a notification, the main action first. All are
+ * quiet, so a list of cards doesn't turn into a list of black buttons. While a
+ * decision is in flight every button is disabled and the chosen one says so.
  */
 export function RowActionButtons(props: {
   actions: readonly InboxRowAction[];
@@ -27,10 +27,10 @@ export function RowActionButtons(props: {
 }) {
   return (
     <For each={props.actions}>
-      {(action, index) => (
+      {(action) => (
         <Button
           size="sm"
-          variant={index() === 0 ? 'primary' : 'secondary'}
+          variant="secondary"
           disabled={props.pending !== undefined}
           aria-busy={props.pending === action.kind}
           onClick={(event) => {

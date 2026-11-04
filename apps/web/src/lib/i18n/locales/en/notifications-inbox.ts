@@ -19,6 +19,13 @@ export default {
 
   // Done and undo
   markDone: 'Mark done',
+  stackToggle: {
+    other: '{{count}} notifications, show or hide them',
+  },
+  stackMore: {
+    one: 'and {{count}} more',
+    other: 'and {{count}} more',
+  },
   markedDone: {
     one: 'Marked as done',
     other: 'Marked {{count}} notifications as done',

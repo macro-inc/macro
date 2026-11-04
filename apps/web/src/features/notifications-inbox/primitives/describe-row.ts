@@ -21,6 +21,25 @@ export type InboxRowDisplay = {
   subject: string;
 };
 
+/** One notification inside an unfolded stack. */
+export type InboxStackItem = {
+  id: string;
+  /** Who did what, without the place the card already names. */
+  by: string;
+  /** What was said, as Markdown. */
+  text: string;
+  /** When it arrived. */
+  at: Date;
+};
+
+/** What a card says: what it is about, then who, and its stack if it has one. */
+export type InboxCardDisplay = {
+  title: string;
+  detail: string;
+  /** Newest first; empty when the row is not a stack. */
+  items: InboxStackItem[];
+};
+
 type Names = Pick<NotificationsInboxContext, 'userName' | 'senderName'>;
 
 /**
@@ -89,10 +108,17 @@ export function describeInboxRow(
   row: NotificationInboxRow,
   names: Names
 ): InboxRowDisplay {
-  const entityName = row.content.entity.name;
   const latest = row.content.notifications[0];
-  if (!latest) return { action: '', subject: entityName };
-  const actor = actorName(row, latest, names);
+  if (!latest) return { action: '', subject: row.content.entity.name };
+  return describeNotification(row, latest, actorName(row, latest, names));
+}
+
+function describeNotification(
+  row: NotificationInboxRow,
+  latest: UnifiedNotification,
+  actor: string | undefined
+): InboxRowDisplay {
+  const entityName = row.content.entity.name;
   const content = getNotificationContent(latest);
   const target = getNotificationTargetName(latest);
 
@@ -174,4 +200,171 @@ export function describeInboxRow(
       action: join(actor, getNotificationAction(latest), target),
       subject: content ?? target ?? entityName,
     }));
+}
+
+/**
+ * Who sent one notification of a stack. The row's actor speaks for its newest
+ * notification only, so the older ones name their own sender.
+ */
+const senderOf = (
+  row: NotificationInboxRow,
+  notification: UnifiedNotification,
+  names: Names
+) =>
+  (notification === row.content.notifications[0]
+    ? actorName(row, notification, names)
+    : undefined) ??
+  names.senderName(notification) ??
+  (notification.sender_id
+    ? names.userName(notification.sender_id)
+    : undefined) ??
+  getNotificationSenderFallbackName(notification);
+
+/** "Sam", "Sam and Noor", "Sam, Noor and Mara", "Sam, Noor and 3 others". */
+const nameList = (all: readonly string[]) => {
+  const unique = [...new Set(all)];
+  const [first = '', second, third] = unique;
+  if (unique.length <= 1) return first;
+  if (unique.length === 2) return `${first} and ${second}`;
+  if (unique.length === 3) return `${first}, ${second} and ${third}`;
+  return `${first}, ${second} and ${unique.length - 2} others`;
+};
+
+/** What one notification did, for a stack that already names its place. */
+const stackVerb = (notification: UnifiedNotification) =>
+  match(notification.notification_metadata)
+    .with({ tag: P.union('channel_message_send', 'new_email') }, () => '')
+    .with(
+      {
+        tag: P.union(
+          'channel_mention',
+          'mentioned_in_document_comment',
+          'github_pr_mention',
+          'agent_session_mentioned'
+        ),
+      },
+      () => 'mentioned you'
+    )
+    .with(
+      {
+        tag: P.union(
+          'channel_message_reply',
+          'replied_to_document_comment_thread'
+        ),
+      },
+      () => 'replied'
+    )
+    .with({ tag: 'channel_message_reaction' }, () => 'reacted')
+    .with(
+      { tag: P.union('commented_on_document', 'github_pr_comment') },
+      () => 'commented'
+    )
+    .with(
+      { tag: P.union('initiative_discussion', 'crm_discussion') },
+      ({ content }) =>
+        match(content.reason as string)
+          .with('mention', () => 'mentioned you')
+          .with('reply', () => 'replied')
+          .otherwise(() => 'commented')
+    )
+    .with({ tag: 'agent_session_settled' }, () => 'finished')
+    .with({ tag: 'agent_session_waiting_for_input' }, () => 'needs your answer')
+    .with({ tag: 'ai_response' }, () => 'responded')
+    .with({ tag: 'github_pr_status_changed' }, () => 'updated')
+    .with({ tag: 'github_review_requested' }, () => 'wants your review')
+    .with({ tag: 'github_pr_review' }, () => 'reviewed')
+    .otherwise(() =>
+      getNotificationAction(notification).replace(/ (in|on|to)$/, '')
+    );
+
+/** The top-level message a thread row is about, when one of its notifications carries it. */
+const rootMessage = (row: NotificationInboxRow) => {
+  if (!row.threadId) return undefined;
+  for (const { notification_metadata: metadata } of row.content.notifications) {
+    const root = match(metadata)
+      .with(
+        {
+          tag: P.union(
+            'channel_message_send',
+            'channel_mention',
+            'channel_message_reaction'
+          ),
+        },
+        ({ content }) =>
+          content.messageId === row.threadId
+            ? content.messageContent
+            : undefined
+      )
+      .otherwise(() => undefined);
+    if (root) return root;
+  }
+  return undefined;
+};
+
+/**
+ * Describe a row's card. A single notification says what it is about and who
+ * did it; a stack names what its notifications share (the message, channel,
+ * session, document or thread) and everyone in it, and unfolds into the
+ * notifications themselves.
+ */
+export function describeInboxCard(
+  row: NotificationInboxRow,
+  names: Names
+): InboxCardDisplay {
+  const single = describeInboxRow(row, names);
+  const latest = row.content.notifications[0];
+  if (row.count <= 1 || !latest) {
+    return { title: single.subject, detail: single.action, items: [] };
+  }
+
+  const entityName = row.content.entity.name;
+  const senders = row.content.notifications.map(
+    (notification) => senderOf(row, notification, names) ?? ''
+  );
+  const who = nameList(senders.filter((sender) => sender !== ''));
+  const place = channelPlace(
+    latest.notification_metadata.content as ChannelContent
+  );
+  const target = getNotificationTargetName(latest);
+
+  const { title, detail } = match(row.type)
+    .with('channel_thread', 'channel_mention', () => ({
+      title: rootMessage(row) ?? single.subject,
+      detail: place ? `${who} in ${place}` : who,
+    }))
+    .with('channel_messages', () =>
+      place
+        ? { title: place, detail: `${who} posted` }
+        : { title: who || entityName, detail: single.subject }
+    )
+    .with(
+      'discussion_mention',
+      'discussion_messages',
+      'discussion_thread',
+      () => ({
+        title: target ?? entityName,
+        detail: `${who} commented`,
+      })
+    )
+    .with('agent', () => ({
+      title: target ?? entityName,
+      detail: join(who, stackVerb(latest)),
+    }))
+    .with('pull_request', () => ({
+      title: entityName,
+      detail: join(who, stackVerb(latest)),
+    }))
+    .with('email', () => ({ title: single.subject, detail: who }))
+    .otherwise(() => ({ title: single.subject, detail: single.action }));
+
+  return {
+    title,
+    detail,
+    items: row.content.notifications.map((notification, index) => ({
+      id: notification.id,
+      by: join(senders[index], stackVerb(notification)),
+      text: describeNotification(row, notification, senders[index]).subject,
+      at: new Date(notification.created_at),
+    })),
+  };
 }

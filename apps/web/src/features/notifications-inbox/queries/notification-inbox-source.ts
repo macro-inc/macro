@@ -4,6 +4,7 @@ import type { CacheHost } from '@graphql-cache/host/types';
 import { createLiveAttentionFeed } from '@queries/attention-feed/live-attention-feed';
 import {
   NotificationInboxDocument,
+  type NotificationInboxEntryFieldsFragment,
   type NotificationInboxQuery,
   type NotificationInboxQueryVariables,
   type NotificationInboxScopeInput,
@@ -24,7 +25,7 @@ import {
   withoutDoneRows,
   withSeenRows,
 } from '../core/inbox-row';
-import { encodeInboxScope, toInboxGroup } from './decode';
+import { encodeInboxScope, type InboxRowMemo, toInboxGroup } from './decode';
 import {
   type NotificationInboxGroup,
   orderInboxRows,
@@ -87,6 +88,20 @@ export function createNotificationInboxSource(
   const enabled = () =>
     options.enabled() && options.scope().rowTypes.length > 0;
 
+  // Every change rebuilds the pages; rows it didn't touch keep their objects,
+  // so what reads them, such as an open preview, doesn't rerun.
+  let decodedRows: InboxRowMemo['previous'] = new Map();
+  const readGroups = (
+    entries: readonly NotificationInboxEntryFieldsFragment[]
+  ) => {
+    const memo: InboxRowMemo = { previous: decodedRows, next: new Map() };
+    const groups = entries
+      .map((entry) => toInboxGroup(entry, memo))
+      .filter(isGroup);
+    decodedRows = memo.next;
+    return groups;
+  };
+
   const query = createUrqlInfiniteQuery<
     NotificationInboxQuery,
     NotificationInboxQueryVariables,
@@ -105,10 +120,9 @@ export function createNotificationInboxSource(
       requestPolicy: 'cache-and-network',
       keepPreviousData: true,
       select: ({ pages, pageParams }) => ({
-        groups: pages
-          .flatMap((page) => page.user.notificationInbox.entries)
-          .map(toInboxGroup)
-          .filter(isGroup),
+        groups: readGroups(
+          pages.flatMap((page) => page.user.notificationInbox.entries)
+        ),
         cursors: [...pageParams],
       }),
     };
