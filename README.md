@@ -175,6 +175,8 @@ The problem with standalone CRM is the same as with task trackers: it's not up t
 
 Agents in Macro have the superpower of all your context. Your emails, conversations, docs, tasks, and customer records are already connected so agents have the context behind a request and complete high quality work without giving you slop.
 
+Agents also have access to Macro’s SDK and can write and run code to carry out your requests. Ask for ten personalized emails and an agent can collect the relevant context and prepare them as a batch of drafts you can review, edit, and send. This lets agents put together custom workflows across your workspace without us having to build a dedicated feature for each one.
+
 - DM an agent, @mention one in a channel, or assign it a task.
 - Have agents research a customer, draft a reply, update a document, maintain a database, or take an engineering task through to a pull request.
 - Use the models we provide, connect Cursor with your own API key, or bring agents running on your own machine into Macro through macrod.
