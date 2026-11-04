@@ -166,8 +166,7 @@ pub(super) fn signals(thread: &FocusThread) -> FocusSignals {
         && notes_to_primary
             .iter()
             .all(|note| !is_substantive(note.body.as_deref()));
-    let list_mail = incoming.iter().any(|message| message.bulk);
-    let bulk = list_mail || is_automated_sender(&primary);
+    let bulk = incoming.iter().any(|message| message.bulk) || is_automated_sender(&primary);
 
     let contact = !brushed_off && (replied_for_real || written_to || (teammate && !bulk));
 
@@ -200,7 +199,6 @@ pub(super) fn signals(thread: &FocusThread) -> FocusSignals {
     // Only threads with mail from the other side: the owner's own unanswered
     // sends are not inbox threads, and nothing here can judge them.
     let awaiting_reply = !incoming.is_empty()
-        && !list_mail
         && latest.is_some_and(|message| {
             message.is_sent
                 && calendar_notice(message).is_none()

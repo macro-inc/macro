@@ -73,6 +73,40 @@ fn worker(
     )
 }
 
+/// A message in a fixture thread, from Casey or the owner.
+async fn insert_message(
+    pool: &Pool<Postgres>,
+    thread_id: Uuid,
+    is_sent: bool,
+    at: DateTime<Utc>,
+) -> Result<(), Report> {
+    let from_contact_id = if is_sent {
+        uuid::uuid!("00000000-0000-0000-0000-0000000cf002")
+    } else {
+        uuid::uuid!("00000000-0000-0000-0000-0000000cf001")
+    };
+    let id = macro_uuid::generate_uuid_v7();
+    sqlx::query!(
+        r#"
+        INSERT INTO email_messages (
+            id, thread_id, link_id, provider_id, is_sent, from_contact_id, internal_date_ts,
+            has_attachments, is_read, is_starred, is_draft, created_at, updated_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, false, true, false, false, NOW(), NOW())
+        "#,
+        id,
+        thread_id,
+        OWNER_LINK,
+        id.to_string(),
+        is_sent,
+        from_contact_id,
+        at,
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 /// Project every fixture thread's labels onto it, as ingestion does.
 async fn project_threads(pool: &Pool<Postgres>) -> Result<(), Report> {
     let mut conn = pool.acquire().await?;
@@ -302,14 +336,8 @@ async fn focus_list_is_the_owners_inbox_newest_first(pool: Pool<Postgres>) -> Re
     );
 
     // A newer message in either direction moves a thread up: the owner's reply
-    // yesterday brings BULK ahead of nothing inbound in days.
-    sqlx::query!(
-        "UPDATE email_threads SET latest_outbound_message_ts = $1 WHERE id = $2",
-        now - Duration::hours(1),
-        BULK,
-    )
-    .execute(&pool)
-    .await?;
+    // an hour ago brings BULK ahead of INVOICE's newer inbound mail.
+    insert_message(&pool, BULK, true, now - Duration::hours(1)).await?;
     assert_eq!(
         repo.focus_thread_ids(&owner(), since, now, 10).await?,
         vec![BULK, INVOICE]
@@ -422,8 +450,8 @@ async fn a_thread_the_owner_answered_last_reaches_the_list_after_the_wait(
             .contains(&REPLIED_LAST)
     );
 
-    // An answer ends the wait at once, ahead of the worker. Until the worker
-    // reads it the thread keeps no label it no longer has.
+    // Editing a draft moves the thread's inbound time, as recompute_thread_metadata
+    // does, but nobody wrote: it still waits and still reads as a follow-up.
     sqlx::query!(
         "UPDATE email_threads SET latest_inbound_message_ts = $1 WHERE id = $2",
         Utc::now(),
@@ -431,6 +459,19 @@ async fn a_thread_the_owner_answered_last_reaches_the_list_after_the_wait(
     )
     .execute(&pool)
     .await?;
+    assert!(
+        queries
+            .focus_thread_ids(&owner(), 30)
+            .await?
+            .contains(&REPLIED_LAST)
+    );
+    let focus = queries.focus_for_threads(&owner(), &[REPLIED_LAST]).await?;
+    let drafting = focus.get(&REPLIED_LAST).expect("stored");
+    assert!(drafting.needs_follow_up && !drafting.needs_reply);
+
+    // An answer ends the wait at once, ahead of the worker. Until the worker
+    // reads it the thread keeps no label it no longer has.
+    insert_message(&pool, REPLIED_LAST, false, Utc::now()).await?;
     assert!(
         !queries
             .focus_thread_ids(&owner(), 30)
@@ -702,5 +743,37 @@ async fn rows_from_an_older_rule_read_right_and_are_decided_again_without_the_cl
         worker.classify_thread(INVOICE).await?,
         ClassifyOutcome::UpToDate
     );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("email_focus"))
+)]
+async fn a_row_from_an_older_rule_is_swept_even_outside_the_signal_inbox(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool.clone());
+    let enabled = vec!["acme.example".to_owned()];
+    let thread = load_thread(&repo, BULK).await?.expect("thread");
+    let latest = thread.messages.last().expect("message");
+    repo.save(&record(BULK, latest.id, latest.at, 40)).await?;
+    sqlx::query!(
+        "UPDATE email_thread_focus SET rule_version = 0 WHERE thread_id = $1",
+        BULK
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "UPDATE email_threads SET is_signal = false WHERE id = $1",
+        BULK
+    )
+    .execute(&pool)
+    .await?;
+
+    let stale = repo
+        .stale_threads(Utc::now() - Duration::days(30), &enabled, 10)
+        .await?;
+    assert!(stale.iter().any(|stale| stale.thread_id == BULK));
     Ok(())
 }

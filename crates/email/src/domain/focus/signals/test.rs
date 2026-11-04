@@ -245,17 +245,18 @@ fn only_mail_sent_by_the_owner_awaits_nothing() {
 }
 
 #[test]
-fn replying_to_list_mail_awaits_nothing() {
-    let mut list_mail = message("eva@vendor.example", 0, false, "This week");
-    list_mail.bulk = true;
+fn a_support_thread_opened_by_a_tool_still_awaits_a_reply() {
+    let mut opened_by_a_tool = message("help@vendor.example", 0, false, "Ticket opened");
+    opened_by_a_tool.bulk = true;
     let signals = signals(&thread(
         vec![
-            list_mail,
-            reply_to("eva@vendor.example", 5, "Can you add me?"),
+            opened_by_a_tool,
+            message("ana@vendor.example", 5, false, "Looking into it"),
+            reply_to("ana@vendor.example", 10, "Any update on this?"),
         ],
         Vec::new(),
     ));
-    assert!(signals.latest_from_owner && !signals.awaiting_reply);
+    assert!(signals.latest_from_owner && signals.awaiting_reply);
 }
 
 #[test]

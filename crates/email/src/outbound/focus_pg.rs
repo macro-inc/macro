@@ -327,6 +327,7 @@ impl FocusStore for FocusPgRepository {
                   t.is_signal
                   OR t.has_calendar_attachment
                   OR t.latest_outbound_message_ts > t.latest_inbound_message_ts
+                  OR f.rule_version < $4
               )
               AND (
                   f.thread_id IS NULL
@@ -367,6 +368,20 @@ impl FocusStore for FocusPgRepository {
             SELECT f.thread_id
             FROM email_thread_focus f
             JOIN email_threads t ON t.id = f.thread_id AND t.link_id = f.link_id
+            -- Who wrote last comes from the mail itself: editing a draft moves
+            -- the thread's own timestamps. An indexed per-thread top-one probe.
+            CROSS JOIN LATERAL (
+                SELECT COALESCE(m.internal_date_ts, m.created_at) AS at, m.is_sent
+                FROM email_messages m
+                WHERE m.thread_id = t.id
+                  AND NOT m.is_draft
+                  AND EXISTS (
+                      SELECT 1 FROM email_message_mailbox_facts facts
+                      WHERE facts.id = m.id AND facts.is_present AND NOT facts.in_trash
+                  )
+                ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC
+                LIMIT 1
+            ) latest
             WHERE f.link_id IN (
                     -- The owner's inboxes, as Soup lists them: their own and linked ones.
                     SELECT el.id FROM email_links el WHERE el.macro_id = $1
@@ -377,7 +392,9 @@ impl FocusStore for FocusPgRepository {
               -- email_thread_focus_waiting_idx.
               AND (f.is_focus OR f.awaiting_reply)
               AND t.inbox_visible
+              -- Never earlier than the latest mail, so this spares most probes.
               AND GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts) >= $2
+              AND latest.at >= $2
               AND (
                   (f.is_focus AND (t.is_signal OR f.pinned))
                   OR (
@@ -386,12 +403,11 @@ impl FocusStore for FocusPgRepository {
                       -- gets to the thread.
                       f.awaiting_reply
                       AND f.classified_message_ts <= $3
-                      AND t.latest_inbound_message_ts <= f.classified_message_ts
+                      AND latest.is_sent
                   )
               )
             -- Newest first, so the limit keeps the newest threads.
-            ORDER BY GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts) DESC,
-                     f.thread_id
+            ORDER BY latest.at DESC, f.thread_id
             LIMIT $4
             "#,
             owner.as_ref(),
@@ -431,18 +447,24 @@ impl FocusStore for FocusPgRepository {
                    now_state.waiting AS "waiting!"
             FROM email_thread_focus f
             JOIN email_threads t ON t.id = f.thread_id AND t.link_id = f.link_id
+            LEFT JOIN LATERAL (
+                SELECT m.is_sent
+                FROM email_messages m
+                WHERE m.thread_id = t.id
+                  AND NOT m.is_draft
+                  AND EXISTS (
+                      SELECT 1 FROM email_message_mailbox_facts facts
+                      WHERE facts.id = m.id AND facts.is_present AND NOT facts.in_trash
+                  )
+                ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC
+                LIMIT 1
+            ) latest ON TRUE
             CROSS JOIN LATERAL (
-                SELECT COALESCE(
-                           t.latest_outbound_message_ts >= t.latest_inbound_message_ts,
-                           t.latest_outbound_message_ts IS NOT NULL
-                       ) AS owner_latest,
-                       COALESCE(
-                           f.awaiting_reply
+                SELECT COALESCE(latest.is_sent, false) AS owner_latest,
+                       f.awaiting_reply
                            AND t.inbox_visible
                            AND f.classified_message_ts <= $3
-                           AND t.latest_inbound_message_ts <= f.classified_message_ts,
-                           false
-                       ) AS waiting
+                           AND COALESCE(latest.is_sent, false) AS waiting
             ) now_state
             WHERE f.thread_id = ANY($1)
               AND f.link_id IN (
