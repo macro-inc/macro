@@ -5,9 +5,9 @@ use std::collections::HashSet;
 use chrono::Duration;
 
 use super::{
+    calendar::notice_in_message,
     input::{is_closing_reply, is_dismissive_reply, new_text},
-    models::{CalendarNotice, CalendarPart, FocusMessage, FocusSignals, FocusThread},
-    rule::calendar_notice_in_subject,
+    models::{FocusSignals, FocusThread},
 };
 
 /// How far back from a thread's latest message the owner's writing to someone
@@ -95,23 +95,6 @@ fn is_substantive(body: Option<&str>) -> bool {
     !is_dismissive_reply(&new_text(body.unwrap_or_default()))
 }
 
-/// The calendar notice one message carries: its saved calendar parts decide,
-/// then its subject. A calendar file nothing could read is still a notice.
-fn calendar_notice(message: &FocusMessage) -> Option<CalendarNotice> {
-    let from_subject = || {
-        message
-            .subject
-            .as_deref()
-            .and_then(calendar_notice_in_subject)
-    };
-    match message.calendar_part {
-        Some(CalendarPart::Scheduling) => Some(CalendarNotice::Scheduling),
-        Some(CalendarPart::Rsvp) => Some(CalendarNotice::Rsvp),
-        Some(CalendarPart::Unparsed) => from_subject().or(Some(CalendarNotice::Scheduling)),
-        None => from_subject(),
-    }
-}
-
 /// Derive the owner's relationship with a thread from its messages and the
 /// owner's sent mail.
 pub(super) fn signals(thread: &FocusThread) -> FocusSignals {
@@ -182,26 +165,18 @@ pub(super) fn signals(thread: &FocusThread) -> FocusSignals {
         .any(|note| is_recent(note.at) && is_substantive(note.body.as_deref()));
     let recent_contact = !brushed_off && !bulk && (replied_recently || wrote_recently);
 
-    // An RSVP only counts while it is the latest thing to read; a person
-    // replying to one is a conversation. A scheduling notice stays one.
-    let latest_incoming_notice = incoming.last().and_then(|message| calendar_notice(message));
-    let calendar = if latest_incoming_notice == Some(CalendarNotice::Rsvp) {
-        Some(CalendarNotice::Rsvp)
-    } else if incoming
-        .iter()
-        .any(|message| calendar_notice(message) == Some(CalendarNotice::Scheduling))
-    {
-        Some(CalendarNotice::Scheduling)
-    } else {
-        None
-    };
+    // Only a notice nobody has written after: a person replying to one is a
+    // conversation, and the owner answering one has seen it.
+    let calendar = latest
+        .filter(|message| !message.is_sent)
+        .and_then(notice_in_message);
 
     // Only threads with mail from the other side: the owner's own unanswered
     // sends are not inbox threads, and nothing here can judge them.
     let awaiting_reply = !incoming.is_empty()
         && latest.is_some_and(|message| {
             message.is_sent
-                && calendar_notice(message).is_none()
+                && notice_in_message(message).is_none()
                 && !is_closing_reply(&new_text(message.body.as_deref().unwrap_or_default()))
                 && message.to.iter().any(|recipient| {
                     let recipient = recipient.to_lowercase();

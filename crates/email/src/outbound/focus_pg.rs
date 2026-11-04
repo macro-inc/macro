@@ -8,10 +8,13 @@ use rootcause::Report;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::domain::focus::{
-    CalendarPart, FOCUS_RULE_VERSION, FocusAnswers, FocusCategory, FocusInbox, FocusMail,
-    FocusMessage, FocusRecord, FocusStore, RECENT_CONTACT_DAYS, SentNote, StaleThread,
-    StoredClassification, ThreadFocus,
+use crate::{
+    domain::focus::{
+        CalendarPart, FOCUS_RULE_VERSION, FocusAnswers, FocusCategory, FocusInbox, FocusMail,
+        FocusMessage, FocusRecord, FocusStore, RECENT_CONTACT_DAYS, SentNote, StaleThread,
+        StoredClassification, ThreadFocus, change_subject_pattern,
+    },
+    outbound::invitation_pg,
 };
 
 /// Most recent messages read per thread.
@@ -69,18 +72,12 @@ impl FocusPgRepository {
                 EXISTS (
                     SELECT 1 FROM email_message_calendar_invites i
                     WHERE i.message_id = m.id
-                      AND i.snapshot->>'method' IS DISTINCT FROM 'reply'
-                ) AS "calendar_scheduling!",
-                EXISTS (
-                    SELECT 1 FROM email_message_calendar_invites i
-                    WHERE i.message_id = m.id AND i.snapshot->>'method' = 'reply'
-                ) AS "calendar_rsvp!",
-                EXISTS (
+                ) OR EXISTS (
                     SELECT 1 FROM email_attachments a
                     WHERE a.message_id = m.id
                       AND (a.filename ILIKE '%.ics'
                            OR a.mime_type IN ('text/calendar', 'application/ics'))
-                ) AS "calendar_file!"
+                ) AS "has_calendar!"
             FROM email_messages m
             LEFT JOIN email_contacts c ON c.id = m.from_contact_id
             WHERE m.thread_id = $1
@@ -99,18 +96,26 @@ impl FocusPgRepository {
         )
         .fetch_all(&self.0)
         .await?;
+        let with_calendar = rows
+            .iter()
+            .filter(|row| row.has_calendar)
+            .map(|row| row.id)
+            .collect::<Vec<_>>();
+        let invites = if with_calendar.is_empty() {
+            HashMap::new()
+        } else {
+            invitation_pg::load(&self.0, &with_calendar).await?
+        };
         let mut messages = rows
             .into_iter()
             .map(|row| {
-                let calendar_part = if row.calendar_scheduling {
-                    Some(CalendarPart::Scheduling)
-                } else if row.calendar_rsvp {
-                    Some(CalendarPart::Rsvp)
-                } else if row.calendar_file {
-                    Some(CalendarPart::Unparsed)
-                } else {
-                    None
-                };
+                // A calendar file or snapshot nothing could read still is one.
+                let calendar_part = row.has_calendar.then(|| {
+                    invites
+                        .get(&row.id)
+                        .and_then(|invites| CalendarPart::from_saved(invites, row.at))
+                        .unwrap_or(CalendarPart::Unparsed)
+                });
                 FocusMessage {
                     id: row.id,
                     at: row.at,
@@ -263,9 +268,9 @@ impl FocusStore for FocusPgRepository {
             INSERT INTO email_thread_focus (
                 thread_id, link_id, classified_message_id, classified_message_ts, is_focus,
                 category, importance, needs_reply, needs_follow_up, scores, model, classified_at,
-                rule_version, pinned, awaiting_reply
+                rule_version, pinned, awaiting_reply, calendar_hold_until
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
             ON CONFLICT (thread_id) DO UPDATE SET
                 link_id = EXCLUDED.link_id,
                 classified_message_id = EXCLUDED.classified_message_id,
@@ -280,7 +285,8 @@ impl FocusStore for FocusPgRepository {
                 classified_at = EXCLUDED.classified_at,
                 rule_version = EXCLUDED.rule_version,
                 pinned = EXCLUDED.pinned,
-                awaiting_reply = EXCLUDED.awaiting_reply
+                awaiting_reply = EXCLUDED.awaiting_reply,
+                calendar_hold_until = EXCLUDED.calendar_hold_until
             WHERE email_thread_focus.classified_message_ts <= EXCLUDED.classified_message_ts
             "#,
             record.thread_id,
@@ -298,6 +304,7 @@ impl FocusStore for FocusPgRepository {
             FOCUS_RULE_VERSION,
             record.verdict.pinned,
             record.verdict.awaiting_reply,
+            record.verdict.calendar_hold_until,
         )
         .execute(&self.0)
         .await?;
@@ -325,9 +332,32 @@ impl FocusStore for FocusPgRepository {
               AND GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts) >= $1
               AND (
                   t.is_signal
-                  OR t.has_calendar_attachment
                   OR t.latest_outbound_message_ts > t.latest_inbound_message_ts
                   OR f.rule_version < $4
+                  -- A calendar change. The service judges whether it is the
+                  -- latest message and its event isn't over; a new invite or an
+                  -- RSVP never gets this far.
+                  OR EXISTS (
+                      SELECT 1
+                      FROM email_messages notice
+                      WHERE notice.thread_id = t.id
+                        AND NOT notice.is_sent
+                        AND NOT notice.is_draft
+                        AND (
+                            LOWER(notice.subject) ~ $6
+                            OR EXISTS (
+                                SELECT 1 FROM email_message_calendar_invites i
+                                WHERE i.message_id = notice.id
+                                  AND (
+                                      i.snapshot->>'method' IN ('cancel', 'counter')
+                                      OR (
+                                          i.snapshot->>'method' = 'request'
+                                          AND i.snapshot->'sequence' > '0'::jsonb
+                                      )
+                                  )
+                            )
+                        )
+                  )
                   -- A sender the owner has written to lately. The service judges
                   -- whether it really is a recent contact; mail no event covers,
                   -- such as an initial sync, only arrives this way.
@@ -358,6 +388,7 @@ impl FocusStore for FocusPgRepository {
             limit,
             FOCUS_RULE_VERSION,
             since - Duration::days(RECENT_CONTACT_DAYS),
+            change_subject_pattern(),
         )
         .fetch_all(&self.0)
         .await?;
@@ -376,9 +407,11 @@ impl FocusStore for FocusPgRepository {
         owner: &MacroUserIdStr<'static>,
         since: DateTime<Utc>,
         waiting_before: DateTime<Utc>,
+        now: DateTime<Utc>,
         limit: i64,
     ) -> Result<Vec<Uuid>, Report> {
-        // The waiting test here restates `focus_for_threads`; change both together.
+        // The waiting and calendar hold tests here restate `focus_for_threads`;
+        // change both together.
         let thread_ids = sqlx::query_scalar!(
             r#"
             SELECT f.thread_id
@@ -404,9 +437,9 @@ impl FocusStore for FocusPgRepository {
                     UNION
                     SELECT mul.link_id FROM macro_user_links mul WHERE mul.primary_macro_id = $1
                 )
-              -- Both ways in, indexed by email_thread_focus_list_idx and
-              -- email_thread_focus_waiting_idx.
-              AND (f.is_focus OR f.awaiting_reply)
+              -- Every way in, indexed by email_thread_focus_list_idx and
+              -- email_thread_focus_read_time_idx.
+              AND (f.is_focus OR f.awaiting_reply OR f.calendar_hold_until IS NOT NULL)
               AND t.inbox_visible
               -- Never earlier than the latest mail, so this spares most probes.
               AND GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts) >= $2
@@ -421,14 +454,18 @@ impl FocusStore for FocusPgRepository {
                       AND latest.is_sent
                       AND latest.at <= $3
                   )
+                  -- A calendar change holds a thread until its event is over, and
+                  -- a newer message ends that before the worker gets to the thread.
+                  OR (f.calendar_hold_until > $4 AND latest.at <= f.classified_message_ts)
               )
             -- Newest first, so the limit keeps the newest threads.
             ORDER BY latest.at DESC, f.thread_id
-            LIMIT $4
+            LIMIT $5
             "#,
             owner.as_ref(),
             since,
             waiting_before,
+            now,
             limit,
         )
         .fetch_all(&self.0)
@@ -439,7 +476,11 @@ impl FocusStore for FocusPgRepository {
 
     #[tracing::instrument(
         skip(self, thread_ids),
-        fields(threads = thread_ids.len(), waiting = tracing::field::Empty),
+        fields(
+            threads = thread_ids.len(),
+            waiting = tracing::field::Empty,
+            calendar_held = tracing::field::Empty,
+        ),
         err
     )]
     async fn focus_for_threads(
@@ -447,20 +488,28 @@ impl FocusStore for FocusPgRepository {
         owner: &MacroUserIdStr<'static>,
         thread_ids: &[Uuid],
         waiting_before: DateTime<Utc>,
+        now: DateTime<Utc>,
     ) -> Result<HashMap<Uuid, ThreadFocus>, Report> {
         // The labels are settled here rather than trusted from the row: who
-        // wrote last can move before the worker reaches the thread, and rows
-        // from an older rule can carry a follow-up on someone else's message,
-        // which reads as a reply needed.
+        // wrote last can move before the worker reaches the thread, rows from an
+        // older rule can carry a follow-up on someone else's message, which reads
+        // as a reply needed, and a held thread's event can end.
         let rows = sqlx::query!(
             r#"
             SELECT f.thread_id, f.category, f.importance, f.classified_at,
-                   f.is_focus OR now_state.waiting AS "is_focus!",
-                   (f.needs_reply OR f.needs_follow_up) AND NOT now_state.owner_latest
+                   now_state.earned OR now_state.waiting OR now_state.calendar_held
+                       AS "is_focus!",
+                   (now_state.earned OR now_state.calendar_held)
+                       AND (f.needs_reply OR f.needs_follow_up)
+                       AND NOT now_state.owner_latest
                        AS "needs_reply!",
-                   (f.needs_follow_up AND now_state.owner_latest) OR now_state.waiting
+                   ((now_state.earned OR now_state.calendar_held)
+                       AND f.needs_follow_up
+                       AND now_state.owner_latest)
+                       OR now_state.waiting
                        AS "needs_follow_up!",
-                   now_state.waiting AS "waiting!"
+                   now_state.waiting AS "waiting!",
+                   now_state.calendar_held AS "calendar_held!"
             FROM email_thread_focus f
             JOIN email_threads t ON t.id = f.thread_id AND t.link_id = f.link_id
             LEFT JOIN LATERAL (
@@ -477,9 +526,16 @@ impl FocusStore for FocusPgRepository {
             ) latest ON TRUE
             CROSS JOIN LATERAL (
                 SELECT COALESCE(latest.is_sent, false) AS owner_latest,
+                       f.is_focus AND (t.is_signal OR f.pinned) AS earned,
                        f.awaiting_reply
                            AND t.inbox_visible
-                           AND COALESCE(latest.is_sent AND latest.at <= $3, false) AS waiting
+                           AND COALESCE(latest.is_sent AND latest.at <= $3, false) AS waiting,
+                       t.inbox_visible
+                           AND COALESCE(
+                               f.calendar_hold_until > $4
+                                   AND latest.at <= f.classified_message_ts,
+                               false
+                           ) AS calendar_held
             ) now_state
             WHERE f.thread_id = ANY($1)
               AND f.link_id IN (
@@ -491,19 +547,29 @@ impl FocusStore for FocusPgRepository {
             thread_ids,
             owner.as_ref(),
             waiting_before,
+            now,
         )
         .fetch_all(&self.0)
         .await?;
-        let waiting = rows.iter().filter(|row| row.waiting).count();
-        tracing::Span::current().record("waiting", waiting);
+        let span = tracing::Span::current();
+        span.record("waiting", rows.iter().filter(|row| row.waiting).count());
+        span.record(
+            "calendar_held",
+            rows.iter().filter(|row| row.calendar_held).count(),
+        );
         Ok(rows
             .into_iter()
             .filter_map(|row| {
-                let category = FocusCategory::from_str(&row.category)
-                    .inspect_err(|_| {
-                        tracing::warn!(thread_id = %row.thread_id, "unknown focus category stored");
-                    })
-                    .ok()?;
+                // Calendar in Focus only ever means a change still ahead of its event.
+                let category = if row.calendar_held {
+                    FocusCategory::Calendar
+                } else {
+                    FocusCategory::from_str(&row.category)
+                        .inspect_err(|_| {
+                            tracing::warn!(thread_id = %row.thread_id, "unknown focus category stored");
+                        })
+                        .ok()?
+                };
                 Some((
                     row.thread_id,
                     ThreadFocus {

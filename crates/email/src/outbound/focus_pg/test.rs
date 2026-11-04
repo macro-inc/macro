@@ -4,9 +4,12 @@ use serde_json::Value;
 use sqlx::{Pool, Postgres};
 
 use super::*;
-use crate::domain::focus::{
-    ClassifyOutcome, FocusAnswers, FocusClassifier, FocusClassifierError, FocusQueries,
-    FocusQuestion, FocusService, FocusThread, FocusVerdict, ProfileSource,
+use crate::domain::{
+    focus::{
+        ClassifyOutcome, FocusAnswers, FocusClassifier, FocusClassifierError, FocusQueries,
+        FocusQuestion, FocusService, FocusThread, FocusVerdict, ProfileSource,
+    },
+    models::calendar_invitation::{CalendarInvitation, InvitationDateTime, InvitationMethod},
 };
 
 const OWNER_LINK: Uuid = uuid::uuid!("00000000-0000-0000-0000-000000000f01");
@@ -28,8 +31,14 @@ const RSVP: Uuid = uuid::uuid!("00000000-0000-0000-0000-00000000f307");
 const NOISE: Uuid = uuid::uuid!("00000000-0000-0000-0000-00000000f308");
 const CALENDAR_FILE: Uuid = uuid::uuid!("00000000-0000-0000-0000-00000000f309");
 const RECENT_CONTACT: Uuid = uuid::uuid!("00000000-0000-0000-0000-00000000f30a");
+/// In the email_focus_waiting fixture: someone the owner never wrote to, and labels.
+const STRANGER: Uuid = uuid::uuid!("00000000-0000-0000-0000-0000000cf006");
+const INBOX_LABEL: Uuid = uuid::uuid!("00000000-0000-0000-0000-0000000bf002");
+const UPDATES_LABEL: Uuid = uuid::uuid!("00000000-0000-0000-0000-0000000bf004");
 /// Answers that earn nothing: only key mail and the wait bring a thread in.
 const LOW_ANSWERS: [f32; 8] = [0.05, 0.0, 0.9, 0.0, 0.0, 0.0, 0.0, 0.0];
+/// Answers that earn Focus on their own.
+const HIGH_ANSWERS: [f32; 8] = [0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
 
 struct NoProfile;
 
@@ -86,6 +95,16 @@ async fn insert_message(
     } else {
         uuid::uuid!("00000000-0000-0000-0000-0000000cf001")
     };
+    insert_message_from(pool, thread_id, from_contact_id, is_sent, at).await
+}
+
+async fn insert_message_from(
+    pool: &Pool<Postgres>,
+    thread_id: Uuid,
+    from_contact_id: Uuid,
+    is_sent: bool,
+    at: DateTime<Utc>,
+) -> Result<(), Report> {
     let id = macro_uuid::generate_uuid_v7();
     sqlx::query!(
         r#"
@@ -153,6 +172,7 @@ fn record(thread_id: Uuid, message_id: Uuid, at: DateTime<Utc>, importance: u8) 
         verdict: FocusVerdict {
             is_focus: true,
             pinned: false,
+            calendar_hold_until: None,
             category: FocusCategory::Customer,
             needs_reply: true,
             needs_follow_up: false,
@@ -277,7 +297,7 @@ async fn an_older_classification_never_replaces_a_newer_one(
     );
 
     let stored = repo
-        .focus_for_threads(&owner(), &[INVOICE], Utc::now())
+        .focus_for_threads(&owner(), &[INVOICE], Utc::now(), Utc::now())
         .await?;
     let focus = stored.get(&INVOICE).expect("stored");
     assert_eq!(focus.importance, 80);
@@ -295,7 +315,7 @@ async fn an_older_classification_never_replaces_a_newer_one(
             .await?
     );
     let stored = repo
-        .focus_for_threads(&owner(), &[INVOICE], Utc::now())
+        .focus_for_threads(&owner(), &[INVOICE], Utc::now(), Utc::now())
         .await?;
     assert_eq!(stored.get(&INVOICE).expect("stored").importance, 70);
     Ok(())
@@ -324,15 +344,15 @@ async fn focus_list_is_the_owners_inbox_newest_first(pool: Pool<Postgres>) -> Re
     // Importance plays no part: mail from 20 hours ago at 10 comes before mail
     // from 3 days ago at 90, and the limit keeps the newer one.
     assert_eq!(
-        repo.focus_thread_ids(&owner(), since, now, 10).await?,
+        repo.focus_thread_ids(&owner(), since, now, now, 10).await?,
         vec![INVOICE, BULK]
     );
     assert_eq!(
-        repo.focus_thread_ids(&owner(), since, now, 1).await?,
+        repo.focus_thread_ids(&owner(), since, now, now, 1).await?,
         vec![INVOICE]
     );
     assert_eq!(
-        repo.focus_thread_ids(&owner(), now - Duration::days(1), now, 10)
+        repo.focus_thread_ids(&owner(), now - Duration::days(1), now, now, 10)
             .await?,
         vec![INVOICE]
     );
@@ -341,27 +361,28 @@ async fn focus_list_is_the_owners_inbox_newest_first(pool: Pool<Postgres>) -> Re
     // an hour ago brings BULK ahead of INVOICE's newer inbound mail.
     insert_message(&pool, BULK, true, now - Duration::hours(1)).await?;
     assert_eq!(
-        repo.focus_thread_ids(&owner(), since, now, 10).await?,
+        repo.focus_thread_ids(&owner(), since, now, now, 10).await?,
         vec![BULK, INVOICE]
     );
     assert_eq!(
-        repo.focus_thread_ids(&owner(), since, now, 1).await?,
+        repo.focus_thread_ids(&owner(), since, now, now, 1).await?,
         vec![BULK]
     );
 
     // The other inbox's owner sees only their own thread.
     let stranger = MacroUserIdStr::try_from_email("other@elsewhere.example").unwrap();
     assert_eq!(
-        repo.focus_thread_ids(&stranger, since, now, 10).await?,
+        repo.focus_thread_ids(&stranger, since, now, now, 10)
+            .await?,
         vec![OTHER_THREAD]
     );
     assert!(
-        repo.focus_for_threads(&stranger, &[INVOICE, BULK], now)
+        repo.focus_for_threads(&stranger, &[INVOICE, BULK], now, now)
             .await?
             .is_empty()
     );
     assert_eq!(
-        repo.focus_for_threads(&owner(), &[INVOICE, BULK, ARCHIVED], now)
+        repo.focus_for_threads(&owner(), &[INVOICE, BULK, ARCHIVED], now, now)
             .await?
             .len(),
         3
@@ -387,12 +408,12 @@ async fn focus_covers_inboxes_linked_to_the_owner(pool: Pool<Postgres>) -> Resul
 
     // The other inbox is linked to the owner's account, so its Focus is theirs too.
     assert_eq!(
-        repo.focus_thread_ids(&owner(), now - Duration::days(30), now, 10)
+        repo.focus_thread_ids(&owner(), now - Duration::days(30), now, now, 10)
             .await?,
         vec![OTHER_THREAD]
     );
     assert!(
-        repo.focus_for_threads(&owner(), &[OTHER_THREAD], now)
+        repo.focus_for_threads(&owner(), &[OTHER_THREAD], now, now)
             .await?
             .contains_key(&OTHER_THREAD)
     );
@@ -553,7 +574,7 @@ async fn a_thread_of_only_sent_mail_stays_out(pool: Pool<Postgres>) -> Result<()
     repo.save(&waiting).await?;
     assert!(
         !repo
-            .focus_thread_ids(&owner(), since, now, 100)
+            .focus_thread_ids(&owner(), since, now, now, 100)
             .await?
             .contains(&ONLY_SENT)
     );
@@ -587,7 +608,7 @@ async fn done_threads_and_closed_exchanges_are_not_waiting(
     repo.save(&waiting).await?;
     assert!(
         !repo
-            .focus_thread_ids(&owner(), since, now, 100)
+            .focus_thread_ids(&owner(), since, now, now, 100)
             .await?
             .contains(&REPLIED_THEN_DONE)
     );
@@ -600,7 +621,7 @@ async fn done_threads_and_closed_exchanges_are_not_waiting(
     assert!(!verdict.awaiting_reply);
     assert!(
         !repo
-            .focus_thread_ids(&owner(), since, now, 100)
+            .focus_thread_ids(&owner(), since, now, now, 100)
             .await?
             .contains(&CLOSED_WITH_THANKS)
     );
@@ -614,7 +635,7 @@ async fn done_threads_and_closed_exchanges_are_not_waiting(
         scripts("email_focus", "email_focus_waiting")
     )
 )]
-async fn calendar_mail_reaches_focus_from_outside_the_signal_inbox(
+async fn a_reschedule_reaches_focus_from_outside_the_signal_inbox(
     pool: Pool<Postgres>,
 ) -> Result<(), Report> {
     project_threads(&pool).await?;
@@ -626,52 +647,603 @@ async fn calendar_mail_reaches_focus_from_outside_the_signal_inbox(
     // Gmail filed these under Updates, so they are not signal threads.
     let reschedule = load_thread(&repo, RESCHEDULE).await?.expect("thread");
     assert!(!reschedule.is_signal);
-    assert_eq!(
+    assert!(matches!(
         reschedule.messages[0].calendar_part,
-        Some(CalendarPart::Scheduling)
-    );
+        Some(CalendarPart::Change { .. })
+    ));
     let rsvp = load_thread(&repo, RSVP).await?.expect("thread");
     assert_eq!(rsvp.messages[0].calendar_part, Some(CalendarPart::Rsvp));
     let file = load_thread(&repo, CALENDAR_FILE).await?.expect("thread");
     assert_eq!(file.messages[0].calendar_part, Some(CalendarPart::Unparsed));
 
-    // The sweep finds them; plain mail outside the signal inbox it leaves alone.
+    // The sweep finds only the change; the others have no reason to be read.
     let stale = repo
         .stale_threads(since, &["acme.example".to_owned()], 100)
         .await?
         .into_iter()
         .map(|stale| stale.thread_id)
         .collect::<Vec<_>>();
-    assert!(stale.contains(&RESCHEDULE) && stale.contains(&RSVP) && stale.contains(&CALENDAR_FILE));
-    assert!(!stale.contains(&NOISE));
-    assert_eq!(
-        worker.classify_thread(NOISE).await?,
-        ClassifyOutcome::NotSignal
-    );
+    assert!(stale.contains(&RESCHEDULE));
+    for other in [RSVP, CALENDAR_FILE, NOISE] {
+        assert!(!stale.contains(&other), "{other}");
+    }
 
     let ClassifyOutcome::Classified(verdict) = worker.classify_thread(RESCHEDULE).await? else {
         panic!("expected the reschedule to be classified");
     };
-    assert!(verdict.is_focus && verdict.pinned);
-    assert_eq!(verdict.category, FocusCategory::Calendar);
+    assert!(verdict.calendar_hold_until.is_some());
+    assert!(!verdict.is_focus);
+    // None of these is key mail, so none reaches the classifier.
+    for other in [RSVP, CALENDAR_FILE, NOISE] {
+        assert_eq!(
+            worker.classify_thread(other).await?,
+            ClassifyOutcome::NotSignal,
+            "{other}"
+        );
+    }
+
+    let listed = repo
+        .focus_thread_ids(&owner(), since, now, now, 100)
+        .await?;
+    assert_eq!(listed, vec![RESCHEDULE]);
+    let focus = repo
+        .focus_for_threads(&owner(), &[RESCHEDULE], now, now)
+        .await?;
+    let held = focus.get(&RESCHEDULE).expect("stored");
+    assert!(held.is_focus);
+    assert_eq!(held.category, FocusCategory::Calendar);
+    assert_eq!(held.importance, 50);
+    Ok(())
+}
+
+fn invite(method: InvitationMethod, sequence: u32, end: DateTime<Utc>) -> CalendarInvitation {
+    CalendarInvitation {
+        id: macro_uuid::generate_uuid_v7().to_string(),
+        uid: "event@numbers.example".to_owned(),
+        method,
+        sequence,
+        dtstamp: None,
+        last_modified: None,
+        status: None,
+        recurrence_id: None,
+        recurrence_id_raw: None,
+        title: None,
+        organizer: None,
+        attendees: Vec::new(),
+        comment: None,
+        location: None,
+        description: None,
+        start: None,
+        end: Some(InvitationDateTime::Zoned {
+            value: end.to_rfc3339(),
+            time_zone: "UTC".to_owned(),
+        }),
+        recurrence: Some(Vec::new()),
+        conference_url: None,
+    }
+}
+
+/// A new thread holding one message from a stranger, received `at`, with what
+/// ingestion would store for it. Filed under Updates it is outside the signal
+/// inbox, so only what the message is can bring it in.
+async fn notice_thread(
+    pool: &Pool<Postgres>,
+    subject: &str,
+    invite: Option<CalendarInvitation>,
+    at: DateTime<Utc>,
+    filed_under_updates: bool,
+) -> Result<Uuid, Report> {
+    let thread_id = macro_uuid::generate_uuid_v7();
+    let message_id = macro_uuid::generate_uuid_v7();
+    sqlx::query!(
+        r#"
+        INSERT INTO email_threads (id, link_id, inbox_visible, is_read, is_signal, created_at, updated_at)
+        VALUES ($1, $2, false, true, false, NOW(), NOW())
+        "#,
+        thread_id,
+        OWNER_LINK,
+    )
+    .execute(pool)
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO email_messages (
+            id, thread_id, link_id, provider_id, is_sent, from_contact_id, internal_date_ts,
+            subject, body_text, has_attachments, is_read, is_starred, is_draft, created_at, updated_at
+        )
+        VALUES ($1, $2, $3, $4, false, $5, $6, $7, '', false, true, false, false, NOW(), NOW())
+        "#,
+        message_id,
+        thread_id,
+        OWNER_LINK,
+        message_id.to_string(),
+        STRANGER,
+        at,
+        subject,
+    )
+    .execute(pool)
+    .await?;
+    let mut labels = vec![INBOX_LABEL];
+    labels.extend(filed_under_updates.then_some(UPDATES_LABEL));
+    for label in labels {
+        sqlx::query!(
+            "INSERT INTO email_message_labels (message_id, label_id) VALUES ($1, $2)",
+            message_id,
+            label,
+        )
+        .execute(pool)
+        .await?;
+    }
+    if let Some(invite) = invite {
+        sqlx::query!(
+            r#"
+            INSERT INTO email_message_calendar_invites (message_id, component_id, snapshot)
+            VALUES ($1, $2, $3)
+            "#,
+            message_id,
+            invite.id,
+            serde_json::to_value(&invite)?,
+        )
+        .execute(pool)
+        .await?;
+    }
+    let mut conn = pool.acquire().await?;
+    email_db_client::threads::update::recompute_thread_metadata(&mut conn, thread_id, OWNER_LINK)
+        .await?;
+    Ok(thread_id)
+}
+
+/// Whether the list holds `thread` at `now`, and how it reads then.
+async fn read_at(
+    repo: &FocusPgRepository,
+    thread: Uuid,
+    now: DateTime<Utc>,
+) -> Result<(bool, ThreadFocus), Report> {
+    let since = now - Duration::days(90);
+    let waiting_before = now - Duration::days(3);
+    let listed = repo
+        .focus_thread_ids(&owner(), since, waiting_before, now, 100)
+        .await?
+        .contains(&thread);
+    let focus = repo
+        .focus_for_threads(&owner(), &[thread], waiting_before, now)
+        .await?;
+    Ok((listed, focus.get(&thread).expect("stored").clone()))
+}
+
+async fn is_stale(repo: &FocusPgRepository, thread: Uuid) -> Result<bool, Report> {
+    let since = Utc::now() - Duration::days(30);
+    let enabled = vec!["acme.example".to_owned()];
+    let stale = repo.stale_threads(since, &enabled, 100).await?;
+    Ok(stale.iter().any(|stale| stale.thread_id == thread))
+}
+
+/// A change for an event that isn't over: found, classified, listed as Calendar.
+async fn assert_held(repo: &FocusPgRepository, thread: Uuid) -> Result<(), Report> {
+    assert!(is_stale(repo, thread).await?);
+    let verdict = worker(repo, Ok(LOW_ANSWERS.to_vec()))
+        .classify_thread(thread)
+        .await?;
+    assert!(matches!(verdict, ClassifyOutcome::Classified(_)));
+    let (listed, focus) = read_at(repo, thread, Utc::now()).await?;
+    assert!(listed && focus.is_focus);
+    assert_eq!(focus.category, FocusCategory::Calendar);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_waiting")
+    )
+)]
+async fn an_upcoming_reschedule_is_in_until_the_event_is_over(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool.clone());
+    let now = Utc::now();
+    let end = now + Duration::days(2);
+    let thread = notice_thread(
+        &pool,
+        "Moved: Demo",
+        Some(invite(InvitationMethod::Request, 2, end)),
+        now - Duration::hours(1),
+        true,
+    )
+    .await?;
+    assert_held(&repo, thread).await?;
+
+    let (listed, focus) = read_at(&repo, thread, end - Duration::minutes(1)).await?;
+    assert!(listed && focus.is_focus);
+    assert_eq!(focus.category, FocusCategory::Calendar);
+
+    // Over: both reads agree it is out, and it no longer reads as Calendar.
+    let (listed, focus) = read_at(&repo, thread, end).await?;
+    assert!(!listed && !focus.is_focus);
+    assert!(!focus.needs_reply && !focus.needs_follow_up);
+    assert_ne!(focus.category, FocusCategory::Calendar);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_waiting")
+    )
+)]
+async fn a_held_thread_that_needs_a_reply_loses_the_flag_with_the_hold(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool.clone());
+    let now = Utc::now();
+    let end = now + Duration::days(2);
+    let thread = notice_thread(
+        &pool,
+        "Moved: Demo",
+        Some(invite(InvitationMethod::Request, 2, end)),
+        now - Duration::hours(1),
+        true,
+    )
+    .await?;
+    // Reads as automated, yet Jev says it asks the owner something.
+    let asks = worker(&repo, Ok(vec![0.05, 0.0, 0.9, 0.0, 0.0, 0.0, 0.9, 0.0]));
     assert!(matches!(
-        worker.classify_thread(CALENDAR_FILE).await?,
+        asks.classify_thread(thread).await?,
         ClassifyOutcome::Classified(_)
     ));
-    // An RSVP is not key mail: it never reaches the classifier.
+    let (_, focus) = read_at(&repo, thread, now).await?;
+    assert!(focus.is_focus && focus.needs_reply);
+
+    let (_, focus) = read_at(&repo, thread, end).await?;
+    assert!(!focus.is_focus && !focus.needs_reply);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_waiting")
+    )
+)]
+async fn a_new_invite_stays_out(pool: Pool<Postgres>) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool.clone());
+    let now = Utc::now();
+    let at = now - Duration::hours(1);
+    let upcoming = now + Duration::days(2);
+    let refuses = worker(&repo, Err(FocusClassifierError::Rejected));
+    let earns = worker(&repo, Ok(HIGH_ANSWERS.to_vec()));
+
+    // Outside the signal inbox: never found, never read by the classifier.
+    for thread in [
+        notice_thread(
+            &pool,
+            "Demo",
+            Some(invite(InvitationMethod::Request, 0, upcoming)),
+            at,
+            true,
+        )
+        .await?,
+        notice_thread(&pool, "Invitation: Demo @ Thu", None, at, true).await?,
+        notice_thread(&pool, "New event: Demo", None, at, true).await?,
+    ] {
+        assert!(!is_stale(&repo, thread).await?);
+        assert_eq!(
+            refuses.classify_thread(thread).await?,
+            ClassifyOutcome::NotSignal
+        );
+    }
+
+    // In the signal inbox: out however much Jev likes it. Calendar names why.
+    let thread = notice_thread(
+        &pool,
+        "Invitation: Demo @ Thu",
+        Some(invite(InvitationMethod::Request, 0, upcoming)),
+        at,
+        false,
+    )
+    .await?;
+    let ClassifyOutcome::Classified(verdict) = earns.classify_thread(thread).await? else {
+        panic!("expected a classification");
+    };
+    assert!(!verdict.is_focus && verdict.calendar_hold_until.is_none());
+    let (listed, focus) = read_at(&repo, thread, now).await?;
+    assert!(!listed && !focus.is_focus);
+    assert_eq!(focus.category, FocusCategory::Calendar);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_waiting")
+    )
+)]
+async fn an_update_to_an_event_already_over_stays_out(pool: Pool<Postgres>) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool.clone());
+    let now = Utc::now();
+    let at = now - Duration::hours(3);
+    let over = now - Duration::hours(1);
+
+    // Outside the signal inbox the sweep reads it, and the classifier never does.
+    let outside = notice_thread(
+        &pool,
+        "Updated invitation: Demo",
+        Some(invite(InvitationMethod::Request, 1, over)),
+        at,
+        true,
+    )
+    .await?;
     assert_eq!(
-        worker.classify_thread(RSVP).await?,
+        worker(&repo, Err(FocusClassifierError::Rejected))
+            .classify_thread(outside)
+            .await?,
         ClassifyOutcome::NotSignal
     );
 
-    let listed = repo.focus_thread_ids(&owner(), since, now, 100).await?;
-    assert!(listed.contains(&RESCHEDULE) && listed.contains(&CALENDAR_FILE));
-    assert!(!listed.contains(&RSVP) && !listed.contains(&NOISE));
-    let focus = repo.focus_for_threads(&owner(), &[RESCHEDULE], now).await?;
+    // In the signal inbox with nothing else going for it: out.
+    let signal = notice_thread(
+        &pool,
+        "Updated invitation: Demo",
+        Some(invite(InvitationMethod::Request, 1, over)),
+        at,
+        false,
+    )
+    .await?;
+    let low = worker(&repo, Ok(LOW_ANSWERS.to_vec()));
+    assert!(matches!(
+        low.classify_thread(signal).await?,
+        ClassifyOutcome::Classified(_)
+    ));
+    let (listed, focus) = read_at(&repo, signal, now).await?;
+    assert!(!listed && !focus.is_focus);
+    assert_ne!(focus.category, FocusCategory::Calendar);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_waiting")
+    )
+)]
+async fn a_thread_in_focus_for_more_than_the_hold_stays_after_the_event(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool.clone());
+    let now = Utc::now();
+    let end = now + Duration::days(2);
+    let high = worker(&repo, Ok(HIGH_ANSWERS.to_vec()));
+
+    // Jev says it is worth reading: in for that reason once the event is over,
+    // when it reads as its sender's category, since Calendar means a live change.
+    let signal = notice_thread(
+        &pool,
+        "Rescheduled: Demo",
+        Some(invite(InvitationMethod::Request, 1, end)),
+        now - Duration::hours(1),
+        false,
+    )
+    .await?;
+    high.classify_thread(signal).await?;
+    let (listed, focus) = read_at(&repo, signal, now).await?;
+    assert!(listed && focus.is_focus);
+    assert_eq!(focus.category, FocusCategory::Calendar);
+    let (listed, focus) = read_at(&repo, signal, end).await?;
+    assert!(listed && focus.is_focus);
+    assert_eq!(focus.category, FocusCategory::Other);
+
+    // The same answers outside the signal inbox earn nothing: only the hold had it in.
+    let outside = notice_thread(
+        &pool,
+        "Rescheduled: Demo",
+        Some(invite(InvitationMethod::Request, 1, end)),
+        now - Duration::hours(1),
+        true,
+    )
+    .await?;
+    high.classify_thread(outside).await?;
+    let (listed, focus) = read_at(&repo, outside, now).await?;
+    assert!(listed && focus.is_focus);
+    let (listed, focus) = read_at(&repo, outside, end).await?;
+    assert!(!listed && !focus.is_focus);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_waiting")
+    )
+)]
+async fn a_cancellation_is_in(pool: Pool<Postgres>) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool.clone());
+    let now = Utc::now();
+    let end = now + Duration::days(2);
+    let thread = notice_thread(
+        &pool,
+        "Demo",
+        Some(invite(InvitationMethod::Cancel, 0, end)),
+        now - Duration::hours(1),
+        true,
+    )
+    .await?;
+    assert_held(&repo, thread).await?;
+    let (listed, _) = read_at(&repo, thread, end).await?;
+    assert!(!listed);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_waiting")
+    )
+)]
+async fn a_counter_proposal_is_in(pool: Pool<Postgres>) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool.clone());
+    let now = Utc::now();
+    let end = now + Duration::days(2);
+    let thread = notice_thread(
+        &pool,
+        "Demo",
+        Some(invite(InvitationMethod::Counter, 0, end)),
+        now - Duration::hours(1),
+        true,
+    )
+    .await?;
+    assert_held(&repo, thread).await?;
+    let (listed, _) = read_at(&repo, thread, end).await?;
+    assert!(!listed);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_waiting")
+    )
+)]
+async fn a_series_or_a_subject_alone_holds_for_a_week_after_the_notice(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool.clone());
+    let now = Utc::now();
+    let at = now - Duration::hours(1);
+    // The series began long ago, so its own dates say nothing about what's ahead.
+    let mut series = invite(InvitationMethod::Request, 3, now - Duration::days(200));
+    series.recurrence = Some(vec!["RRULE:FREQ=WEEKLY".to_owned()]);
+    let mut wall_time = invite(InvitationMethod::Cancel, 0, now);
+    wall_time.end = Some(InvitationDateTime::Unresolved {
+        value: "2026-11-05T11:00:00".to_owned(),
+        time_zone: None,
+    });
+    for thread in [
+        notice_thread(&pool, "Standup", Some(series), at, true).await?,
+        notice_thread(&pool, "Standup", Some(wall_time), at, true).await?,
+        notice_thread(&pool, "Rescheduled: Demo", None, at, true).await?,
+        notice_thread(&pool, "Canceled event: Demo", None, at, true).await?,
+    ] {
+        assert_held(&repo, thread).await?;
+        let last = at + Duration::days(7);
+        let (listed, _) = read_at(&repo, thread, last - Duration::minutes(1)).await?;
+        assert!(listed);
+        let (listed, focus) = read_at(&repo, thread, last).await?;
+        assert!(!listed && !focus.is_focus);
+    }
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_waiting")
+    )
+)]
+async fn a_person_writing_after_a_notice_makes_it_a_conversation(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool.clone());
+    let now = Utc::now();
+    let at = now - Duration::hours(2);
+    let end = now + Duration::days(2);
+    let low = worker(&repo, Ok(LOW_ANSWERS.to_vec()));
+    let high = worker(&repo, Ok(HIGH_ANSWERS.to_vec()));
+
+    // A change: the reply ends the hold right away, ahead of the worker.
+    let outside = notice_thread(
+        &pool,
+        "Rescheduled: Demo",
+        Some(invite(InvitationMethod::Request, 1, end)),
+        at,
+        true,
+    )
+    .await?;
+    assert_held(&repo, outside).await?;
+    insert_message_from(&pool, outside, STRANGER, false, now - Duration::hours(1)).await?;
+    let (listed, focus) = read_at(&repo, outside, now).await?;
+    assert!(!listed && !focus.is_focus);
+    assert_ne!(focus.category, FocusCategory::Calendar);
+    // Filed outside the signal inbox, the conversation is no key mail either.
     assert_eq!(
-        focus.get(&RESCHEDULE).expect("stored").category,
-        FocusCategory::Calendar
+        low.classify_thread(outside).await?,
+        ClassifyOutcome::NotSignal
     );
+
+    // In the signal inbox it takes the normal rule, whichever way that goes.
+    let signal = notice_thread(
+        &pool,
+        "Rescheduled: Demo",
+        Some(invite(InvitationMethod::Request, 1, end)),
+        at,
+        false,
+    )
+    .await?;
+    insert_message_from(&pool, signal, STRANGER, false, now - Duration::hours(1)).await?;
+    let ClassifyOutcome::Classified(verdict) = low.classify_thread(signal).await? else {
+        panic!("expected a classification");
+    };
+    assert!(!verdict.is_focus && verdict.calendar_hold_until.is_none());
+    let (listed, _) = read_at(&repo, signal, now).await?;
+    assert!(!listed);
+
+    // New invites and RSVPs are no veto once someone has written after them.
+    for (subject, invite) in [
+        (
+            "Invitation: Demo",
+            Some(invite(InvitationMethod::Request, 0, end)),
+        ),
+        (
+            "Accepted: Demo",
+            Some(invite(InvitationMethod::Reply, 0, end)),
+        ),
+    ] {
+        let thread = notice_thread(&pool, subject, invite, at, false).await?;
+        insert_message_from(&pool, thread, STRANGER, false, now - Duration::hours(1)).await?;
+        let ClassifyOutcome::Classified(verdict) = high.classify_thread(thread).await? else {
+            panic!("expected a classification");
+        };
+        assert!(verdict.is_focus, "{subject}");
+        let (listed, focus) = read_at(&repo, thread, now).await?;
+        assert!(listed, "{subject}");
+        assert_eq!(focus.category, FocusCategory::Other, "{subject}");
+    }
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_waiting")
+    )
+)]
+async fn the_owner_answering_a_notice_ends_the_hold(pool: Pool<Postgres>) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool.clone());
+    let now = Utc::now();
+    let end = now + Duration::days(20);
+    let thread = notice_thread(
+        &pool,
+        "Rescheduled: Demo",
+        Some(invite(InvitationMethod::Request, 1, end)),
+        now - Duration::days(6),
+        true,
+    )
+    .await?;
+    assert_held(&repo, thread).await?;
+
+    // Ahead of the worker, and whatever it later makes of the answer.
+    insert_message(&pool, thread, true, now - Duration::days(5)).await?;
+    let (listed, focus) = read_at(&repo, thread, now).await?;
+    assert!(!listed && !focus.is_focus);
     Ok(())
 }
 
@@ -704,7 +1276,7 @@ async fn mail_from_a_recent_contact_is_found_and_pinned_outside_the_signal_inbox
     };
     assert!(verdict.is_focus && verdict.pinned);
     assert!(
-        repo.focus_thread_ids(&owner(), since, now, 100)
+        repo.focus_thread_ids(&owner(), since, now, now, 100)
             .await?
             .contains(&RECENT_CONTACT)
     );
@@ -730,7 +1302,7 @@ async fn a_thread_that_lost_signal_leaves_focus_unless_pinned(
     .await?;
     assert!(
         !repo
-            .focus_thread_ids(&owner(), since, now, 10)
+            .focus_thread_ids(&owner(), since, now, now, 10)
             .await?
             .contains(&INVOICE)
     );
@@ -739,7 +1311,7 @@ async fn a_thread_that_lost_signal_leaves_focus_unless_pinned(
     pinned.verdict.pinned = true;
     repo.save(&pinned).await?;
     assert!(
-        repo.focus_thread_ids(&owner(), since, now, 10)
+        repo.focus_thread_ids(&owner(), since, now, now, 10)
             .await?
             .contains(&INVOICE)
     );
@@ -758,8 +1330,8 @@ async fn rows_from_an_older_rule_read_right_and_are_decided_again_without_the_cl
     let since = now - Duration::days(30);
     let enabled = vec!["acme.example".to_owned()];
 
-    // As the previous rule stored it: a follow-up on Casey's message, left out
-    // of Focus on a low score that Jev also said needs a reply.
+    // As the previous rule stored it: a follow-up on Casey's message, on answers
+    // that Jev also said need a reply.
     let thread = load_thread(&repo, INVOICE).await?.expect("thread");
     let latest = thread.messages.last().expect("message");
     let scores = serde_json::to_value(FocusAnswers::from_probabilities(&[
@@ -771,7 +1343,7 @@ async fn rows_from_an_older_rule_read_right_and_are_decided_again_without_the_cl
             thread_id, link_id, classified_message_id, classified_message_ts, is_focus,
             category, importance, needs_reply, needs_follow_up, scores, model, classified_at
         )
-        VALUES ($1, $2, $3, $4, false, 'low_relevance', 6, false, true, $5, 'jev-earlier', $6)
+        VALUES ($1, $2, $3, $4, true, 'known', 6, false, true, $5, 'jev-earlier', $6)
         "#,
         INVOICE,
         OWNER_LINK,
@@ -784,7 +1356,9 @@ async fn rows_from_an_older_rule_read_right_and_are_decided_again_without_the_cl
     .await?;
 
     // Right away, with no worker: someone else wrote last, so it reads as a reply.
-    let focus = repo.focus_for_threads(&owner(), &[INVOICE], now).await?;
+    let focus = repo
+        .focus_for_threads(&owner(), &[INVOICE], now, now)
+        .await?;
     let stored = focus.get(&INVOICE).expect("stored");
     assert!(stored.needs_reply && !stored.needs_follow_up);
 
@@ -801,7 +1375,7 @@ async fn rows_from_an_older_rule_read_right_and_are_decided_again_without_the_cl
     assert_eq!(verdict.importance, 70);
 
     assert!(
-        repo.focus_thread_ids(&owner(), since, now, 10)
+        repo.focus_thread_ids(&owner(), since, now, now, 10)
             .await?
             .contains(&INVOICE)
     );
@@ -883,7 +1457,7 @@ async fn editing_a_draft_never_changes_who_wrote_last(pool: Pool<Postgres>) -> R
     .await?;
     let waiting_before = now - Duration::days(3);
     let focus = repo
-        .focus_for_threads(&owner(), &[REPLIED_YESTERDAY], waiting_before)
+        .focus_for_threads(&owner(), &[REPLIED_YESTERDAY], waiting_before, now)
         .await?;
     let drafting = focus.get(&REPLIED_YESTERDAY).expect("stored");
     assert!(drafting.needs_follow_up && !drafting.needs_reply);
@@ -891,7 +1465,7 @@ async fn editing_a_draft_never_changes_who_wrote_last(pool: Pool<Postgres>) -> R
     // Mail from someone else does change it.
     insert_message(&pool, REPLIED_YESTERDAY, false, now).await?;
     let focus = repo
-        .focus_for_threads(&owner(), &[REPLIED_YESTERDAY], waiting_before)
+        .focus_for_threads(&owner(), &[REPLIED_YESTERDAY], waiting_before, now)
         .await?;
     let answered = focus.get(&REPLIED_YESTERDAY).expect("stored");
     assert!(answered.needs_reply && !answered.needs_follow_up);

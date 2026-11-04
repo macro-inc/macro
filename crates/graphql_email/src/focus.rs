@@ -66,8 +66,8 @@ pub enum GraphqlEmailFocusCategory {
     Known,
     /// Relevant mail that fits no narrower category.
     Other,
-    /// A calendar invite, update, reschedule or cancellation in Focus, or an
-    /// RSVP notice left out.
+    /// In Focus, a reschedule, update, cancellation or proposed new time for an
+    /// event that isn't over. Left out, a new invite or an RSVP notice.
     Calendar,
     /// Unsolicited outreach: a pitch, recruiting or a job application.
     Outreach,

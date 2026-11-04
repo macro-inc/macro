@@ -15,35 +15,13 @@ const CONTACT_FOCUS: f32 = 0.3;
 /// profile that asks for such mail (a recruiter's applications) clears it;
 /// on the experiment's founder inbox no stranger outreach scored above 0.5.
 const OUTREACH_FOCUS: f32 = 0.6;
-/// Jev's calendar answer only counts when it is this sure; below it, it
-/// flagged real conversations that merely mentioned an invite.
-const CALENDAR: f32 = 0.7;
 /// The bar for the reply-needed and follow-up flags. With the owner's memory
 /// as context Jev leans towards "yes", so a plain yes flagged half of Focus.
 const FLAG: f32 = 0.7;
 
-/// Subject prefixes Google Calendar, Outlook and scheduling tools put on
-/// invites, updates, reschedules and cancellations.
-const SCHEDULING_PREFIXES: [&str; 15] = [
-    "invitation",
-    "updated invitation",
-    "updated invitation with note",
-    "canceled",
-    "cancelled",
-    "canceled event",
-    "cancelled event",
-    "canceled event with note",
-    "new event",
-    "event updated",
-    "rescheduled",
-    "event rescheduled",
-    "meeting rescheduled",
-    "proposed new time",
-    "new time proposed",
-];
-
-/// Subject prefixes on attendees' RSVP notices.
-const RSVP_PREFIXES: [&str; 4] = ["accepted", "declined", "tentative", "tentatively accepted"];
+/// A new invite is out of Focus, like an RSVP. Set this to false and a new invite
+/// takes the normal rule instead, as an ordinary thread.
+const NEW_INVITES_STAY_OUT: bool = true;
 
 /// Importance weights. A thread needs a reply or a follow-up, never both, so the
 /// largest score is 1.
@@ -60,45 +38,35 @@ const FOLLOW_UP_FLOOR: u8 = 55;
 const KEY_FLOOR: u8 = 50;
 const FOCUS_FLOOR: u8 = 30;
 
-fn has_subject_prefix(subject: &str, prefixes: &[&str]) -> bool {
-    prefixes.iter().any(|prefix| {
-        subject
-            .strip_prefix(prefix)
-            .is_some_and(|rest| rest.trim_start().starts_with(':'))
-    })
-}
-
-/// The calendar notice a subject reads as, e.g. "Accepted: Demo @ Fri" is an RSVP.
-pub(super) fn calendar_notice_in_subject(subject: &str) -> Option<CalendarNotice> {
-    let subject = subject.to_lowercase();
-    if has_subject_prefix(&subject, &RSVP_PREFIXES) {
-        return Some(CalendarNotice::Rsvp);
-    }
-    has_subject_prefix(&subject, &SCHEDULING_PREFIXES).then_some(CalendarNotice::Scheduling)
-}
-
 /// Decide whether a thread belongs in Focus, why, and how important it is.
 ///
-/// Key mail is always in: invites, updates, reschedules and cancellations, mail
-/// waiting on the owner's reply, and mail from recent contacts, unless it is
-/// outreach, automated, or from someone the owner turned away. RSVP notices are
-/// always out. Everything else is in when Jev says the owner, as their profile
-/// describes them, would want it, unless it is automated mail nobody vouches
-/// for. Unsolicited outreach from strangers needs a firmer yes. Customers, and
-/// contacts Jev finds at least somewhat relevant, need less, unless the mail is
-/// outreach.
+/// Key mail is always in: mail waiting on the owner's reply, and mail from recent
+/// contacts, unless it is outreach, automated, or from someone the owner turned
+/// away. Everything else is in when Jev says the owner, as their profile describes
+/// them, would want it, unless it is automated mail nobody vouches for. Unsolicited
+/// outreach from strangers needs a firmer yes. Customers, and contacts Jev finds at
+/// least somewhat relevant, need less, unless the mail is outreach.
 ///
-/// A thread the owner is waiting on joins Focus once it has waited long enough;
-/// the list applies that age when it reads, since nothing reclassifies a thread
-/// as it ages. Its category and importance are set for that moment here.
+/// Calendar mail counts only when it is the thread's latest message; once anyone
+/// has written after it, the thread is a conversation like any other. A change (a
+/// reschedule, update, cancellation or proposed new time) is held in Focus until
+/// its event is over, whatever else it reads as. A new invite and an RSVP are out.
+/// Jev's calendar answer plays no part: it can't tell these apart, so a thread only
+/// Jev calls calendar mail takes the rules above and reads as its sender's category.
+///
+/// Time is not known here, so `is_focus` leaves out what time decides. A thread the
+/// owner is waiting on joins Focus once it has waited long enough, and a calendar
+/// change holds one until `calendar_hold_until`; the list applies both when it
+/// reads, since nothing reclassifies a thread as it ages. Its labels and importance
+/// are set for those moments here, and the read calls a held thread Calendar, so
+/// Calendar in Focus only ever means a change still ahead of its event.
 pub fn decide(answers: &FocusAnswers, signals: &FocusSignals) -> FocusVerdict {
-    // Jev's one calendar question covers invites, updates and RSVPs alike, so
-    // alone it can only say "scheduling notice": never drop a reschedule.
-    let notice = signals
-        .calendar
-        .or((answers.calendar_rsvp >= CALENDAR).then_some(CalendarNotice::Scheduling));
-    let scheduling = notice == Some(CalendarNotice::Scheduling);
-    let rsvp = notice == Some(CalendarNotice::Rsvp);
+    let calendar_hold_until = signals.calendar_change_until();
+    let left_out = match signals.calendar {
+        Some(CalendarNotice::Rsvp) => true,
+        Some(CalendarNotice::NewInvite) => NEW_INVITES_STAY_OUT,
+        Some(CalendarNotice::Change { .. }) | None => false,
+    };
 
     let customer = answers.customer >= YES;
     let outreach = answers.outreach >= YES;
@@ -117,16 +85,18 @@ pub fn decide(answers: &FocusAnswers, signals: &FocusSignals) -> FocusVerdict {
 
     let asks_owner = !signals.latest_from_owner && answers.needs_response >= FLAG;
     let key_sender = !outreach && !reads_automated && !signals.brushed_off;
-    let pinned = scheduling || (!rsvp && key_sender && (asks_owner || signals.recent_contact));
-    let is_focus = !rsvp && (pinned || earned);
+    let pinned = !left_out && key_sender && (asks_owner || signals.recent_contact);
+    let is_focus = !left_out && (pinned || earned);
+    let in_focus_while_held = is_focus || calendar_hold_until.is_some();
 
     // Who wrote last settles the label, whichever way Jev flagged the thread:
     // nobody follows up on mail still waiting on the owner's own answer.
     let open_loop = answers.needs_follow_up >= FLAG;
-    let needs_reply = is_focus && !signals.latest_from_owner && (asks_owner || open_loop);
-    let needs_follow_up = is_focus && signals.latest_from_owner && open_loop;
+    let needs_reply =
+        in_focus_while_held && !signals.latest_from_owner && (asks_owner || open_loop);
+    let needs_follow_up = in_focus_while_held && signals.latest_from_owner && open_loop;
 
-    let category = if notice.is_some() {
+    let category = if left_out {
         FocusCategory::Calendar
     } else if is_focus || signals.awaiting_reply {
         if customer {
@@ -155,7 +125,7 @@ pub fn decide(answers: &FocusAnswers, signals: &FocusSignals) -> FocusVerdict {
         REPLY_FLOOR
     } else if needs_follow_up || signals.awaiting_reply {
         FOLLOW_UP_FLOOR
-    } else if pinned || (is_focus && customer) {
+    } else if pinned || calendar_hold_until.is_some() || (is_focus && customer) {
         KEY_FLOOR
     } else if is_focus {
         FOCUS_FLOOR
@@ -168,6 +138,7 @@ pub fn decide(answers: &FocusAnswers, signals: &FocusSignals) -> FocusVerdict {
     FocusVerdict {
         is_focus,
         pinned,
+        calendar_hold_until,
         category,
         needs_reply,
         needs_follow_up,

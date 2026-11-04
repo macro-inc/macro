@@ -26,6 +26,7 @@ struct FakeStore {
     mail_reads: Arc<Mutex<usize>>,
     /// The cutoff each list read was given.
     waiting_before: Arc<Mutex<Vec<DateTime<Utc>>>>,
+    read_at: Arc<Mutex<Vec<DateTime<Utc>>>>,
 }
 
 impl FocusStore for FakeStore {
@@ -79,9 +80,11 @@ impl FocusStore for FakeStore {
         _owner: &MacroUserIdStr<'static>,
         _since: DateTime<Utc>,
         waiting_before: DateTime<Utc>,
+        now: DateTime<Utc>,
         _limit: i64,
     ) -> Result<Vec<Uuid>, Report> {
         self.waiting_before.lock().unwrap().push(waiting_before);
+        self.read_at.lock().unwrap().push(now);
         Ok(Vec::new())
     }
 
@@ -90,8 +93,10 @@ impl FocusStore for FakeStore {
         _owner: &MacroUserIdStr<'static>,
         _thread_ids: &[Uuid],
         waiting_before: DateTime<Utc>,
+        now: DateTime<Utc>,
     ) -> Result<HashMap<Uuid, ThreadFocus>, Report> {
         self.waiting_before.lock().unwrap().push(waiting_before);
+        self.read_at.lock().unwrap().push(now);
         Ok(HashMap::new())
     }
 }
@@ -551,16 +556,37 @@ async fn outside_the_signal_inbox_only_key_mail_reaches_the_classifier() {
     );
     assert!(classifier.inputs.lock().unwrap().is_empty());
 
+    // Neither is a new invite, or a change to an event that is already over.
+    let mut new_invite = thread("owner@acme.example");
+    new_invite.is_signal = false;
+    new_invite.messages[0].calendar_part = Some(CalendarPart::NewInvite);
+    let new_invite = insert(&store, new_invite);
+    assert_eq!(
+        service.classify_thread(new_invite).await.unwrap(),
+        ClassifyOutcome::NotSignal
+    );
+    let mut over = thread("owner@acme.example");
+    over.is_signal = false;
+    over.messages[0].calendar_part = Some(CalendarPart::Change {
+        until: Utc::now() - Duration::hours(1),
+    });
+    let over = insert(&store, over);
+    assert_eq!(
+        service.classify_thread(over).await.unwrap(),
+        ClassifyOutcome::NotSignal
+    );
+    assert!(classifier.inputs.lock().unwrap().is_empty());
+
+    let until = Utc::now() + Duration::days(2);
     let mut reschedule = thread("owner@acme.example");
     reschedule.is_signal = false;
-    reschedule.messages[0].calendar_part = Some(CalendarPart::Scheduling);
+    reschedule.messages[0].calendar_part = Some(CalendarPart::Change { until });
     let reschedule = insert(&store, reschedule);
     let ClassifyOutcome::Classified(verdict) = service.classify_thread(reschedule).await.unwrap()
     else {
         panic!("expected the reschedule to be classified");
     };
-    assert!(verdict.is_focus && verdict.pinned);
-    assert_eq!(verdict.category, FocusCategory::Calendar);
+    assert_eq!(verdict.calendar_hold_until, Some(until));
 
     let mut contact = thread("owner@acme.example");
     contact.is_signal = false;
@@ -658,4 +684,11 @@ async fn the_lists_apply_a_three_day_wait() {
             .all(|cutoff| before <= *cutoff && *cutoff <= after)
     );
     assert_eq!(FOLLOW_UP_AFTER_DAYS, 3);
+    let read_at = store.read_at.lock().unwrap();
+    assert_eq!(read_at.len(), 2);
+    assert!(
+        read_at
+            .iter()
+            .all(|now| before + Duration::days(FOLLOW_UP_AFTER_DAYS) <= *now)
+    );
 }

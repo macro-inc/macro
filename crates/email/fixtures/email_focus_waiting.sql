@@ -10,7 +10,8 @@
 -- Thread f305: only the owner's own message, sent 5 days ago.
 -- Threads f306 to f309 come from someone the owner never wrote to, so only what
 -- the thread itself is can bring them in:
--- Thread f306: a reschedule (METHOD:REQUEST) filed under Updates.
+-- Thread f306: a reschedule (METHOD:REQUEST past the first revision) filed under
+-- Updates, for an event two days ahead.
 -- Thread f307: an RSVP (METHOD:REPLY) filed under Updates.
 -- Thread f308: plain mail filed under Updates.
 -- Thread f309: a calendar file nothing parsed, filed under Updates.
@@ -106,8 +107,18 @@ VALUES ('00000000-0000-0000-0000-00000000f611', '00000000-0000-0000-0000-0000000
        ('00000000-0000-0000-0000-00000000f6a1', '00000000-0000-0000-0000-0000000bf004');
 
 INSERT INTO email_message_calendar_invites (message_id, component_id, snapshot)
-VALUES ('00000000-0000-0000-0000-00000000f661', 'request-1', '{"method": "request"}'::jsonb),
-       ('00000000-0000-0000-0000-00000000f671', 'reply-1', '{"method": "reply"}'::jsonb);
+VALUES ('00000000-0000-0000-0000-00000000f661', 'request-1', jsonb_build_object(
+            'id', 'request-1', 'uid', 'demo@numbers.example', 'method', 'request', 'sequence', 1,
+            'attendees', '[]'::jsonb, 'recurrence', '[]'::jsonb,
+            'end', jsonb_build_object(
+                'kind', 'zoned', 'time_zone', 'UTC',
+                'value', to_char((NOW() + INTERVAL '2 days') AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+            )
+        )),
+       ('00000000-0000-0000-0000-00000000f671', 'reply-1', jsonb_build_object(
+            'id', 'reply-1', 'uid', 'demo@numbers.example', 'method', 'reply', 'sequence', 1,
+            'attendees', '[]'::jsonb, 'recurrence', '[]'::jsonb
+        ));
 
 INSERT INTO email_attachments (id, message_id, filename, mime_type, created_at)
 VALUES ('00000000-0000-0000-0000-00000000f991', '00000000-0000-0000-0000-00000000f691', 'invite.ics', 'text/calendar', NOW());

@@ -165,11 +165,16 @@ desktop Inbox tabs and the mobile pills. It lists inbox
 threads from the last 30 days that the email focus worker
 (`services/email_focus_worker`) classified as worth attention, including inboxes
 linked to the account, newest first by latest message in either direction. Key
-mail stays in whatever its score: invites, updates, reschedules and cancellations
-(RSVP notices stay out), mail waiting on the owner's reply, and mail from someone
-the owner wrote to in the last 90 days, unless it reads as outreach or automated.
-A thread the owner answered last joins 3 days after their message, unless that
-message only closes the exchange ("Thanks!"). `Follow up` marks only threads whose
+mail stays in whatever its score: mail waiting on the owner's reply, and mail from
+someone the owner wrote to in the last 90 days, unless it reads as outreach or
+automated. A calendar change (a reschedule, update, cancellation or proposed new
+time) stays in until its event is over, or for 7 days after the notice when it is a
+recurring event or no time can be read, and is the only mail with the Calendar
+category in Focus. New invites and RSVP notices stay out. A calendar notice counts
+only as the thread's latest message: once anyone writes after it, the thread takes
+the same rules as any other. A thread the owner answered last joins 3 days after
+their message, unless that message only closes the exchange ("Thanks!"). `Follow up`
+marks only threads whose
 latest message is the owner's, and `Reply needed` only threads whose latest message
 is someone else's. A thread holding only the owner's sent mail is not listed: it
 has no inbox state, so Mark Done could not remove it. Rows at least 32rem wide show the 0-100

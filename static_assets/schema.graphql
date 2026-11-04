@@ -4423,8 +4423,8 @@ enum GraphqlEmailFocusCategory {
 	"""
 	OTHER
 	"""
-	A calendar invite, update, reschedule or cancellation in Focus, or an
-	RSVP notice left out.
+	In Focus, a reschedule, update, cancellation or proposed new time for an
+	event that isn't over. Left out, a new invite or an RSVP notice.
 	"""
 	CALENDAR
 	"""

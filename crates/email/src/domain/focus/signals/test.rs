@@ -3,7 +3,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::*;
-use crate::domain::focus::models::{CalendarPart, FocusMessage, SentNote};
+use crate::domain::focus::models::{CalendarNotice, CalendarPart, FocusMessage, SentNote};
 
 fn start() -> DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 10, 1, 9, 0, 0).unwrap()
@@ -64,6 +64,11 @@ fn with_subject(mut message: FocusMessage, subject: &str) -> FocusMessage {
 fn with_part(mut message: FocusMessage, part: CalendarPart) -> FocusMessage {
     message.calendar_part = Some(part);
     message
+}
+
+fn saved_change(message: FocusMessage) -> FocusMessage {
+    let until = message.at + Duration::days(2);
+    with_part(message, CalendarPart::Change { until })
 }
 
 fn calendar(messages: Vec<FocusMessage>) -> Option<CalendarNotice> {
@@ -241,7 +246,7 @@ fn only_mail_sent_by_the_owner_awaits_nothing() {
     ));
     assert!(signals.latest_from_owner);
     assert!(!signals.awaiting_reply);
-    assert!(!signals.is_key_mail());
+    assert!(!signals.is_key_mail(start()));
 }
 
 #[test]
@@ -264,10 +269,11 @@ fn the_owners_own_calendar_notice_awaits_nothing() {
     let signals = signals(&thread(
         vec![
             message("kaio@applicant.example", 0, false, "Application"),
-            with_part(
-                reply_to("kaio@applicant.example", 5, "Joining details attached"),
-                CalendarPart::Scheduling,
-            ),
+            saved_change(reply_to(
+                "kaio@applicant.example",
+                5,
+                "Joining details attached",
+            )),
         ],
         Vec::new(),
     ));
@@ -316,57 +322,40 @@ fn freemail_owners_have_no_teammates() {
 }
 
 #[test]
-fn a_reschedule_later_in_a_thread_counts() {
+fn a_notice_counts_only_as_the_threads_latest_message() {
     let first = message("jacob@acme.example", 0, false, "Can we meet?");
     let reschedule = with_subject(
         message("jacob@acme.example", 5, false, ""),
         "Rescheduled: Demo @ Thu",
     );
-    let update = with_subject(
-        message("jacob@acme.example", 5, false, ""),
-        "Updated invitation: Demo @ Thu",
-    );
-    assert_eq!(
-        calendar(vec![first.clone(), reschedule]),
-        Some(CalendarNotice::Scheduling)
-    );
-    assert_eq!(
-        calendar(vec![first, update]),
-        Some(CalendarNotice::Scheduling)
-    );
+    let later = message("jacob@acme.example", 10, false, "Does Friday work instead?");
+    assert!(matches!(
+        calendar(vec![first.clone(), reschedule.clone()]),
+        Some(CalendarNotice::Change { .. })
+    ));
+    // Someone wrote after it: a conversation.
+    assert_eq!(calendar(vec![first, reschedule.clone(), later]), None);
+
+    // The owner answered it: they have seen it, and may be waiting on an answer.
+    let answered = signals(&thread(
+        vec![
+            reschedule.clone(),
+            reply_to("jacob@acme.example", 10, "Does Friday work instead?"),
+        ],
+        Vec::new(),
+    ));
+    assert_eq!(answered.calendar, None);
+    assert!(answered.awaiting_reply);
+
+    // The owner's own RSVP settles it the same way, and awaits nothing.
+    let rsvp = with_part(reply_to("jacob@acme.example", 10, ""), CalendarPart::Rsvp);
+    let accepted = signals(&thread(vec![reschedule, rsvp], Vec::new()));
+    assert_eq!(accepted.calendar, None);
+    assert!(!accepted.awaiting_reply);
 }
 
 #[test]
-fn a_saved_calendar_part_decides_whatever_the_subject_says() {
-    let plain = message("jacob@acme.example", 0, false, "");
-    assert_eq!(
-        calendar(vec![with_part(plain.clone(), CalendarPart::Scheduling)]),
-        Some(CalendarNotice::Scheduling)
-    );
-    // An RSVP in another language has no subject prefix to match.
-    assert_eq!(
-        calendar(vec![with_part(
-            with_subject(plain.clone(), "Aceptada: Demo"),
-            CalendarPart::Rsvp
-        )]),
-        Some(CalendarNotice::Rsvp)
-    );
-    // A calendar file nothing could read reads as its subject, or as scheduling.
-    assert_eq!(
-        calendar(vec![with_part(
-            with_subject(plain.clone(), "Accepted: Demo"),
-            CalendarPart::Unparsed
-        )]),
-        Some(CalendarNotice::Rsvp)
-    );
-    assert_eq!(
-        calendar(vec![with_part(plain, CalendarPart::Unparsed)]),
-        Some(CalendarNotice::Scheduling)
-    );
-}
-
-#[test]
-fn a_person_replying_to_a_notice_does_not_end_it_but_does_end_an_rsvp() {
+fn a_new_invite_or_rsvp_behind_a_later_message_is_a_conversation() {
     let invite = with_subject(
         message("jacob@acme.example", 0, false, ""),
         "Invitation: Demo @ Thu",
@@ -380,19 +369,21 @@ fn a_person_replying_to_a_notice_does_not_end_it_but_does_end_an_rsvp() {
         "Re: Invitation: Demo @ Thu",
     );
     assert_eq!(
-        calendar(vec![invite.clone(), person.clone()]),
-        Some(CalendarNotice::Scheduling)
+        calendar(vec![invite.clone()]),
+        Some(CalendarNotice::NewInvite)
     );
+    assert_eq!(calendar(vec![invite.clone(), person.clone()]), None);
     assert_eq!(calendar(vec![rsvp.clone(), person]), None);
 
-    // The newest thing to read being an RSVP settles it, invite or not.
+    // The latest message settles it, whatever came before.
     assert_eq!(calendar(vec![invite, rsvp]), Some(CalendarNotice::Rsvp));
 }
 
 #[test]
-fn key_mail_is_scheduling_recent_contacts_and_waiting_threads() {
-    let scheduling = FocusSignals {
-        calendar: Some(CalendarNotice::Scheduling),
+fn key_mail_is_changes_to_events_ahead_recent_contacts_and_waiting_threads() {
+    let now = start();
+    let change_until = |until| FocusSignals {
+        calendar: Some(CalendarNotice::Change { until }),
         ..FocusSignals::default()
     };
     let recent = FocusSignals {
@@ -403,14 +394,19 @@ fn key_mail_is_scheduling_recent_contacts_and_waiting_threads() {
         awaiting_reply: true,
         ..FocusSignals::default()
     };
-    let rsvp = FocusSignals {
-        calendar: Some(CalendarNotice::Rsvp),
+    let notice = |notice| FocusSignals {
+        calendar: Some(notice),
         ..FocusSignals::default()
     };
     let contact = FocusSignals {
         contact: true,
         ..FocusSignals::default()
     };
-    assert!(scheduling.is_key_mail() && recent.is_key_mail() && waiting.is_key_mail());
-    assert!(!rsvp.is_key_mail() && !contact.is_key_mail());
+    assert!(change_until(now + Duration::minutes(1)).is_key_mail(now));
+    assert!(recent.is_key_mail(now) && waiting.is_key_mail(now));
+    assert!(!change_until(now).is_key_mail(now));
+    assert!(!change_until(now - Duration::days(1)).is_key_mail(now));
+    assert!(!notice(CalendarNotice::NewInvite).is_key_mail(now));
+    assert!(!notice(CalendarNotice::Rsvp).is_key_mail(now));
+    assert!(!contact.is_key_mail(now));
 }

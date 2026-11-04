@@ -1,0 +1,33 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT t.id,\n                   GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts)\n                       AS \"latest_at!\"\n            FROM email_links el\n            JOIN email_threads t ON t.link_id = el.id\n            LEFT JOIN email_thread_focus f ON f.thread_id = t.id\n            WHERE LOWER(SPLIT_PART(el.email_address, '@', 2)) = ANY($2)\n              AND t.inbox_visible\n              AND t.latest_inbound_message_ts IS NOT NULL\n              AND GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts) >= $1\n              AND (\n                  t.is_signal\n                  OR t.latest_outbound_message_ts > t.latest_inbound_message_ts\n                  OR f.rule_version < $4\n                  -- A calendar change. The service judges whether it is the\n                  -- latest message and its event isn't over; a new invite or an\n                  -- RSVP never gets this far.\n                  OR EXISTS (\n                      SELECT 1\n                      FROM email_messages notice\n                      WHERE notice.thread_id = t.id\n                        AND NOT notice.is_sent\n                        AND NOT notice.is_draft\n                        AND (\n                            LOWER(notice.subject) ~ $6\n                            OR EXISTS (\n                                SELECT 1 FROM email_message_calendar_invites i\n                                WHERE i.message_id = notice.id\n                                  AND (\n                                      i.snapshot->>'method' IN ('cancel', 'counter')\n                                      OR (\n                                          i.snapshot->>'method' = 'request'\n                                          AND i.snapshot->'sequence' > '0'::jsonb\n                                      )\n                                  )\n                            )\n                        )\n                  )\n                  -- A sender the owner has written to lately. The service judges\n                  -- whether it really is a recent contact; mail no event covers,\n                  -- such as an initial sync, only arrives this way.\n                  OR EXISTS (\n                      SELECT 1\n                      FROM email_messages inbound\n                      JOIN email_message_recipients r ON r.contact_id = inbound.from_contact_id\n                      JOIN email_messages sent ON sent.id = r.message_id\n                      WHERE inbound.thread_id = t.id\n                        AND NOT inbound.is_sent\n                        AND NOT inbound.is_draft\n                        AND sent.is_sent\n                        AND NOT sent.is_draft\n                        AND sent.internal_date_ts >= $5\n                  )\n              )\n              AND (\n                  f.thread_id IS NULL\n                  OR f.rule_version < $4\n                  OR f.classified_message_ts\n                     < GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts)\n              )\n            ORDER BY GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts) DESC\n            LIMIT $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "latest_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "TextArray",
+        "Int8",
+        "Int2",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "f57763374b5c18a6873b8c5cdcff32214c127a5e662bb3f579afc5d97d613ac8"
+}

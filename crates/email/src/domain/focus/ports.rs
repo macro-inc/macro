@@ -41,23 +41,27 @@ pub trait FocusStore: Send + Sync + 'static {
 
     /// The owner's Focus threads still in the inbox with mail since `since`,
     /// newest first by latest message time, in either direction. Threads whose
-    /// owner has been awaiting a reply since at or before `waiting_before` count.
+    /// owner has been awaiting a reply since at or before `waiting_before` count,
+    /// as do threads a calendar change still holds at `now`.
     fn focus_thread_ids(
         &self,
         owner: &MacroUserIdStr<'static>,
         since: DateTime<Utc>,
         waiting_before: DateTime<Utc>,
+        now: DateTime<Utc>,
         limit: i64,
     ) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
 
     /// Classifications of the owner's threads among `thread_ids`, as they stand
-    /// now: who wrote last settles the labels, and a thread whose owner has been
-    /// awaiting a reply since at or before `waiting_before` is in Focus.
+    /// at `now`: who wrote last settles the labels, a thread whose owner has been
+    /// awaiting a reply since at or before `waiting_before` is in Focus, and one a
+    /// calendar change still holds is in Focus as Calendar.
     fn focus_for_threads(
         &self,
         owner: &MacroUserIdStr<'static>,
         thread_ids: &[Uuid],
         waiting_before: DateTime<Utc>,
+        now: DateTime<Utc>,
     ) -> impl Future<Output = Result<HashMap<Uuid, ThreadFocus>, Report>> + Send;
 }
 

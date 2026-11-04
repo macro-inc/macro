@@ -8,10 +8,10 @@ use uuid::Uuid;
 
 use super::questions::FocusQuestion;
 
-/// Why a thread is in or out of Focus. The first four, and Calendar for
-/// scheduling notices, are Focus categories; the rest name the reason a thread
-/// was left out. None depends on the owner's line of work: who the mail is from
-/// comes from their own history.
+/// Why a thread is in or out of Focus. The first four, and Calendar for a change
+/// to an event that isn't over, are Focus categories; the rest name the reason a
+/// thread was left out. None depends on the owner's line of work: who the mail is
+/// from comes from their own history.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Display, EnumString)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
@@ -24,8 +24,8 @@ pub enum FocusCategory {
     Known,
     /// Relevant mail that fits no narrower category.
     Other,
-    /// A calendar invite, update, reschedule or cancellation, in Focus; or an
-    /// RSVP notice, left out.
+    /// In Focus: a reschedule, update, cancellation or proposed new time for an
+    /// event that isn't over. Left out: a new invite or an RSVP notice.
     Calendar,
     /// Unsolicited outreach: a pitch, recruiting or a job application.
     Outreach,
@@ -46,7 +46,8 @@ pub struct FocusAnswers {
     pub automated: f32,
     /// Is it a customer, client or user asking for help or giving feedback?
     pub customer: f32,
-    /// Is it only a calendar invite, update or RSVP?
+    /// Is it only a calendar invite, update or RSVP? Stored, but the rule doesn't
+    /// read it: the one question can't tell a change from a new invite or an RSVP.
     pub calendar_rsvp: f32,
     /// Does it ask for a decision only the owner can make?
     pub needs_decision: f32,
@@ -82,12 +83,19 @@ impl FocusAnswers {
     }
 }
 
-/// A calendar notice in a thread.
+/// The calendar notice a thread's latest message is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(tag = "kind", rename_all = "snake_case")]
 pub enum CalendarNotice {
-    /// An invite, update, reschedule or cancellation: the owner's time moves.
-    Scheduling,
+    /// A reschedule, update, cancellation or proposed new time: the owner's
+    /// time moves.
+    Change {
+        /// When the event is over, or a fixed while after the notice when
+        /// nothing says.
+        until: DateTime<Utc>,
+    },
+    /// A first invitation to an event.
+    NewInvite,
     /// An attendee's accepted, declined or tentative notice.
     Rsvp,
 }
@@ -95,11 +103,18 @@ pub enum CalendarNotice {
 /// What a message's calendar content says, before its subject is considered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CalendarPart {
-    /// A saved component that invites, updates or cancels.
-    Scheduling,
+    /// A saved component that cancels an event, proposes a new time, or updates
+    /// one past its first revision.
+    Change {
+        /// When the event is over, or a fixed while after the notice when
+        /// nothing says.
+        until: DateTime<Utc>,
+    },
+    /// Saved components that invite or publish, and change nothing.
+    NewInvite,
     /// Saved components that are only attendees' replies.
     Rsvp,
-    /// A calendar file with no saved component.
+    /// A calendar file with no saved component to read.
     Unparsed,
 }
 
@@ -122,7 +137,8 @@ pub struct FocusSignals {
     pub teammate: bool,
     /// The thread's latest message is the owner's.
     pub latest_from_owner: bool,
-    /// The calendar notice the thread's mail amounts to.
+    /// The notice the thread's latest message is. Anyone writing after a notice
+    /// makes the thread a conversation, so it counts only as the latest message.
     pub calendar: Option<CalendarNotice>,
     /// Someone wrote to the owner, the owner answered last, and that answer
     /// expects a reply from someone who can give one. "Thanks!" does not.
@@ -130,9 +146,20 @@ pub struct FocusSignals {
 }
 
 impl FocusSignals {
-    /// Mail worth classifying even when it isn't in the signal inbox.
-    pub fn is_key_mail(&self) -> bool {
-        self.calendar == Some(CalendarNotice::Scheduling)
+    /// When the calendar change that is the thread's latest message stops holding
+    /// it in Focus.
+    pub fn calendar_change_until(&self) -> Option<DateTime<Utc>> {
+        match self.calendar {
+            Some(CalendarNotice::Change { until }) => Some(until),
+            Some(CalendarNotice::NewInvite | CalendarNotice::Rsvp) | None => None,
+        }
+    }
+
+    /// Mail worth classifying even when it isn't in the signal inbox. A new
+    /// invite or a change to an event already over is not.
+    pub fn is_key_mail(&self, now: DateTime<Utc>) -> bool {
+        self.calendar_change_until()
+            .is_some_and(|until| until > now)
             || self.recent_contact
             || self.awaiting_reply
     }
@@ -141,12 +168,17 @@ impl FocusSignals {
 /// The rule's decision about one thread.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FocusVerdict {
-    /// Whether the thread belongs in Focus at classification time. A thread
-    /// awaiting a reply also joins once it has waited long enough.
+    /// Whether the thread belongs in Focus whatever the time. A thread awaiting
+    /// a reply also joins once it has waited long enough, and a calendar change
+    /// holds one until `calendar_hold_until`.
     pub is_focus: bool,
     /// Key mail: in Focus even when the thread is not in the signal inbox.
     pub pinned: bool,
-    /// The Focus category, or why the thread was left out.
+    /// A calendar change holds the thread in Focus until this time, in the signal
+    /// inbox or not, as long as nobody writes after it.
+    pub calendar_hold_until: Option<DateTime<Utc>>,
+    /// The Focus category, or why the thread was left out, apart from a calendar
+    /// hold: the read calls a thread Calendar while one lasts.
     pub category: FocusCategory,
     /// A Focus thread whose latest message is someone else's and waits on the
     /// owner. Never set together with `needs_follow_up`.
@@ -313,8 +345,9 @@ pub struct FocusRecord {
     pub classified_at: DateTime<Utc>,
 }
 
-/// A stored classification as it stands when read: who wrote last and how long
-/// the owner has waited are applied to what was stored.
+/// A stored classification as it stands when read: who wrote last, how long the
+/// owner has waited and whether a changed event is over are applied to what was
+/// stored.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ThreadFocus {
     /// Whether the thread belongs in Focus.

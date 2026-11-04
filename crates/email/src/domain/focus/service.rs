@@ -45,7 +45,7 @@ pub enum ClassifyOutcome {
     /// The thread is gone, or has no message from anyone but the owner.
     Missing,
     /// The thread is out of the inbox, or outside the signal inbox without
-    /// being key mail.
+    /// being key mail right now.
     NotSignal,
     /// The inbox is not on the allowlist, so nothing left the system.
     NotEnabled,
@@ -132,6 +132,7 @@ where
         fields(
             is_focus = tracing::field::Empty,
             pinned = tracing::field::Empty,
+            calendar_held = tracing::field::Empty,
             awaiting_reply = tracing::field::Empty,
             category = tracing::field::Empty,
             importance = tracing::field::Empty,
@@ -181,7 +182,7 @@ where
             record_verdict(&verdict, true);
             return Ok(ClassifyOutcome::Redecided(verdict));
         }
-        if !thread.is_signal && !signals.is_key_mail() {
+        if !thread.is_signal && !signals.is_key_mail(Utc::now()) {
             return Ok(ClassifyOutcome::NotSignal);
         }
 
@@ -328,6 +329,7 @@ fn record_verdict(verdict: &FocusVerdict, redecided: bool) {
     let span = tracing::Span::current();
     span.record("is_focus", verdict.is_focus);
     span.record("pinned", verdict.pinned);
+    span.record("calendar_held", verdict.calendar_hold_until.is_some());
     span.record("awaiting_reply", verdict.awaiting_reply);
     span.record("category", tracing::field::display(verdict.category));
     span.record("importance", verdict.importance);
@@ -335,8 +337,8 @@ fn record_verdict(verdict: &FocusVerdict, redecided: bool) {
 }
 
 /// The latest time a thread's waiting can have started and still count now.
-fn waiting_before() -> DateTime<Utc> {
-    Utc::now() - Duration::days(FOLLOW_UP_AFTER_DAYS)
+fn waiting_before(now: DateTime<Utc>) -> DateTime<Utc> {
+    now - Duration::days(FOLLOW_UP_AFTER_DAYS)
 }
 
 /// Reads the Focus view needs.
@@ -359,11 +361,13 @@ impl<S: FocusStore> FocusQueries<S> {
         window_days: u16,
     ) -> Result<Vec<Uuid>, Report> {
         let days = window_days.clamp(1, MAX_WINDOW_DAYS);
+        let now = Utc::now();
         self.store
             .focus_thread_ids(
                 owner,
-                Utc::now() - Duration::days(i64::from(days)),
-                waiting_before(),
+                now - Duration::days(i64::from(days)),
+                waiting_before(now),
+                now,
                 MAX_FOCUS_THREADS,
             )
             .await
@@ -379,8 +383,9 @@ impl<S: FocusStore> FocusQueries<S> {
         if thread_ids.is_empty() {
             return Ok(HashMap::new());
         }
+        let now = Utc::now();
         self.store
-            .focus_for_threads(owner, thread_ids, waiting_before())
+            .focus_for_threads(owner, thread_ids, waiting_before(now), now)
             .await
     }
 }
