@@ -911,6 +911,14 @@ Use the shared scoped drag helpers and overlayIcon for the tag chip.
 The backend-free browser regression is
 `bunx playwright test --config src/features/property/tags/browser-test/playwright.config.ts`.
 
+### Senders in email rows
+
+Keep person cards off the senders in Mail rows and collapsed thread messages:
+a card covers the rows below it, and portaled content bubbles clicks to the row
+that opened it, so the next click on a sender opens the wrong email. The
+backend-free desktop/phone regression is
+`bunx playwright test --config src/features/entity/browser-test/playwright.config.ts`.
+
 ### Enter on a property pill
 
 A document control owns Enter unless a press focused it, including one given
