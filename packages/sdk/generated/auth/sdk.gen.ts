@@ -1028,7 +1028,7 @@ export class Sdk extends HeyApiClient {
     public getUserHotkeyProfiles<ThrowOnError extends boolean = false>(options?: Options<GetUserHotkeyProfilesData, ThrowOnError>): RequestResult<GetUserHotkeyProfilesResponses, GetUserHotkeyProfilesErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetUserHotkeyProfilesResponses, GetUserHotkeyProfilesErrors, ThrowOnError>({ url: '/user/hotkey-profiles', ...options });
     }
-    
+
     /**
      * Replace the caller's keyboard shortcut layouts. A `null` layout keeps
      * Macro's own shortcuts in that area.
@@ -1043,7 +1043,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Get the caller's interface language.
      */
