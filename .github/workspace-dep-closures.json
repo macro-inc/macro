@@ -2464,6 +2464,7 @@
       "crates/non_empty",
       "crates/notification",
       "crates/notification_state",
+      "crates/phone_number",
       "crates/pptx_engine",
       "crates/projects",
       "crates/prompt",
