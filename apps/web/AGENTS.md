@@ -409,6 +409,10 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Record search fills the row beside filters with header spacing; section creation
   replaces the default floating dock action through FloatRegion. See
   `src/features/crm/README.md` and `docs/agent-guide/crm.md` at the repo root.
+  Company Team lists exclude hidden contacts for every role; keep authorized
+  detail/restore access and invalidate embedded company contacts on hide/restore.
+  The backend-free desktop/phone regression uses real CRM query adapters:
+  `bunx playwright test --config src/features/crm/browser-test/team/playwright.config.ts`.
 - Main Tasks mounts reusable GraphQL saved views; keep embedded Project/CRM task lists unchanged. Read `src/features/tasks-view/AGENTS.md` for filter, draft, navigation, and browser checks.
 - Enable persisted email/calendar review controls only for the review’s saved acting account; historical reviews fall back to the session owner. Require session edit access on desktop and mobile.
 - Email draft reads compare server generations before choosing cached delivery state over a restored working copy; only a definitive first-submission rejection permits local send recovery without server cancellation.

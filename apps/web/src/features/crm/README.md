@@ -60,6 +60,14 @@ Company Overview and contact headers expose `RecordVisibilityAction` for removal
 and restoration through the existing hidden mutations. Keep admin/owner checks,
 confirmation of the company-wide contact cascade, and the restore action on the
 open record. The information panel's visibility checkbox uses the same state.
+Company Team lists filter hidden contacts for every role without changing the
+underlying response or admin detail access. Contact visibility mutations invalidate
+the company query family because those responses embed contacts: mounted lists
+refetch before completion, and inactive lists reload when revisited. No company ID
+is required, so unfiled contacts use the same mutation safely.
+`browser-test/team` exercises the real Team component, visibility action and query
+adapters with a synthetic storage client on desktop and phone; entity row metadata
+and app navigation are isolated. Run its `playwright.config.ts` from `apps/web`.
 Both hidden mutations emit `crm.visibility_change` through request and cache
 refresh completion, with the opaque record ID, record type, requested hidden
 state, and outcome. `crm.visibility_change.refresh` times cache invalidation and

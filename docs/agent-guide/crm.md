@@ -232,8 +232,11 @@ team's CRM lists without permanently deleting it. The page stays open and offers
 Hiding a company hides all its contacts and turns off team email sync. Restoring
 the company restores every contact, including individually hidden ones, but leaves
 email sync off; re-enable **Sync Emails** under the information panel's **Sharing**
-section if needed. Admins can still inspect hidden contacts in a company's Team
-tab. The existing **Sharing → Visible in CRM** checkbox and company row **Hide /
+section if needed. A company's Team tab excludes hidden contacts for every role,
+including search results. Admins retain direct-link access to hidden contacts for
+restoration. Removing or restoring a person refreshes open company Team lists;
+returning to a previously visited company reloads its contacts. The existing
+**Sharing → Visible in CRM** checkbox and company row **Hide /
 Unhide** actions control the same state.
 Restoring a person under a hidden company does not make them appear in People
 until that company is restored too. People without a company can be restored
