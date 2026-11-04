@@ -112,7 +112,13 @@ Outlook (Microsoft Graph) outbound adapters.
   log that one event. Give a new check a `Rejected`, not `invalid()`. Graph names UTC `tzone://Microsoft/Utc` on meetings Exchange
   imported from another system's invitation, which `zones::zone` maps; a
   series end date in a legacy custom zone (`tzone://Microsoft/Custom`) is
-  read in the zone the event's time is kept in.
+  read in the zone the event's time is kept in. Calendar discovery reads the
+  mailbox's `mailboxSettings.timeZone` (Windows or IANA) through the same
+  table; a name it cannot map leaves the calendars without a zone and is
+  reported as `OutlookDiscovery::unmapped_time_zone` rather than failing the
+  account. `zones.rs` is CLDR's `windowsZones.xml` (territory `001`, in file
+  order) with its `LICENSE` beside it; regenerate both from a new CLDR
+  release when Windows adds zones.
 - Same-mailbox Outlook replies use `createReply`. When Graph refuses it with
   400 `ErrorInvalidOperation`, `create_draft` creates a standalone draft that
   carries the same correlation and RFC reply headers.

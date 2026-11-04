@@ -44,6 +44,17 @@ pub struct OutlookCalendar {
     pub online_meeting_providers: Vec<String>,
 }
 
+/// Every calendar one Outlook account can see.
+pub struct OutlookDiscovery {
+    /// The account's calendars, each in the mailbox's time zone.
+    pub calendars: Vec<OutlookCalendar>,
+    /// The mailbox time zone Microsoft named when Macro cannot map it to an
+    /// IANA zone. The calendars then carry no time zone rather than failing
+    /// discovery, and every reader treats it as unknown, as it does a Google
+    /// calendar zone it cannot read.
+    pub unmapped_time_zone: Option<String>,
+}
+
 /// One page of event identities. Its cursor is staged with its child work.
 pub struct OutlookCalendarPage {
     /// (Provider occurrence/single ID, normalized master/single ID).
@@ -102,7 +113,7 @@ pub trait OutlookCalendarReader: Send + Sync + 'static {
         &self,
         token: &str,
         binding: CalendarGrantBinding,
-    ) -> impl Future<Output = Result<Vec<OutlookCalendar>, CalendarProviderError>> + Send;
+    ) -> impl Future<Output = Result<OutlookDiscovery, CalendarProviderError>> + Send;
     /// Fetch one provider page without advancing any checkpoint.
     fn calendar_page(
         &self,
@@ -229,6 +240,7 @@ impl<
             provider_event_id = tracing::field::Empty,
             outcome = tracing::field::Empty,
             rejected_field = tracing::field::Empty,
+            unmapped_time_zone = tracing::field::Empty,
             error_kind = tracing::field::Empty,
         ),
         err(level = tracing::Level::DEBUG)
@@ -327,9 +339,17 @@ impl<
                     .map_err(storage_error)?;
             } else {
                 span.record("step", "discover");
-                let calendars = self.provider.calendars(&token, lease.binding).await?;
+                let discovery = self.provider.calendars(&token, lease.binding).await?;
+                if let Some(zone) = &discovery.unmapped_time_zone {
+                    span.record("unmapped_time_zone", zone.as_str());
+                    tracing::warn!(
+                        account_id = %lease.account_id,
+                        unmapped_time_zone = %zone,
+                        "ignoring an Outlook mailbox time zone Macro cannot map"
+                    );
+                }
                 self.repository
-                    .commit_outlook_calendars(lease, calendars)
+                    .commit_outlook_calendars(lease, discovery.calendars)
                     .await
                     .map_err(storage_error)?;
             }

@@ -35,6 +35,46 @@ pub(super) fn target() -> ProviderCalendarTarget {
 pub(super) fn event(id: &str) -> Value {
     json!({"id":id,"@odata.etag":"W/\"1\"","iCalUId":format!("{id}@outlook"),"subject":"Meeting","type":"singleInstance","createdDateTime":"2026-01-01T10:00:00Z","lastModifiedDateTime":"2026-10-01T10:00:00Z","originalStartTimeZone":"Pacific Standard Time","start":{"dateTime":"2026-11-02T17:00:00.0000000","timeZone":"UTC"},"end":{"dateTime":"2026-11-02T18:00:00.0000000","timeZone":"UTC"},"isAllDay":false,"attendees":[]})
 }
+/// `GET /me/mailboxSettings` as Graph documents it, with `time_zone` as the
+/// mailbox's zone, or without one when it is `None`. Its working hours keep a
+/// zone of their own.
+pub(super) fn mailbox_settings(time_zone: Option<&str>) -> Value {
+    let mut settings = json!({
+        "@odata.context":"https://graph.microsoft.com/v1.0/$metadata#Me/mailboxSettings",
+        "archiveFolder":"AAMkAGI2TGuLAAA=",
+        "automaticRepliesSetting":{
+            "status":"disabled","externalAudience":"all",
+            "scheduledStartDateTime":{"dateTime":"2026-11-04T08:00:00.0000000","timeZone":"UTC"},
+            "scheduledEndDateTime":{"dateTime":"2026-11-05T08:00:00.0000000","timeZone":"UTC"},
+            "internalReplyMessage":"","externalReplyMessage":""
+        },
+        "timeZone":time_zone,
+        "language":{"locale":"en-US","displayName":"English (United States)"},
+        "workingHours":{
+            "daysOfWeek":["monday","tuesday","wednesday","thursday","friday"],
+            "startTime":"08:00:00.0000000","endTime":"17:00:00.0000000",
+            "timeZone":{"name":"Pacific Standard Time"}
+        },
+        "userPurpose":{"value":"user"},
+        "dateFormat":"MM/dd/yyyy","timeFormat":"hh:mm tt",
+        "delegateMeetingMessageDeliveryOptions":"sendToDelegateOnly"
+    });
+    if time_zone.is_none() {
+        settings.as_object_mut().unwrap().remove("timeZone");
+    }
+    settings
+}
+/// The mailbox's default calendar, as `GET /me/calendars` lists it.
+pub(super) fn default_calendar(id: &str) -> Value {
+    json!({
+        "id":id,"name":"Calendar","color":"auto","hexColor":"","isDefaultCalendar":true,
+        "changeKey":"nfZyf7VcrEKLNoU37KWlkQAAA0x0+w==","canShare":true,"canViewPrivateItems":true,
+        "isSharedWithMe":false,"canEdit":true,
+        "allowedOnlineMeetingProviders":["teamsForBusiness"],"defaultOnlineMeetingProvider":"teamsForBusiness",
+        "isTallyingResponses":true,"isRemovable":false,
+        "owner":{"name":"Olivia","address":"olivia@example.com"}
+    })
+}
 pub(super) async fn setup() -> (MockServer, OutlookApiClientRepository) {
     let server = MockServer::start().await;
     let api = OutlookApiClientRepository::for_test(&format!("{}/v1.0/", server.uri()));
@@ -123,6 +163,64 @@ async fn secondary_calendars_use_complete_v1_views_and_follow_every_page() {
     assert_eq!(last.members, vec![("two".into(), "two".into())]);
     assert!(last.next.is_none());
     assert!(last.delta.is_none());
+}
+
+/// Discover the calendars of a mailbox whose settings name `time_zone`.
+async fn discover(time_zone: Option<&str>) -> OutlookDiscovery {
+    let (server, api) = setup().await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailboxSettings"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(mailbox_settings(time_zone)))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/calendars"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "@odata.context":"https://graph.microsoft.com/v1.0/$metadata#me/calendars",
+            "value":[default_calendar("AAMkCalendar")],
+        })))
+        .mount(&server)
+        .await;
+    match api.calendars("token", target().binding.unwrap()).await {
+        Ok(discovery) => discovery,
+        Err(_) => panic!("a mailbox in {time_zone:?} fails discovery"),
+    }
+}
+
+#[tokio::test]
+async fn calendars_carry_the_iana_zone_of_the_mailbox() {
+    for (named, iana) in [
+        (Some("Pacific Standard Time"), "America/Los_Angeles"),
+        // Added to Windows after CLDR 48.
+        (Some("British Columbia Standard Time"), "America/Vancouver"),
+        (Some("America/Los_Angeles"), "America/Los_Angeles"),
+        (None, "Etc/UTC"),
+    ] {
+        let discovery = discover(named).await;
+        assert_eq!(
+            discovery.calendars[0].calendar.time_zone.as_deref(),
+            Some(iana),
+            "{named:?}"
+        );
+        assert_eq!(discovery.unmapped_time_zone, None, "{named:?}");
+    }
+}
+
+#[tokio::test]
+async fn a_mailbox_time_zone_macro_cannot_map_leaves_its_calendars_without_one() {
+    for named in ["tzone://Microsoft/Custom", "Atlantis Standard Time", ""] {
+        let discovery = discover(Some(named)).await;
+        assert_eq!(discovery.calendars.len(), 1, "{named:?}");
+        assert_eq!(
+            discovery.calendars[0].calendar.time_zone, None,
+            "{named:?} is unknown, not UTC"
+        );
+        assert_eq!(
+            discovery.unmapped_time_zone.as_deref(),
+            Some(named),
+            "{named:?}"
+        );
+    }
 }
 
 #[test]
