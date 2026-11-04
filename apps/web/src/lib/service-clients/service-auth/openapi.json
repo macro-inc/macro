@@ -5989,7 +5989,7 @@
             }
           },
           "400": {
-            "description": "Not a supported image type",
+            "description": "Not a supported image type, or empty",
             "content": {
               "application/json": {
                 "schema": {
@@ -6004,6 +6004,26 @@
               "text/plain": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The image is larger than 16 MB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many uploads this hour",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -6906,7 +6926,7 @@
       },
       "CreateProfilePictureUploadRequest": {
         "type": "object",
-        "required": ["file_name", "content_type"],
+        "required": ["file_name", "content_type", "size_bytes"],
         "properties": {
           "content_type": {
             "type": "string",
@@ -6915,6 +6935,12 @@
           "file_name": {
             "type": "string",
             "description": "File name, such as `avatar.png`."
+          },
+          "size_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Exact size of the image in bytes. Storage rejects a body of any other size.",
+            "minimum": 0
           }
         }
       },

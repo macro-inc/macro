@@ -47,6 +47,8 @@ pub async fn put_presigned_url(
             })
     }?;
 
+    let request_content_length = request.content_length;
+
     let id: String = Uuid::new_v4().to_string();
     let static_file_key = s3_key::StaticFileKey::new(&id);
     let s3_key = static_file_key.to_key();
@@ -75,7 +77,7 @@ pub async fn put_presigned_url(
 
     let upload_url = ctx
         .storage_client
-        .put_presigned_url(s3_key.clone(), content_type.clone())
+        .put_presigned_url(s3_key.clone(), content_type.clone(), request_content_length)
         .await
         .map_err(|err| {
             tracing::error!(error=?err, "could not create presigned url");

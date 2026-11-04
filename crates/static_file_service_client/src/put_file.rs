@@ -15,6 +15,8 @@ pub struct PutFileRequest {
     /// extra metadata to store with file
     /// don't put anything private in here it is public
     pub extension_data: Option<Value>,
+    /// Exact upload size in bytes, signed into the upload URL when set.
+    pub content_length: Option<u64>,
 }
 
 // HACK: duplicate logic. put into model crate later
@@ -57,6 +59,7 @@ impl StaticFileServiceClient {
                 file_name: file_url.to_string(),
                 content_type: Some(content_type.clone()),
                 extension_data: None,
+                content_length: None,
             },
             file_bytes,
             &content_type,
@@ -83,6 +86,7 @@ impl StaticFileServiceClient {
                 file_name: file_name.to_string(),
                 content_type: Some(content_type.to_string()),
                 extension_data: None,
+                content_length: None,
             },
             bytes,
             content_type,
@@ -104,6 +108,7 @@ impl StaticFileServiceClient {
                 file_name: file_name.to_string(),
                 content_type: Some(content_type.to_string()),
                 extension_data: None,
+                content_length: None,
             },
             bytes,
             content_type,
@@ -121,6 +126,30 @@ impl StaticFileServiceClient {
         file_name: &str,
         content_type: &str,
     ) -> Result<PutFileResponse> {
+        self.reserve(owner_id, file_name, content_type, None).await
+    }
+
+    /// Like [`Self::reserve_for_user`], but storage rejects an upload of any
+    /// size other than `content_length`.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn reserve_sized_for_user(
+        &self,
+        owner_id: &str,
+        file_name: &str,
+        content_type: &str,
+        content_length: u64,
+    ) -> Result<PutFileResponse> {
+        self.reserve(owner_id, file_name, content_type, Some(content_length))
+            .await
+    }
+
+    async fn reserve(
+        &self,
+        owner_id: &str,
+        file_name: &str,
+        content_type: &str,
+        content_length: Option<u64>,
+    ) -> Result<PutFileResponse> {
         let full_url = format!("{}/internal/file", self.url);
         let res = self
             .client
@@ -130,6 +159,7 @@ impl StaticFileServiceClient {
                 file_name: file_name.to_string(),
                 content_type: Some(content_type.to_string()),
                 extension_data: None,
+                content_length,
             })
             .send()
             .await?;

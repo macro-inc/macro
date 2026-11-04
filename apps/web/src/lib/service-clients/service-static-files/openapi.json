@@ -400,6 +400,12 @@
         "type": "object",
         "required": ["file_name"],
         "properties": {
+          "content_length": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Exact size of the upload in bytes. When set, it is signed into the upload\nURL, so storage rejects a body of any other size.",
+            "minimum": 0
+          },
           "content_type": {
             "type": ["string", "null"],
             "description": "optional mime type if type cannot be infered from file_name"

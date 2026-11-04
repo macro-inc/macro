@@ -54,7 +54,8 @@ await macro.me.update({ name: 'Research Agent', profilePicture: image });
 > **uploadProfilePicture**(`data`, `options`): `Promise`\<[`StaticImage`](../../../images/image/classes/StaticImage.md)\>
 
 Upload an image to use as your profile picture. This only stores it; pass
-the result to [MeNamespace.update](#update) to start using it.
+the result to [MeNamespace.update](#update) to start using it. Pictures can be
+at most 16 MB, and each user can start 20 uploads an hour.
 
 #### Parameters
 

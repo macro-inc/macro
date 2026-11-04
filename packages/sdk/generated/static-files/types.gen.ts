@@ -92,6 +92,11 @@ export type FileMetadata = {
 
 export type PutFileRequest = {
     /**
+     * Exact size of the upload in bytes. When set, it is signed into the upload
+     * URL, so storage rejects a body of any other size.
+     */
+    content_length?: number | null;
+    /**
      * optional mime type if type cannot be infered from file_name
      */
     content_type?: string | null;
