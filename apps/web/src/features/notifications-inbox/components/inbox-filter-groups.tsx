@@ -1,11 +1,7 @@
 import type { ListFilterGroup } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
 import { match } from 'ts-pattern';
-import {
-  INBOX_CATEGORIES,
-  type InboxCategory,
-  type InboxStatus,
-} from '../core/inbox-filters';
+import { INBOX_CATEGORIES, type InboxCategory } from '../core/inbox-filters';
 import type { InboxRowType } from '../core/inbox-row';
 import { InboxRowIcon } from './inbox-row-icon';
 
@@ -38,45 +34,17 @@ const categoryRowType = (category: InboxCategory): InboxRowType =>
     .with('agents', () => 'agent' as const)
     .exhaustive();
 
-export type InboxFilterGroupId = 'status' | 'type';
-export type InboxFilterOptionId = InboxStatus | InboxCategory;
+export type InboxFilterGroupId = 'type';
+export type InboxFilterOptionId = InboxCategory;
 
 /**
- * The Status and Type groups, shared by the desktop menu and the touch drawer.
- * Labels are getters so a module constant follows the interface language.
+ * The Type group, shared by the desktop menu and the touch drawer. Labels are
+ * getters so a module constant follows the interface language.
  */
 export const INBOX_FILTER_GROUPS: ListFilterGroup<
   InboxFilterGroupId,
   InboxFilterOptionId
 >[] = [
-  {
-    id: 'status',
-    get label() {
-      return t('notificationsInbox.status');
-    },
-    selectionMode: 'single',
-    defaultOptionId: 'all',
-    options: [
-      {
-        id: 'unread',
-        get label() {
-          return t('notificationsInbox.statusUnread');
-        },
-      },
-      {
-        id: 'read',
-        get label() {
-          return t('notificationsInbox.statusRead');
-        },
-      },
-      {
-        id: 'all',
-        get label() {
-          return t('notificationsInbox.statusAll');
-        },
-      },
-    ],
-  },
   {
     id: 'type',
     get label() {
@@ -96,6 +64,3 @@ export const INBOX_FILTER_GROUPS: ListFilterGroup<
     })),
   },
 ];
-
-export const isStatusOption = (id: InboxFilterOptionId): id is InboxStatus =>
-  id === 'all' || id === 'unread' || id === 'read';

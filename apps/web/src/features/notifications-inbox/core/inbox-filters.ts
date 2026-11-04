@@ -62,7 +62,7 @@ export const rowCategory = (type: InboxRowType): InboxCategory =>
     .exhaustive();
 
 /** Which rows a reader wants: by read state, and the categories they hide. */
-export type InboxStatus = 'all' | 'unread' | 'read';
+export type InboxStatus = 'all' | 'unread';
 
 export type InboxFilters = {
   status: InboxStatus;
@@ -87,17 +87,19 @@ export function statusIncludes(status: InboxStatus, unseen: boolean): boolean {
   return match(status)
     .with('all', () => true)
     .with('unread', () => unseen)
-    .with('read', () => !unseen)
     .exhaustive();
 }
 
-/** How many filters differ from the defaults, for the trigger's badge. */
+/**
+ * How many kinds of notification are hidden, for the filter trigger's badge.
+ * The All and Unread toggle shows its own state.
+ */
 export function activeFilterCount(filters: InboxFilters): number {
-  return filters.hiddenCategories.length + (filters.status === 'all' ? 0 : 1);
+  return filters.hiddenCategories.length;
 }
 
 const isStatus = (value: unknown): value is InboxStatus =>
-  value === 'all' || value === 'unread' || value === 'read';
+  value === 'all' || value === 'unread';
 const isCategory = (value: unknown): value is InboxCategory =>
   INBOX_CATEGORIES.some((category) => category === value);
 

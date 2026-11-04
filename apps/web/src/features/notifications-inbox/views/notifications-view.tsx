@@ -5,6 +5,7 @@ import {
 } from '@app/components/list';
 import {
   useViewControlHotkeys,
+  useViewTabHotkeys,
   ViewBreadcrumbs,
   ViewShell,
   ViewSidebar,
@@ -63,6 +64,7 @@ import { InboxDateHeader } from '../components/inbox-date-header';
 import { InboxFilterDrawer } from '../components/inbox-filter-drawer';
 import { InboxFilterMenu } from '../components/inbox-filter-menu';
 import { InboxSenderAvatar } from '../components/inbox-sender-avatar';
+import { InboxStatusTabs } from '../components/inbox-status-tabs';
 import { NotificationRow } from '../components/notification-row';
 import { NotificationStackItem } from '../components/notification-stack-item';
 import { RowActionButtons } from '../components/row-action-buttons';
@@ -70,7 +72,7 @@ import {
   type NotificationInboxRow,
   useNotificationsInboxContext,
 } from '../context/notifications-inbox-context';
-import { statusIncludes } from '../core/inbox-filters';
+import type { InboxStatus } from '../core/inbox-filters';
 import type { InboxDecision } from '../core/inbox-row';
 import {
   describeInboxCard,
@@ -105,6 +107,7 @@ export type NotificationsViewProps = {
 
 /** Distance from the end of the list, in pixels, that loads the next page. */
 const LOAD_MORE_DISTANCE_PX = 300;
+const INBOX_STATUSES: readonly InboxStatus[] = ['all', 'unread'];
 /** Frames a visible row is held in place after a live change above it. */
 const ANCHOR_HOLD_FRAMES = 12;
 
@@ -196,6 +199,7 @@ function ListStatus(props: { children: JSX.Element }) {
  * per thing that needs the viewer, newest first under Home's date dividers.
  * Several notifications about one thing show as a stack; its button, or the
  * right arrow, unfolds them below the card, and each opens at its own location.
+ * All and Unread switch the list, and the choice is kept between visits.
  * `j`/`k` move through rows and unfolded notifications (and follow in an open
  * preview), Enter previews, `e` marks the focused row done. Touch shows the list
  * alone: a tap opens the row or notification in place, a stack's button unfolds
@@ -233,10 +237,18 @@ export function NotificationsView(props: NotificationsViewProps) {
       },
       announceFailure: (message) => toast.failure(message),
     },
-    (row) => statusIncludes(filters.filters().status, row.unseen)
+    filters.includesRow
   );
 
   onMount(() => panel.handle.setDisplayName(t('nav.notifications')));
+
+  useViewTabHotkeys({
+    scopeId: panel.splitHotkeyScope,
+    enabled: panel.isPanelActive,
+    ids: () => INBOX_STATUSES,
+    activeId: () => filters.filters().status,
+    setActiveId: filters.setStatus,
+  });
 
   const [filterOpen, setFilterOpen] = createSignal(false);
   useViewControlHotkeys({
@@ -285,6 +297,7 @@ export function NotificationsView(props: NotificationsViewProps) {
 
   const markSeen = (row: NotificationInboxRow) => {
     if (!row.unseen) return;
+    filters.keepRead(row.id);
     fireAndForget(feed.markSeen([row]), 'notifications-inbox');
   };
 
@@ -734,14 +747,10 @@ export function NotificationsView(props: NotificationsViewProps) {
   );
 
   const filterControls = {
-    get status() {
-      return filters.filters().status;
-    },
     isShown: filters.isShown,
     get activeCount() {
       return filters.activeCount();
     },
-    onStatusChange: filters.setStatus,
     onShownChange: filters.setShown,
     onReset: filters.reset,
   };
@@ -762,6 +771,10 @@ export function NotificationsView(props: NotificationsViewProps) {
               <h1 class="min-w-0 flex-1 truncate text-lg font-semibold text-ink">
                 {t('nav.notifications')}
               </h1>
+              <InboxStatusTabs
+                status={filters.filters().status}
+                onChange={filters.setStatus}
+              />
               <InboxFilterDrawer {...filterControls} />
             </div>
           </header>
@@ -826,6 +839,13 @@ export function NotificationsView(props: NotificationsViewProps) {
                     </>
                   }
                 />
+                <div class="shrink-0 px-3 pb-1">
+                  <InboxStatusTabs
+                    fullWidth
+                    status={filters.filters().status}
+                    onChange={filters.setStatus}
+                  />
+                </div>
                 <div
                   role="grid"
                   aria-label={t('nav.notifications')}

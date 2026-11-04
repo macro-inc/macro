@@ -72,7 +72,6 @@ export default {
   resetFilters: 'Reset filters',
   status: 'Status',
   statusUnread: 'Unread',
-  statusRead: 'Read',
   statusAll: 'All',
   type: 'Type',
   categoryMentions: 'Mentions',

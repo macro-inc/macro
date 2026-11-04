@@ -1,23 +1,17 @@
 import { ListFilterDropdown } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
-import {
-  INBOX_CATEGORIES,
-  type InboxCategory,
-  type InboxStatus,
-} from '../core/inbox-filters';
-import { INBOX_FILTER_GROUPS, isStatusOption } from './inbox-filter-groups';
+import { INBOX_CATEGORIES, type InboxCategory } from '../core/inbox-filters';
+import { INBOX_FILTER_GROUPS } from './inbox-filter-groups';
 
 /**
- * Filter notifications by read state and by kind. Kinds are checkboxes that
- * start checked; unchecking hides that kind.
+ * Filter notifications by kind. Kinds are checkboxes that start checked;
+ * unchecking hides that kind.
  */
 export function InboxFilterMenu(props: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  status: InboxStatus;
   isShown: (category: InboxCategory) => boolean;
   activeCount: number;
-  onStatusChange: (status: InboxStatus) => void;
   onShownChange: (category: InboxCategory, shown: boolean) => void;
   onReset: () => void;
 }) {
@@ -28,23 +22,13 @@ export function InboxFilterMenu(props: {
       open={props.open}
       onOpenChange={props.onOpenChange}
       activeCount={props.activeCount}
-      isSelected={(group, option) =>
-        group === 'status'
-          ? props.status === option
-          : !isStatusOption(option) && props.isShown(option)
+      isSelected={(_group, option) => props.isShown(option)}
+      isGroupActive={() =>
+        INBOX_CATEGORIES.some((category) => !props.isShown(category))
       }
-      isGroupActive={(group) =>
-        group === 'status'
-          ? props.status !== 'all'
-          : INBOX_CATEGORIES.some((category) => !props.isShown(category))
+      onSelectionChange={(_group, option, selected) =>
+        props.onShownChange(option, selected)
       }
-      onSelectionChange={(group, option, selected) => {
-        if (isStatusOption(option)) {
-          if (group === 'status') props.onStatusChange(option);
-          return;
-        }
-        props.onShownChange(option, selected);
-      }}
       onClear={props.onReset}
       clearLabel={t('notificationsInbox.resetFilters')}
     />

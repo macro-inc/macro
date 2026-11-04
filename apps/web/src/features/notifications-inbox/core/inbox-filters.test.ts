@@ -28,13 +28,10 @@ describe('rowTypesFor', () => {
 });
 
 describe('statusIncludes', () => {
-  it('narrows to unread or read rows', () => {
+  it('narrows to unread rows', () => {
     expect(
       [true, false].filter((unseen) => statusIncludes('unread', unseen))
     ).toEqual([true]);
-    expect(
-      [true, false].filter((unseen) => statusIncludes('read', unseen))
-    ).toEqual([false]);
     expect(
       [true, false].filter((unseen) => statusIncludes('all', unseen))
     ).toEqual([true, false]);
@@ -42,10 +39,13 @@ describe('statusIncludes', () => {
 });
 
 describe('saved filters', () => {
-  it('counts each hidden category and a narrowed status', () => {
+  it('counts hidden categories, not the toggle that shows its own state', () => {
     expect(
       activeFilterCount({ status: 'unread', hiddenCategories: ['email'] })
-    ).toBe(2);
+    ).toBe(1);
+    expect(activeFilterCount({ status: 'unread', hiddenCategories: [] })).toBe(
+      0
+    );
   });
 
   it('keeps only what this build understands', () => {
@@ -61,7 +61,8 @@ describe('saved filters', () => {
       status: 'all',
       hiddenCategories: [],
     });
-    expect(parseInboxFilters(JSON.stringify({ status: 'later' }))).toEqual({
+    // A read-only filter saved by an earlier build opens at All.
+    expect(parseInboxFilters(JSON.stringify({ status: 'read' }))).toEqual({
       status: 'all',
       hiddenCategories: [],
     });

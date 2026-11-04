@@ -63,21 +63,25 @@ access request **Open**; both open the row as choosing it does. A pull request
 whose review was requested offers **Review**, which opens the pull request on
 GitHub and marks the row seen.
 
-**Filter notifications** (funnel, or `f`) offers **Status** (Unread, Read, All;
-single choice) and **Type** checkboxes that start checked: Mentions, Replies,
-Messages, Comments, Email, Tasks, Pull requests, Calendar, Access requests,
-and Agents. Unchecking a type hides its rows (Mentions covers
-both channel and comment mentions, Replies both channel and comment threads).
-The trigger counts hidden types plus a narrowed status, and **Reset filters**
-restores everything. Choices persist per user across reloads. Hiding every type
-shows **Every kind of notification is hidden** with Reset filters; filters that
-hide every row show **No notifications match these filters**. The gear beside
+**All** and **Unread** under the header switch the list (`1` and `2`, or Tab, also
+switch), and the choice is kept per user across reloads. A row you read under
+Unread, or a stack you're going through, stays until you next switch or reload.
+With nothing unread, Unread shows **You're all caught up**.
+
+**Filter notifications** (funnel, or `f`) offers **Type** checkboxes that start
+checked: Mentions, Replies, Messages, Comments, Email, Tasks, Pull requests,
+Calendar, Access requests, and Agents. Unchecking a type hides its rows (Mentions
+covers both channel and comment mentions, Replies both channel and comment
+threads). The trigger counts hidden types, and **Reset filters** shows them all
+again without changing All or Unread. Choices persist per user across reloads.
+Hiding every type shows **Every kind of notification is hidden** with Reset
+filters; types that hide every row show **No notifications match these filters**. The gear beside
 the filter opens **Settings → Notifications**, which decides what is delivered
 at all (including push and email).
 
 On touch devices the dock's bell (**Notifications**) opens this view with the
-flag on, as the list alone under a floating **Notifications** header with a
-filter drawer (Status and Type). Cards keep the same anatomy with 44px targets
+flag on, as the list alone under a floating **Notifications** header with
+the All and Unread toggle and a filter drawer (Type). Cards keep the same anatomy with 44px targets
 and inline row buttons; tapping a card or an unfolded notification opens it
 full-screen in place, tapping a stack's count unfolds it, a left swipe marks it
 done (with the same Undo), and pulling down refreshes. Hover controls and the preview pane are desktop-only. The
