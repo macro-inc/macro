@@ -1,7 +1,7 @@
 //! Read-only discovery of apps and their actual MCP capabilities.
 
 use crate::domain::{
-    models::MacroUserIdStr,
+    models::{ConnectionProvider, MacroUserIdStr},
     ports::{
         ConnectionStore, ConnectorCapabilities, ConnectorDirectory, ConnectorOverlays,
         OverlayConnections,
@@ -156,6 +156,18 @@ where
         user_id: &MacroUserIdStr<'static>,
         app_slug: &str,
     ) -> anyhow::Result<bool> {
+        let connection = self
+            .connections
+            .load(user_id, app_slug)
+            .await
+            .map_err(|error| anyhow::anyhow!("Could not check connector status: {error:?}"))?;
+        // A Macro Connect grant outranks an overlay; a Pipedream grant doesn't.
+        if let Some(connection) = connection
+            .as_ref()
+            .filter(|connection| connection.provider == ConnectionProvider::Connect)
+        {
+            return Ok(connection.enabled);
+        }
         if let Some(overlay) = self.connections.overlay(app_slug).await? {
             return Ok(self
                 .overlay_connections
@@ -163,12 +175,7 @@ where
                 .await?
                 .is_some());
         }
-        Ok(self
-            .connections
-            .load(user_id, app_slug)
-            .await
-            .map_err(|error| anyhow::anyhow!("Could not check connector status: {error:?}"))?
-            .is_some_and(|connection| connection.enabled))
+        Ok(connection.is_some_and(|connection| connection.enabled))
     }
 }
 

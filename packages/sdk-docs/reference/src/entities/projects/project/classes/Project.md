@@ -227,18 +227,21 @@ Read this project's sharing configuration.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`Project`](../../../../../generated/storage/types.gen/type-aliases/Project.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`Project`](../../../../../generated/storage/types.gen/type-aliases/Project.md); `id`: `string`; `url`: `string`; \}
+
+Identity, loaded detail and [webUrl](#weburl), so serialized handles carry their link.
 
 #### Returns
 
-\{ `detail?`: [`Project`](../../../../../generated/storage/types.gen/type-aliases/Project.md); `id`: `string`; \}
+\{ `detail?`: [`Project`](../../../../../generated/storage/types.gen/type-aliases/Project.md); `id`: `string`; `url`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`Project`](../../../../../generated/storage/types.gen/type-aliases/Project.md) |
 | `id` | `string` |
+| `url` | `string` |
 
-#### Inherited from
+#### Overrides
 
 [`PropertiedEntity`](../../../entity/classes/PropertiedEntity.md).[`toJSON`](../../../entity/classes/PropertiedEntity.md#tojson)
 
@@ -279,6 +282,18 @@ Apply multi-select option deltas atomically across this entity's properties.
 #### Inherited from
 
 [`PropertiedEntity`](../../../entity/classes/PropertiedEntity.md).[`updatePropertyOptions`](../../../entity/classes/PropertiedEntity.md#updatepropertyoptions)
+
+***
+
+### webUrl()
+
+> **webUrl**(): `string`
+
+The project's URL in the Macro web app; hand it to users as the link.
+
+#### Returns
+
+`string`
 
 ***
 

@@ -122,6 +122,17 @@ impl ProfileSource for FakeProfiles {
     }
 }
 
+#[derive(Clone, Default)]
+struct FakeNotifier {
+    changed: Arc<Mutex<Vec<(MacroUserIdStr<'static>, Uuid)>>>,
+}
+
+impl FocusNotifier for FakeNotifier {
+    fn focus_changed(&self, owner: &MacroUserIdStr<'static>, link_id: Uuid) {
+        self.changed.lock().unwrap().push((owner.clone(), link_id));
+    }
+}
+
 #[derive(Clone)]
 struct FakeClassifier {
     answers: Result<Vec<f32>, FocusClassifierError>,
@@ -192,11 +203,21 @@ fn service(
     store: &FakeStore,
     classifier: &FakeClassifier,
     domains: &[&str],
-) -> FocusService<FakeStore, FakeProfiles, FakeClassifier> {
+) -> FocusService<FakeStore, FakeProfiles, FakeClassifier, FakeNotifier> {
+    notifying_service(store, classifier, domains, &FakeNotifier::default())
+}
+
+fn notifying_service(
+    store: &FakeStore,
+    classifier: &FakeClassifier,
+    domains: &[&str],
+    notifier: &FakeNotifier,
+) -> FocusService<FakeStore, FakeProfiles, FakeClassifier, FakeNotifier> {
     FocusService::new(
         store.clone(),
         FakeProfiles(Some("Owner runs finance at Acme.".to_owned())),
         classifier.clone(),
+        notifier.clone(),
         domains.iter().map(|domain| (*domain).to_owned()).collect(),
     )
 }
@@ -528,6 +549,100 @@ async fn sweep_stops_when_the_classifier_rejects_everything() {
         classifier.inputs.lock().unwrap().len(),
         MAX_REJECTIONS_IN_A_ROW
     );
+}
+
+#[tokio::test]
+async fn a_stored_classification_tells_the_inbox_readers() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Ok(relevant()));
+    let notifier = FakeNotifier::default();
+    let thread = thread("owner@acme.example");
+    let (owner, link_id) = (thread.owner.clone(), thread.link_id);
+    let thread_id = insert(&store, thread);
+
+    notifying_service(&store, &classifier, &["acme.example"], &notifier)
+        .classify_thread(thread_id)
+        .await
+        .unwrap();
+
+    assert_eq!(*notifier.changed.lock().unwrap(), vec![(owner, link_id)]);
+}
+
+#[tokio::test]
+async fn nothing_stored_tells_nobody() {
+    let notifier = FakeNotifier::default();
+
+    // A later message's result is already stored.
+    let refusing = FakeStore {
+        refuse_saves: true,
+        ..FakeStore::default()
+    };
+    let thread_id = insert(&refusing, thread("owner@acme.example"));
+    let classifier = FakeClassifier::answering(Ok(relevant()));
+    let outcome = notifying_service(&refusing, &classifier, &["acme.example"], &notifier)
+        .classify_thread(thread_id)
+        .await
+        .unwrap();
+    assert_eq!(outcome, ClassifyOutcome::UpToDate);
+
+    // The classifier gave no answers.
+    let store = FakeStore::default();
+    let thread_id = insert(&store, thread("owner@acme.example"));
+    let classifier = FakeClassifier::answering(Err(FocusClassifierError::Unavailable));
+    let outcome = notifying_service(&store, &classifier, &["acme.example"], &notifier)
+        .classify_thread(thread_id)
+        .await
+        .unwrap();
+    assert_eq!(outcome, ClassifyOutcome::Unavailable);
+
+    assert!(notifier.changed.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn deciding_again_under_a_new_rule_tells_the_inbox_readers() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Err(FocusClassifierError::Unavailable));
+    let notifier = FakeNotifier::default();
+    let mut legacy = thread("owner@acme.example");
+    legacy.classified = Some(stored_at(&legacy, 0));
+    let (owner, link_id) = (legacy.owner.clone(), legacy.link_id);
+    let id = insert(&store, legacy);
+
+    let outcome = notifying_service(&store, &classifier, &["acme.example"], &notifier)
+        .classify_thread(id)
+        .await
+        .unwrap();
+
+    assert!(matches!(outcome, ClassifyOutcome::Redecided(_)));
+    assert_eq!(*notifier.changed.lock().unwrap(), vec![(owner, link_id)]);
+}
+
+#[tokio::test]
+async fn key_mail_outside_the_signal_inbox_tells_the_inbox_readers() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Ok(relevant()));
+    let notifier = FakeNotifier::default();
+    let service = notifying_service(&store, &classifier, &["acme.example"], &notifier);
+
+    let mut noise = thread("owner@acme.example");
+    noise.is_signal = false;
+    let noise = insert(&store, noise);
+    assert_eq!(
+        service.classify_thread(noise).await.unwrap(),
+        ClassifyOutcome::NotSignal
+    );
+    assert!(notifier.changed.lock().unwrap().is_empty());
+
+    let mut reschedule = thread("owner@acme.example");
+    reschedule.is_signal = false;
+    reschedule.messages[0].calendar_part = Some(CalendarPart::Change {
+        until: Utc::now() + Duration::days(2),
+    });
+    let (owner, link_id) = (reschedule.owner.clone(), reschedule.link_id);
+    let reschedule = insert(&store, reschedule);
+    service.classify_thread(reschedule).await.unwrap();
+
+    assert_eq!(*notifier.changed.lock().unwrap(), vec![(owner, link_id)]);
 }
 
 #[tokio::test]
