@@ -21,6 +21,7 @@ pub async fn create_user(
     stripe_customer_id: Option<&str>,
     organization_id: Option<i32>,
     roles: HashSet<String>,
+    is_agent: bool,
 ) -> anyhow::Result<String> {
     let id = macro_uuid::string_to_uuid(id)?;
 
@@ -60,15 +61,16 @@ pub async fn create_user(
 
     let user_id = sqlx::query!(
         r#"
-        INSERT INTO "User" ("id", "email", "stripeCustomerId", "organizationId", "macro_user_id")
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO "User" ("id", "email", "stripeCustomerId", "organizationId", "macro_user_id", "isAgent")
+        VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id
         "#,
         &id,
         email,
         stripe_customer_id,
         organization_id,
-        &macro_user_id
+        &macro_user_id,
+        is_agent
     )
     .map(|row| row.id)
     .fetch_one(&mut *transaction)

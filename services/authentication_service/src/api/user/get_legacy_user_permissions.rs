@@ -26,6 +26,8 @@ pub struct GetLegacyUserPermissionsResponse {
     license_status: String,
     /// Whether the user has completed the tutorial
     tutorial_complete: bool,
+    /// Whether this is an agent account rather than a person
+    is_agent: bool,
     /// The user's group
     group: Option<ABGroup>,
     /// Whether the user has the chrome extension
@@ -138,6 +140,7 @@ pub async fn handler(
         name: legacy_user_info.name,
         license_status: license_status.to_string(),
         tutorial_complete: legacy_user_info.tutorial_complete,
+        is_agent: legacy_user_info.is_agent,
         group: match legacy_user_info.group.as_deref() {
             Some("A" | "a") => Some(ABGroup::A),
             Some("B" | "b") => Some(ABGroup::B),

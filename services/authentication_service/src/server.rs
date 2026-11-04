@@ -48,6 +48,7 @@ use macro_authorization::{
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use macro_service_urls::{
     AppServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, EmailServiceUrl,
+    StaticFilePublicUrl, StaticFileServiceUrl,
 };
 use native_app_service::{
     domain::{models::PlatformData, service::NativeAppServiceImpl},
@@ -63,6 +64,7 @@ use roles_and_permissions::{
 };
 use secretsmanager_client::SecretManager;
 use sqlx::postgres::PgPoolOptions;
+use static_file_service_client::StaticFileServiceClient;
 use teams::{
     domain::team_service::TeamServiceImpl,
     outbound::{
@@ -272,6 +274,11 @@ pub async fn run() -> anyhow::Result<()> {
         ) as Arc<dyn MicrosoftAuth>
     });
 
+    let static_file_service_client = Arc::new(StaticFileServiceClient::new(
+        config.service_internal_auth_key.to_string(),
+        StaticFileServiceUrl::new()?.to_string(),
+    ));
+    let static_file_public_url = StaticFilePublicUrl::new()?.to_string();
     let document_storage_service_client = DocumentStorageServiceClient::new(
         config.service_internal_auth_key.to_string().clone(),
         DocumentStorageServiceUrl::new()?.to_string(),
@@ -773,6 +780,8 @@ pub async fn run() -> anyhow::Result<()> {
             subscription_plan,
             subscription_status,
             document_storage_service_client,
+            static_file_service_client,
+            static_file_public_url,
             user_deletion,
             email_service_client: Arc::new(email_service_client),
             ses_client: Arc::new(ses_client),

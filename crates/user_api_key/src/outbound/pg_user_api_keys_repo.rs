@@ -111,6 +111,27 @@ impl UserApiKeysRepo for PgUserApiKeysRepo {
     }
 
     #[tracing::instrument(err, skip_all)]
+    async fn delete_keys_named_except(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        name: &str,
+        keep: UserApiKeyId,
+    ) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"
+            DELETE FROM "UserApiKey"
+            WHERE user_id = $1 AND name = $2 AND id <> $3
+            "#,
+            user_id.as_ref(),
+            name,
+            keep.as_uuid(),
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip_all)]
     async fn delete_key(
         &self,
         user_id: &MacroUserIdStr<'_>,

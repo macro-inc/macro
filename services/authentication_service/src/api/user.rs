@@ -7,6 +7,7 @@ use tower_cookies::CookieManagerLayer;
 use crate::api::{ApiContext, context::EntityAccessServiceType};
 
 // needs to be public in api crate for swagger
+pub(in crate::api) mod agent_setup;
 pub(in crate::api) mod delete_user;
 pub(in crate::api) mod get_legacy_user_permissions;
 pub(in crate::api) mod get_name;
@@ -23,6 +24,7 @@ pub(in crate::api) mod post_get_names_with_email;
 pub(in crate::api) mod post_profile_pictures;
 pub(in crate::api) mod put_name;
 pub(in crate::api) mod put_profile_picture;
+pub(in crate::api) mod put_profile_picture_file;
 pub(in crate::api) mod stripe;
 
 pub fn router() -> Router<ApiContext> {
@@ -35,6 +37,11 @@ fn router_with_auth() -> Router<ApiContext> {
         .route("/me", delete(delete_user::handler))
         .route("/profile_pictures", post(post_profile_pictures::handler))
         .route("/profile_picture", put(put_profile_picture::handler))
+        .route(
+            "/profile_picture/file",
+            put(put_profile_picture_file::handler),
+        )
+        .route("/agent_setup", post(agent_setup::handler))
         .route("/name", put(put_name::handler))
         .route("/name", get(get_name::handler))
         .route("/get_names", post(post_get_names::handler_external))

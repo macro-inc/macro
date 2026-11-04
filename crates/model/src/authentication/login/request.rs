@@ -8,6 +8,10 @@ pub struct PasswordlessRequest {
     pub redirect_uri: String,
     /// The referral code
     pub referral_code: Option<String>,
+    /// Create an agent account if this address has no account yet. Ignored for
+    /// an existing account, whose type never changes.
+    #[serde(default)]
+    pub is_agent: bool,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, ToSchema)]

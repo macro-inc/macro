@@ -14,6 +14,7 @@ async fn a_local_placeholder_does_not_become_a_billing_customer(pool: sqlx::PgPo
         None,
         None,
         HashSet::new(),
+        false,
     )
     .await
     .unwrap();
@@ -40,6 +41,7 @@ async fn a_real_stripe_customer_remains_available_for_billing(pool: sqlx::PgPool
         Some(customer_id),
         None,
         HashSet::new(),
+        false,
     )
     .await
     .unwrap();

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, email, team_id\n            FROM team_invite\n            WHERE id = $1\n            ",
+  "query": "\n            SELECT id, email, team_id, is_agent\n            FROM team_invite\n            WHERE id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -17,6 +17,11 @@
         "ordinal": 2,
         "name": "team_id",
         "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "is_agent",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
@@ -27,8 +32,9 @@
     "nullable": [
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "ae5a21740f17c450f53a07e833b6ab8dc226dd06869786792add6fe5535da1e7"
+  "hash": "4cd34eaa61747332f77748c9f591fbf7a4841de9990414010d3cba9926b1fcb3"
 }
