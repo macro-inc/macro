@@ -61,7 +61,9 @@ export function EmailTutorialRow() {
           <span class="grid size-5 shrink-0 place-items-center rounded-md bg-ink text-surface">
             <LogoIcon class="size-3" />
           </span>
-          <span class="shrink-0 font-semibold text-ink">Macro</span>
+          <span class="shrink-0 font-semibold text-ink">
+            {t('tutorials.from')}
+          </span>
           <span class="min-w-0 truncate">
             <span class="font-semibold text-ink">
               {t('tutorials.learnMacroMail')}
@@ -73,7 +75,7 @@ export function EmailTutorialRow() {
           </span>
           <span class="ml-auto flex shrink-0 items-center gap-1 pr-1 text-xs font-medium text-ink-extra-muted">
             <PlayIcon class="size-3.5" />
-            0:43
+            {t('tutorials.macroMailLength')}
           </span>
         </button>
         <Button
@@ -142,6 +144,7 @@ function TutorialVideoDialog(props: {
           poster={posterUrl}
           preload="metadata"
           playsinline
+          tabIndex={-1}
           controls={started()}
           onPlay={() => setStarted(true)}
           onKeyDown={(event) => {
