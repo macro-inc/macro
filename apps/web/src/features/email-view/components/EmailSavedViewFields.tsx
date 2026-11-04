@@ -180,7 +180,7 @@ export function EmailSavedViewFields(props: {
   inboxes: readonly { id: string; label: string }[];
   suggestions: Accessor<EmailParticipantSuggestion[]>;
 }) {
-  const lookInId = createUniqueId();
+  const matchFromId = createUniqueId();
   const set = <K extends keyof EmailSavedViewFilters>(
     key: K,
     value: EmailSavedViewFilters[K]
@@ -242,12 +242,12 @@ export function EmailSavedViewFields(props: {
           portalScope="local"
         />
         <div class="flex flex-wrap items-center gap-1.5">
-          <span id={lookInId} class="mr-1 text-xs text-ink-muted">
-            {t('emailViews.lookIn')}
+          <span id={matchFromId} class="mr-1 text-xs text-ink-muted">
+            {t('emailViews.matchFrom')}
           </span>
           <div
             role="group"
-            aria-labelledby={lookInId}
+            aria-labelledby={matchFromId}
             class="flex flex-wrap gap-1.5"
           >
             <For each={PARTICIPANT_FIELDS}>

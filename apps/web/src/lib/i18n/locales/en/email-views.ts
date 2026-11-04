@@ -34,7 +34,7 @@ export default {
     one: '{{count}} contact',
     other: '{{count}} contacts',
   },
-  lookIn: 'Look in',
+  matchFrom: 'Match from',
   fieldFrom: 'From',
   fieldTo: 'To',
   fieldCc: 'Cc',

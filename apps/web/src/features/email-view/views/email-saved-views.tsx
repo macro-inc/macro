@@ -929,7 +929,7 @@ const ISSUE_LABELS: Record<string, () => string> = {
   inboxIds: () => t('emailViews.inboxes'),
   importance: () => t('emailViews.importance'),
   participants: () => t('emailViews.people'),
-  participantFields: () => t('emailViews.lookIn'),
+  participantFields: () => t('emailViews.matchFrom'),
   subject: () => t('emailViews.subjectContains'),
   receivedWithinDays: () => t('emailViews.received'),
   starred: () => t('emailViews.starred'),

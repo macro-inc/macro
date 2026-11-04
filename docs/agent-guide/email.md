@@ -1387,7 +1387,7 @@ live mail with the viewer's access. See `docs/design/saved-views.md`.
   how many contacts use them, then people, your own address included; typing
   `example.com` offers the domain above the people at it. A typed address adds
   a person and a typed domain, `@domain` or website adds a domain, with Enter,
-  a comma, or leaving the field), Look in (From/To/Cc/Bcc toggle buttons, at
+  a comma, or leaving the field), Match from (From/To/Cc/Bcc toggle buttons, at
   least one on), Subject contains,
   Importance, Status, Done, Latest activity, Inboxes (with two or more linked),
   and Starred, calendar invite and attachment requirements. Values within one
