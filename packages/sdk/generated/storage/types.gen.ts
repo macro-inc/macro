@@ -5434,6 +5434,50 @@ export type DirectAccess = {
     userId: string;
 };
 
+export type DocumentLexicalState = {
+    state: unknown;
+    revision: string;
+};
+
+export type DocumentLexicalBlock = {
+    id: string;
+    after?: string | null;
+    node: unknown;
+};
+
+export type DocumentLexicalCommitRequest = {
+    revision: string;
+    blocks: Array<DocumentLexicalBlock>;
+    removed: Array<string>;
+};
+
+export type DocumentLexicalCommitted = {
+    state: unknown;
+    revision: string;
+};
+
+export type DocumentLexicalConflictReason = 'changed' | 'removed' | 'moved' | 'revision';
+
+export type DocumentLexicalConflictEntry = {
+    id?: string | null;
+    reason: DocumentLexicalConflictReason;
+};
+
+export type DocumentLexicalConflict = {
+    error: 'conflict';
+    conflicts: Array<DocumentLexicalConflictEntry>;
+};
+
+export type DocumentLexicalInvalid = {
+    error: 'invalid';
+    message: string;
+};
+
+export type DocumentLexicalOutcomeUnknown = {
+    error: 'edit_outcome_unknown';
+    message: string;
+};
+
 /**
  * The edit failed after it started, so it may have partly applied. Read the
  * document before retrying.
@@ -21703,6 +21747,100 @@ export type SaveDocumentHandlerResponses = {
 };
 
 export type SaveDocumentHandlerResponse = SaveDocumentHandlerResponses[keyof SaveDocumentHandlerResponses];
+
+export type GetDocumentLexicalData = {
+    body?: never;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/lexical';
+};
+
+export type GetDocumentLexicalErrors = {
+    /**
+     * Not a markdown document
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document view access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The editing worker could not read the document
+     */
+    502: ErrorResponse;
+};
+
+export type GetDocumentLexicalError = GetDocumentLexicalErrors[keyof GetDocumentLexicalErrors];
+
+export type GetDocumentLexicalResponses = {
+    200: DocumentLexicalState;
+};
+
+export type GetDocumentLexicalResponse = GetDocumentLexicalResponses[keyof GetDocumentLexicalResponses];
+
+export type CommitDocumentLexicalData = {
+    body: DocumentLexicalCommitRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/lexical';
+};
+
+export type CommitDocumentLexicalErrors = {
+    /**
+     * Not a markdown document, or too many blocks
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document edit access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The commit conflicts with concurrent edits; nothing changed
+     */
+    409: DocumentLexicalConflict;
+    /**
+     * The commit is invalid; nothing changed
+     */
+    422: DocumentLexicalInvalid;
+    /**
+     * The commit may have applied
+     */
+    502: DocumentLexicalOutcomeUnknown;
+};
+
+export type CommitDocumentLexicalError = CommitDocumentLexicalErrors[keyof CommitDocumentLexicalErrors];
+
+export type CommitDocumentLexicalResponses = {
+    200: DocumentLexicalCommitted;
+};
+
+export type CommitDocumentLexicalResponse = CommitDocumentLexicalResponses[keyof CommitDocumentLexicalResponses];
 
 export type EditDocumentWithAiData = {
     body: DocumentAiEditRequest;
