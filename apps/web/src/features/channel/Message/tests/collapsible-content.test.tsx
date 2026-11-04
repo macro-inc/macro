@@ -3,7 +3,13 @@
  */
 
 import type { MessageData } from '@core/messages/types';
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import {
+  cleanup,
+  createEvent,
+  fireEvent,
+  render,
+  screen,
+} from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Content } from '../Content';
 import { CollapseLongContentProvider, MessageProvider } from '../context';
@@ -121,10 +127,22 @@ describe('long message content', () => {
       menu.remove();
     }
 
+    // jsdom has no PointerEvent, so the id has to be set on the event itself.
+    const pointer = (
+      target: Element,
+      type: 'pointerDown' | 'pointerUp',
+      pointerId: number
+    ) => {
+      const event = createEvent[type](target);
+      Object.defineProperty(event, 'pointerId', { value: pointerId });
+      fireEvent(target, event);
+    };
     const page = screen.getByRole('button', { name: 'Page' });
-    fireEvent.pointerDown(page);
+    pointer(page, 'pointerDown', 7);
     expect(preview()).toBeNull();
-    fireEvent.pointerUp(page);
+    pointer(page, 'pointerUp', 8);
+    expect(preview()).toBeNull();
+    pointer(page, 'pointerUp', 7);
     expect(preview()).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Show more' })).toBeTruthy();
   });

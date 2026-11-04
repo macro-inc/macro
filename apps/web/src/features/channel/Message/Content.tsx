@@ -143,7 +143,7 @@ function CollapsibleBody(props: { children: JSX.Element }) {
     // The margin card stays mounted when a press leaves it, so the body has
     // to fold itself. Folding on pointerdown would shrink this card and slide
     // the cards below it out from under the press before pointerup.
-    let finishPress: (() => void) | undefined;
+    let finishPress: ((event: PointerEvent) => void) | undefined;
     const clearFinish = () => {
       if (!finishPress) return;
       document.removeEventListener('pointerup', finishPress, true);
@@ -155,7 +155,10 @@ function CollapsibleBody(props: { children: JSX.Element }) {
       const card = bodyRef.closest('[data-comment-thread]');
       if (!card || pressKeepsExpandedComment(card, event.target)) return;
       clearFinish();
-      finishPress = () => {
+      const pointerId = event.pointerId;
+      finishPress = (end: PointerEvent) => {
+        // A second pointer ending first must not fold the card under the first.
+        if (end.pointerId !== pointerId) return;
         clearFinish();
         if (!expanded()) return;
         showLess();
