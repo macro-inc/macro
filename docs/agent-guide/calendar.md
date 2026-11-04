@@ -252,6 +252,13 @@ backdrop, or Escape dismiss it.
 Desktop retains the centered dialog with inline dates, wrapping pills, and its
 Cancel footer; both layouts compose `EventFormParts` (`MobileEventForm` and
 `EventForm`), and the range rows compose `DateTimeRange` parts.
+The composer split's keys work from any field: `Cmd+Enter` creates or saves
+(committing a time still being typed), `Cmd+Shift+S` and `Cmd+Shift+E` focus
+the start and end time (the end list shows durations; all-day events focus the
+dates), `Cmd+Shift+G` and `Cmd+Shift+L` open guests and location, and
+`Cmd+Shift+M` focuses the meeting link picker (Enter opens it). The form
+registers them only when its host passes `hotkeyScope`;
+`event-form-hotkeys.test.tsx` covers a keyboard-only create.
 Dismissing a changed event by swipe, backdrop tap or Escape still asks before
 discarding the draft; Keep editing returns to the sheet with the edits intact,
 and the prompt stays away until the next attempt to close. An event created
