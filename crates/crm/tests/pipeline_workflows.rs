@@ -681,3 +681,6 @@ async fn pipelines_are_created_with_stages_and_edited_by_name(pool: PgPool) {
             .is_err()
     );
 }
+
+#[path = "pipeline_workflows/requirements.rs"]
+mod requirements;

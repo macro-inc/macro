@@ -124,6 +124,9 @@ the existing gateway prefixes.
   that as `false`. A 204 from `GET /team` (no team) parses as an empty
   object, not `undefined`.
 - Keep access-request resolution snapshots: resolved requests leave pending lists.
+- `CrmPipeline.stageRequirements()` and `setStageRequirements()` use pipeline
+  column and option handles; `PipelineColumn.options()` supplies stable options.
+  Stage requirements are enforced on every pipeline operation batch.
 - Pipeline schema reads share the parent's cache; successful op batches clear it.
 - Email sends and other writes against hosted data are real actions; use mocks
   for automated SDK mutation tests.

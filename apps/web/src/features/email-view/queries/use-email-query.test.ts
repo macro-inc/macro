@@ -524,6 +524,7 @@ describe('Email list query transitions', () => {
             importance: 87,
             needsReply: true,
             needsFollowUp: false,
+            importanceTrend: 'FLAT',
           },
         },
       } as EmailDataSourceItem,
