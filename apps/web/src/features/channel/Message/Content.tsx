@@ -100,13 +100,27 @@ function CollapsibleBody(props: { children: JSX.Element }) {
     onCleanup(() => observer.disconnect());
   });
 
+  let bodyRef!: HTMLDivElement;
+
   const collapsed = () => overflowing() && !expanded();
+
+  const toggleExpanded = () => {
+    // The preview starts at the top, wherever the expanded body was scrolled.
+    if (expanded()) bodyRef.scrollTop = 0;
+    setExpanded((prev) => !prev);
+  };
 
   return (
     <>
       <div
+        ref={bodyRef}
         data-collapsed={collapsed() ? '' : undefined}
-        class={cn(collapsed() && 'overflow-hidden')}
+        // Expanded, the body scrolls inside the card, which would otherwise
+        // grow past the document it sits beside.
+        class={cn(
+          collapsed() && 'overflow-hidden',
+          expanded() && 'max-h-[50vh] overflow-y-auto'
+        )}
         // Tabbing to a link under the cut (or in the fade) reveals it
         // instead of focusing something hidden.
         onFocusIn={(event) => {
@@ -134,7 +148,7 @@ function CollapsibleBody(props: { children: JSX.Element }) {
           size="xs"
           class="mt-1 -ml-1.5 text-ink-muted"
           aria-expanded={expanded()}
-          onClick={() => setExpanded((prev) => !prev)}
+          onClick={toggleExpanded}
         >
           <CaretRight
             aria-hidden="true"
