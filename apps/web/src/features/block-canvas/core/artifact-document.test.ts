@@ -108,6 +108,8 @@ describe('composeArtifactDocument', () => {
     expect(composed).toContain('<style>h1{color:red}</style>');
     expect(composed).not.toContain('macro-style');
     expect(parse(composed).body.textContent).toContain('Kept');
+  });
+
   it('marks its own load before any artifact script can run', () => {
     const composed = composeArtifactDocument(
       '<script>run()</script>',
