@@ -36,10 +36,13 @@ impl StarterRoutineClient {
             self.base_url.trim_end_matches('/'),
             urlencoding::encode(user_id),
         );
+        let mut trace_headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut trace_headers);
         let response = self
             .client
             .post(url)
             .header(INTERNAL_API_KEY_HEADER, &self.internal_key)
+            .headers(trace_headers)
             .send()
             .await
             .context("failed to seed email triage routine")?;
