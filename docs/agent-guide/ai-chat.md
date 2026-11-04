@@ -476,6 +476,13 @@ the shimmer.
   **Add connections** opens Discover; **Manage connections** opens Connected.
   Disabled connections remain available to manage. A partial loading failure
   offers Retry without hiding uploads, references, or skills.
+- Skills have a one-line **When to use** description ("Use when …; not …"),
+  required in the skill composer (`C K`) under the name and editable under
+  the title of an open skill (saves on blur or Enter; an invalid line shows
+  an error below it). Owners with the `auto-skills` flag get up to two of
+  their skills loaded on their own when a session request matches a
+  description; the session view shows nothing for it, and the
+  `agent.skill_selection` span says what loaded.
 - Empty conversation greetings use Roboto Slab with the Macro mark to the left,
   at weight 390 with softened ink in light mode and 315 in dark mode, including the Chat and Code
   starting headings, legacy Home, and the conversation preview empty state.

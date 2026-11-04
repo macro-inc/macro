@@ -17439,13 +17439,18 @@ export const createMarkdownHandlerResponse = zod
   .describe('Response for creating a markdown document.');
 
 /**
- * @summary Creates a skill document with initialized markdown content in one
-backend-owned lifecycle. Skills are markdown documents containing
+ * @summary Creates a skill document with initialized markdown content and its
+routing description in one backend-owned lifecycle. Skills are markdown documents containing
 instructions that AI reads and follows when the skill is referenced in an
 AI input.
  */
 export const createSkillHandlerBody = zod
   .object({
+    description: zod
+      .string()
+      .describe(
+        'When to use the skill, in one line starting \"Use when\", e.g. \"Use when\ndrafting release notes; not changelog entries\". Agents choose skills\nfor a request by it.'
+      ),
     markdown: zod
       .string()
       .nullish()
@@ -20037,6 +20042,54 @@ export const simpleSaveResponse = zod.object({
   }),
   error: zod.boolean().describe('Indicates if an error occurred'),
 });
+
+/**
+ * @summary Gets when to use a skill. `description` is absent for a skill created
+before descriptions existed.
+ */
+export const getSkillDescriptionParams = zod.object({
+  document_id: zod.string().describe('Skill document ID'),
+});
+
+export const getSkillDescriptionResponse = zod
+  .object({
+    description: zod
+      .string()
+      .nullish()
+      .describe(
+        'When to use the skill, in one line starting \"Use when\". Absent for a\nskill created before descriptions existed.'
+      ),
+  })
+  .describe("A skill's routing description.");
+
+/**
+ * @summary Sets when to use a skill: one line starting "Use when", at most 300
+characters. Agents choose skills for a request by it.
+ */
+export const setSkillDescriptionParams = zod.object({
+  document_id: zod.string().describe('Skill document ID'),
+});
+
+export const setSkillDescriptionBody = zod
+  .object({
+    description: zod
+      .string()
+      .describe(
+        'When to use the skill, in one line starting \"Use when\", at most 300\ncharacters.'
+      ),
+  })
+  .describe("Request body for setting a skill's routing description.");
+
+export const setSkillDescriptionResponse = zod
+  .object({
+    description: zod
+      .string()
+      .nullish()
+      .describe(
+        'When to use the skill, in one line starting \"Use when\". Absent for a\nskill created before descriptions existed.'
+      ),
+  })
+  .describe("A skill's routing description.");
 
 /**
  * @summary Gets the team-share state of a document. The team is resolved from the
