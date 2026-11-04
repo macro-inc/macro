@@ -22,6 +22,11 @@ type RecipientKind = 'user' | 'contact';
 // Mirrors the codec's bare-domain rule so typed entries show as accepted.
 const DOMAIN_PATTERN = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i;
 
+// Enter in a list field ends the entry, never submits the whole view.
+const keepEnterInField = (event: KeyboardEvent) => {
+  if (event.key === 'Enter') event.preventDefault();
+};
+
 const splitList = (text: string) =>
   text
     .split(',')
@@ -216,6 +221,7 @@ export function EmailSavedViewFields(props: {
           aria-label={t('emailViews.domains')}
           placeholder={t('emailViews.domainsPlaceholder')}
           value={domainsText()}
+          onKeyDown={keepEnterInField}
           onInput={(event) => {
             const text = event.currentTarget.value;
             setDomainsText(text);
@@ -266,6 +272,7 @@ export function EmailSavedViewFields(props: {
           aria-label={t('emailViews.subjectContains')}
           placeholder={t('emailViews.subjectPlaceholder')}
           value={subjectText()}
+          onKeyDown={keepEnterInField}
           maxLength={2000}
           onInput={(event) => {
             const text = event.currentTarget.value;
