@@ -108,7 +108,9 @@ The gate is that preview:
   `renotifyInterval` only** — the routing move to GoAlert. The two AI-editing
   monitors, already deployed from this stack, update their `message` the same
   way. `dss-errors-prod` also changes its query and critical threshold
-  (150 → 800).
+  (150 → 800), and `rds-low-freeable-memory` its query and thresholds
+  (critical 2 GB → 250 MB, warning 3 GB → 500 MB) so 2 GiB instances stop
+  alerting at their normal level.
 - **Already-deployed monitors update their `message`** (GoAlert handles instead
   of the channel), and the GraphQL soup volume, gateway connections and task
   count monitors their `query` and thresholds.
@@ -240,7 +242,7 @@ otherwise the missing-telemetry alerts intentionally fire. Until it ships, a
 downtime in `notification-retention.ts` mutes the prod one; delete the downtime
 once the instrumentation is deployed. This monitoring stack
 still requires a separate, explicitly approved manual deployment. Adopted
-monitors may change only in `message` and `renotifyInterval` (see the gate above).
+monitors may change only as the gate above lists.
 
 Consumers are intentionally ungrouped and do not commit offsets, so native MSK
 consumer-group lag is not meaningful. The new logs expose broker high watermark
