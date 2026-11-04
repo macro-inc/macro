@@ -16,35 +16,40 @@ const emailFocusOf = (entity: EntityData): EmailFocus | undefined =>
 
 /** Lit bars for each importance band, highest first. */
 const IMPORTANCE_LEVELS = [
-  { from: 80, lit: 5 },
-  { from: 60, lit: 4 },
-  { from: 40, lit: 3 },
-  { from: 20, lit: 2 },
-  { from: 5, lit: 1 },
-  { from: 0, lit: 0 },
+  { from: 80, lit: 5, color: 'bg-green' },
+  { from: 60, lit: 4, color: 'bg-lime' },
+  { from: 40, lit: 3, color: 'bg-yellow' },
+  { from: 20, lit: 2, color: 'bg-orange' },
+  { from: 5, lit: 1, color: 'bg-red' },
+  { from: 0, lit: 0, color: '' },
 ] as const;
 
 const BARS = [0, 1, 2, 3, 4] as const;
 
-/** The 0-100 importance score as five quiet bars; the value is in the label. */
+/** The 0-100 importance score as a number and a five-bar meter. */
 function ImportanceMeter(props: { focus: EmailFocus }) {
   const label = () => `Importance ${props.focus.importance} of 100`;
-  const lit = () =>
-    IMPORTANCE_LEVELS.find((band) => props.focus.importance >= band.from)
-      ?.lit ?? 0;
+  const level = () =>
+    IMPORTANCE_LEVELS.find((band) => props.focus.importance >= band.from) ??
+    IMPORTANCE_LEVELS[IMPORTANCE_LEVELS.length - 1];
   return (
     <Tooltip as="span" label={label()} class="inline-flex shrink-0">
-      <span role="img" aria-label={label()} class="flex items-center gap-0.5">
-        <For each={BARS}>
-          {(bar) => (
-            <span
-              class={cn(
-                'h-3 w-1 rounded-full',
-                bar < lit() ? 'bg-ink-extra-muted/60' : 'bg-ink-extra-muted/20'
-              )}
-            />
-          )}
-        </For>
+      <span role="img" aria-label={label()} class="flex items-center gap-2">
+        <span class="w-[3ch] text-right text-xs font-medium tabular-nums text-ink-muted">
+          {props.focus.importance}
+        </span>
+        <span class="flex items-center gap-[3px]">
+          <For each={BARS}>
+            {(bar) => (
+              <span
+                class={cn(
+                  'h-3.5 w-1.5 rounded-full',
+                  bar < level().lit ? level().color : 'bg-ink-extra-muted/25'
+                )}
+              />
+            )}
+          </For>
+        </span>
       </span>
     </Tooltip>
   );
