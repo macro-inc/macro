@@ -29,6 +29,7 @@ import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import PlugIcon from '@icon/system/regular/plugs-connected.svg';
 import AgentIcon from '@icon/system/regular/sparkle.svg';
 import { Key } from '@solid-primitives/keyed';
+import { makePersisted } from '@solid-primitives/storage';
 import { cn, Dropdown } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createEffect, createSignal, type JSX, Show } from 'solid-js';
@@ -169,6 +170,9 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
   const [searchOpen, setSearchOpen] = createSignal(false);
   const [openPullRequestsOpen, setOpenPullRequestsOpen] = createSignal(true);
   const [conversationsOpen, setConversationsOpen] = createSignal(true);
+  const [archivedOpen, setArchivedOpen] = makePersisted(createSignal(false), {
+    name: 'agents-archived-open',
+  });
   let searchInput: HTMLInputElement | undefined;
   const factsOf = (conversation: AgentConversationEntity) =>
     conversationFacts(
@@ -478,23 +482,33 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
             </CollapsibleSection.Content>
           </CollapsibleSection.Root>
           <Show when={archived().length}>
-            <section
+            <CollapsibleSection.Root
+              open={archivedOpen()}
+              onOpenChange={setArchivedOpen}
               aria-label="Archived conversations"
-              class="mt-auto flex min-h-0 shrink-0 basis-1/4 flex-col border-t border-edge-muted pt-2"
+              class={cn(
+                'mt-auto flex min-h-0 flex-col border-t border-edge-muted pt-2',
+                archivedOpen() ? 'basis-1/4' : 'shrink-0'
+              )}
             >
-              <ViewSidebar.Toolbar class="shrink-0">
-                <h3 class="text-xs font-medium text-ink-muted">Archived</h3>
-                <span class="text-xs text-ink-extra-muted tabular-nums">
-                  {archived().length}
-                </span>
-              </ViewSidebar.Toolbar>
-              <ViewSidebar.Nav
-                class="min-h-0 flex-1 shrink overflow-auto"
-                onScroll={loadMoreNearEnd}
-              >
-                {rows(archived)}
-              </ViewSidebar.Nav>
-            </section>
+              <CollapsibleSection.Header>
+                <CollapsibleSection.Trigger>
+                  <span class="min-w-0 truncate">Archived</span>
+                  <span class="text-ink-extra-muted tabular-nums">
+                    {archived().length}
+                  </span>
+                  <CollapsibleSection.Indicator />
+                </CollapsibleSection.Trigger>
+              </CollapsibleSection.Header>
+              <CollapsibleSection.Content class="flex min-h-0 flex-1 flex-col">
+                <ViewSidebar.Nav
+                  class="min-h-0 flex-1 shrink overflow-auto"
+                  onScroll={loadMoreNearEnd}
+                >
+                  {rows(archived)}
+                </ViewSidebar.Nav>
+              </CollapsibleSection.Content>
+            </CollapsibleSection.Root>
           </Show>
         </ViewSidebar.Content>
       </ViewSidebar.Root>
