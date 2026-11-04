@@ -18,9 +18,14 @@ import {
   splitProps,
 } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { clampChannelSectionHeight } from '../../constants';
 import { ChannelFavoriteRow } from './ChannelFavoriteRows';
 import { ChannelOption } from './ChannelOption';
 import { ChannelFavoriteRow as DraggableFavoriteRow } from './next/ChannelFavoriteRow';
+import {
+  ChannelSectionHeading,
+  DraggableChannelSectionHeading,
+} from './next/ChannelSectionHeading';
 import { ResizableRailSection } from './next/ResizableRailSection';
 import {
   reorderVisibleFavorites,
@@ -47,9 +52,12 @@ const rail = vi.hoisted(() => ({
 }));
 
 const drag = vi.hoisted(() => ({
+  activate: vi.fn(),
   viewer: (): string => 'viewer',
   starts: [] as Array<
-    (event: { draggable: { data: Record<string, unknown> } }) => void
+    (event: {
+      draggable: { id?: string; data: Record<string, unknown> };
+    }) => void
   >,
   ends: [] as Array<
     (event: {
@@ -70,6 +78,12 @@ vi.mock('@queries/favorites/favorites', () => ({
   useReorderFavoritesMutation: () => ({ mutateAsync: drag.reorder }),
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => drag.viewer() }));
+vi.mock('@app/components/drag-drop/create-distance-pointer-sensor', () => ({
+  createDistancePointerSensor: () => ({
+    start: (_event: MouseEvent, id: string) => drag.activate(id),
+    cancel: vi.fn(),
+  }),
+}));
 vi.mock('@macro-inc/observability', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@macro-inc/observability')>()),
   Telemetry: {
@@ -94,7 +108,7 @@ vi.mock('@thisbeyond/solid-dnd', () => ({
     drag.draggables.set(id, data);
     return {
       ref() {},
-      dragActivators: {},
+      dragActivators: { onMouseDown: () => drag.activate(id) },
       isActiveDraggable: false,
     };
   },
@@ -184,7 +198,13 @@ vi.mock('@app/features/favorites/FavoriteIcon', () => ({
 vi.mock('@app/util/favorites', () => ({
   useFavoriteDisplayName: () => () => 'Design',
 }));
-vi.mock('@app/components/view-shell', () => ({
+vi.mock('@app/components/view-shell/ViewSidebar', () => ({
+  ViewSidebar: { Control: () => null },
+}));
+vi.mock('@app/components/view-shell', async () => ({
+  CollapsibleSection: (
+    await import('@app/components/view-shell/CollapsibleSection')
+  ).CollapsibleSection,
   ViewSidebar: {
     Item: (
       props: ComponentProps<'div'> & { as?: string; active?: boolean }
@@ -197,6 +217,16 @@ vi.mock('@app/components/view-shell', () => ({
 }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
 vi.mock('@ui', async () => ({
+  Button: (
+    props: ComponentProps<'button'> & {
+      variant?: string;
+      size?: string;
+      tooltip?: string;
+    }
+  ) => {
+    const [, rest] = splitProps(props, ['variant', 'size', 'tooltip']);
+    return <button {...rest} />;
+  },
   Tooltip: (await import('@ui/components/Tooltip')).Tooltip,
   cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
 }));
@@ -222,6 +252,7 @@ beforeEach(() => {
   drag.ends.length = 0;
   drag.draggables.clear();
   rail.labels = () => [];
+  rail.sectionPreferences = () => ({ sort: 'manual' });
   rail.sectionOrder = () => [];
   drag.favorites = [];
   drag.viewer = () => 'viewer';
@@ -232,6 +263,62 @@ beforeEach(() => {
     loaded()?.id === channelId ? loaded() : undefined;
 });
 afterEach(cleanup);
+
+describe('section heading dragging', () => {
+  it('drags from the name without toggling after a drop or dragging action buttons', () => {
+    const toggle = vi.fn();
+    const move = vi.fn();
+    render(() => (
+      <DraggableChannelSectionHeading
+        section="channels"
+        label="Channels"
+        reorder={{
+          scope: 'rail:sections',
+          dropEdge: () => undefined,
+          isDragging: () => false,
+          cancel: vi.fn(),
+          move,
+        }}
+      >
+        <ChannelSectionHeading
+          id="channels-heading"
+          label="Channels"
+          open
+          focused={false}
+          unreadCount={0}
+          onToggle={toggle}
+        >
+          <button type="button">Actions</button>
+        </ChannelSectionHeading>
+      </DraggableChannelSectionHeading>
+    ));
+    const heading = screen.getByRole('treeitem');
+
+    fireEvent.pointerDown(heading);
+    fireEvent.mouseDown(heading);
+    expect(drag.activate).toHaveBeenCalledWith('rail:sections:channels');
+    fireEvent.click(heading, { detail: 1 });
+    expect(toggle).toHaveBeenCalledOnce();
+
+    fireEvent.pointerDown(heading);
+    for (const start of drag.starts) {
+      start({ draggable: { id: 'rail:sections:channels', data: {} } });
+    }
+    fireEvent.click(heading, { detail: 1 });
+    expect(toggle).toHaveBeenCalledOnce();
+
+    drag.activate.mockClear();
+    fireEvent.mouseDown(screen.getByRole('button', { name: 'Actions' }));
+    expect(drag.activate).not.toHaveBeenCalled();
+    fireEvent.keyDown(
+      screen.getByRole('button', { name: 'Reorder Channels' }),
+      {
+        key: 'ArrowDown',
+      }
+    );
+    expect(move).toHaveBeenCalledWith('channels', 1);
+  });
+});
 
 describe('channel section drag sources', () => {
   it('keeps the drag identity current when a virtual row is reused', () => {
@@ -497,6 +584,49 @@ describe('section reordering', () => {
 });
 
 describe('resizable chat sections', () => {
+  it('grows the last All channels list to its content while preserving manual heights', () => {
+    const [maximum, setMaximum] = createSignal(Number.POSITIVE_INFINITY);
+    const [savedHeight, setSavedHeight] = createSignal<number>();
+    rail.sectionPreferences = () => ({ sort: 'manual', height: savedHeight() });
+    measurements.contentHeight = () => 1360;
+    let viewport!: HTMLDivElement;
+    render(() => (
+      <ResizableRailSection
+        section="channels"
+        label="All channels"
+        open
+        maxHeight={maximum()}
+        itemCount={40}
+        header={<span>Section</span>}
+        rootRef={() => {}}
+        scrollRef={(element) => {
+          viewport = element;
+        }}
+      >
+        Conversations
+      </ResizableRailSection>
+    ));
+
+    expect(viewport.style.height).toBe('1360px');
+    setMaximum(252);
+    expect(viewport.style.height).toBe('252px');
+
+    setSavedHeight(180);
+    setMaximum(Number.POSITIVE_INFINITY);
+    expect(viewport.style.height).toBe('180px');
+    setMaximum(252);
+    expect(viewport.style.height).toBe('180px');
+
+    setMaximum(Number.POSITIVE_INFINITY);
+    setSavedHeight(1100);
+    expect(viewport.style.height).toBe('1100px');
+    expect(clampChannelSectionHeight(1100)).toBe(1100);
+    fireEvent.keyDown(screen.getByRole('separator'), { key: 'ArrowDown' });
+    expect(rail.setSectionPreferences).toHaveBeenCalledWith('channels', {
+      height: 1120,
+    });
+  });
+
   it('saves the final zoom-adjusted size and can resize again after collapse cancels a drag', () => {
     const [open, setOpen] = createSignal(true);
     render(() => (
@@ -604,6 +734,95 @@ describe('resizable chat sections', () => {
       height: 186,
     });
   });
+
+  it.each(['pointerup', 'pointercancel'])(
+    'scrolls while resizing near the sidebar edge and stops on %s',
+    (endEvent) => {
+      const frames = new Map<number, FrameRequestCallback>();
+      let frameId = 0;
+      const request = vi
+        .spyOn(window, 'requestAnimationFrame')
+        .mockImplementation((callback) => {
+          frames.set(++frameId, callback);
+          return frameId;
+        });
+      const cancel = vi
+        .spyOn(window, 'cancelAnimationFrame')
+        .mockImplementation((id) => {
+          frames.delete(id);
+        });
+      const outer = document.createElement('div');
+      Object.defineProperties(outer, {
+        clientHeight: { value: 280 },
+        scrollHeight: { value: 800 },
+      });
+      vi.spyOn(outer, 'getBoundingClientRect').mockReturnValue(
+        new DOMRect(0, 0, 200, 280)
+      );
+      let viewport!: HTMLDivElement;
+      const view = render(() => (
+        <ResizableRailSection
+          section="favorites"
+          label="Favorites"
+          open
+          maxHeight={400}
+          itemCount={12}
+          outerScrollRoot={outer}
+          header={<span>Section</span>}
+          rootRef={() => {}}
+          scrollRef={(element) => {
+            viewport = element;
+            Object.defineProperty(element, 'offsetHeight', { value: 136 });
+            vi.spyOn(element, 'getBoundingClientRect').mockImplementation(
+              () => new DOMRect(0, 132 - outer.scrollTop, 200, 136)
+            );
+          }}
+        >
+          Conversations
+        </ResizableRailSection>
+      ));
+      const handle = screen.getByRole('separator');
+      Object.defineProperty(handle, 'setPointerCapture', { value: vi.fn() });
+      const start = new MouseEvent('pointerdown', {
+        bubbles: true,
+        clientX: 100,
+        clientY: 268,
+      });
+      Object.defineProperty(start, 'pointerId', { value: 1 });
+      handle.dispatchEvent(start);
+
+      for (const time of [0, 16, 32]) {
+        const pending = [...frames.values()];
+        frames.clear();
+        for (const callback of pending) callback(time);
+      }
+
+      expect(outer.scrollTop).toBeGreaterThan(0);
+      expect(Number.parseFloat(viewport.style.height)).toBe(
+        Math.round(136 + outer.scrollTop)
+      );
+      const end = new MouseEvent(endEvent, {
+        bubbles: true,
+        clientX: 100,
+        clientY: 268,
+      });
+      Object.defineProperty(end, 'pointerId', { value: 1 });
+      handle.dispatchEvent(end);
+      expect(frames.size).toBe(0);
+      if (endEvent === 'pointerup') {
+        expect(rail.setSectionPreferences).toHaveBeenCalledExactlyOnceWith(
+          'favorites',
+          { height: Math.round(136 + outer.scrollTop) }
+        );
+      } else {
+        expect(rail.setSectionPreferences).not.toHaveBeenCalled();
+      }
+
+      view.unmount();
+      request.mockRestore();
+      cancel.mockRestore();
+    }
+  );
 
   it.each(['pointercancel', 'lostpointercapture'])(
     'does not save after %s and accepts a later resize',

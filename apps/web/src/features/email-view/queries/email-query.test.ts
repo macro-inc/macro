@@ -166,6 +166,8 @@ describe('buildEmailQuery', () => {
       ['archived', 'all'],
       ['all', 'all'],
       ['focus', 'all'],
+      ['spam', 'spam'],
+      ['trash', 'trash'],
     ]);
 
     for (const tab of EMAIL_TAB_IDS) {
@@ -174,6 +176,26 @@ describe('buildEmailQuery', () => {
       );
     }
   });
+
+  it.each(['spam', 'trash'] as const)(
+    'keeps %s in its provider folder with inbox and alias scope',
+    (tab) => {
+      const args = buildEmailQuery(
+        contextFor({
+          tab,
+          inboxIds: ['inbox-a'],
+          aliasFilter: {
+            inboxId: 'inbox-a',
+            emailAddress: 'alias@example.com',
+          },
+        })
+      );
+      expect(args.transport).toBe('rest');
+      expect(args.body.emailView).toBe(tab);
+      expect(serialize(args.body.ef)).toContain('inbox-a');
+      expect(serialize(args.body.ef)).toContain('alias@example.com');
+    }
+  );
 
   it('confines every non-email target to nothing', () => {
     const { body } = buildEmailQuery(contextFor());
@@ -321,6 +343,17 @@ describe('buildEmailQuery', () => {
 
 describe('buildEmailSearchRequest', () => {
   const search = { query: 'invoice', matchType: 'partial' as const };
+
+  it.each(['spam', 'trash'] as const)(
+    'fails closed for %s even with retained IDs',
+    (tab) => {
+      expect(
+        buildEmailSearchRequest(contextFor({ tab }), search, [
+          'retained-thread',
+        ]).body.filters?.email_filters?.email_thread_ids
+      ).toEqual([NIL]);
+    }
+  );
 
   const requestFor = (overrides: Partial<EmailQueryContext> = {}) => {
     const { body } = buildEmailSearchRequest(contextFor(overrides), search);

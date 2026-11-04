@@ -11,6 +11,9 @@ export const messageKeys = createQueryKeys('messages', {
   threadReplies: (parent: MessageParent, rootId: string) => ({
     queryKey: [parent, rootId],
   }),
+  postedComment: (documentId: string, markId: string) => ({
+    queryKey: [documentId, markId],
+  }),
   resolveMessage: (parent: MessageParent, messageId: string) => ({
     queryKey: [parent, messageId],
   }),

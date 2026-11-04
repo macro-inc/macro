@@ -25,6 +25,19 @@ swaps the user token for a short-lived document token against the document
 service, builds the sync-service WebSocket URL from it, and hands everything to
 `runEditSession` (`src/run-edit.ts`).
 
+The 200 response carries the ops, usage and any clarification, plus
+`revision`: base64 of the Loro oplog version once the sync service acknowledged
+every update, as sync-service encodes revisions (entry order varies, so compare
+decoded versions); with `propagate: false` it is the version the edit started
+from. Unacknowledged updates answer 502.
+
+Cancelling the request stops the edit, with no rollback. Every op and typing
+step propagates as it lands, and the sync socket closes on abort, so the
+document keeps what was sent before the abort. Nothing is applied afterwards: the
+queue checks the signal before each op and each animation step. An op that was
+being typed can be left partway, since typing is several steps and `setText`
+removes the old text before typing the new. The response is 499, never 200.
+
 ## Joining the document
 
 `runEditSession` is the main entrypoint that our edit endpoint calls to start an
@@ -120,6 +133,17 @@ There are only three kinds of steps:
 
 We have an abstraction called the "executor" that ties together the animation queue and the document editor. It is what actually "plays" everything.
 
+### Database blocks
+
+The XML view shows saved database questions as `<database-query>` (queryId,
+displayMode, chart, title) and embedded databases as `<document-card
+blockName="database" blockParams=…>`. Writers insert a question only from the
+`<m-db-query>` block the caller passes (`SaveDatabaseQuery` output); `Doc`
+parses it with the shared lexical-core validator and refuses anything else,
+since the SQL lives on the server. `setDatabaseQueryView` changes presentation
+(display mode, chart, title, height) and never the question;
+`setDatabaseLocation` switches an embedded database's table or view.
+
 ### "Doc"s
 
 `Doc{Writer/Reader}` is an abstraction over the real Lexical `Document`. This makes everything much more testable. It has a minimal-ish (okay not super minimal) interface that's easy to mock and run against real lexical.
@@ -138,8 +162,8 @@ ephemeral awareness channel, so the website renders a remote cursor walking
 through the text. The cursor's label is the editor `POST /edit` names
 (`editor: { name }`): the agent or persona that asked for the edit, so a
 `Macro` or `Grunk` session's edits read `Macro (AI)` / `Grunk (AI)` on every
-cursor they draw (`PeerPool.forEditor`). A request that names nobody falls back
-to the pool of distinct names (`Sam (AI)`, `Alex (AI)`). Every label ends in
+cursor they draw (`PeerPool.forEditor`). A request that names nobody labels its
+cursors `Macro (AI)` (`DEFAULT_EDITOR_NAME`), never a person's name. Every label ends in
 `(AI)`; the website keys off that suffix to keep AI name tags pinned. Each
 writer also gets one of a few accent colors; the cursor lingers ~700ms after the
 writer finishes, then clears. We have some ugly code that manages resolving a

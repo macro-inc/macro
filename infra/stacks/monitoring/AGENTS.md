@@ -4,7 +4,7 @@
 
 Org-global Datadog monitors, synthetics, and rollout dashboards. This stack is
 manual and has only a prod stack, even for monitors covering both environments.
-Prod threshold and anomaly monitors are in `monitors/{macrodb,redis,queues,regressions}.ts`
+Prod threshold and anomaly monitors are in `monitors/{macrodb,redis,queues,regressions,outlook-sync}.ts`
 (`prodMonitor()` in `prod-monitor.ts`), each file with a dashboard graphing its
 monitors that their messages link to; every monitor notifies through `notify.ts`.
 `dashboards/web-performance.ts` holds the web app performance dashboard with the
@@ -35,9 +35,11 @@ From `infra/`:
   at oncall.macro-internal.com.
 - A prod monitor's graph on its file's dashboard repeats its metric and
   thresholds by hand; change both. `routing.test.ts` matches them by title.
-  The long-running transaction monitor is a Database Monitoring alert so the
-  notification can include the SQL; its graph still plots
-  `postgresql.activity.xact_start_age`.
+  The long-running transaction monitor takes the lowest
+  `postgresql.activity.xact_start_age` over 5 minutes, and its graph plots the
+  same `moving_rollup(..., 300, 'min')`. A single-sample spike from
+  notification-service's `LISTEN` connection fires hourly otherwise
+  (docs/runbooks/macrodb.md#locks).
 - End every monitor message with `notify({ pages })`, which routes only to
   GoAlert, and pass `dependsOn: goalertWebhooks`. Never mention a channel
   webhook, Slack handle or email address: GoAlert posts to the channel. Only
@@ -58,6 +60,11 @@ From `infra/`:
 - `monitors/whatsapp-session.ts` reads log events by `telemetry_event`; its
   header is the field contract with `services/whatsapp_session_service`.
   Renaming a field there silently turns its monitor into missing data.
+- `monitors/outlook-sync.ts` reads the health log, sync spans and Graph and
+  token span fields email-service emits; its header is the field contract.
+  It finds the Graph and token spans by `@outlook.throttle_origin` and
+  `@outlook.token_cache`, not by name: Datadog renames an HTTP client span to
+  `http.client.request` with its method as the resource.
 - `monitors/calls.ts` matches the text of the `voip push: SNS delivery failed`
   log in `crates/notification/src/domain/service/voip.rs` and the
   `PushEndpointUnavailable` message. Rewording either silently breaks it.

@@ -5,7 +5,7 @@ mod user_cleanup;
 use super::*;
 use crate::domain::event_runs::ClaimToken;
 use crate::domain::models::{
-    ActionConfigurationUpdate, ActionKind, ExecutionResource, ExecutionResourceType,
+    ActionConfigurationUpdate, ActionKind, ExecutionResource, ExecutionResourceType, ListedAction,
     MAX_ACTION_TIME, RunVisibility,
 };
 use crate::domain::{
@@ -93,6 +93,12 @@ impl ScheduledActionRepo for FakeRepo {
 
     async fn get_execution_records(&self, _id: &Uuid) -> Result<Vec<ActionExecutionRecord>> {
         Ok(vec![])
+    }
+    async fn last_runs(
+        &self,
+        _: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, crate::domain::models::LastRun>> {
+        Ok(std::collections::HashMap::new())
     }
 
     async fn get_next_unclaimed_actions(&self, _limit: i64) -> Result<Vec<ScheduledAction>> {
@@ -633,7 +639,10 @@ async fn list_is_cron_only_by_default_but_id_operations_reach_events() {
         .create_action(&user_principal(), configuration(true))
         .await
         .unwrap();
-    assert_eq!(svc.get_actions(user(), false).await.unwrap()[0].id, cron.id);
+    assert_eq!(
+        svc.get_actions(user(), false).await.unwrap()[0].action.id,
+        cron.id
+    );
     assert_eq!(svc.get_actions(user(), false).await.unwrap().len(), 1);
     assert_eq!(svc.get_actions(user(), true).await.unwrap().len(), 2);
     svc.get_execution_records(view_receipt(event.id.unwrap()))
@@ -1075,12 +1084,18 @@ async fn read_service_keeps_both_triggers_for_the_owner_in_stable_order() {
         read.iter()
             .any(|action| matches!(action.trigger, ActionTrigger::Events { .. }))
     );
+    let listed = |listed: Vec<ListedAction>| {
+        listed
+            .into_iter()
+            .map(|listed| listed.action.name)
+            .collect::<Vec<_>>()
+    };
     assert_eq!(
-        names(&svc.get_actions(user(), true).await.unwrap()),
+        listed(svc.get_actions(user(), true).await.unwrap()),
         expected
     );
     assert_eq!(
-        names(&svc.get_actions(user(), false).await.unwrap()),
+        listed(svc.get_actions(user(), false).await.unwrap()),
         vec!["early-cron", "low-id", "first-equal", "second-equal"]
     );
 }
@@ -1225,6 +1240,43 @@ async fn editing_an_overdue_one_off_keeps_its_unconsumed_firing() {
         .await
         .unwrap();
     assert_eq!(updated.next_run_at, None);
+}
+
+#[tokio::test]
+async fn a_past_once_time_is_due_on_save_but_never_rearmed_after_it_ran() {
+    use chrono::SubsecRound;
+    let svc = service(false);
+    let at = (Utc::now() - chrono::Duration::minutes(1)).trunc_subsecs(0);
+    let mut config = configuration(false);
+    config.trigger = ActionTrigger::Once { at };
+    let created = svc
+        .create_action(&user_principal(), config.clone())
+        .await
+        .unwrap();
+    assert_eq!(created.next_run_at, Some(at));
+    let id = created.id.unwrap();
+
+    // The dispatcher ran it: nothing is left to run.
+    svc.repo.actions.lock().unwrap()[0].next_run_at = None;
+    let paused = svc.set_enabled(edit_receipt(id), false).await.unwrap();
+    assert_eq!(paused.next_run_at, None);
+    assert_policy(
+        svc.set_enabled(edit_receipt(id), true).await,
+        ActionPolicyError::NoFutureFirings,
+    );
+
+    // An edit keeps the spent time spent; a newly added past time is due now.
+    let later = (Utc::now() - chrono::Duration::seconds(5)).trunc_subsecs(0);
+    config.trigger = serde_json::from_value(json!({"type": "multiple", "triggers": [
+        {"type": "once", "at": at},
+        {"type": "once", "at": later},
+    ]}))
+    .unwrap();
+    let updated = svc
+        .update_action(edit_receipt(id), update(config))
+        .await
+        .unwrap();
+    assert_eq!(updated.next_run_at, Some(later));
 }
 
 fn conditional_configuration() -> ActionConfiguration {

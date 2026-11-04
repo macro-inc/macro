@@ -125,8 +125,15 @@ call setup. Existing channel calls and the upcoming-events list remain available
 For local verification, set `VITE_ENABLE_QUICK_CALLS=true` or `false` explicitly.
 
 During a quick or scheduled call, signed-in participants can open **Call chat**
-from its separate button at the far right of the bottom toolbar. Messages persist
-with that call session and are visible in its recording page after it ends.
+with **Open chat** at the bottom-right. On desktop, **Copy Meeting Url** sits at
+the bottom-left and becomes icon-only in narrow panes. Active phone calls fill
+the viewport, with persistent Back and Copy Meeting Url header islands. Media/chat
+controls sit below the video, hide after four idle seconds, and return on tap;
+chat and settings keep them visible. Back returns to the app without hanging up.
+Tap or click a participant to focus them; tap again to restore the grid.
+Talking participants have an accent-colored border.
+Desktop chat fills the call content height; phones use a bottom sheet. Messages
+persist with that call session and are visible in its recording page after it ends.
 Guests can open the same call discussion and read and send text while connected;
 their messages show their name with **(Guest)**. The signed-in composer’s `@` menu includes Macro and available agents;
 mentioning one invokes it in the call thread. Reply on any live message, including
@@ -229,7 +236,7 @@ show progress; the event summary and selected time stay visible. Choose another
 time preserves attendee input. Event booking pages do not show an All meetings
 link back to the profile chooser.
 The private confirmation shows the meeting, date, timezone, location, and guest.
-In the native iOS and Android apps, standalone booking and receipt pages keep a
+In the native desktop, iOS and Android apps, standalone booking and receipt pages keep a
 sticky **Back to Macro** button below the device's top safe-area inset. It returns to
 the app through the router without reloading, including while the page is loading
 or unavailable. Browser pages and embedded booking dialogs omit this button.
@@ -459,6 +466,8 @@ call instead of creating duplicates. The invitation includes
 the call link in its description and, when no location was entered, its location.
 Event details show a plain icon row with a standard gray `Join Macro call` button
 and `Copy call link`, without an enclosing border or the full URL.
+Day-view chips, which show an event's location under its time on desktop and phone,
+leave out a location that is only the call link and keep a location typed beside it.
 Editing or rescheduling an owned event retains and updates its selected Macro call.
 Selecting `Macro call` on an owned editable event without one adds a call on save;
 choosing another option removes its generated Macro link from the invitation.
@@ -500,7 +509,11 @@ window. The picker, the people chosen and the send button stay visible at every
 event position and window height. The same regression covers both editors in a
 tall and a short window (`?guests=add` or `?guests=forward`, with
 `?contacts=late` delivering the picker's contacts on
-`window.calendarPreview.deliverContacts()`) and their phone sheets.
+`window.calendarPreview.deliverContacts()`) and their phone sheets. With `?addresses=long` it
+checks that a named guest's address and an address-only guest's address, neither with a space,
+wrap inside the popover and the phone drawer. CI runs it (`just test-calendar-details-browser`
+in `apps/web`) when calendar details or the calendar queries change; its `preview-adapters.tsx`
+stands in for those queries, so give it every export and callback argument the components use.
 
 The `New event` composer (also opened by dragging a range on the grid) has an `Event kind`
 pill choosing between `Event` and `Out of office`. Picking `Out of office` hides the guests,
@@ -545,6 +558,16 @@ selected, since the presets never end. Either is saved as written while untouche
 start to another weekday keeps a custom rule on the day the editor shows. Event details (desktop
 popover and phone drawer) and Forward by email's summary name the day too (`Weekly on Saturday ·
 3 occurrences`), read from the occurrence's original slot in the event's own time zone.
+Each guest in event details (desktop popover and phone drawer) shows their name with their
+address on a muted line under it, as the user card shows a person, followed by `Organizer` or
+`Optional` and any comment; the viewer's own row (`(you)`) does too, which tells their inboxes
+apart. A guest Macro has no name for (no Macro profile or email contact) shows the address
+once, as the name. The address wraps instead of truncating in a narrow popover or on a phone
+(the event details browser regression's `?addresses=long`).
+The `Organizer` row under the calendar row, shown when someone other than the calendar
+organizes the event, adds the organizer's address the same way. Teammates' read-only event
+details (`Shared in Macro · Read only`) list guests by provider name, or by address when there
+is none.
 As in Google Calendar, the guests row of the details popover (a bottom sheet on phones)
 carries `Copy guest emails` and `Email guests` icon buttons, both hidden when you are the
 only guest (always so on a snapshot). Copying puts every guest's address on the clipboard,
@@ -1349,9 +1372,10 @@ is an accessible disclosure that starts closed and stays open across unchanged
 permission refreshes and window refocus on desktop and mobile; attachments remain below it.
 ICS attachments show a calendar icon in the attachment pill and file headers on
 desktop and mobile, including when the email uses `application/ics` or a
-parameterized `text/calendar` MIME type. Opening the attachment of a message that shows a
+parameterized `text/calendar` MIME type. The pill's download button saves the
+file without opening it and without adding it to Drive. Opening the attachment of a message that shows a
 card opens a dialog (a drawer on phones) with the same card, so its RSVP or `Add to calendar`
-works there, and `Download .ics`, which saves the file without adding it to Drive. When an
+works there, and `Download .ics`, which saves the file the same way. When an
 invitation's card falls back to the saved invitation (the event matches nothing on your
 calendars), its status line reads `Saved invitation.` in the dialog; the card in the email
 adds that the original email or invitation attachment has more options. A shared event shown

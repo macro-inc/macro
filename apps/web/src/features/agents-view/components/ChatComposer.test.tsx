@@ -339,18 +339,16 @@ describe('Chat session input', () => {
     expect(send).toHaveBeenCalledWith('Next request', []);
   });
 
-  it('advances a queued prompt with Enter only when the draft is empty', () => {
+  it('never stops the turn from Enter on an empty draft', () => {
     const send = vi.fn();
     const stop = vi.fn();
-    render(() => (
-      <ChatSessionInput busy hasQueuedMessages onSend={send} onStop={stop} />
-    ));
+    render(() => <ChatSessionInput busy onSend={send} onStop={stop} />);
     editor.enter?.(undefined, '');
-    expect(stop).toHaveBeenCalledOnce();
+    expect(stop).not.toHaveBeenCalled();
     type('Another request');
     editor.enter?.(undefined, editor.text);
     expect(send).toHaveBeenCalledWith('Another request', []);
-    expect(stop).toHaveBeenCalledOnce();
+    expect(stop).not.toHaveBeenCalled();
   });
 
   describe('on a touch device', () => {
@@ -370,24 +368,6 @@ describe('Chat session input', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Send' }));
       expect(send).toHaveBeenCalledWith('first line', []);
       expect(hapticImpact).toHaveBeenCalledExactlyOnceWith('light');
-    });
-
-    it('does not advance the queue from Enter either', () => {
-      const stop = vi.fn();
-      render(() => (
-        <ChatSessionInput
-          busy
-          hasQueuedMessages
-          onSend={vi.fn()}
-          onStop={stop}
-        />
-      ));
-      expect(editor.enter?.(undefined, '')).toBe(false);
-      expect(stop).not.toHaveBeenCalled();
-      fireEvent.click(
-        screen.getByRole('button', { name: 'Flush queued messages' })
-      );
-      expect(stop).toHaveBeenCalledOnce();
     });
 
     it('applies to a new conversation as well', () => {
@@ -586,7 +566,6 @@ describe('attachments in the shared composer', () => {
     render(() => (
       <ChatSessionInput
         busy
-        hasQueuedMessages
         onSend={send}
         onStop={stop}
         attachments={attachments()}

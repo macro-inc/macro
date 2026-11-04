@@ -306,7 +306,7 @@ describe('grid cell', () => {
     expect(navigate).toHaveBeenCalledWith(1);
   });
 
-  it('focuses the read-only boolean wrapper without enabling its checkbox', () => {
+  it('focuses the read-only boolean wrapper without enabling its checkbox', async () => {
     let control: GridCellControl | undefined;
     const onWrite = vi.fn(async () => true);
     render(() => (
@@ -322,11 +322,71 @@ describe('grid cell', () => {
       />
     ));
     const checkbox = screen.getByRole('checkbox') as HTMLInputElement;
+    await userEvent.click(screen.getByText('Name', { selector: 'label' }));
     control?.focus();
     expect(checkbox.disabled).toBe(true);
+    expect(checkbox.readOnly).toBe(true);
     expect(document.activeElement).toBe(checkbox.parentElement);
     expect(onWrite).not.toHaveBeenCalled();
   });
+
+  it('shows the host empty label for an unset read-only select', () => {
+    const [value, setValue] = createSignal<DatabaseCellValue>(null);
+    render(() => (
+      <GridCell
+        column={{
+          ...column,
+          dataType: 'SELECT_STRING',
+          options: [{ id: 'open', label: 'Open', color: null }],
+        }}
+        value={value()}
+        emptyLabel="—"
+        canEdit={false}
+        onWrite={vi.fn(async () => true)}
+        onAddOption={vi.fn(async () => true)}
+      />
+    ));
+    expect(screen.getByText('—')).toBeTruthy();
+    setValue('Open');
+    expect(screen.queryByText('—')).toBeNull();
+    expect(screen.getByText('Open')).toBeTruthy();
+  });
+
+  it.each([true, false])(
+    'distinguishes an unset boolean from false with a host empty label (editable: %s)',
+    async (canEdit) => {
+      const [value, setValue] = createSignal<DatabaseCellValue>(null);
+      const onWrite = vi.fn(async (next: DatabaseCellValue) => {
+        setValue(next);
+        return true;
+      });
+      render(() => (
+        <GridCell
+          column={{ ...column, dataType: 'BOOLEAN' }}
+          value={value()}
+          emptyLabel="—"
+          canEdit={canEdit}
+          onWrite={onWrite}
+          onAddOption={vi.fn(async () => true)}
+        />
+      ));
+      const checkbox = screen.getByRole('checkbox') as HTMLInputElement;
+      expect(screen.getByText('—')).toBeTruthy();
+      expect(checkbox.indeterminate).toBe(true);
+      if (canEdit) {
+        await userEvent.click(screen.getByText('—'));
+        expect(onWrite).toHaveBeenLastCalledWith(1);
+        expect(checkbox.checked).toBe(true);
+      }
+      setValue(0);
+      expect(screen.queryByText('—')).toBeNull();
+      expect(checkbox.checked).toBe(false);
+      expect(checkbox.indeterminate).toBe(false);
+      setValue(1);
+      expect(checkbox.checked).toBe(true);
+      expect(checkbox.indeterminate).toBe(false);
+    }
+  );
 
   it('shows Unnamed for an empty title without saving placeholder text', async () => {
     const onWrite = vi.fn(async () => true);

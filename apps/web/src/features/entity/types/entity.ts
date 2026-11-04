@@ -13,6 +13,10 @@ import type {
   CallStatus as StorageCallStatus,
 } from '@service-storage/generated/schemas';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
+import type {
+  GraphqlEmailFocusCategory,
+  GraphqlEmailImportanceTrend,
+} from '@service-storage/graphql/generated/graphql';
 
 export type EntityBase = {
   id: string;
@@ -301,10 +305,12 @@ export type EmailAttachment = {
 
 /** A thread's Focus classification; present only on Focus list rows. */
 export type EmailFocus = {
+  category: GraphqlEmailFocusCategory;
   /** 0 to 100. */
   importance: number;
   needsReply: boolean;
   needsFollowUp: boolean;
+  importanceTrend: GraphqlEmailImportanceTrend;
 };
 
 // We spread ApiThreadPreviewCursor into the email entity, should we explcitly include all those fields here, or only add them as needed?
@@ -368,11 +374,13 @@ export type CallEntity = EntityBase & {
 };
 
 /**
- * What a routine is doing now. A run in progress outranks activation, and a
- * paused routine keeps its stale `next_run_at`, so pause outranks the schedule.
+ * What a routine is doing now. A run in progress outranks activation, a failed
+ * last run outranks the schedule, and a paused routine keeps its stale
+ * `next_run_at`, so pause outranks the schedule.
  */
 export type RoutineStatus =
   | { kind: 'running' }
+  | { kind: 'failed' }
   | { kind: 'paused' }
   | { kind: 'scheduled'; nextRunAt: string }
   | { kind: 'unscheduled' };
@@ -381,8 +389,11 @@ export function routineStatus(facts: {
   enabled: boolean;
   isRunning: boolean;
   nextRunAt?: string | null;
+  /** The latest finished run failed; it stays visible until a run succeeds. */
+  lastRunFailed?: boolean;
 }): RoutineStatus {
   if (facts.isRunning) return { kind: 'running' };
+  if (facts.lastRunFailed) return { kind: 'failed' };
   if (!facts.enabled) return { kind: 'paused' };
   if (facts.nextRunAt) return { kind: 'scheduled', nextRunAt: facts.nextRunAt };
   return { kind: 'unscheduled' };
@@ -428,13 +439,13 @@ export type CrmCompanyEntity = EntityBase & {
 export type CrmContactEntity = EntityBase & {
   type: 'crm_contact';
   teamId?: string;
-  companyName?: string;
+  companyName?: string | null;
   firstInteraction?: string;
   lastInteraction?: string;
-  /** The company the contact belongs to. */
-  companyId: string;
-  /** The contact's email address. */
-  email: string;
+  /** The company the contact belongs to; absent without a company. */
+  companyId?: string | null;
+  /** The contact's email address; absent for a contact added by name. */
+  email?: string | null;
   /** Whether the contact has been hidden from the CRM listings. Only
    * admin/owner team members can see `hidden: true` rows. */
   hidden: boolean;
@@ -673,6 +684,13 @@ export const isCrmContactEntity = (
 /** The full-email identity shared by CRM contacts and Macro users. Plus
  * aliases stay distinct, as in the backend's authorized contact deduplication. */
 export const crmContactEmailKey = (email: string) => email.trim().toLowerCase();
+
+/** One key per person: the normalized email, or the record id for a contact
+ * added without one, which never merges with anyone else. */
+export const crmContactIdentityKey = (contact: {
+  id: string;
+  email?: string | null;
+}) => (contact.email ? crmContactEmailKey(contact.email) : `id:${contact.id}`);
 
 export const isDocumentEntity = (
   entity: EntityData

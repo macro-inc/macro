@@ -12,6 +12,7 @@ export {
   getDisplayNameParts,
   getInitials,
   getInitialsFromName,
+  isAgentAccount,
   seedMockDisplayNames,
   useDisplayName,
   useDisplayNameParts,

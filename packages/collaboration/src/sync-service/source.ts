@@ -171,7 +171,10 @@ export class SyncServiceSource implements LiveSyncSource {
   public status: LiveSyncSource['status'] = () =>
     mapToSyncStatus(this.ws.connectionState);
 
-  public pushUpdate = async (updates: RawUpdate[]): Promise<boolean> => {
+  public pushUpdate: LiveSyncSource['pushUpdate'] = async (
+    updates,
+    options
+  ) => {
     if (!this.initialSyncReceived) return false;
     if (updates.length === 0) return true;
 
@@ -187,7 +190,11 @@ export class SyncServiceSource implements LiveSyncSource {
       () => false
     );
 
-    this.ws.send(FromPeer.fromPeerUpdate({ updates, id }));
+    this.ws.send(
+      options?.commentOnly
+        ? FromPeer.fromPeerCommentUpdate({ updates, id })
+        : FromPeer.fromPeerUpdate({ updates, id })
+    );
     return acked;
   };
 

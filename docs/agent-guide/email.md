@@ -65,7 +65,24 @@ view. `Shift+M` mutes the selected rows or the open thread, and `S` and
 `Shift+M` also work on a thread opened in its own split. In a thread, `O` opens
 or closes the selected message (the latest when none is selected), `Shift+O`
 opens every message including the collapsed middle run, and `N`/`P` step
-messages like the arrows. `Cmd+Up`/`Cmd+Down` jump to either end of a list.
+messages like the arrows. `B` in an open thread, or `Create event` in its
+title menu, opens the event composer with the subject as the title and every
+From, To and Cc address except the viewer's as guests (Bcc and drafts are left
+out); both are hidden while the calendar is off. With `enable-universal-input`
+on, the composer also sends the subject and latest message to
+`/universal_input/extract` (`intent: 'calendar'`, the Cmd+K event extractor)
+and, while a small spinner shows left of Cancel (left of Create event on phones),
+fills in
+the suggested title, time, location and repeat rule. Suggestions that arrive after
+any edit are dropped. The desktop reply and standalone composers have the same
+action as a calendar button between attach and the schedule clock (tooltip
+`Create event` and `B`; in the standalone composer `B` works while focus is
+outside the editor, as in a reply it works from the thread). It uses the draft instead: subject, To
+and Cc as guests, and the written text (with the replied-to message in a
+reply) for extraction. The button is accented while the written text, above
+any quoted thread, pairs a meeting word with a time (`proposesMeeting` in
+`email-compose/core/meeting-intent.ts`, a keyword heuristic until a classifier
+replaces it). `Cmd+Up`/`Cmd+Down` jump to either end of a list.
 In every composer `Cmd+Shift+.`, `Cmd+Shift+,` and `Cmd+Shift+D` discard the
 draft exactly like its trash button, `Cmd+Shift+U` opens the attach picker, and
 `Cmd+Shift+X`, `7`, `8` and `9` apply strikethrough, numbered list, bulleted
@@ -131,7 +148,10 @@ further reloads, even while an offline edit is still queued.
 Opening an attachment opens it in a split from its Drive copy, except a
 calendar file: it opens its event (see the calendar invitations section of the
 calendar guide), or downloads when Macro could not read one, and creates no
-Drive file.
+Drive file. Every received attachment chip, of any file type, has a download
+button joined to the filename that saves the file without opening it. Images
+and videos keep their previews and get the same chip. Cloud-reference chips
+stay open-only.
 
 Imported Outlook attachments keep their provider identity, including inline
 images. Cloud-reference attachment chips open the original Outlook message.
@@ -148,6 +168,14 @@ query: load more threads from the same address, then check that existing row
 names and their hover cards do not change. Repeat with a text query to exercise
 the search-service results.
 
+Hovering a sender's name in a Mail row or a collapsed thread message shows the
+sender's card. Clicking the name, or anywhere else on the row, opens that email
+or message; clicking inside the card (its actions, padding, or name) never
+opens the row underneath. On touch, tapping a collapsed message's sender
+picture opens the message. The backend-free desktop/phone regression is
+`bunx playwright test --config src/features/entity/browser-test/playwright.config.ts`
+from `apps/web`.
+
 `Favorites`, directly below Inbox on desktop, lists starred Macro emails across
 Signal, Noise, and archived mail. It respects the selected inboxes and filters; search
 within the tab is also restricted to favorites. Removing a star removes the row
@@ -158,24 +186,58 @@ changing the list query. Text search still resolves favorite IDs for the search
 service. An empty favorites list shows `No favorite emails`.
 
 With `enable-email-focus` and `enable-graphql-soup` on, a `Focus` tab leads the
-desktop Inbox tabs and the mobile pills. It lists signal
+desktop Inbox tabs and the mobile pills. It lists inbox
 threads from the last 30 days that the email focus worker
 (`services/email_focus_worker`) classified as worth attention, including inboxes
-linked to the account, by priority: the importance score halved for every 2 days
-since the thread's latest inbound mail. Rows at least 32rem wide show the 0-100
-importance score with a five-bar meter just before the date, and from 56rem also
-`Reply needed` and `Follow up` tag pills ahead of it. Narrower rows drop both;
-without a touch screen the score moves before the subject, and touch screens
-show neither. The desktop header's sort dropdown (`Sort Focus`, among the view
-options) switches between **Priority**,
-**Importance** and **Most recent**; touch layouts have no dropdown and keep the
-saved order (Priority by default). The filter menu adds a Focus group (Reply
+linked to the account, newest first by the thread's latest message in either
+direction, so a thread the owner replied to last sorts and dates by that reply.
+Day headers group the list and stay pinned while it scrolls: Today, Yesterday,
+the weekday for the rest of the last week, then the date. These are Focus's own
+(`focusDateBucket`); Signal keeps the shared date sections, drops a leading
+Today, and does not pin. Key
+mail stays in whatever its score: mail waiting on the owner's reply, and mail from
+someone the owner wrote to in the last 90 days, unless it reads as outreach or
+automated. A calendar change (a reschedule, update, cancellation or proposed new
+time) stays in until its event is over, or for 7 days after the notice when it is a
+recurring event or no time can be read, and is the only mail with the Calendar
+category in Focus. New invites and RSVP notices stay out. A calendar notice counts
+only as the thread's latest message: once anyone writes after it, the thread takes
+the same rules as any other. A thread the owner answered last joins 3 days after
+their message, unless that message only closes the exchange ("Thanks!"). `Follow up`
+marks only threads whose
+latest message is the owner's, and `Reply needed` only threads whose latest message
+is someone else's. A thread holding only the owner's sent mail is not listed: it
+has no inbox state, so Mark Done could not remove it. Each row says why it is
+there with one tag pill: `Reply needed`, else `Follow up`, else its category as
+`Calendar change`, `Customer`, `Teammate` or `Contact`; other categories show no
+pill. While the list is sorted by Importance, the 0-100 score and five bars
+colored by band join it, red through green; Most recent hides them. The meter's
+tooltip and label add `rising` or `falling` while a thread's importance is moving:
+Jev judges per thread whether it gets more pressing or matters less as it sits, and
+the read moves the score from the time of its classified message until newer mail
+arrives. Threads classified before those questions stay flat until their next
+message. Rows at least 40rem wide keep both just before the date. Narrower Focus
+rows stack, on touch too, with the subject on its own line and both ahead of the
+preview, so a narrow desktop window still shows the meter. The desktop
+header's sort dropdown (`Sort Focus`, among the view options) switches between
+**Most recent**, the default, and **Importance**, which
+is flat with no day headers. Touch layouts, phone or tablet, have no dropdown and
+keep the saved order: Most recent, which shows no meter, unless that browser had
+already saved Importance. A saved order
+that no longer exists restores as Most recent. The filter menu adds a Focus group (Reply
 needed, Follow up) on this tab only and has no Status or Done group there. The
-list is one `user.emailFocus` GraphQL read filtered on the client; it refreshes
-on open, not live. Mark Done hides the row at once and archives the thread; Undo
-brings it back. The worker classifies only inboxes on its
-`FOCUS_ENABLED_EMAIL_DOMAINS` allowlist, so other accounts see the empty state
-`Nothing needs you`.
+list is one `user.emailFocus` GraphQL read filtered on the client. New mail
+reaches an open Focus tab within seconds: when the worker stores a
+classification it pushes `refresh_email` (`focus_updated`) to the inbox's owner
+and delegates, and the tab reads the list again without a reload. A hidden tab
+reads once when it next shows, and any other tab reads when Focus opens. Time
+passing stores nothing and pushes nothing, so a follow-up coming due, a
+calendar change whose event ends or importance moving shows at the tab's next
+read. Mark
+Done hides the row at once and archives the thread; Undo brings it back. The
+worker classifies only inboxes on its `FOCUS_ENABLED_EMAIL_DOMAINS` allowlist, so
+other accounts see the empty state `You're caught up`, whose **See the rest of
+your inbox** opens Signal.
 
 `Archived`, between All mail and Shared in the desktop Library section, lists
 your own archived (Mail Done) threads: the
@@ -361,6 +423,38 @@ the backend schema containing `setEmailThreadArchived` and
 Browser WASM and native cache builds must include the regenerated schema metadata;
 native offline archive support therefore requires a full app build, not just OTA.
 
+### Spam and Trash
+
+The desktop sidebar and mobile tabs include **Spam** and **Trash**. Spam reads
+Gmail Spam or Outlook Junk; Trash reads Gmail Trash or Outlook Deleted Items.
+Account, alias, and facet filters stay within the selected folder. Mixed threads
+show their latest message in that folder, and folder membership is checked before
+pagination. These views load server pages; full-text search and offline predicate
+filtering are not available for them yet.
+
+Spam and Trash order threads by their latest message in that folder. Reading a thread or receiving a newer message outside the folder does not change that folder cursor. Pending provider moves affect folder membership immediately.
+
+Use **Not spam** on a Spam row or **Restore** on a Trash row. The same
+action appears in the selection toolbar for bulk restores, including on mobile.
+Outlook restores received mail to Inbox and provider drafts to Drafts. Gmail removes
+the Spam or Trash label and preserves the remaining labels; it does not add Inbox.
+Gmail restores update the canonical preview and ordering immediately, before the
+queued provider write completes.
+Outlook uses pending mailbox operations, and the thread's operation notice shows
+provider confirmation or failure. Gmail uses the existing queued label-sync path
+and does not expose those operation notices. A success toast means the request was
+accepted, not that the provider has confirmed it. Read/unread actions and provider
+sync events refresh the isolated folder lists. Outlook operation polling runs
+while the thread is open; otherwise
+folder refresh follows the provider sync event. The unread facet remains
+thread-level, so an unread reply outside Spam can make its Spam row unread.
+Bulk restores limit concurrent requests. Failed requests remain retryable, and a partial
+bulk failure does not undo successful restores. While a restore is pending, switch
+folders and select another row; completing the old restore must preserve the new
+selection. The same applies to selecting different rows in the original folder.
+Restoring an individual row also preserves selections on other rows.
+No permanent-delete action is added.
+
 ### Cached Mail filtering
 
 The per-query caches for email threads, channels, and native offline document
@@ -399,7 +493,7 @@ headers use the selected Mail view's indexed timestamps, not a preview cached fr
 another view. Drafts and Sent display their latest eligible message snapshot, even
 when a newer normal message is the ALL preview; no message bodies are needed.
 Sent also requires a canonical outbound timestamp. Trashed messages cannot supply
-any preview. All Mail also excludes spam/junk, including its cached preview and
+these cached previews. All Mail also excludes spam/junk, including its cached preview and
 non-draft baseline after draft edits. Mixed threads show the latest message outside
 spam and trash; excluded messages must not consume a page slot. Drafts and Sent
 keep their own canonical preview membership. Mail profiles v5/v6 require fresh
@@ -553,6 +647,15 @@ Opening a saved draft from **Drafts** shows the title menu beside Back, since
 the composer has no subject line above it, and keeps the applicable header
 controls. Verify these remain
 available when returning to Drafts and reopening the draft.
+On desktop a new email opens inside the Email view at `/app/mail/new`, from
+Email's **New**, the app's New menu, a `mailto:` link, a calendar event's
+guest email, or the agent's send-email card: the composer takes the list's
+place beside the Email sidebar, and the reading pane folds away while it is
+open. Its Back arrow returns to the list. Replies stay in their thread. Touch
+keeps the full-screen composer. Check with the reading pane on and off that
+the sidebar stays usable while composing, that Back and sidebar tabs return
+to the list without the draft in its URL, that reloading keeps the draft, and
+that a second **New** starts an empty composer.
 **Delete** in the title menu moves the thread to Trash and returns to the same
 filtered list. Its toast offers **Undo** to restore the email.
 **Sender → Signal**, **Sender → Noise** and **Block Sender**, and the sender
@@ -1377,3 +1480,7 @@ On desktop, drag a tag from the sidebar onto an email row. Its existing tags
 remain; dropping onto a selected row applies the tag to every taggable selected
 row. The dragged chip shows the tag color and name, and the target gets an outline.
 Clicking the tag still filters the list. Mobile uses the existing tag menu.
+
+Opening a row clears its unread state immediately; direct details mark read when
+ready. See [reading items](notifications.md#reading-items) for failure, keyboard,
+mobile, and email inbox checks.

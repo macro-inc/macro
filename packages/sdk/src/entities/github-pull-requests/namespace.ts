@@ -2,7 +2,11 @@ import type { MacroClient } from '../../utils/client';
 import type { ForeignEntity } from '../foreign/foreign-entity';
 import { GithubPullRequest } from './pull-request';
 
-/** GitHub pull request snapshots and captured diffs. */
+/**
+ * GitHub pull request snapshots and captured diffs.
+ *
+ * @routing Use when reading a GitHub pull request's stored snapshot or diff; not changing code, which a coding agent does.
+ */
 export class GithubPullRequestNamespace {
   constructor(private readonly client: MacroClient) {}
 

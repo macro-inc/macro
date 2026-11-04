@@ -4,8 +4,6 @@ import { setGlobalSplitManager } from '@app/signal/splitLayout';
 import { globalTabManager } from '@app/signal/tabLayout';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { DesktopTabsController } from '@components/app/tab-layout/DesktopTabsController';
-import { Resize } from '@core/component/Resize';
-import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import { useIsAuthenticated, useUserId } from '@core/context/user';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -26,15 +24,25 @@ import { PopoverSplitRenderer } from './components/PopoverSplitRenderer';
 import { SplitPanel } from './components/SplitPanel';
 import { SplitLayoutContext } from './context';
 import { INITIAL_LAYER_ID, type SplitLayers, sameIds } from './layers';
-import { createSplitLayout, type SplitId } from './layoutManager';
+import {
+  createSplitLayout,
+  paneOf,
+  type SplitId,
+  splitOf,
+} from './layoutManager';
 import { createMobilePaneStack } from './mobile/createMobilePaneStack';
 import { MobileSplitContainer } from './mobile/MobileSplitContainer';
+import {
+  consumeSplitBelowIntent,
+  installSplitBelowIntentTracker,
+} from './split-below-intent';
+import type { TileArea } from './split-geometry';
 import {
   resolveContentLocation,
   splitContentFromLocation,
 } from './split-router/legacy-route';
-import { DEFAULT_SPLIT_MIN_WIDTH } from './splitContentSizing';
 import { createSplitFocusTracker } from './splitFocusTracker';
+import { TiledSplits } from './TiledSplits';
 
 /** Own the layout and creation context above both app chrome and pane content. */
 export function SplitLayoutProvider(props: ParentProps) {
@@ -49,7 +57,9 @@ export function SplitLayoutProvider(props: ParentProps) {
     toContent: splitContentFromLocation,
     stacked: isNativeMobilePlatform,
     sessionKey: () => (authenticated() === false ? undefined : userId()),
+    consumeSplitBelowIntent,
   });
+  if (!isTouchDevice()) onCleanup(installSplitBelowIntentTracker());
   createEffect(() => setGlobalSplitManager(splitManager));
   onCleanup(() => setGlobalSplitManager(undefined));
 
@@ -65,6 +75,7 @@ export function SplitLayoutProvider(props: ParentProps) {
 
 /** The app route's view: one panel per pane in the owning layout. */
 export function SplitLayout() {
+  const router = useSplitRouter();
   const layout = useContext(SplitLayoutContext);
   if (!layout) throw new Error('SplitLayout requires SplitLayoutProvider');
   const splitManager = layout.manager;
@@ -118,13 +129,22 @@ export function SplitLayout() {
 
   function SplitLayer(props: { layer: string }) {
     const live = () => layers().isLive(props.layer);
-    const layerIds = createMemo(() => layers().layerSplits(props.layer), [], {
-      equals: sameIds,
-    });
-    const [resizeContext, setResizeContext] = createSignal<ResizeZoneCtx>();
+    const layerPanes = createMemo(
+      () => layers().layerSplits(props.layer).map(paneOf),
+      [],
+      { equals: sameIds }
+    );
+    // The live layer tiles as the open panes do; a parked one as its panes
+    // did when they were parked.
+    const tiles = () => {
+      const [first] = layerPanes();
+
+      return first && router.layoutOf(first);
+    };
+    const [area, setArea] = createSignal<TileArea>();
     createEffect(() => {
-      const context = resizeContext();
-      if (live() && context) splitManager.setResizeContext(context);
+      const measured = area();
+      if (live() && measured) splitManager.setTileArea(measured);
     });
 
     return (
@@ -136,42 +156,42 @@ export function SplitLayout() {
         inert={!live()}
         data-split-layer={props.layer}
       >
-        <Resize.Zone
-          direction="horizontal"
+        <TiledSplits
+          layout={tiles}
+          panes={layerPanes}
           gutter={useBentoLayout() ? 6 : 1}
           showDividers={!useBentoLayout()}
-          captureResizeCtx={setResizeContext}
+          onResize={(path, shares) => {
+            if (live()) router.resizeLayout(path, shares);
+          }}
+          onArea={setArea}
         >
-          <For each={layerIds()}>
-            {(id, index) => (
+          {(pane, index) => {
+            const id = splitOf(pane);
+
+            return (
               <Show when={splitManager.getSplit(id)}>
                 {(handle) => (
                   <Show when={splitManager.splitState(id)}>
                     {(split) => (
                       <Suspense>
-                        <Resize.Panel
-                          id={id}
-                          minSize={DEFAULT_SPLIT_MIN_WIDTH}
+                        <SplitPanel
+                          split={split()}
+                          handle={handle()}
+                          active={activeSplitSelector(id)}
+                          setPanelRef={(panelRef) =>
+                            panelRefs.set(id, panelRef)
+                          }
                           index={index()}
-                        >
-                          <SplitPanel
-                            split={split()}
-                            handle={handle()}
-                            active={activeSplitSelector(id)}
-                            setPanelRef={(panelRef) =>
-                              panelRefs.set(id, panelRef)
-                            }
-                            index={index()}
-                          />
-                        </Resize.Panel>
+                        />
                       </Suspense>
                     )}
                   </Show>
                 )}
               </Show>
-            )}
-          </For>
-        </Resize.Zone>
+            );
+          }}
+        </TiledSplits>
       </div>
     );
   }

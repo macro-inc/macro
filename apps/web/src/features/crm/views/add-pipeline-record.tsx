@@ -45,6 +45,11 @@ import {
   recordChoiceProblem,
   recordDetail,
 } from '../core/pipeline-record';
+import {
+  missingStageFields,
+  requiredStageFields,
+  type StageRequirement,
+} from '../core/stage-requirements';
 import { companyCreationError } from './create-company';
 import { contactCreationError } from './create-contact';
 import {
@@ -67,6 +72,9 @@ export function AddPipelineRecordDialog(
   props: CellRenderers & {
     pipeline: Pick<Pipeline, 'name' | 'recordType'>;
     columns: DatabaseViewColumn[];
+    requirements?: StageRequirement[];
+    requirementsLoading?: boolean;
+    requirementsError?: boolean;
     /** Values the row starts with, such as the stage of the board lane it was added in. */
     initialValues: Record<string, DatabaseCellValue>;
     onCreate: (creation: RecordCreation) => Promise<boolean>;
@@ -82,8 +90,8 @@ export function AddPipelineRecordDialog(
     contacts
       ? contacts.contacts().map((contact) => ({
           id: contact.id,
-          name: contact.name || contact.email,
-          detail: contact.email,
+          name: contact.name || contact.email || '',
+          detail: contact.email ?? '',
         }))
       : companies.companies().map((entry) => ({
           id: entry.id,
@@ -109,7 +117,35 @@ export function AddPipelineRecordDialog(
   // One intent per dialog, so submitting again never adds a second row.
   const intentId = `pipeline-record:${createUniqueId()}`;
   const [choice, setChoice] = createSignal<RecordChoice>();
-  const [values, setValues] = createSignal(props.initialValues);
+  const [draftValues, setDraftValues] = createSignal(props.initialValues);
+  const [selectedOptions, setSelectedOptions] = createSignal<
+    Record<string, string>
+  >(
+    Object.fromEntries(
+      props.columns.flatMap((column) => {
+        if (column.dataType !== 'SELECT_STRING' || column.isMultiSelect)
+          return [];
+        const option = column.options.find(
+          (option) => option.label === props.initialValues[column.id]
+        );
+        return option ? [[column.id, option.id]] : [];
+      })
+    )
+  );
+  // Keep selections tied to option identities while schema polling renames labels.
+  // Deleted columns leave the submitted row; surviving drafts retain their edits.
+  const values = createMemo<Record<string, DatabaseCellValue>>(() =>
+    Object.fromEntries(
+      props.columns.flatMap((column) => {
+        const value = draftValues()[column.id];
+        if (value === undefined) return [];
+        const selected = selectedOptions()[column.id];
+        const option =
+          selected && column.options.find((option) => option.id === selected);
+        return [[column.id, option ? option.label : value]];
+      })
+    )
+  );
   const [newOption, setNewOption] = createSignal<string>();
   const [pending, setPending] = createSignal(false);
   const [error, setError] = createSignal<string>();
@@ -121,6 +157,8 @@ export function AddPipelineRecordDialog(
       (column) =>
         column.id !== title()?.id && !column.relation && canEditCell(column)
     );
+  const required = () =>
+    requiredStageFields(props.columns, props.requirements ?? [], values());
   const noun = company ? 'deal' : 'contact';
   const submitLabel = company ? 'Add deal' : 'Add contact';
   const existing = () => {
@@ -144,7 +182,19 @@ export function AddPipelineRecordDialog(
     setError(undefined);
   };
   const write = (columnId: string, value: DatabaseCellValue) => {
-    setValues((current) => ({ ...current, [columnId]: value }));
+    setDraftValues((current) => ({ ...current, [columnId]: value }));
+    setSelectedOptions((current) => {
+      const next = { ...current };
+      const column = props.columns.find((column) => column.id === columnId);
+      const option =
+        column?.dataType === 'SELECT_STRING' && !column.isMultiSelect
+          ? column.options.find((option) => option.label === value)
+          : undefined;
+      if (option) next[columnId] = option.id;
+      else delete next[columnId];
+      return next;
+    });
+    setError(undefined);
     return Promise.resolve(true);
   };
 
@@ -204,7 +254,39 @@ export function AddPipelineRecordDialog(
       editing.blur();
     const current = choice();
     const titleField = title();
-    if (pending() || !current || !titleField) return;
+    if (
+      pending() ||
+      props.requirementsLoading ||
+      props.requirementsError ||
+      !current ||
+      !titleField
+    )
+      return;
+    const deleted = props.columns.find(
+      (column) =>
+        column.dataType === 'SELECT_STRING' &&
+        !column.isMultiSelect &&
+        selectedOptions()[column.id] &&
+        !column.options.some(
+          (option) => option.id === selectedOptions()[column.id]
+        )
+    );
+    if (deleted) {
+      setError(
+        `The selected ${deleted.name} option was deleted. Choose another value.`
+      );
+      return;
+    }
+    const missing = missingStageFields(
+      required().filter((column) => column.id !== titleField.id),
+      values()
+    );
+    if (missing.length) {
+      setError(
+        `Fill in ${missing.map((column) => column.name).join(', ')} for the selected stage.`
+      );
+      return;
+    }
     const problem = recordChoiceProblem(current, domainCompanies());
     if (problem) {
       setError(problem);
@@ -442,12 +524,26 @@ export function AddPipelineRecordDialog(
                 <div ref={fieldList} class="flex flex-col gap-5">
                   <Key each={fields()} by="id">
                     {(column) => (
-                      <StackedField column={column()}>
+                      <StackedField
+                        column={column()}
+                        required={required().some(
+                          (field) => field.id === column().id
+                        )}
+                      >
                         <div class={FIELD_BOX}>{cell(column)}</div>
                       </StackedField>
                     )}
                   </Key>
                 </div>
+                <Show
+                  when={props.requirementsLoading || props.requirementsError}
+                >
+                  <p role="status" class="text-sm text-ink-muted">
+                    {props.requirementsError
+                      ? 'Could not load stage requirements. Reopen this form to retry.'
+                      : 'Loading stage requirements…'}
+                  </p>
+                </Show>
                 <Show when={error()}>
                   {(message) => (
                     <p role="alert" class="text-sm text-failure">
@@ -469,7 +565,12 @@ export function AddPipelineRecordDialog(
                 <EntityComposer.Submit
                   type="submit"
                   hasContent={!!choice()}
-                  disabled={!choice() || pending()}
+                  disabled={
+                    !choice() ||
+                    pending() ||
+                    props.requirementsLoading ||
+                    props.requirementsError
+                  }
                 >
                   {pending() ? 'Adding…' : submitLabel}
                 </EntityComposer.Submit>
@@ -488,6 +589,7 @@ const FIELD_BOX =
 /** A field with its label stacked above the input. */
 function StackedField(props: {
   column: DatabaseViewColumn | undefined;
+  required?: boolean;
   children: JSX.Element;
 }) {
   return (
@@ -501,6 +603,9 @@ function StackedField(props: {
               entityType={column().specificEntityType}
             />
             <span class="truncate">{column().name}</span>
+            <Show when={props.required}>
+              <span class="text-accent">Required</span>
+            </Show>
           </div>
         )}
       </Show>

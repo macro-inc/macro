@@ -92,7 +92,7 @@ it('uses a single hamburger touch toggle and closes when leaving navigation', ()
   expect(screen.queryByRole('navigation')).toBeNull();
   fireEvent.click(toggle);
   fireEvent.focusOut(toggle, {
-    relatedTarget: screen.getByRole('link', { name: 'Open app' }),
+    relatedTarget: screen.getByRole('link', { name: 'Sign Up' }),
   });
   expect(screen.queryByRole('navigation')).toBeNull();
 });

@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::{ExecutionRecord, ExecutionStatus};
 use macro_user_id::cowlike::CowLike;
-use serde_json::json;
+use serde_json::{Value, json};
 use std::{
     collections::HashMap,
     sync::{
@@ -120,7 +120,7 @@ struct Actions {
     owner: MacroUserIdStr<'static>,
     archived: AtomicBool,
     prompter: Mutex<Option<TurnPrompter>>,
-    calls: Mutex<Vec<Value>>,
+    calls: Mutex<Vec<String>>,
     actors: Mutex<Vec<String>>,
     presentations: Mutex<Vec<ReviewId>>,
     views: Mutex<Vec<(AgentSessionId, PresentedView)>>,
@@ -129,6 +129,17 @@ struct Actions {
     action_gate: tokio::sync::Notify,
     action_started: tokio::sync::Notify,
     approvable: AtomicBool,
+    fail_import: AtomicBool,
+}
+impl Actions {
+    async fn act(&self, account_holder: &MacroUserIdStr<'static>, call: String) {
+        self.actors.lock().unwrap().push(account_holder.to_string());
+        self.calls.lock().unwrap().push(call);
+        self.action_started.notify_one();
+        if self.block_actions.load(Ordering::SeqCst) {
+            self.action_gate.notified().await;
+        }
+    }
 }
 #[async_trait]
 impl ReviewActions for Actions {
@@ -144,34 +155,41 @@ impl ReviewActions for Actions {
         account_holder: &MacroUserIdStr<'static>,
         record: &ReviewRecord,
     ) -> Result<bool, CodeModeError> {
-        assert_eq!(
-            Some(account_holder),
-            record.acting_user.as_ref().or(Some(&self.owner))
-        );
+        assert_eq!(account_holder, &record.acting_user);
         Ok(self.approvable.load(Ordering::SeqCst))
     }
-    fn validate(&self, _: ReviewKind, draft: &Value) -> Result<(), CodeModeError> {
-        if draft.get("subject").and_then(Value::as_str).is_none() {
-            return Err(invalid());
-        }
-        Ok(())
-    }
-    async fn execute(
+    async fn send_email(
         &self,
-        owner: &MacroUserIdStr<'static>,
-        _: &ReviewRecord,
-        draft: Value,
-    ) -> Result<Value, CodeModeError> {
-        self.actors.lock().unwrap().push(owner.to_string());
-        self.calls.lock().unwrap().push(draft.clone());
-        self.action_started.notify_one();
-        if self.block_actions.load(Ordering::SeqCst) {
-            self.action_gate.notified().await;
-        }
-        if draft.get("fail").is_some() {
+        account_holder: &MacroUserIdStr<'static>,
+        draft: &EmailDraft,
+    ) -> Result<EmailResult, CodeModeError> {
+        self.act(account_holder, draft.subject.clone()).await;
+        if draft.subject == "fail" {
             return Err(invalid());
         }
-        Ok(draft)
+        Ok(EmailResult::Sent {
+            message_id: macro_uuid::generate_uuid_v7(),
+            thread_id: macro_uuid::generate_uuid_v7(),
+        })
+    }
+    async fn create_calendar_event(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &CalendarDraft,
+    ) -> Result<CalendarResult, CodeModeError> {
+        unreachable!("these tests present email and import reviews")
+    }
+    async fn start_import(
+        &self,
+        account_holder: &MacroUserIdStr<'static>,
+        _: &ReviewRecord,
+        _: &ImportDraft,
+    ) -> Result<ImportResult, CodeModeError> {
+        self.act(account_holder, "import".into()).await;
+        if self.fail_import.load(Ordering::SeqCst) {
+            return Err(invalid());
+        }
+        Ok(ImportResult::default())
     }
     async fn present(
         &self,
@@ -224,6 +242,7 @@ impl Fixture {
             action_gate: tokio::sync::Notify::new(),
             action_started: tokio::sync::Notify::new(),
             approvable: AtomicBool::new(true),
+            fail_import: AtomicBool::new(false),
         });
         let service = ReviewService::new(
             store.clone(),
@@ -252,17 +271,22 @@ impl Fixture {
             EntityType::AgentSession,
         )
     }
-    fn input(&self, drafts: Vec<Value>) -> CreateReview {
-        CreateReview {
-            execution_id: Some(self.execution),
-            kind: ReviewKind::Email,
-            title: "Emails".into(),
-            drafts,
-        }
+    fn input(&self, kind: &str, drafts: Vec<Value>) -> CreateReview {
+        let input = json!({
+            "executionId": self.execution,
+            "title": "Drafts",
+            "kind": kind,
+            "drafts": drafts,
+        });
+        decode(&serde_json::to_vec(&input).unwrap()).unwrap()
     }
     async fn create(&self, drafts: Vec<Value>) -> ReviewRecord {
         self.service
-            .create(&self.edit(), &self.actions.owner, self.input(drafts))
+            .create(
+                &self.edit(),
+                &self.actions.owner,
+                self.input("email", drafts),
+            )
             .await
             .unwrap()
     }
@@ -275,6 +299,7 @@ impl Fixture {
                 let row = self.store.get(self.session, id).await.unwrap();
                 if row
                     .items
+                    .states()
                     .iter()
                     .all(|item| item.status != ReviewItemStatus::Submitting)
                 {
@@ -295,11 +320,23 @@ async fn owner_receipt_execution_and_archive_are_enforced_before_creation() {
         .into_owned();
     assert!(matches!(
         f.service
-            .create(&f.edit(), &stranger, f.input(vec![json!({"subject":"x"})]))
+            .create(
+                &f.edit(),
+                &stranger,
+                f.input(
+                    "email",
+                    vec![
+                        json!({"subject":"x", "body":"Hello", "to":[{"email":"ada@example.com"}]})
+                    ]
+                )
+            )
             .await,
         Err(CodeModeError::Forbidden)
     ));
-    let mut input = f.input(vec![json!({"subject":"x"})]);
+    let mut input = f.input(
+        "email",
+        vec![json!({"subject":"x", "body":"Hello", "to":[{"email":"ada@example.com"}]})],
+    );
     input.execution_id = Some(ExecutionId::mint());
     assert!(matches!(
         f.service.create(&f.edit(), &f.actions.owner, input).await,
@@ -315,7 +352,12 @@ async fn owner_receipt_execution_and_archive_are_enforced_before_creation() {
             .create(
                 &wrong_receipt,
                 &f.actions.owner,
-                f.input(vec![json!({"subject":"x"})])
+                f.input(
+                    "email",
+                    vec![
+                        json!({"subject":"x", "body":"Hello", "to":[{"email":"ada@example.com"}]})
+                    ]
+                )
             )
             .await,
         Err(CodeModeError::Forbidden)
@@ -326,7 +368,12 @@ async fn owner_receipt_execution_and_archive_are_enforced_before_creation() {
             .create(
                 &f.edit(),
                 &f.actions.owner,
-                f.input(vec![json!({"subject":"x"})])
+                f.input(
+                    "email",
+                    vec![
+                        json!({"subject":"x", "body":"Hello", "to":[{"email":"ada@example.com"}]})
+                    ]
+                )
             )
             .await,
         Err(CodeModeError::Forbidden)
@@ -337,7 +384,11 @@ async fn owner_receipt_execution_and_archive_are_enforced_before_creation() {
 async fn double_submit_claims_before_work_and_never_repeats_an_action() {
     let f = Fixture::new();
     f.actions.block_actions.store(true, Ordering::SeqCst);
-    let row = f.create(vec![json!({"subject":"x"})]).await;
+    let row = f
+        .create(vec![
+            json!({"subject":"x", "body":"Hello", "to":[{"email":"ada@example.com"}]}),
+        ])
+        .await;
     let decision = ReviewDecision::Submit {
         revision: row.revision,
         items: vec![],
@@ -353,12 +404,15 @@ async fn double_submit_claims_before_work_and_never_repeats_an_action() {
     assert!(matches!(a.err().or(b.err()), Some(CodeModeError::Conflict)));
     f.actions.action_started.notified().await;
     assert_eq!(
-        f.store.get(f.session, row.id).await.unwrap().items[0].status,
+        f.store.get(f.session, row.id).await.unwrap().items.states()[0].status,
         ReviewItemStatus::Submitting
     );
     f.actions.action_gate.notify_one();
     let final_row = f.settled(row.id).await;
-    assert_eq!(final_row.items[0].status, ReviewItemStatus::Completed);
+    assert_eq!(
+        final_row.items.states()[0].status,
+        ReviewItemStatus::Completed
+    );
     assert_eq!(f.actions.calls.lock().unwrap().len(), 1);
     assert!(matches!(
         f.service
@@ -368,7 +422,7 @@ async fn double_submit_claims_before_work_and_never_repeats_an_action() {
                 row.id,
                 ReviewDecision::Submit {
                     revision: final_row.revision,
-                    items: vec![row.items[0].id]
+                    items: vec![row.items.states()[0].id]
                 }
             )
             .await,
@@ -380,9 +434,9 @@ async fn send_all_preserves_successes_and_ambiguous_failure_without_retries() {
     let f = Fixture::new();
     let row = f
         .create(vec![
-            json!({"subject":"one"}),
-            json!({"subject":"two", "fail":true}),
-            json!({"subject":"three"}),
+            json!({"subject":"one", "body":"Hello", "to":[{"email":"ada@example.com"}]}),
+            json!({"subject":"fail", "body":"Hello", "to":[{"email":"ada@example.com"}]}),
+            json!({"subject":"three", "body":"Hello", "to":[{"email":"ada@example.com"}]}),
         ])
         .await;
     f.service
@@ -401,8 +455,9 @@ async fn send_all_preserves_successes_and_ambiguous_failure_without_retries() {
     assert_eq!(
         completed
             .items
+            .states()
             .iter()
-            .map(|i| i.status.clone())
+            .map(|i| i.status)
             .collect::<Vec<_>>(),
         vec![
             ReviewItemStatus::Completed,
@@ -416,11 +471,15 @@ async fn send_all_preserves_successes_and_ambiguous_failure_without_retries() {
 #[tokio::test]
 async fn edit_checks_saved_revision_and_draft_bounds_and_dismiss_does_not_execute() {
     let f = Fixture::new();
-    let row = f.create(vec![json!({"subject":"x"})]).await;
-    let edit = |revision, draft| ReviewDecision::Edit {
+    let row = f
+        .create(vec![
+            json!({"subject":"x", "body":"Hello", "to":[{"email":"ada@example.com"}]}),
+        ])
+        .await;
+    let edit = |revision, draft: Value| ReviewDecision::Edit {
         revision,
-        item: row.items[0].id,
-        draft,
+        item: row.items.states()[0].id,
+        draft: Box::new(serde_json::from_value(json!({"kind":"email", "draft": draft})).unwrap()),
     };
     let changed = f
         .service
@@ -428,7 +487,10 @@ async fn edit_checks_saved_revision_and_draft_bounds_and_dismiss_does_not_execut
             &f.edit(),
             &f.actions.owner,
             row.id,
-            edit(row.revision, json!({"subject":"edited"})),
+            edit(
+                row.revision,
+                json!({"subject":"edited", "body":"Hello", "to":[{"email":"ada@example.com"}]}),
+            ),
         )
         .await
         .unwrap();
@@ -438,7 +500,10 @@ async fn edit_checks_saved_revision_and_draft_bounds_and_dismiss_does_not_execut
                 &f.edit(),
                 &f.actions.owner,
                 row.id,
-                edit(row.revision, json!({"subject":"stale"}))
+                edit(
+                    row.revision,
+                    json!({"subject":"stale", "body":"Hello", "to":[{"email":"ada@example.com"}]})
+                )
             )
             .await,
         Err(CodeModeError::Conflict)
@@ -451,7 +516,7 @@ async fn edit_checks_saved_revision_and_draft_bounds_and_dismiss_does_not_execut
                 row.id,
                 edit(
                     changed.revision,
-                    json!({"subject":"x".repeat(MAX_DRAFT_BYTES)})
+                    json!({"subject":"x".repeat(MAX_DRAFT_BYTES), "body":"Hello", "to":[{"email":"ada@example.com"}]})
                 )
             )
             .await
@@ -470,19 +535,26 @@ async fn edit_checks_saved_revision_and_draft_bounds_and_dismiss_does_not_execut
         .await
         .unwrap();
     let final_row = f.settled(row.id).await;
-    assert_eq!(final_row.items[0].status, ReviewItemStatus::Dismissed);
+    assert_eq!(
+        final_row.items.states()[0].status,
+        ReviewItemStatus::Dismissed
+    );
     assert!(f.actions.calls.lock().unwrap().is_empty());
 }
 #[tokio::test]
 async fn list_recovers_stale_claim_without_repeating_external_work() {
     let f = Fixture::new();
-    let mut row = f.create(vec![json!({"subject":"x"})]).await;
-    row.items[0].status = ReviewItemStatus::Submitting;
+    let mut row = f
+        .create(vec![
+            json!({"subject":"x", "body":"Hello", "to":[{"email":"ada@example.com"}]}),
+        ])
+        .await;
+    row.items.states_mut()[0].status = ReviewItemStatus::Submitting;
     row.decision = Some(ReviewDecisionContext {
         by: f.actions.owner.to_string(),
         via: DecisionVia::Card,
         revision: row.revision,
-        items: vec![row.items[0].id],
+        items: vec![row.items.states()[0].id],
     });
     row.updated_at -= STALE_SUBMISSION_MS + 1;
     f.store
@@ -491,7 +563,10 @@ async fn list_recovers_stale_claim_without_repeating_external_work() {
         .unwrap()
         .insert((f.session, row.id.0), row.clone());
     let listed = f.service.list(&f.view(), f.execution).await.unwrap();
-    assert_eq!(listed[0].items[0].status, ReviewItemStatus::Unknown);
+    assert_eq!(
+        listed[0].items.states()[0].status,
+        ReviewItemStatus::Unknown
+    );
     assert!(f.actions.calls.lock().unwrap().is_empty());
     let events = f.store.2.lock().unwrap();
     assert_eq!(events.len(), 1);
@@ -503,7 +578,11 @@ async fn list_recovers_stale_claim_without_repeating_external_work() {
 #[tokio::test]
 async fn read_and_list_never_cross_session_scope_and_creation_is_bounded() {
     let f = Fixture::new();
-    let row = f.create(vec![json!({"subject":"x"})]).await;
+    let row = f
+        .create(vec![
+            json!({"subject":"x", "body":"Hello", "to":[{"email":"ada@example.com"}]}),
+        ])
+        .await;
     let other = EntityAccessReceipt::dangerously_assert_authenticated_user(
         f.actions.owner.clone(),
         &macro_uuid::generate_uuid_v7().to_string(),
@@ -520,25 +599,188 @@ async fn read_and_list_never_cross_session_scope_and_creation_is_bounded() {
             .unwrap()
             .is_empty()
     );
-    for drafts in [
-        vec![],
-        vec![json!({"subject":"x"}); 101],
-        vec![json!({"subject":"x".repeat(MAX_DRAFT_BYTES)})],
-        vec![json!({"wrong":"shape"})],
+    let oversized = f.input(
+        "email",
+        vec![json!({"subject":"x".repeat(MAX_DRAFT_BYTES), "body":"Hello", "to":[{"email":"ada@example.com"}]}); 9],
+    );
+    assert!(
+        f.service
+            .create(&f.edit(), &f.actions.owner, oversized)
+            .await
+            .is_err()
+    );
+    let one_oversized_draft = f.input(
+        "email",
+        vec![json!({"subject":"x".repeat(MAX_DRAFT_BYTES), "body":"Hello", "to":[{"email":"ada@example.com"}]})],
+    );
+    assert!(
+        f.service
+            .create(&f.edit(), &f.actions.owner, one_oversized_draft)
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn an_import_review_keeps_the_source_it_was_presented_with() {
+    let f = Fixture::new();
+    let row = f
+        .service
+        .create(
+            &f.edit(),
+            &f.actions.owner,
+            f.input("import", vec![json!({"source":"notion"})]),
+        )
+        .await
+        .unwrap();
+    let item = row.items.states()[0].id;
+    let edit = |source| ReviewDecision::Edit {
+        revision: row.revision,
+        item,
+        draft: Box::new(ReviewDraft::Import(ImportDraft {
+            source,
+            excluded: vec![],
+            shared: vec![],
+            personal: vec![],
+        })),
+    };
+
+    assert!(matches!(
+        f.service
+            .decide(
+                &f.edit(),
+                &f.actions.owner,
+                row.id,
+                edit(ImportReviewSource::Jira)
+            )
+            .await,
+        Err(CodeModeError::Invalid(_))
+    ));
+    f.service
+        .decide(
+            &f.edit(),
+            &f.actions.owner,
+            row.id,
+            edit(ImportReviewSource::Notion),
+        )
+        .await
+        .unwrap();
+}
+
+#[test]
+fn decoding_a_review_is_its_validation_and_errors_name_only_the_location() {
+    let email = json!({"subject":"Hi", "body":"Hello", "to":[{"email":"ada@example.com"}]});
+    let decoded = decode::<CreateReview>(
+        &serde_json::to_vec(&json!({"title":"Emails", "kind":"email", "drafts":[email]})).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(decoded.drafts.kind(), ReviewKind::Email);
+
+    for input in [
+        json!({"title":"Emails", "kind":"email", "drafts":[]}),
+        json!({"title":"Emails", "kind":"email", "drafts":vec![email.clone(); 101]}),
+        json!({"title":"   ", "kind":"email", "drafts":[email]}),
+        json!({"title":"Emails", "kind":"email", "drafts":[{"subject":"missing body"}]}),
+        json!({"title":"Events", "kind":"calendar", "drafts":[{"title":"missing time"}]}),
+        json!({"title":"Import", "kind":"import", "drafts":[{"source":"notion"}, {"source":"jira"}]}),
+        json!({"title":"Import", "kind":"import", "drafts":[{"source":"slack"}]}),
+        json!({"title":"Import", "kind":"import", "drafts":[{"source":"notion", "write":"everything"}]}),
     ] {
         assert!(
-            f.service
-                .create(&f.edit(), &f.actions.owner, f.input(drafts))
-                .await
-                .is_err()
+            decode::<CreateReview>(&serde_json::to_vec(&input).unwrap()).is_err(),
+            "{input}"
+        );
+    }
+
+    let secret = "not-an-address-secret";
+    let Err(CodeModeError::Invalid(message)) = decode::<CreateReview>(
+        &serde_json::to_vec(&json!({
+            "title":"Emails",
+            "kind":"email",
+            "drafts":[{"subject":"Hi", "body":"Hello", "to":[{"email":secret}]}]
+        }))
+        .unwrap(),
+    ) else {
+        panic!("an invalid address must not decode");
+    };
+    assert!(!message.contains(secret), "{message}");
+}
+
+#[test]
+fn an_import_review_keeps_its_source_and_owner_choices() {
+    for source in ["notion", "linear", "jira"] {
+        let input = json!({
+            "title":"Import",
+            "kind":"import",
+            "drafts":[{
+                "source": source,
+                "excluded": ["01a15623-f76d-7ea0-955d-a9ecb91a520e"],
+                "shared": ["01a15623-f76d-7ea0-955d-a9ecb91a520f"],
+                "personal": ["01a15623-f76d-7ea0-955d-a9ecb91a5210"]
+            }]
+        });
+        let decoded = decode::<CreateReview>(&serde_json::to_vec(&input).unwrap()).unwrap();
+        assert_eq!(
+            serde_json::to_value(&decoded).unwrap()["drafts"],
+            input["drafts"]
         );
     }
 }
 
 #[tokio::test]
+async fn an_edit_must_match_the_review_kind_and_a_submit_needs_a_complete_draft() {
+    let f = Fixture::new();
+    let row = f
+        .create(vec![json!({"subject":"Hi", "body":"Hello", "to":[]})])
+        .await;
+    let item = row.items.states()[0].id;
+    assert!(matches!(
+        f.service
+            .decide(
+                &f.edit(),
+                &f.actions.owner,
+                row.id,
+                ReviewDecision::Edit {
+                    revision: row.revision,
+                    item,
+                    draft: Box::new(ReviewDraft::Import(ImportDraft {
+                        source: ImportReviewSource::Notion,
+                        excluded: vec![],
+                        shared: vec![],
+                        personal: vec![],
+                    })),
+                },
+            )
+            .await,
+        Err(CodeModeError::Invalid(_))
+    ));
+
+    let Err(CodeModeError::Invalid(message)) = f
+        .service
+        .decide(
+            &f.edit(),
+            &f.actions.owner,
+            row.id,
+            ReviewDecision::Submit {
+                revision: row.revision,
+                items: vec![],
+            },
+        )
+        .await
+    else {
+        panic!("a draft without recipients cannot be sent");
+    };
+    assert_eq!(message, "Add at least one recipient.");
+    let unsaved = f.store.get(f.session, row.id).await.unwrap();
+    assert_eq!(unsaved.revision, row.revision);
+    assert_eq!(unsaved.items.states()[0].status, ReviewItemStatus::Pending);
+    assert!(f.actions.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn standalone_presentation_completes_without_approval_or_external_dispatch() {
     let f = Fixture::new();
-    let mut input = f.input(vec![json!({"subject":"Approve this proposal?"})]);
+    let mut input = f.input("email", vec![json!({"subject":"Approve this proposal?", "body":"Hello", "to":[{"email":"ada@example.com"}]})]);
     input.execution_id = None;
     f.actions.block_actions.store(true, Ordering::SeqCst);
     let row = tokio::time::timeout(
@@ -550,7 +792,7 @@ async fn standalone_presentation_completes_without_approval_or_external_dispatch
     .unwrap();
     assert!(row.execution_id.is_none());
     assert!(row.presented_at.is_some());
-    assert_eq!(row.items[0].status, ReviewItemStatus::Pending);
+    assert_eq!(row.items.states()[0].status, ReviewItemStatus::Pending);
     assert!(f.actions.calls.lock().unwrap().is_empty());
     assert!(f.store.2.lock().unwrap().is_empty());
     assert_eq!(*f.actions.presentations.lock().unwrap(), vec![row.id]);
@@ -567,7 +809,7 @@ async fn interrupted_presentation_preserves_review_and_retries_same_identity() {
             .create(
                 &f.edit(),
                 &f.actions.owner,
-                f.input(vec![json!({"subject":"Which?"})])
+                f.input("email", vec![json!({"subject":"Which?", "body":"Hello", "to":[{"email":"ada@example.com"}]})])
             )
             .await
             .is_err()
@@ -605,7 +847,10 @@ async fn native_presentation_checks_authenticated_and_current_owner() {
     let f = Fixture::new();
     let mut session = agent_session::testing::test_agent_session(f.session);
     // The test session's owner differs from the authoritative review owner.
-    let mut input = f.input(vec![json!({"subject":"Which?"})]);
+    let mut input = f.input(
+        "email",
+        vec![json!({"subject":"Which?", "body":"Hello", "to":[{"email":"ada@example.com"}]})],
+    );
     input.execution_id = None;
     assert!(matches!(
         f.service
@@ -642,7 +887,11 @@ fn questions_use_acp_instead_of_the_saved_review_contract() {
 #[tokio::test]
 async fn a_system_turn_cannot_approve_even_with_owner_credentials() {
     let f = Fixture::new();
-    let row = f.create(vec![json!({"subject":"x"})]).await;
+    let row = f
+        .create(vec![
+            json!({"subject":"x", "body":"Hello", "to":[{"email":"ada@example.com"}]}),
+        ])
+        .await;
     *f.actions.prompter.lock().unwrap() = Some(TurnPrompter {
         action_id: agent_runtime_protocol::domain::action::AgentActionId::mint(),
         user: Some(f.actions.owner.clone()),
@@ -666,7 +915,10 @@ async fn a_system_turn_cannot_approve_even_with_owner_credentials() {
         .await
         .unwrap();
     let settled = f.settled(row.id).await;
-    assert_eq!(settled.items[0].status, ReviewItemStatus::Completed);
+    assert_eq!(
+        settled.items.states()[0].status,
+        ReviewItemStatus::Completed
+    );
     let events = f.store.2.lock().unwrap();
     assert_eq!(events.len(), 2);
     assert!(events.iter().all(|event| event.wake));
@@ -678,8 +930,7 @@ async fn a_system_turn_cannot_approve_even_with_owner_credentials() {
 #[tokio::test]
 async fn a_started_import_waits_quietly_for_its_write_to_settle() {
     let f = Fixture::new();
-    let mut input = f.input(vec![json!({"subject":"plan"})]);
-    input.kind = ReviewKind::Import;
+    let input = f.input("import", vec![json!({"source":"notion"})]);
     let row = f
         .service
         .create(&f.edit(), &f.actions.owner, input)
@@ -700,7 +951,10 @@ async fn a_started_import_waits_quietly_for_its_write_to_settle() {
         .unwrap();
     let started = f.settled(row.id).await;
 
-    assert_eq!(started.items[0].status, ReviewItemStatus::Completed);
+    assert_eq!(
+        started.items.states()[0].status,
+        ReviewItemStatus::Completed
+    );
     let events = f.store.2.lock().unwrap();
     assert_eq!(events.len(), 1);
     assert!(matches!(
@@ -713,8 +967,8 @@ async fn a_started_import_waits_quietly_for_its_write_to_settle() {
 #[tokio::test]
 async fn an_import_that_could_not_start_settles_and_wakes() {
     let f = Fixture::new();
-    let mut input = f.input(vec![json!({"subject":"plan", "fail": true})]);
-    input.kind = ReviewKind::Import;
+    f.actions.fail_import.store(true, Ordering::SeqCst);
+    let input = f.input("import", vec![json!({"source":"notion"})]);
     let row = f
         .service
         .create(&f.edit(), &f.actions.owner, input)
@@ -735,7 +989,7 @@ async fn an_import_that_could_not_start_settles_and_wakes() {
         .unwrap();
     let ended = f.settled(row.id).await;
 
-    assert_eq!(ended.items[0].status, ReviewItemStatus::Unknown);
+    assert_eq!(ended.items.states()[0].status, ReviewItemStatus::Unknown);
     let events = f.store.2.lock().unwrap();
     assert_eq!(events.len(), 2);
     assert!(!events[0].wake);
@@ -749,8 +1003,7 @@ async fn an_import_that_could_not_start_settles_and_wakes() {
 #[tokio::test]
 async fn dismissing_an_import_wakes_the_session() {
     let f = Fixture::new();
-    let mut input = f.input(vec![json!({"subject":"plan"})]);
-    input.kind = ReviewKind::Import;
+    let input = f.input("import", vec![json!({"source":"notion"})]);
     let row = f
         .service
         .create(&f.edit(), &f.actions.owner, input)
@@ -790,11 +1043,11 @@ async fn requester_reviews_are_decided_and_executed_only_with_their_account() {
         .create(
             &access,
             &requester,
-            f.input(vec![json!({"subject":"requester draft"})]),
+            f.input("email", vec![json!({"subject":"requester draft", "body":"Hello", "to":[{"email":"ada@example.com"}]})]),
         )
         .await
         .unwrap();
-    assert_eq!(row.acting_user.as_ref(), Some(&requester));
+    assert_eq!(row.acting_user, requester);
     let decision = ReviewDecision::Submit {
         revision: row.revision,
         items: vec![],
@@ -810,7 +1063,10 @@ async fn requester_reviews_are_decided_and_executed_only_with_their_account() {
         .await
         .unwrap();
     let settled = f.settled(row.id).await;
-    assert_eq!(settled.items[0].status, ReviewItemStatus::Completed);
+    assert_eq!(
+        settled.items.states()[0].status,
+        ReviewItemStatus::Completed
+    );
     assert_eq!(
         *f.actions.actors.lock().unwrap(),
         vec![requester.to_string()]
@@ -820,7 +1076,11 @@ async fn requester_reviews_are_decided_and_executed_only_with_their_account() {
 #[tokio::test]
 async fn a_chat_submit_waits_until_the_review_is_approvable() {
     let f = Fixture::new();
-    let row = f.create(vec![json!({"subject":"x"})]).await;
+    let row = f
+        .create(vec![
+            json!({"subject":"x", "body":"Hello", "to":[{"email":"ada@example.com"}]}),
+        ])
+        .await;
     *f.actions.prompter.lock().unwrap() = Some(TurnPrompter {
         action_id: agent_runtime_protocol::domain::action::AgentActionId::mint(),
         user: Some(f.actions.owner.clone()),
@@ -840,7 +1100,7 @@ async fn a_chat_submit_waits_until_the_review_is_approvable() {
     ));
     let unsaved = f.store.get(f.session, row.id).await.unwrap();
     assert_eq!(unsaved.revision, row.revision);
-    assert_eq!(unsaved.items[0].status, ReviewItemStatus::Pending);
+    assert_eq!(unsaved.items.states()[0].status, ReviewItemStatus::Pending);
     assert!(f.actions.calls.lock().unwrap().is_empty());
 
     f.actions.approvable.store(true, Ordering::SeqCst);
@@ -851,7 +1111,10 @@ async fn a_chat_submit_waits_until_the_review_is_approvable() {
         .unwrap();
     assert_eq!(approved.decision.unwrap().via, DecisionVia::Chat);
     let settled = f.settled(row.id).await;
-    assert_eq!(settled.items[0].status, ReviewItemStatus::Completed);
+    assert_eq!(
+        settled.items.states()[0].status,
+        ReviewItemStatus::Completed
+    );
 }
 
 fn a_view() -> Value {
@@ -910,7 +1173,7 @@ async fn a_view_the_renderer_would_not_draw_is_turned_back_with_what_to_fix() {
     };
     assert_eq!(
         message,
-        "The view was not presented: it does not match the PresentView schema. view.widgets[0].type should be one of `md`, `timeline`, `list`, `channelMessage`, `container`. Fix it and present the whole view again."
+        "The view was not presented: it does not match the PresentView schema. view.widgets[0].type should be one of `md`, `timeline`, `list`, `channelMessage`, `events`, `cards`, `tags`, `container`. Fix it and present the whole view again."
     );
     assert!(f.actions.views.lock().unwrap().is_empty());
 }

@@ -346,7 +346,7 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
           <GridCell
             {...options}
             column={column()}
-            emptyLabel=""
+            emptyLabel={options?.emptyLabel ?? ''}
             value={rowValue(row(), column().id)}
             canEdit={props.canEdit}
             renderTextEditor={props.renderTextEditor}
@@ -573,6 +573,7 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
               onOpen={records.open}
               onCreate={records.createRow}
               onWrite={writeRowCell}
+              onCompose={props.onComposeRecord}
               onDuplicate={records.duplicateRow}
               onRequestDelete={records.requestDelete}
               renderMentionValue={props.renderMentionValue}

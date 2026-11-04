@@ -41,4 +41,15 @@ pub enum ValidationError {
     /// The root of a tool input schema must be an object.
     #[error("tool input schema root must have type \"object\"")]
     RootNotObject,
+    /// Providers reject composition keywords at the tool input root.
+    #[error(
+        "tool input schema root must not contain oneOf, anyOf, or allOf; put alternatives inside a named property instead of flattening them"
+    )]
+    RootComposition,
+    /// A `$ref` loop runs only through required, non-nullable fields, so no
+    /// finite value fits it; Gemini rejects the whole request.
+    #[error(
+        "schema has a $ref loop of required fields closing at {0}; make a field on the loop optional or nullable, or reach it through an array that may be empty"
+    )]
+    RequiredRefLoop(String),
 }

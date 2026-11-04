@@ -335,6 +335,16 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   plain sentence for an event that is not the user's: `ReadCalendarEvent` and
   `NameSearch` both give it, because models follow it more reliably than the
   fields behind it.
+- A series Google split off another without moving it in time has the id
+  `<parent>_R<first start>`, a UID of its own and the parent's `created`; a
+  split that moved it gets an unrelated id. A change to a `_R` series' recurrence
+  answers with a new event, new id and UID at `sequence` + 1, and leaves the old
+  id, and every later `_R` slice of that parent, a cancelled tombstone Google
+  refuses to patch (`badRequest`). The entity follows the UID, so the echo lands
+  on a new entity: `delete_copy` retires the old id's source in the same request,
+  or the old entity keeps every occurrence until the tombstone syncs, and
+  `truncate_recurring_event` reads a tombstone as gone, so a delete from a copy
+  or later slice that has not synced yet retires it too.
 - Copies of one meeting pair by `calendar_meeting_uid(ical_uid)`, not the raw
   UID: Exchange gives a meeting it imports from an invitation its own UID that
   wraps the original after `vCal-Uid`, and the SQL function unwraps it, so an
@@ -349,6 +359,18 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   removing a source whose typed `event_type` is out of office raises it, since
   every sync of a removed meeting's attendees reaches their teammates' calendars
   and the hint blanks their overlay.
+- The Outlook sync (`src/domain/outlook.rs`) refreshes a page's events one
+  at a time, first pending id first, and retries that id after any error, so
+  one error blocks the calendar. An event the adapter cannot normalize is not
+  an error: it comes back as `OutlookEventRefresh::Unreadable` with the Graph
+  property it rejected, and the sync skips it, as Google never shows an event
+  it cannot normalize. The event is absent: a copy stored before is retired
+  (`OutlookCalendarProgress::Unreadable`), since without the calendar error
+  Google shows beside its old copy a stale copy would look current, but its
+  page membership stays so later tombstones resolve. The round still finishes
+  as a clean sync. The warning `skipping an Outlook event Macro cannot read`
+  and the `calendar.outlook_sync` span carry `calendar_id`,
+  `provider_event_id` and `rejected_field`.
 - A sync of a `ready`, already synced account stays `ready`, on Google as on
   Outlook, including after a re-grant that kept calendar access, whose sync tokens
   survive. Any other state is catching up and marks it `syncing`: a first import,

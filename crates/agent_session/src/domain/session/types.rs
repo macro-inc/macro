@@ -105,6 +105,20 @@ pub struct SessionRestoreSupport {
     pub load: bool,
 }
 
+impl SessionRestoreSupport {
+    /// What an agent's `initialize` answer offers.
+    pub fn of(response: &agent_client_protocol::schema::v1::InitializeResponse) -> Self {
+        Self {
+            resume: response
+                .agent_capabilities
+                .session_capabilities
+                .resume
+                .is_some(),
+            load: response.agent_capabilities.load_session,
+        }
+    }
+}
+
 /// Where the sessions on one connection learn that its ACP handshake is done.
 ///
 /// Exactly one session runs `initialize` per connection; the rest wait for
