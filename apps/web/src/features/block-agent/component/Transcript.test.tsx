@@ -62,6 +62,7 @@ vi.mock('./ReplyToSelection', () => ({
 const message = (turn: number, text = 'hello'): FoldedMessage =>
   ({
     agentSessionId: 'session',
+    key: `${turn}:agent`,
     turn,
     author: { kind: 'agent' },
     parts: [{ kind: 'text', text }],
@@ -219,7 +220,11 @@ describe('Transcript live turn', () => {
     session.turn = () => 'running';
     const view = mount([
       message(0),
-      { ...message(1), author: { kind: 'user', userId: 'u' } } as FoldedMessage,
+      {
+        ...message(1),
+        key: '1:user',
+        author: { kind: 'user', userId: 'u' },
+      } as FoldedMessage,
     ]);
     await settle();
     expect(inFlight(view)).toEqual(['0:agent=false', '1:user=false']);
@@ -258,6 +263,7 @@ describe('Transcript with the shared TanStack ThreadList', () => {
     setMessages([
       {
         ...message(0),
+        key: '0:user',
         author: { kind: 'user', userId: 'owner' },
       } as FoldedMessage,
       ...Array.from({ length: 80 }, (_, turn) => message(turn)),

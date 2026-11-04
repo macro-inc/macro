@@ -60,8 +60,8 @@ function tabCopy(tab: EmailTab): { title: string; description: string } {
       description: 'Email you archive will appear here.',
     }))
     .with('focus', () => ({
-      title: 'Nothing needs you',
-      description: `Signal email worth your attention from the last ${FOCUS_WINDOW_DAYS} days appears here.`,
+      title: "You're caught up",
+      description: `Email worth your attention from the last ${FOCUS_WINDOW_DAYS} days appears here.`,
     }))
     .with('spam', () => ({
       title: 'No spam',
@@ -81,7 +81,7 @@ function tabCopy(tab: EmailTab): { title: string; description: string } {
 }
 
 export function EmailEmptyState() {
-  const { state, setFacets, setInboxIds } = useEmailView();
+  const { state, setFacets, setInboxIds, setTab } = useEmailView();
   const emailActive = useEmailLinksStatus();
   const startAddInbox = useAddInboxFlow();
   // Scheduled has no search or filters; text typed on another tab stays behind.
@@ -155,6 +155,14 @@ export function EmailEmptyState() {
             graphic={EmptyStateInboxTrayGraphic}
             title={copy().title}
             description={copy().description}
+            primaryAction={
+              state.tab === 'focus'
+                ? {
+                    label: 'See the rest of your inbox',
+                    onClick: () => setTab('important'),
+                  }
+                : undefined
+            }
             documentationUrl={EMAIL_DOCS_URL}
           />
         )}

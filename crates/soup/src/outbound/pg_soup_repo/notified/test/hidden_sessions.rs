@@ -159,3 +159,47 @@ async fn unlisted_runs_with_notifications_stay_out_of_feeds_that_exclude_them(
     assert!(!keys(&notified).contains(&(EntityType::AgentSession, mine.to_string())));
     Ok(())
 }
+
+/// A hidden session its owner follows (they prompted it from the session
+/// itself) is back in Home's notified and work feeds for them.
+#[sqlx::test(
+    fixtures(path = "../../../../../fixtures", scripts("notified_at")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn followed_hidden_sessions_return_to_broad_feeds(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let (mine, _) = seed_agent_sessions(&pool).await?;
+    let sources = sources();
+    let include = EntityFilterAst {
+        agent_session_filter: Some(Arc::new(Expr::val(AgentSessionLiteral::Include))),
+        ..Default::default()
+    };
+    sqlx::query!(
+        "UPDATE agent_session SET visibility = 'hidden', for_warming = FALSE WHERE id = $1",
+        mine
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO agent_session_follower (agent_session_id, user_id) VALUES ($1, $2)",
+        mine,
+        USER_1,
+    )
+    .execute(&pool)
+    .await?;
+
+    let notified =
+        notified_soup_page(&pool, req(Some(&include), &[], &sources, EVERYTHING)).await?;
+    assert!(keys(&notified).contains(&(EntityType::AgentSession, mine.to_string())));
+    assert_eq!(
+        work_feed_soup_page(
+            &pool,
+            work_request(&include, &sources, WorkFeedSoupMode::Attention, None)
+        )
+        .await?
+        .len(),
+        1
+    );
+    Ok(())
+}
