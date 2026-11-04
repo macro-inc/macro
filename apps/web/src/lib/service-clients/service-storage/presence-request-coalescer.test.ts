@@ -67,6 +67,21 @@ describe('createPresenceRequestCoalescer', () => {
     expect(bodies).toEqual(['r2', 'r2', 'r2']);
   });
 
+  it('sends one request per interval while a tab refetches in a loop', async () => {
+    const { coalesce, send, pending, advance } = harness();
+    const responses: Promise<Response>[] = [];
+    // A tab asking 12 times a second for a minute.
+    for (let tick = 0; tick < 720; tick++) {
+      responses.push(coalesce(presence(), send));
+      await advance(83);
+      for (const request of pending) request.resolve();
+    }
+    await advance(2_000);
+    for (const request of pending) request.resolve();
+    await Promise.all(responses);
+    expect(send.mock.calls.length).toBe(30);
+  });
+
   it('starts at once after a quiet interval', async () => {
     const { coalesce, send, pending, advance } = harness();
     const first = coalesce(presence(), send);
