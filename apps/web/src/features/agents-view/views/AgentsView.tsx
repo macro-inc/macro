@@ -60,6 +60,7 @@ import {
 } from '../core/recent-conversations';
 import { kindForBot } from '../core/roster';
 import { type AgentsRoute, agentsRouteId } from '../core/route';
+import { createPersistedComposerDraft } from '../primitives/composer-draft';
 import { createConversationListView } from '../primitives/conversation-list-view';
 import { createWorkspaceMode } from '../primitives/workspace-mode';
 import { agentConversationsQuery } from '../queries/agent-conversations-query';
@@ -148,7 +149,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   );
   const dataMode = () => dataModeFor(selected() ? mode() : workspace.mode());
   const [mobileList, setMobileList] = createSignal(!isRoutinesPage());
-  const [draft, setDraft] = createSignal('');
+  const persistedDraft = createPersistedComposerDraft(undefined, userId);
   const [search, setSearch] = createSignal('');
   // Routines that run often leave their runs unlisted; those stay a click
   // away instead of in the list.
@@ -209,9 +210,10 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
         const content = panel.handle.content();
         if (
           content.type === 'component' &&
-          typeof content.params?.draft === 'string'
+          typeof content.params?.draft === 'string' &&
+          content.params.draft.length > 0
         )
-          setDraft(content.params.draft);
+          persistedDraft.setDraft(content.params.draft);
         showComposer();
       }
     )
@@ -485,8 +487,8 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                                     composerFocus = focus;
                                   }}
                                   workspaceId={panel.handle.id}
-                                  draft={draft()}
-                                  onDraftChange={setDraft}
+                                  draft={persistedDraft.draft()}
+                                  onDraftChange={persistedDraft.setDraft}
                                   roster={rosterSource.roster()}
                                   rosterLoading={rosterSource.loading()}
                                   availabilityLoading={rosterSource.availabilityLoading()}

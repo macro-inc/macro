@@ -26,6 +26,7 @@ use agent_fold::domain::model::TurnId;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::events::{InFlightTurnSummary, TurnSummary};
 use agent_session::domain::model::AgentSessionId;
+use agent_session::domain::model::PrompterKind;
 use agent_session::domain::model::StoredQueuedAction;
 use agent_session::domain::ports::QueuedControl;
 use bot_id::BotId;
@@ -162,6 +163,32 @@ impl From<&QueuedEntry> for QueuedControl {
 }
 
 impl QueuedEntry {
+    /// Who the turn this entry opens acts for: a system turn acts for nobody,
+    /// even when the batch names a user.
+    pub fn prompter_kind(&self) -> PrompterKind {
+        if matches!(&self.action, AgentAction::Prompt(prompt) if prompt.notifications.as_ref().is_some_and(|input| input.system_turn))
+        {
+            PrompterKind::System
+        } else {
+            PrompterKind::User
+        }
+    }
+
+    /// The person who typed this prompt into the session itself, from the
+    /// session view or the API: a human prompt with no thread to announce
+    /// into and no trigger behind it. A mention in a channel, document or call
+    /// thread carries its origin (`announce`), and a runtime forwarding a
+    /// triggered prompt carries its `context`; neither counts. A tool that
+    /// prompts on a person's behalf with no trigger counts as theirs.
+    /// Following a session is what lists a hidden one for this person.
+    pub fn direct_prompter(&self) -> Option<&MacroUserIdStr<'static>> {
+        let typed = matches!(self.action, AgentAction::Prompt(_))
+            && self.prompter_kind() == PrompterKind::User
+            && self.announce.is_none()
+            && self.context.is_none();
+        self.actor.as_ref().filter(|_| typed)
+    }
+
     /// The durable form written to the session store.
     pub fn to_stored(&self) -> anyhow::Result<StoredQueuedAction> {
         Ok(StoredQueuedAction {

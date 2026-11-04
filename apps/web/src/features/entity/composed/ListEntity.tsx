@@ -109,6 +109,7 @@ export function ListEntity(props: ListEntityProps) {
   const titleTrailing = children(() => props.titleTrailing);
   const meta = children(() => props.meta);
   const metaEnd = children(() => props.metaEnd);
+  const previewLeading = children(() => props.previewLeading);
   const scheduleStatus = children(() => props.scheduleStatus);
 
   const unread = () => unreadFilterFn(props.entity);
@@ -172,6 +173,7 @@ export function ListEntity(props: ListEntityProps) {
     titleTrailing: titleTrailing(),
     meta: meta(),
     metaEnd: metaEnd(),
+    previewLeading: previewLeading(),
     scheduleStatus: scheduleStatus(),
     referenceProperties: referenceProperties(),
     authorDisplayName: props.authorDisplayName,
@@ -268,6 +270,7 @@ export function ListEntity(props: ListEntityProps) {
         {
           'min-h-10': !isMobile() && !usesCondensedNarrowLayout(),
           'min-h-9': !isMobile() && usesCondensedNarrowLayout(),
+          'touch:min-h-[44px]': isEmailEntity(props.entity),
           'mx-(--soup-row-gutter)': !isMobile() && !isNarrowEmail(),
           'bg-list-selected [--avatar-group-separator:var(--color-list-selected)]':
             props.checked,

@@ -72,29 +72,18 @@ export const isEmailInboxTab = (tab: EmailTab) =>
   (EMAIL_INBOX_TAB_IDS as readonly EmailTab[]).includes(tab);
 
 /** How the Focus tab orders its threads. */
-export const EMAIL_FOCUS_SORT_IDS = [
-  'priority',
-  'importance',
-  'recent',
-] as const;
+export const EMAIL_FOCUS_SORT_IDS = ['recent', 'importance'] as const;
 
 export type EmailFocusSort = (typeof EMAIL_FOCUS_SORT_IDS)[number];
 
-export const DEFAULT_EMAIL_FOCUS_SORT: EmailFocusSort = 'priority';
+export const DEFAULT_EMAIL_FOCUS_SORT: EmailFocusSort = 'recent';
 
-export const EMAIL_FOCUS_SORT_OPTIONS: readonly {
+export const EMAIL_FOCUS_SORT_OPTIONS: {
   id: EmailFocusSort;
   label: string;
-  /** A second line in the sort menu, for orders the label can't explain. */
-  description?: string;
 }[] = [
-  {
-    id: 'priority',
-    label: 'Priority',
-    description: 'Importance, halved every 2 days since mail last came in',
-  },
-  { id: 'importance', label: 'Importance' },
   { id: 'recent', label: 'Most recent' },
+  { id: 'importance', label: 'Importance' },
 ];
 
 /** Provider folders have separate membership and currently use network pages. */
