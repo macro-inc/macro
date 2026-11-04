@@ -1,6 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Button, Dialog, Panel } from '@ui';
 import { Show } from 'solid-js';
+import { PipelineImportFailures } from '../components/pipeline-import-failures';
 import type { PipelineTransfer } from '../context/pipelines';
 import type { Pipeline } from '../core/pipeline';
 import { pipelineRecordHeaders } from '../core/pipeline-csv';
@@ -92,6 +93,14 @@ export function PipelineImport(props: {
                 </p>
               )}
             </Show>
+            <PipelineImportFailures
+              addLabel={
+                props.pipeline.recordType === 'company'
+                  ? 'Add deal'
+                  : 'Add contact'
+              }
+              failures={result()?.invalid}
+            />
             <Show when={error()}>
               <p role="alert" class="text-sm text-failure">
                 {error()}

@@ -166,6 +166,9 @@ finished edits become one backend transaction. Tests cover conflicting strings,
 text-versus-move, new labels versus moves, and local undo preserving remote moves.
 
 Image, video and document references use the existing shape geometry mapping.
+Artifact HTML and presentation order use their own `html` and `presentOrder`
+registers, so content edits and moves merge independently. Like text, HTML is one
+whole-string register: concurrent edits to the same artifact keep one version.
 Their source bytes, resolved URLs, loading state and playback are host concerns.
 
 ### Canvas host integration

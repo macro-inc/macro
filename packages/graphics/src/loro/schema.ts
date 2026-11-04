@@ -64,6 +64,16 @@ export const canvasNodeSchema = schema.LoroMap({
   ),
   opacity: schema.Number(),
   cornerRadius: schema.Number(),
+  /** Artifact HTML and presentation sort key, independent of pose; null on
+   * other kinds. Like text, the HTML is one whole-string register. */
+  html: schema.Value(
+    (value): value is string | null =>
+      value === null || typeof value === 'string'
+  ),
+  presentOrder: schema.Value(
+    (value): value is string | null =>
+      value === null || typeof value === 'string'
+  ),
 });
 export type NodeData = InferType<typeof canvasNodeSchema>;
 export const canvasSchema = schema(

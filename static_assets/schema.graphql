@@ -4472,6 +4472,24 @@ enum GraphqlEmailFocusCategory {
 }
 
 """
+Which way a thread's importance is moving.
+"""
+enum GraphqlEmailImportanceTrend {
+	"""
+	Rising, towards 100.
+	"""
+	UP
+	"""
+	Falling, towards 0.
+	"""
+	DOWN
+	"""
+	Not moving.
+	"""
+	FLAT
+}
+
+"""
 Enriched email link accessible to the authenticated user.
 """
 type GraphqlEmailLink {
@@ -4698,7 +4716,7 @@ type GraphqlEmailThreadFocus {
 	"""
 	category: GraphqlEmailFocusCategory!
 	"""
-	How much the thread matters, 0 to 100.
+	How much the thread matters right now, 0 to 100.
 	"""
 	importance: Int!
 	"""
@@ -4716,6 +4734,10 @@ type GraphqlEmailThreadFocus {
 	When the classification was made, in RFC 3339 format.
 	"""
 	classifiedAt: String!
+	"""
+	Which way `importance` is moving.
+	"""
+	importanceTrend: GraphqlEmailImportanceTrend!
 }
 
 """

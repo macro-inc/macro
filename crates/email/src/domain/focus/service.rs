@@ -145,6 +145,7 @@ where
             awaiting_reply = tracing::field::Empty,
             category = tracing::field::Empty,
             importance = tracing::field::Empty,
+            importance_rate = tracing::field::Empty,
             redecided = tracing::field::Empty,
         )
     )]
@@ -371,6 +372,7 @@ fn record_verdict(verdict: &FocusVerdict, redecided: bool) {
     span.record("awaiting_reply", verdict.awaiting_reply);
     span.record("category", tracing::field::display(verdict.category));
     span.record("importance", verdict.importance);
+    span.record("importance_rate", verdict.importance_rate);
     span.record("redecided", redecided);
 }
 
