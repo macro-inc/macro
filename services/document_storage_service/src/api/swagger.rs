@@ -57,6 +57,13 @@ use crate::{
         },
     },
 };
+use account_manager::domain::models::{
+    AccountManagerDecision, AccountManagerGrant, AccountManagerGrantStatus, AccountManagerRole,
+};
+use account_manager::inbound::axum_router::{
+    AccountManagersList, ClaimedAccountManagerToken, RequestAccountManagerBody,
+    RespondToAccountManagerRequestBody,
+};
 use channel_labels::domain::models::{
     ChannelLabel, ChannelLabelRule, ChannelLabelScopeSelection, ChannelLabelsList,
     SmartTagChannelMatch, SmartTagPreview,
@@ -442,6 +449,12 @@ use utoipa::OpenApi;
         channel_labels::inbound::axum_router::set_channel_label_handler,
 
         // user api keys
+        account_manager::inbound::axum_router::request_account_manager_handler,
+        account_manager::inbound::axum_router::list_account_managers_handler,
+        account_manager::inbound::axum_router::get_account_manager_grant_handler,
+        account_manager::inbound::axum_router::respond_to_account_manager_request_handler,
+        account_manager::inbound::axum_router::claim_account_manager_token_handler,
+        account_manager::inbound::axum_router::revoke_account_manager_grant_handler,
         user_api_key::inbound::axum_router::create_user_api_key_handler,
         user_api_key::inbound::axum_router::list_user_api_keys_handler,
         user_api_key::inbound::axum_router::delete_user_api_key_handler,
@@ -718,6 +731,14 @@ use utoipa::OpenApi;
             GitRefDto,
             Favorite,
             FavoritesList,
+            AccountManagerDecision,
+            AccountManagerGrant,
+            AccountManagerGrantStatus,
+            AccountManagerRole,
+            AccountManagersList,
+            ClaimedAccountManagerToken,
+            RequestAccountManagerBody,
+            RespondToAccountManagerRequestBody,
             CreatedUserApiKey,
             CreateUserApiKeyRequest,
             UserApiKeyInfo,

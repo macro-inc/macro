@@ -16,6 +16,13 @@ use crate::{
     outbound,
     service::{self, s3::S3},
 };
+use account_manager::{
+    domain::service::AccountManagerServiceImpl,
+    inbound::axum_router::AccountManagerRouterState,
+    outbound::{
+        dm_delivery::DmAccountManagerDelivery, pg_account_manager_repo::PgAccountManagerRepo,
+    },
+};
 use agent_session_realtime::{
     domain::service::AgentSessionLogConsumerService,
     outbound::redis_stream::consumer::RedisLogStreamConsumer,
@@ -1941,6 +1948,15 @@ pub async fn run() -> anyhow::Result<()> {
         favorites_service.clone(),
         entity_access_service.clone(),
     ));
+    let account_manager_service = Arc::new(AccountManagerServiceImpl::new(
+        PgAccountManagerRepo::new(db.clone()),
+        DmAccountManagerDelivery::new(
+            channels_service.clone(),
+            message_commands.clone(),
+            entity_access_service.clone(),
+            macro_service_urls::AppServiceUrl::new()?,
+        ),
+    ));
     let user_api_key_service = Arc::new(UserApiKeyServiceImpl::new(PgUserApiKeysRepo::new(
         db.clone(),
     )));
@@ -2184,6 +2200,10 @@ pub async fn run() -> anyhow::Result<()> {
                 db.clone(),
             ))),
             entity_access_service.clone(),
+            authorization_state.clone(),
+        ),
+        account_manager_state: AccountManagerRouterState::new(
+            account_manager_service,
             authorization_state.clone(),
         ),
         user_api_key_state: UserApiKeyRouterState::new(
