@@ -96,14 +96,6 @@ export const TOKENS = {
       today: 'calendar.period.today',
     },
     search: 'calendar.search',
-    composer: {
-      save: 'calendar.composer.save',
-      editStart: 'calendar.composer.editStart',
-      editEnd: 'calendar.composer.editEnd',
-      editGuests: 'calendar.composer.editGuests',
-      editLocation: 'calendar.composer.editLocation',
-      editConference: 'calendar.composer.editConference',
-    },
   },
 
   // global

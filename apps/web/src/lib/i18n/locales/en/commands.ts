@@ -32,11 +32,4 @@ export default {
   focusSplitRight: 'Focus split right',
   focusSplitLeft: 'Focus split left',
   createEventFromEmail: 'Create event from email',
-  createEvent: 'Create event',
-  saveEvent: 'Save event',
-  editEventStart: 'Edit start time',
-  editEventEnd: 'Edit end time or duration',
-  editEventGuests: 'Edit guests',
-  editEventLocation: 'Edit location',
-  editEventConference: 'Edit meeting link',
 };

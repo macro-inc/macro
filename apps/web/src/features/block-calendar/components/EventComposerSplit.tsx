@@ -99,10 +99,7 @@ function EventComposerContent(
 ) {
   const panel = useSplitPanelOrThrow();
   const macroCallsEnabled = props.macroCallsEnabled;
-  const [attachHotkeys, hotkeyScope] = useHotkeyDOMScope(
-    'event-composer',
-    true
-  );
+  const [attachHotkeys] = useHotkeyDOMScope('event-composer', true);
   const close = () => panel.handle.close();
   const guestInvitesEnabled = useCalendarGuestInvitesFlag();
   const invitationForwardEnabled = useCalendarInvitationForwardFlag();
@@ -143,7 +140,6 @@ function EventComposerContent(
     <div ref={attachHotkeys} class="flex h-full min-h-0 flex-col p-4 text-ink">
       <PanelEventForm
         controller={controller}
-        hotkeyScope={hotkeyScope}
         macroCallsEnabled={macroCallsEnabled()}
         isEdit={isEdit()}
         saveError={editor.saveError()}

@@ -69,8 +69,7 @@ opens every message including the collapsed middle run, and `N`/`P` step
 messages like the arrows. `B` in an open thread, or `Create event` in its
 title menu, opens the event composer with the subject as the title and every
 From, To and Cc address except the viewer's as guests (Bcc and drafts are left
-out); both are hidden while the calendar is off. The composer's own keys are
-in the calendar guide. `Cmd+Up`/`Cmd+Down` jump to either end of a list.
+out); both are hidden while the calendar is off. `Cmd+Up`/`Cmd+Down` jump to either end of a list.
 In every composer `Cmd+Shift+.`, `Cmd+Shift+,` and `Cmd+Shift+D` discard the
 draft exactly like its trash button, `Cmd+Shift+U` opens the attach picker, and
 `Cmd+Shift+X`, `7`, `8` and `9` apply strikethrough, numbered list, bulleted
