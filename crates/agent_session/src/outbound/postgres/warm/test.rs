@@ -131,15 +131,15 @@ fn warm_policy_rejects_message_provenance() {
         SessionPurpose::Warm
     );
     assert_eq!(
-        SessionPurpose::AgentDm.visibility(bot_id::MACRO_NEW_BOT_ID, None, true),
+        SessionPurpose::AgentDm.visibility(None, true),
         SessionVisibility::Hidden
     );
     assert_eq!(
-        SessionPurpose::AgentDm.visibility(bot_id::MACRO_NEW_BOT_ID, None, false),
+        SessionPurpose::AgentDm.visibility(None, false),
         SessionVisibility::Listed
     );
     assert_eq!(
-        SessionPurpose::Standalone.visibility(bot_id::MACRO_NEW_BOT_ID, None, true),
+        SessionPurpose::Standalone.visibility(None, true),
         SessionVisibility::Listed
     );
 }
