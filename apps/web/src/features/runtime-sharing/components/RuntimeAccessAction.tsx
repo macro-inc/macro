@@ -2,6 +2,7 @@ import { shareEntity } from '@app/features/access-requests/core/types';
 import { createSharingSource } from '@app/features/access-requests/queries/source';
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 
@@ -33,7 +34,10 @@ export function RuntimeAccessAction(props: { harnessId: string }) {
           size="sm"
           disabled={source.busy() || coolingDown() || !source.state()}
           onClick={() =>
-            run(() => source.submit('edit', mine()?.revision ?? undefined))
+            fireAndForget(
+              run(() => source.submit('edit', mine()?.revision ?? undefined)),
+              'runtime-sharing'
+            )
           }
         >
           {mine()?.status === 'denied' && coolingDown()
@@ -49,7 +53,11 @@ export function RuntimeAccessAction(props: { harnessId: string }) {
         aria-label={t('runtimeSharing.cancelRequest')}
         onClick={() => {
           const revision = mine()?.revision;
-          if (revision !== undefined) run(() => source.cancel(revision));
+          if (revision !== undefined)
+            fireAndForget(
+              run(() => source.cancel(revision)),
+              'runtime-sharing'
+            );
         }}
       >
         {t('runtimeSharing.requested')}

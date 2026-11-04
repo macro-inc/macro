@@ -3,7 +3,7 @@ import { MacroNotFoundError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { Agent } from '../agents/agent';
 import { MacroEntity } from '../entity';
-import { EntityAccess, type AccessRequest } from '../sharing/access';
+import { type AccessRequest, EntityAccess } from '../sharing/access';
 import { User } from '../users/user';
 
 /** A registered host for agents: a teammate's computer running macrod. */
@@ -25,9 +25,9 @@ export class Harness extends MacroEntity<HarnessRecord> {
   }
 
   protected async fetch(): Promise<HarnessRecord> {
-    const record = unwrap(await this.client.storage.listHarnessDirectory()).find(
-      (h) => h.id === this.id,
-    );
+    const record = unwrap(
+      await this.client.storage.listHarnessDirectory(),
+    ).find((h) => h.id === this.id);
     if (!record)
       throw new MacroNotFoundError(`Harness ${this.id} is unavailable`);
     return record;
