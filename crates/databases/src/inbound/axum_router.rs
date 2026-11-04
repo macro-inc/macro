@@ -272,7 +272,7 @@ where
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(err, skip_all)]
+#[tracing::instrument(err, skip_all, fields(acting_bot = tracing::field::Empty))]
 pub async fn create_database_handler<Service, EntityAccess, Authorization>(
     State(state): State<DatabasesRouterState<Service, EntityAccess, Authorization>>,
     user: MacroAuthorizationExtractor<Authorization, UserOrInternal>,
@@ -283,12 +283,22 @@ where
     EntityAccess: EntityAccessService,
     Authorization: MacroAuthorizationService,
 {
+    // An agent's SDK token (code mode) creates as its user, attributed to the
+    // agent like the native tool's creations, so channel delivery can share
+    // what it made for the request.
+    let acting_bot = user.authorization.user.agent_id;
+    tracing::Span::current().record(
+        "acting_bot",
+        tracing::field::display(
+            acting_bot.map_or_else(|| "none".to_owned(), |bot| bot.to_string()),
+        ),
+    );
     let database = state
         .service
         .create_database(CreateDatabase {
             name: request.name,
             owner_id: viewer_of(&user).user_id,
-            acting_bot: None,
+            acting_bot,
         })
         .await?;
     Ok((StatusCode::CREATED, Json(database)))

@@ -53,6 +53,9 @@ service with Axum, agent-tool and Postgres adapters.
 
 ## Gotchas
 
+- `POST /databases` attributes the creation to the SDK token's `agent_id`
+  (code mode), like the native tool, so channel delivery shares a database an
+  agent makes; access checks still run as the plain user (`viewer_of`).
 - Hosts authorize the database through their own entity before calling
   `storage_view_positions`; the operation also checks database, table and view
   membership.

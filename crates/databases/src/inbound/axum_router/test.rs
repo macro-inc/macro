@@ -1052,3 +1052,30 @@ async fn a_duplicate_without_a_body_name_reaches_the_service_unnamed() {
     assert_eq!(response.status(), StatusCode::CREATED);
     assert_eq!(service.duplicates.lock().unwrap()[0].2, None);
 }
+
+#[tokio::test]
+async fn a_database_an_agent_creates_with_its_sdk_token_is_attributed_to_the_agent() {
+    use axum::body::Body;
+    use axum::http::{Request, header};
+    use tower::ServiceExt;
+
+    for (token, bot) in [("agent", Some(fakes::AGENT)), ("valid", None)] {
+        let (router, service) = fakes::create_router();
+        let response = router
+            .oneshot(
+                Request::post("/")
+                    .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(r#"{"name": "Standup notes"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED, "{token}");
+        let creates = service.creates.lock().unwrap();
+        assert_eq!(creates.len(), 1, "{token}");
+        assert_eq!(creates[0].owner_id.as_ref(), fakes::USER, "{token}");
+        assert_eq!(creates[0].acting_bot, bot, "{token}");
+    }
+}
