@@ -478,6 +478,12 @@ Re-exports [Meeting](../entities/meetings/meeting/classes/Meeting.md)
 
 ***
 
+### MeNamespace
+
+Re-exports [MeNamespace](../entities/me/namespace/classes/MeNamespace.md)
+
+***
+
 ### Mentionable
 
 Re-exports [Mentionable](../mentions/interfaces/Mentionable.md)
@@ -541,6 +547,12 @@ Re-exports [PipelineStageRequirement](../entities/crm/pipeline/type-aliases/Pipe
 ### PipelineTable
 
 Re-exports [PipelineTable](../entities/crm/pipeline/classes/PipelineTable.md)
+
+***
+
+### PipelineView
+
+Re-exports [PipelineView](../entities/crm/pipeline/classes/PipelineView.md)
 
 ***
 
@@ -727,6 +739,18 @@ Re-exports [toBody](../mentions/functions/toBody.md)
 ### ToolApproval
 
 Re-exports [ToolApproval](../entities/agent-sessions/tool-approval/classes/ToolApproval.md)
+
+***
+
+### UpdateMeOptions
+
+Re-exports [UpdateMeOptions](../entities/me/namespace/interfaces/UpdateMeOptions.md)
+
+***
+
+### UploadProfilePictureOptions
+
+Re-exports [UploadProfilePictureOptions](../entities/me/namespace/interfaces/UploadProfilePictureOptions.md)
 
 ***
 

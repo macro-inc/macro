@@ -6,6 +6,7 @@
  */
 import type {
   AgentApiKey,
+  AgentSetupResponse,
   AiBillingErrorBody,
   AppleLoginRequest,
   ChangePlanRequest,
@@ -22,6 +23,7 @@ import type {
   CreateGtmInviteLinkRequest,
   CreateInProgressLinkResponse,
   CreatePortalSessionRequest,
+  CreateProfilePictureUploadRequest,
   CreateTeamRequest,
   CreditCheckoutRequestBody,
   CreditCheckoutResponse,
@@ -80,10 +82,12 @@ import type {
   PlanCatalogResponse,
   PostGetNamesRequestBody,
   ProfilePictures,
+  ProfilePictureUpload,
   PublicGtmInviteLink,
   PutAgentApiKeyRequest,
   PutCursorApiKeyRequest,
   PutCursorDefaultModelRequest,
+  PutProfilePictureFileRequest,
   PutProfilePictureParams,
   PutUserNameParams,
   RedeemGtmInviteLinkRequest,
@@ -5948,6 +5952,75 @@ export const getUserInvites = async (
 };
 
 /**
+ * Safe to repeat until the agent confirms it saved the token: a reload replaces
+the key, and a failed join stays pending for the next attempt.
+ * @summary Finishes an agent's signup: joins the team that invited it and mints its
+SDK token.
+ */
+export type agentSetupResponse200 = {
+  data: AgentSetupResponse;
+  status: 200;
+};
+
+export type agentSetupResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type agentSetupResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type agentSetupResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type agentSetupResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type agentSetupResponseSuccess = agentSetupResponse200 & {
+  headers: Headers;
+};
+export type agentSetupResponseError = (
+  | agentSetupResponse401
+  | agentSetupResponse403
+  | agentSetupResponse409
+  | agentSetupResponse500
+) & {
+  headers: Headers;
+};
+
+export type agentSetupResponse =
+  | agentSetupResponseSuccess
+  | agentSetupResponseError;
+
+export const getAgentSetupUrl = () => {
+  return `/user/agent_setup`;
+};
+
+export const agentSetup = async (
+  options?: RequestInit
+): Promise<agentSetupResponse> => {
+  const res = await fetch(getAgentSetupUrl(), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: agentSetupResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as agentSetupResponse;
+};
+
+/**
  * @summary Retrieves user names in bulk
  */
 export type getUserNamesResponse200 = {
@@ -6821,6 +6894,145 @@ export const putProfilePicture = async (
     status: res.status,
     headers: res.headers,
   } as putProfilePictureResponse;
+};
+
+/**
+ * @summary Sets the caller's profile picture to an image they uploaded.
+ */
+export type putProfilePictureFileResponse200 = {
+  data: EmptyResponse;
+  status: 200;
+};
+
+export type putProfilePictureFileResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type putProfilePictureFileResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type putProfilePictureFileResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type putProfilePictureFileResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type putProfilePictureFileResponseSuccess =
+  putProfilePictureFileResponse200 & {
+    headers: Headers;
+  };
+export type putProfilePictureFileResponseError = (
+  | putProfilePictureFileResponse400
+  | putProfilePictureFileResponse401
+  | putProfilePictureFileResponse404
+  | putProfilePictureFileResponse500
+) & {
+  headers: Headers;
+};
+
+export type putProfilePictureFileResponse =
+  | putProfilePictureFileResponseSuccess
+  | putProfilePictureFileResponseError;
+
+export const getPutProfilePictureFileUrl = () => {
+  return `/user/profile_picture/file`;
+};
+
+export const putProfilePictureFile = async (
+  putProfilePictureFileRequest: PutProfilePictureFileRequest,
+  options?: RequestInit
+): Promise<putProfilePictureFileResponse> => {
+  const res = await fetch(getPutProfilePictureFileUrl(), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(putProfilePictureFileRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: putProfilePictureFileResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as putProfilePictureFileResponse;
+};
+
+/**
+ * @summary Reserves storage for a new profile picture. Static file storage has no
+MacroDB, so it cannot check API keys; this route lets key holders upload.
+ */
+export type createProfilePictureUploadResponse200 = {
+  data: ProfilePictureUpload;
+  status: 200;
+};
+
+export type createProfilePictureUploadResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type createProfilePictureUploadResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type createProfilePictureUploadResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type createProfilePictureUploadResponseSuccess =
+  createProfilePictureUploadResponse200 & {
+    headers: Headers;
+  };
+export type createProfilePictureUploadResponseError = (
+  | createProfilePictureUploadResponse400
+  | createProfilePictureUploadResponse401
+  | createProfilePictureUploadResponse500
+) & {
+  headers: Headers;
+};
+
+export type createProfilePictureUploadResponse =
+  | createProfilePictureUploadResponseSuccess
+  | createProfilePictureUploadResponseError;
+
+export const getCreateProfilePictureUploadUrl = () => {
+  return `/user/profile_picture/file`;
+};
+
+export const createProfilePictureUpload = async (
+  createProfilePictureUploadRequest: CreateProfilePictureUploadRequest,
+  options?: RequestInit
+): Promise<createProfilePictureUploadResponse> => {
+  const res = await fetch(getCreateProfilePictureUploadUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createProfilePictureUploadRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createProfilePictureUploadResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createProfilePictureUploadResponse;
 };
 
 /**

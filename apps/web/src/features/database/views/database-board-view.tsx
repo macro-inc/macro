@@ -64,7 +64,10 @@ type BoardLayout = Extract<ViewLayout, { kind: 'board' }>;
 
 /** Where a board's card places come from, and how a move is written. */
 export type BoardPositions = {
+  /** Stable view identity; switching it retires pending visual moves and sort prompts. */
+  viewId?: string;
   state: Accessor<BoardPositionsState>;
+  /** Reading this capability binds it to the current view for a pending move. */
   setPositions?: (
     change: (positions: CardPosition[]) => CardPosition[]
   ) => void;
@@ -151,11 +154,15 @@ export function DatabaseBoardView(props: DatabaseBoardViewProps) {
         }
       >
         {(shown) => (
-          <GroupedBoard
-            {...props}
-            layout={shown().layout}
-            groupColumn={shown().group}
-          />
+          <Show when={props.positions.viewId ?? 'local'} keyed>
+            {(_viewId) => (
+              <GroupedBoard
+                {...props}
+                layout={shown().layout}
+                groupColumn={shown().group}
+              />
+            )}
+          </Show>
         )}
       </Show>
     </>
@@ -232,15 +239,15 @@ function GroupedBoard(
   function write(move: CardMove) {
     const persist = props.positions.move;
     if (!persist) return;
+    // Capture the setter for the view where this move started.
+    const setPositions = props.positions.setPositions;
     // Pending moves supply visual optimism; saved positions change only on success.
     // A refusal then reveals the original order without overwriting a later move.
     setMoves((current) => [...current, { move }]);
     fireAndForget(
       persist(move)
         .map(({ positions, tableVersion }) => {
-          props.positions.setPositions?.((current) =>
-            withPositions(current, positions)
-          );
+          setPositions?.((current) => withPositions(current, positions));
           taken(move, tableVersion);
         })
         .mapErr((failure) => {

@@ -6,6 +6,7 @@
 - [PipelineColumn](classes/PipelineColumn.md)
 - [PipelineRow](classes/PipelineRow.md)
 - [PipelineTable](classes/PipelineTable.md)
+- [PipelineView](classes/PipelineView.md)
 
 ## Type Aliases
 

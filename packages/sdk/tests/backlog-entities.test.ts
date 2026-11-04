@@ -3,10 +3,11 @@ import type { ParsedMessage } from '../generated/email/types.gen';
 import type {
   AccessiblePipeline,
   AccessRequest,
+  CardPosition,
   Meeting,
   TableDetail,
 } from '../generated/storage/types.gen';
-import { DraftAttachment, Macro } from '../src/macro';
+import { DraftAttachment, Macro, PipelineView } from '../src/macro';
 import { MacroApiError } from '../src/utils';
 
 const originalFetch = globalThis.fetch;
@@ -523,5 +524,40 @@ test('chat send receipts expose a scoped response message and cancellation never
   expect(await requests[2].json()).toEqual({
     chat_id: 'chat-1',
     stream_id: 'stream-1',
+  });
+});
+
+test('pipeline view positions use the pipeline route and reject foreign handles before a request', async () => {
+  const requests: Request[] = [];
+  const positions: CardPosition[] = [
+    { row: 'row-1', lane: { kind: 'none' }, position: '80' },
+  ];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      requests.push(request);
+      if (request.url.endsWith('/positions')) return Response.json(positions);
+      return Response.json(tableRecord);
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    token: 'token',
+    hosts: { storage: 'https://storage.test' },
+  });
+  const pipeline = macro.crm.pipelines.byId('pipeline-1');
+  const view = PipelineView.byId(await pipeline.table(), 'view-1');
+  expect(await view.positions()).toEqual(positions);
+  expect(new URL(requests[1].url).pathname).toBe(
+    '/crm/pipelines/pipeline-1/views/view-1/positions',
+  );
+  await expect(
+    macro.crm.pipelines.byId('pipeline-2').viewPositions(view),
+  ).rejects.toThrow('another pipeline');
+  expect(requests).toHaveLength(2);
+  expect(view.toJSON()).toEqual({
+    id: 'view-1',
+    tableId: 'table-1',
+    pipelineId: 'pipeline-1',
   });
 });

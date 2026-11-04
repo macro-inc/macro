@@ -78,6 +78,8 @@ longer delivery state.
 
 - `cargo test -p agent_code_mode --lib` from the repository root, with live local
   database configuration and `SQLX_OFFLINE` unset.
+- The review toolset test builds every review tool through shared provider schema
+  validation.
 - Keep generated discovery topics within the classifier's 32-question limit.
 - Regenerate SDK documentation through `packages/code-mode-sdk`; never edit
   `src/domain/documentation.json` by hand.

@@ -52,7 +52,8 @@ impl std::fmt::Debug for ConnectConfig {
 /// Serves records with [`ConnectionProvider::Connect`]: tools through
 /// Connect's MCP gateway (Connect attaches the vendor token), app API calls
 /// with an exported access token, and the connect flow. Catalog apps are
-/// addressed by the Pipedream slugs they replace.
+/// addressed by the Pipedream slugs they replace, or by their Connect id when
+/// Pipedream has no such app.
 ///
 /// [`ConnectionProvider::Connect`]: crate::domain::models::ConnectionProvider::Connect
 pub struct ConnectAdapter {
@@ -111,6 +112,16 @@ impl ConnectAdapter {
     }
 }
 
+/// The slugs Macro addresses a Connect app by: the Pipedream slugs it
+/// replaces, or its Connect id when Pipedream has no such app.
+fn macro_slugs(app: &wire::CatalogEntry) -> &[String] {
+    if app.pipedream_app_slugs.is_empty() {
+        std::slice::from_ref(&app.id)
+    } else {
+        &app.pipedream_app_slugs
+    }
+}
+
 /// The catalog entry Macro shows for a Connect app under `app_slug`. Icon
 /// paths are relative to the Connect origin.
 fn catalog_entry(app: &wire::CatalogEntry, app_slug: &str, api_url: &Url) -> CatalogEntry {
@@ -139,7 +150,7 @@ impl MacroConnect for ConnectAdapter {
             .catalog()
             .await?
             .iter()
-            .find(|app| app.pipedream_app_slugs.iter().any(|slug| slug == app_slug))
+            .find(|app| macro_slugs(app).iter().any(|slug| slug == app_slug))
             .map(|app| ConnectApp {
                 app_id: app.id.clone(),
                 app_slug: app_slug.to_owned(),
@@ -273,7 +284,7 @@ impl ConnectorCapabilities for ConnectAdapter {
 }
 
 impl ConnectorDirectory for ConnectAdapter {
-    /// Connect's catalog under each app's first Pipedream slug, in catalog
+    /// Connect's catalog under each app's first Macro slug, in catalog
     /// order. `cursor` is an offset.
     #[tracing::instrument(skip(self), err)]
     async fn search(
@@ -294,7 +305,7 @@ impl ConnectorDirectory for ConnectAdapter {
                     .is_none_or(|needle| app.name.to_lowercase().contains(needle))
             })
             .filter_map(|app| {
-                let slug = app.pipedream_app_slugs.first()?;
+                let slug = macro_slugs(app).first()?;
                 Some(catalog_entry(app, slug, &self.api_url))
             })
             .collect();
@@ -316,7 +327,7 @@ impl ConnectorDirectory for ConnectAdapter {
             .catalog()
             .await?
             .iter()
-            .find(|app| app.pipedream_app_slugs.iter().any(|slug| slug == app_slug))
+            .find(|app| macro_slugs(app).iter().any(|slug| slug == app_slug))
             .map(|app| catalog_entry(app, app_slug, &self.api_url)))
     }
 }

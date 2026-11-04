@@ -104,6 +104,7 @@
 - [src/entities/images/namespace](src/entities/images/namespace/README.md)
 - [src/entities/initiatives/initiative](src/entities/initiatives/initiative/README.md)
 - [src/entities/initiatives/namespace](src/entities/initiatives/namespace/README.md)
+- [src/entities/me/namespace](src/entities/me/namespace/README.md)
 - [src/entities/meetings/meeting](src/entities/meetings/meeting/README.md)
 - [src/entities/meetings/namespace](src/entities/meetings/namespace/README.md)
 - [src/entities/messages/thread](src/entities/messages/thread/README.md)

@@ -1426,3 +1426,80 @@ async fn editors_share_with_people_and_only_the_owner_changes_team_access(pool: 
 
 #[path = "pipelines/requirements.rs"]
 mod requirements;
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn board_positions_survive_reads_and_stay_with_the_authorized_pipeline(pool: PgPool) {
+    use databases::domain::storage::DatabaseStorageService;
+
+    let (s, db, a, team, company) = fixture(&pool).await;
+    let p = create(&s, team, PipelineRecordType::Company).await;
+    let detail = s
+        .table(access(&a, p.id, EntityType::CrmPipeline, OWNER).await)
+        .await
+        .unwrap();
+    let stage = &detail.columns[1];
+    let option = stage.definition.property_options[0].id;
+    let board = ViewId::from_uuid(Uuid::now_v7());
+    let create_board: DatabaseOp = serde_json::from_value(json!({
+        "kind": "view", "table": p.table_id, "view": board,
+        "change": {"kind": "create", "view": {
+            "name": "Sales board", "query": {"filter": null},
+            "layout": {"kind": "board", "groupBy": stage.column.id, "title": p.primary_column_id,
+                "cardFields": [], "lanes": [], "hideEmptyLanes": false}
+        }}
+    }))
+    .unwrap();
+    write(&s, &a, &p, vec![create_board]).await.unwrap();
+    let row = inserted(&write(&s, &a, &p, vec![insert(&p, company)]).await.unwrap());
+    let move_card: DatabaseOp = serde_json::from_value(json!({
+        "kind": "view", "table": p.table_id, "view": board,
+        "change": {"kind": "move_card", "row": row, "lane": {"kind": "option", "id": option}, "before": null, "after": null}
+    })).unwrap();
+    let moved = write(&s, &a, &p, vec![move_card]).await.unwrap();
+    let expected = serde_json::to_value(&moved[0]).unwrap()["change"]["positions"].clone();
+    assert_eq!(expected.as_array().unwrap().len(), 1);
+    let read = s
+        .view_positions(
+            access(&a, p.id, EntityType::CrmPipeline, OWNER).await,
+            board,
+        )
+        .await
+        .unwrap();
+    assert_eq!(serde_json::to_value(read).unwrap(), expected);
+
+    // The pipeline receipt cannot be used to read a board in another storage resource.
+    let other = create(&s, team, PipelineRecordType::Company).await;
+    assert!(
+        s.view_positions(
+            access(&a, other.id, EntityType::CrmPipeline, OWNER).await,
+            board
+        )
+        .await
+        .is_err()
+    );
+    assert!(
+        db.storage_view_positions(other.database_id, p.table_id, board)
+            .await
+            .is_err()
+    );
+    assert!(
+        a.generate_entity_access_receipt::<ViewAccessLevel>(
+            &user(OUTSIDER),
+            None,
+            &p.id.to_string(),
+            EntityType::CrmPipeline
+        )
+        .await
+        .is_err()
+    );
+
+    // A receipt issued before trashing cannot bypass the live-pipeline guard.
+    let receipt = access(&a, p.id, EntityType::CrmPipeline, OWNER).await;
+    s.set_trashed(access(&a, p.id, EntityType::CrmPipeline, OWNER).await, true)
+        .await
+        .unwrap();
+    assert!(matches!(
+        s.view_positions(receipt, board).await,
+        Err(PipelineError::NotFound)
+    ));
+}

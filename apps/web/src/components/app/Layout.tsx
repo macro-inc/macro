@@ -1,5 +1,6 @@
 import { ViewSwitcherContext } from '@app/components/view-shell';
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
+import { AgentSetupModal } from '@app/features/agent-setup/agent-setup-modal';
 import Banner from '@app/features/auth/banner/Banner';
 import { CalendarPermissionPrompt } from '@app/features/auth/CalendarPermissionPrompt';
 import { GithubReauthenticationPrompt } from '@app/features/auth/GithubReauthenticationPrompt';
@@ -237,6 +238,8 @@ function useNewOnboardingRedirect() {
     if (data?.authenticated !== true || data.tutorialComplete !== false) {
       return;
     }
+    // Agents skip onboarding: AgentSetupModal shows their SDK token.
+    if (data.isAgent) return;
     // Preserve the deep link the user arrived on (a shared doc, an invite)
     // as ?next, and a lifecycle-email ?step, so finish() and the flow can
     // resume. Base-relative so navigate() can resolve it against the router.
@@ -375,6 +378,7 @@ export function AppChrome(props: ParentProps) {
         </FloatRegion>
       </Show>
       <InitialInteractiveOnboardingModal />
+      <AgentSetupModal />
       <Suspense>
         <Show when={isAuthenticated()}>
           <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />

@@ -31,6 +31,13 @@ impl PipelineService for RecordingPipelines {
     ) -> Result<(), PipelineError> {
         unimplemented!()
     }
+    async fn view_positions(
+        &self,
+        _: EntityAccessReceipt<ViewAccessLevel>,
+        _: databases::domain::models::ViewId,
+    ) -> Result<Vec<databases::domain::models::CardPosition>, PipelineError> {
+        unimplemented!()
+    }
     async fn create(
         &self,
         _: CrmTeamReceipt<MemberTeamRole>,
