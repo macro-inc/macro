@@ -96,6 +96,16 @@ export interface RoutineOptions {
 
 /** A scheduled or event-triggered agent task. */
 export class Routine extends MacroEntity<ScheduledActionResponse> {
+  /** The routine's URL in the Macro web app; hand it to users as the link. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/routines/${this.id}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
+  }
+
   /** Construct a lazy routine handle. */
   static byId(client: MacroClient, id: string): Routine {
     return new Routine(client, id);

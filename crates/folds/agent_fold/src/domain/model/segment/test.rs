@@ -399,7 +399,7 @@ fn session_activity_retains_command_and_tool_input_details_for_authorized_live_v
     assert_eq!(live[0].rows[1].detail.as_deref(), Some(query));
 }
 
-fn present_view(id: &str, view: serde_json::Value, status: ToolStatus) -> MessagePart {
+fn present_view(id: &str, view: Option<dynamic_ui::View>, status: ToolStatus) -> MessagePart {
     MessagePart::ToolUse {
         id: ToolUseId(id.to_owned()),
         name: ToolName::Mcp {
@@ -407,25 +407,21 @@ fn present_view(id: &str, view: serde_json::Value, status: ToolStatus) -> Messag
             tool: "PresentView".into(),
         },
         status,
-        detail: ToolDetail::Other {
-            kind: "other".into(),
-            input: Some(serde_json::json!({ "view": view })),
-            result: Some(serde_json::json!({ "message": "Presented to the user" })),
-            output: None,
-            error: None,
-        },
+        detail: ToolDetail::View { view, error: None },
     }
 }
 
 #[test]
 fn a_presented_view_is_its_steps_card() {
-    let view = serde_json::json!({
-        "title": "Launch notes",
-        "widgets": [{ "type": "md", "markdown": "Shipped." }]
-    });
+    let view = dynamic_ui::View {
+        title: Some("Launch notes".to_owned()),
+        widgets: vec![dynamic_ui::Widget::Md {
+            markdown: "Shipped.".to_owned(),
+        }],
+    };
     let parts = [
-        present_view("call-1", view.clone(), ToolStatus::Completed),
-        present_view("view_0199", view.clone(), ToolStatus::Completed),
+        present_view("call-1", Some(view.clone()), ToolStatus::Completed),
+        present_view("view_0199", Some(view.clone()), ToolStatus::Completed),
     ];
     let rows = &segments(&parts, true)[0].rows;
     // The agent's own call is its receipt; the presented call shows the view.
@@ -437,15 +433,14 @@ fn a_presented_view_is_its_steps_card() {
 
 #[test]
 fn only_a_finished_presentation_with_a_view_has_a_card() {
-    let view = serde_json::json!({ "widgets": [] });
+    let view = dynamic_ui::View {
+        title: None,
+        widgets: Vec::new(),
+    };
     for part in [
-        present_view("view_1", view.clone(), ToolStatus::Running),
-        present_view("view_2", view.clone(), ToolStatus::Failed),
-        present_view(
-            "view_3",
-            serde_json::json!("not a view"),
-            ToolStatus::Completed,
-        ),
+        present_view("view_1", Some(view.clone()), ToolStatus::Running),
+        present_view("view_2", Some(view.clone()), ToolStatus::Failed),
+        present_view("view_3", None, ToolStatus::Completed),
     ] {
         let parts = [part];
         assert_eq!(segments(&parts, false)[0].rows[0].card, None);

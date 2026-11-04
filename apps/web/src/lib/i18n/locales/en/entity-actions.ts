@@ -1,4 +1,11 @@
 export default {
+  notSpam: 'Not spam',
+  restoreEmail: 'Restore',
+  toastEmailRestoreRequested: 'Restore requested',
+  toastEmailRestoreFailed: {
+    one: 'Could not restore {{count}} email. Try again.',
+    other: 'Could not restore {{count}} emails. Try again.',
+  },
   // Action labels shared by the entity menus, file menu, command menu and
   // project/folder menus.
   markDone: 'Mark Done',
@@ -37,6 +44,8 @@ export default {
   addToProject: 'Add to project…',
   openProjectNamed: 'Open project {{name}}',
   changeProject: 'Change project',
+  openSourceNamed: 'Open source {{name}}',
+  changeSource: 'Change source',
   moveToFolder: 'Move to folder',
   removeFromFolder: 'Remove from folder',
   duplicate: 'Duplicate',

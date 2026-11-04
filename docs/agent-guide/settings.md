@@ -118,7 +118,8 @@ under that action, including the account catalog's durable refresh.
 
 Behind `enable-email-read-receipts` (on in dev), **Settings → Email → Read
 receipts** lists each owned inbox with a switch that saves immediately. It is
-off by default. Messages sent from an inbox with it on carry an invisible
+on by default, and the section's only copy is "See when recipients open
+messages you send." Messages sent from an inbox with it on carry an invisible
 pixel; see [read receipts in a thread](email.md#read-receipts) for the status.
 
 ### Notification permission prompt
@@ -196,7 +197,9 @@ another team are told to leave it first. Team admins and owners also see
 **Reset link** (the old link stops working and a new one is copied) and
 **Turn off**, each behind a confirmation. Anyone who may invite can copy the
 link or create the first one. Below it, **Invite by email** sends invitations
-as before. Each email says what joining gives: **Pro is included** when joining
+as before; **Invite as agent** invites every address in the dialog as an agent,
+and its email and **Copy link** go to `/app/signup/agent?team_invite=<id>` (see
+[agent accounts](login.md#agent-accounts)). Each email says what joining gives: **Pro is included** when joining
 grants a Pro seat (an enterprise team, or one with a subscription), otherwise
 **Free to join**. Examples: [desktop](media/team-invite-email/desktop.png) and
 [mobile](media/team-invite-email/mobile.png).
@@ -314,10 +317,14 @@ the app's embedded bundle runs. In the browser it links to the latest desktop re
 on GitHub, and only appears when the `desktop-app` PostHog flag is enabled. Native desktop always shows this section regardless of the flag;
 native mobile never shows it.
 
-The **Mobile App** page is titled **Mobile app**. In the browser it offers a QR
-code to download **Macro** from the App Store; inside the iOS and Android apps
-it shows the same Version, Build date, and Bundle date card as the desktop app,
-and the sidebar's **Get the mobile app** button stays hidden.
+The **Mobile App** page is titled **Mobile app**. In a desktop browser an
+**iPhone** / **Android** switch picks which phone and QR code to show (App Store
+or Google Play), with **Copy link** for that store's URL. Phone browsers get a
+store button instead, with no QR codes: **App Store** on an iPhone, **Google
+Play** on an Android phone, and both when the user agent names neither. The
+page description names the store shown, or says "your app store" with both. Inside the
+iOS and Android apps it shows the same Version, Build date, and Bundle date card
+as the desktop app, and the sidebar's **Get the mobile app** button stays hidden.
 
 Search checks individual setting titles and keywords, tolerates common typos,
 and shows the parent page below each control result. Selecting a result opens
@@ -707,6 +714,11 @@ mention picker; select text to open the formatting menu. Saved instructions
 retain mention identities using the shared editor's Markdown format and reopen
 with their formatting intact. Enter adds a new paragraph; use `Create agent` or
 `Save changes` to submit. The form also includes runtime selectors.
+Under `In Macro`, an Anthropic or OpenAI model shows an optional
+`<Provider> API key · Optional` row with `Add key`; the agent runs on Macro
+usage without one. `Add key` reveals the write-only field (`Cancel` hides it
+again); a saved key starts expanded with `Remove`. On plans without agent keys
+the row only explains that keys are part of Premium and Max.
 `Advanced` starts collapsed on desktop and mobile, showing only its heading,
 summary, and `Show` action, without an empty card beneath it. `Show` reveals the
 settings; `Hide` collapses them again and preserves the selected options.
@@ -727,7 +739,7 @@ New macrod sessions use the agent's saved model before sending the first prompt.
 Changing that default applies to new sessions; existing sessions keep their selected model.
 If the runtime rejects the saved model, the prompt fails instead of using a different model.
 
-The `Runtimes` section shows built-in Macro, Cursor, and Codex configuration, followed by paired macrod runtimes. Codex's card appears only within the agents and Codex rollouts. On the desktop app only, a “This computer” card appears above the built-in runtimes: the bundled macrod daemon is set up from here with one click. `Set up` scans the machine for installed agents and names the one it will use (Claude Code first, then Codex, OpenCode, OpenClaw, Hermes); `Options` changes the agent, workspace folder, and a larger Full access choice labeled Suggested (unchecked until explicitly selected). `Set up <agent>` then walks a three-step checklist — Find an agent, Connect this computer (start, install the connector, link to the account; the pairing is approved automatically, no code is typed), Create your agent (a private `@<agent>` coding agent bound to this runtime) — and ends on `@<agent> is ready` with `Start a session`, which opens the Agents composer in Auto with that agent as the usual coding agent. A failed step shows its error and `Try again`, which resumes at the failed step. A desktop app that was never set up also shows a one-time “Run agents on this computer” prompt whose `Set up` runs the same flow in a dialog; closing the prompt sticks. Before this computer is paired, a dismissible “Run agents on this computer” invitation also appears above the Home input and the Agents new-conversation and active-session inputs; it opens Runtimes, and dismissal applies only to this user on this computer. The Runtimes settings tab stays available in the desktop app even if the newer Agents view is disabled. A running runtime with no agent bound to it offers `Create agent`. The app then keeps the daemon up: it restarts after any unexpected exit (with backoff) and on every launch until the user presses `Stop`, and any re-pairing is approved from wherever the user is in the app, not only on this card. While running the card shows the bound agent and workspace with a `Stop` action; a stopped runtime offers `Start`. The web app never shows this card. The “Bring your own agent” card sits above the Agents / Runtimes navigation and is visible on both sections. It rotates Claude Code, OpenCode, OpenClaw, and Hermes; reduced motion keeps a static name. Its `New runtime` action opens the full-page pairing flow from either section: enter the code, look up the request, review the machine, name, sharing and permission consent, then Approve and Done. Back/Cancel returns to the runtime list. Destructive removal still requires confirmation. `/settings/runtimes` opens this section; legacy `/settings/harness?pair=…` links remain supported.
+The `Runtimes` section shows built-in Macro, Cursor, and Codex configuration, followed by paired macrod runtimes. Codex's card appears only within the agents and Codex rollouts. On the desktop app only, a “This computer” card appears above the built-in runtimes: the bundled macrod daemon is set up from here with one click. `Set up` scans the machine for installed agents and names the one it will use (Claude Code first, then Codex, OpenCode, OpenClaw, Hermes); `Options` changes the agent, workspace folder, and a larger Full access choice labeled Suggested (unchecked until explicitly selected). `Set up <agent>` then walks a three-step checklist — Find an agent, Connect this computer (start, install the connector, link to the account; the pairing is approved automatically, no code is typed), Create your agent (a private `@<agent>` coding agent bound to this runtime) — and ends on `@<agent> is ready` with `Start a session`, which opens the Agents composer in Auto with that agent as the usual coding agent. A failed step shows its error and `Try again`, which resumes at the failed step. A desktop app that was never set up also shows a one-time “Run agents on this computer” prompt whose `Set up` runs the same flow in a dialog; closing the prompt sticks. Before this computer is paired, a dismissible “Run agents on this computer” invitation also appears above the Home input and the Agents new-conversation and active-session inputs; its `Set up` runs the same flow in a dialog in place, and dismissal applies only to this user on this computer. The Runtimes settings tab stays available in the desktop app even if the newer Agents view is disabled. A running runtime with no agent bound to it offers `Create agent`. The daemon runs with the user's interactive login-shell environment (variables exported from `.zshrc` and the like), so agents authenticate as they do in a terminal. The app then keeps the daemon up: it restarts after any unexpected exit (with backoff) and on every launch until the user presses `Stop`, and any re-pairing is approved from wherever the user is in the app, not only on this card. While running the card shows the bound agent and workspace with a `Stop` action; a stopped runtime offers `Start`. The web app never shows this card. The “Bring your own agent” card sits above the Agents / Runtimes navigation and is visible on both sections. It rotates Claude Code, OpenCode, OpenClaw, and Hermes; reduced motion keeps a static name. Its `New runtime` action opens the full-page pairing flow from either section: enter the code, look up the request, review the machine, name, sharing and permission consent, then Approve and Done. Back/Cancel returns to the runtime list. Destructive removal still requires confirmation. `/settings/runtimes` opens this section; legacy `/settings/harness?pair=…` links remain supported.
 Connection chips in agent replies open this page, including before any account is connected. Cursor's default-model picker uses
 the same live model discovery and retains its existing save action.
 

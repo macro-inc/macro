@@ -74,18 +74,6 @@ export interface AgentInputProps {
   onDraftChange?: (draft: string) => void;
   /** The agent is working: the send button becomes a stop square. */
   busy?: boolean;
-  /**
-   * A waiting action can be flushed by ending the current turn. While the
-   * input is empty, Enter and the send button do exactly that. The button
-   * stays a send arrow, ringed so it reads as flush rather than a new message.
-   */
-  hasQueuedMessages?: boolean;
-  /**
-   * Enter or the send button with an empty input and a queued message. Falls
-   * back to `onStop`, which is the mechanism: the queue advances when the
-   * turn it waits on ends.
-   */
-  onSendNext?: () => void;
   disabled?: boolean;
   /** View-only sessions cannot edit drafts; pending sessions still can. */
   readOnly?: boolean;
@@ -212,30 +200,6 @@ export function AgentInput(props: AgentInputProps) {
     props.onSend(content, attached);
   };
 
-  // Deliberately not gated on `busy`. A speculated stop reads as done
-  // everywhere else, so `busy` is already false while the runtime is still
-  // winding the turn down - and that is exactly when a waiting message is
-  // most worth advancing. Attached files are something to send in their own
-  // right, so they hold it back.
-  const canSendNext = () =>
-    !dictation.active() &&
-    markdown().trim().length === 0 &&
-    attachments().length === 0 &&
-    props.hasQueuedMessages === true &&
-    !props.disabled &&
-    !props.readOnly &&
-    props.onStop !== undefined;
-
-  const sendNext = () => {
-    if (!canSendNext()) return;
-    // Without `onSendNext`, Stop is the mechanism: it bypasses the server
-    // queue, the fold shows it at once as a pending Stopped line, and when the runtime ends the cancelled turn the server
-    // dispatches the oldest waiting action, so the queue remains FIFO. How
-    // soon that is depends on the runtime - a booting sandbox cannot be
-    // interrupted until it is up.
-    (props.onSendNext ?? props.onStop)?.();
-  };
-
   const editor = buildConfig('chat')
     .withAppLinkResolver(useMacroMentionLinkResolver())
     .namespace('agent-input')
@@ -266,7 +230,6 @@ export function AgentInput(props: AgentInputProps) {
       // button is the only way to submit.
       if (isTouchDevice()) return false;
       if (canSend()) send();
-      else sendNext();
       return true;
     })
     .onFocusLeave({
@@ -473,52 +436,31 @@ export function AgentInput(props: AgentInputProps) {
                       disabled={props.disabled || props.readOnly}
                     />
                     <Show
-                      when={
-                        props.hasQueuedMessages &&
-                        markdown().trim().length === 0 &&
-                        attachments().length === 0
-                      }
+                      when={props.busy && props.onStop && !canSend()}
                       fallback={
-                        <Show
-                          when={props.busy && props.onStop && !canSend()}
-                          fallback={
-                            <SendButton
-                              appearance="composer"
-                              tooltip="Send"
-                              disabled={!canSend()}
-                              onClick={send}
-                            />
-                          }
-                        >
-                          <Button
-                            aria-label="Stop"
-                            tooltip="Stop"
-                            variant={isTouchDevice() ? 'ghost' : 'secondary'}
-                            size="icon-md"
-                            disabled={props.disabled || props.readOnly}
-                            onClick={() => props.onStop?.()}
-                            class={
-                              isTouchDevice()
-                                ? 'size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10'
-                                : undefined
-                            }
-                          >
-                            <div class="size-3.5 not-touch:size-[13.125px] rounded-sm bg-current" />
-                          </Button>
-                        </Show>
+                        <SendButton
+                          appearance="composer"
+                          tooltip="Send"
+                          disabled={!canSend()}
+                          onClick={send}
+                        />
                       }
                     >
-                      <SendButton
-                        appearance="composer"
-                        intent="flush"
-                        aria-label="Flush queued messages"
-                        tooltip={{
-                          content: 'Flush queued messages',
-                          shortcut: 'Enter',
-                        }}
-                        onClick={sendNext}
-                        disabled={!canSendNext()}
-                      />
+                      <Button
+                        aria-label="Stop"
+                        tooltip="Stop"
+                        variant={isTouchDevice() ? 'ghost' : 'secondary'}
+                        size="icon-md"
+                        disabled={props.disabled || props.readOnly}
+                        onClick={() => props.onStop?.()}
+                        class={
+                          isTouchDevice()
+                            ? 'size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10'
+                            : undefined
+                        }
+                      >
+                        <div class="size-3.5 not-touch:size-[13.125px] rounded-sm bg-current" />
+                      </Button>
                     </Show>
                   </div>
                 </div>

@@ -634,6 +634,7 @@ function phaseOf(parts: readonly MessagePart[]): TurnPhase {
 function foldedReply(scenario: Scenario): FoldedMessage {
   return {
     agentSessionId: SESSION,
+    key: '1:agent',
     turn: 1,
     author: { kind: 'agent' },
     requestId: null,

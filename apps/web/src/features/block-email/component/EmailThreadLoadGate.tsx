@@ -3,14 +3,14 @@ import {
   EntityLoadGate,
   type EntityLoadResult,
 } from '@core/component/EntityLoadGate';
-import { EmailDebouncedReadMarker } from '@notifications';
+import { EmailReadMarker } from '@notifications';
 import type { ComponentProps, ParentProps } from 'solid-js';
 import { Show, Suspense } from 'solid-js';
 
 export type EmailThreadLoadGateProps<Data> = ParentProps<{
   result: EntityLoadResult<Data>;
   notificationSource: ComponentProps<
-    typeof EmailDebouncedReadMarker
+    typeof EmailReadMarker
   >['notificationSource'];
   threadId: string;
   /** An account-owned working copy whose thread has never been confirmed. */
@@ -48,7 +48,7 @@ export function EmailThreadLoadGate<Data>(
       >
         <Show when={!props.isLocalDraft && props.threadId} keyed>
           {(threadId) => (
-            <EmailDebouncedReadMarker
+            <EmailReadMarker
               notificationSource={props.notificationSource}
               threadId={threadId}
               linkId={props.linkId}

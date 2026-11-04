@@ -120,7 +120,7 @@ impl CrmService for FakeCrm {
         &self,
         _access: &CrmCompanyReceipt<ViewAccessLevel>,
         _name: &str,
-        _email: &str,
+        _email: Option<&str>,
     ) -> Result<CrmContact, CrmError> {
         unimplemented!("FakeCrm.create_contact")
     }
@@ -238,6 +238,31 @@ impl CrmService for FakeCrm {
         _patch: CrmTeamSettingsPatch,
     ) -> Result<CrmTeamSettings, CrmError> {
         unimplemented!("FakeCrm.update_team_settings")
+    }
+
+    async fn create_team_contact(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _name: &str,
+        _email: Option<&str>,
+    ) -> Result<CrmContact, CrmError> {
+        unimplemented!("FakeCrm.create_team_contact")
+    }
+
+    async fn list_blocked_domains(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+    ) -> Result<Vec<crm::domain::model::CrmBlockedDomain>, CrmError> {
+        unimplemented!("FakeCrm.list_blocked_domains")
+    }
+
+    async fn set_domain_blocked(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _domain: &str,
+        _blocked: bool,
+    ) -> Result<String, CrmError> {
+        unimplemented!("FakeCrm.set_domain_blocked")
     }
 }
 

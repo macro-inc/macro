@@ -7,10 +7,10 @@ use std::time::Duration;
 
 use axum::{
     Router,
-    extract::{Query, State},
+    extract::{Query, RawQuery, State},
     http::{HeaderName, Method, header},
     middleware as axum_mw,
-    response::{IntoResponse, Json, Redirect, Response},
+    response::{Html, IntoResponse, Json, Redirect, Response},
     routing,
 };
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -84,10 +84,59 @@ async fn register<I: InflightAuthStore + 'static>(
     }
 }
 
+/// Hosts whose users pick how to sign in, rather than going straight to
+/// Google. OpenAI's reviewers sign in with a password, and can't get through
+/// Google's challenges on a shared account.
+const SIGN_IN_CHOICE_HOSTS: [&str; 2] = ["chatgpt.com", "chat.openai.com"];
+
+fn offers_sign_in_choice(redirect_uri: &str) -> bool {
+    url::Url::parse(redirect_uri).is_ok_and(|uri| {
+        uri.scheme() == "https"
+            && uri
+                .host_str()
+                .is_some_and(|host| SIGN_IN_CHOICE_HOSTS.contains(&host))
+    })
+}
+
+/// The sign-in chooser. Each link repeats the authorize request with the
+/// choice added; the query is re-encoded, so nothing from it reaches the page
+/// unescaped. Nothing is stored until a link is followed.
+fn sign_in_choice(query: Option<String>) -> Response {
+    let link = |choice: &str| {
+        let query = query.as_deref().unwrap_or_default();
+        let mut params = url::form_urlencoded::Serializer::new(String::new());
+        params.extend_pairs(url::form_urlencoded::parse(query.as_bytes()));
+        params.append_pair("sign_in", choice);
+        format!("/authorize?{}", params.finish()).replace('&', "&amp;")
+    };
+    let page = format!(
+        include_str!("sign_in_choice.html"),
+        google = link("google"),
+        login = link("login"),
+    );
+    (
+        [
+            (header::CACHE_CONTROL, "no-store"),
+            (header::REFERRER_POLICY, "no-referrer"),
+            (header::X_FRAME_OPTIONS, "DENY"),
+            (
+                header::CONTENT_SECURITY_POLICY,
+                "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'",
+            ),
+        ],
+        Html(page),
+    )
+        .into_response()
+}
+
 async fn authorize<I: InflightAuthStore + 'static>(
     State(auth_proxy): State<McpAuthProxyServiceImpl<I>>,
+    RawQuery(query): RawQuery,
     Query(params): Query<AuthorizeRequest>,
 ) -> Response {
+    if params.sign_in.is_none() && offers_sign_in_choice(&params.redirect_uri) {
+        return sign_in_choice(query);
+    }
     match auth_proxy.start_authorization(params).await {
         // The browser carries the MCP client page's Referer across this
         // redirect, and FusionAuth rejects any Referer outside its first-party

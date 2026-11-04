@@ -63,6 +63,24 @@ where
     }
 
     #[tracing::instrument(err, skip_all)]
+    async fn replace_key(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        name: &str,
+    ) -> Result<CreatedUserApiKey, UserApiKeyError> {
+        let name = normalize_key_name(name)?;
+        let id = UserApiKeyId::generate();
+        let key = UserApiKey::generate();
+        let hash = key.hash();
+        let info = self
+            .repo
+            .replace_keys_named(user_id, id, &name, &hash)
+            .await
+            .map_err(|e| rootcause::Report::new(e).into_dynamic())?;
+        Ok(CreatedUserApiKey::new(info, &key))
+    }
+
+    #[tracing::instrument(err, skip_all)]
     async fn list_keys(
         &self,
         user_id: &MacroUserIdStr<'_>,

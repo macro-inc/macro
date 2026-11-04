@@ -10,6 +10,7 @@ import {
   initialValues,
   validate,
 } from '@app/features/agent-interactions/state/elicitation-form';
+import type { View } from '@app/features/dynamic-ui/view';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { MagicChipView } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/MagicChipView';
 import type { MagicChipPresentation } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/presentation';
@@ -254,13 +255,9 @@ function QueuedInFlightDemo() {
       />
       <AgentInput
         busy
-        hasQueuedMessages={items().length > 0}
         onSend={() => setNote('Typed text still sends as a new queued prompt.')}
         onStop={() =>
-          setNote('Flush stops the turn so the queue drains, oldest first.')
-        }
-        onSendNext={() =>
-          setNote('Flush stops the turn so the queue drains, oldest first.')
+          setNote('Stop ends the turn so the queue drains, oldest first.')
         }
       />
     </div>
@@ -412,6 +409,7 @@ function ToolReplayDemo() {
   onCleanup(() => clearInterval(timer));
   const message = (): FoldedMessage => ({
     agentSessionId: 'tool-replay',
+    key: '0:agent',
     requestId: null,
     pending: false,
     segments: [],
@@ -462,6 +460,7 @@ function DisplayResultsDemo() {
   const [pending, setPending] = createSignal(false);
   const message = (): FoldedMessage => ({
     agentSessionId: 'display-results-demo',
+    key: '0:agent',
     requestId: null,
     pending: false,
     segments: [],
@@ -478,37 +477,8 @@ function DisplayResultsDemo() {
         name: { kind: 'mcp', server: 'macro', tool: 'DisplayResults' },
         status: pending() ? 'running' : 'completed',
         detail: {
-          kind: 'macro',
-          input: {
-            view: {
-              title: 'Launch overview',
-              widgets: [
-                {
-                  type: 'md',
-                  markdown:
-                    'The checklist is ready. **Two steps remain before launch.**',
-                },
-                {
-                  type: 'timeline',
-                  events: [
-                    {
-                      time: 'Today',
-                      title: 'Review launch checklist',
-                      description:
-                        'Confirm the release notes and rollout plan.',
-                    },
-                    {
-                      time: 'Tomorrow',
-                      title: 'Launch',
-                      description: 'Publish the release after checks pass.',
-                      future: true,
-                    },
-                  ],
-                },
-              ],
-            },
-          },
-          output: null,
+          kind: 'view',
+          view: pending() ? null : PRESENTED_VIEW,
           error: null,
         },
       },
@@ -530,7 +500,7 @@ function DisplayResultsDemo() {
   );
 }
 
-const PRESENTED_VIEW = {
+const PRESENTED_VIEW: View = {
   title: 'Launch overview',
   widgets: [
     {
@@ -564,14 +534,7 @@ function presentViewPart(id: string): MessagePart {
     id,
     name: { kind: 'mcp', server: 'macro_internal', tool: 'PresentView' },
     status: 'completed',
-    detail: {
-      kind: 'other',
-      acpKind: 'other',
-      input: { view: PRESENTED_VIEW },
-      output: null,
-      result: { message: 'Presented to the user' },
-      error: null,
-    },
+    detail: { kind: 'view', view: PRESENTED_VIEW, error: null },
   };
 }
 
@@ -579,6 +542,7 @@ function presentViewPart(id: string): MessagePart {
 function PresentViewDemo() {
   const message: FoldedMessage = {
     agentSessionId: 'present-view-demo',
+    key: '0:agent',
     requestId: null,
     pending: false,
     segments: [],
@@ -626,6 +590,7 @@ function PresentViewDmDemo() {
 
 const FIXTURE_MESSAGE: FoldedMessage = {
   agentSessionId: 'demo',
+  key: '0:agent',
   requestId: null,
   pending: false,
   segments: [],
@@ -875,6 +840,7 @@ const FIXTURE_MESSAGE: FoldedMessage = {
 /** A live Cursor-shaped turn: earlier reasoning has settled, the tail has not. */
 const FIXTURE_IN_FLIGHT: FoldedMessage = {
   agentSessionId: 'demo',
+  key: '1:agent',
   requestId: null,
   pending: false,
   segments: [],
@@ -921,6 +887,7 @@ const FIXTURE_IN_FLIGHT: FoldedMessage = {
  */
 const FIXTURE_UNCLOSED: FoldedMessage = {
   agentSessionId: 'demo',
+  key: '2:agent',
   requestId: null,
   pending: false,
   segments: [],
@@ -990,6 +957,7 @@ function PromptAuthorDemo() {
   const userId = useUserId();
   const prompt = (userId: string | null, text: string): FoldedMessage => ({
     agentSessionId: 'demo',
+    key: '0:user',
     requestId: null,
     pending: false,
     segments: [],

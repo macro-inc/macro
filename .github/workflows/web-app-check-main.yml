@@ -18,6 +18,7 @@ jobs:
       codegen_changed: ${{ steps.filter.outputs.codegen_changed }}
       i18n_changed: ${{ steps.filter.outputs.i18n_changed }}
       database_grid_changed: ${{ steps.filter.outputs.database_grid_changed }}
+      calendar_details_changed: ${{ steps.filter.outputs.calendar_details_changed }}
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -49,11 +50,7 @@ jobs:
             - 'packages/sdk-docs/**'
             - 'services/ai-editing-worker/**'
             - 'packages/code-mode-sdk/**'
-            - 'crates/code_execution/src/outbound/deno/*.mjs'
-            - 'crates/agent_code_mode/src/domain/documentation.json'
             - 'crates/agent_code_mode/SKILL.md'
-            - 'crates/ai_tools/src/display_results/schema.generated.json'
-            - 'crates/dynamic_ui/src/present_view.schema.generated.json'
             - '.github/actions/setup-reqs-web/**'
           codegen_changed:
             - 'crates/**/*.rs'
@@ -73,6 +70,10 @@ jobs:
             - 'apps/web/src/features/settings/**'
           database_grid_changed:
             - 'apps/web/src/features/database/**'
+          calendar_details_changed:
+            - 'apps/web/src/features/calendar-view/**'
+            - 'apps/web/src/features/calendar/**'
+            - 'apps/web/src/lib/queries/calendar/**'
   android-native-check:
     name: Android Native Check
     runs-on: namespace-profile-linux-tiny-no-cache
@@ -218,9 +219,6 @@ jobs:
       uses: './.github/actions/setup-nix'
     - name: Setup Prereqs
       uses: './.github/actions/setup-reqs-web'
-    - name: Check Dynamic UI Schema
-      run: bun run check-dynamic-ui-schema
-      working-directory: apps/web
     - name: Check Types
       run: bun run type-check
       working-directory: apps/web
@@ -306,6 +304,10 @@ jobs:
         else
           echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
         fi
+    - name: Build code-mode assets
+      run: |
+        assets="$(nix build --no-link --print-out-paths --print-build-logs .#code-mode-assets)"
+        echo "CODE_MODE_ASSETS_DIR=$assets" >> "$GITHUB_ENV"
     - name: Build schema binaries
       run: |
         set -euo pipefail
@@ -343,8 +345,10 @@ jobs:
       run: |
         just gen-agent-fold-types
         just gen-database-sql-types
-        if ! git diff --exit-code -- src/lib/service-clients/service-agent-fold/generated src/lib/core/database-sql/generated; then
-          echo "Generated wasm wire types are stale. Run 'just gen-agent-fold-types' and 'just gen-database-sql-types' in apps/web and commit the result."
+        just gen-dynamic-ui-types
+        just gen-agent-review-types
+        if ! git diff --exit-code -- src/lib/service-clients/service-agent-fold/generated src/lib/core/database-sql/generated src/features/dynamic-ui/generated ../../packages/lexical-core/generated src/lib/service-clients/service-agent-reviews/generated ../../packages/sdk/generated/agent-reviews; then
+          echo "Generated specta types are stale. Run 'just gen-agent-fold-types', 'just gen-database-sql-types', 'just gen-dynamic-ui-types' and 'just gen-agent-review-types' in apps/web and commit the result."
           exit 1
         fi
       working-directory: apps/web
@@ -431,6 +435,12 @@ jobs:
       run: |-
         bunx playwright install-deps chromium
         just test-database-browser
+      working-directory: apps/web
+    - name: Calendar Event Details Browser Tests
+      if: needs.path-check.outputs.calendar_details_changed == 'true'
+      run: |-
+        bunx playwright install-deps chromium
+        just test-calendar-details-browser
       working-directory: apps/web
     - name: Teardown Nix
       if: always()

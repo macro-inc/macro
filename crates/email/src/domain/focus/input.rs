@@ -26,6 +26,35 @@ const BRUSH_OFF_PHRASES: [&str; 5] = [
     "remove me",
 ];
 
+/// Messages that end the exchange ("Thanks!", "Got it"): nobody owes a reply to
+/// one, though unlike a brush-off it says nothing bad about the relationship.
+const CLOSING_PHRASES: [&str; 20] = [
+    "thanks",
+    "thanks so much",
+    "thanks a lot",
+    "thanks very much",
+    "thank you",
+    "thank you so much",
+    "thank you very much",
+    "many thanks",
+    "thx",
+    "ty",
+    "cheers",
+    "got it",
+    "sounds good",
+    "will do",
+    "noted",
+    "great",
+    "perfect",
+    "awesome",
+    "ok",
+    "okay",
+];
+/// Words a closing line can carry after its phrase: a name, as in "Thanks Ava!".
+const CLOSING_LINE_EXTRA_WORDS: usize = 1;
+/// Words a later line can have and still read as a signature.
+const SIGNATURE_LINE_WORDS: usize = 3;
+
 /// The part of a plain-text body above the quoted history.
 pub fn new_text(body: &str) -> String {
     let mut kept = Vec::new();
@@ -61,6 +90,49 @@ pub fn is_dismissive_reply(text: &str) -> bool {
         || BRUSH_OFF_PHRASES
             .iter()
             .any(|phrase| contains_words(&lowered, phrase))
+}
+
+/// Whether a line after an acknowledgement reads as a name or title rather than
+/// a request: short, with every word capitalized ("Alex Smith", not "Please
+/// confirm").
+fn reads_as_signature(line: &str) -> bool {
+    line.split_whitespace().count() <= SIGNATURE_LINE_WORDS
+        && line
+            .split_whitespace()
+            .all(|word| !word.starts_with(char::is_lowercase))
+}
+
+/// Whether a message only ends the exchange, so nobody owes a reply to it: a
+/// brush-off, or an acknowledgement and nothing but a signature after it. When
+/// in doubt it says no: a stray follow-up costs less than a missed one.
+pub(super) fn is_closing_reply(text: &str) -> bool {
+    if is_dismissive_reply(text) {
+        return true;
+    }
+    if text.contains('?') {
+        return false;
+    }
+    let mut lines = text.lines().map(str::trim).filter(|line| !line.is_empty());
+    let Some(first_line) = lines.next() else {
+        return false;
+    };
+    let first_line = first_line.to_lowercase();
+    let first_line = first_line.trim_end_matches(['.', '!', ',']);
+    let closes = CLOSING_PHRASES.iter().any(|phrase| {
+        first_line.strip_prefix(phrase).is_some_and(|rest| {
+            let is_whole_phrase = !rest.starts_with(char::is_alphanumeric);
+            let extra_words = rest
+                .trim_start_matches([',', '.', '!', '-', ' '])
+                .split_whitespace()
+                .count();
+            is_whole_phrase && extra_words <= CLOSING_LINE_EXTRA_WORDS
+        })
+    });
+    // Anything past a signature delimiter is signature, whatever it says.
+    closes
+        && lines
+            .take_while(|line| !line.starts_with("--"))
+            .all(reads_as_signature)
 }
 
 /// `phrase` appears in `text` as whole words.

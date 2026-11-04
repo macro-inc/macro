@@ -26,6 +26,8 @@ export type PanesDiff<E extends PaneEntry = PaneEntry> = {
 
 export type LivePanes<E extends PaneEntry = PaneEntry> = {
   panes: readonly PaneId[];
+  /** Parked panes; their ids are never reused for a new pane. */
+  parked?: readonly PaneId[];
   read(pane: PaneId): PaneSnapshot<E> | undefined;
 };
 
@@ -91,7 +93,8 @@ export function diffPanes<E extends PaneEntry>(
   };
 
   const idForNewPane = (paneId: PaneId | undefined): PaneId => {
-    const reusable = paneId && !isLive(paneId) && !isUsed(paneId);
+    const parked = paneId !== undefined && live.parked?.includes(paneId);
+    const reusable = paneId && !isLive(paneId) && !isUsed(paneId) && !parked;
 
     return reusable ? paneId : options.createPaneId();
   };

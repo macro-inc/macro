@@ -8,16 +8,21 @@ Windows, Linux, and mobile layouts do not add this space.
 On macOS, Back and Forward arrows beside the traffic lights navigate the active
 split's history. Each arrow is
 disabled when its direction has no entry. Sidebar controls remain inside each
-workspace. The top-right split icon opens another Home split, even
-when Home is already open, and is disabled when there is no room for a new split.
-Its tooltip is “New Split” and displays the registered new-split shortcut (`\`).
+workspace. The top-right split icon opens another Home split to the right of
+the active split, even when Home is already open, and is disabled when that
+split has no room to divide. Its tooltip is “New split” and displays the
+registered new-split shortcut (`\`). The icon before it, “New split below”
+(`|`), opens Home stacked below the active split.
 
 ## Desktop tabs (macOS, `enable-desktop-tabs` flag)
 
 The title bar's center holds browser-style tabs; each tab is a whole split
-layout. Only the active tab's layout is mounted — switching tabs swaps every
-split through the router, preserving each split's back/forward history and
-running unsaved-changes guards. A tab holding more than one split shows a
+layout. Tabs you have visited stay mounted in the background: switching back
+is instant and keeps scroll, selection, and editor state, each split keeps
+its back/forward history, and stacked splits come back stacked at the sizes
+they had. Background tabs are hidden, inert, and skip
+rendering; past five, the least recently used unmount and reload when next
+opened. Closing the active tab runs its unsaved-changes guards. A tab holding more than one split shows a
 split icon with the count. The strip's `+` button (and `Cmd+T`) opens a tab on
 Home; the `X` or a middle click closes one (the last tab cannot close;
 `Shift+Cmd+W` closes the active tab); `Ctrl+Tab` / `Ctrl+Shift+Tab` cycle.
@@ -25,6 +30,11 @@ Cmd+click (Ctrl elsewhere) on anything that navigates opens the destination in
 a background tab; adding Shift also switches to it. Tabs are not draggable.
 Tabs persist per user and restore on launch. In the browser and on other
 platforms the strip does not render.
+
+An inline preview in a background tab stays open there, so selecting its entity
+from another tab switches to that tab with the entity showing. A tab that opens
+onto an entity another tab already holds shows its list instead, without moving
+you or showing a toast.
 
 Reference captures (browser fixture with the desktop gates forced):
 [a three-split tab beside a second tab](media/desktop-tabs/three-split-tab.png)
@@ -234,6 +244,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 
 Each `~`-separated part of an app URL is a split (`/app/home/~/drive`). The
 pages outside the app (`/app/login`, `/app/welcome`, `/app/signup`,
+`/app/signup/agent`, `/app/agent-setup`,
 `/app/onboarding`, `/app/setup`, the invite pages, `/app/meet/...` and
 `/app/task-slug/...`) render without the split layout and take one part only.
 `/app/login/~/home` and URLs nothing matches, such as `/app/garbage`, are
@@ -292,9 +303,24 @@ Command and create-menu headers have 20px horizontal and 12px vertical padding.
 
 Splits: the app is a tiling window manager. Active light-theme panes are white;
 inactive desktop panes are slightly darker than the active pane across themes,
-while retaining the theme hue. Public variable-length routes use
+while retaining the theme hue. Any split can be divided beside or stacked:
+the split menu (right-click a split's header) offers **New split left**,
+**right**, **above**, and **below**, each splitting that split and disabled
+when it lacks room (400px wide, 240px tall per split). `\` (or Cmd+\ while
+typing) opens Home to the right of the active split, so in a stack only the
+active split divides; `|` (Shift+\, or Shift+Cmd+\ while typing) stacks Home
+below it. A new split beside others along the same axis takes an equal share.
+Option+Shift-click (Alt+Shift elsewhere) on anything that
+Shift-clicks into a new split opens it below the split it came from. Closing a
+stacked split gives its space to its neighbours; **Swap split left/right**
+trades places with the previous or next split in reading order, and the tiles
+keep their sizes. Public variable-length routes use
 `~` as the boundary between panes
-(`/app/drive/folder/<uuid>/~/mail`). Legacy fixed `type/id`
+(`/app/drive/folder/<uuid>/~/mail`). Panes are listed top to bottom, left to
+right, and a `layout` key records stacking when there is any:
+`/app/home/~/drive/~/mail?layout=r2pc2pp` is Home beside Drive over Mail
+(`p` a pane, `r<n>` side by side, `c<n>` stacked). Without the key the panes
+sit side by side; sizes are not in the URL. Legacy fixed `type/id`
 pane routes remain accepted. Known app-view URLs under `/app/component/` redirect
 to their canonical paths above; legacy composers keep their existing paths. Split-specific view state uses positionally
 namespaced query parameters such as `s0.drive.sort=created_at`. Route identity
@@ -430,8 +456,9 @@ the main title when hidden, with separate preferences per block type.
 
 Desktop splits, including a single split in the browser or native app, appear as
 individually bordered panels with 8px corners and 6px top, right, and bottom
-insets and 6px resizable gaps. The leftmost panel sits flush against the app rail,
-which has no right divider. Touch layouts keep their existing presentation.
+insets and 6px resizable gaps between them, side by side and stacked. The
+leftmost panels sit flush against the app rail, which has no right divider.
+Touch layouts keep their existing presentation.
 
 Split focus mode (`Shift+Esc`) floats the active split in a rounded, bordered
 panel over the same glass scrim as dialogs. Click the scrim or use the shortcut
@@ -1105,13 +1132,13 @@ The event menu groups Macro activity triggers by surface:
 
 - **Channels:** **Channel created**, **Message sent in channel**, and **@ mentioned in channel**.
 - **Documents:** **Document created** and **Document deleted**. Tasks are separate.
-- **Tasks:** **Task created**, **Status changed**, **Priority changed**, and **Any property changed**.
+- **Tasks:** **Task created**, **Status changed**, **Priority changed**, **Assignees changed**, **Due date changed**, **Project changed**, **Effort changed**, and **Any property changed**. Under **Changes to**, choose the values that start the routine, such as **Completed**, or leave **Any status**. A value counts only when the change adds it. Tags aren't properties and have no trigger.
 - **Email:** **New email received** in the routine owner's inbox, excluding spam, trash, drafts, and historical imports.
 - **Calls:** **Call started**, for calls the routine owner starts (receives the call and who has joined so far); and **Call ended**, for channel calls and meetings the owner joined (receives participants and transcript, cut short for long calls).
 - **GitHub:** presets for **Workflow failed**, **Workflow finished**, **Pull request opened**, **Pull request merged**, **Review requested**, **Review submitted**, **Issue opened**, **Comment added**, **Code pushed**, **Release published**, and **Any GitHub event**, from repositories Macro's GitHub app reaches for the routine owner. Until the owner connects GitHub, the group shows **Connect GitHub** instead.
 
-For messages, mentions, deletion, and task changes, choose specific accessible
-channels/documents/tasks or any accessible item in the same panel. Creation
+For messages, mentions, deletion, and task changes, use **Applies to** in the
+same panel to choose any accessible item or specific channels/documents/tasks. Creation
 triggers cover newly created accessible items; email covers the owner's inbox;
 **Call started** shows **Calls you start** and **Call ended** shows **Calls you
 join** — neither has an item picker. Calls the owner did not start never trigger

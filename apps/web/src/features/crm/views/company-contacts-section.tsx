@@ -21,8 +21,9 @@ function ContactRow(props: {
   onOpen: (event: MouseEvent) => void;
   ownerId: string;
 }) {
-  const photo = useCrmContext().createContactPhoto?.(props.contact.email);
-  const name = () => props.contact.name || props.contact.email;
+  const email = props.contact.email;
+  const photo = email ? useCrmContext().createContactPhoto?.(email) : undefined;
+  const name = () => props.contact.name || props.contact.email || '';
   const entity = (): CrmContactEntity => ({
     ...props.contact,
     type: 'crm_contact',
@@ -52,7 +53,7 @@ function ContactRow(props: {
         </Avatar>
       }
       titleTrailing={
-        <Show when={props.contact.name}>
+        <Show when={props.contact.name && props.contact.email}>
           <span class="min-w-0 truncate font-normal text-ink-extra-muted">
             {props.contact.email}
           </span>
@@ -75,9 +76,10 @@ export function CompanyContactsSection(props: {
     const query = search().trim().toLowerCase();
     return (props.contacts ?? []).filter(
       (contact) =>
-        !query ||
-        contact.name?.toLowerCase().includes(query) ||
-        contact.email.toLowerCase().includes(query)
+        !contact.hidden &&
+        (!query ||
+          contact.name?.toLowerCase().includes(query) ||
+          contact.email?.toLowerCase().includes(query))
     );
   });
   const createContact = () => {

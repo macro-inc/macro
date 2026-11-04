@@ -4,12 +4,6 @@ resolver = "2"
 exclude = ["vendor"]
 
 members = [
-  "connect/crates/connect_registry",
-  "connect/crates/connect_platform",
-  "connect/crates/connect_client",
-  "connect/tests/connect_integration",
-  "connect/services/connect_api",
-  "connect/services/connect_demo",
   "crates/access_requests",
   "crates/agent_api_keys",
   "crates/routines",
@@ -19,6 +13,7 @@ members = [
   "crates/trigger_context",
   "crates/agent_preview",
   "crates/agent_code_mode",
+  "crates/code_mode_assets",
   "crates/dynamic_ui",
   "crates/agent_inmem",
   "crates/agent_runtime_protocol", "crates/agent_session", "crates/agent_session_realtime",
@@ -43,6 +38,7 @@ members = [
   "crates/cognition",
   "crates/codex_cloud_agents",
   "crates/codex_connection",
+  "crates/connect_client",
   "crates/collab_surface",
   "crates/complete_graph",
   "crates/cowlike",
@@ -339,6 +335,7 @@ lru = "0.16"
 md-5 = "0.10.6"
 miniz_oxide = { version = "0.8", features = ["with-alloc"] }
 mockall = "0.13"
+nutype = { version = "0.8.0", features = ["serde", "derive_unchecked"] }
 nom = "8"
 openssl-sys = "0.9"
 opus-pure = "0.2.1"
@@ -402,6 +399,7 @@ ruzstd = { version = "0.9.1", default-features = false, features = ["std"] }
 serde = { version = "1.0.214", features = ["derive"] }
 serde-wasm-bindgen = "0.6"
 serde_dynamo = { version = "4", features = ["aws-sdk-dynamodb+1"] }
+serde_path_to_error = "0.1.20"
 serde_json = { version = "1.0.132" }
 serde_repr = "0.1"
 serde_with = { version = "3.12.0", features = ["base64"] }

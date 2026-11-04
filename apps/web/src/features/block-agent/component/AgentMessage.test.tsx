@@ -164,6 +164,7 @@ const message = (
   stop: FoldedMessage['stop'] = { kind: 'end_turn' }
 ): FoldedMessage => ({
   agentSessionId: 'session',
+  key: '0:agent',
   requestId: null,
   pending: false,
   postedAt: null,
@@ -351,7 +352,7 @@ describe('Message tool grouping', () => {
           tool('display', {
             name: { kind: 'mcp', server: 'macro', tool: 'DisplayResults' },
             status: 'pending',
-            detail: { kind: 'macro', input: null, output: null, error: null },
+            detail: { kind: 'view', view: null, error: null },
           }),
           tool('c'),
           tool('d'),
