@@ -286,10 +286,10 @@ pub async fn fetch_inbox_details_for_macro_id(
         .map(|row| {
             let settings = service::settings::Settings {
                 link_id: row.id,
-                // Missing settings row → schema default (FALSE).
+                // Missing settings row → schema defaults.
                 signature_on_replies_forwards: row.signature_on_replies_forwards.unwrap_or(false),
                 signature: row.signature,
-                read_receipts_enabled: row.read_receipts_enabled.unwrap_or(false),
+                read_receipts_enabled: row.read_receipts_enabled.unwrap_or(true),
             };
             let link = link::Link::try_from(DbLink {
                 id: row.id,
