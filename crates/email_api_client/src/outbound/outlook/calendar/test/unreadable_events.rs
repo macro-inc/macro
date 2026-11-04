@@ -99,7 +99,8 @@ async fn the_series_names_the_field_it_was_rejected_for() {
     );
 
     let mut unknown_zone = series(no_end());
-    unknown_zone["start"] = json!({"dateTime": "2026-11-02T17:00:00.0000000", "timeZone": "Customized Time Zone"});
+    unknown_zone["start"] =
+        json!({"dateTime": "2026-11-02T17:00:00.0000000", "timeZone": "Customized Time Zone"});
     assert_eq!(
         rejected_field(unknown_zone, empty.clone()).await,
         "start.timeZone"

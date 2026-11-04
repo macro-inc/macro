@@ -293,8 +293,7 @@ pub(super) fn projection(
             };
             overrides.push(CalendarEventOverride {
                 reminders: Some(event_reminders(&instance, effective_preferences)),
-                automatic_decline: automatic_decline(&instance_preferences)
-                    .map_err(in_instance)?,
+                automatic_decline: automatic_decline(&instance_preferences).map_err(in_instance)?,
                 recurrence_id: original_time.occurrence_key(),
                 original_time,
                 time: time.clone(),
