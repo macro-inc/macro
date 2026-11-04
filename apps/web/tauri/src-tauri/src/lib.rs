@@ -436,6 +436,7 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
             macro_bundle_updater_plugin::inbound::plugin::grant_bundle_update,
             macro_bundle_updater_plugin::inbound::plugin::perform_update,
             macro_bundle_updater_plugin::inbound::plugin::ack_bundle_update_reload,
+            macro_bundle_updater_plugin::inbound::plugin::set_bundle_reload_hold,
             macro_bundle_updater_plugin::inbound::plugin::check_for_update,
             macro_bundle_updater_plugin::inbound::plugin::get_bundle_debug_info,
             macro_bundle_updater_plugin::inbound::plugin::get_bundle_update_status,
@@ -459,6 +460,8 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
             desktop::macrod::macrod_stop,
             #[cfg(desktop)]
             desktop::macrod::macrod_status,
+            #[cfg(desktop)]
+            desktop::pasteboard::stage_desktop_pasteboard_files,
         ])
         .setup(move |app| {
             #[cfg(desktop)]

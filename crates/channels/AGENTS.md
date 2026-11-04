@@ -58,6 +58,12 @@ DMs, and the shared message store other domains discuss things on.
 
 ## Gotchas
 
+- Deletion is authorized in `ChannelServiceImpl::delete_channel`: the channel
+  participant owner may delete it; a team owner/admin may delete only a `team`
+  channel whose `team_id` matches their membership. Membership in a channel or
+  the channel creator's team never grants deletion authority on its own. Both
+  REST deletion and permanent entity deletion call this policy.
+
 - Human DM messages to nonusers use immediate email, including mentions and replies; empty DM creation, bot messages, and silent/mentions-only policies do not trigger this path. Keep registered recipients on their normal notification routes.
 - Channel access requests are separate from `crates/access_requests`: access is
   membership, and every participant reviews. Each attempt is its own row so a

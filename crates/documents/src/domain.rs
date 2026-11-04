@@ -41,6 +41,8 @@ pub mod notion_markdown;
 #[cfg(feature = "axum")]
 pub mod permission_token;
 pub mod response;
+/// A skill's one-line routing description.
+pub mod skill_description;
 
 /// Permission-scoped spreadsheet inspection, calculation, and mutation.
 #[cfg(feature = "ai_tools")]

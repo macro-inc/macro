@@ -476,6 +476,13 @@ the shimmer.
   **Add connections** opens Discover; **Manage connections** opens Connected.
   Disabled connections remain available to manage. A partial loading failure
   offers Retry without hiding uploads, references, or skills.
+- Skills have a one-line **When to use** description ("Use when …; not …"),
+  required in the skill composer (`C K`) under the name and editable under
+  the title of an open skill (saves on blur or Enter; an invalid line shows
+  an error below it). Owners with the `auto-skills` flag get up to two of
+  their skills loaded on their own when a session request matches a
+  description; the session view shows nothing for it, and the
+  `agent.skill_selection` span says what loaded.
 - Empty conversation greetings use Roboto Slab with the Macro mark to the left,
   at weight 390 with softened ink in light mode and 315 in dark mode, including the Chat and Code
   starting headings, legacy Home, and the conversation preview empty state.
@@ -515,7 +522,7 @@ the shimmer.
   without asking; any failure or a 3s timeout also falls back to Chat. The session opens
   under Chat or Code like one started from that mode.
   Switching modes preserves the draft and attachments and
-  clears model and effort overrides from the previous mode. It does not filter
+  clears the model override from the previous mode. It does not filter
   the conversation sidebar. Session composers start at one line and grow with
   longer prompts or Shift+Enter. Lists, quotes, headings, and other non-paragraph
   blocks expand immediately, even with short text. The editor takes the full width
@@ -658,8 +665,10 @@ the shimmer.
   the catalog in place with a Back action. Search includes every model.
 - A compact **speedometer-style effort** button with a simple arc and needle beside the model selector opens a simple list of effort levels with a check beside the current choice: a popover centered below the button on desktop, or its own bottom sheet on mobile. Choosing a level applies it and closes the menu. Mobile shows it alongside the model control after the input expands. It is hidden when the model has fewer than two effort choices.
   Model-specific effort choices remain available in desktop model submenus.
-  Free and Pro users start new conversations at the lowest advertised level,
-  unless they explicitly choose another. Existing sessions keep their current setting.
+  New conversations remember the last effort picked for each runtime and model,
+  per signed-in user, across sends, mode switches, and reloads, while that model
+  still offers it. Without one, Free and Pro users start at the lowest advertised
+  level. Existing sessions keep their current setting.
 - On desktop, chat agents' empty input shows the static hint **Type @ to mention
   docs, people, or channels, / for skills** immediately, without typing or cycling
   through other hints. Clearing a draft restores the same hint.
@@ -2399,6 +2408,9 @@ draft before starting any sends/creates, and waits for attachments still
 uploading in the active email.
 Invalid drafts remain editable; navigation opens the first draft needing attention.
 
+The card polls its saved review while it is preparing or has pending drafts, so
+statuses set by the agent or another editor appear in place. A poll that returns
+the card's own in-flight save is not a conflict and leaves the editor focused.
 A revision conflict or uncertain request shows **Reload saved review**. Reload
 reads the saved version and discards the local edit; it never retries an external
 send automatically. If the outcome is unknown, check the inbox/calendar before
@@ -2422,6 +2434,9 @@ navigation and page reload,
 that a single draft has no stack controls, that a batch's picker finds drafts,
 that chat remains usable, and that another account cannot submit. Sending an email or
 creating an event is a real action, including from a local app connected to dev.
+The backend-free browser regression for polling, presentation, and typing during
+a save is `bunx playwright test --config src/features/email-compose/browser-test/playwright.app.config.ts agent-review`
+(from `apps/web`).
 ## Agent reasoning effort
 
 Open the model selector and hover a model to choose its reasoning effort in the
