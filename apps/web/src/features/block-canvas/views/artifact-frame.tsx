@@ -119,7 +119,7 @@ export function ArtifactFrame(props: {
         }
       >
         <Show when={visible() ? mounted() : undefined} keyed>
-          {(frame) => {
+          {(mount) => {
             let element: HTMLIFrameElement | undefined;
             let loads = 0;
             let announced = 0;
@@ -145,7 +145,7 @@ export function ArtifactFrame(props: {
                 sandbox={ARTIFACT_SANDBOX}
                 allow=""
                 referrerPolicy="no-referrer"
-                srcdoc={frame.content}
+                srcdoc={mount.content}
                 tabIndex={props.interactive ? 0 : -1}
                 ref={(iframe) => {
                   element = iframe;
