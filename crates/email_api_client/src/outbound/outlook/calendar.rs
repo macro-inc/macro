@@ -29,11 +29,15 @@ const APPOINTMENT_SEQUENCE_ID: &str = "Integer {00062002-0000-0000-C000-00000000
 const PREFERENCES_ID: &str =
     "String {81f532e3-7ace-4e0b-bae9-312ce0d50c8c} Name MacroCalendarPreferences";
 
+const INVALID_RESPONSE: &str = "Microsoft returned an invalid calendar response";
+
 fn invalid() -> CalendarProviderError {
-    CalendarProviderError::new(
-        CalendarProviderErrorKind::Permanent,
-        "Microsoft returned an invalid calendar response",
-    )
+    CalendarProviderError::new(CalendarProviderErrorKind::Permanent, INVALID_RESPONSE)
+}
+/// An event Macro cannot read, naming the part it rejected. Sync skips these
+/// events, so use `invalid` for a failure that is not about one event's content.
+fn rejected(field: &'static str) -> CalendarProviderError {
+    CalendarProviderError::unreadable_event(field, INVALID_RESPONSE)
 }
 fn unsupported(message: &str) -> CalendarProviderError {
     CalendarProviderError::new(CalendarProviderErrorKind::Permanent, message)
@@ -56,11 +60,11 @@ fn error(error: EmailApiError) -> CalendarProviderError {
         },
     )
 }
-fn string<'a>(value: &'a Value, key: &str) -> Result<&'a str, CalendarProviderError> {
+fn string<'a>(value: &'a Value, key: &'static str) -> Result<&'a str, CalendarProviderError> {
     value[key]
         .as_str()
         .filter(|s| !s.is_empty())
-        .ok_or_else(invalid)
+        .ok_or_else(|| rejected(key))
 }
 fn access(binding: CalendarGrantBinding) -> MailboxAccess {
     MailboxAccess {
@@ -151,13 +155,13 @@ impl OutlookApiClientRepository {
         let mut values = vec![];
         loop {
             if !seen.insert(url.to_string()) {
-                return Err(invalid());
+                return Err(rejected("@odata.nextLink"));
             }
             let page = self.calendar_get(token, url).await?;
             values.extend(
                 page["value"]
                     .as_array()
-                    .ok_or_else(invalid)?
+                    .ok_or_else(|| rejected("value"))?
                     .iter()
                     .cloned(),
             );
@@ -225,7 +229,8 @@ impl OutlookApiClientRepository {
     ) -> Result<CalendarEventUpsert, CalendarProviderError> {
         let instances = if master["type"].as_str() == Some("seriesMaster") {
             self.calendar_instances(token, target, string(&master, "id")?)
-                .await?
+                .await
+                .map_err(|error| error.within("instances"))?
         } else {
             vec![master.clone()]
         };

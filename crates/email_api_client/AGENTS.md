@@ -105,6 +105,10 @@ Outlook (Microsoft Graph) outbound adapters.
 - `domain::request_count::counted` counts the Graph requests one unit of work
   sends (the transport calls `record_sent`); Outlook token failures surface
   as `EmailApiError::CredentialsUnavailable`, apart from Graph failures.
+- Calendar normalization rejects a Graph event with `rejected(field)`, a fixed
+  label (`recurrence.range.endDate`) that sync logs and skips the event on, so
+  never build one from a value in the event. Use `invalid()` for a failure that
+  is not about one event's content, such as a wrong binding: sync retries those.
 - Same-mailbox Outlook replies use `createReply`. When Graph refuses it with
   400 `ErrorInvalidOperation`, `create_draft` creates a standalone draft that
   carries the same correlation and RFC reply headers.

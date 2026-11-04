@@ -19,6 +19,9 @@ const INDICES: [(&str, &str); 5] = [
     ("4", "fourth"),
     ("-1", "last"),
 ];
+const PATTERN_TYPE: &str = "pattern.type";
+const DAYS_OF_WEEK: &str = "pattern.daysOfWeek";
+const END_DATE: &str = "range.endDate";
 
 pub(super) fn from_graph(event: &Value) -> Result<Vec<String>, CalendarProviderError> {
     let recurrence = &event["recurrence"];
@@ -27,14 +30,15 @@ pub(super) fn from_graph(event: &Value) -> Result<Vec<String>, CalendarProviderE
     }
     let p = &recurrence["pattern"];
     let r = &recurrence["range"];
-    let kind = string(p, "type")?;
-    let (_, _, start, _) = normalize::time_body(&normalize::event_time(event)?)?;
+    let kind = p["type"].as_str().ok_or_else(|| rejected(PATTERN_TYPE))?;
+    let (_, _, start, _) = normalize::time_body(&normalize::event_time(event)?)
+        .map_err(|_| rejected("start.timeZone"))?;
     let frequency = match kind {
         "daily" => "DAILY",
         "weekly" => "WEEKLY",
         "absoluteMonthly" | "relativeMonthly" => "MONTHLY",
         "absoluteYearly" | "relativeYearly" => "YEARLY",
-        _ => return Err(invalid()),
+        _ => return Err(rejected(PATTERN_TYPE)),
     };
     let mut fields = vec![
         format!("FREQ={frequency}"),
@@ -43,23 +47,23 @@ pub(super) fn from_graph(event: &Value) -> Result<Vec<String>, CalendarProviderE
             p["interval"]
                 .as_u64()
                 .filter(|n| *n > 0)
-                .ok_or_else(invalid)?
+                .ok_or_else(|| rejected("pattern.interval"))?
         ),
     ];
     if matches!(kind, "weekly" | "relativeMonthly" | "relativeYearly") {
         let days: Vec<_> = p["daysOfWeek"]
             .as_array()
-            .ok_or_else(invalid)?
+            .ok_or_else(|| rejected(DAYS_OF_WEEK))?
             .iter()
             .map(|v| {
                 DAYS.iter()
                     .find(|d| Some(d.1) == v.as_str())
                     .map(|d| d.0)
-                    .ok_or_else(invalid)
+                    .ok_or_else(|| rejected(DAYS_OF_WEEK))
             })
             .collect::<Result<_, _>>()?;
         if days.is_empty() {
-            return Err(invalid());
+            return Err(rejected(DAYS_OF_WEEK));
         }
         if !kind.starts_with("relative") {
             fields.push(format!("BYDAY={}", days.join(",")));
@@ -68,7 +72,7 @@ pub(super) fn from_graph(event: &Value) -> Result<Vec<String>, CalendarProviderE
             let index = INDICES
                 .iter()
                 .find(|i| Some(i.1) == p["index"].as_str())
-                .ok_or_else(invalid)?
+                .ok_or_else(|| rejected("pattern.index"))?
                 .0;
             if days.len() == 1 {
                 fields.push(format!("BYDAY={index}{}", days[0]));
@@ -82,7 +86,7 @@ pub(super) fn from_graph(event: &Value) -> Result<Vec<String>, CalendarProviderE
         let day = p["dayOfMonth"]
             .as_u64()
             .filter(|n| (1..=31).contains(n))
-            .ok_or_else(invalid)?;
+            .ok_or_else(|| rejected("pattern.dayOfMonth"))?;
         // A DTSTART-aligned pattern is the same rule the shared editor emits.
         // Keep explicit selectors only when omitting them would change dates.
         if day != u64::from(start.day()) {
@@ -93,7 +97,7 @@ pub(super) fn from_graph(event: &Value) -> Result<Vec<String>, CalendarProviderE
         let month = p["month"]
             .as_u64()
             .filter(|n| (1..=12).contains(n))
-            .ok_or_else(invalid)?;
+            .ok_or_else(|| rejected("pattern.month"))?;
         if month != u64::from(start.month()) {
             fields.push(format!("BYMONTH={month}"));
         }
@@ -106,17 +110,19 @@ pub(super) fn from_graph(event: &Value) -> Result<Vec<String>, CalendarProviderE
             .unwrap_or("SU");
         fields.push(format!("WKST={day}"));
     }
-    match string(r, "type")? {
-        "numbered" => fields.push(format!(
+    match r["type"].as_str() {
+        Some("numbered") => fields.push(format!(
             "COUNT={}",
             r["numberOfOccurrences"]
                 .as_u64()
                 .filter(|n| *n > 0)
-                .ok_or_else(invalid)?
+                .ok_or_else(|| rejected("range.numberOfOccurrences"))?
         )),
-        "endDate" => {
-            let date = NaiveDate::parse_from_str(string(r, "endDate")?, "%Y-%m-%d")
-                .map_err(|_| invalid())?;
+        Some("endDate") => {
+            let date = r["endDate"]
+                .as_str()
+                .and_then(|date| NaiveDate::parse_from_str(date, "%Y-%m-%d").ok())
+                .ok_or_else(|| rejected(END_DATE))?;
             if event["isAllDay"].as_bool() == Some(true) {
                 fields.push(format!("UNTIL={}", date.format("%Y%m%d")));
             } else {
@@ -126,19 +132,23 @@ pub(super) fn from_graph(event: &Value) -> Result<Vec<String>, CalendarProviderE
                         .or(event["originalStartTimeZone"].as_str())
                         .unwrap_or("UTC"),
                 )
-                .ok_or_else(invalid)?;
+                .ok_or_else(|| rejected("range.recurrenceTimeZone"))?;
                 let end = zone
-                    .from_local_datetime(&date.and_hms_opt(23, 59, 59).ok_or_else(invalid)?)
+                    .from_local_datetime(
+                        &date
+                            .and_hms_opt(23, 59, 59)
+                            .ok_or_else(|| rejected(END_DATE))?,
+                    )
                     .single()
-                    .ok_or_else(invalid)?;
+                    .ok_or_else(|| rejected("range.endDate.localTime"))?;
                 fields.push(format!(
                     "UNTIL={}",
                     end.with_timezone(&chrono::Utc).format("%Y%m%dT%H%M%SZ")
                 ));
             }
         }
-        "noEnd" => {}
-        _ => return Err(invalid()),
+        Some("noEnd") => {}
+        _ => return Err(rejected("range.type")),
     }
     Ok(vec![format!("RRULE:{}", fields.join(";"))])
 }

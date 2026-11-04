@@ -6,6 +6,7 @@ use wiremock::{
 };
 
 mod mutations;
+mod unreadable_events;
 
 pub(super) fn target() -> ProviderCalendarTarget {
     let link_id = Uuid::now_v7();

@@ -55,6 +55,7 @@ pub enum CalendarProviderErrorKind {
 pub struct CalendarProviderError {
     kind: CalendarProviderErrorKind,
     message: String,
+    unreadable_field: Option<String>,
 }
 
 impl CalendarProviderError {
@@ -63,7 +64,33 @@ impl CalendarProviderError {
         Self {
             kind,
             message: message.into(),
+            unreadable_field: None,
         }
+    }
+
+    /// A permanent failure to read one event the provider returned. `field`
+    /// names the rejected part and goes into logs, so it is always a fixed
+    /// label and never a value from the event.
+    pub fn unreadable_event(field: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            kind: CalendarProviderErrorKind::Permanent,
+            message: message.into(),
+            unreadable_field: Some(field.into()),
+        }
+    }
+
+    /// Place an unreadable field under `scope`, so `dateTime` reads `start.dateTime`.
+    pub fn within(mut self, scope: &'static str) -> Self {
+        self.unreadable_field = self
+            .unreadable_field
+            .map(|field| format!("{scope}.{field}"));
+        self
+    }
+
+    /// The rejected part of an event the provider returned, when that is what
+    /// failed. Synchronization skips such an event; nothing else is skippable.
+    pub fn unreadable_field(&self) -> Option<&str> {
+        self.unreadable_field.as_deref()
     }
 
     /// Return the retry/reauthorization classification.

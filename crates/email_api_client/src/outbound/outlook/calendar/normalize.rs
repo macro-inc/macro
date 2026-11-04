@@ -4,25 +4,29 @@ use chrono::{DateTime, NaiveDate, NaiveDateTime, TimeZone, Utc};
 #[cfg(test)]
 mod test;
 
+const ORIGINAL_START: &str = "originalStart";
+const AUTOMATIC_DECLINE: &str = "automaticDecline";
+
 pub(super) fn instant(value: &Value) -> Result<DateTime<Utc>, CalendarProviderError> {
     let text = string(value, "dateTime")?;
     if let Ok(instant) = DateTime::parse_from_rfc3339(text) {
         return Ok(instant.with_timezone(&Utc));
     }
-    let local =
-        NaiveDateTime::parse_from_str(text, "%Y-%m-%dT%H:%M:%S%.f").map_err(|_| invalid())?;
+    let local = NaiveDateTime::parse_from_str(text, "%Y-%m-%dT%H:%M:%S%.f")
+        .map_err(|_| rejected("dateTime"))?;
     // Requests receive UTC by default. Never guess an unknown Windows zone or
     // choose one side of an ambiguous local-time response silently.
-    let zone = zones::zone(value["timeZone"].as_str().unwrap_or("UTC")).ok_or_else(invalid)?;
+    let zone = zones::zone(value["timeZone"].as_str().unwrap_or("UTC"))
+        .ok_or_else(|| rejected("timeZone"))?;
     zone.from_local_datetime(&local)
         .single()
         .map(|v| v.with_timezone(&Utc))
-        .ok_or_else(invalid)
+        .ok_or_else(|| rejected("localTime"))
 }
 
 pub(super) fn event_time(value: &Value) -> Result<EventTime, CalendarProviderError> {
-    let start = instant(&value["start"])?;
-    let end = instant(&value["end"])?;
+    let start = instant(&value["start"]).map_err(|error| error.within("start"))?;
+    let end = instant(&value["end"]).map_err(|error| error.within("end"))?;
     let zone_name = value["originalStartTimeZone"]
         .as_str()
         .or(value["start"]["timeZone"].as_str())
@@ -45,17 +49,17 @@ pub(super) fn event_time(value: &Value) -> Result<EventTime, CalendarProviderErr
         }
     };
     if !time.is_valid() {
-        return Err(invalid());
+        return Err(rejected("timeRange"));
     }
     Ok(time)
 }
 
 pub(super) fn original(value: &Value) -> Result<Option<EventStart>, CalendarProviderError> {
-    let Some(text) = value["originalStart"].as_str() else {
+    let Some(text) = value[ORIGINAL_START].as_str() else {
         return Ok(None);
     };
     let instant = DateTime::parse_from_rfc3339(text)
-        .map_err(|_| invalid())?
+        .map_err(|_| rejected(ORIGINAL_START))?
         .with_timezone(&Utc);
     if value["isAllDay"].as_bool() == Some(true) {
         let zone = zones::zone(value["originalStartTimeZone"].as_str().unwrap_or("UTC"))
@@ -92,6 +96,17 @@ fn transparency(show_as: &str) -> EventTransparency {
     } else {
         EventTransparency::Opaque
     }
+}
+
+fn automatic_decline(
+    preferences: &Value,
+) -> Result<Option<AutomaticDeclinePolicy>, CalendarProviderError> {
+    preferences
+        .get(AUTOMATIC_DECLINE)
+        .cloned()
+        .map(serde_json::from_value)
+        .transpose()
+        .map_err(|_| rejected(AUTOMATIC_DECLINE))
 }
 
 fn attendees(value: &Value) -> Vec<CalendarAttendee> {
@@ -181,7 +196,7 @@ pub(super) fn projection(
         .as_str()
         .and_then(|v| DateTime::parse_from_rfc3339(v).ok())
         .map(|v| v.with_timezone(&Utc))
-        .ok_or_else(invalid)?;
+        .ok_or_else(|| rejected("lastModifiedDateTime"))?;
     let created = master["createdDateTime"]
         .as_str()
         .and_then(|v| DateTime::parse_from_rfc3339(v).ok())
@@ -225,7 +240,8 @@ pub(super) fn projection(
             EventType::Default
         },
         time,
-        recurrence_lines: recurrence::from_graph(&master)?,
+        recurrence_lines: recurrence::from_graph(&master)
+            .map_err(|error| error.within("recurrence"))?,
         organizer_email: master["organizer"]["emailAddress"]["address"]
             .as_str()
             .map(str::to_ascii_lowercase),
@@ -252,17 +268,20 @@ pub(super) fn projection(
         created_at: created,
         updated_at: updated,
     };
+    let in_instance = |error: CalendarProviderError| error.within("instance");
     let mut occurrences = std::collections::BTreeMap::new();
     let mut overrides = vec![];
     for instance in instances {
         if instance["isCancelled"].as_bool() == Some(true) {
             continue;
         }
-        let time = event_time(&instance)?;
-        let original = original(&instance)?;
+        let time = event_time(&instance).map_err(in_instance)?;
+        let original = original(&instance).map_err(in_instance)?;
         let recurrence_id = original.as_ref().map(EventStart::occurrence_key);
         if instance["type"].as_str() == Some("exception") {
-            let original_time = original.ok_or_else(invalid)?;
+            let original_time = original
+                .ok_or_else(|| rejected(ORIGINAL_START))
+                .map_err(in_instance)?;
             let instance_preferences = preferences(&instance);
             // Graph may omit inherited extended properties. Preserve the series'
             // extra reminders unless this instance carries its own settings or
@@ -274,12 +293,8 @@ pub(super) fn projection(
             };
             overrides.push(CalendarEventOverride {
                 reminders: Some(event_reminders(&instance, effective_preferences)),
-                automatic_decline: instance_preferences
-                    .get("automaticDecline")
-                    .cloned()
-                    .map(serde_json::from_value)
-                    .transpose()
-                    .map_err(|_| invalid())?,
+                automatic_decline: automatic_decline(&instance_preferences)
+                    .map_err(in_instance)?,
                 recurrence_id: original_time.occurrence_key(),
                 original_time,
                 time: time.clone(),
@@ -319,12 +334,7 @@ pub(super) fn projection(
         event,
         source: CalendarEventSource::Outlook(ProviderEventSource {
             automatic_decline: if master["showAs"].as_str() == Some("oof") {
-                master_preferences
-                    .get("automaticDecline")
-                    .cloned()
-                    .map(serde_json::from_value)
-                    .transpose()
-                    .map_err(|_| invalid())?
+                automatic_decline(&master_preferences)?
             } else {
                 None
             },
