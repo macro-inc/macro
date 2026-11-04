@@ -150,7 +150,7 @@ for (const size of WIDTHS) {
       });
       expect(firstBarColors).toHaveLength(2);
 
-      await page.getByRole('button', { name: 'Priority' }).click();
+      await page.getByRole('button', { name: 'Most recent' }).click();
       await expect(meters).toHaveCount(0);
     });
   });

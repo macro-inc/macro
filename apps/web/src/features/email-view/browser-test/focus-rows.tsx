@@ -169,7 +169,7 @@ const ROWS = mapEmailFocus({
 });
 
 function Fixture() {
-  const [sort, setSort] = createSignal<EmailFocusSort>('priority');
+  const [sort, setSort] = createSignal<EmailFocusSort>('recent');
   const [list, setList] = createSignal<HTMLElement>();
   const sortButton = (value: EmailFocusSort, label: string): JSX.Element => (
     <button
@@ -183,7 +183,7 @@ function Fixture() {
   return (
     <main class="flex h-dvh flex-col bg-panel text-ink">
       <div class="flex h-8 shrink-0 gap-2 px-2 text-xs text-ink-muted">
-        {sortButton('priority', 'Priority')}
+        {sortButton('recent', 'Most recent')}
         {sortButton('importance', 'Importance')}
       </div>
       <div ref={setList} class="soup-list min-h-0 flex-1 overflow-y-auto">
