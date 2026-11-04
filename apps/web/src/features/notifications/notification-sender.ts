@@ -1,6 +1,8 @@
 import { match } from 'ts-pattern';
 import type { UnifiedNotification } from './types';
 
+type ManualAgent = { name: string; avatarUrl?: string | null };
+
 type SenderMetadataContent = {
   sender?: string;
   senderDisplayName?: string | null;
@@ -9,6 +11,7 @@ type SenderMetadataContent = {
   botName?: string;
   routineName?: string;
   mentionedBy?: string;
+  agent?: ManualAgent | null;
 };
 
 const senderContent = (
@@ -31,6 +34,10 @@ export function getNotificationSenderFallbackName(
     .with('new_email', () => content?.sender ?? undefined)
     .with('ai_response', () => 'Macro agent')
     .with('routine_run_finished', () => content?.routineName)
+    .with(
+      'manual',
+      () => content?.agent?.name ?? notification.sender_id ?? undefined
+    )
     .with(
       'agent_session_settled',
       'agent_session_waiting_for_input',
@@ -66,7 +73,10 @@ export function getNotificationSenderFallbackName(
 export function getNotificationSenderAvatarUrl(
   notification: UnifiedNotification
 ): string | undefined {
-  return senderContent(notification)?.senderProfilePictureUrl ?? undefined;
+  const content = senderContent(notification);
+  return (
+    content?.senderProfilePictureUrl ?? content?.agent?.avatarUrl ?? undefined
+  );
 }
 
 export type NotificationAgentSender = {
@@ -82,6 +92,14 @@ export type NotificationAgentSender = {
 export function getNotificationAgentSender(
   notification: UnifiedNotification
 ): NotificationAgentSender | undefined {
+  // Agent code sends manual notifications as its user, so they keep the
+  // user's id as sender and read as from the agent.
+  if (notification.notification_metadata.tag === 'manual') {
+    const agent = senderContent(notification)?.agent;
+    if (!agent?.name) return undefined;
+    return { name: agent.name, avatarUrl: agent.avatarUrl ?? undefined };
+  }
+
   if (notification.sender_id) return undefined;
 
   return match(notification.notification_metadata.tag)

@@ -193,6 +193,11 @@ export const NOTIFICATION_EVENT_GROUPS: readonly NotificationEventGroup[] = [
         label: 'Routine runs',
         description: 'When one of your routines finishes or fails a run',
       },
+      {
+        type: 'manual',
+        label: 'Agent notes',
+        description: 'When an agent or a script sends you a notification',
+      },
     ],
   },
   {

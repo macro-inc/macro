@@ -3,6 +3,7 @@ import {
   getSortedKeyProperties,
   soupPropertyToProperty,
 } from '@entity/extractors-property/property-helpers';
+import { manualText } from '@notifications/notification-metadata';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { match } from 'ts-pattern';
 
@@ -75,6 +76,7 @@ function notificationContent(notification: Notification): string | undefined {
     return `Requested ${metadata.content.accessLevel} access`;
   if (metadata.tag === 'entity_access_granted')
     return `Granted you ${metadata.content.accessLevel} access`;
+  if (metadata.tag === 'manual') return manualText(metadata.content);
   const field =
     NOTIFICATION_CONTENT_FIELD[notification.notification_metadata.tag];
   if (!field) return undefined;

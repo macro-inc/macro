@@ -11,6 +11,7 @@ import CheckIcon from '@icon/system/regular/check.svg';
 import ClockIcon from '@icon/system/regular/clock-clockwise.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import FilesIcon from '@icon/system/regular/files.svg';
+import PaperPlaneIcon from '@icon/system/regular/paper-plane-tilt.svg';
 import PhoneIcon from '@icon/system/regular/phone-call.svg';
 import QuestionIcon from '@icon/system/regular/question.svg';
 import SmileyIcon from '@icon/system/regular/smiley.svg';
@@ -80,6 +81,7 @@ export function getNotificationIcon(
     .with('agent_session_waiting_for_input', () => QuestionIcon)
     .with('agent_session_mentioned', () => AtIcon)
     .with('routine_run_finished', () => ClockIcon)
+    .with('manual', () => PaperPlaneIcon)
     .exhaustive(() => BellIcon);
 }
 

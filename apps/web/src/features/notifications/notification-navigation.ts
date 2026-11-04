@@ -126,6 +126,59 @@ function openSplitIfNotOpen(
   }
 }
 
+/** A manual notification opens the entity its sender linked. */
+function openManualNotificationLink(
+  notification: UnifiedNotification,
+  sourceHandle?: SplitHandle,
+  onApplied?: VoidFunction
+): ((layoutManager: SplitManager, newSplit?: boolean) => Promise<void>) | null {
+  const id = notification.entity_id;
+  const block = match(notification.entity_type)
+    .with('chat', () => 'chat' as const)
+    .with('channel', () => 'channel' as const)
+    .with('project', () => 'project' as const)
+    .with('email_thread', () => 'email' as const)
+    .with('agent_session', () => 'agent' as const)
+    .with('database', () => 'database' as const)
+    .with('form', () => 'form' as const)
+    .with('document', 'scheduled_action', () => undefined)
+    .otherwise(() => null);
+  if (block === null) return null;
+
+  return async (lm: SplitManager, newSplit = false) => {
+    const options = { newSplit, sourceHandle, onApplied };
+    if (block) {
+      openSplitIfNotOpen(lm, block, id, options);
+      return;
+    }
+
+    if (notification.entity_type === 'scheduled_action') {
+      openContent(lm, routineContent(id), options);
+      return;
+    }
+
+    // Tasks, notes and files are all documents; their block comes from the
+    // document itself.
+    const { fetchDocumentMetadata } = await import(
+      '@queries/storage/document-metadata'
+    );
+    const document = await fetchDocumentMetadata(id);
+    openSplitIfNotOpen(
+      lm,
+      itemToBlockName({
+        type: 'document',
+        fileType: document.fileType ?? undefined,
+        subType:
+          document.subType && document.subType !== 'initiative_description'
+            ? { type: document.subType }
+            : undefined,
+      }),
+      id,
+      options
+    );
+  };
+}
+
 export function getChannelNotificationParams(
   notification: UnifiedNotification
 ): { messageId?: string; threadId?: string; params?: Record<string, string> } {
@@ -657,6 +710,9 @@ function getSupportedHandler(
             onApplied,
           });
       })
+      .with('manual', () =>
+        openManualNotificationLink(notification, sourceHandle, onApplied)
+      )
       .exhaustive(() => null)
   );
 }

@@ -831,6 +831,81 @@
         }
       }
     },
+    "/v1/user_notifications/send": {
+      "post": {
+        "tags": ["manual_notification"],
+        "summary": "Send a notification the caller wrote, to themselves or to someone who can\nalready see what it links to. Delivered like any other notification and\nsubject to the recipient's notification preferences.",
+        "operationId": "send_manual_notification",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendManualNotificationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Queued for delivery"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The recipient cannot see the link",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The link does not exist or the caller cannot see it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many manual notifications from this sender"
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/user_notifications/{notification_id}": {
       "get": {
         "tags": ["user_notification"],
@@ -2547,6 +2622,66 @@
       "MacroUserIdStr": {
         "type": "string"
       },
+      "ManualMetadata": {
+        "type": "object",
+        "description": "A notification written by its sender: a title, an optional body, and the\nentity it opens. The sender is the notification's `sender_id`, or nobody\nwhen people notify themselves.",
+        "required": ["title"],
+        "properties": {
+          "agent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ManualNotificationAgent",
+                "description": "The agent whose code sent it, when one did."
+              }
+            ]
+          },
+          "body": {
+            "type": ["string", "null"],
+            "description": "More detail, as the sender wrote it."
+          },
+          "title": {
+            "type": "string",
+            "description": "The headline, as the sender wrote it."
+          }
+        }
+      },
+      "ManualNotificationAgent": {
+        "type": "object",
+        "description": "The agent a manual notification reads as being from, as it was when sent.",
+        "required": ["id", "name"],
+        "properties": {
+          "avatarUrl": {
+            "type": ["string", "null"],
+            "description": "The agent's avatar."
+          },
+          "id": {
+            "type": "string",
+            "description": "A string on the wire: system bots have fixed ids that are not RFC 4122\nuuids."
+          },
+          "name": {
+            "type": "string",
+            "description": "The agent's display name."
+          }
+        }
+      },
+      "ManualNotificationLink": {
+        "type": "object",
+        "description": "What a manual notification opens.",
+        "required": ["entityType", "entityId"],
+        "properties": {
+          "entityId": {
+            "type": "string",
+            "description": "The entity's id."
+          },
+          "entityType": {
+            "$ref": "#/components/schemas/EntityType",
+            "description": "One of document, chat, channel, project, email_thread, agent_session,\nscheduled_action, database or form."
+          }
+        }
+      },
       "MentionedInDocumentCommentMetadata": {
         "type": "object",
         "description": "Notification sent when a user is mentioned in a document comment.",
@@ -3124,6 +3259,21 @@
                 "enum": ["routine_run_finished"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Someone, usually agent code through the SDK, sent the user a\nnotification they wrote.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/ManualMetadata",
+                "description": "Someone, usually agent code through the SDK, sent the user a\nnotification they wrote."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["manual"]
+              }
+            }
           }
         ],
         "description": "Mirrors [`model_notifications::NotificationEvent`] but uses `tag` / `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait."
@@ -3444,6 +3594,29 @@
         "type": "string",
         "description": "How a routine run ended, as its notification reports it.",
         "enum": ["succeeded", "failed"]
+      },
+      "SendManualNotificationRequest": {
+        "type": "object",
+        "description": "A notification written by the caller.",
+        "required": ["title", "link"],
+        "properties": {
+          "body": {
+            "type": ["string", "null"],
+            "description": "More detail, at most 1000 characters."
+          },
+          "link": {
+            "$ref": "#/components/schemas/ManualNotificationLink",
+            "description": "What the notification opens; the caller must be able to see it."
+          },
+          "recipientId": {
+            "type": ["string", "null"],
+            "description": "Who gets it; the caller when omitted. Anyone else must already be able\nto see `link`."
+          },
+          "title": {
+            "type": "string",
+            "description": "The headline, at most 120 characters."
+          }
+        }
       },
       "TaskAssignedMetadata": {
         "type": "object",
