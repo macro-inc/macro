@@ -114,6 +114,20 @@ async fn imported(pool: &PgPool) -> Vec<String> {
     .unwrap()
 }
 
+/// Whether the page membership of a series' occurrence survives. An event
+/// confirmed gone drops it; one skipped as unreadable keeps it.
+async fn occurrence_is_member(pool: &PgPool, master: &str) -> bool {
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS(SELECT 1 FROM calendar_outlook_members
+        WHERE provider_id = $1 AND master_id = $2) AS "member!""#,
+        format!("{master}-occurrence"),
+        master
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
 async fn connected(pool: &PgPool) -> (MockServer, Sync) {
     let (server, api) = setup().await;
     let repo = connected_mailbox(
@@ -160,6 +174,10 @@ async fn an_event_macro_cannot_read_is_skipped_and_the_rest_of_the_calendar_sync
         vec!["AAMkReadable"],
         "the readable meeting is imported and the unreadable one is absent"
     );
+    assert!(
+        occurrence_is_member(&pool, "AAMkAway").await,
+        "the series was read and skipped, not found gone"
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -198,12 +216,8 @@ async fn a_stored_event_that_turns_unreadable_leaves_the_calendar(pool: PgPool) 
 
     assert_synced(&pool).await;
     assert_eq!(imported(&pool).await, vec!["AAMkReadable"]);
-    let members = sqlx::query_scalar!(
-        r#"SELECT count(*) AS "count!" FROM calendar_outlook_members
-        WHERE provider_id = 'AAMkChanged-occurrence' AND master_id = 'AAMkChanged'"#
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(members, 1, "a later tombstone for it still resolves");
+    assert!(
+        occurrence_is_member(&pool, "AAMkChanged").await,
+        "a later tombstone for it still resolves"
+    );
 }
