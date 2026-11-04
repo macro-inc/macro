@@ -221,7 +221,7 @@ hides them. The meter's tooltip and label add `rising` or `falling` while a thre
 importance is moving: Jev judges per thread whether it gets more pressing or matters
 less as it sits, and the read moves the score from the time of its classified
 message until newer mail arrives. Threads classified before those questions stay
-flat until their next message. Rows at least 40rem wide keep all of it just before
+flat until their next message. Rows at least 45rem wide keep all of it just before
 the date. Narrower Focus rows stack, on touch too, with the subject on its own line
 and all of it ahead of the preview, so a narrow desktop window still shows the meter. The desktop
 header's sort dropdown (`Sort Focus`, among the view options) switches between

@@ -30,12 +30,12 @@ const WIDTHS = [
   // The narrowest row that keeps the subject and reason on one line.
   {
     name: 'one-line row',
-    width: 640,
+    width: 720,
     height: 800,
     touch: false,
     stacked: false,
   },
-  { name: 'stacked row', width: 639, height: 800, touch: false, stacked: true },
+  { name: 'stacked row', width: 719, height: 800, touch: false, stacked: true },
   { name: 'narrow row', width: 420, height: 800, touch: false, stacked: true },
   { name: 'phone', width: 390, height: 844, touch: true, stacked: true },
   { name: 'tablet', width: 820, height: 1180, touch: true, stacked: false },
@@ -97,14 +97,25 @@ for (const size of WIDTHS) {
         if (!box) throw new Error(`Row ${id} has no box`);
         return box.height;
       };
-      const subjectWidth = async (id: string) => {
-        const box = await page
+      // What can be read, not the subject's own box, which truncation leaves wide.
+      const subjectWidth = (id: string) =>
+        page
           .getByTestId(`row-${id}`)
           .getByText(/^A subject long enough/)
-          .boundingBox();
-        if (!box) throw new Error(`Row ${id} has no subject`);
-        return box.width;
-      };
+          .evaluate((subject) => {
+            const box = subject.getBoundingClientRect();
+            let right = box.right;
+            for (
+              let parent = subject.parentElement;
+              parent;
+              parent = parent.parentElement
+            ) {
+              if (getComputedStyle(parent).overflowX !== 'visible') {
+                right = Math.min(right, parent.getBoundingClientRect().right);
+              }
+            }
+            return right - box.left;
+          });
 
       // A pill adds no height, whatever the row's layout.
       expect(await rowHeight('reply')).toBe(await rowHeight('other'));
@@ -116,8 +127,13 @@ for (const size of WIDTHS) {
       if (size.stacked) {
         expect(await subjectWidth('reply')).toBe(await subjectWidth('other'));
       }
-      // One-line rows keep a readable subject beside the widest pills.
-      else expect(await subjectWidth('due-soon')).toBeGreaterThanOrEqual(200);
+      // One-line rows keep a readable subject beside the pills, and the meter too.
+      else {
+        expect(await subjectWidth('due-soon')).toBeGreaterThanOrEqual(200);
+        await page.getByRole('button', { name: 'Importance' }).click();
+        expect(await subjectWidth('due-soon')).toBeGreaterThanOrEqual(130);
+        await page.getByRole('button', { name: 'Most recent' }).click();
+      }
 
       const horizontalOverflow = await page.evaluate(
         () =>

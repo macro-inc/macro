@@ -7,10 +7,10 @@ import { emailFocusDue } from '../focus-due';
 import { emailFocusReason } from '../focus-reason';
 
 /**
- * Focus rows stack below this list width, in px, where a reason beside the
- * subject would leave it only a few words.
+ * Focus rows stack below this list width, in px, where a reason and a due date
+ * beside the subject, with the importance meter, would leave it only a few words.
  */
-export const EMAIL_FOCUS_WIDE_BREAKPOINT = 640;
+export const EMAIL_FOCUS_WIDE_BREAKPOINT = 720;
 
 /** A Focus row's classification; other rows have none. */
 const emailFocusOf = (entity: EntityData): EmailFocus | undefined =>
