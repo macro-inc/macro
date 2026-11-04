@@ -83,6 +83,9 @@ function TabsOwner(props: {
   });
   setGlobalTabManager(tabManager);
   onCleanup(() => setGlobalTabManager(undefined));
+  // Not reset on cleanup: the last live tab's blocks are still mounted, and
+  // the disposed scope keeps resolving to them.
+  props.manager.getOrchestrator().setBlockScope(tabManager.blockScope);
   onCleanup(installOpenInNewTabIntentTracker());
   registerTabHotkeys(tabManager);
 

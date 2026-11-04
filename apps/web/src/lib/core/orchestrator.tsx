@@ -8,6 +8,7 @@ import {
   onCleanup,
   onMount,
   Suspense,
+  untrack,
 } from 'solid-js';
 import { createStore, unwrap } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
@@ -40,6 +41,11 @@ type Block = {
 /** Key used to index on the block instace */
 type BlockKey = `${BlockName}:${string}`;
 const keyOf = (type: BlockName, id: string): BlockKey => `${type}:${id}`;
+
+/** Separates each surface's managed blocks; undefined is the default surface. */
+type BlockScope = string | undefined;
+const inScope = (scope: BlockScope, key: string) =>
+  scope === undefined ? key : `${scope}/${key}`;
 
 function getBlockDefinition(type: BlockName) {
   const definition = BLOCK_REGISTRY[type];
@@ -95,6 +101,7 @@ type BlockInstance = {
   isMounted: () => boolean;
   nested?: NestedState<any>;
   handle: OwnedBlockHandle<any>;
+  scope?: BlockScope;
 };
 
 type CreateBlockOptions<Name extends BlockName = BlockName> = {
@@ -105,7 +112,10 @@ type CreateBlockOptions<Name extends BlockName = BlockName> = {
   aliasContext?: BlockAliasContext;
 };
 
-type UnmanagedBlockInstance = Omit<BlockInstance, 'handle' | 'isMounted'>;
+type UnmanagedBlockInstance = Omit<
+  BlockInstance,
+  'handle' | 'isMounted' | 'scope'
+>;
 
 /**
  * Creates an unmanaged block instance
@@ -314,14 +324,20 @@ type CreateBlockInstanceFn = (
 export type BlockOrchestrator = {
   /** Whether a managed block is currently mounted in any surface. */
   isBlockMounted: (type: BlockName, id: string) => boolean;
-  /** Get a publicly accessible handle to a block instance */
+  /** Get a publicly accessible handle to a block instance in the current scope */
   getBlockHandle: GetBlockHandleFn;
+  /**
+   * Sets the scope that new managed blocks belong to and that handle lookups
+   * read, so surfaces shown one at a time (desktop tabs) can each mount the
+   * same block.
+   */
+  setBlockScope: (scope: Accessor<BlockScope>) => void;
   /**
    * Creates a managed block instance
    * - A managed block instance is discoverable by the orchestrator
    * - A managed block instance is "managed" / "owned" by the orchestrator
    * - A managed block instance can expose external api's to the orchestrator
-   * - *A managed block instance is unique on type and id*
+   * - *A managed block instance is unique on type and id within its scope*
    *
    * NOTE: Use this for mounting full blocks, for example in a layout
    * WARN: DO NOT use this for block previews of block-in-block scenarios
@@ -365,10 +381,14 @@ export type BlockOrchestrator = {
 export function createBlockOrchestrator(): BlockOrchestrator {
   const [blocks, setBlocks] = createStore<BlockWithHandleMap>({});
   const instances = new Map<string, BlockInstance>();
+  let blockScope: Accessor<BlockScope> = () => undefined;
+  // Blocks mount inside memos and effects, which must not rerun on a tab switch.
+  const currentScope = () => untrack(blockScope);
 
   const registerBlock = <T extends BlockName>(
     type: T,
-    id: string
+    id: string,
+    scope: BlockScope
   ): OwnedBlockHandle<BlockMethodsFor<T>> => {
     const block: Block = { type, id };
     const [registry, setRegistry] = createStore<
@@ -388,29 +408,33 @@ export function createBlockOrchestrator(): BlockOrchestrator {
       ...block,
       handle: ownedHandle as any,
     };
-    setBlocks(id, blockWithHandle);
+    setBlocks(inScope(scope, id), blockWithHandle);
     return ownedHandle;
   };
 
   /** Placeholder id -> the id its instance was re-filed under. */
   const rekeyed = new Map<string, string>();
 
-  const deregisterBlock = (type: BlockName, id: string) => {
+  const deregisterBlock = (type: BlockName, id: string, scope: BlockScope) => {
     // The element closed over the id it mounted with, so a re-keyed instance
     // asks to be torn down under its placeholder. Follow the move, or the
     // real entry outlives the mount.
-    const current = rekeyed.get(keyOf(type, id)) ?? id;
-    rekeyed.delete(keyOf(type, id));
-    instances.delete(keyOf(type, current));
-    setBlocks(current, undefined!);
+    const placeholder = inScope(scope, keyOf(type, id));
+    const current = rekeyed.get(placeholder) ?? id;
+    rekeyed.delete(placeholder);
+    instances.delete(inScope(scope, keyOf(type, current)));
+    setBlocks(inScope(scope, current), undefined!);
   };
 
   const getBlockHandle: GetBlockHandleFn = async function (
     blockId: string,
     blockType?: BlockName | BlockAlias
   ): Promise<BlockHandle<any> | undefined> {
-    await awaitBlockRegistered(blocks as any, blockId);
-    const block = (blocks as any)[blockId] as BlockWithHandle | undefined;
+    // Waits for the scope's own instance: a mount in another tab can't take
+    // the navigation meant for the view being opened here.
+    const entry = inScope(currentScope(), blockId);
+    await awaitBlockRegistered(blocks as any, entry);
+    const block = (blocks as any)[entry] as BlockWithHandle | undefined;
     if (!block) return;
     if (blockType && block.type !== blockType) {
       console.warn(
@@ -427,11 +451,12 @@ export function createBlockOrchestrator(): BlockOrchestrator {
     id: string,
     opts?: CreateBlockOptions
   ): BlockInstance {
-    const key = keyOf(type, id);
+    const scope = currentScope();
+    const key = inScope(scope, keyOf(type, id));
     const existing = instances.get(key);
     if (existing) return existing;
 
-    const ownedHandle = registerBlock(type, id);
+    const ownedHandle = registerBlock(type, id, scope);
 
     const definition = getBlockDefinition(type);
     const src = (opts?.sourceResolver ?? defaultSourceResolver)(
@@ -448,7 +473,7 @@ export function createBlockOrchestrator(): BlockOrchestrator {
       ownedHandle,
       opts,
       onCleanup: () => {
-        deregisterBlock(type, id);
+        deregisterBlock(type, id, scope);
       },
     });
 
@@ -477,6 +502,7 @@ export function createBlockOrchestrator(): BlockOrchestrator {
       isMounted: () => mounted,
       nested: opts?.nested,
       handle: ownedHandle,
+      scope,
     };
 
     instances.set(key, instance);
@@ -485,36 +511,52 @@ export function createBlockOrchestrator(): BlockOrchestrator {
 
   function rekeyBlockInstance(type: BlockName, fromId: string, toId: string) {
     if (fromId === toId) return;
-    const from = keyOf(type, fromId);
-    const to = keyOf(type, toId);
-    const instance = instances.get(from);
-    if (!instance || instances.has(to)) return;
+    // The create can resolve after its tab went to the background, so the
+    // instance is not necessarily in the current scope.
+    const moving = [...instances.values()].filter(
+      (instance) => instance.type === type && instance.id === fromId
+    );
+    for (const instance of moving) {
+      const { scope } = instance;
+      const from = inScope(scope, keyOf(type, fromId));
+      const to = inScope(scope, keyOf(type, toId));
+      if (instances.has(to)) continue;
 
-    instances.delete(from);
-    instances.set(to, { ...instance, key: to, id: toId });
-    rekeyed.set(from, toId);
+      instances.delete(from);
+      instances.set(to, { ...instance, key: to, id: toId });
+      rekeyed.set(from, toId);
 
-    // The handle's `block.id` is what `getBlockHandle` resolves and what
-    // method registrations are looked up by, so it moves with the instance.
-    const existing = (blocks as any)[fromId] as BlockWithHandle | undefined;
-    if (!existing) return;
-    setBlocks(fromId, undefined!);
-    setBlocks(toId, { ...existing, id: toId });
+      // The handle's `block.id` is what `getBlockHandle` resolves and what
+      // method registrations are looked up by, so it moves with the instance.
+      const fromEntry = inScope(scope, fromId);
+      const existing = (blocks as any)[fromEntry] as
+        | BlockWithHandle
+        | undefined;
+      if (!existing) continue;
+      setBlocks(fromEntry, undefined!);
+      setBlocks(inScope(scope, toId), { ...existing, id: toId });
+    }
   }
 
   function registerBlockHandle<T extends BlockName>(type: T, id: string) {
-    if (unwrap(blocks)[id]) return;
-    const handle = registerBlock(type, id);
+    const scope = currentScope();
+    const entry = inScope(scope, id);
+    if (unwrap(blocks)[entry]) return;
+    const handle = registerBlock(type, id, scope);
     onCleanup(() => {
-      if (unwrap(blocks)[id]?.handle === handle) setBlocks(id, undefined!);
+      if (unwrap(blocks)[entry]?.handle === handle) setBlocks(entry, undefined!);
     });
     return handle;
   }
 
   return {
     isBlockMounted: (type, id) =>
-      instances.get(keyOf(type, id))?.isMounted() ?? false,
+      instances.get(inScope(currentScope(), keyOf(type, id)))?.isMounted() ??
+      false,
     getBlockHandle,
+    setBlockScope(scope) {
+      blockScope = scope;
+    },
     createBlockInstance: createManagedBlockInstance,
     rekeyBlockInstance,
     registerBlockHandle,

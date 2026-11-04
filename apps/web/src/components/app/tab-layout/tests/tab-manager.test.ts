@@ -121,33 +121,18 @@ describe('desktop tab manager', () => {
     expect(router.canGo(router.panes()[0]!, -1)).toBe(true);
   });
 
-  it('reveals the tab holding a parked split and focuses that split', async () => {
-    const activateSplit = vi.fn();
-    const host: TabLayoutHost = {
-      ...fakeHost(),
-      getSplit: (id) => ({ id }) as ReturnType<TabLayoutHost['getSplit']>,
-      activateSplit,
-    };
-    const { router, tabManager } = track(setup('/mail/t1', undefined, host));
+  it('scopes blocks to the tab they mount in, leaving the first unscoped', async () => {
+    const { router, tabManager } = track(setup('/mail/t1'));
     const [first] = tabManager.tabs();
-    const parkedSplit = router.panes()[0]! as string as SplitId;
-
-    expect(tabManager.revealSplit(parkedSplit)).toBe(false);
+    expect(tabManager.blockScope()).toBeUndefined();
 
     tabManager.newTab();
     await flush(router);
-    const liveSplit = router.panes()[0]! as string as SplitId;
-    expect(tabManager.revealSplit(liveSplit)).toBe(false);
-    expect(tabManager.activeTabId()).not.toBe(first!.id);
+    expect(tabManager.blockScope()).toBe(tabManager.activeTabId());
 
-    expect(tabManager.revealSplit(parkedSplit)).toBe(true);
+    tabManager.activateTab(first!.id);
     await flush(router);
-    expect(tabManager.activeTabId()).toBe(first!.id);
-    expect(routeIds(router)).toEqual([['mail', 'mail-thread']]);
-    expect(activateSplit).toHaveBeenLastCalledWith(parkedSplit);
-
-    // Back on its own tab, the split is live again rather than held elsewhere.
-    expect(tabManager.revealSplit(parkedSplit)).toBe(false);
+    expect(tabManager.blockScope()).toBeUndefined();
   });
 
   it('closing the active tab activates its neighbor and restores it', async () => {
