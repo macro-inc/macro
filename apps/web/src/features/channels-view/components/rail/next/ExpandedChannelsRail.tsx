@@ -170,6 +170,10 @@ function SectionHeading(props: { group: 'favorites' | ChannelsGroup }) {
       }
     }
 
+    if (props.group === 'channels') {
+      return t('channelSections.allChannels');
+    }
+
     return t(`channelSections.${props.group}`);
   };
 
@@ -310,6 +314,7 @@ type SectionHandle = {
   root?: HTMLDivElement;
   virtualizer?: ChannelRailVirtualizerHandle;
   viewport?: HTMLDivElement;
+  outerScroll?: boolean;
 };
 
 function BrowseSection(props: {
@@ -317,6 +322,8 @@ function BrowseSection(props: {
   section: ChannelRailSectionRows;
   maxHeight: number;
   outerScrollRoot: HTMLDivElement | undefined;
+  layoutVersion: number;
+  sectionOrder: readonly ChannelSectionKey[];
   scrollVersion: number;
   savedScrollTop: number;
   onReady: () => void;
@@ -331,6 +338,14 @@ function BrowseSection(props: {
   const [virtualizer, setVirtualizer] =
     createSignal<ChannelRailVirtualizerHandle>();
   const size = createElementSize(scrollRoot);
+  const [resizing, setResizing] = createSignal(false);
+  const [startMargin, setStartMargin] = createSignal(0);
+  const outerScroll = () =>
+    props.maxHeight === Number.POSITIVE_INFINITY &&
+    rail.sectionPreferences(props.sectionKey).height === undefined &&
+    !resizing();
+  const rowsScrollRoot = () =>
+    outerScroll() ? props.outerScrollRoot : scrollRoot();
   const droppable = createDroppable(
     `${props.sectionReorder.scope}:${props.sectionKey}`,
     {
@@ -343,9 +358,40 @@ function BrowseSection(props: {
   onCleanup(props.register(props.sectionKey, handle));
   onMount(() => {
     const viewport = scrollRoot();
-    if (viewport) viewport.scrollTop = props.savedScrollTop;
+    if (viewport && !outerScroll()) viewport.scrollTop = props.savedScrollTop;
     props.onReady();
   });
+
+  createEffect(
+    on(
+      [
+        scrollRoot,
+        outerScroll,
+        () => props.layoutVersion,
+        () => props.sectionOrder,
+        () => size.height,
+      ],
+      () => {
+        if (!outerScroll()) return;
+
+        const frame = requestAnimationFrame(() => {
+          let element: HTMLElement | undefined = scrollRoot();
+          let offset = 0;
+
+          while (element && element !== props.outerScrollRoot) {
+            offset += element.offsetTop;
+            element =
+              element.offsetParent instanceof HTMLElement
+                ? element.offsetParent
+                : undefined;
+          }
+
+          setStartMargin(offset);
+        });
+        onCleanup(() => cancelAnimationFrame(frame));
+      }
+    )
+  );
 
   // Stable row IDs preserve in-flight pointer gestures during live updates.
   const rowsById = createMemo(
@@ -371,6 +417,11 @@ function BrowseSection(props: {
 
   const label = () => {
     const row = heading();
+
+    if (row.kind === 'section' && row.group === 'channels') {
+      return t('channelSections.allChannels');
+    }
+
     return row.kind === 'label'
       ? row.label.name
       : t(`channelSections.${row.group}`);
@@ -466,6 +517,7 @@ function BrowseSection(props: {
       dragging={props.sectionReorder.isDragging(props.sectionKey)}
       outerScrollRoot={props.outerScrollRoot}
       itemCount={itemCount()}
+      onResizingChange={setResizing}
       rootRef={(element) => {
         handle.root = element;
         droppable.ref(element);
@@ -508,11 +560,13 @@ function BrowseSection(props: {
         <ChannelRailVirtualizer
           ref={(current) => {
             handle.virtualizer = current;
+            handle.outerScroll = outerScroll();
             setVirtualizer(current);
             if (current) props.onReady();
           }}
           keys={rowIds()}
-          scrollRoot={scrollRoot()}
+          scrollRoot={rowsScrollRoot()}
+          scrollMargin={outerScroll() ? startMargin() : 0}
           scrollPadding={CHANNEL_SECTION_ROW_HEIGHT * 2}
           estimateSize={CHANNEL_SECTION_ROW_HEIGHT}
           keepMounted={keepRows()}
@@ -551,6 +605,7 @@ function BrowseSection(props: {
 function ExpandedBrowse() {
   const rail = useChannelsRail();
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
+  const [stackContent, setStackContent] = createSignal<HTMLDivElement>();
   const [scrollVersion, setScrollVersion] = createSignal(0);
   const [handlesVersion, setHandlesVersion] = createSignal(0);
   const [gestureSection, setGestureSection] = createSignal<ChannelSectionKey>();
@@ -562,6 +617,7 @@ function ExpandedBrowse() {
   }>();
   const userId = useUserId();
   const scrollSize = createElementSize(scrollRoot);
+  const stackSize = createElementSize(stackContent);
   const scrollOffsets = new Map<ChannelSectionKey, number>();
   const sections = createMemo(() =>
     groupChannelRailSections(rail.list.items.all())
@@ -575,11 +631,22 @@ function ExpandedBrowse() {
     }
     return lookup;
   });
-  const maximumHeight = () =>
-    Math.min(
+  const maximumHeight = (key: ChannelSectionKey) => {
+    const paneHeight = Math.min(
       CHANNEL_SECTION_MAX_HEIGHT,
       Math.max(CHANNEL_SECTION_MIN_HEIGHT, (scrollSize.height ?? 300) - 48)
     );
+
+    if (key !== 'channels') {
+      return paneHeight;
+    }
+
+    if (keys().at(-1) === key) {
+      return Number.POSITIVE_INFINITY;
+    }
+
+    return Math.max(paneHeight, rail.sectionPreferences(key).height ?? 0);
+  };
   const handles = new Map<ChannelSectionKey, SectionHandle>();
   const motion = createLayoutAnimation({
     viewport: scrollRoot,
@@ -691,7 +758,7 @@ function ExpandedBrowse() {
     handles.set(key, handle);
     return () => {
       if (handles.get(key) === handle) {
-        if (handle.viewport) {
+        if (handle.viewport && !handle.outerScroll) {
           scrollOffsets.set(key, handle.viewport.scrollTop);
         }
         handles.delete(key);
@@ -742,7 +809,7 @@ function ExpandedBrowse() {
         const target = document.getElementById(
           domIdForRow(rail.railId, request.rowId)
         );
-        if (container && target) {
+        if (container && target && (!handle.outerScroll || currentIndex < 0)) {
           const nextOffset =
             currentIndex >= 0
               ? handle.virtualizer?.getScrollOffsetForIndex(
@@ -777,7 +844,7 @@ function ExpandedBrowse() {
         class="scrollbar-hidden relative min-h-0 flex-1 overflow-y-auto px-(--sidebar-gutter) [&:has([data-resizing])]:[overflow-anchor:none]"
         on:scroll={{ capture: true, handleEvent: updateDropTarget }}
       >
-        <div>
+        <div ref={setStackContent}>
           <ChannelRailVirtualizer
             scrollRoot={scrollRoot()}
             keys={keys()}
@@ -791,8 +858,10 @@ function ExpandedBrowse() {
                   <BrowseSection
                     sectionKey={key}
                     section={section()}
-                    maxHeight={maximumHeight()}
+                    maxHeight={maximumHeight(key)}
                     outerScrollRoot={scrollRoot()}
+                    layoutVersion={stackSize.height ?? 0}
+                    sectionOrder={keys()}
                     scrollVersion={scrollVersion()}
                     savedScrollTop={scrollOffsets.get(key) ?? 0}
                     onReady={ready}
