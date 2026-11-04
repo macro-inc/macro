@@ -7,6 +7,7 @@ use crate::domain::{
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
+use email_validator::EmailAddress;
 use entity_access::domain::{models::ViewAccessLevel, ports::EntityAccessService};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
@@ -17,11 +18,11 @@ use uuid::Uuid;
 use super::EmailToolContext;
 
 /// A recipient for an email.
-#[derive(Debug, Clone, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct EmailRecipient {
     /// The recipient's email address.
-    pub email: String,
+    pub email: EmailAddress,
     /// The recipient's display name (optional).
     #[serde(default)]
     pub name: Option<String>,
@@ -30,7 +31,7 @@ pub struct EmailRecipient {
 impl From<EmailRecipient> for ContactInfo {
     fn from(r: EmailRecipient) -> Self {
         ContactInfo {
-            email: r.email,
+            email: r.email.into_inner(),
             name: r.name,
             photo_url: None,
         }
@@ -38,7 +39,7 @@ impl From<EmailRecipient> for ContactInfo {
 }
 
 /// A Macro document attached to an outgoing email as a file.
-#[derive(Debug, Clone, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct EmailAttachment {
     /// The id of the Macro document to attach. It must be a stored file -
@@ -49,7 +50,7 @@ pub struct EmailAttachment {
 }
 
 /// Compose and send an email. Creates a draft and immediately queues it for delivery.
-#[derive(Debug, Deserialize, JsonSchema, Clone)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema, specta::Type, Clone)]
 #[schemars(
     title = "SendEmail",
     description = "Draft, compose, and send an email the user confirms in a review card or composer. Use this tool whenever the user asks you to draft, write, compose, or send an email (or reply to one) from the agent session view or from chat — never write the email as plain text there. It opens the draft for the user to review, edit, and confirm before it is sent, so it is the correct tool even when the user only wants a draft. Do NOT use it for a prompt that came from a channel or document thread — the context block names a conversation parent when it did, and there is no surface to review a draft in: write the email out in your reply, ask whether to send it, and use SendConfirmedEmail once the user approves. To reply to an existing message, provide the replying_to_id; the reply then goes out from the inbox that received it unless `from` says otherwise. To attach files, list the Macro documents in attachments — uploaded files such as PDFs, images, spreadsheets, or Word documents the user can view; the user can add or remove attachments in the composer before sending. Write the body in Markdown — use **bold**, *italics*, lists, links, and other standard Markdown formatting. The draft composer renders the Markdown for the user to review and edit; the composer produces HTML that is sent as the actual email body."
@@ -97,7 +98,7 @@ pub struct SendEmail {
 }
 
 /// Response from the SendEmail tool.
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum SendEmailResponse {
     Sent {

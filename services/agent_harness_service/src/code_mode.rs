@@ -119,6 +119,7 @@ pub fn sdk_hosts() -> anyhow::Result<BTreeMap<String, String>> {
             DocumentStorageServiceCloudfrontDistributionUrl::new()?.to_string(),
         ),
         ("static-content", StaticFilePublicUrl::new()?.to_string()),
+        ("editing-worker", AiEditingWorkerUrl::new()?.to_string()),
         ("storage", storage.clone()),
         ("search", storage.clone()),
         ("properties", storage),

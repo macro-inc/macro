@@ -32,7 +32,7 @@ The root adapters construct production dependencies. `context` defines the
 capabilities; it does not import their implementations. Views consume these
 capabilities, primitives receive narrow inputs, and components render props.
 Core modules remain independent of Solid, service clients, and app state.
-`mark-record-notifications-seen.ts` integrates with shared list activation so
+`features/notifications/mark-row-seen.ts` integrates with shared list activation so
 opening a company or contact clears its row's unread notifications immediately.
 It uses the row's attached notifications before falling back to an entity read;
 the shared notification source owns optimistic state and failure rollback.

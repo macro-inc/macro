@@ -71,7 +71,10 @@ export type LiveSyncSource = {
   readonly documentId: string;
   readonly listen: Listen<SyncSourceEvent>;
   /** Sends a batch of updates to the server. Resolves true if acked, false if timed out. */
-  pushUpdate: (updates: RawUpdate[]) => Promise<boolean>;
+  pushUpdate: (
+    updates: RawUpdate[],
+    options?: { commentOnly: boolean }
+  ) => Promise<boolean>;
   pushAwareness: (awareness: RawUpdate) => void;
   registerPeerId: (peerId: bigint) => void;
   status: Accessor<SyncSourceStatus>;

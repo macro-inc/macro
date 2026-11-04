@@ -3,6 +3,7 @@
 ## Modules
 
 - [generated/agent-harness/types.gen](generated/agent-harness/types.gen/README.md)
+- [generated/agent-reviews](generated/agent-reviews/README.md)
 - [generated/auth/types.gen](generated/auth/types.gen/README.md)
 - [generated/calendar/types.gen](generated/calendar/types.gen/README.md)
 - [generated/cognition/types.gen](generated/cognition/types.gen/README.md)
