@@ -83,6 +83,7 @@ async fn the_builder_initializes_an_editor_only_durable_layout() {
                 required: true,
                 widget: None,
             }],
+            show_when: None,
         }],
     };
     world

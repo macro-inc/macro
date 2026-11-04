@@ -76,6 +76,11 @@ DecideReview are eager internal tools in both standard and code modes.
   Opus 5.5 (hard), GPT-6.1 Sol (mid) or Gemini 3.8 Flash (simple, and
   whenever Jev is unavailable). Capability lookups go through
   `models::resolve`.
+- Owners with the `auto-skills` flag route each turn's request to their skills
+  (`skills::domain::selection`, Jev, 1 s). Loaded skills are appended to the
+  user message that loaded them in the model's copy only, and remembered per
+  session in `SessionSkills` (memory; lost on restart). Eval:
+  `route_evaluation` (ignored; needs `TYPESAFE_API_KEY`).
 - Keep session-aware `NameSearch`, `ContentSearch`, and `ListEntities` native in
   code mode; legacy `ReadChat` must not appear in either runtime tool catalog.
 - Every turn cuts tool results over `agent::ToolResultLimit`'s limit (about

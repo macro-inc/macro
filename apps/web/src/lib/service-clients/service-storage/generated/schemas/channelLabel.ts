@@ -30,6 +30,6 @@ export interface ChannelLabel {
   sortOrder: number;
   /** Owning team, or `None` for account-private labels. */
   teamId?: ChannelLabelTeamId;
-  /** When the label was last renamed or reordered. */
+  /** When the label's name, rule, scope, or order last changed. */
   updatedAt: string;
 }

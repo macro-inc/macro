@@ -3419,7 +3419,7 @@
       },
       "patch": {
         "tags": ["channel_labels"],
-        "summary": "Rename a label of the caller's authorized scope.",
+        "summary": "Update a label, optionally moving it to another authorized scope.",
         "operationId": "rename_channel_label",
         "parameters": [
           {
@@ -9742,7 +9742,7 @@
     "/documents/create_skill": {
       "post": {
         "tags": ["document"],
-        "summary": "Creates a skill document with initialized markdown content in one\nbackend-owned lifecycle. Skills are markdown documents containing\ninstructions that AI reads and follows when the skill is referenced in an\nAI input.",
+        "summary": "Creates a skill document with initialized markdown content and its\nrouting description in one backend-owned lifecycle. Skills are markdown documents containing\ninstructions that AI reads and follows when the skill is referenced in an\nAI input.",
         "operationId": "create_skill_handler",
         "requestBody": {
           "content": {
@@ -9774,7 +9774,7 @@
             }
           },
           "400": {
-            "description": "",
+            "description": "The description is blank, longer than one line or 300 characters, or does not start \"Use when\"",
             "content": {
               "application/json": {
                 "schema": {
@@ -11815,6 +11815,144 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/skill_description": {
+      "get": {
+        "tags": ["document"],
+        "summary": "Gets when to use a skill. `description` is absent for a skill created\nbefore descriptions existed.",
+        "operationId": "get_skill_description",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Skill document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillDescriptionBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["document"],
+        "summary": "Sets when to use a skill: one line starting \"Use when\", at most 300\ncharacters. Agents choose skills for a request by it.",
+        "operationId": "set_skill_description",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Skill document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSkillDescriptionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillDescriptionBody"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The document is not a skill, or the description is invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -24219,7 +24357,7 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time",
-            "description": "When the label was last renamed or reordered."
+            "description": "When the label's name, rule, scope, or order last changed."
           }
         }
       },
@@ -26792,8 +26930,12 @@
       "CreateSkillRequest": {
         "type": "object",
         "description": "Request body for creating a skill — a markdown document containing\ninstructions that AI reads and follows when the skill is referenced in an\nAI input.",
-        "required": ["skillName"],
+        "required": ["skillName", "description"],
         "properties": {
+          "description": {
+            "type": "string",
+            "description": "When to use the skill, in one line starting \"Use when\", e.g. \"Use when\ndrafting release notes; not changelog entries\". Agents choose skills\nfor a request by it."
+          },
           "markdown": {
             "type": ["string", "null"],
             "description": "Markdown source text. Defaults to an empty skill document."
@@ -32821,6 +32963,10 @@
                 },
                 "description": "Its questions, in order."
               },
+              "showWhen": {
+                "$ref": "#/components/schemas/FilterGroup",
+                "description": "When to show it: the rules answers of earlier shown sections must\npass, naming only their columns. A section whose rules fail is\nskipped: its questions are not required and their answers are\nnot written. Absent, it is always shown."
+              },
               "title": {
                 "type": "string",
                 "description": "Its title; may be empty."
@@ -32923,6 +33069,10 @@
                   "$ref": "#/components/schemas/FormQuestionDetail"
                 },
                 "description": "Its questions, in order."
+              },
+              "showWhen": {
+                "$ref": "#/components/schemas/FilterGroup",
+                "description": "When to show it, from earlier shown sections' answers; absent,\nit is always shown. Sent to every caller so a respondent's page\ncan skip it."
               },
               "title": {
                 "type": "string",
@@ -35489,6 +35639,37 @@
               "kind": {
                 "type": "string",
                 "enum": ["gateRule"]
+              },
+              "reason": {
+                "type": "string",
+                "description": "Why."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A section's show-when rules test a column no earlier section asks.",
+            "required": ["column", "kind"],
+            "properties": {
+              "column": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The column."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["conditionNamesLaterColumn"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A section's show-when rule does not fit its column.",
+            "required": ["reason", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["conditionRule"]
               },
               "reason": {
                 "type": "string",
@@ -39284,7 +39465,7 @@
       },
       "RenameChannelLabelRequest": {
         "type": "object",
-        "description": "Request body for renaming a label.",
+        "description": "Request body for updating a label's name, smart rule, or sharing scope.",
         "required": ["name"],
         "properties": {
           "name": {
@@ -39299,6 +39480,17 @@
               {
                 "$ref": "#/components/schemas/ChannelLabelRule",
                 "description": "Automatic name-matching rule; omitted for manual labels or a name-only rename."
+              }
+            ]
+          },
+          "targetScope": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChannelLabelScopeSelection",
+                "description": "Destination namespace; omitted to preserve the current scope."
               }
             ]
           }
@@ -40640,6 +40832,17 @@
         ],
         "description": "Type-safe enum for setting entity property values - provides compile-time validation."
       },
+      "SetSkillDescriptionRequest": {
+        "type": "object",
+        "description": "Request body for setting a skill's routing description.",
+        "required": ["description"],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "When to use the skill, in one line starting \"Use when\", at most 300\ncharacters."
+          }
+        }
+      },
       "Sha256Digest": {
         "type": "string",
         "description": "SHA-256 encoded as exactly 64 lowercase hexadecimal characters."
@@ -40789,6 +40992,16 @@
           "entity_type": {
             "type": "string",
             "description": "Mentioned entity type."
+          }
+        }
+      },
+      "SkillDescriptionBody": {
+        "type": "object",
+        "description": "A skill's routing description.",
+        "properties": {
+          "description": {
+            "type": ["string", "null"],
+            "description": "When to use the skill, in one line starting \"Use when\". Absent for a\nskill created before descriptions existed."
           }
         }
       },

@@ -1450,6 +1450,49 @@ describe('agent-led new conversation', () => {
       expect.objectContaining({ effortOverride: undefined })
     );
   });
+  it('keeps the last picked effort as the default for that model', async () => {
+    const pickGpt5 = async () => {
+      const models = await hoverAgent('Cursor');
+      fireEvent.keyDown(models.getByRole('menuitem', { name: /^GPT-5/ }), {
+        key: 'Enter',
+      });
+      await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    };
+    const send = page(true, [], false, [], 'code');
+    await pickGpt5();
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Effort: Low' }), {
+      key: 'ArrowDown',
+    });
+    fireEvent.keyDown(await screen.findByRole('menuitem', { name: 'Ultra' }), {
+      key: 'Enter',
+    });
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        effortOverride: { configId: 'cursor_effort', value: 'ultra' },
+      })
+    );
+
+    await pickGpt5();
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        effortOverride: { configId: 'cursor_effort', value: 'ultra' },
+      })
+    );
+
+    cleanup();
+    const remounted = page(true, [], false, [], 'code');
+    await pickGpt5();
+    expect(screen.getByRole('button', { name: 'Effort: Ultra' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(remounted).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        effortOverride: { configId: 'cursor_effort', value: 'ultra' },
+      })
+    );
+  });
 });
 
 it('starts a conversation with an uploaded image and no text', () => {
