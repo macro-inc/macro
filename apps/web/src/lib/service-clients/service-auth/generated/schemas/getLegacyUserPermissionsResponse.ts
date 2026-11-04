@@ -21,6 +21,8 @@ creation-time tracking. */
   hasChromeExt: boolean;
   /** Whether the user has trialed through stripe */
   hasTrialed: boolean;
+  /** Whether this is an agent account rather than a person */
+  isAgent: boolean;
   /** The user's license status */
   licenseStatus: string;
   /** The user's name */

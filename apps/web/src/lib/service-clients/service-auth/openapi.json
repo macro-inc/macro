@@ -5128,6 +5128,66 @@
         }
       }
     },
+    "/user/agent_setup": {
+      "post": {
+        "tags": ["user::agent_setup"],
+        "summary": "Finishes an agent's signup: joins the team that invited it and mints its\nSDK token.",
+        "description": "Safe to repeat until the agent confirms it saved the token: a reload replaces\nthe key, and a failed join stays pending for the next attempt.",
+        "operationId": "agent_setup",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSetupResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account is not an agent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Setup is already confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/user/get_names": {
       "post": {
         "tags": ["user::post_get_names"],
@@ -5835,6 +5895,75 @@
         }
       }
     },
+    "/user/profile_picture/file": {
+      "put": {
+        "tags": ["user::put_profile_picture_file"],
+        "summary": "Sets the caller's profile picture to an image they uploaded.",
+        "operationId": "put_profile_picture_file",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutProfilePictureFileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The file is not an uploaded image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The caller has no such file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/user/profile_pictures": {
       "post": {
         "tags": ["user::post_profile_pictures"],
@@ -6321,6 +6450,17 @@
         "type": "string",
         "description": "A provider an agent can bring its own key for.",
         "enum": ["anthropic", "openai"]
+      },
+      "AgentSetupResponse": {
+        "type": "object",
+        "description": "What an agent needs to start using the SDK.",
+        "required": ["api_key"],
+        "properties": {
+          "api_key": {
+            "type": "string",
+            "description": "The agent's API key. Shown only here; repeating setup revokes it."
+          }
+        }
       },
       "AiBillingErrorBody": {
         "type": "object",
@@ -7125,6 +7265,7 @@
           "email",
           "licenseStatus",
           "tutorialComplete",
+          "isAgent",
           "hasChromeExt",
           "hasTrialed",
           "aiDataConsent",
@@ -7162,6 +7303,10 @@
           "hasTrialed": {
             "type": "boolean",
             "description": "Whether the user has trialed through stripe"
+          },
+          "isAgent": {
+            "type": "boolean",
+            "description": "Whether this is an agent account rather than a person"
           },
           "licenseStatus": {
             "type": "string",
@@ -7821,6 +7966,10 @@
             },
             "description": "The invites to send, each with an email and tier"
           },
+          "is_agent": {
+            "type": "boolean",
+            "description": "Invite these addresses as agents: an address with no account signs up\nas an agent and joins the team when it first signs in."
+          },
           "team_id": {
             "type": ["string", "null"],
             "format": "uuid",
@@ -7964,6 +8113,10 @@
           "email": {
             "type": "string",
             "description": "The email to initiate passwordless authentication for"
+          },
+          "is_agent": {
+            "type": "boolean",
+            "description": "Create an agent account if this address has no account yet. Ignored for\nan existing account, whose type never changes."
           },
           "redirect_uri": {
             "type": "string",
@@ -8326,6 +8479,16 @@
           "modelId": {
             "type": ["string", "null"],
             "description": "A Cursor model id (e.g. `grok-4.6`), or `null` to clear the choice and\nfall back to the deployment default."
+          }
+        }
+      },
+      "PutProfilePictureFileRequest": {
+        "type": "object",
+        "required": ["file_id"],
+        "properties": {
+          "file_id": {
+            "type": "string",
+            "description": "Id of an image the caller uploaded to static file storage."
           }
         }
       },
@@ -8746,7 +8909,8 @@
           "team_role",
           "invited_by",
           "created_at",
-          "last_sent_at"
+          "last_sent_at",
+          "is_agent"
         ],
         "properties": {
           "created_at": {
@@ -8766,6 +8930,10 @@
           "invited_by": {
             "type": "string",
             "description": "The user who sent the invitation"
+          },
+          "is_agent": {
+            "type": "boolean",
+            "description": "Whether the invite creates an agent account"
           },
           "last_sent_at": {
             "type": "string",
@@ -9182,6 +9350,10 @@
           },
           "id": {
             "type": "string"
+          },
+          "is_agent": {
+            "type": "boolean",
+            "description": "Whether this is an agent account rather than a person."
           },
           "last_name": {
             "type": ["string", "null"]

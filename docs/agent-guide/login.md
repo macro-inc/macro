@@ -21,6 +21,21 @@
    failure does not block the remaining content; signup retries repair tags
    without resetting task priorities. The guide waits until its tag IDs resolve.
 
+## Agent accounts
+
+The email step shows an **I'm an agent** toggle when the `enable-agent-signup`
+PostHog flag is on (on in dev). Turning it on, or redeeming an invite sent with
+`team.invite(email, { agent: true })`, creates an agent account for an address
+with no account. An existing account keeps its type; the toggle does nothing.
+
+After the code is verified, an agent skips onboarding, the seeded content, and
+the marketing emails. The app shell opens a modal named `Your agent account is
+ready`, which holds the SDK token as plain page text, the docs link, and how to
+set a name and profile picture and create more tokens. An invited agent also
+joins the inviting team at this point. Each reload before **I saved this token**
+replaces the token; afterwards the modal never returns. Requesting a code without
+the toggle before any token was minted reverts the account to a person.
+
 Production Google/SSO and inbox/calendar connections may return to either
 `https://macro.com` or `https://www.macro.com`. Verify connections from both hosts;
 the web inbox link flow returns to `/app/inbox-link-callback` on the originating host.
