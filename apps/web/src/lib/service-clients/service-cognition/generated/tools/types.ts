@@ -496,6 +496,13 @@ export type Section =
        * Ordered questions.
        */
       questions: Question2Question[];
+      /**
+       * Show this section only when earlier answers pass these rules,
+       * which reference questions of earlier sections like a gate's.
+       * A skipped section's questions are not required and their answers
+       * are not saved. Omitted means always shown.
+       */
+      showWhen?: Rules | null;
       kind: 'questions';
     }
   | {
@@ -652,7 +659,7 @@ export type Widget =
  */
 export type Conjunction = 'and' | 'or';
 /**
- * One screening condition or nested nonempty group.
+ * One gate or show-when condition, or a nested nonempty group.
  */
 export type Rule =
   | {
@@ -913,6 +920,13 @@ export type FormSection =
        * Its questions, in order.
        */
       questions: QuestionLayout[];
+      /**
+       * When to show it: the rules answers of earlier shown sections must
+       * pass, naming only their columns. A section whose rules fail is
+       * skipped: its questions are not required and their answers are
+       * not written. Absent, it is always shown.
+       */
+      showWhen?: FilterGroup | null;
       kind: 'questions';
     }
   | {
@@ -984,8 +998,10 @@ export type Code =
   | 'ScreeningTooDeep'
   | 'TooManyConditions'
   | 'GateReferencesLaterQuestion'
+  | 'ShowWhenReferencesLaterQuestion'
   | 'UnknownOption'
   | 'InvalidGateRule'
+  | 'InvalidShowWhenRule'
   | 'ConcurrentFieldChange'
   | 'InvalidEdit'
   | 'Forbidden'
@@ -1230,6 +1246,15 @@ export type Change =
       sectionId: FormSectionId;
       rules: FilterGroup;
       kind: 'setGateRules';
+    }
+  | {
+      sectionId: FormSectionId;
+      /**
+       * Nonempty AND/OR tree referencing earlier sections' question
+       * columns; null makes the section always shown.
+       */
+      showWhen?: FilterGroup | null;
+      kind: 'setShowWhen';
     }
   | {
       sectionId: FormSectionId;
@@ -4559,6 +4584,12 @@ export type FormSectionDetail =
        * Its questions, in order.
        */
       questions: FormQuestionDetail[];
+      /**
+       * When to show it, from earlier shown sections' answers; absent,
+       * it is always shown. Sent to every caller so a respondent's page
+       * can skip it.
+       */
+      showWhen?: FilterGroup | null;
       kind: 'questions';
     }
   | {
@@ -7670,7 +7701,7 @@ export interface CreateDocumentResponse {
   documentId: string;
 }
 /**
- * Create a complete questionnaire with response columns, ordered sections, gates and an optional saved booking link. Creates closed and private; use SetFormAccess afterward to open or share it. Existing-table attachment requires database Owner and an unbound table. Use local question/option keys in gates and reference only earlier sections. Required questions require an answer; gates compare answers using AND/OR. Empty answers pass only IsEmpty. A final booking step reveals an existing authorized link after acceptance; its independent URL remains usable, and strict qualification is unsupported. Each invocation creates a new form; after a timeout, use ListForms and ReadForm before trying again. Returns actual saved IDs, links and completion state; inspect partial work instead of recreating.
+ * Create a complete questionnaire with response columns, ordered sections, gates and an optional saved booking link. Creates closed and private; use SetFormAccess afterward to open or share it. Existing-table attachment requires database Owner and an unbound table. Use local question/option keys in gates and reference only earlier sections. Required questions require an answer; gates compare answers using AND/OR. A questions section may set showWhen (rules like a gate's, referencing only questions of earlier sections) to branch: when earlier answers fail them the section is skipped, its questions are not required and their answers are not saved. Empty answers pass only IsEmpty. A final booking step reveals an existing authorized link after acceptance; its independent URL remains usable, and strict qualification is unsupported. Each invocation creates a new form; after a timeout, use ListForms and ReadForm before trying again. Returns actual saved IDs, links and completion state; inspect partial work instead of recreating.
  */
 export interface CreateForm {
   /**
@@ -7733,7 +7764,8 @@ export interface OptionDraft {
   label: string;
 }
 /**
- * Gates support AND/OR, at most eight levels and 200 conditions.
+ * Gate and show-when rules support AND/OR, at most eight levels and 200
+ * conditions across the form.
  */
 export interface Rules {
   conjunction: Conjunction;
@@ -9182,7 +9214,7 @@ export interface EditDocumentResponse {
   clarification?: string | null;
 }
 /**
- * Edit the live form using typed targeted operations. ReadForm provides stable question/section IDs. Edits produce granular CRDT updates; concurrent changes merge using the same rules as the builder. Omitted fields stay unchanged. Invalid merged layouts are refused. Changes can add or move questions/sections, edit requiredness/help/gates and attach an existing booking target. New columns use explicit stable IDs. Question labels follow backing column names; rename them through database tools. Removing a question keeps its column and answers. Schema retyping and conditional column cleanup are unsupported. Keep gates after the questions they test and booking last. Read the current form after a timeout or partial result before proceeding. Opening and sharing require SetFormAccess.
+ * Edit the live form using typed targeted operations. ReadForm provides stable question/section IDs. Edits produce granular CRDT updates; concurrent changes merge using the same rules as the builder. Omitted fields stay unchanged. Invalid merged layouts are refused. Changes can add or move questions/sections, edit requiredness/help/gates, set or clear a questions section's showWhen (setShowWhen; skipped sections' questions are not required or saved) and attach an existing booking target. New columns use explicit stable IDs. Question labels follow backing column names; rename them through database tools. Removing a question keeps its column and answers. Schema retyping and conditional column cleanup are unsupported. Keep gates and showWhen rules after the questions they test and booking last. Read the current form after a timeout or partial result before proceeding. Opening and sharing require SetFormAccess.
  */
 export interface EditForm {
   formId: FormId;
