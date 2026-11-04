@@ -1,4 +1,6 @@
 import '@app/index.css';
+import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
+import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { queryClient } from '@queries/client';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { Show } from 'solid-js';
@@ -24,7 +26,11 @@ if (root)
   render(
     () => (
       <QueryClientProvider client={queryClient}>
-        <Fixture />
+        <AnalyticsContextProvider>
+          <PosthogProvider>
+            <Fixture />
+          </PosthogProvider>
+        </AnalyticsContextProvider>
       </QueryClientProvider>
     ),
     root

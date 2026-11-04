@@ -2,6 +2,7 @@ import { SlackImport } from '@app/features/slack-import/slack-import';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   ENABLE_EMAIL,
+  enableDialpad,
   enableMultiInbox,
   enableSlackArchiveImport,
 } from '@core/constant/featureFlags';
@@ -408,6 +409,7 @@ export function useGranolaItem(): IntegrationItem {
  * Macro Connect; the row reads "Connecting" until setup finishes.
  */
 export function useDialpadItem(): IntegrationItem {
+  const flag = useFeatureFlag(enableDialpad);
   const dialpad = createDialpadConnection();
 
   function ConnectMenu(props: { label: string }) {
@@ -510,7 +512,7 @@ export function useDialpadItem(): IntegrationItem {
     },
     get hidden() {
       const state = dialpad.connection()?.state;
-      return state === undefined || state === 'unavailable';
+      return !flag().enabled || state === undefined || state === 'unavailable';
     },
     Actions,
   };

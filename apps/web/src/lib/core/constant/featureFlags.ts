@@ -165,6 +165,15 @@ export const macroConnect = defineFlag({
   env: 'ENABLE_MACRO_CONNECT',
 });
 
+/**
+ * Dialpad call sync in Connections. Off in dev too: connecting needs Dialpad
+ * to approve Macro's app in Macro Connect.
+ */
+export const enableDialpad = defineFlag({
+  key: 'enable-dialpad',
+  env: 'ENABLE_DIALPAD',
+});
+
 /** Browser-style tabs in the macOS desktop title bar; each tab holds a split layout. */
 export const enableDesktopTabs = defineFlag({
   key: 'enable-desktop-tabs',

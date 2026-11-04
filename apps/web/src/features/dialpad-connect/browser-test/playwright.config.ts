@@ -17,7 +17,7 @@ export default defineConfig({
     },
   },
   webServer: {
-    command: `MACRO_DEV_HTTPS=false bunx vite --port ${port} --strictPort`,
+    command: `MACRO_DEV_HTTPS=false VITE_ENABLE_DIALPAD=true bunx vite --port ${port} --strictPort`,
     cwd: webDirectory,
     url: `http://localhost:${port}/app/`,
     reuseExistingServer: false,
