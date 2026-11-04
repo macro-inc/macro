@@ -27,7 +27,12 @@ const threads = SENDERS.map(
       id: `thread-${i + 1}`,
       type: 'email',
       name: `Subject ${i + 1}`,
-      participants: [{ email: `sender${i + 1}@example.com`, name }],
+      // Two senders, the second a shared notification address, as on a
+      // GitHub thread: hovering the second name is where clicks were lost.
+      participants: [
+        { email: `sender${i + 1}@example.com`, name },
+        { email: 'notifications@example.com', name: 'macro-application[bot]' },
+      ],
     }) as unknown as EmailEntity
 );
 

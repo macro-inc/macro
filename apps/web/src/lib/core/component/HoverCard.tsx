@@ -400,41 +400,47 @@ export function HoverCard(props: HoverCardComponentProps) {
         {props.trigger}
       </KobalteHoverCard.Trigger>
 
-      <KobalteHoverCard.Portal mount={props.portalMount}>
-        <KobalteHoverCard.Content
-          ref={(el) => {
-            setContentEl(el);
-            props.contentRef?.(el);
-          }}
-          {...dismissableLayerProps}
-          class={cn(
-            props.contentZIndexClass ?? 'z-tool-tip',
-            // `!` because the dismissable layer writes `pointer-events: auto`
-            // onto this element.
-            props.passThroughPointerEvents && 'pointer-events-none!',
-            props.contentClass
-          )}
-        >
-          <HoverCardPortalNestedPreviewOpenContext.Provider
-            value={{
-              count: nestedOpenCount,
-              setCount: setNestedOpenCount,
-              entry,
+      {/* Opening the card leaves the portal's placeholder text node here, and
+          closing it removes the node. Outside a wrapper that change reaches the
+          trigger's parent, which can detach and reinsert the trigger; a press
+          that closes the card then loses its click. */}
+      <span class="contents">
+        <KobalteHoverCard.Portal mount={props.portalMount}>
+          <KobalteHoverCard.Content
+            ref={(el) => {
+              setContentEl(el);
+              props.contentRef?.(el);
             }}
+            {...dismissableLayerProps}
+            class={cn(
+              props.contentZIndexClass ?? 'z-tool-tip',
+              // `!` because the dismissable layer writes `pointer-events: auto`
+              // onto this element.
+              props.passThroughPointerEvents && 'pointer-events-none!',
+              props.contentClass
+            )}
           >
-            <Show when={props.isolateClicks} fallback={props.content}>
-              <div
-                class="contents"
-                onClick={stopPropagation}
-                onMouseDown={stopPropagation}
-                onPointerDown={stopPropagation}
-              >
-                {props.content}
-              </div>
-            </Show>
-          </HoverCardPortalNestedPreviewOpenContext.Provider>
-        </KobalteHoverCard.Content>
-      </KobalteHoverCard.Portal>
+            <HoverCardPortalNestedPreviewOpenContext.Provider
+              value={{
+                count: nestedOpenCount,
+                setCount: setNestedOpenCount,
+                entry,
+              }}
+            >
+              <Show when={props.isolateClicks} fallback={props.content}>
+                <div
+                  class="contents"
+                  onClick={stopPropagation}
+                  onMouseDown={stopPropagation}
+                  onPointerDown={stopPropagation}
+                >
+                  {props.content}
+                </div>
+              </Show>
+            </HoverCardPortalNestedPreviewOpenContext.Provider>
+          </KobalteHoverCard.Content>
+        </KobalteHoverCard.Portal>
+      </span>
     </KobalteHoverCard>
   );
 }

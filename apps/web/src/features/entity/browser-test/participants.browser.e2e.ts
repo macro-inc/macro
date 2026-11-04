@@ -9,7 +9,7 @@ test.beforeEach(async ({ page }) => {
   await page.routeWebSocket('**/*', (socket) => socket.close());
   await page.goto('/src/features/entity/browser-test/participants.html');
   await expect(
-    page.getByTestId('list-narrow').getByText('Ada Lovelace')
+    page.getByTestId('list-narrow').getByText('Ada', { exact: true })
   ).toBeVisible({ timeout: 60_000 });
 });
 
@@ -46,14 +46,17 @@ for (const list of ['list-narrow', 'list-wide']) {
   test(`${list}: hovering a sender shows the card; the row, not the card, opens the email`, async ({
     page,
   }) => {
-    const rows = page.getByTestId(list);
-    const sender = rows.getByText('Ada Lovelace');
-    const card = page.getByText('sender1@example.com');
+    const sender = page
+      .getByTestId(list)
+      .getByText('macro-application[bot]')
+      .first();
+    const card = page.getByText('notifications@example.com');
     await openCard(page, sender, card);
 
     await click(page, card);
     await expect(page.getByLabel('Opened threads')).toHaveText('');
 
+    // Pressing the sender closes its card; the click must still land.
     await click(page, sender);
     await expect(page.getByLabel('Opened threads')).toHaveText('thread-1');
   });
@@ -82,7 +85,10 @@ test.describe('touch', () => {
   });
 
   test('tapping a sender opens the email', async ({ page }) => {
-    await page.getByTestId('list-narrow').getByText('Alan Turing').tap();
+    await page
+      .getByTestId('list-narrow')
+      .getByText('Alan', { exact: true })
+      .tap();
     await expect(page.getByLabel('Opened threads')).toHaveText('thread-2');
   });
 

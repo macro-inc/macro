@@ -915,10 +915,14 @@ The backend-free browser regression is
 
 Sender names in Mail rows and collapsed thread messages keep their person card
 on hover; clicking the name or anywhere else on the row opens the email.
-Cards opened from a row use `HoverCard`'s `isolateClicks`: Solid delivers
-portaled events through the component tree, so without it a click on the card
-also opens the row that opened it. On touch, a collapsed message's picture lets
-the tap through to the row. The backend-free desktop/phone regression is
+`HoverCard` keeps the portal's placeholder inside its own `display: contents`
+wrapper: opening or closing the card otherwise changes the trigger's siblings,
+Solid can then detach and reinsert the trigger, and a press that closes the
+card loses its click. Cards opened from a row use `isolateClicks`, because
+Solid delivers portaled events through the component tree and a click on the
+card would also open the row. On touch, a collapsed message's picture lets the
+tap through to the row. The backend-free desktop/phone regression, over rows
+with two senders, is
 `bunx playwright test --config src/features/entity/browser-test/playwright.config.ts`.
 
 ### Enter on a property pill
