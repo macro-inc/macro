@@ -46,14 +46,14 @@ function renderCommentCard() {
   return render(() => (
     <>
       <button type="button">Page</button>
-      <div data-comment-thread>
+      <div data-comment-thread="comment">
         <CollapseLongContentProvider value={true}>
           <MessageProvider value={() => message}>
             <Content />
           </MessageProvider>
         </CollapseLongContentProvider>
       </div>
-      <div data-comment-badge>
+      <div data-comment-badge="comment">
         <button type="button">Badge</button>
       </div>
     </>

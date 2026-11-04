@@ -56,7 +56,13 @@ function pressKeepsExpandedComment(
   const element = pressTarget(target);
   if (!element) return true;
   if (card.contains(element)) return true;
-  if (element.closest('[data-comment-badge]')) return true;
+  const badge = element.closest('[data-comment-badge]');
+  if (badge) {
+    const badgeThread = badge.getAttribute('data-comment-badge');
+    const cardThread = card.getAttribute('data-comment-thread');
+    // A badge with no thread id belongs to the card that is open beside it.
+    if (!badgeThread || badgeThread === cardThread) return true;
+  }
   return !appRootOf(card).contains(element);
 }
 
