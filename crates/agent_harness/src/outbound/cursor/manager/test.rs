@@ -344,6 +344,7 @@ async fn fake_cursor_api() -> (
                         "displayName": "Cursor Grok 4.6",
                         "variants": [
                             {"params": [{"id":"effort","value":"low"}], "isDefault": false},
+                            {"params": [{"id":"effort","value":"medium"},{"id":"fast","value":"true"}], "isDefault": false},
                             {"params": [{"id":"effort","value":"high"},{"id":"fast","value":"true"}], "isDefault": true},
                         ],
                     }],
@@ -659,7 +660,7 @@ async fn spawn_uses_the_owners_default_model_and_effort() {
         StubKeys {
             key: Some("crsr_test"),
             model: Some("grok-4.6"),
-            effort: Some("low"),
+            effort: Some("medium"),
         },
     );
 
@@ -707,11 +708,11 @@ async fn spawn_uses_the_owners_default_model_and_effort() {
 
     let body = created.lock().expect("create log poisoned")[0].clone();
     assert_eq!(body["model"]["id"], "grok-4.6");
-    // The chosen effort's variant travels with the id — a bare id is not a
-    // selection Cursor accepts.
+    // The chosen effort's variant travels with the id, keeping the default
+    // variant's other params — a bare id is not a selection Cursor accepts.
     assert_eq!(
         body["model"]["params"],
-        serde_json::json!([{"id":"effort","value":"low"}])
+        serde_json::json!([{"id":"effort","value":"medium"},{"id":"fast","value":"true"}])
     );
 }
 
