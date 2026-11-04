@@ -54,6 +54,7 @@ use super::{
 };
 
 mod sync_content;
+mod upload_file;
 use crate::{
     domain::{
         content::DocumentContent,
@@ -147,6 +148,15 @@ struct FakeDocumentService {
     get_text_calls: Mutex<Vec<String>>,
     document_owner: Mutex<Option<Owner>>,
     copy_calls: Mutex<Vec<CreationPrincipal>>,
+    created_documents: Mutex<Vec<CreatedDocumentCall>>,
+    upload_url: Mutex<Option<String>>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct CreatedDocumentCall {
+    document_name: String,
+    file_type: Option<FileType>,
+    project_id: Option<Uuid>,
 }
 
 impl FakeDocumentService {
@@ -329,7 +339,7 @@ impl DocumentService for FakeDocumentService {
     async fn create_document(
         &self,
         principal: &CreationPrincipal,
-        _document: NewDocument,
+        document: NewDocument,
         _job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         self.create_calls
@@ -338,8 +348,22 @@ impl DocumentService for FakeDocumentService {
             .push(CreateDocumentCall {
                 principal: principal.clone(),
             });
+        self.created_documents
+            .lock()
+            .expect("created documents lock poisoned")
+            .push(CreatedDocumentCall {
+                document_name: document.document_name,
+                file_type: document.file_type,
+                project_id: document.project_id,
+            });
 
-        Ok(create_document_response(principal.owner()))
+        let mut response = create_document_response(principal.owner());
+        response.document_response.presigned_url = self
+            .upload_url
+            .lock()
+            .expect("upload url lock poisoned")
+            .clone();
+        Ok(response)
     }
 
     async fn import_email_attachment(
@@ -1550,6 +1574,7 @@ async fn create_routes_reject_callers_that_cannot_create_before_reading_the_body
         "/create_snippet",
         "/create_skill",
         "/copy-source/copy",
+        "/upload?fileName=notes.txt",
     ] {
         for authenticate in callers {
             let (router, document_service, _access_service, _authorization_service) = test_router();

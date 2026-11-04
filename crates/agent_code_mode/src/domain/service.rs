@@ -254,6 +254,8 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "CreateSkill"
                 | "Decide"
                 | "GenerateObject"
+                // macro.documents.upload(), which sends the bytes through Macro.
+                | "UploadFile"
                 // macro.agents.list() and macro.agentSessions.createManaged.
                 | "ListCodingAgents"
                 | "DispatchCodingAgent"

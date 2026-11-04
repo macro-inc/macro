@@ -11,6 +11,10 @@ enforced by the ordinary backend APIs.
 - `src/macro.ts`: public exports and namespace registration.
 - `documents.createCanvas()` creates shared content before returning a Document handle;
   it requires no browser open or upload.
+- File bytes must work inside code mode, whose sandbox reaches only Macro hosts:
+  `documents.upload()` posts them to storage's `/documents/upload`, and
+  `Document.bytes()` downloads through the CloudFront export host (`document-content`
+  in the harness's `sdk_hosts`). Never return a presigned S3 URL as the only path.
 - `src/entities/entity.ts`: lazy detail reads, mutation invalidation and safe JSON.
 - `src/entities/workspace/namespace.ts`: filtered activity pages and iteration.
 - `src/entities/routines/`, `agents/`, `harnesses/`: automation and agent hosts.

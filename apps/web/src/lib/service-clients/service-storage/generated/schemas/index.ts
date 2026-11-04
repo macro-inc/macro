@@ -2306,6 +2306,8 @@ export * from './uploadExtractFolderHandler200DataOneOf';
 export * from './uploadExtractFolderRequest';
 export * from './uploadExtractFolderRequestName';
 export * from './uploadExtractFolderRequestParentId';
+export * from './uploadFileParams';
+export * from './uploadFileResponse';
 export * from './uploadFolderHandler200';
 export * from './uploadFolderHandler200DataOneOf';
 export * from './uploadFolderRequest';
