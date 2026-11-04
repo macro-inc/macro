@@ -3857,7 +3857,7 @@
       },
       "patch": {
         "tags": ["channel_labels"],
-        "summary": "Rename a label of the caller's authorized scope.",
+        "summary": "Update a label, optionally moving it to another authorized scope.",
         "operationId": "rename_channel_label",
         "parameters": [
           {
@@ -24886,7 +24886,7 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time",
-            "description": "When the label was last renamed or reordered."
+            "description": "When the label's name, rule, scope, or order last changed."
           }
         }
       },
@@ -40009,7 +40009,7 @@
       },
       "RenameChannelLabelRequest": {
         "type": "object",
-        "description": "Request body for renaming a label.",
+        "description": "Request body for updating a label's name, smart rule, or sharing scope.",
         "required": ["name"],
         "properties": {
           "name": {
@@ -40024,6 +40024,17 @@
               {
                 "$ref": "#/components/schemas/ChannelLabelRule",
                 "description": "Automatic name-matching rule; omitted for manual labels or a name-only rename."
+              }
+            ]
+          },
+          "targetScope": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChannelLabelScopeSelection",
+                "description": "Destination namespace; omitted to preserve the current scope."
               }
             ]
           }

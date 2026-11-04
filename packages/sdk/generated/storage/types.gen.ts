@@ -2860,7 +2860,7 @@ export type ChannelLabel = {
      */
     teamId?: string | null;
     /**
-     * When the label was last renamed or reordered.
+     * When the label's name, rule, scope, or order last changed.
      */
     updatedAt: string;
 };
@@ -12292,7 +12292,7 @@ export type RemoveParticipantsRequest = {
 };
 
 /**
- * Request body for renaming a label.
+ * Request body for updating a label's name, smart rule, or sharing scope.
  */
 export type RenameChannelLabelRequest = {
     /**
@@ -12300,6 +12300,7 @@ export type RenameChannelLabelRequest = {
      */
     name: string;
     rule?: null | ChannelLabelRule;
+    targetScope?: null | ChannelLabelScopeSelection;
 };
 
 /**

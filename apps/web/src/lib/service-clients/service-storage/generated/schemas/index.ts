@@ -1710,6 +1710,7 @@ export * from './removeParticipantsRequest';
 export * from './renameChannelLabelParams';
 export * from './renameChannelLabelRequest';
 export * from './renameChannelLabelRequestRule';
+export * from './renameChannelLabelRequestTargetScope';
 export * from './renamePipeline';
 export * from './reorderFavoritesRequest';
 export * from './reorderPinRequest';

@@ -236,7 +236,11 @@ vi.mock('../../channels-view-context', () => ({
   useChannelsView: () => ({
     state: {
       tab: 'browse',
-      expandedGroups: { channels: true, direct_messages: true },
+      expandedGroups: {
+        channels: true,
+        team_channels: true,
+        direct_messages: true,
+      },
       collapsedLabels: [],
       sectionPreferences: {},
       sortBy: {
@@ -537,7 +541,7 @@ it('keeps a pressed channel row attached through a live data refresh and activat
   const [channels, setChannels] = createSignal([channel]);
   const liveSources: ChannelsSources = {
     ...sources,
-    channels: { ...source, items: channels },
+    team_channels: { ...source, items: channels },
     direct_messages: { ...source, items: () => [] },
   };
   const { container } = render(() => (
@@ -594,7 +598,7 @@ describe('section heading navigation', () => {
   it.each([
     ['label:first', ']', 'label:second'],
     ['label:second', '[', 'label:first'],
-    ['section:team_channels', ']', 'section:channels'],
+    ['section:team_channels', ']', 'label:first'],
     ['channel:one:label:first', ']', 'label:second'],
   ])('jumps from %s with %s to %s', (from, hotkey, to) => {
     const first: ChannelLabel = {
@@ -608,12 +612,11 @@ describe('section heading navigation', () => {
     };
     mocks.listRows = [
       { kind: 'section', id: 'section:team_channels', group: 'team_channels' },
-      { kind: 'section', id: 'section:channels', group: 'channels' },
       {
         kind: 'label',
         id: 'label:first',
         group: 'team_channels',
-        localIndex: 2,
+        localIndex: 1,
         label: first,
       },
       {
@@ -621,7 +624,7 @@ describe('section heading navigation', () => {
         id: 'channel:one:label:first',
         group: 'team_channels',
         scope: 'team_channels',
-        localIndex: 3,
+        localIndex: 2,
         channel,
         labelId: 'first',
       },
@@ -629,7 +632,7 @@ describe('section heading navigation', () => {
         kind: 'label',
         id: 'label:second',
         group: 'team_channels',
-        localIndex: 4,
+        localIndex: 3,
         label: { ...first, id: 'second', name: 'Second' },
       },
     ];
