@@ -10,7 +10,10 @@ import { storageServiceClient } from '@service-storage/client';
 import { useQueryClient } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import { createContactDiscovery } from './primitives/contact-discovery';
-import { useSetCompanyHiddenMutation as createHiddenMutation } from './queries/companies';
+import {
+  useCompanyQuery as createCompanyQuery,
+  useSetCompanyHiddenMutation as createHiddenMutation,
+} from './queries/companies';
 import {
   useQuickAccessCrmContactsQuery as createContactSuggestions,
   useCrmContactsQuery,
@@ -24,6 +27,12 @@ export function useSetCompanyHiddenMutation() {
     storage: storageServiceClient,
     client: useQueryClient(),
   });
+}
+export function useCrmCompanyQuery(companyId: Accessor<string>) {
+  return createCompanyQuery(
+    { storage: storageServiceClient, client: useQueryClient() },
+    companyId
+  );
 }
 export function useCrmContactByEmailQuery(
   teamId: Accessor<string>,
