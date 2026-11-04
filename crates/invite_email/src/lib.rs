@@ -339,9 +339,14 @@ impl InviteToTeamMetadata {
         let env = Environment::new_or_prod();
 
         let mut url = frontend_host(env);
-        url.set_path("/app/team-invite");
-        url.query_pairs_mut()
-            .append_pair("id", &self.team_invite_id.to_string());
+        let invite_id = self.team_invite_id.to_string();
+        if self.is_agent {
+            url.set_path("/app/signup/agent");
+            url.query_pairs_mut().append_pair("team_invite", &invite_id);
+        } else {
+            url.set_path("/app/team-invite");
+            url.query_pairs_mut().append_pair("id", &invite_id);
+        }
 
         url
     }

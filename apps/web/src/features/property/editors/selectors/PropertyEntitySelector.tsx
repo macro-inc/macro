@@ -594,7 +594,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                                       <>
                                         {parts().name}
                                         <Show when={parts().email}>
-                                          <span class="ml-[0.5em] opacity-50">
+                                          {/* An en space is the 0.5em gap; unlike a margin, Safari's truncated-text tooltip keeps it. */}
+                                          {' '}
+                                          <span class="opacity-50">
                                             {parts().email}
                                           </span>
                                         </Show>

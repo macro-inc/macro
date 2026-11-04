@@ -50,8 +50,6 @@ jobs:
             - 'packages/sdk-docs/**'
             - 'services/ai-editing-worker/**'
             - 'packages/code-mode-sdk/**'
-            - 'crates/code_execution/src/outbound/deno/*.mjs'
-            - 'crates/agent_code_mode/src/domain/documentation.json'
             - 'crates/agent_code_mode/SKILL.md'
             - '.github/actions/setup-reqs-web/**'
           codegen_changed:
@@ -82,7 +80,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
-      id-token: write
+      statuses: read
     steps:
     - name: Checkout PR merge commit
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -126,17 +124,6 @@ jobs:
         bun scripts/android-version-check.mjs --skip-release "$base"
       shell: bash
       working-directory: apps/web
-    - id: auth
-      name: Authenticate to Google Play
-      if: steps.android-version.outputs.changed == 'true' && steps.labels.outputs.skip != 'true'
-      uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
-      with:
-        workload_identity_provider: ${{ vars.GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER }}
-        service_account: ${{ vars.GOOGLE_PLAY_SERVICE_ACCOUNT }}
-        token_format: access_token
-        access_token_scopes: https://www.googleapis.com/auth/androidpublisher
-        create_credentials_file: 'false'
-        export_environment_variables: 'false'
     - name: Require the Play release to be live
       if: steps.android-version.outputs.changed == 'true' && steps.labels.outputs.skip != 'true'
       run: |
@@ -184,20 +171,107 @@ jobs:
           done
         }
         # ------------------------------------------------------------------------------
+        # --- Android Play commit statuses ---------------------------------------------
+        # Only workflows that run main's copy may sign in to Google Play, so they
+        # record what they learn as commit statuses on the PR's commits, where the
+        # PR-side jobs (the merge gate, the drift check) read it:
+        #
+        #   android-play/release  set by Android Play Publish on the commit it built:
+        #                         pending just before the production promotion, then
+        #                         success or failure.
+        #   android-play/live     set by Android Release Watch on the PR head once the
+        #                         release is live on production.
+        #
+        # Readers match the descriptions exactly, so they are built only here.
+        # Needs GH_TOKEN and GH_REPO; pr_commit_statuses also PR_NUMBER.
+
+        # android_release_description <version code> <native hash>
+        android_release_description() {
+          printf 'Version code %s (native tree %s)' "$1" "$2"
+        }
+
+        # android_live_description <version code> <native hash> <PR number>
+        android_live_description() {
+          printf 'Version code %s is live on Google Play (native tree %s, PR #%s)' "$1" "$2" "$3"
+        }
+
+        # commit_status <sha> <context>: `<state> <description>` of the commit's latest
+        # status with that context, or nothing.
+        commit_status() {
+          gh api "repos/${GH_REPO}/commits/$1/status" \
+            --jq ".statuses[] | select(.context == \"$2\") | \"\(.state) \(.description)\""
+        }
+
+        # pr_commit_statuses <context>: `<sha> <state> <description>` for each of PR
+        # #PR_NUMBER's last 100 commits that has a status with that context (its
+        # latest one), states in lower case like the REST API's.
+        pr_commit_statuses() {
+          gh api graphql -F owner="${GH_REPO%%/*}" -F name="${GH_REPO#*/}" -F pr="$PR_NUMBER" -F context="$1" \
+            -f query='query($owner: String!, $name: String!, $pr: Int!, $context: String!) {
+              repository(owner: $owner, name: $name) {
+                pullRequest(number: $pr) {
+                  commits(last: 100) { nodes { commit { oid status { context(name: $context) { state description } } } } }
+                }
+              }
+            }' \
+            --jq '.data.repository.pullRequest.commits.nodes[].commit
+              | select(.status.context != null)
+              | "\(.oid) \(.status.context.state | ascii_downcase) \(.status.context.description)"'
+        }
+
+        # set_commit_status <sha> <context> <state> <description>, linking this run.
+        set_commit_status() {
+          gh api "repos/${GH_REPO}/statuses/$1" -f context="$2" -f state="$3" -f description="$4" \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
+        }
+        # ------------------------------------------------------------------------------
         set -euo pipefail
+        # The Android merge gate proper: version code $VERSION_CODE must be live on
+        # Google Play production, built from the Android native code of PR
+        # #PR_NUMBER's *current* merge result (fetched through the API: a re-run
+        # checks out the merge commit of the run's original event, which may predate
+        # native code landing on main). This job cannot sign in to Play — only
+        # workflows that run main's copy can — so it reads the `android-play/live`
+        # status that Android Release Watch sets once the release is live. Any of the
+        # PR's commits counts: web-only pushes after the release keep it valid, and
+        # the native hash in the description pins it to this merge result.
         merge=$(pr_merge_commit)
         gh_fetch "$merge"
         native_hash=$(bun scripts/android-native.mjs hash "$merge")
         echo "Merge result ${merge:0:10}: Android native hash ${native_hash}"
-        bun scripts/android-play-status.mjs --version-code "$VERSION_CODE" --require-live \
-          --native-hash "$native_hash" --pr "$PR_NUMBER"
+        want=$(android_live_description "$VERSION_CODE" "$native_hash" "$PR_NUMBER")
+        statuses=$(pr_commit_statuses android-play/live)
+        while read -r sha state description; do
+          if [[ "$state" == success && "$description" == "$want" ]]; then
+            echo "${sha:0:10} is marked android-play/live: ${description}."
+            exit 0
+          fi
+        done <<<"$statuses"
+        echo "Android native changes require version code ${VERSION_CODE} to be live on Google Play before merging," \
+          "built from native tree ${native_hash}, but no commit of this PR is marked so (android-play/live)." >&2
+        if [[ -n "$statuses" ]]; then
+          echo "android-play/live statuses on this PR's commits:" >&2
+          while read -r sha state description; do
+            echo "  ${sha:0:10} ${state}: ${description}" >&2
+          done <<<"$statuses"
+        fi
+        cat >&2 <<'EOF'
+          - Not started yet? Add the `android-update` label to the PR to build, upload
+            and promote it.
+          - Promoted? Wait for Google review; the `Android Release Watch` workflow marks
+            the PR and re-runs this check within half an hour of the release.
+          - Native code changed since the release (pushed to the PR, or landed on main)?
+            Bump (`just android-bump`), commit, re-add `android-update`.
+          - If the native change doesn't break the native/web contract, add the
+            `skip-android-update` label instead.
+        EOF
+        exit 1
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
         GH_REPO: ${{ github.repository }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
         VERSION_CODE: ${{ steps.android-version.outputs.version_code }}
-        GOOGLE_PLAY_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
       working-directory: apps/web
     - name: Skipped via label
       if: steps.labels.outputs.skip == 'true'
@@ -306,6 +380,10 @@ jobs:
         else
           echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
         fi
+    - name: Build code-mode assets
+      run: |
+        assets="$(nix build --no-link --print-out-paths --print-build-logs .#code-mode-assets)"
+        echo "CODE_MODE_ASSETS_DIR=$assets" >> "$GITHUB_ENV"
     - name: Build schema binaries
       run: |
         set -euo pipefail

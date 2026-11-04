@@ -21,7 +21,11 @@ export type FavoritesFilter = {
   entityIds?: string[];
 };
 
-/** The user's favorites: a manually ordered collection of entity references. */
+/**
+ * The user's favorites: a manually ordered collection of entity references.
+ *
+ * @routing Use when adding or removing the user's favorites; not pins.
+ */
 export class FavoritesNamespace {
   constructor(private readonly client: MacroClient) {}
 

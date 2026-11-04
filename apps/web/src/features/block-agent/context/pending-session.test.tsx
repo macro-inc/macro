@@ -165,6 +165,7 @@ describe('pending navigation ownership', () => {
         kind: 'update',
         message: {
           agentSessionId: id,
+          key: '1:user',
           turn: 1,
           author: { kind: 'user', userId: 'me' },
           requestId: request.actionId ?? null,
@@ -180,6 +181,7 @@ describe('pending navigation ownership', () => {
         kind: 'new',
         message: {
           agentSessionId: id,
+          key: '1:agent',
           turn: 1,
           author: { kind: 'agent' },
           requestId: null,
@@ -421,6 +423,7 @@ describe('first prompt on the create', () => {
         kind: 'update',
         message: {
           agentSessionId: id,
+          key: '1:user',
           turn: 1,
           author: { kind: 'user', userId: 'me' },
           requestId: actionId,
@@ -436,6 +439,7 @@ describe('first prompt on the create', () => {
         kind: 'new',
         message: {
           agentSessionId: id,
+          key: '1:agent',
           turn: 1,
           author: { kind: 'agent' },
           requestId: null,

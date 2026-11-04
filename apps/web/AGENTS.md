@@ -83,6 +83,12 @@ otherwise); its backend-free regression opens it, scrolls to the last group,
 searches, and picks by keyboard:
 `bunx playwright test --config src/lib/core/component/Emoji/browser-test/playwright.config.ts`.
 
+Focus rows have a backend-free browser regression over the real row and mapping
+at wide, one-line, stacked, phone, and tablet widths: one reason per row, no
+extra height or lost subject, touch rows of at least 44px, and the importance
+meter only under its sort:
+`bunx playwright test --config src/features/email-view/browser-test/playwright.config.ts`.
+
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 
@@ -164,6 +170,9 @@ boosts (Cmd+K's channel and DM boosts) order rows within those groups and never
 lift a row past a better name match. The one exception: Cmd+K then keeps Macro
 users and DMs ahead of CRM contacts across the people positions, whatever their
 match. Tune name relevance there for every menu.
+Soup's local search pool (`createSearchState`) stays lazy: it builds only when
+local search has text. Measure Quick Access ranking at scale with the
+[scale fixture](src/features/command/browser-test/README.md).
 Cmd+K and mobile name search widen the first group: a query equal to the first
 word of a DM or person name counts as exact, so a person's first name reaches
 their full-name DM. `commaSeparatedChannelMatch` (Cmd+K, mobile name search,
@@ -194,6 +203,9 @@ Channel composer draft persistence has a backend-free browser regression:
 It checks draft blank lines across remounts, that a sent message renders its
 lines with the spacing the draft showed, and pending sends on desktop and phone: clear immediately, restore failed sends, and preserve a new draft typed during delivery.
 It also pastes a Macro link and Markdown into a code block, which must keep both as literal text.
+Its phone formatting regression opens the ribbon from the add drawer in the
+production message editor, removes selected strikethrough, and saves; keep
+the ribbon horizontally scrollable and preserve editor focus on its controls.
 
 Shared GraphQL query metadata has a backend-free desktop and iPhone WebKit regression:
 `bunx playwright test --config src/lib/urql-solid/browser-test/playwright.config.ts`.
@@ -466,6 +478,12 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Leave the login hint (`syncLoginStorage(true)`) before a full-page hosted
   SSO redirect; the callback sets only HttpOnly cookies, and a load without the
   hint never checks identity, so the returning user sees sign-in again.
+- Hold automatic reloads (`holdAutomaticReload`) across anything a reload would
+  lose. `createNativeAuthSession` holds them for the sheet: its result reaches
+  only the JavaScript that opened it, and leaving the app for a sign-in code
+  hides the page, the moment OTA bundles apply. Holds also reach the native
+  updater, whose foreground handler never asks the page. See
+  [reload diagnostics](tauri/src-tauri/README.md#diagnosing-unexpected-webview-reloads).
 - Disable GraphQL cache sessions and clear login hints on confirmed auth 401s,
   even with retained user data; preserve session state on transient failures.
 - Treat a repeated worker-ready frame as a coordinator restart: retire the old
@@ -612,6 +630,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   the create response confirms success; never clear newer composer input from a
   late callback or automatically retry an uncertain create. Keep recovery copies
   through restarts and remove them on explicit logout. See the Tasks walkthrough.
+- Prefill task Source through the originating action's composer preset under
+  `enable-task-source-property`; keep the shared composer flag-agnostic and retain
+  exact message IDs through property edits. See the Tasks walkthrough.
 - Shared server-state queries and mutations live in `src/lib/queries`; keep
   feature-specific query orchestration with its owning feature.
 - Keep CRM contacts explicitly included in the auxiliary GraphQL backfill;
@@ -961,10 +982,12 @@ persisted `turnState` is `failed`; open the session to inspect its error.
 
 ### Agent transcript projection
 
-Keep folded messages ordered by turn and author in the transcript store: append
-at the new index, reconcile matching rows in place, binary-search earlier
-updates, and splice only for real insertion/removal. Never `produce` the whole
-array per append; it makes initial projection quadratic. Check with the
+Key transcript rows by the fold's `FoldedMessage.key` (`<turn>:<author kind>`);
+never rebuild it from `turn` and `author`. Apply a load or rebase as one keyed
+`reconcile(messages, { key: 'key' })`, without `merge`. A streamed message
+reconciles the tail row in place or writes the next index; only an out-of-order
+one takes the keyed path. Never `produce` the whole array per append; it makes
+initial projection quadratic. Check with the
 [session-open runner](src/features/block-agent/browser-test/README.md).
 
 ### Agent system events
@@ -1080,6 +1103,20 @@ Use the shared scoped drag helpers and overlayIcon for the tag chip.
 The backend-free browser regression is
 `bunx playwright test --config src/features/property/tags/browser-test/playwright.config.ts`.
 
+### Senders in email rows
+
+Sender names in Mail rows and collapsed thread messages keep their person card
+on hover; clicking the name or anywhere else on the row opens the email.
+`HoverCard` keeps the portal's placeholder inside its own `display: contents`
+wrapper: opening or closing the card otherwise changes the trigger's siblings,
+Solid can then detach and reinsert the trigger, and a press that closes the
+card loses its click. Cards opened from a row use `isolateClicks`, because
+Solid delivers portaled events through the component tree and a click on the
+card would also open the row. On touch, a collapsed message's picture lets the
+tap through to the row. The backend-free desktop/phone regression, over rows
+with two senders, is
+`bunx playwright test --config src/features/entity/browser-test/playwright.config.ts`.
+
 ### Enter on a property pill
 
 A document control owns Enter unless a press focused it, including one given
@@ -1147,3 +1184,10 @@ of posting, multi-paragraph anchors, saved ranges, and cancellation during posti
   static `data-input-surface` categories on editor/field owners, never caller
   labels.
 - Keep record names, addresses, answers and query text out of attributes.
+
+### Entity rows
+
+- Keep `ListEntity` layout fields independently reactive (getters, not a
+  dynamic object spread); a spread makes a selection change revisit every
+  unrelated layout input. Profile with the
+  [entity collection fixture](src/features/entity/browser-test/README.md).

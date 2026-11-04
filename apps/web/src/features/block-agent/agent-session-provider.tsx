@@ -81,6 +81,7 @@ export function AgentSessionProvider(
     return [
       {
         agentSessionId: sessionId() ?? props.blockId,
+        key: '0:user',
         turn: 0,
         author: { kind: 'user', userId: userId() ?? null },
         requestId: null,
@@ -188,7 +189,6 @@ export function AgentSessionProvider(
           turn,
           issue: live.issue,
           selectModel: live.selectModel,
-          sendNext: steering.sendNext,
           steer: steering.steer,
           steerFailed: steering.failed,
           interactions,

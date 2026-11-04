@@ -7,7 +7,7 @@ export default {
   openCategoryNamed: 'Open {{category}}',
   createNewSplit: 'Create new split',
   createNewSplitBelow: 'Create new split below',
-  toggleSettings: 'Toggle settings',
+  toggleSettings: 'Go to Settings',
   account: 'Account',
   logout: 'Logout',
   mcpSetup: 'MCP setup',
