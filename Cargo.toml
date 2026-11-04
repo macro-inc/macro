@@ -37,6 +37,7 @@ members = [
   "crates/cognition",
   "crates/codex_cloud_agents",
   "crates/codex_connection",
+  "crates/connect_client",
   "crates/collab_surface",
   "crates/complete_graph",
   "crates/cowlike",
@@ -397,8 +398,8 @@ ruzstd = { version = "0.9.1", default-features = false, features = ["std"] }
 serde = { version = "1.0.214", features = ["derive"] }
 serde-wasm-bindgen = "0.6"
 serde_dynamo = { version = "4", features = ["aws-sdk-dynamodb+1"] }
-serde_json = { version = "1.0.132" }
 serde_path_to_error = "0.1.20"
+serde_json = { version = "1.0.132" }
 serde_repr = "0.1"
 serde_with = { version = "3.12.0", features = ["base64"] }
 serde_yaml = "0.9"

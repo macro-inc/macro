@@ -1,5 +1,12 @@
 import { batch, untrack } from 'solid-js';
 import { type ChangedPane, changedPanes, type PanesDiff } from '../panes/diff';
+import {
+  fillShape,
+  layoutShape,
+  type PaneLayout,
+  rowLayout,
+  tilesFor,
+} from '../panes/layout-tree';
 import type { PaneId } from '../panes/types';
 import {
   decodePanes,
@@ -28,9 +35,11 @@ export type LayoutPane = {
   index: number;
 };
 
-/** A whole layout: every open pane with its history, in order. */
+/** A whole layout: every open pane with its history, in order, and how they tile. */
 export type LayoutSnapshot = {
   panes: readonly LayoutPane[];
+  /** The tiles and their sizes; absent, the panes sit side by side. */
+  layout?: PaneLayout;
 };
 
 export type RestoreLayoutOptions = {
@@ -69,15 +78,31 @@ export function createLayout(options: {
 }) {
   const { routes, panes, url, runner } = options;
 
-  /** The open (or the given retained) panes with their histories; entries are shared, not copied. */
-  const snapshot = (only?: readonly PaneId[]): LayoutSnapshot => ({
-    panes: (only ?? untrack(panes.ids)).flatMap((pane) => {
+  /**
+   * The open (or the given retained) panes with their histories and tiles;
+   * entries are shared, not copied.
+   */
+  const snapshot = (only?: readonly PaneId[]): LayoutSnapshot => {
+    const captured = (only ?? untrack(panes.ids)).flatMap((pane) => {
       const stored = untrack(() => panes.read(pane));
       if (!stored) return [];
 
       return [{ pane, entries: stored.entries, index: stored.index }];
-    }),
-  });
+    });
+    const [first] = captured;
+    if (!first) return { panes: captured };
+
+    const layout = tilesFor(
+      untrack(() => panes.layoutOf(first.pane)),
+      captured.map(({ pane }) => pane)
+    );
+
+    return layout ? { panes: captured, layout } : { panes: captured };
+  };
+
+  /** The tiles `layout` shows its panes in, in order. */
+  const tilesOf = (layout: LayoutSnapshot): PaneLayout | undefined =>
+    layout.layout ?? rowLayout(layout.panes.map(({ pane }) => pane));
 
   /**
    * Makes the captured layout the open panes in one guarded navigation: leave
@@ -109,8 +134,10 @@ export function createLayout(options: {
     mode: 'push' | 'replace'
   ): Navigation => {
     const apply = (entries: readonly Entry[]): NavigationResult => {
+      const tiles = tilesOf(layout);
+
       batch(() => {
-        panes.applyDiff(diff, entries);
+        panes.applyDiff(diff, entries, tiles ? { layout: tiles } : {});
 
         // Put each captured history back; the shown entry may have been
         // amended by middleware, so the live one replaces it at the cursor.
@@ -215,14 +242,19 @@ export function createLayout(options: {
   /** The layout a mount-relative URL shows, in new panes, for `open`. */
   const fromHref = (href: string): LayoutSnapshot => {
     const decoded = decodePanes(routes, parseLocation(href));
+    const captured = decoded.panes.map(({ entry }) => ({
+      pane: panes.createPaneId(),
+      entries: [entry],
+      index: 0,
+    }));
+    const layout =
+      decoded.shape &&
+      fillShape(
+        decoded.shape,
+        captured.map(({ pane }) => pane)
+      );
 
-    return {
-      panes: decoded.panes.map(({ entry }) => ({
-        pane: panes.createPaneId(),
-        entries: [entry],
-        index: 0,
-      })),
-    };
+    return layout ? { panes: captured, layout } : { panes: captured };
   };
 
   /** The mount-relative URL a captured layout shows, for saving or sharing. */
@@ -232,7 +264,12 @@ export function createLayout(options: {
       entry: shownEntry(pane),
     }));
 
-    return formatLocation(encodePanes(routes, shown, untrack(url.lastKnown)));
+    const tiles = tilesOf(layout);
+    const encoded = encodePanes(routes, shown, untrack(url.lastKnown), {
+      layout: tiles && layoutShape(tiles),
+    });
+
+    return formatLocation(encoded);
   };
 
   return { snapshot, restore, open, show, discard, fromHref, href };

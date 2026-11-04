@@ -99,6 +99,7 @@ fn connections(slugs: &[&str]) -> Vec<PipedreamConnection> {
             server_name: "Slack".to_string(),
             account_id: format!("apn_{slug}"),
             enabled: true,
+            provider: pipedream_mcp::domain::models::ConnectionProvider::Pipedream,
         })
         .collect()
 }
@@ -390,6 +391,7 @@ async fn mixed_stack_discovers_and_dispatches_both_and_deduplicates_names() {
                     server_name: hosted_name.into(),
                     account_id: "test".into(),
                     enabled: true,
+                    provider: pipedream_mcp::domain::models::ConnectionProvider::Pipedream,
                 }],
                 native_records: vec![McpServerRecord {
                     user_id: user(),

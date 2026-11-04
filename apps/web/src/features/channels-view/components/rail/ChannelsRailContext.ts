@@ -6,7 +6,6 @@ import type { ChannelLabel } from '@service-storage/generated/schemas/channelLab
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import type { ContextProviderProps } from '@solid-primitives/context';
 import type { Accessor } from 'solid-js';
-import type { VirtualizerHandle } from 'virtua/solid';
 import type { ChannelsSourceScope, ChannelsSources } from '../../queries';
 import type {
   ChannelListSort,
@@ -157,6 +156,7 @@ export type ChannelsRailContext = {
   labelsAvailable: Accessor<boolean>;
   /** Why labels are unavailable, for the create menu and refused drops. */
   labelsUnavailableReason: Accessor<string>;
+  labelsFailed: Accessor<boolean>;
   retryLabels: () => Promise<void>;
   /** Retry unresolved channels referenced by section membership or favorites. */
   retryReferencedChannels: () => Promise<void>;
@@ -215,7 +215,7 @@ export type ChannelsRailContext = {
   registerBrowseScrollHandle: (handle: ListScrollHandle) => () => void;
   registerVirtualizer: (
     scope: ChannelsSourceScope,
-    handle: VirtualizerHandle
+    handle: ListScrollHandle
   ) => () => void;
   channelActivity: ChannelRailActivity;
 };

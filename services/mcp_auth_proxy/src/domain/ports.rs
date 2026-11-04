@@ -2,7 +2,9 @@
 
 use std::{future::Future, pin::Pin};
 
-use super::models::{RefreshToken, RefreshTokenBinding, RegisteredClient, UpstreamTokens};
+use super::models::{
+    RefreshToken, RefreshTokenBinding, RegisteredClient, SignInMethod, UpstreamTokens,
+};
 
 /// Boxed future returning a token grant from the upstream provider.
 pub type UpstreamTokensFuture<'a> =
@@ -74,7 +76,8 @@ pub trait RefreshTokenBindingStore: Send + Sync {
 /// Upstream OAuth provider used by the broker.
 pub trait OAuthProvider: Send + Sync {
     /// Builds the upstream authorize URL for a broker session.
-    fn construct_authorize_url(&self, state: &str) -> anyhow::Result<String>;
+    fn construct_authorize_url(&self, state: &str, sign_in: SignInMethod)
+    -> anyhow::Result<String>;
 
     /// Exchanges an upstream authorization code for tokens.
     fn exchange_authorization_code<'a>(&'a self, code: &'a str) -> UpstreamTokensFuture<'a>;

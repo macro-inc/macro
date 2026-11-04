@@ -6,6 +6,7 @@ import {
   type SplitRouter,
   type SplitRoutes,
 } from '@app/lib/split-router';
+import { SplitRouterProvider } from '@app/lib/split-router/solid/context';
 import { paneRoute } from '@app/routes/app-route';
 import {
   appRoute,
@@ -29,14 +30,14 @@ import {
 } from '@components/app/split-layout/split-router/legacy-route';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { cleanup, render } from '@solidjs/testing-library';
-import { onCleanup, type ParentProps } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { onCleanup } from 'solid-js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTabManager, type TabManager } from '../tab-manager';
 
 const panels = vi.hoisted(() => ({ mounted: 0, unmounted: 0 }));
 
-// Stand-ins that count mounts: the layers decide what stays mounted, not the
-// panel or the resize zone.
+// A stand-in that counts mounts: the layers decide what stays mounted, not
+// the panel.
 vi.mock('@components/app/split-layout/components/SplitPanel', () => ({
   SplitPanel: (props: { split: { id: string } }) => {
     panels.mounted += 1;
@@ -44,12 +45,6 @@ vi.mock('@components/app/split-layout/components/SplitPanel', () => ({
       panels.unmounted += 1;
     });
     return <div data-panel={props.split.id} />;
-  },
-}));
-vi.mock('@core/component/Resize', () => ({
-  Resize: {
-    Zone: (props: ParentProps) => <div>{props.children}</div>,
-    Panel: (props: ParentProps) => <div>{props.children}</div>,
   },
 }));
 
@@ -101,9 +96,11 @@ function setup(url: string) {
     });
     setGlobalTabManager(tabManager);
     return (
-      <SplitLayoutContext.Provider value={{ manager }}>
-        <SplitLayout />
-      </SplitLayoutContext.Provider>
+      <SplitRouterProvider router={router}>
+        <SplitLayoutContext.Provider value={{ manager }}>
+          <SplitLayout />
+        </SplitLayoutContext.Provider>
+      </SplitRouterProvider>
     );
   });
   return { router, tabManager };
@@ -118,7 +115,19 @@ async function flush(router: SplitRouter) {
 const layer = (id: string) =>
   document.querySelector<HTMLElement>(`[data-split-layer="${id}"]`);
 
+// jsdom has no layout; the tiled layout only needs to observe something.
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+beforeEach(() => {
+  vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+});
+
 afterEach(() => {
+  vi.unstubAllGlobals();
   setGlobalTabManager(undefined);
   cleanup();
   panels.mounted = 0;
@@ -155,6 +164,25 @@ describe('desktop tab layers', () => {
     expect(document.querySelector('[data-panel]')).toBe(firstPanel);
     expect(layer(first)?.inert).toBe(false);
     expect(layer(second)?.inert).toBe(true);
+  });
+
+  it('a stacked tab parks and comes back stacked without remounting', async () => {
+    const { router, tabManager } = setup(
+      '/channels/channel-one/~/home?layout=c2pp'
+    );
+    await flush(router);
+    const first = tabManager.activeTabId();
+    const stacked = router.layout();
+    expect(stacked).toMatchObject({ axis: 'column' });
+
+    tabManager.newTab();
+    await flush(router);
+    tabManager.activateTab(first);
+    await flush(router);
+
+    expect(router.layout()).toEqual(stacked);
+    expect(panels.mounted).toBe(3);
+    expect(panels.unmounted).toBe(0);
   });
 
   it('closing a tab unmounts only its panes', async () => {

@@ -1,10 +1,10 @@
 #![recursion_limit = "256"]
-//! Classifies signal email threads for the Focus view.
+//! Classifies email threads for the Focus view.
 //!
-//! Reads `macro.email` for new and sent messages, asks Jev about each thread
-//! in an allowlisted inbox with the owner's stored memory as context, and
-//! stores the verdict in `email_thread_focus`. An hourly sweep catches what
-//! the event stream missed.
+//! Reads `macro.email` for new and sent messages, asks Jev about each signal
+//! thread and key mail in an allowlisted inbox with the owner's stored memory
+//! as context, and stores the verdict in `email_thread_focus`. An hourly sweep
+//! catches what the event stream missed.
 
 mod config;
 mod inbound {

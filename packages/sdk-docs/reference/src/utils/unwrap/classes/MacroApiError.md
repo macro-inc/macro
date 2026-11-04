@@ -13,6 +13,7 @@ and `data` holds the parsed error body.
 - [`MacroOpRefusedError`](../../../entities/databases/database/classes/MacroOpRefusedError.md)
 - [`EditOutcomeUnknownError`](../../../entities/documents/ai-edit/classes/EditOutcomeUnknownError.md)
 - [`DocumentEditRefusedError`](../../../entities/documents/ai-edit/classes/DocumentEditRefusedError.md)
+- [`MacroForbiddenError`](MacroForbiddenError.md)
 
 ## Constructors
 

@@ -87,6 +87,11 @@ impl TeamCrmSettingsRepository for TeamCrmSettingsRepositoryImpl {
             .execute(&mut *tx)
             .await?;
 
+        // Contacts without a company belong to the team directly.
+        sqlx::query!(r#"DELETE FROM crm_contacts WHERE team_id = $1"#, team_id,)
+            .execute(&mut *tx)
+            .await?;
+
         tx.commit().await?;
         Ok(())
     }

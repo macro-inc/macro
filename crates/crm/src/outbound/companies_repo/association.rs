@@ -52,7 +52,7 @@ impl CompaniesRepositoryImpl {
         };
         let rows = sqlx::query!(
             r#"
-            SELECT co.id AS "company_id!", ct.id AS "contact_id?",
+            SELECT co.id AS "company_id?", ct.id AS "contact_id?",
                    LOWER(BTRIM(d.domain)) AS "domain?", LOWER(BTRIM(ct.email)) AS "email?"
             FROM crm_companies co
             JOIN team_crm_settings tcs ON tcs.team_id = co.team_id AND tcs.crm_enabled
@@ -62,6 +62,16 @@ impl CompaniesRepositoryImpl {
             WHERE NOT co.hidden
               AND (($1::text IS NOT NULL AND tu.user_id IS NOT NULL)
                    OR ($2::uuid IS NOT NULL AND co.team_id = $2))
+            UNION ALL
+            -- Contacts without a company.
+            SELECT NULL, ct.id, NULL, LOWER(BTRIM(ct.email))
+            FROM crm_contacts ct
+            JOIN team_crm_settings tcs ON tcs.team_id = ct.team_id AND tcs.crm_enabled
+            LEFT JOIN team_user tu ON tu.team_id = ct.team_id AND tu.user_id = $1
+            WHERE ct.company_id IS NULL
+              AND NOT ct.hidden
+              AND (($1::text IS NOT NULL AND tu.user_id IS NOT NULL)
+                   OR ($2::uuid IS NOT NULL AND ct.team_id = $2))
             "#,
             viewer,
             team_id,
@@ -74,7 +84,7 @@ impl CompaniesRepositoryImpl {
         let mut domains = std::collections::BTreeSet::new();
         let mut addresses = std::collections::BTreeSet::new();
         for row in rows {
-            company_ids.insert(row.company_id);
+            company_ids.extend(row.company_id);
             contact_ids.extend(row.contact_id);
             domains.extend(row.domain);
             addresses.extend(row.email);
@@ -152,11 +162,11 @@ impl CompaniesRepositoryImpl {
                     SELECT EXISTS (
                         SELECT 1
                         FROM crm_contacts ct
-                        JOIN crm_companies co ON co.id = ct.company_id
-                        JOIN team_crm_settings tcs ON tcs.team_id = co.team_id AND tcs.crm_enabled
-                        JOIN team_user tu ON tu.team_id = co.team_id AND tu.user_id = $1
+                        LEFT JOIN crm_companies co ON co.id = ct.company_id
+                        JOIN team_crm_settings tcs ON tcs.team_id = ct.team_id AND tcs.crm_enabled
+                        JOIN team_user tu ON tu.team_id = ct.team_id AND tu.user_id = $1
                         WHERE ct.id = $2
-                          AND (NOT (ct.hidden OR co.hidden) OR tu.team_role <> 'member')
+                          AND (NOT (ct.hidden OR co.hidden IS TRUE) OR tu.team_role <> 'member')
                     ) AS "visible!"
                     "#,
                     user_id,
@@ -174,11 +184,11 @@ impl CompaniesRepositoryImpl {
                     SELECT EXISTS (
                         SELECT 1
                         FROM crm_contacts ct
-                        JOIN crm_companies co ON co.id = ct.company_id
-                        JOIN team_crm_settings tcs ON tcs.team_id = co.team_id AND tcs.crm_enabled
+                        LEFT JOIN crm_companies co ON co.id = ct.company_id
+                        JOIN team_crm_settings tcs ON tcs.team_id = ct.team_id AND tcs.crm_enabled
                         WHERE ct.id = $1
-                          AND co.team_id = $2
-                          AND (NOT (ct.hidden OR co.hidden) OR $3)
+                          AND ct.team_id = $2
+                          AND (NOT (ct.hidden OR co.hidden IS TRUE) OR $3)
                     ) AS "visible!"
                     "#,
                     contact_id,

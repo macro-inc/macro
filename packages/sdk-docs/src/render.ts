@@ -19,6 +19,8 @@ export async function renderSdkDocs(root: string, output: string) {
   const entryPoints = [
     ...new Bun.Glob('src/entities/**/*.ts').scanSync(sdk),
     ...new Bun.Glob('generated/*/types.gen.ts').scanSync(sdk),
+    // Specta-generated review types the review handles are typed with.
+    'generated/agent-reviews/index.ts',
     'src/macro.ts',
     'src/config.ts',
     'src/mentions.ts',

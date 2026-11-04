@@ -502,6 +502,12 @@ Re-exports [Meeting](../entities/meetings/meeting/classes/Meeting.md)
 
 ***
 
+### MeNamespace
+
+Re-exports [MeNamespace](../entities/me/namespace/classes/MeNamespace.md)
+
+***
+
 ### Mentionable
 
 Re-exports [Mentionable](../mentions/interfaces/Mentionable.md)
@@ -562,6 +568,12 @@ Re-exports [PipelineTable](../entities/crm/pipeline/classes/PipelineTable.md)
 
 ***
 
+### PipelineView
+
+Re-exports [PipelineView](../entities/crm/pipeline/classes/PipelineView.md)
+
+***
+
 ### PullRequestChangeset
 
 Re-exports [PullRequestChangeset](../entities/github-pull-requests/pull-request/classes/PullRequestChangeset.md)
@@ -592,9 +604,21 @@ Re-exports [QueryTableVersion](../entities/databases/query/interfaces/QueryTable
 
 ***
 
+### ReferralLink
+
+Re-exports [ReferralLink](../entities/referrals/namespace/interfaces/ReferralLink.md)
+
+***
+
 ### ReviewCalendarDraft
 
 Re-exports [ReviewCalendarDraft](../entities/agent-sessions/review/type-aliases/ReviewCalendarDraft.md)
+
+***
+
+### ReviewDraft
+
+Re-exports [ReviewDraft](../entities/agent-sessions/review/type-aliases/ReviewDraft.md)
 
 ***
 
@@ -712,6 +736,12 @@ Re-exports [TaskSummary](../entities/tasks/task/interfaces/TaskSummary.md)
 
 ***
 
+### TeamInvite
+
+Re-exports [TeamInvite](../entities/teams/invite/classes/TeamInvite.md)
+
+***
+
 ### TimelineOptions
 
 Re-exports [TimelineOptions](../entities/messages/thread/interfaces/TimelineOptions.md)
@@ -727,6 +757,18 @@ Re-exports [toBody](../mentions/functions/toBody.md)
 ### ToolApproval
 
 Re-exports [ToolApproval](../entities/agent-sessions/tool-approval/classes/ToolApproval.md)
+
+***
+
+### UpdateMeOptions
+
+Re-exports [UpdateMeOptions](../entities/me/namespace/interfaces/UpdateMeOptions.md)
+
+***
+
+### UploadProfilePictureOptions
+
+Re-exports [UploadProfilePictureOptions](../entities/me/namespace/interfaces/UploadProfilePictureOptions.md)
 
 ***
 
