@@ -338,7 +338,7 @@ where
 
         match self
             .markdown_initializer
-            .initialize_existing_markdown(&candidate.id, &markdown)
+            .initialize_existing_markdown(&candidate.id, &markdown, None)
             .await
         {
             Ok(_) => CandidateResult::Initialized,

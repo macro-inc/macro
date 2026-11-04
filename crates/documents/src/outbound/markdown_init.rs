@@ -25,8 +25,9 @@ impl LexicalSnapshotPort for LexicalClient {
     fn markdown_to_loro_snapshot(
         &self,
         markdown: &str,
+        initial_pins: Option<&[String]>,
     ) -> impl Future<Output = anyhow::Result<Vec<u8>>> + Send {
-        LexicalClient::markdown_to_loro_snapshot(self, markdown)
+        LexicalClient::markdown_to_loro_snapshot(self, markdown, initial_pins)
     }
 
     async fn notion_to_loro_snapshot(
@@ -131,12 +132,13 @@ where
         &self,
         document_id: &str,
         markdown: &str,
+        initial_pins: Option<&[String]>,
     ) -> Result<Vec<u8>, DocumentError> {
-        let loro_snapshot: Vec<u8> = if markdown.is_empty() {
+        let loro_snapshot: Vec<u8> = if markdown.is_empty() && initial_pins.is_none() {
             MARKDOWN_GOLDEN_SNAPSHOT.into()
         } else {
             self.lexical_client
-                .markdown_to_loro_snapshot(markdown)
+                .markdown_to_loro_snapshot(markdown, initial_pins)
                 .await
                 .map_err(DocumentError::Internal)?
         };
@@ -252,10 +254,37 @@ mod tests {
 
         let initializer = LexicalSyncMarkdownInitializer::new(lexical, sync);
         let snapshot = initializer
-            .initialize_existing_markdown("doc1", "")
+            .initialize_existing_markdown("doc1", "", None)
             .await
             .unwrap();
         assert_eq!(snapshot, MARKDOWN_GOLDEN_SNAPSHOT);
+    }
+
+    #[tokio::test]
+    async fn empty_markdown_with_pins_uses_lexical_canonical_snapshot() {
+        let mut lexical = MockLexicalSnapshotPort::new();
+        let mut sync = MockSyncInitializeSnapshotPort::new();
+        lexical
+            .expect_markdown_to_loro_snapshot()
+            .withf(|markdown, pins| {
+                markdown.is_empty() && *pins == Some(&["field".to_string()][..])
+            })
+            .times(1)
+            .returning(|_, _| Box::pin(async { Ok(vec![4, 2]) }));
+        sync.expect_initialize_from_snapshot()
+            .withf(|id, snapshot| id == "task" && snapshot == [4, 2])
+            .times(1)
+            .returning(|_, _| Box::pin(async { Ok(()) }));
+
+        let initializer = LexicalSyncMarkdownInitializer::new(lexical, sync);
+        let pins = vec!["field".to_string()];
+        assert_eq!(
+            initializer
+                .initialize_existing_markdown("task", "", Some(&pins))
+                .await
+                .unwrap(),
+            [4, 2]
+        );
     }
 
     #[tokio::test]
@@ -265,9 +294,9 @@ mod tests {
 
         lexical
             .expect_markdown_to_loro_snapshot()
-            .withf(|m| m == "# hi")
+            .withf(|m, pins| m == "# hi" && pins.is_none())
             .times(1)
-            .returning(|_| Box::pin(async { Ok(vec![1, 2, 3]) }));
+            .returning(|_, _| Box::pin(async { Ok(vec![1, 2, 3]) }));
         sync.expect_initialize_from_snapshot()
             .withf(|id, bytes| id == "doc2" && bytes == [1, 2, 3])
             .times(1)
@@ -275,7 +304,7 @@ mod tests {
 
         let initializer = LexicalSyncMarkdownInitializer::new(lexical, sync);
         let snapshot = initializer
-            .initialize_existing_markdown("doc2", "# hi")
+            .initialize_existing_markdown("doc2", "# hi", None)
             .await
             .unwrap();
         assert_eq!(snapshot, [1, 2, 3]);
@@ -289,14 +318,14 @@ mod tests {
         lexical
             .expect_markdown_to_loro_snapshot()
             .times(1)
-            .returning(|_| Box::pin(async { Ok(vec![1, 2, 3]) }));
+            .returning(|_, _| Box::pin(async { Ok(vec![1, 2, 3]) }));
         sync.expect_initialize_from_snapshot()
             .times(3)
             .returning(|_, _| Box::pin(async { Err(anyhow::anyhow!("sync-service unavailable")) }));
 
         let initializer = LexicalSyncMarkdownInitializer::new(lexical, sync);
         let error = initializer
-            .initialize_existing_markdown("doc3", "# hi")
+            .initialize_existing_markdown("doc3", "# hi", None)
             .await
             .unwrap_err();
         assert_eq!(error.to_string(), "sync-service unavailable");
@@ -310,14 +339,14 @@ mod tests {
         lexical
             .expect_markdown_to_loro_snapshot()
             .times(1)
-            .returning(|_| Box::pin(async { Ok(vec![1, 2, 3]) }));
+            .returning(|_, _| Box::pin(async { Ok(vec![1, 2, 3]) }));
         sync.expect_initialize_from_snapshot()
             .times(1)
             .returning(|_, _| Box::pin(async { Err(SnapshotAlreadyExists.into()) }));
 
         let initializer = LexicalSyncMarkdownInitializer::new(lexical, sync);
         let error = initializer
-            .initialize_existing_markdown("doc4", "# hi")
+            .initialize_existing_markdown("doc4", "# hi", None)
             .await
             .unwrap_err();
         assert_eq!(error.to_string(), "snapshot already exists");
@@ -331,13 +360,13 @@ mod tests {
         lexical
             .expect_markdown_to_loro_snapshot()
             .times(1)
-            .returning(|_| Box::pin(async { Ok(vec![1, 2, 3]) }));
+            .returning(|_, _| Box::pin(async { Ok(vec![1, 2, 3]) }));
         sync.expect_initialize_from_snapshot()
             .returning(|_, _| Box::pin(async { Err(anyhow::anyhow!("sync-service unavailable")) }));
 
         let initializer = LexicalSyncMarkdownInitializer::detached(lexical, sync);
         let snapshot = initializer
-            .initialize_existing_markdown("doc5", "# hi")
+            .initialize_existing_markdown("doc5", "# hi", None)
             .await
             .unwrap();
         assert_eq!(snapshot, [1, 2, 3]);

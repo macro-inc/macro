@@ -172,6 +172,8 @@ pub enum MarkdownSubtype {
     Task {
         /// Optional property values to assign. Defaults are used when omitted.
         property_values: Option<Vec<PropertyInput>>,
+        /// Definition IDs to pin in the initial collaborative snapshot.
+        pinned_property_definition_ids: Option<Vec<String>>,
         /// Consent to share the task with the creator's team. The persisted owner's
         /// membership, not `team_id`, decides which team receives access.
         share_with_team: bool,
@@ -197,6 +199,7 @@ impl MarkdownSubtype {
         if is_task {
             Self::Task {
                 property_values: None,
+                pinned_property_definition_ids: None,
                 share_with_team: team_id.is_some(),
                 team_id,
             }
@@ -697,14 +700,20 @@ where
             | MarkdownSubtype::InitiativeDescription => None,
             MarkdownSubtype::Task {
                 property_values,
+                pinned_property_definition_ids,
                 share_with_team,
                 team_id,
-            } => Some((property_values.clone(), *share_with_team, *team_id)),
+            } => Some((
+                property_values.clone(),
+                pinned_property_definition_ids.clone(),
+                *share_with_team,
+                *team_id,
+            )),
         };
 
         let task_name = metadata.document_name.clone();
         let project_id = metadata.project_id;
-        let team_id = if let Some((_, _, team_id)) = task.as_ref() {
+        let team_id = if let Some((_, _, _, team_id)) = task.as_ref() {
             *team_id
         } else {
             None
@@ -723,7 +732,7 @@ where
                 }
             },
             team_id,
-            share_with_team: task.as_ref().is_some_and(|(_, share, _)| *share),
+            share_with_team: task.as_ref().is_some_and(|(_, _, share, _)| *share),
         });
 
         let mut response = self
@@ -738,12 +747,19 @@ where
             .document_id
             .clone();
 
+        // Only task creation supplies explicit pins. Other markdown callers retain
+        // their existing implicit editor defaults.
+        let initial_pins = task.as_ref().and_then(|(_, pins, _, _)| pins.clone());
         let finalize_result = async {
             let initialized = match &content {
                 MarkdownContent::Markdown(markdown) => MarkdownSnapshot {
                     snapshot: self
                         .markdown_initializer
-                        .initialize_existing_markdown(&document_id, markdown)
+                        .initialize_existing_markdown(
+                            &document_id,
+                            markdown,
+                            initial_pins.as_deref(),
+                        )
                         .await?,
                     markdown: markdown.clone(),
                 },
@@ -763,7 +779,13 @@ where
 
             // Assignments publish events that can start agents immediately.
             // Make the task body readable before applying its properties.
-            if let Some((property_values, share_with_team, team_id)) = task {
+            if let Some((
+                property_values,
+                pinned_property_definition_ids,
+                share_with_team,
+                team_id,
+            )) = task
+            {
                 self.document_service
                     .handle_task_properties(
                         principal,
@@ -774,6 +796,7 @@ where
                             project_id,
                             team_id,
                             property_values,
+                            pinned_property_definition_ids,
                             share_with_team,
                         },
                     )

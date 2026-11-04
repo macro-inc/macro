@@ -544,7 +544,7 @@ async fn initialize_markdown_content(
             } else {
                 clients
                     .lexical
-                    .markdown_to_loro_snapshot(markdown)
+                    .markdown_to_loro_snapshot(markdown, None)
                     .await
                     .context("converting markdown via lexical-service")?
             };

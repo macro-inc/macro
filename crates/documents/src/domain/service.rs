@@ -2268,7 +2268,7 @@ impl<
     }
 
     /// Assigns the task properties to a document
-    #[tracing::instrument(skip(self, request), err)]
+    #[tracing::instrument(skip_all, fields(document_id = %document_id), err)]
     async fn handle_task_properties(
         &self,
         principal: &CreationPrincipal,
@@ -2301,11 +2301,13 @@ impl<
                 .collect::<Vec<_>>()
         };
 
+        let mut assigned = std::collections::HashSet::new();
         for property_input in properties {
             let Ok(property_uuid) = uuid::Uuid::parse_str(&property_input.property_id) else {
                 tracing::warn!(property_id=?property_input.property_id, "invalid property_id UUID, skipping");
                 continue;
             };
+            assigned.insert(property_uuid);
 
             let _ = self
                 .task_properties_service
@@ -2321,6 +2323,29 @@ impl<
                             error=?e,
                             property_uuid=?property_uuid,
                             "unable to set entity property")
+                });
+        }
+
+        // An empty selected field still belongs to the task. Persist its assignment
+        // so every authorized viewer reads the definition through this entity,
+        // rather than depending on the creator's personal definition list.
+        for definition_id in request.pinned_property_definition_ids.iter().flatten() {
+            let Ok(property_uuid) = uuid::Uuid::parse_str(definition_id) else {
+                continue;
+            };
+            if !assigned.insert(property_uuid) {
+                continue;
+            }
+            let _ = self
+                .task_properties_service
+                .set_entity_property(principal, document_id, property_uuid, None)
+                .await
+                .inspect_err(|error| {
+                    tracing::warn!(
+                        error = ?error,
+                        property_uuid = %property_uuid,
+                        "unable to assign empty task property"
+                    );
                 });
         }
 

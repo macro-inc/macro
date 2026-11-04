@@ -27,6 +27,8 @@ struct LexicalResponse {
 #[derive(Debug, serde::Serialize)]
 struct MarkdownSnapshotRequest<'a> {
     markdown: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    initial_pins: Option<&'a [String]>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -544,12 +546,19 @@ impl LexicalClient {
     }
 
     #[tracing::instrument(skip(self, markdown), err)]
-    pub async fn markdown_to_loro_snapshot(&self, markdown: &str) -> Result<Vec<u8>> {
+    pub async fn markdown_to_loro_snapshot(
+        &self,
+        markdown: &str,
+        initial_pins: Option<&[String]>,
+    ) -> Result<Vec<u8>> {
         let url = format!("{}/snapshot/markdown", self.url);
         let response = check_response(
             self.client
                 .post(&url)
-                .json(&MarkdownSnapshotRequest { markdown })
+                .json(&MarkdownSnapshotRequest {
+                    markdown,
+                    initial_pins,
+                })
                 .send()
                 .await?,
         )
