@@ -42,7 +42,17 @@ export function createContactRecipientSource(
             (!isAutomatedAddress(user.email) ||
               input.search().trim().toLowerCase() === user.email.toLowerCase())
         )
-        .map(recipientEntityMapper('user'))
+        // Selected chips outlive this query window: retain scalar display data,
+        // not the query-store objects from which it was materialized.
+        .map((user) =>
+          recipientEntityMapper('user')({
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            photoUrl: user.photoUrl,
+            lastInteraction: user.lastInteraction,
+          })
+        )
     ),
     loading: directory.loading,
     error: directory.error,

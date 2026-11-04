@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   taskDefinitions: new Map<string, PropertyDefinition>(),
   definitionsWait: vi.fn<() => Promise<void>>(),
   accountCurrent: true,
+  referencesUnavailable: false,
   chat: vi.fn(),
   saveEmail: vi.fn(),
   sendEmail: vi.fn(),
@@ -125,17 +126,39 @@ vi.mock('@core/context/quickAccess', () => ({
   }),
 }));
 vi.mock('@core/signal/useCombinedRecipient', () => ({
-  useCombinedRecipients: () => ({
-    users: () => [
-      {
-        id: 'macro|john@example.com',
-        kind: 'user',
-        data: { name: 'John Adams', email: 'john@example.com' },
-      },
-    ],
+  useCombinedRecipients: () => {
+    throw new Error('Unexpected full-directory pool');
+  },
+}));
+vi.mock('@core/context/channels', () => ({
+  useChannelsContext: () => ({
     channels: () => [
-      { kind: 'channel', id: 'team-channel', data: { name: 'engineering' } },
+      { id: 'team-channel', name: 'engineering', participants: [{}, {}, {}] },
     ],
+  }),
+}));
+vi.mock('@queries/contacts/use-references', () => ({
+  useContactReferences: () => ({
+    lookup: (label: string) =>
+      mocks.referencesUnavailable
+        ? undefined
+        : [
+              'john',
+              'john adams',
+              'john@example.com',
+              'macro|john@example.com',
+            ].includes(label)
+          ? [
+              {
+                userId: 'macro|john@example.com',
+                name: 'John Adams',
+                email: 'john@example.com',
+              },
+            ]
+          : [],
+    loading: () => mocks.referencesUnavailable,
+    error: () => null,
+    retry: async () => {},
   }),
 }));
 vi.mock('@app/features/block-md/queries/create-document-with-tags', () => ({
@@ -255,6 +278,7 @@ beforeEach(() => {
   mocks.taskDefinitions = new Map();
   mocks.definitionsWait.mockResolvedValue(undefined);
   mocks.accountCurrent = true;
+  mocks.referencesUnavailable = false;
   mocks.chat.mockResolvedValue(ok({ id: 'chat' }));
   mocks.session.mockReturnValue('session');
   mocks.saveEmail.mockResolvedValue({
@@ -717,6 +741,41 @@ describe('destination adapters', () => {
     release.resolve();
     await rejected;
     expect(mocks.task).not.toHaveBeenCalled();
+  });
+  it('does not guess inferred names when reference evidence is incomplete', async () => {
+    mocks.referencesUnavailable = true;
+    await expect(execute(input('email'))).rejects.toThrow('specific recipient');
+    await expect(
+      execute(input('message', { recipients: '#engineering' }))
+    ).rejects.toThrow('specific recipient');
+    expect(mocks.saveEmail).not.toHaveBeenCalled();
+    expect(mocks.message).not.toHaveBeenCalled();
+    await execute(input('message', { recipients: 'team-channel' }));
+    expect(mocks.message).toHaveBeenCalledWith(
+      expect.objectContaining({
+        parent: { type: 'channel', id: 'team-channel' },
+      })
+    );
+  });
+  it('does not send a saved email draft after the account changes', async () => {
+    mocks.saveEmail.mockImplementationOnce(async () => {
+      mocks.accountCurrent = false;
+      return { draftId: 'draft', threadId: 'thread', inboxId: 'inbox' };
+    });
+    await expect(execute(input('email'))).rejects.toThrow(
+      'Query account changed'
+    );
+    expect(mocks.sendEmail).not.toHaveBeenCalled();
+  });
+  it('does not send a message after account replacement during DM creation', async () => {
+    mocks.dm.mockImplementationOnce(async () => {
+      mocks.accountCurrent = false;
+      return { channel_id: 'dm' };
+    });
+    await expect(execute(input('message'))).rejects.toThrow(
+      'Query account changed'
+    );
+    expect(mocks.message).not.toHaveBeenCalled();
   });
   it('posts to an existing channel without creating a DM', async () => {
     await execute(input('message', { recipients: '#engineering' }));

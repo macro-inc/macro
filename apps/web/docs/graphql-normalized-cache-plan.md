@@ -1293,17 +1293,20 @@ Creation/sharing and main email recipient controls now own paged sources; email
 threads retain scoped addresses, not an address book. Channel invitations and
 participant pickers also use those sources, with existing roster IDs excluded and
 empty continuations retained when a roster exceeds the native exclusion budget.
-Remaining Universal Input recipient/search/guest and AI-filter planner pools retain
-legacy sources. Calendar create/edit, event-detail guest actions and AI-draft
+Universal Input recipient/search/guest references now use complete per-label evidence
+and independent picker/mention windows. The separate Tasks filter planner retains
+its legacy source. Calendar create/edit, event-detail guest actions and AI-draft
 composers now use bounded property windows with event-owned guest extras. Chosen
 names stay in selection metadata rather than a directory map, and person pages
 are not truncated again by the property UI. Shared scoped exclusions bind the
 full roster while capping native IPC; continuations retain oversized-roster gaps.
 Universal task-property inference now uses complete
 per-label reference evidence instead of the shared pool, with ambiguous/incomplete
-names unresolved and manual properties taking precedence. Its other composer
-modes still retain that pool; whole-app memory completion and bounded shared name
-storage remain pending.
+names unresolved and manual properties taking precedence. Other Universal Input
+modes prefer a unique full name before first-name matching; explicit addresses
+never match another person's display-name alias. Chosen display metadata stays
+separate from automatic name evidence. Whole-app memory completion and bounded
+shared name storage remain pending.
 
 ## Cached email Quick Access
 

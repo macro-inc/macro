@@ -106,15 +106,19 @@ identity, never another person's display-name alias. Do not re-cap or locally di
 already matched person pages; expose continuation even for an empty window. Keep
 Quick Access list factory setup untracked so loading/paging cannot reconstruct its
 owner at page one. An in-flight multi-window advance stops when `inputKey` changes.
-Universal task inference resolves only current person-valued fields through
-`useContactReferences` (`anyName`), not a people catalog or suggestion page.
-Keep incomplete/ambiguous evidence unresolved, preserve model term boundaries,
-and skip manually overridden fields. Snapshot resolved task values before awaiting
-creation metadata and fence the submitting account afterward. Its real adapter,
-reference reader and property controls have desktop/phone coverage in
-`features/universal-input/browser-test/task-references.browser.e2e.ts`. Other
-Universal Input recipients/search/guest pools and the Tasks filter planner still
-need migration; never replace their complete resolution inputs with suggestions.
+Universal Input resolves only current person references through `useContactReferences`:
+task properties use `anyName`; recipients, guests and search use `preferFullName`.
+Keep incomplete/ambiguous evidence unresolved, preserve structured term boundaries,
+and never substitute a suggestion window for name proof. Use `recipientTerms` and
+`formatRecipientTerms` for recipient string fields so delimiter-bearing model names
+retain their boundaries while legacy manual separators remain supported. Explicit
+addresses cannot resolve through display-name aliases; channel IDs remain scoped choices.
+Picker factories and personal mentions use their own windows. Field-owned choice
+snapshots preserve selected labels without becoming inference evidence or reviving
+on a later return to the same text. Capture submission identities before async
+work and recheck the account before dependent writes. The `task-references` and
+`input-references` browser cases cover the real adapters/composers on desktop/phone.
+The separate Tasks filter planner still needs migration.
 `CacheHost.people.resolveReferences` exposes the core's bounded full-directory
 ambiguity evidence. It needs a bound viewer and ready context only for inbox
 exclusions; callers must also check directory completeness. Missing reference

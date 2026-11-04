@@ -836,7 +836,15 @@ Select **Auto** to resume detection; manually edited fields remain yours.
 **Enter** inserts a newline. **Cmd/Ctrl+Enter** or the labeled action button
 submits only the currently displayed, complete action. There is no queued send
 while inference is pending. Email and message modes show their outgoing body
-and resolved recipients. Email uses the Email Composer's inbox picker, recipient
+and resolved recipients. Recipient, guest and search names resolve against complete
+per-label directory evidence, not just the first suggestion page. They prefer an
+exact full name before a unique first name; a comma-bearing model name remains
+one person rather than turning into multiple recipients. Ambiguous or incomplete
+offline names require a specific choice; reconnecting can resolve the same draft. A complete
+email address never resolves through another person's display-name alias. Email,
+message and guest pickers have independent bounded windows, and chosen labels stay
+visible while explicit identity lookup finishes. Changing a field invalidates its
+previous choice snapshot; unresolved search constraints cannot broaden a search. Email uses the Email Composer's inbox picker, recipient
 chips with address completion, separate Cc/Bcc controls, subject control, rich Markdown editor, and HTML
 preparation for delivery. Task creation uses the task composer's rich title,
 Markdown description, and editable property pills, including Due date, and the

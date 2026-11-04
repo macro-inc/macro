@@ -42,6 +42,7 @@ export default defineConfig({
       testMatch: [
         'mobile-input.browser.e2e.ts',
         'task-references.browser.e2e.ts',
+        'input-references.browser.e2e.ts',
       ],
       use: {
         ...devices['Desktop Chrome'],

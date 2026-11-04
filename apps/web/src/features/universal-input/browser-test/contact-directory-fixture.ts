@@ -11,6 +11,14 @@ import { createSignal } from 'solid-js';
 const VIEWER = 'macro|viewer@example.com';
 let people: readonly IUser[] = [];
 export const [referencePages, setReferencePages] = createSignal(0);
+let lookupGate: PromiseWithResolvers<void> | undefined;
+export function pauseIdentityLookups() {
+  lookupGate ??= Promise.withResolvers<void>();
+}
+export function resumeIdentityLookups() {
+  lookupGate?.resolve();
+  lookupGate = undefined;
+}
 export function registerContactFixture(rows: readonly IUser[]) {
   people = rows;
 }
@@ -46,6 +54,8 @@ export async function fetchContactDirectoryByIds(
   ids: string[],
   signal: AbortSignal
 ) {
+  signal.throwIfAborted();
+  if (lookupGate) await lookupGate.promise;
   signal.throwIfAborted();
   return {
     user: {
