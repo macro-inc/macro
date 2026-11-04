@@ -3151,7 +3151,9 @@ export const listChannelLabelsResponse = zod
               .describe('Owning team, or `None` for account-private labels.'),
             updatedAt: zod.iso
               .datetime({})
-              .describe('When the label was last renamed or reordered.'),
+              .describe(
+                "When the label's name, rule, scope, or order last changed."
+              ),
           })
           .describe(
             'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: it lists only the labelled channels the\nrequesting user participates in. `channel_count` counts every channel in\nthe label so clients can warn accurately before a delete.'
@@ -3258,7 +3260,7 @@ export const createChannelLabelResponse = zod
       .describe('Owning team, or `None` for account-private labels.'),
     updatedAt: zod.iso
       .datetime({})
-      .describe('When the label was last renamed or reordered.'),
+      .describe("When the label's name, rule, scope, or order last changed."),
   })
   .describe(
     'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: it lists only the labelled channels the\nrequesting user participates in. `channel_count` counts every channel in\nthe label so clients can warn accurately before a delete.'
@@ -3354,7 +3356,7 @@ export const deleteChannelLabelQueryParams = zod.object({
 });
 
 /**
- * @summary Rename a label of the caller's authorized scope.
+ * @summary Update a label, optionally moving it to another authorized scope.
  */
 export const renameChannelLabelParams = zod.object({
   label_id: zod.uuid().describe('The label id.'),
@@ -3390,8 +3392,20 @@ export const renameChannelLabelBody = zod
           ),
       ])
       .optional(),
+    targetScope: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['personal', 'team'])
+          .describe(
+            'Requested label namespace. Omission retains the deployed automatic selection.'
+          ),
+      ])
+      .optional(),
   })
-  .describe('Request body for renaming a label.');
+  .describe(
+    "Request body for updating a label's name, smart rule, or sharing scope."
+  );
 
 export const renameChannelLabelResponse = zod
   .object({
@@ -3437,7 +3451,7 @@ export const renameChannelLabelResponse = zod
       .describe('Owning team, or `None` for account-private labels.'),
     updatedAt: zod.iso
       .datetime({})
-      .describe('When the label was last renamed or reordered.'),
+      .describe("When the label's name, rule, scope, or order last changed."),
   })
   .describe(
     'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: it lists only the labelled channels the\nrequesting user participates in. `channel_count` counts every channel in\nthe label so clients can warn accurately before a delete.'
@@ -17439,13 +17453,18 @@ export const createMarkdownHandlerResponse = zod
   .describe('Response for creating a markdown document.');
 
 /**
- * @summary Creates a skill document with initialized markdown content in one
-backend-owned lifecycle. Skills are markdown documents containing
+ * @summary Creates a skill document with initialized markdown content and its
+routing description in one backend-owned lifecycle. Skills are markdown documents containing
 instructions that AI reads and follows when the skill is referenced in an
 AI input.
  */
 export const createSkillHandlerBody = zod
   .object({
+    description: zod
+      .string()
+      .describe(
+        'When to use the skill, in one line starting \"Use when\", e.g. \"Use when\ndrafting release notes; not changelog entries\". Agents choose skills\nfor a request by it.'
+      ),
     markdown: zod
       .string()
       .nullish()
@@ -20037,6 +20056,54 @@ export const simpleSaveResponse = zod.object({
   }),
   error: zod.boolean().describe('Indicates if an error occurred'),
 });
+
+/**
+ * @summary Gets when to use a skill. `description` is absent for a skill created
+before descriptions existed.
+ */
+export const getSkillDescriptionParams = zod.object({
+  document_id: zod.string().describe('Skill document ID'),
+});
+
+export const getSkillDescriptionResponse = zod
+  .object({
+    description: zod
+      .string()
+      .nullish()
+      .describe(
+        'When to use the skill, in one line starting \"Use when\". Absent for a\nskill created before descriptions existed.'
+      ),
+  })
+  .describe("A skill's routing description.");
+
+/**
+ * @summary Sets when to use a skill: one line starting "Use when", at most 300
+characters. Agents choose skills for a request by it.
+ */
+export const setSkillDescriptionParams = zod.object({
+  document_id: zod.string().describe('Skill document ID'),
+});
+
+export const setSkillDescriptionBody = zod
+  .object({
+    description: zod
+      .string()
+      .describe(
+        'When to use the skill, in one line starting \"Use when\", at most 300\ncharacters.'
+      ),
+  })
+  .describe("Request body for setting a skill's routing description.");
+
+export const setSkillDescriptionResponse = zod
+  .object({
+    description: zod
+      .string()
+      .nullish()
+      .describe(
+        'When to use the skill, in one line starting \"Use when\". Absent for a\nskill created before descriptions existed.'
+      ),
+  })
+  .describe("A skill's routing description.");
 
 /**
  * @summary Gets the team-share state of a document. The team is resolved from the

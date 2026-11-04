@@ -174,6 +174,7 @@ export const TOKENS = {
     toggleReadingPane: 'email.toggleReadingPane',
     star: 'email.star',
     mute: 'email.mute',
+    createEvent: 'email.createEvent',
     compose: {
       edit: {
         recipients: 'email.compose.edit.recipients',

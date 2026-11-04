@@ -271,6 +271,8 @@ use utoipa::OpenApi;
         documents_hex::inbound::axum_router::system_skills::get_system_skills_handler,
         documents_hex::inbound::axum_router::team_share::get_team_share_handler,
         documents_hex::inbound::axum_router::team_share::set_team_share_handler,
+        documents_hex::inbound::axum_router::skill_description::get_skill_description_handler,
+        documents_hex::inbound::axum_router::skill_description::set_skill_description_handler,
 
         // instructions
         instructions::create_instructions::create_instructions_handler,
@@ -624,6 +626,8 @@ use utoipa::OpenApi;
             documents_hex::domain::models::CreateSkillResponse,
             documents_hex::domain::models::DocumentTeamShareResponse,
             documents_hex::domain::models::SetDocumentTeamShareRequest,
+            documents_hex::domain::models::SetSkillDescriptionRequest,
+            documents_hex::domain::models::SkillDescriptionBody,
             documents_hex::domain::models::PropertyInput,
             models_properties::api::requests::SetPropertyValue,
             models_properties::shared::EntityReference,

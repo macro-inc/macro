@@ -32,4 +32,5 @@ export default {
   goForward: 'Go forward',
   focusSplitRight: 'Focus split right',
   focusSplitLeft: 'Focus split left',
+  createEventFromEmail: 'Create event from email',
 };
