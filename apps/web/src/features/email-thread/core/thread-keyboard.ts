@@ -22,6 +22,12 @@ export interface EmailThreadKeyboardHandlers {
   isThreadMarkedUnread: () => boolean;
   markSenderSignal: () => boolean;
   markSenderNoise: () => boolean;
+  /** Copy the focused (or latest) message's sender address or name. The
+   *  `can` gates hide a command whose sender has no such value. */
+  canCopySenderEmail: () => boolean;
+  copySenderEmail: () => boolean;
+  canCopySenderName: () => boolean;
+  copySenderName: () => boolean;
   navigateToPreviousMessage: () => boolean;
   navigateToNextMessage: () => boolean;
   /** Expands the focused message, or collapses it if already expanded. */

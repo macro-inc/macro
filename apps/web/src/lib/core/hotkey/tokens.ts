@@ -169,6 +169,8 @@ export const TOKENS = {
     blockSender: 'email.blockSender',
     markSenderSignal: 'email.markSenderSignal',
     markSenderNoise: 'email.markSenderNoise',
+    copySenderEmail: 'email.copySenderEmail',
+    copySenderName: 'email.copySenderName',
     toggleReadingPane: 'email.toggleReadingPane',
     star: 'email.star',
     mute: 'email.mute',

@@ -42,6 +42,8 @@ export default {
   copyLinkCommand: 'Copy link',
   copyBranchNameCommand: 'Copy branch name',
   copyId: 'Copy ID',
+  copySenderEmailCommand: 'Copy sender email',
+  copySenderNameCommand: 'Copy sender name',
   share: 'Share',
   downloadDocx: 'Download',
   downloadEml: 'Download .eml',

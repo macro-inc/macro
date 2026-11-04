@@ -1,5 +1,7 @@
 import type { ReplyType } from '@app/features/email-compose/core/reply-type';
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
+import { copyableName, copyUserDetail } from '@core/component/userDetailCopy';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce } from '@solid-primitives/scheduled';
 import {
@@ -626,6 +628,20 @@ export function createThreadNavigation(
     return true;
   };
 
+  const hotkeySenderEmail = () => getHotkeyTarget()?.message.from?.email;
+  const hotkeySenderName = () => {
+    const from = getHotkeyTarget()?.message.from;
+    return from?.name ? copyableName(from.name, from.email) : undefined;
+  };
+  const copySenderDetail = (
+    value: string | undefined,
+    toastMessage: string
+  ) => {
+    if (!value) return false;
+    fireAndForget(copyUserDetail(value, toastMessage), 'email-thread');
+    return true;
+  };
+
   onMount(() =>
     host.registerKeyboard?.({
       replyToFocusedMessage: () => openHotkeyTarget('reply-all'),
@@ -642,6 +658,11 @@ export function createThreadNavigation(
       isThreadMarkedUnread: context.isThreadMarkedUnread,
       markSenderSignal: context.markSenderSignal,
       markSenderNoise: context.markSenderNoise,
+      canCopySenderEmail: () => !!hotkeySenderEmail(),
+      copySenderEmail: () =>
+        copySenderDetail(hotkeySenderEmail(), 'Email copied'),
+      canCopySenderName: () => !!hotkeySenderName(),
+      copySenderName: () => copySenderDetail(hotkeySenderName(), 'Name copied'),
       navigateToPreviousMessage,
       navigateToNextMessage,
       activate,

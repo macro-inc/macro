@@ -1,4 +1,5 @@
 import type { EmailThreadKeyboardHandlers } from '@app/features/email-thread/core/thread-keyboard';
+import { t } from '@app/lib/i18n';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 
@@ -95,6 +96,24 @@ export function registerEmailHotkeys(
     hotkeyToken: TOKENS.email.markSenderNoise,
     displayPriority: 5,
     condition: () => handlers.canActOnSender(),
+  });
+  registerHotkey({
+    hotkey: 'opt+c',
+    scopeId,
+    description: () => t('entityActions.copySenderEmailCommand'),
+    keyDownHandler: handlers.copySenderEmail,
+    hotkeyToken: TOKENS.email.copySenderEmail,
+    displayPriority: 5,
+    condition: handlers.canCopySenderEmail,
+  });
+  registerHotkey({
+    hotkey: 'opt+shift+c',
+    scopeId,
+    description: () => t('entityActions.copySenderNameCommand'),
+    keyDownHandler: handlers.copySenderName,
+    hotkeyToken: TOKENS.email.copySenderName,
+    displayPriority: 5,
+    condition: handlers.canCopySenderName,
   });
   registerHotkey({
     hotkey: ['arrowup', 'p'],

@@ -2,6 +2,7 @@ import { createCrmUserCardAction } from '@app/features/crm/crm-user-action';
 import { createBotSettingsUserCardAction } from '@app/features/settings/bot-settings-user-action';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
+import { copyableName, copyUserDetail } from '@core/component/userDetailCopy';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { useUserId } from '@core/context/user';
 import { useIsConnectedSecondaryInbox } from '@core/user';
@@ -41,21 +42,6 @@ export type UserCardAction = {
   copies?: boolean;
   onSelect: (event: MouseEvent) => void | Promise<void>;
 };
-
-function copyableName(
-  displayName: string,
-  email: string | undefined
-): string | undefined {
-  const name = displayName.trim();
-  if (!name) return undefined;
-  if (name.toLowerCase() === 'me') return undefined;
-  if (email && name.toLowerCase() === email.toLowerCase()) return undefined;
-  const localPart = email?.split('@')[0];
-  if (localPart && name.toLowerCase() === localPart.toLowerCase()) {
-    return undefined;
-  }
-  return name;
-}
 
 /**
  * The actions a user card offers, shared by every presentation of it: the
@@ -97,15 +83,9 @@ export function useUserCardActions(
     label,
     icon: CopyIcon,
     copies: true,
-    onSelect: async (event) => {
+    onSelect: (event) => {
       event.stopPropagation();
-      try {
-        await navigator.clipboard.writeText(value);
-      } catch (error) {
-        toast.failure('Failed to copy to clipboard');
-        throw error;
-      }
-      toast.success(toastMessage);
+      return copyUserDetail(value, toastMessage);
     },
   });
 

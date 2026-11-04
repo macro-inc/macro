@@ -198,6 +198,43 @@ it('o toggles the focused message open and closed, defaulting to the latest', ()
   }
 });
 
+it('copies the sender address and name of the focused message, defaulting to the latest', async () => {
+  const writeText = vi.fn(() => Promise.resolve());
+  vi.stubGlobal('navigator', { clipboard: { writeText } });
+  const state = navigationWithList(['first', 'last']);
+  state.setSnapshot(
+    thread([
+      message('first', {
+        from: { email: 'ada@example.com', name: 'Ada Lovelace' },
+      }),
+      message('last', { from: { email: 'grace@example.com' } }),
+    ])
+  );
+  const handlers = state.handlers();
+  try {
+    expect(handlers?.canCopySenderEmail()).toBe(true);
+    expect(handlers?.copySenderEmail()).toBe(true);
+    expect(writeText).toHaveBeenLastCalledWith('grace@example.com');
+    // The latest sender has no display name to copy.
+    expect(handlers?.canCopySenderName()).toBe(false);
+    expect(handlers?.copySenderName()).toBe(false);
+
+    state.context.messages.setFocused('first');
+    expect(handlers?.copySenderName()).toBe(true);
+    expect(writeText).toHaveBeenLastCalledWith('Ada Lovelace');
+    expect(handlers?.copySenderEmail()).toBe(true);
+    expect(writeText).toHaveBeenLastCalledWith('ada@example.com');
+    await Promise.resolve();
+
+    state.setSnapshot(thread([]));
+    expect(handlers?.canCopySenderEmail()).toBe(false);
+    expect(handlers?.copySenderEmail()).toBe(false);
+    expect(writeText).toHaveBeenCalledTimes(3);
+  } finally {
+    state.dispose();
+  }
+});
+
 it('shift+o opens every message, including the collapsed middle run', () => {
   const ids = ['a', 'b', 'c', 'd', 'e'];
   const state = navigationWithList(ids);
