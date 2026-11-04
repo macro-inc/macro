@@ -3116,3 +3116,7 @@ an empty circle, and subtype-only previews use their completion flag. See
 Sharing labels describe their audience: Only people with access, Anyone with the link, and Team members with the link. Permission choices say Can view, Can comment, and Can edit. Copying a restricted link still does not grant access. The existing immediately opening dialog and its deferred loading remain unchanged.
 
 Drive's existing New controls open a wide menu with icons and short descriptions for creation and uploads, while preserving the current destination and feature gates.
+
+Opening a row clears its unread state immediately; direct details mark read when
+ready. See [reading items](notifications.md#reading-items) for failure, keyboard,
+mobile, and email inbox checks.

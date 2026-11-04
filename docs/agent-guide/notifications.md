@@ -1,5 +1,33 @@
 # Notifications
 
+## Reading items
+
+Opening or previewing an item clears the unread dot immediately, before its
+read request completes. Home, Mail, Drive and Tasks share this behavior for
+Markdown/tasks, legacy AI chats, email, calendar events, agent sessions, CRM
+records and pull requests. Loaded call/project notifications use the same policy.
+Email clears both the mailbox unread state and reminder notifications, using the
+thread's owning inbox. A failed notification write restores its dot; failed REST
+mailbox writes refresh the affected thread. Direct document/chat/PR/email links
+mark read when their content mounts, without an extra timer.
+
+Check click/tap, Enter, keyboard preview following, next-item navigation and
+mark-done advance. With writes held pending, the dot should already be gone;
+fail the write and verify that the dot returns and reopening retries. Include
+email from a secondary inbox and a received thread with a draft reply. Mark an
+open email unread explicitly and leave it open: the mount marker must not keep
+marking it read. Local-only drafts must not issue a mailbox read.
+
+Channel/thread rows retain their scoped reads, and message readers still require
+actual visibility; opening another entity must not mark hidden replies seen.
+
+With GraphQL Soup enabled, modern project **Mark read** and **Mark done** actions
+target all of the project's notifications, including notifications absent from
+the loaded feed. The target is `INITIATIVE`; legacy Drive folders retain the
+separate `PROJECT` target.
+Check both actions with a partially loaded notification feed. This mapping does
+not add read-on-open behavior to project routes or folder navigation.
+
 ## Notifications
 
 Browser notifications must arrive while Macro is in a background tab, not just

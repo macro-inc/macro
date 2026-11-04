@@ -6,11 +6,13 @@ import {
 } from '@app/features/next-soup/actions';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { SoupEntityContextMenu } from '@app/features/soup';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { getTaskStatusOptionId, type TaskEntityWithProperties } from '@entity';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { usePropertyEntityDisplay } from '@property/hooks/usePropertyEntityDisplay';
 import { usePropertyUserDisplay } from '@property/hooks/usePropertyUserDisplay';
@@ -28,6 +30,7 @@ export function TasksGantt(props: { ref?: (element: HTMLDivElement) => void }) {
   const context = useTasksView();
   const { source, state, setState, openTask } = context;
   const panel = useSplitPanelOrThrow();
+  const notificationSource = useGlobalNotificationSource();
   const layout = useSplitLayout();
   const createTask = (options?: TaskCreateOptions) =>
     layout.popoverSplit({
@@ -57,6 +60,7 @@ export function TasksGantt(props: { ref?: (element: HTMLDivElement) => void }) {
     );
 
     if (opened) return;
+    markRowNotificationsSeenOnOpen(task, notificationSource);
 
     fireAndForget(
       openEntityInSplitFromUnifiedList(task, {

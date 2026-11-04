@@ -474,7 +474,7 @@ If you started without the flag and suspect a stale image, press `q`. Then start
 
 ## Headless Mode
 
-`just stack` runs the same stack without an attached terminal. There is no hotkey loop and no dev server. The frontend is built once and served statically by the proxy. The whole product lives behind one origin. A finished `up` leaves only Docker containers running.
+`just stack` runs the same stack without an attached terminal. There is no hotkey loop and no dev server. The frontend is built once and served statically by the proxy. The bundle counts as local, as `run_local`'s dev server does: flags, routes and tools gated on `LOCAL_ONLY` are on. The whole product lives behind one origin. A finished `up` leaves only Docker containers running.
 
 Both headless and attached startup prepare the browser WebAssembly packages
 through `bun run dev:prepare`. A fresh worktree builds them before serving the app;
