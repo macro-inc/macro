@@ -60,7 +60,11 @@ export function Login(props: { signupMode?: boolean }) {
 
 function PostAuthGate(props: { user: AuthUser }) {
   const needsOnboarding = () =>
-    !isMobile() && !isNativeMobilePlatform() && !props.user.tutorialComplete;
+    !isMobile() &&
+    !isNativeMobilePlatform() &&
+    !props.user.tutorialComplete &&
+    // Agents get an SDK token from the app shell instead.
+    !props.user.isAgent;
   return (
     <Show when={needsOnboarding()} fallback={<PostLoginRedirect />}>
       <Onboarding />
