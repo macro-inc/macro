@@ -1,6 +1,6 @@
 import type { FilterContext } from '@app/features/next-soup/filters/configs/base';
 import type { PredicateConfig } from '@app/features/next-soup/filters/filter-store/predicates-store';
-import type { EntityData } from '@entity';
+import type { CrmCompanyEntity, EntityData } from '@entity';
 import '../../../../index.css';
 import { SearchBar } from '@app/components/view-shell';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -15,13 +15,12 @@ import { render } from 'solid-js/web';
 import { createPredicatesStore } from '../../../next-soup/filters/filter-store/predicates-store';
 import { createQueryStore } from '../../../next-soup/filters/filter-store/query-store';
 import {
+  crmCompanyActiveFilter,
+  crmCompanyHiddenFilter,
   crmContactActiveFilter,
   crmContactHiddenFilter,
 } from '../../collection-filters';
-import {
-  PeopleDisplayMenu,
-  RemovedPeopleNotice,
-} from '../../components/people-display-menu';
+import { PeopleDisplayMenu } from '../../components/people-display-menu';
 import { RecordVisibilityAction } from '../../components/record-visibility-action';
 import {
   bindPeopleVisibility,
@@ -38,6 +37,7 @@ import {
   setHoldNextRead,
 } from './graphql-preview';
 import {
+  contacts,
   role,
   setFailNext,
   setFailRead,
@@ -76,17 +76,28 @@ function Detail(props: { id: string; close(): void }) {
               recordId={contact().id}
               name={contact().name ?? 'Contact'}
               kind="contact"
-              hidden={contact().hidden}
+              hidden={
+                contact().hidden ||
+                contacts.some(
+                  (item) => item.id === contact().id && item.parentHidden
+                )
+              }
+              parentArchived={contacts.some(
+                (item) => item.id === contact().id && item.parentHidden
+              )}
+              onOpenParent={() => {}}
               canManage={role() !== 'member'}
               pending={mutation.isPending}
-              onChange={(hidden, onSuccess) => {
+              onChange={(hidden, onSuccess, onError) => {
                 setError('');
                 mutation.mutate(
                   { contactId: contact().id, hidden },
                   {
                     onSuccess,
-                    onError: () =>
-                      setError('Could not update contact visibility'),
+                    onError: () => {
+                      onError();
+                      setError('Could not update contact visibility');
+                    },
                   }
                 );
               }}
@@ -106,6 +117,27 @@ function Detail(props: { id: string; close(): void }) {
 function Fixture() {
   const [activeTab, setActiveTab] = createSignal('people');
   const [selected, setSelected] = createSignal<string>();
+  const [companySearch, setCompanySearch] = createSignal('');
+  const companies: CrmCompanyEntity[] = [
+    {
+      type: 'crm_company',
+      id: 'company-visible',
+      name: 'Example visible company',
+      ownerId: 'team-1',
+      teamId: 'team-1',
+      hidden: false,
+      domains: [],
+    },
+    {
+      type: 'crm_company',
+      id: 'company-archived',
+      name: 'Example archived company',
+      ownerId: 'team-1',
+      teamId: 'team-1',
+      hidden: true,
+      domains: [],
+    },
+  ];
   const visibility = createPeopleVisibility({
     userId,
     teamId,
@@ -119,7 +151,14 @@ function Fixture() {
     EntityData,
     FilterContext,
     PredicateConfig<EntityData, string, FilterContext>
-  >({ configs: [crmContactActiveFilter, crmContactHiddenFilter] });
+  >({
+    configs: [
+      crmContactActiveFilter,
+      crmContactHiddenFilter,
+      crmCompanyActiveFilter,
+      crmCompanyHiddenFilter,
+    ],
+  });
   bindPeopleVisibility(visibility, {
     activeTab,
     queryFilters,
@@ -223,11 +262,36 @@ function Fixture() {
             Open removed directly
           </Button>
         </nav>
-        <Show when={activeTab() === 'people'} fallback={<h1>Companies</h1>}>
+        <Show
+          when={activeTab() === 'people'}
+          fallback={
+            <section aria-label="Company results" class="p-4">
+              <h1>Companies</h1>
+              <PeopleDisplayMenu visibility={visibility} />
+              <SearchBar
+                label="Search companies"
+                value={companySearch()}
+                onValueChange={setCompanySearch}
+              />
+              <For
+                each={companies.filter(
+                  (company) =>
+                    company.name
+                      .toLowerCase()
+                      .includes(companySearch().toLowerCase()) &&
+                    predicates.test(company, {})
+                )}
+              >
+                {(company) => <div>{company.name}</div>}
+              </For>
+              <output aria-label="Company filter">
+                {String(queryFilters.state.include.crmCompanyHidden)}
+              </output>
+            </section>
+          }
+        >
           <header class="flex items-center gap-2 px-4 py-3">
-            <h1 class="flex-1 text-lg font-semibold">
-              {visibility.showRemoved() ? 'Removed people' : 'People'}
-            </h1>
+            <h1 class="flex-1 text-lg font-semibold">{'People'}</h1>
             <PeopleDisplayMenu visibility={visibility} />
           </header>
           <div class="px-4 pb-3">
@@ -242,11 +306,6 @@ function Fixture() {
               }
             />
           </div>
-          <Show when={visibility.showRemoved()}>
-            <RemovedPeopleNotice
-              onShowActive={() => visibility.setShowRemoved(false)}
-            />
-          </Show>
           <Suspense fallback={<p>Loading contact</p>}>
             <Show when={selected()}>
               {(id) => (
@@ -287,7 +346,7 @@ function Fixture() {
               }
             >
               <p>
-                {visibility.showRemoved() ? 'No removed people' : 'No people'}
+                {visibility.showRemoved() ? 'No archived people' : 'No people'}
               </p>
             </Show>
             <Show when={source.hasNextPage()}>

@@ -6,15 +6,25 @@ import {
   ListLayoutProvider,
 } from '@entity';
 import { Avatar } from '@ui';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import {
+  createMemo,
+  createRenderEffect,
+  createSignal,
+  For,
+  on,
+  Show,
+} from 'solid-js';
 import {
   CrmListEmpty,
   CrmListSearchEmpty,
   CrmListSkeleton,
 } from '../components/list-state';
+import { ArchivedRecordBadge } from '../components/record-archived-status';
 import { RecordSection } from '../components/record-section';
+import { RecordVisibilityFilter } from '../components/record-visibility-filter';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmContact } from '../core/contact';
+import { useIsTeamAdmin } from './use-crm';
 
 function ContactRow(props: {
   contact: CrmContact;
@@ -53,11 +63,16 @@ function ContactRow(props: {
         </Avatar>
       }
       titleTrailing={
-        <Show when={props.contact.name && props.contact.email}>
-          <span class="min-w-0 truncate font-normal text-ink-extra-muted">
-            {props.contact.email}
-          </span>
-        </Show>
+        <>
+          <Show when={props.contact.hidden}>
+            <ArchivedRecordBadge />
+          </Show>
+          <Show when={props.contact.name && props.contact.email}>
+            <span class="min-w-0 truncate font-normal text-ink-extra-muted">
+              {props.contact.email}
+            </span>
+          </Show>
+        </>
       }
     />
   );
@@ -70,13 +85,29 @@ export function CompanyContactsSection(props: {
 }) {
   const context = useCrmContext();
   const { openWithSplit } = context.createNavigation();
+  const isAdmin = useIsTeamAdmin();
+  const [archivedCompany, setArchivedCompany] = createSignal<string>();
+  const archived = () =>
+    isAdmin() && !!props.company && archivedCompany() === props.company?.id;
+  createRenderEffect(
+    on(
+      [
+        context.userId,
+        isAdmin,
+        () => props.company?.teamId,
+        () => props.company?.id,
+      ],
+      () => setArchivedCompany(undefined),
+      { defer: true }
+    )
+  );
   const [search, setSearch] = createSignal('');
   const [listRef, setListRef] = createSignal<HTMLElement>();
   const filtered = createMemo(() => {
     const query = search().trim().toLowerCase();
     return (props.contacts ?? []).filter(
       (contact) =>
-        !contact.hidden &&
+        (contact.hidden || !!props.company?.hidden) === archived() &&
         (!query ||
           contact.name?.toLowerCase().includes(query) ||
           contact.email?.toLowerCase().includes(query))
@@ -90,6 +121,15 @@ export function CompanyContactsSection(props: {
   return (
     <RecordSection
       title="Team"
+      actions={
+        <RecordVisibilityFilter
+          archived={archived()}
+          onChange={(value) =>
+            setArchivedCompany(value ? props.company?.id : undefined)
+          }
+          disabled={!isAdmin()}
+        />
+      }
       search={search()}
       onSearchChange={setSearch}
       searchPlaceholder="Search contacts…"
@@ -97,7 +137,7 @@ export function CompanyContactsSection(props: {
       createAction={{
         label: 'Add contact',
         onClick: createContact,
-        disabled: !props.company,
+        disabled: !props.company || props.company.hidden,
       }}
       toolbarCreate
     >
@@ -112,10 +152,14 @@ export function CompanyContactsSection(props: {
               when={search().trim()}
               fallback={
                 <CrmListEmpty
-                  title="No contacts yet"
-                  description="Add a contact to this company to see them here."
+                  title={archived() ? 'No archived people' : 'No contacts yet'}
+                  description={
+                    archived()
+                      ? undefined
+                      : 'Add a contact to this company to see them here.'
+                  }
                   action={
-                    props.company
+                    props.company && !archived()
                       ? { label: 'Add contact', onClick: createContact }
                       : undefined
                   }

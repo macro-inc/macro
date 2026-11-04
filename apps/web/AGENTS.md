@@ -430,17 +430,16 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Record search fills the row beside filters with header spacing; section creation
   replaces the default floating dock action through FloatRegion. See
   `src/features/crm/README.md` and `docs/agent-guide/crm.md` at the repo root.
-  Keep record Remove/Restore actions out of the information panel: contact Sharing
-  is absent, and company Sharing contains only permission-gated Sync Emails.
-  Company Team lists exclude hidden contacts for every role; keep authorized
-  detail/restore access and invalidate embedded company contacts on hide/restore.
-  People display options expose removed records only after an explicit admin/owner
-  choice scoped to the current team; query hidden state on the server before
-  pagination, reset the choice on session/team/role/list changes, and refresh
-  mounted GraphQL contact readers after visibility mutations. Exercise discovery
-  with `bunx playwright test --config src/features/crm/browser-test/people/playwright.config.ts`.
-  The backend-free desktop/phone regression uses real CRM query adapters:
-  `bunx playwright test --config src/features/crm/browser-test/team/playwright.config.ts`.
+  Put Archive beside Copy link for visible CRM records; put the Archived chip and
+  separate borderless Restore action in the identity heading for archived records.
+  Keep explanations on the chip and retain company-only Email sharing controls.
+  Use the explicit Visible/Archived filter for People, Companies and company Team;
+  reset its admin-only choice on account/team/role/list changes and preserve search.
+  Apply confirmed visibility changes to detail, list and normalized search caches;
+  fence in-flight pre-write responses and refresh only affected CRM readers.
+  Preserve company cascade semantics and require company restoration before a person.
+  Run desktop/phone controls with `bunx playwright test --config src/features/crm/browser-test/archive/playwright.config.ts`;
+  `browser-test/people` and `browser-test/team` additionally cover synthetic query adapters.
 - Main Tasks mounts reusable GraphQL saved views; keep embedded Project/CRM task lists unchanged. Read `src/features/tasks-view/AGENTS.md` for filter, draft, navigation, and browser checks.
 - Enable persisted email/calendar review controls only for the review’s saved acting account; historical reviews fall back to the session owner. Require session edit access on desktop and mobile.
 - Email draft reads compare server generations before choosing cached delivery state over a restored working copy; only a definitive first-submission rejection permits local send recovery without server cancellation.
