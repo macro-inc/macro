@@ -372,6 +372,17 @@ mod tests {
     }
 
     #[test]
+    fn contact_mentions_link_crm_contact_records() {
+        for instructions in [
+            mentions::PROMPT.instructions.as_ref(),
+            document_content_links::PROMPT.instructions.as_ref(),
+        ] {
+            assert!(instructions.contains("\"blockName\":\"contact\""));
+            assert!(!instructions.contains("m-contact-mention"));
+        }
+    }
+
+    #[test]
     fn mcp_and_coding_agents_open_ready_pull_requests_with_ci_passing() {
         assert!(mcp_instructions("https://macro.com").contains(pull_requests::READY_PULL_REQUEST));
 
