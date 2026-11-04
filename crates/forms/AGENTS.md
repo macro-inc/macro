@@ -39,12 +39,31 @@ service.
 - Add a layout field: `src/domain/authoring/models.rs` → `src/domain/authoring/edit.rs`
   → `src/domain/authoring/validate.rs` → `src/outbound/collaborative_layout.rs`.
 - Add an AI authoring tool: `src/inbound/toolset.rs` → `src/domain/authoring/workflow.rs`.
+- Change section rules (gates, a questions section's `showWhen` branching):
+  `models_forms` → `src/domain/service/layout.rs` (`validate_layout`,
+  `gates_fit_table`) → `src/domain/service/answers.rs` (`evaluate`) →
+  `src/domain/authoring/validate.rs` → `src/outbound/pg_forms_repo/layout.rs`.
+  A skipped section's answers are ignored and count as unanswered.
 - Add a submission rule: `src/domain/service.rs` (`submit`/`answers` modules)
   → `src/outbound/pg_forms_repo.rs`.
 
 ## Checks
 
 - `cargo test -p forms --all-features` (`SQLX_OFFLINE` unset).
+
+## Gotchas
+
+- An anonymous form (`forms.anonymous`) keeps who responded in
+  `form_submission_receipts` (no response, row or time) and writes ledger
+  entries with no respondent, a random v4 id and the day only. Nothing may
+  join the two: no span, log, event or row author names a voter next to a
+  response.
+- A form is filed in a folder on its own (`forms.project_id`, `MoveEntity`,
+  owner only); its database stays where it is. The folder's inherited grants
+  on the form reach the database through form access, like any form grant.
+- `POST /forms` attributes the creation to the SDK token's `agent_id` (code
+  mode), like the native tool, so channel delivery shares a poll an agent
+  posts; access checks still run as the plain user.
 
 ## Related
 

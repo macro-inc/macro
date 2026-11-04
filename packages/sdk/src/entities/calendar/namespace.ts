@@ -19,9 +19,7 @@ import type {
 } from '../../../generated/storage/types.gen';
 import { paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
-import { Document } from '../documents/document';
 import type { Link } from '../email/link';
-import { Team } from '../teams/team';
 import { User } from '../users/user';
 import { Calendar } from './calendar';
 import { CalendarEvent } from './event';
@@ -107,25 +105,28 @@ export type CalendarEventRole = 'organizer' | 'guest';
  * of the user's calendars holds it. Refused with `already_on_calendar`, it is
  * refused on every calendar, so tell the user the meeting is already on their
  * calendar and never offer to add it to another one.
+ *
+ * @routing Use when working with calendar events, availability, scheduling a meeting with people, or booking links; not reminders or recurring automations, which are routines.
+ *
+ * @agent
+ * ## Booking links
+ *
+ * - Booking links use conversational confirmation in every surface. First use `ListBookingLinks`
+ *   to find existing links and reusable availability. Resolve team and host identities with tools;
+ *   never ask for IDs, revisions or JSON. Default to personal ownership unless a team is requested.
+ *   Explain the complete proposal in readable prose: ownership and named hosts, who attends,
+ *   meeting name and description, duration, location or Google Meet, time zone, weekly hours and
+ *   date exceptions, link name, buffers, minimum notice, booking window, slot interval, daily limit,
+ *   guest questions, and whether bookings are enabled. Group related settings so it is easy to
+ *   review. Ask whether to proceed, and end the turn. Only after the user's reply approving that
+ *   proposal, call `CreateBookingLink` or `EditBookingLink`, quoting the reply verbatim in
+ *   `userConfirmation`. Do not quote the original request or invent approval. These tools save
+ *   immediately, with no booking review form. Do not use `AskUser` or an elicitation for booking
+ *   details. For edits preserve unrequested settings, and re-read and reconfirm if the revision
+ *   conflicts. Share the saved URL with an `<m-booking-link-mention>` chip (see Mentions), not a
+ *   bare URL. If the same proposal is already approved, do not ask again.
  */
 export class CalendarNamespace {
-  /** Find up to 30 owned markdown documents for meeting notes, plus available extra team audiences. */
-  async noteDocuments(query = '') {
-    const picker = unwrap(
-      await this.client.calendar.noteDocuments({ query: { query } }),
-    );
-    return {
-      documents: picker.documents.map((note) => ({
-        document: Document.byId(this.client, note.documentId),
-        name: note.name,
-      })),
-      teams: picker.teams.map((team) => ({
-        team: Team.byId(this.client, team.id),
-        name: team.name,
-      })),
-    };
-  }
-
   /** Calendar availability settings, each referring to a typed calendar. */
   async availabilityCalendars() {
     return unwrap(

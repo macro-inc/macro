@@ -6,6 +6,8 @@ import {
   materializeCachedGraphqlCrmContacts,
   useQuickAccessCrmContactsQuery,
 } from '@app/features/crm/record-adapter';
+import { scheduleToEntity } from '@app/features/routines/queries/entities';
+import { useSchedulesQuery } from '@app/features/routines/queries/schedules';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { itemToSafeName } from '@core/constant/allBlocks';
 import {
@@ -379,6 +381,8 @@ const RECORD_TYPE_BY_BUCKET: Record<Bucket, string> = {
   database: 'Database',
   // Forms come from their REST list too.
   form: 'Form',
+  // Routines come from the scheduled-action list.
+  routine: 'Routine',
   initiative: 'GraphqlSoupInitiative',
 };
 
@@ -452,6 +456,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   const databasesFlag = useFeatureFlag(enableDatabases);
   const formsQuery = useFormsQuery();
   const formsFlag = useFeatureFlag(enableForms);
+  const schedulesQuery = useSchedulesQuery(() => true);
   const { query: initiativesQuery, initiatives: initiativesAccessor } =
     useQuickAccessInitiativesQuery();
 
@@ -651,6 +656,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     // updated_at for unviewed companies — same shape as channels.
     const crmCompanyData = crmCompaniesAccessor();
     for (const company of crmCompanyData) {
+      if (company.hidden) continue;
       const viewedAt =
         viewedAtMap.get(company.id) ?? company.viewedAt ?? undefined;
 
@@ -955,6 +961,39 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     return sortIndexEntries(entries);
   });
 
+  // Routines have no view history; their last change is the closest signal.
+  const routineEntries = createLazyMemo(() => {
+    const entries: IndexEntry[] = [];
+    const schedules = schedulesQuery.isSuccess ? schedulesQuery.data : [];
+    for (const schedule of schedules) {
+      const routine = scheduleToEntity(schedule);
+      if (!routine) continue;
+      const sortTimestamp =
+        toTimestamp(routine.updatedAt) || toTimestamp(routine.createdAt);
+      const version = JSON.stringify(routine);
+      const cached = itemCache.get(routine.id);
+      if (!cached || cached.version !== version) {
+        itemCache.set(routine.id, {
+          version,
+          item: {
+            kind: 'entity',
+            id: routine.id,
+            bucket: 'routine',
+            searchText: routine.name,
+            sortTimestamp,
+            timestamps: {
+              updatedAt: routine.updatedAt,
+              createdAt: routine.createdAt,
+            },
+            data: routine,
+          },
+        });
+      }
+      entries.push({ id: routine.id, bucket: 'routine', sortTimestamp });
+    }
+    return sortIndexEntries(entries);
+  });
+
   const initiativeEntries = createLazyMemo(() => {
     const viewedAtMap = soupViewedAtMap();
     const entries: IndexEntry[] = [];
@@ -987,6 +1026,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       agentSessionEntries(),
       databaseEntries(),
       formEntries(),
+      routineEntries(),
       initiativeEntries(),
     ]);
     const seenIds = new Set(allEntries.map((entry) => entry.id));
@@ -1399,6 +1439,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       fireAndForget(databasesQuery.refetch(), 'quick-access');
     if (formsFlag().enabled)
       fireAndForget(formsQuery.refetch(), 'quick-access');
+    fireAndForget(schedulesQuery.refetch(), 'quick-access');
     fireAndForget(initiativesQuery.refetch(), 'quick-access');
   };
 

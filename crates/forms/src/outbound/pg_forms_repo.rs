@@ -3,6 +3,7 @@
 //! access crate's helpers.
 
 mod drafts;
+mod folders;
 mod layout;
 mod ledger;
 mod sharing;
@@ -29,10 +30,13 @@ pub enum PgFormsRepoError {
     /// Underlying database failure.
     #[error("database error")]
     Sqlx(#[from] sqlx::Error),
-    /// A gate's rules could not be encoded as JSON for storage, or stored
-    /// ones decoded.
-    #[error("failed to encode or decode stored gate rules")]
+    /// A section's rules or booking target could not be encoded as JSON for
+    /// storage, or stored ones decoded.
+    #[error("failed to encode or decode a stored section's JSON")]
     Json(#[from] serde_json::Error),
+    /// A folder id is not a uuid.
+    #[error("folder id is not a uuid")]
+    FolderId(#[from] uuid::Error),
     /// Positions could not be minted for a layout.
     #[error("layout position")]
     Position(#[from] PositionError),
@@ -98,6 +102,9 @@ struct FormRow {
     trashed_at: Option<DateTime<Utc>>,
     name_follows_database: bool,
     is_hidden_in_drive: bool,
+    responses_visible: bool,
+    anonymous: bool,
+    project_id: Option<String>,
 }
 
 impl TryFrom<FormRow> for StoredForm {
@@ -136,7 +143,10 @@ impl TryFrom<FormRow> for StoredForm {
                 },
                 created_at: row.created_at,
                 updated_at: row.updated_at,
+                project_id: row.project_id,
                 is_hidden_in_drive: row.is_hidden_in_drive,
+                responses_visible: row.responses_visible,
+                anonymous: row.anonymous,
             },
             trashed_at: row.trashed_at,
             name_follows_database: row.name_follows_database,
@@ -183,11 +193,11 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                 id, name, description, owner_id, database_id, table_id,
                 submitted_column_id, respondent_column_id, audience, tally_visible,
                 status, closes_at, confirmation_message, logo_file_id, cover_file_id,
-                accent_color, created_at, updated_at, name_follows_database, is_hidden_in_drive
+                accent_color, created_at, updated_at, name_follows_database, is_hidden_in_drive, responses_visible, anonymous
             )
             VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-                $19, $20
+                $19, $20, $21, $22
             )
             ON CONFLICT (table_id) DO NOTHING
             "#,
@@ -211,6 +221,8 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
             form.updated_at,
             name_follows_database,
             form.is_hidden_in_drive,
+            form.responses_visible,
+            form.anonymous,
         )
         .execute(&mut *transaction)
         .await;
@@ -258,7 +270,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                    submitted_column_id, respondent_column_id, audience, tally_visible,
                    status, closes_at, confirmation_message, logo_file_id, cover_file_id, accent_color,
                    created_at, updated_at, trashed_at,
-                   name_follows_database, is_hidden_in_drive
+                   name_follows_database, is_hidden_in_drive, project_id, responses_visible, anonymous
             FROM forms WHERE id = $1
             "#,
             id.into_uuid(),
@@ -279,7 +291,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                        submitted_column_id, respondent_column_id, audience, tally_visible,
                        status, closes_at, confirmation_message, logo_file_id, cover_file_id, accent_color,
                    created_at, updated_at, trashed_at,
-                   name_follows_database, is_hidden_in_drive
+                   name_follows_database, is_hidden_in_drive, project_id, responses_visible, anonymous
                 FROM forms WHERE id = ANY($1) AND trashed_at IS NULL
                 ORDER BY id
                 "#,
@@ -313,7 +325,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                        submitted_column_id, respondent_column_id, audience, tally_visible,
                        status, closes_at, confirmation_message, logo_file_id, cover_file_id, accent_color,
                    created_at, updated_at, trashed_at,
-                   name_follows_database, is_hidden_in_drive
+                   name_follows_database, is_hidden_in_drive, project_id, responses_visible, anonymous
                 FROM forms WHERE database_id = $1 AND trashed_at IS NULL
                 ORDER BY created_at, id
                 "#,
@@ -385,6 +397,27 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                 return Ok(FormUpdate::WidgetInUse);
             }
         }
+        // The form's row lock also waits out a response being recorded, so
+        // no response lands between this check and the change.
+        if let Some(anonymous) = changes.anonymous {
+            let locked = sqlx::query_scalar!(
+                r#"
+                SELECT f.anonymous <> $2 AND EXISTS (
+                    SELECT 1 FROM form_responses
+                    WHERE form_id = f.id AND status = 'submitted'
+                ) AS "locked!"
+                FROM forms f WHERE f.id = $1
+                "#,
+                id.into_uuid(),
+                anonymous,
+            )
+            .fetch_one(&mut *transaction)
+            .await?;
+            if locked {
+                transaction.rollback().await?;
+                return Ok(FormUpdate::AnonymityLocked);
+            }
+        }
         let updated = sqlx::query_as!(
             FormRow,
             r#"
@@ -398,13 +431,15 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                 logo_file_id = CASE WHEN $10 THEN $11 ELSE logo_file_id END,
                 cover_file_id = CASE WHEN $12 THEN $13 ELSE cover_file_id END,
                 accent_color = CASE WHEN $14 THEN $15 ELSE accent_color END,
+                responses_visible = COALESCE($16, responses_visible),
+                anonymous = COALESCE($17, anonymous),
                 updated_at = $9
             WHERE id = $1
             RETURNING id, name, description, owner_id, database_id, table_id,
                       submitted_column_id, respondent_column_id, audience, tally_visible,
                       status, closes_at, confirmation_message, logo_file_id, cover_file_id, accent_color,
                    created_at, updated_at, trashed_at,
-                   name_follows_database, is_hidden_in_drive
+                   name_follows_database, is_hidden_in_drive, project_id, responses_visible, anonymous
             "#,
             id.into_uuid(),
             changes.description.as_deref(),
@@ -424,6 +459,8 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                 .accent_color
                 .as_ref()
                 .and_then(|color| color.as_ref().map(AccentColor::as_str)),
+            changes.responses_visible,
+            changes.anonymous,
         )
         .fetch_one(&mut *transaction)
         .await?;
@@ -448,7 +485,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                       submitted_column_id, respondent_column_id, audience, tally_visible,
                       status, closes_at, confirmation_message, logo_file_id, cover_file_id, accent_color,
                    created_at, updated_at, trashed_at,
-                   name_follows_database, is_hidden_in_drive
+                   name_follows_database, is_hidden_in_drive, project_id, responses_visible, anonymous
             "#,
             id.into_uuid(),
             name,
@@ -475,7 +512,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                       submitted_column_id, respondent_column_id, audience, tally_visible,
                       status, closes_at, confirmation_message, logo_file_id, cover_file_id, accent_color,
                    created_at, updated_at, trashed_at,
-                      name_follows_database, is_hidden_in_drive
+                      name_follows_database, is_hidden_in_drive, project_id, responses_visible, anonymous
             "#,
             id.into_uuid(),
             updated_at,
@@ -509,6 +546,11 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
         .await?
         .rows_affected()
             > 0)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn move_form(&self, id: FormId, project_id: Option<&str>) -> Result<bool, Self::Error> {
+        folders::move_form(&self.pool, id, project_id).await
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -556,6 +598,24 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
         ledger::record_submission(&self.pool, form, respondent, row, at).await
     }
 
+    async fn record_anonymous_submission(
+        &self,
+        form: FormId,
+        voter: Option<&MacroUserIdStr<'_>>,
+        row: RowId,
+        day: DateTime<Utc>,
+    ) -> Result<RecordedResponse, Self::Error> {
+        ledger::record_anonymous_submission(&self.pool, form, voter, row, day).await
+    }
+
+    async fn holds_receipt(
+        &self,
+        form: FormId,
+        voter: &MacroUserIdStr<'_>,
+    ) -> Result<bool, Self::Error> {
+        ledger::holds_receipt(&self.pool, form, voter).await
+    }
+
     async fn repoint_response(
         &self,
         response: FormResponseId,
@@ -575,5 +635,12 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
 
     async fn response_counts(&self, form: FormId) -> Result<ResponseCounts, Self::Error> {
         ledger::response_counts(&self.pool, form).await
+    }
+
+    async fn respondents_by_row(
+        &self,
+        form: FormId,
+    ) -> Result<Vec<(RowId, MacroUserIdStr<'static>)>, Self::Error> {
+        ledger::respondents_by_row(&self.pool, form).await
     }
 }

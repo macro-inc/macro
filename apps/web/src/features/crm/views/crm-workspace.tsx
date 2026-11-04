@@ -57,6 +57,7 @@ import { CrmCreateMenu } from '../components/crm-create-menu';
 import { CrmMobileTabs } from '../components/crm-mobile-tabs';
 import { CrmSidebar } from '../components/crm-sidebar';
 import { CrmListError, CrmListSkeleton } from '../components/list-state';
+import { PeopleDisplayMenu } from '../components/people-display-menu';
 import { PipelineDialog } from '../components/pipeline-dialog';
 import { PipelineSidebar } from '../components/pipeline-sidebar';
 import { useCrmContext } from '../context/crm-context';
@@ -752,13 +753,16 @@ export function CrmWorkspaceView(props: {
             <Show
               when={!isTouchDevice()}
               fallback={
-                <Show when={peopleActive()}>
-                  <ViewShell.Header class="touch:pt-0">
-                    <div class="flex min-w-0 items-center justify-between gap-3">
+                <ViewShell.Header class="touch:pt-0">
+                  <div class="flex min-w-0 items-center justify-between gap-3">
+                    <Show when={peopleActive()}>
                       <PeopleSearchBar
                         value={peopleSearch()}
                         onValueChange={searchPeople}
                       />
+                    </Show>
+                    <PeopleDisplayMenu visibility={view.peopleVisibility} />
+                    <Show when={peopleActive()}>
                       <Button
                         variant="secondary"
                         class="ml-auto shrink-0"
@@ -767,9 +771,9 @@ export function CrmWorkspaceView(props: {
                         <PlusIcon class="size-4" />
                         New contact
                       </Button>
-                    </div>
-                  </ViewShell.Header>
-                </Show>
+                    </Show>
+                  </div>
+                </ViewShell.Header>
               }
             >
               <ListHeader
@@ -805,6 +809,7 @@ export function CrmWorkspaceView(props: {
                     </Show>
                   </HeaderActionGroup>
                 </Show>
+                <PeopleDisplayMenu visibility={view.peopleVisibility} />
                 {toolbarCreateMenu()}
                 <CrmHeaderSearch
                   label={peopleActive() ? 'Search people' : 'Search companies'}

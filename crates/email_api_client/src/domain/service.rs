@@ -208,7 +208,7 @@ where
 fn log_operation_error(error: &EmailApiError) {
     match error {
         EmailApiError::RateLimited {
-            origin: RateLimitOrigin::Local,
+            origin: RateLimitOrigin::Local | RateLimitOrigin::Gate(_),
             ..
         } => tracing::debug!(error = %error),
         EmailApiError::RateLimited { origin, .. } => {

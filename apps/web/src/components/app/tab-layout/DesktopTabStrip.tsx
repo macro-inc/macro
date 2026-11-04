@@ -5,7 +5,7 @@ import PlusIcon from '@icon/system/regular/plus.svg';
 import SquareSplitIcon from '@icon/system/regular/square-split-horizontal.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, cn, Tooltip } from '@ui';
-import { For, Show } from 'solid-js';
+import { createEffect, For, on, Show } from 'solid-js';
 import type { DesktopTab, TabManager } from './tab-manager';
 
 function TabItem(props: { tabManager: TabManager; tab: DesktopTab }) {
@@ -13,13 +13,22 @@ function TabItem(props: { tabManager: TabManager; tab: DesktopTab }) {
   const active = () => props.tabManager.activeTabId() === props.tab.id;
   const paneCount = () => props.tabManager.tabPaneCount(props.tab);
   const closable = () => props.tabManager.tabs().length > 1;
+  let ref!: HTMLDivElement;
+
+  // Tabs scroll once they shrink to their minimum width; keep the active one visible.
+  createEffect(
+    on(active, (isActive) => {
+      if (isActive) ref.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    })
+  );
 
   return (
     <div
+      ref={ref}
       role="tab"
       aria-selected={active()}
       class={cn(
-        'group flex h-7 min-w-9 max-w-72 flex-initial basis-56 items-center gap-1 rounded-md pl-2 pr-1 text-xs select-none',
+        'group flex h-8 min-w-[76px] max-w-72 flex-initial basis-72 items-center gap-1.5 rounded-md p-1 pl-2.5 text-xs select-none',
         active()
           ? 'bg-active text-ink'
           : 'text-ink-muted not-touch:hover:bg-hover not-touch:hover:text-ink'
@@ -78,7 +87,7 @@ export function DesktopTabStrip() {
           <div
             role="tablist"
             aria-label={t('tabs.tablist')}
-            class="flex min-w-0 items-center gap-1 overflow-hidden"
+            class="scrollbar-hidden flex min-w-0 items-center gap-1 overflow-x-auto"
           >
             <For each={tabManager().tabs()}>
               {(tab) => <TabItem tabManager={tabManager()} tab={tab} />}

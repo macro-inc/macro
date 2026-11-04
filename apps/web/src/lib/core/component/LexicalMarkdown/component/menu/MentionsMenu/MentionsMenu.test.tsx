@@ -373,8 +373,7 @@ it('only paginates an open mobile menu and resumes on reopen', async () => {
       menu={menu}
       editor={editor}
       users={() => []}
-      sources={['users']}
-      includeContacts
+      sources={['crm']}
     />
   ));
   expect(mocks.loadMoreContacts).not.toHaveBeenCalled();
@@ -564,4 +563,32 @@ it("offers the viewer's routines to share by mention, only in channel composers"
     />
   ));
   expect(screen.queryByText('Routines')).toBeNull();
+});
+
+it('marks an offline agent and refuses to mention it', () => {
+  Element.prototype.scrollIntoView = vi.fn();
+  const offlineAgent: IUser = {
+    id: 'bot|agent-1',
+    name: 'Dev box agent',
+    email: 'Dev box agent',
+    offline: true,
+  };
+  const menu = createMenuOperations();
+  menu.openMenu();
+  const onPick = vi.fn();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      entities={() => []}
+      users={() => [offlineAgent]}
+      sources={['users']}
+      anchor={document.createElement('div')}
+      onPick={onPick}
+    />
+  ));
+
+  expect(screen.getByText('Offline')).toBeTruthy();
+  fireEvent.click(screen.getByTitle('Dev box agent — offline'));
+  expect(onPick).not.toHaveBeenCalled();
+  expect(menu.isOpen()).toBe(true);
 });

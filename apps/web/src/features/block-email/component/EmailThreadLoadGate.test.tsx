@@ -21,7 +21,7 @@ vi.mock('@queries/email/local-draft-source', () => ({
 }));
 beforeEach(() => localDrafts.mockReset().mockReturnValue([]));
 vi.mock('@notifications', () => ({
-  EmailDebouncedReadMarker: (props: { threadId: string; linkId?: string }) => {
+  EmailReadMarker: (props: { threadId: string; linkId?: string }) => {
     const id = props.threadId;
     onMount(() => markers.mounts.push(id));
     onCleanup(() => markers.releases.push(id));

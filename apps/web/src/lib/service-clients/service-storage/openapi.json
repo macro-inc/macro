@@ -3419,7 +3419,7 @@
       },
       "patch": {
         "tags": ["channel_labels"],
-        "summary": "Rename a label of the caller's authorized scope.",
+        "summary": "Update a label, optionally moving it to another authorized scope.",
         "operationId": "rename_channel_label",
         "parameters": [
           {
@@ -5643,10 +5643,176 @@
         }
       }
     },
+    "/crm/blocked-domains": {
+      "get": {
+        "tags": ["crm::inbound::axum_router::blocked_domains"],
+        "summary": "List the domains the caller's team keeps out of email sync,\nalphabetically. Any team member may read.",
+        "operationId": "list_crm_blocked_domains",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CrmBlockedDomainResponse"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/blocked-domains/{domain}": {
+      "put": {
+        "tags": ["crm::inbound::axum_router::blocked_domains"],
+        "summary": "Block a domain: email sync stops creating or updating CRM records for\nit, and the company and contacts the CRM holds for it are hidden.\nIdempotent. Requires an admin/owner team role (403).",
+        "operationId": "block_crm_domain",
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "path",
+            "description": "A bare domain like acme.com",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["crm::inbound::axum_router::blocked_domains"],
+        "summary": "Unblock a domain: email sync resumes for it, and what blocking hid is\nshown again. Idempotent. Requires an admin/owner team role (403).",
+        "operationId": "unblock_crm_domain",
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "path",
+            "description": "A bare domain like acme.com",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/companies": {
       "post": {
         "tags": ["crm::inbound::axum_router::create_company"],
-        "summary": "Manually create a CRM company for the caller's team. Any team member\nmay create one. The domain must not already be tracked by the team\n(409), and the team's CRM killswitch must be on (403). Returns the\ncreated company in the same shape as `GET /crm/companies/{id}` (its\ncontact list is empty until emails populate it).",
+        "summary": "Manually create a CRM company for the caller's team. Any team member\nmay create one. A domain, when given, must not already be tracked by the team\n(409), and the team's CRM killswitch must be on (403). Returns the\ncreated company in the same shape as `GET /crm/companies/{id}` (its\ncontact list is empty until emails populate it).",
         "operationId": "create_crm_company",
         "requestBody": {
           "content": {
@@ -6197,6 +6363,83 @@
             }
           },
           "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["crm::inbound::axum_router::create_team_contact"],
+        "summary": "Manually create a contact without a company for the caller's team.\nAny team member may create one. The team must not already have a\ncompany-less contact with the email (409), and the team's CRM\nkillswitch must be on (403).",
+        "operationId": "create_crm_team_contact",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCrmTeamContactRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmContactResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
             "description": "",
             "content": {
               "application/json": {
@@ -6809,6 +7052,70 @@
         }
       }
     },
+    "/crm/pipelines/{id}/stage-requirements": {
+      "get": {
+        "tags": ["crm::inbound::pipelines"],
+        "summary": "Read requirements by stable stage and field identities.",
+        "operationId": "get_crm_pipeline_stage_requirements",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/StageRequirement"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["crm::inbound::pipelines"],
+        "summary": "Replace the required fields for one stage. An empty list removes its rule.",
+        "operationId": "set_crm_pipeline_stage_requirement",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StageRequirement"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/crm/pipelines/{id}/table": {
       "get": {
         "tags": ["crm::inbound::pipelines"],
@@ -6872,6 +7179,48 @@
         }
       }
     },
+    "/crm/pipelines/{id}/views/{view}/positions": {
+      "get": {
+        "tags": ["crm::inbound::pipelines"],
+        "summary": "Read saved board positions through pipeline access.",
+        "operationId": "get_crm_pipeline_view_positions",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "view",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CardPosition"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/settings": {
       "get": {
         "tags": ["crm::inbound::axum_router::team_settings"],
@@ -6912,7 +7261,7 @@
       },
       "put": {
         "tags": ["crm::inbound::axum_router::team_settings"],
-        "summary": "Partially update the caller's team CRM configuration. Any team\nmember may update the views fields (`team_views`,\n`default_team_view_id`); the governance fields (permission\nthresholds, `closed_stage_ids`) require an admin/owner team role\n(403 otherwise). Omitted fields keep their current values;\n`team_views` is replaced whole. Returns the resulting settings.",
+        "summary": "Partially update the caller's team CRM configuration. Any team\nmember may update the views fields (`team_views`,\n`default_team_view_id`); the governance fields (permission\nthresholds, `closed_stage_ids`, `exclude_personal_emails`) require an admin/owner team role\n(403 otherwise). Omitted fields keep their current values;\n`team_views` is replaced whole. Returns the resulting settings.",
         "operationId": "put_crm_team_settings",
         "requestBody": {
           "content": {
@@ -7714,6 +8063,96 @@
           },
           "409": {
             "description": "The table kept moving under the undo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/{id}/duplicate": {
+      "post": {
+        "tags": ["databases"],
+        "summary": "Copy a database, with its tables, columns, views and rows, into a new one\nthe caller owns. Its sharing, forms, webhooks and history stay behind.",
+        "operationId": "duplicate_database",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DuplicateDatabaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Database"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -9367,7 +9806,7 @@
     "/documents/create_skill": {
       "post": {
         "tags": ["document"],
-        "summary": "Creates a skill document with initialized markdown content in one\nbackend-owned lifecycle. Skills are markdown documents containing\ninstructions that AI reads and follows when the skill is referenced in an\nAI input.",
+        "summary": "Creates a skill document with initialized markdown content and its\nrouting description in one backend-owned lifecycle. Skills are markdown documents containing\ninstructions that AI reads and follows when the skill is referenced in an\nAI input.",
         "operationId": "create_skill_handler",
         "requestBody": {
           "content": {
@@ -9399,7 +9838,7 @@
             }
           },
           "400": {
-            "description": "",
+            "description": "The description is blank, longer than one line or 300 characters, or does not start \"Use when\"",
             "content": {
               "application/json": {
                 "schema": {
@@ -10475,6 +10914,116 @@
         }
       }
     },
+    "/documents/{document_id}/ai-edit": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Edit a markdown document or task by instructions with the caller's edit\naccess. Runs EditDocument's pipeline as a live collaborator, with its AI\nadmission and billing.",
+        "description": "A client that disconnects aborts the edit: axum drops this handler's\nfuture, which drops the in-flight request to the editing worker, and the\nworker aborts on its request signal. Steps already acknowledged stay.",
+        "operationId": "edit_document_with_ai",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentAiEditRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentAiEdited"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a markdown document, or empty instructions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "402": {
+            "description": "AI allowance exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Document edit access denied"
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "422": {
+            "description": "The editor could not do the edit; nothing changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentAiEditRefused"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The edit could not start",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The edit failed and may have partly applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentAiEditFailed"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI usage validation unavailable; retry later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/{document_id}/branch_name": {
       "get": {
         "tags": ["document"],
@@ -11330,6 +11879,144 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/skill_description": {
+      "get": {
+        "tags": ["document"],
+        "summary": "Gets when to use a skill. `description` is absent for a skill created\nbefore descriptions existed.",
+        "operationId": "get_skill_description",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Skill document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillDescriptionBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["document"],
+        "summary": "Sets when to use a skill: one line starting \"Use when\", at most 300\ncharacters. Agents choose skills for a request by it.",
+        "operationId": "set_skill_description",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Skill document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSkillDescriptionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillDescriptionBody"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The document is not a skill, or the description is invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -20178,6 +20865,11 @@
         "description": "Last synchronized state of a session's linked GitHub pull request.",
         "enum": ["open", "draft", "closed", "merged"]
       },
+      "AgentSessionArchiveCause": {
+        "type": "string",
+        "description": "Who or what archived an agent session.",
+        "enum": ["user", "pull_request_merged", "runtime_closed"]
+      },
       "AgentSessionFilters": {
         "type": "object",
         "description": "Filters for agent sessions.",
@@ -20402,6 +21094,21 @@
         "type": "string",
         "description": "What a typing agent is doing.",
         "enum": ["thinking", "writing", "working", "waiting"]
+      },
+      "AiAdmissionErrorBody": {
+        "type": "object",
+        "description": "Public admission error payload. Handlers with additional fields can reuse the\ndomain error's code and message and [`admission_status`].",
+        "required": ["error", "code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable denial or unavailability code."
+          },
+          "error": {
+            "type": "string",
+            "description": "Human-readable explanation, without internal billing diagnostics."
+          }
+        }
       },
       "Anchor": {
         "oneOf": [
@@ -21554,8 +22261,12 @@
       "AwarenessRelay": {
         "type": "object",
         "description": "The [`AWARENESS_MESSAGE_TYPE`] payload: one viewer's awareness, stamped\nwhen the server relayed it so receivers can drop older relays.",
-        "required": ["databaseId", "userId", "state", "relayedAt"],
+        "required": ["databaseId", "userId", "canEdit", "state", "relayedAt"],
         "properties": {
+          "canEdit": {
+            "type": "boolean",
+            "description": "Whether the viewer's grant lets them edit; a viewer who cannot is\nshown as viewing."
+          },
           "databaseId": {
             "type": "string",
             "format": "uuid",
@@ -23710,7 +24421,7 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time",
-            "description": "When the label was last renamed or reordered."
+            "description": "When the label's name, rule, scope, or order last changed."
           }
         }
       },
@@ -25828,11 +26539,26 @@
       "CreateCrmContactRequest": {
         "type": "object",
         "description": "Request body for `POST /crm/companies/{company_id}/contacts`.",
-        "required": ["name", "email"],
+        "required": ["name"],
         "properties": {
           "email": {
+            "type": ["string", "null"],
+            "description": "The contact's email address, including personal email providers.\nIt need not match a company domain. Optional: omit it to add the\ncontact by name only."
+          },
+          "name": {
             "type": "string",
-            "description": "The contact's email address, including personal email providers.\nIt need not match a company domain."
+            "description": "Display name for the contact."
+          }
+        }
+      },
+      "CreateCrmTeamContactRequest": {
+        "type": "object",
+        "description": "Request body for `POST /crm/contacts`.",
+        "required": ["name"],
+        "properties": {
+          "email": {
+            "type": ["string", "null"],
+            "description": "The contact's email address, of any domain. Optional: omit it to\nadd the contact by name only."
           },
           "name": {
             "type": "string",
@@ -26268,8 +26994,12 @@
       "CreateSkillRequest": {
         "type": "object",
         "description": "Request body for creating a skill — a markdown document containing\ninstructions that AI reads and follows when the skill is referenced in an\nAI input.",
-        "required": ["skillName"],
+        "required": ["skillName", "description"],
         "properties": {
+          "description": {
+            "type": "string",
+            "description": "When to use the skill, in one line starting \"Use when\", e.g. \"Use when\ndrafting release notes; not changelog entries\". Agents choose skills\nfor a request by it."
+          },
           "markdown": {
             "type": ["string", "null"],
             "description": "Markdown source text. Defaults to an empty skill document."
@@ -26713,6 +27443,22 @@
         ],
         "description": "The CRM record an association filter names."
       },
+      "CrmBlockedDomainResponse": {
+        "type": "object",
+        "description": "A domain the team keeps out of email sync.",
+        "required": ["domain", "created_at"],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it was added."
+          },
+          "domain": {
+            "type": "string",
+            "description": "The blocked domain, lowercase."
+          }
+        }
+      },
       "CrmCompanyFilters": {
         "type": "object",
         "description": "The crm company filters used to narrow which CRM companies appear in soup.",
@@ -26801,8 +27547,6 @@
         "description": "A CRM contact as returned by `GET /crm/companies/{company_id}/contacts`.",
         "required": [
           "id",
-          "companyId",
-          "email",
           "hidden",
           "firstInteraction",
           "lastInteraction",
@@ -26811,9 +27555,9 @@
         ],
         "properties": {
           "companyId": {
-            "type": "string",
+            "type": ["string", "null"],
             "format": "uuid",
-            "description": "The id of the company the contact belongs to."
+            "description": "The id of the company the contact belongs to; absent for a\ncontact without a company."
           },
           "createdAt": {
             "type": "string",
@@ -26821,8 +27565,8 @@
             "description": "When the contact record was created."
           },
           "email": {
-            "type": "string",
-            "description": "The contact's email address."
+            "type": ["string", "null"],
+            "description": "The contact's email address; absent for contacts added by name\nalone."
           },
           "firstInteraction": {
             "type": "string",
@@ -26944,7 +27688,8 @@
           "move_closed_deals_role",
           "delete_records_role",
           "legacy_stage_ids",
-          "team_views"
+          "team_views",
+          "exclude_personal_emails"
         ],
         "properties": {
           "closed_stage_ids": {
@@ -26966,6 +27711,10 @@
           "edit_stages_role": {
             "$ref": "#/components/schemas/CrmPermissionRole",
             "description": "Who can change the deal stage set in CRM settings."
+          },
+          "exclude_personal_emails": {
+            "type": "boolean",
+            "description": "Whether email sync keeps personal-provider addresses (gmail.com\netc.) out of the CRM."
           },
           "legacy_stage_ids": {
             "type": "object",
@@ -27022,7 +27771,14 @@
       "Database": {
         "type": "object",
         "description": "A database: a named collection of tables, owned and shared as one entity.",
-        "required": ["id", "name", "owner_id", "created_at", "trashed_at"],
+        "required": [
+          "id",
+          "name",
+          "owner_id",
+          "created_at",
+          "trashed_at",
+          "project_id"
+        ],
         "properties": {
           "created_at": {
             "type": "string",
@@ -27041,6 +27797,10 @@
           "owner_id": {
             "type": "string",
             "description": "Owning user."
+          },
+          "project_id": {
+            "type": ["string", "null"],
+            "description": "The folder it is filed in; `null` at the root."
           },
           "trashed_at": {
             "type": ["string", "null"],
@@ -27486,6 +28246,77 @@
           "userId": {
             "type": "string",
             "description": "Recipient."
+          }
+        }
+      },
+      "DocumentAiEditFailed": {
+        "type": "object",
+        "description": "The edit failed after it started, so it may have partly applied. Read the\ndocument before retrying.",
+        "required": ["error", "message"],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/DocumentAiEditFailedCode",
+            "description": "Always `edit_failed`."
+          },
+          "message": {
+            "type": "string",
+            "description": "What to do next; the cause is logged, never returned."
+          }
+        }
+      },
+      "DocumentAiEditFailedCode": {
+        "type": "string",
+        "description": "Error code of an edit that failed after it started.",
+        "enum": ["edit_failed"]
+      },
+      "DocumentAiEditRefused": {
+        "type": "object",
+        "description": "The editor could not do the edit; nothing changed.",
+        "required": ["error", "reason"],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/DocumentAiEditRefusedCode",
+            "description": "Always `edit_refused`."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why, in the editor's words: what it needs to know or cannot do."
+          }
+        }
+      },
+      "DocumentAiEditRefusedCode": {
+        "type": "string",
+        "description": "Error code of an edit the editor refused.",
+        "enum": ["edit_refused"]
+      },
+      "DocumentAiEditRequest": {
+        "type": "object",
+        "description": "What to change, in words.",
+        "required": ["instructions"],
+        "properties": {
+          "fast": {
+            "type": "boolean",
+            "description": "Run the single-model fast pipeline, for one small, contained edit."
+          },
+          "instructions": {
+            "type": "string",
+            "description": "Natural-language instructions. Name the section or quote the text to\nchange, describe the outcome, and say what must stay as it is.",
+            "minLength": 1
+          }
+        }
+      },
+      "DocumentAiEdited": {
+        "type": "object",
+        "description": "A completed edit by instructions.",
+        "required": ["revision"],
+        "properties": {
+          "clarification": {
+            "type": ["string", "null"],
+            "description": "What the editor needs to know to finish, when it applied part of the\nedit and stopped; the applied part stays."
+          },
+          "revision": {
+            "type": "string",
+            "description": "The document's version after the edit, as sync-service encodes it."
           }
         }
       },
@@ -28612,6 +29443,16 @@
           "share_permission_updated": {
             "type": "boolean",
             "description": "Whether share permissions were updated."
+          }
+        }
+      },
+      "DuplicateDatabaseRequest": {
+        "type": "object",
+        "description": "Request body for duplicating a database.",
+        "properties": {
+          "name": {
+            "type": ["string", "null"],
+            "description": "The copy's name; left out, \"<name> copy\"."
           }
         }
       },
@@ -31731,15 +32572,22 @@
           "respondentColumnId",
           "audience",
           "tallyVisible",
+          "responsesVisible",
+          "anonymous",
           "status",
           "closesAt",
           "confirmationMessage",
           "branding",
           "createdAt",
           "updatedAt",
+          "projectId",
           "isHiddenInDrive"
         ],
         "properties": {
+          "anonymous": {
+            "type": "boolean",
+            "description": "Whether nobody, the owner included, can see who gave which response.\nWho responded is kept apart from the responses, only so nobody\nresponds twice. Fixed once anyone has responded."
+          },
           "audience": {
             "$ref": "#/components/schemas/Audience",
             "description": "Who may respond."
@@ -31788,10 +32636,18 @@
             "type": "string",
             "description": "Its owner."
           },
+          "projectId": {
+            "type": ["string", "null"],
+            "description": "The folder it is filed in; `null` at the root."
+          },
           "respondentColumnId": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "The person column each signed-in submission names its respondent in;\n`null` once deleted."
+            "description": "The person column each signed-in submission names its respondent in;\n`null` once deleted, and on a form created anonymous. An anonymous\nform never writes it."
+          },
+          "responsesVisible": {
+            "type": "boolean",
+            "description": "Whether people with View may read individual response rows."
           },
           "status": {
             "$ref": "#/components/schemas/FormStatus",
@@ -31820,7 +32676,7 @@
       },
       "FormAccess": {
         "type": "string",
-        "description": "The caller's level on a form: view responds, edit changes questions and\nreads responses, owner also sets the audience, closes and trashes it.",
+        "description": "The caller's level on a form: view responds (and reads responses when\nthey are shared), edit changes questions and reads responses, owner\nalso sets the audience, closes and trashes it.",
         "enum": ["view", "edit", "owner"]
       },
       "FormBranding": {
@@ -31905,6 +32761,7 @@
           "tableGone",
           "alreadyResponded",
           "noResponse",
+          "anonymousResponseFinal",
           "unknownQuestion",
           "repeatedAnswer",
           "missingAnswer",
@@ -32170,6 +33027,10 @@
                 },
                 "description": "Its questions, in order."
               },
+              "showWhen": {
+                "$ref": "#/components/schemas/FilterGroup",
+                "description": "When to show it: the rules answers of earlier shown sections must\npass, naming only their columns. A section whose rules fail is\nskipped: its questions are not required and their answers are\nnot written. Absent, it is always shown."
+              },
               "title": {
                 "type": "string",
                 "description": "Its title; may be empty."
@@ -32273,6 +33134,10 @@
                 },
                 "description": "Its questions, in order."
               },
+              "showWhen": {
+                "$ref": "#/components/schemas/FilterGroup",
+                "description": "When to show it, from earlier shown sections' answers; absent,\nit is always shown. Sent to every caller so a respondent's page\ncan skip it."
+              },
               "title": {
                 "type": "string",
                 "description": "Its title."
@@ -32356,6 +33221,10 @@
             "description": "A new database named like the form, whose one table, \"Responses\",\nstarts with only the form's own columns.",
             "required": ["kind"],
             "properties": {
+              "anonymous": {
+                "type": "boolean",
+                "description": "Make the form anonymous from the start: its table gets no\nRespondent column."
+              },
               "isHiddenInDrive": {
                 "type": "boolean",
                 "description": "Keep the form, and the database made for it, out of Drive, as\nfor a channel poll."
@@ -34843,6 +35712,37 @@
           },
           {
             "type": "object",
+            "description": "A section's show-when rules test a column no earlier section asks.",
+            "required": ["column", "kind"],
+            "properties": {
+              "column": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The column."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["conditionNamesLaterColumn"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A section's show-when rule does not fit its column.",
+            "required": ["reason", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["conditionRule"]
+              },
+              "reason": {
+                "type": "string",
+                "description": "Why."
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "A text is longer than allowed.",
             "required": ["max", "kind"],
             "properties": {
@@ -36289,26 +37189,46 @@
         "description": "Lifecycle events for the common message service, one per committed fact.\nReactions and typing never reach the topic."
       },
       "MyResponse": {
-        "type": "object",
-        "description": "A signed-in respondent's own response, with its answers as the row\nholds them now.",
-        "required": ["response", "answers"],
-        "properties": {
-          "answers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Answer"
-            },
-            "description": "The row's cells for the form's current questions, the empty ones\nleft out; none when the row is gone."
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Their ledger entry, with its answers as the row holds them now.",
+            "required": ["response", "answers", "kind"],
+            "properties": {
+              "answers": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Answer"
+                },
+                "description": "The row's cells for the form's current questions, the empty ones\nleft out; none when the row is gone."
+              },
+              "booking": {
+                "$ref": "#/components/schemas/UnlockedBooking",
+                "description": "The form's booking step, while the saved row still passes the\nform's current required questions and gates."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["saved"]
+              },
+              "response": {
+                "$ref": "#/components/schemas/FormResponse",
+                "description": "The ledger entry."
+              }
+            }
           },
-          "booking": {
-            "$ref": "#/components/schemas/UnlockedBooking",
-            "description": "The form's booking step, while the saved row still passes the form's\ncurrent required questions and gates."
-          },
-          "response": {
-            "$ref": "#/components/schemas/FormResponse",
-            "description": "The ledger entry."
+          {
+            "type": "object",
+            "description": "They responded to an anonymous form. Nothing links them to their\nresponse, so there is nothing more to show.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["anonymous"]
+              }
+            }
           }
-        }
+        ],
+        "description": "A signed-in respondent's own response."
       },
       "NewAttachment": {
         "type": "object",
@@ -38609,7 +39529,7 @@
       },
       "RenameChannelLabelRequest": {
         "type": "object",
-        "description": "Request body for renaming a label.",
+        "description": "Request body for updating a label's name, smart rule, or sharing scope.",
         "required": ["name"],
         "properties": {
           "name": {
@@ -38624,6 +39544,17 @@
               {
                 "$ref": "#/components/schemas/ChannelLabelRule",
                 "description": "Automatic name-matching rule; omitted for manual labels or a name-only rename."
+              }
+            ]
+          },
+          "targetScope": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChannelLabelScopeSelection",
+                "description": "Destination namespace; omitted to preserve the current scope."
               }
             ]
           }
@@ -39965,6 +40896,17 @@
         ],
         "description": "Type-safe enum for setting entity property values - provides compile-time validation."
       },
+      "SetSkillDescriptionRequest": {
+        "type": "object",
+        "description": "Request body for setting a skill's routing description.",
+        "required": ["description"],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "When to use the skill, in one line starting \"Use when\", at most 300\ncharacters."
+          }
+        }
+      },
       "Sha256Digest": {
         "type": "string",
         "description": "SHA-256 encoded as exactly 64 lowercase hexadecimal characters."
@@ -40117,6 +41059,16 @@
           }
         }
       },
+      "SkillDescriptionBody": {
+        "type": "object",
+        "description": "A skill's routing description.",
+        "properties": {
+          "description": {
+            "type": ["string", "null"],
+            "description": "When to use the skill, in one line starting \"Use when\". Absent for a\nskill created before descriptions existed."
+          }
+        }
+      },
       "SkippedCell": {
         "type": "object",
         "description": "A cell an undo left alone, because someone changed it after the change\nbeing undone.",
@@ -40235,7 +41187,6 @@
             "required": [
               "id",
               "name",
-              "isArchived",
               "ownerId",
               "botId",
               "harness",
@@ -40244,6 +41195,22 @@
               "updatedAt"
             ],
             "properties": {
+              "archivedAt": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When the session was archived, or `None` while it is active."
+              },
+              "archivedBy": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AgentSessionArchiveCause",
+                    "description": "Who or what archived the session, or `None` while it is active. An archived session is\nread-only."
+                  }
+                ]
+              },
               "botId": {
                 "type": "string",
                 "format": "uuid",
@@ -40262,10 +41229,6 @@
                 "type": "string",
                 "format": "uuid",
                 "description": "The agent session uuid"
-              },
-              "isArchived": {
-                "type": "boolean",
-                "description": "Whether the session is archived and read-only."
               },
               "name": {
                 "type": "string",
@@ -41079,9 +42042,6 @@
             "required": [
               "id",
               "teamId",
-              "companyId",
-              "companyName",
-              "email",
               "hidden",
               "firstInteraction",
               "lastInteraction",
@@ -41090,13 +42050,13 @@
             ],
             "properties": {
               "companyId": {
-                "type": "string",
+                "type": ["string", "null"],
                 "format": "uuid",
-                "description": "Parent company ID."
+                "description": "Parent company ID; `None` for a contact without a company."
               },
               "companyName": {
-                "type": "string",
-                "description": "Parent company's display name."
+                "type": ["string", "null"],
+                "description": "Parent company's display name; `None` without a company."
               },
               "createdAt": {
                 "type": "string",
@@ -41104,8 +42064,8 @@
                 "description": "Record creation time."
               },
               "email": {
-                "type": "string",
-                "description": "Full email address."
+                "type": ["string", "null"],
+                "description": "Full email address; `None` for a contact added by name alone."
               },
               "firstInteraction": {
                 "type": "string",
@@ -42680,6 +43640,32 @@
         ],
         "description": "The statement that ran: a read, or the table (and for a type change, the\ncolumn) it wrote."
       },
+      "StageRequirement": {
+        "type": "object",
+        "description": "Fields required when a deal enters a particular option of a stage column.",
+        "required": ["stageColumnId", "stageId", "requiredColumnIds"],
+        "properties": {
+          "requiredColumnIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Fields that must be present. Empty removes the rule for this stage."
+          },
+          "stageColumnId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Single-select column identifying the stage, independent of its name."
+          },
+          "stageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable option identity; renaming the stage preserves the rule."
+          }
+        },
+        "additionalProperties": false
+      },
       "StarterDatabase": {
         "type": "object",
         "description": "Starter result. A missing database means the user already started or removed it.",
@@ -43448,6 +44434,13 @@
           "value": {
             "$ref": "#/components/schemas/TallyValue",
             "description": "The value."
+          },
+          "voters": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Who chose it, as Macro user ids in submission order: present only\nfor the form's editors, or its viewers when it shares its responses,\nand never when it hides respondents. Rows no signed-in respondent\nsubmitted count without a voter."
           }
         }
       },
@@ -44587,6 +45580,10 @@
               }
             ]
           },
+          "exclude_personal_emails": {
+            "type": ["boolean", "null"],
+            "description": "Whether email sync keeps personal-provider addresses out of the\nCRM. Admin/owner only."
+          },
           "move_closed_deals_role": {
             "oneOf": [
               {
@@ -44611,6 +45608,10 @@
             "type": ["string", "null"],
             "description": "A new accent color, or `null` for the default.",
             "pattern": "^#[0-9a-fA-F]{6}$"
+          },
+          "anonymous": {
+            "type": "boolean",
+            "description": "Whether nobody can see who gave which response; refused once anyone\nhas responded."
           },
           "audience": {
             "$ref": "#/components/schemas/Audience",
@@ -44638,6 +45639,10 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "A new logo, or `null` to remove it."
+          },
+          "responsesVisible": {
+            "type": "boolean",
+            "description": "Whether people with View may read individual response rows."
           },
           "status": {
             "$ref": "#/components/schemas/FormStatus",

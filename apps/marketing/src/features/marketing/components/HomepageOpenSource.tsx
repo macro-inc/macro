@@ -113,6 +113,8 @@ function DesktopHomepageOpenSource(props: {
         class="homepage-embedded-demo workspace-demo"
         aria-label="Explore Macro interactively"
         id="interactive-demo"
+        // animateDemoEntrance clears this; prerendered markup starts hidden too.
+        data-entrance-waiting
       >
         <div class="homepage-embedded-stage">
           <div class="homepage-embedded-wallpaper">

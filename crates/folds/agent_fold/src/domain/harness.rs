@@ -420,6 +420,8 @@ pub enum ToolShape<'name> {
     Macro(&'name str),
     /// A Macro user tool, by name: the agent drafts it, the user finishes it.
     UserTool(&'name str),
+    /// A Macro tool whose result is a view shown to the person.
+    View,
     /// Work delegated to another agent - the harness's own delegation tool
     /// (Claude Code's `Agent`, Cursor's `task`) or Macro's `Subagent`. Which
     /// of the two it is stays out of the fold's way: [`subagent_result`]
@@ -442,6 +444,7 @@ pub fn tool_shape<'name>(
     match reader.macro_tool(name).map(MacroTool::of) {
         Some(MacroTool::User(tool)) => ToolShape::UserTool(tool),
         Some(MacroTool::Subagent) => ToolShape::Subagent,
+        Some(MacroTool::View) => ToolShape::View,
         Some(MacroTool::Other(tool)) => ToolShape::Macro(tool),
         None if reader.is_subagent(name, frame) => ToolShape::Subagent,
         None => ToolShape::Harness,

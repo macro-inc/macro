@@ -68,6 +68,7 @@ fn acting(user: &str, origin: CredentialOrigin) -> MacroUserAuthentication {
     MacroUserAuthentication {
         origin,
         agent_id: None,
+        agent_via: None,
         macro_user_id: user.to_owned().try_into().unwrap(),
         user_context: context(user),
     }
@@ -101,6 +102,7 @@ impl MacroAuthorizationService for Credentials {
         Ok(ValidatedCredential {
             identity: ValidatedIdentity {
                 agent_id: None,
+                agent_via: None,
                 user_id: user.to_owned(),
                 fusion_user_id: "fusion-user-id".to_owned(),
                 organization_id: None,

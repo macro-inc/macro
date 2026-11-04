@@ -7,7 +7,7 @@ export function AgentSessionMentionLabel(props: { label: string }) {
       <span class="relative top-[0.125em] size-[1em] inline-flex mx-1">
         <AgentIcon class="size-full text-chat" />
       </span>
-      <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
+      <span class="text-ink underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
         {props.label}
       </span>
     </span>

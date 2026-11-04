@@ -15,8 +15,10 @@ message, PR title, or PR description. That includes emails, phone numbers,
 physical addresses, API keys, and tokens. Refer to people as "the customer"
 or a placeholder (`customer@example.com`).
 
-The pre-commit hook scans staged added lines; during merges it scans additions
-relative to every parent, not unchanged imported content. Do not skip it (`--no-verify`).
+The pre-commit hook scans staged added lines; during merges its PII scan checks
+additions relative to every parent. Gitleaks excludes only staged files identical
+to the same path in an incoming parent; modified files remain scanned. Do not
+skip the hook (`--no-verify`).
 Do not add lines to `tooling/pii/exceptions` unless a human asks you to.
 
 Before opening or updating a PR, reread the title and body and strip any PII

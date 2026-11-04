@@ -25,7 +25,7 @@ export function sessionsOf(
       id: item.sessionId,
       name: item.sessionName,
       ownerId,
-      isArchived: false,
+      archivedBy: null,
       harness: item.harness,
       botId: '',
       turnState: item.kind === 'stalled' ? 'running' : 'blocked',

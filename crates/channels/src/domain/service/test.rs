@@ -14,12 +14,14 @@ use crate::domain::{
     },
 };
 use chrono::Utc;
-use entity_access::domain::models::ParticipantRole as AccessRole;
+use entity_access::domain::models::{ParticipantRole as AccessRole, TeamRole};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use std::{
     collections::HashSet,
     sync::{Arc, Mutex},
 };
+
+mod deletion;
 
 fn empty_repo() -> MockChannelRepo {
     let mut repo = MockChannelRepo::new();
@@ -43,6 +45,8 @@ struct FakeMutationRepoState {
     channel_type: ChannelType,
     channel_team_id: Option<Uuid>,
     direct_agent: bool,
+    team_roles: HashMap<(String, Uuid), TeamRole>,
+    deleted_channels: Vec<Uuid>,
     user_team_id: Option<Uuid>,
     user_team_id_lookups: usize,
     join_code: Option<Uuid>,
@@ -68,6 +72,8 @@ impl FakeMutationRepo {
                 channel_type: ChannelType::Private,
                 channel_team_id: None,
                 direct_agent: false,
+                team_roles: HashMap::new(),
+                deleted_channels: vec![],
                 user_team_id: None,
                 user_team_id_lookups: 0,
                 join_code: None,
@@ -319,7 +325,22 @@ impl ChannelRepo for FakeMutationRepo {
         Ok(())
     }
 
-    async fn delete_channel(&self, _channel_id: Uuid, _user_id: String) -> Result<(), Self::Err> {
+    async fn user_is_team_admin(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+    ) -> Result<bool, Self::Err> {
+        Ok(self
+            .state
+            .lock()
+            .unwrap()
+            .team_roles
+            .get(&(user_id.to_string(), team_id))
+            .is_some_and(|role| *role >= TeamRole::Admin))
+    }
+
+    async fn delete_channel(&self, channel_id: Uuid) -> Result<(), Self::Err> {
+        self.state.lock().unwrap().deleted_channels.push(channel_id);
         Ok(())
     }
 

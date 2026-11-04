@@ -1,3 +1,7 @@
+import {
+  captureTraceParentExchange,
+  traceParentExchange,
+} from '@app/lib/urql-solid/trace-parent-exchange';
 import { toast } from '@core/component/Toast/Toast';
 import {
   ENABLE_BEARER_TOKEN_AUTH,
@@ -82,6 +86,7 @@ import { batch, createSignal, untrack } from 'solid-js';
 import { match } from 'ts-pattern';
 import { delegateChannelNotificationRefresh } from '../../queries/channel/notification-refresh';
 import { soupOptimisticResolvers } from '../../queries/optimistic-resolvers';
+import { resolveCrmExternalWriteTypes } from '../../queries/soup/graphql/external-write-scope';
 import { createCacheRecovery } from './cache-recovery';
 import { emailCacheDeletionKeys } from './email-cache-deletions';
 import { emailThreadSortTs } from './email-thread-sort';
@@ -111,6 +116,7 @@ import { shouldRetryGraphqlMutation } from './graphql-mutation-retry';
 import { notificationReceiptExchange } from './graphql-notification-receipt';
 import {
   createGraphqlSoupSubscriptionsLifecycle,
+  createGraphqlSoupWebSocketLiveness,
   createGraphqlSoupWebSocketUrlResolver,
   publishNotificationPatch,
   SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS,
@@ -137,6 +143,7 @@ async function authorizedDssGraphqlFetch(
   input: RequestInfo | URL,
   init?: RequestInit
 ): Promise<Response> {
+  const parent = Telemetry.captureContext();
   if (ENABLE_BEARER_TOKEN_AUTH) {
     const apiToken = await getMacroApiToken();
     return await platformFetch(input, {
@@ -153,7 +160,7 @@ async function authorizedDssGraphqlFetch(
   let response = await fetchWithCredentials();
   if (response.status !== 401) return response;
 
-  const tokenResult = await fetchToken();
+  const tokenResult = await parent.run(fetchToken);
   if (tokenResult.isErr()) return response;
 
   response = await fetchWithCredentials();
@@ -345,7 +352,9 @@ export async function dssGraphqlFetch(
         }),
       };
       span.event('request_dispatch');
-      const response = await authorizedDssGraphqlFetch(input, transportInit);
+      const response = await span.run(() =>
+        authorizedDssGraphqlFetch(input, transportInit)
+      );
       span.setAttr('graphql.response_headers_ms', performance.now() - started);
       span.setAttr('http.response.status_code', response.status);
       span.event('response_headers');
@@ -374,7 +383,7 @@ export async function dssGraphqlFetch(
       // metadata field and suppress v2 local authority for this session. Backfill
       // still refuses to checkpoint missing required Document supplements.
       soupProjectionServerSupported = false;
-      return await authorizedDssGraphqlFetch(input, legacyInit);
+      return await span.run(() => authorizedDssGraphqlFetch(input, legacyInit));
     } catch (error) {
       // Transport errors may contain query URLs; record a category only.
       span.setAttr('graphql.transport_failed', true);
@@ -385,7 +394,12 @@ export async function dssGraphqlFetch(
 
 const graphqlSoupClient = createClient({
   url: `${dssHost}/items/soup/graphql`,
-  exchanges: [networkRevalidationExchange(), fetchExchange],
+  exchanges: [
+    captureTraceParentExchange,
+    networkRevalidationExchange(),
+    traceParentExchange,
+    fetchExchange,
+  ],
   fetch: dssGraphqlFetch,
   // urql's default ("within-url-limit") sends small documents as GET, but
   // GET on the DSS GraphQL path serves the GraphiQL IDE — only POST
@@ -422,7 +436,8 @@ function createGraphqlSoupWebSocketClient(
     getApiToken: getMacroApiToken,
     refreshCookieAuth: fetchToken,
   });
-  return createGraphqlWsClient({
+  const liveness = createGraphqlSoupWebSocketLiveness(() => client.terminate());
+  const client = createGraphqlWsClient({
     url: resolveWebSocketUrl,
     connectionParams: () =>
       Telemetry.span('graphql.websocket.connection_params', async (span) => {
@@ -441,8 +456,13 @@ function createGraphqlSoupWebSocketClient(
     retryWait: waitToRetryGraphqlSoupWebSocket,
     on: {
       connecting: () => onState('connecting'),
-      closed: () => onState('disconnected'),
-      connected: () => {
+      closed: () => {
+        liveness.closed();
+        onState('disconnected');
+      },
+      pong: liveness.pong,
+      connected: (socket) => {
+        liveness.connected(socket);
         onState('connected');
         onConnected();
         connections += 1;
@@ -452,6 +472,7 @@ function createGraphqlSoupWebSocketClient(
     },
     shouldRetry: shouldRetryGraphqlSoupWebSocket,
   });
+  return client;
 }
 
 function graphqlSoupSubscriptionExchange(websocketClient: GraphqlWsClient) {
@@ -495,9 +516,11 @@ function getUncachedRealtimeClient(): Client {
     url: `${dssHost}/items/soup/graphql`,
     preferGetMethod: false,
     exchanges: [
+      captureTraceParentExchange,
       networkRevalidationExchange(),
       notificationReceiptExchange(publishNotificationPatch),
       graphqlSoupSubscriptionExchange(websocketClient),
+      traceParentExchange,
       fetchExchange,
     ],
     fetch: dssGraphqlFetch,
@@ -808,6 +831,7 @@ export function getGraphqlSoupClient(): Client {
         // See graphqlSoupClient: GET serves GraphiQL on this path.
         preferGetMethod: false,
         exchanges: [
+          captureTraceParentExchange,
           optimisticResolversExchange(soupOptimisticResolvers),
           networkRevalidationExchange(() => host?.disabled === true),
           normalizedCacheExchange(host, {
@@ -825,6 +849,9 @@ export function getGraphqlSoupClient(): Client {
                   'input',
                   'threadId',
                 ]),
+                initiative: entityFromArgument('GraphqlSoupInitiative', [
+                  'initiativeId',
+                ]),
               },
             },
             // Session identity witness: the viewer id present on every soup
@@ -837,9 +864,11 @@ export function getGraphqlSoupClient(): Client {
             shouldRetryMutation: shouldRetryGraphqlMutation,
             mutationQueueTelemetry,
             delegateRevalidation: delegateChannelNotificationRefresh,
+            externalWriteTypes: resolveCrmExternalWriteTypes,
           }),
           notificationReceiptExchange(publishNotificationPatch),
           graphqlSoupSubscriptionExchange(graphqlWsClient),
+          traceParentExchange,
           fetchExchange,
         ],
         fetch: (input, init) => dssGraphqlFetch(input, init, host),
@@ -1395,6 +1424,20 @@ function mapGraphqlNotificationMetadata(
         }) satisfies NotifEventMember<'inbox_reauth_required'>
     )
     .with(
+      { __typename: 'GraphqlRoutineRunFinishedMetadata' },
+      (metadata) =>
+        ({
+          tag: 'routine_run_finished',
+          content: {
+            routineId: metadata.routineRunFinishedRoutineId,
+            routineName: metadata.routineRunFinishedRoutineName,
+            outcome: metadata.routineRunFinishedSucceeded
+              ? 'succeeded'
+              : 'failed',
+          },
+        }) satisfies NotifEventMember<'routine_run_finished'>
+    )
+    .with(
       { __typename: 'GraphqlInviteToTeamMetadata' },
       (metadata) =>
         ({
@@ -1749,7 +1792,14 @@ export function mapGraphqlAgentSessionRow(
   return {
     id: entity.id,
     name: entity.sessionName,
-    isArchived: entity.isArchived,
+    archivedBy: match(entity.archivedBy)
+      .with('USER', () => 'user' as const)
+      .with('PULL_REQUEST_MERGED', () => 'pull_request_merged' as const)
+      .with('RUNTIME_CLOSED', () => 'runtime_closed' as const)
+      .with(null, () => null)
+      // A cause this build does not know still archived the session.
+      .exhaustive(() => 'user' as const),
+    archivedAt: entity.archivedAt,
     ownerId: entity.ownerId,
     botId: entity.botId,
     harness: entity.harness,
@@ -2077,9 +2127,9 @@ export function mapGraphqlSoupItem(
           data: {
             id: entity.id,
             teamId: entity.contactTeamId,
-            companyId: entity.companyId,
-            companyName: entity.companyName,
-            email: entity.email,
+            companyId: entity.contactCompanyId,
+            companyName: entity.contactCompanyName,
+            email: entity.contactEmail,
             name: entity.crmContactName,
             hidden: entity.hidden,
             firstInteraction: entity.firstInteraction,

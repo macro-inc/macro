@@ -14,6 +14,8 @@ const lunch: FormDetail = {
     status: 'open',
     closesAt: null,
     tallyVisible: true,
+    responsesVisible: false,
+    anonymous: false,
     confirmationMessage: '',
     branding: { logoFileId: null, coverFileId: null, accentColor: null },
     submittedColumnId: null,
@@ -28,6 +30,7 @@ const lunch: FormDetail = {
         kind: 'questions',
         gateRules: null,
         gateMessage: '',
+        showWhen: null,
         bookingTarget: null,
         questions: [
           {

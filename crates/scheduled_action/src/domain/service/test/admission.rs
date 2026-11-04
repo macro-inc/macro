@@ -10,10 +10,7 @@ async fn manual_admission_keeps_error_type_and_uses_stored_owner_without_gating_
         let service = service(true);
         set_admission_error(&service, error);
         let action = service
-            .create_action(
-                &user_principal(),
-                CreateScheduledAction::Canonical(configuration(false)),
-            )
+            .create_action(&user_principal(), configuration(false))
             .await
             .unwrap();
         let id = action.id.unwrap();

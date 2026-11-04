@@ -19,6 +19,9 @@ pub struct SsoState {
     pub original_url: Option<Url>,
     pub is_mobile: bool,
     pub referral_code: Option<String>,
+    /// Whether this sign-in started on the agent signup page.
+    #[serde(default)]
+    pub is_agent: bool,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -33,6 +36,9 @@ pub(crate) struct LoginQueryParams {
     is_mobile: bool,
     /// Optional referral code
     referral_code: Option<String>,
+    /// Whether this sign-in started on the agent signup page.
+    #[serde(default)]
+    is_agent: bool,
 }
 
 pub(crate) fn is_allowed_original_url(url: &Url) -> bool {
@@ -93,6 +99,7 @@ pub(crate) fn redact_original_url_for_logging(url: &Url) -> Url {
             ("original_url" = String, Query, description = "**OPTIONAL**. The original url you came from."),
             ("is_mobile" = String, Query, description = "**OPTIONAL**. If the authentication request is from a mobile device."),
             ("referral_code" = String, Query, description = "**OPTIONAL**. If the user opened a link with a referral code."),
+            ("is_agent" = bool, Query, description = "**OPTIONAL**. If the sign-in started on the agent signup page. A new account becomes an agent."),
         ),
         responses(
             (status = 200),
@@ -102,7 +109,7 @@ pub(crate) fn redact_original_url_for_logging(url: &Url) -> Url {
     )]
 // `query` is skipped: original_url is client-controlled (query/fragment may
 // carry tokens) and login_hint is a user email — neither belongs in span fields.
-#[tracing::instrument(skip(ctx, query), fields(idp_name = ?query.idp_name, idp_id = ?query.idp_id, is_mobile = query.is_mobile))]
+#[tracing::instrument(skip(ctx, query), fields(idp_name = ?query.idp_name, idp_id = ?query.idp_id, is_mobile = query.is_mobile, is_agent = query.is_agent))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     query: Query<LoginQueryParams>,
@@ -114,6 +121,7 @@ pub async fn handler(
         original_url,
         is_mobile,
         referral_code,
+        is_agent,
     }) = query;
 
     let original_url = original_url.map(|url| url.0);
@@ -198,12 +206,15 @@ pub async fn handler(
         is_mobile,
         original_url,
         referral_code,
+        is_agent,
     };
 
     // Only include state if it has a value
-    let sso_state =
-        (state.is_mobile || state.original_url.is_some() || state.referral_code.is_some())
-            .then_some(state);
+    let sso_state = (state.is_mobile
+        || state.is_agent
+        || state.original_url.is_some()
+        || state.referral_code.is_some())
+    .then_some(state);
 
     // Generate code
     let sso_url = ctx

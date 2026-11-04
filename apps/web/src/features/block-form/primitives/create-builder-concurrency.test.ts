@@ -21,6 +21,7 @@ const startingLayout: FormLayout = {
       kind: 'questions',
       gateRules: null,
       gateMessage: '',
+      showWhen: null,
       bookingTarget: null,
       questions: [
         {
@@ -48,6 +49,8 @@ function detail(layout: FormLayout): FormDetail {
       status: 'open',
       closesAt: null,
       tallyVisible: false,
+      responsesVisible: false,
+      anonymous: false,
       confirmationMessage: '',
       branding: { logoFileId: null, coverFileId: null, accentColor: null },
       submittedColumnId: null,

@@ -2,6 +2,7 @@ import { isCursorBotId } from '@core/constant/cursorAgent';
 import { useCursorAgentsAccess } from '@core/cursor/flag';
 import type { IUser } from '@core/user/types';
 import { useAgentsQuery } from '@queries/agents/agents';
+import { useOfflineAgentBotIds } from '@queries/agents/offline-runtimes';
 import { useChannelBotsQuery } from '@queries/channel/channel-bots';
 import { queryReadyGate } from '@queries/gate';
 import type { Agent } from '@service-storage/generated/schemas/agent';
@@ -9,12 +10,13 @@ import type { Bot } from '@service-storage/generated/schemas/bot';
 import type { MessageParent } from '@service-storage/messages';
 import { type Accessor, createMemo } from 'solid-js';
 
-function mentionUser(bot: Bot): IUser {
+function mentionUser(bot: Bot, offline: boolean): IUser {
   return {
     id: `bot|${bot.id}`,
     name: bot.name,
     email: bot.name,
     photoUrl: bot.avatar_url ?? undefined,
+    offline: offline || undefined,
   };
 }
 
@@ -23,12 +25,17 @@ function mentionUser(bot: Bot): IUser {
  * agents. Account setup does not hide a mention: the harness answers with
  * a connection prompt in the thread when setup is needed. The built-in
  * Cursor entry follows the Cursor rollout flag.
+ *
+ * A disconnected macrod runtime is different from unfinished setup, and is
+ * marked: no harness is listening, so the mention would go unanswered rather
+ * than prompt for anything.
  */
 export function availableBotMentionUsers(
   channelBots: readonly Bot[],
   agents: readonly Agent[],
   cursorEnabled: boolean,
-  surface: MessageParent['type'] = 'channel'
+  surface: MessageParent['type'] = 'channel',
+  offlineBotIds: ReadonlySet<string> = new Set()
 ): IUser[] {
   const globalAgents = agents.filter(
     (agent) =>
@@ -39,7 +46,7 @@ export function availableBotMentionUsers(
 
   return [...channelBots, ...globalAgents.map((agent) => agent.bot)]
     .filter((bot) => cursorEnabled || !isCursorBotId(bot.id))
-    .map(mentionUser)
+    .map((bot) => mentionUser(bot, offlineBotIds.has(bot.id)))
     .filter((user) => {
       if (seen.has(user.id)) return false;
       seen.add(user.id);
@@ -62,13 +69,15 @@ export function useMessageBotMentionUsers(
   );
   const agents = useAgentsQuery();
   const canUseCursor = useCursorAgentsAccess();
+  const offlineBotIds = useOfflineAgentBotIds();
 
   return createMemo(() =>
     availableBotMentionUsers(
       queryReadyGate(channelBots) ? channelBots.data : [],
       queryReadyGate(agents) ? agents.data : [],
       canUseCursor(),
-      parent().type
+      parent().type,
+      offlineBotIds()
     )
   );
 }

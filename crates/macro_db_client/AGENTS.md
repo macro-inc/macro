@@ -55,6 +55,8 @@ the scan does not retain the replacement migration's exclusive table lock.
   gate it behind a Cargo feature in `Cargo.toml` only if it's optional (see
   `account_merge_request`, `team`).
 
+- Composed-memory tables and refresh leases are owned by `crates/memory`; migrations leave legacy memory rows intact.
+
 ## Checks
 
 - `cargo test -p macro_db_client` (`SQLX_OFFLINE` unset; requires local MacroDB
@@ -75,10 +77,6 @@ unreferenced replicas. These additive tables do not change agent-session claims.
 
 ## Gotchas
 
-- `calendar_event_notes` and `calendar_note_event_visible` are shared by calendar
-  note reads and document authorization; keep both consumers on the same policy.
-  The additive migration must precede their service rollout. See
-  [meeting-note access](../../docs/architecture/calendar-meeting-notes.md).
 - Migrations deploy before service code: never drop a column/table in the
   same PR that removes its last usage (see `docs/development/database.md`).
 - Never hand-edit `.sqlx/query-*.json` or invent a migration timestamp.
@@ -114,7 +112,14 @@ The import ledger accepts Jira Cloud sources with `jira_issue`, `jira_project`
 and `jira_epic` kinds. Jira has its own concurrent partial team-claim index; source
 and kind constraints expand without rewriting existing rows and validate separately.
 
+`crm_pipeline_stage_requirements` stores pipeline-owned rules keyed by stage
+column, option and required column IDs. Foreign-key cascades remove rules when
+any referenced stage, field or pipeline is explicitly deleted; renames preserve them.
+
 `mcp_oauth_*` tables hold the public MCP OAuth broker's state (registrations,
 refresh token bindings, pending authorizations, issued codes); their queries and
 expiry sweep belong to `mcp_auth_proxy`. Rows carry `expires_at` and have no
 foreign keys; the broker deletes expired rows.
+
+- Spam/Trash candidate indexes cover `email_messages(link_id, id)` only for the corresponding positive `mailbox_state` JSON containment predicate; keep query literals aligned with the partial-index predicates.
+- If either concurrent folder-index migration is interrupted, inspect `pg_index.indisvalid` and drop only its invalid index before retrying; `CREATE INDEX IF NOT EXISTS` would silently preserve an unusable index.

@@ -137,7 +137,7 @@ export function TagMention(props: TagMentionDecoratorProps) {
         <span class="relative inline-flex -top-px mr-1">
           <TagDot color={resolvedTag().color} class="size-[0.5em]" />
         </span>
-        <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
+        <span class="text-ink underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
           {resolvedTag().name}
         </span>
       </span>

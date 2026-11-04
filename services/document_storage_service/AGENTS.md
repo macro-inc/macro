@@ -69,6 +69,8 @@ threads, pins, recents, notifications, folders, activity.
   `src/api/graphql_soup.rs` if wiring changes.
 - Add a REST route: `src/api/<area>.rs` → `src/api.rs` (router) →
   `src/api/swagger.rs`; register query-only schemas explicitly in its components list.
+  Then `bun run gen-api cloud-storage` in `apps/web` regenerates
+  `service-storage/openapi.json` and its clients.
 - Add a config value or feature-gated behavior: `src/config.rs` → the
   `[features]` table in `Cargo.toml` if it should be independently toggleable.
 
@@ -76,7 +78,8 @@ threads, pins, recents, notifications, folders, activity.
 
 - `cargo test -p document_storage_service` (`SQLX_OFFLINE` unset; needs
   MacroDB + Redis — `just run_dbs` from repo root; DynamoDB local via
-  `just ensure::ensure_dynamodb`, see `justfile`).
+  `just ensure::ensure_dynamodb` from `services/document_storage_service`,
+  whose `justfile` declares the `ensure` module).
 - After query changes: `nix develop --command just prepare_db` from the repo root.
 
 ## Gotchas

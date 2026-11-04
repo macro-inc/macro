@@ -74,6 +74,9 @@ pub struct UserName {
     pub id: String,
     pub first_name: Option<String>,
     pub last_name: Option<String>,
+    /// Whether this is an agent account rather than a person.
+    #[serde(default)]
+    pub is_agent: bool,
 }
 
 // HACK: the zod generator on the FE only likes objects, not arrays, so we build silly structs like these

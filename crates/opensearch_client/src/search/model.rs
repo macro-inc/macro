@@ -367,10 +367,10 @@ impl<T> SearchResponse<T> {
     /// OpenSearch returns HTTP 200 with partial results when individual
     /// shards fail their query or fetch phase, so every hit on a failed
     /// shard is silently absent unless callers check `_shards`.
-    pub(crate) fn warn_on_shard_failures(&self, operation: &str) {
+    pub(crate) fn warn_on_shard_failures(&self, operation: crate::error::OpensearchOperation) {
         if self._shards.failed > 0 {
             tracing::warn!(
-                operation,
+                %operation,
                 failed = self._shards.failed,
                 total = self._shards.total,
                 failures = ?self._shards.failures,

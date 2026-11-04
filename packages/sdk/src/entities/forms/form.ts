@@ -132,8 +132,16 @@ export type FormSubmissionOutcome =
     }
   | { outcome: 'stopped'; section: FormSection; message: string };
 
-/** The caller's receipt and current answers, read without access to other responses. */
-export type MyFormResponse = {
+/**
+ * The caller's receipt and current answers, read without access to other
+ * responses. On an anonymous form the caller only learns that they
+ * responded: nothing links them to their response.
+ */
+export type MyFormResponse = SavedFormResponse | { kind: 'anonymous' };
+
+/** The caller's saved response to a form that isn't anonymous. */
+export type SavedFormResponse = {
+  kind: 'saved';
   booking?: FormBookingStep;
   response: FormResponse;
   status: ResponseStatus;
@@ -502,6 +510,7 @@ export class Form extends MacroEntity<FormDetail> {
     const mine = unwrap(
       await this.client.storage.getMyFormResponse({ path: { id: this.id } }),
     );
+    if (mine.kind === 'anonymous') return { kind: 'anonymous' };
     const table = await this.table();
     const answers = await Promise.all(
       mine.answers.map(async (answer): Promise<FormAnswer> => {
@@ -564,6 +573,7 @@ export class Form extends MacroEntity<FormDetail> {
       : undefined;
     const booking = this.unlockedBooking(mine.booking);
     return {
+      kind: 'saved',
       ...(booking ? { booking } : {}),
       response: FormResponse.byId(this, mine.response.id, {
         status: mine.response.status,
@@ -653,6 +663,11 @@ export class Form extends MacroEntity<FormDetail> {
   /** Open the form's builder in Macro. */
   webUrl(): string {
     return `${this.client.webAppUrl}/app/form/${this.id}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
   }
 
   /** The respondent page, which public forms also expose without signing in. */

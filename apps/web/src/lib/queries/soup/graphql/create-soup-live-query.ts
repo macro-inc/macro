@@ -1,3 +1,4 @@
+import { usePending } from '@app/observability/flow';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import { until } from '@solid-primitives/promise';
@@ -50,12 +51,14 @@ import {
 import { createUrqlInfiniteQuery } from '../../../urql-solid/create-urql-infinite-query';
 import type { UrqlInfiniteData } from '../../../urql-solid/types';
 import { registerGraphqlSoupRevalidations } from './active-queries';
+import { soupCacheTelemetry } from './cache-activity-telemetry';
 import { createPredicateQuery } from './create-predicate-query';
 import {
   buildGraphqlEntitiesSoupInput,
   type SoupEntityRef,
   soupEntityRefKey,
 } from './entity-input';
+import { crmExternalWriteTypes } from './external-write-scope';
 import { isCachedMailView } from './mail-view';
 import {
   usePendingGraphqlSoupDeleteKeys,
@@ -211,6 +214,11 @@ export function createSoupLiveQuery(
   const mailItemSelection = selectRecords(MailItemFieldsFragmentDoc);
   let localRequest = 0;
   let localEvaluationRunning = false;
+  const [initialLocalEvaluation, setInitialLocalEvaluation] =
+    createSignal(false);
+  usePending('soup.local', initialLocalEvaluation);
+  let initialLocalInput: GraphqlSoupInput | undefined;
+  let initialLocalGeneration: number | undefined;
   let localEvaluationPending = false;
   let cacheGeneration = 0;
   let cacheObservation = 0;
@@ -225,22 +233,19 @@ export function createSoupLiveQuery(
   // The server page fetched only to keep the server pages as deep as a local
   // Mail list (fetchNextPage). It never takes over from that list.
   let inStepPageIndex: number | undefined;
-  let staleFallbackSpan: ReturnType<typeof Telemetry.span> | undefined;
+  let staleFallbackStartedAt: number | undefined;
 
   const recordAuthority = (
-    source: 'network' | 'failed-network' | 'local' | 'stale-fallback',
-    pageIndex?: number
-  ) => {
-    const span = Telemetry.span('graphql_cache.soup_authority');
-    span.setAttr('authority.source', source);
-    if (pageIndex !== undefined)
-      span.setAttr('authority.page_index', pageIndex);
-    span.end();
-  };
-  const finishStaleFallback = (source: 'network' | 'local') => {
-    staleFallbackSpan?.setAttr('authority.resumed_by', source);
-    staleFallbackSpan?.end();
-    staleFallbackSpan = undefined;
+    source: 'network' | 'failed-network' | 'local' | 'stale-fallback'
+  ) => soupCacheTelemetry.record(`authority-${source}`);
+  const finishStaleFallback = (discarded = false) => {
+    if (staleFallbackStartedAt !== undefined) {
+      soupCacheTelemetry.record('stale-fallback', {
+        durationMs: performance.now() - staleFallbackStartedAt,
+        discarded,
+      });
+    }
+    staleFallbackStartedAt = undefined;
   };
 
   const hasUnpersistedPages = (input: GraphqlSoupInput | undefined) =>
@@ -321,11 +326,9 @@ export function createSoupLiveQuery(
         if (
           networkAuthorityRevision() !== undefined &&
           networkAuthorityRevision() !== revision &&
-          staleFallbackSpan === undefined
+          staleFallbackStartedAt === undefined
         ) {
-          staleFallbackSpan = Telemetry.span(
-            'graphql_cache.soup_stale_fallback'
-          );
+          staleFallbackStartedAt = performance.now();
           recordAuthority('stale-fallback');
         }
         setCurrentCacheRevision(revision);
@@ -334,16 +337,14 @@ export function createSoupLiveQuery(
       { includeHydration: true }
     );
     const unsubscribeGeneration = host.onCacheGenerationChanged(() => {
-      const span = Telemetry.span('graphql_cache.engine_generation_changed');
-      span.end();
+      soupCacheTelemetry.record('generation');
       cacheGeneration += 1;
       invalidateGeneration();
       fireAndForget(observeCurrentRevision(), 'soup-live-query');
     });
     fireAndForget(observeCurrentRevision(), 'soup-live-query');
     onCleanup(() => {
-      staleFallbackSpan?.end();
-      staleFallbackSpan = undefined;
+      finishStaleFallback(true);
       cacheGeneration += 1;
       unsubscribeChanges();
       unsubscribeGeneration();
@@ -385,6 +386,11 @@ export function createSoupLiveQuery(
       query: queryDocument(),
       client: getGraphqlSoupClient(),
       initialPageParam: null,
+      context: {
+        externalCacheWriteTypes: crmExternalWriteTypes(
+          networkInput()?.initial?.filters
+        ),
+      },
       variables: (cursor) => {
         const input = inputForCursor(cursor);
         if (!input) {
@@ -415,7 +421,7 @@ export function createSoupLiveQuery(
         if (result.error && metadata?.source === 'live-network') {
           // The exchange keeps the rows already shown; a failed response's
           // partial data claims no authority over them or the local rows.
-          recordAuthority('failed-network', page.pageIndex);
+          recordAuthority('failed-network');
           return;
         }
         if (!result.data) return;
@@ -453,7 +459,7 @@ export function createSoupLiveQuery(
             if (!untrack(localProjection)?.mail) setLocalProjection(undefined);
           });
           recordAuthority('network');
-          finishStaleFallback('network');
+          finishStaleFallback();
           fireAndForget(
             acknowledgeNetworkPage(
               page.pageIndex,
@@ -476,11 +482,13 @@ export function createSoupLiveQuery(
           if (!untrack(localProjection)?.mail) setLocalProjection(undefined);
         });
         recordAuthority('network');
-        finishStaleFallback('network');
+        finishStaleFallback();
       },
       select: selectPages,
     };
   });
+
+  usePending('soup.network', () => query.isLoading);
 
   const isEnabled = () =>
     cacheFirstEntities()
@@ -763,11 +771,20 @@ export function createSoupLiveQuery(
       return;
     }
     localEvaluationRunning = true;
+    if (
+      initialLocalInput !== input ||
+      initialLocalGeneration !== cacheGeneration
+    ) {
+      initialLocalInput = input;
+      initialLocalGeneration = cacheGeneration;
+      setInitialLocalEvaluation(true);
+    }
     localEvaluationPending = false;
 
     fireAndForget(
       (async () => {
-        const span = Telemetry.span('graphql_cache.soup_local_evaluation');
+        const startedAt = performance.now();
+        let evaluatedRows = records.length;
         let retryCount = 0;
         let discarded = false;
         let outcome: 'success' | 'incomplete' | 'error' = 'incomplete';
@@ -802,9 +819,8 @@ export function createSoupLiveQuery(
               continue;
             }
             if (mailView) {
-              span.setAttr('evaluation.through', Boolean(through));
               if (result.kind === 'mail-page')
-                span.setAttr('evaluation.depth', result.keys.length);
+                evaluatedRows = result.keys.length;
             }
             if (
               mailView &&
@@ -894,11 +910,7 @@ export function createSoupLiveQuery(
             });
             outcome = 'success';
             recordAuthority('local');
-            finishStaleFallback('local');
-            span.setAttr(
-              'evaluation.retained_count',
-              result.retainedKeys?.length ?? 0
-            );
+            finishStaleFallback();
             return;
           }
         } catch {
@@ -909,10 +921,15 @@ export function createSoupLiveQuery(
           // Only the latest request decides, after any stale-revision retries.
           if (mailView && requestId === localRequest && outcome !== 'success')
             setLocalMailCurrent(false);
-          span.setAttr('evaluation.outcome', outcome);
-          span.setAttr('evaluation.retry_count', retryCount);
-          span.setAttr('evaluation.discarded', discarded);
-          span.end();
+          soupCacheTelemetry.record('local', {
+            durationMs: performance.now() - startedAt,
+            rows: evaluatedRows,
+            error: outcome === 'error',
+            incomplete: outcome === 'incomplete',
+            retries: retryCount,
+            discarded,
+          });
+          setInitialLocalEvaluation(false);
           localEvaluationRunning = false;
           if (localEvaluationPending) {
             localEvaluationPending = false;
