@@ -123,12 +123,23 @@ People lists contacts across every CRM-enabled team the viewer belongs to, from
 the same Soup query with only CRM contacts opted in (`crmf`). The server collapses
 duplicate full email addresses (case-insensitive) to one contact; contacts
 without an email never collapse. Hidden contacts
-and contacts under hidden companies are excluded. Columns are Person (name and
+and contacts under hidden companies are excluded by default. Columns are Person (name and
 email), Company and Last contacted (sortable). `Search people` matches name or
 email on the server after a short typing pause, so results include contacts not
 yet scrolled into view. The desktop header has the title, shared **New** menu,
 and expandable Search; choose **Contact** from New. On touch, **New contact**
-is unchanged. The contact dialog offers an optional **Choose a company** pill (searchable by name
+is unchanged. Admins/owners have **People display options → Show removed people**
+on desktop and touch. This shows **Removed people** from the current team only,
+with server search and normal pagination. Open a person and use the existing
+**Restore to CRM** eye action; successful restoration removes the row from this
+view and returns it to normal People and company Team lists. **Show active people**
+returns to the normal list while keeping the search text. A hidden company also
+hides its people: restore the company first to make them visible. The banner
+explains this; no company is silently restored by an individual contact action.
+The choice is local to this workspace, clears on leaving People or changing
+account/team/role, and is not activated by a shared URL or saved filter. Members
+have no removed control, and server role checks still exclude hidden records.
+The contact dialog offers an optional **Choose a company** pill (searchable by name
 or domain, from the up to 500 most relevant companies, including name-only
 companies); without one the person is added with no company. The email is
 optional: personal addresses and different domains are accepted, and leaving it
@@ -233,14 +244,20 @@ Hiding a company hides all its contacts and turns off team email sync. Restoring
 the company restores every contact, including individually hidden ones, but leaves
 email sync off; re-enable **Sync Emails** under the information panel's **Sharing**
 section if needed. A company's Team tab excludes hidden contacts for every role,
-including search results. Admins retain direct-link access to hidden contacts for
-restoration. Removing or restoring a person refreshes open company Team lists;
+including search results. Admins can find removed contacts in People display options and retain direct-link
+access for restoration. Removing or restoring a person refreshes open company Team lists;
 returning to a previously visited company reloads its contacts. The existing
 **Sharing → Visible in CRM** checkbox and company row **Hide /
 Unhide** actions control the same state.
 Restoring a person under a hidden company does not make them appear in People
 until that company is restored too. People without a company can be restored
 directly; a person without a name or email is labeled **Contact** in the confirmation.
+
+The removed-People discovery check is
+`bunx playwright test --config src/features/crm/browser-test/people/playwright.config.ts`
+from `apps/web`. It covers desktop/phone discovery, server-side search and cursor
+paging, query errors, unfiled records, hidden-parent behavior, rejected writes,
+member filter injection, and account/team/list transitions with synthetic data.
 
 The backend-free browser check is
 `bunx playwright test --config src/features/crm/browser-test/playwright.config.ts visibility.browser.e2e.ts`

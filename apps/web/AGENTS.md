@@ -411,6 +411,11 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   `src/features/crm/README.md` and `docs/agent-guide/crm.md` at the repo root.
   Company Team lists exclude hidden contacts for every role; keep authorized
   detail/restore access and invalidate embedded company contacts on hide/restore.
+  People display options expose removed records only after an explicit admin/owner
+  choice scoped to the current team; query hidden state on the server before
+  pagination, reset the choice on session/team/role/list changes, and refresh
+  mounted GraphQL contact readers after visibility mutations. Exercise discovery
+  with `bunx playwright test --config src/features/crm/browser-test/people/playwright.config.ts`.
   The backend-free desktop/phone regression uses real CRM query adapters:
   `bunx playwright test --config src/features/crm/browser-test/team/playwright.config.ts`.
 - Main Tasks mounts reusable GraphQL saved views; keep embedded Project/CRM task lists unchanged. Read `src/features/tasks-view/AGENTS.md` for filter, draft, navigation, and browser checks.

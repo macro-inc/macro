@@ -1,3 +1,4 @@
+import { registerActiveGraphqlSoupQuery } from '@queries/soup/graphql/active-queries';
 import { storageServiceClient } from '@service-storage/client';
 import { invalidateCachedCrmContacts } from '@service-storage/crm-contacts';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
@@ -155,4 +156,80 @@ it('surfaces a cache refresh failure after a successful write', async () => {
     mutation.mutateAsync({ contactId: CONTACT.id, hidden: true })
   ).rejects.toThrow('Cache unavailable');
   expect(contact.hidden).toBe(true);
+});
+
+it('awaits GraphQL People membership refresh for hide and restore, excluding unrelated lists', async () => {
+  let visible = [CONTACT.id];
+  let removed: string[] = [];
+  const visibleReader = vi.fn(async () => {
+    visible = contact.hidden ? [] : [contact.id];
+  });
+  const removedReader = vi.fn(async () => {
+    removed = contact.hidden ? [contact.id] : [];
+  });
+  const unrelated = vi.fn(async () => {});
+  const unregister = [
+    registerActiveGraphqlSoupQuery({
+      isEnabled: () => true,
+      body: () => ({ crmf: { l: { hidden: false } } }),
+      refresh: visibleReader,
+    }),
+    registerActiveGraphqlSoupQuery({
+      isEnabled: () => true,
+      body: () => ({ crmf: { l: { hidden: true } } }),
+      refresh: removedReader,
+    }),
+    registerActiveGraphqlSoupQuery({
+      isEnabled: () => true,
+      body: () => ({ df: {} }),
+      refresh: unrelated,
+    }),
+    registerActiveGraphqlSoupQuery({
+      isEnabled: () => true,
+      body: () => ({
+        crmf: { l: { id: '00000000-0000-0000-0000-000000000000' } },
+      }),
+      refresh: unrelated,
+    }),
+  ];
+  try {
+    const { mutation } = mount();
+    await mutation.mutateAsync({ contactId: CONTACT.id, hidden: true });
+    expect(visible).toEqual([]);
+    expect(removed).toEqual([CONTACT.id]);
+    await mutation.mutateAsync({ contactId: CONTACT.id, hidden: false });
+    expect(visible).toEqual([CONTACT.id]);
+    expect(removed).toEqual([]);
+    expect(visibleReader).toHaveBeenCalledTimes(2);
+    expect(removedReader).toHaveBeenCalledTimes(2);
+    expect(unrelated).not.toHaveBeenCalled();
+  } finally {
+    unregister.forEach((dispose) => dispose());
+  }
+});
+
+it('reports an active GraphQL refresh failure and does not refresh after a rejected write', async () => {
+  const refresh = vi.fn(async () => {
+    throw new Error('Unavailable');
+  });
+  const unregister = registerActiveGraphqlSoupQuery({
+    isEnabled: () => true,
+    body: () => ({ crmf: { l: { hidden: true } } }),
+    refresh,
+  });
+  try {
+    const { mutation } = mount();
+    await expect(
+      mutation.mutateAsync({ contactId: CONTACT.id, hidden: true })
+    ).rejects.toThrow('revalidation');
+    vi.mocked(storageServiceClient.setContactHidden).mockResolvedValue(
+      err([{ code: 'FORBIDDEN', message: 'Denied' }])
+    );
+    await expect(
+      mutation.mutateAsync({ contactId: CONTACT.id, hidden: false })
+    ).rejects.toThrow();
+    expect(refresh).toHaveBeenCalledTimes(1);
+  } finally {
+    unregister();
+  }
 });
