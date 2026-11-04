@@ -1114,12 +1114,21 @@ With both switches off, the section is personal and manual. Smart grouping revea
 matched channels; larger results show the remaining count. Switching sharing scope
 refreshes the preview without replacing the form. A zero shared count explains
 that only joined team channels match; public and private channels remain personal.
-Edit and delete through each section's sliders menu. Personal sections are
-private to the account, including for team members, and accept joined team,
-public, or private channels. Shared sections
-retain the team's existing label permissions and accept only channels from that
-team. Neither kind accepts DMs. A personal assignment never changes a shared
-assignment. Names are unique within each scope, case-insensitively.
+Edit and delete through each section's sliders menu. Editing also exposes
+**Shared with team**. Turning it on or off preserves the section ID; turning it
+off requires confirmation and makes the section personal to the current account,
+removing it from teammates' sidebars. The toggle is disabled with an explanation
+while channel eligibility is loading or when any current member is unavailable
+or ineligible for the destination scope. No channels are silently dropped.
+Personal sections are private to the account, including for team members, and
+accept joined team, public, or private channels. Shared sections accept only
+channels from that team. Any current team member can create, edit, change sharing,
+or delete a shared section; these actions are not admin-only. Neither kind accepts DMs.
+Scope changes reject duplicate destination names and atomically move manual
+assignments into the destination scope, replacing other manual assignments there.
+Smart sections keep their rule and reevaluate matches in the new scope.
+Ordinary channel assignments stay isolated between personal and shared scopes.
+Names are unique within each scope, case-insensitively.
 
 Each heading has one sliders-icon menu, also available by right-clicking the header.
 **Sort** opens its independent single-select options with a checkmark on the right.

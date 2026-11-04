@@ -137,20 +137,27 @@ export function useSmartTagPreviewQuery(
   });
 }
 
-function availableSectionChannelsQueryOptions(actorId: string | undefined) {
+function availableSectionChannelsQueryOptions(
+  actorId: string | undefined,
+  enabled: boolean
+) {
   return queryOptions({
     queryKey: channelKeys.listChannels._ctx.account(actorId).queryKey,
     queryFn: ({ signal }) => fetchAllChannels(signal),
-    enabled: Boolean(actorId),
+    enabled: enabled && Boolean(actorId),
     reconcile: 'id',
     staleTime: 0,
   });
 }
 
 /** Full authorized channel membership, scoped to the current account. */
-export function useAvailableSectionChannelsQuery() {
+export function useAvailableSectionChannelsQuery(
+  enabled: Accessor<boolean> = () => true
+) {
   const userId = useUserId();
-  return useQuery(() => availableSectionChannelsQueryOptions(userId()));
+  return useQuery(() =>
+    availableSectionChannelsQueryOptions(userId(), enabled())
+  );
 }
 
 export type CreateChannelLabelArgs = {
@@ -216,6 +223,7 @@ export type RenameChannelLabelArgs = {
   labelId: string;
   name: string;
   rule?: ChannelLabelRule;
+  targetScope?: ChannelLabelScopeSelection;
 };
 export function useRenameChannelLabelMutation(
   scope?: ChannelLabelScopeSelection
@@ -232,6 +240,7 @@ export function useRenameChannelLabelMutation(
           {
             name: args.name,
             rule: args.rule,
+            targetScope: args.targetScope,
           },
           scope
         )
@@ -242,13 +251,51 @@ export function useRenameChannelLabelMutation(
         if (args.actorId !== userId()) return;
         await cancelLabelFetch(scope, args.actorId);
         if (args.actorId !== userId()) return;
+        const destinationScope =
+          args.targetScope === 'team' ? undefined : args.targetScope;
+        const changesScope =
+          args.targetScope && args.targetScope !== (scope ?? 'team');
+        if (!changesScope) {
+          writeLabels(scope, args.actorId, (labels) =>
+            labels.map((label) => (label.id === renamed.id ? renamed : label))
+          );
+          return;
+        }
+
+        await cancelLabelFetch(destinationScope, args.actorId);
+        if (args.actorId !== userId()) return;
+
         writeLabels(scope, args.actorId, (labels) =>
-          labels.map((label) => (label.id === renamed.id ? renamed : label))
+          labels.filter((label) => label.id !== renamed.id)
+        );
+        writeLabels(destinationScope, args.actorId, (labels) =>
+          labels
+            .filter((label) => label.id !== renamed.id)
+            .map((label) => {
+              if (renamed.rule || label.rule) return label;
+              const channelIds = label.channelIds.filter(
+                (id) => !renamed.channelIds.includes(id)
+              );
+              return {
+                ...label,
+                channelIds,
+                channelCount:
+                  label.channelCount -
+                  (label.channelIds.length - channelIds.length),
+              };
+            })
+            .concat(renamed)
         );
       },
       onSettled: (_data, _error, args) => {
-        if (args.actorId === userId())
-          return invalidateChannelLabels(scope, args.actorId);
+        if (args.actorId !== userId()) return;
+        const refresh = [invalidateChannelLabels(scope, args.actorId)];
+        if (args.targetScope && args.targetScope !== (scope ?? 'team')) {
+          const destinationScope =
+            args.targetScope === 'team' ? undefined : args.targetScope;
+          refresh.push(invalidateChannelLabels(destinationScope, args.actorId));
+        }
+        return Promise.all(refresh);
       },
     }),
   }));

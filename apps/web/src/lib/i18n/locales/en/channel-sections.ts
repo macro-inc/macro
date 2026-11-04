@@ -69,6 +69,15 @@ export default {
   sharingHelpLabel: 'About shared sections',
   sharingHelp:
     'Team members can see and organize shared sections. Only team channels can be added.',
+  checkingSharing: 'Checking channel eligibility…',
+  sharingIneligibleChannels:
+    'This section contains channels outside your team. Remove them before sharing.',
+  sharingUnavailableChannels:
+    'All section channels must be available to you before changing sharing.',
+  makePersonalTitle: 'Make section personal?',
+  makePersonalBody:
+    '“{{name}}” will disappear from your teammates’ sidebars. Its channels will remain unchanged.',
+  makePersonal: 'Make personal',
   sharedSectionHint: 'Shared with your team. Team channels only.',
   cannotDropHere: 'This item cannot be added here.',
   smartSectionDropHint: 'Smart sections add channels by name, not by dragging.',
