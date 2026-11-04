@@ -220,12 +220,7 @@ function SelectedAppRow(props: {
   return (
     <IntegrationRow
       class="px-3 py-2.5"
-      icon={
-        <ConnectedAppIcon
-          appSlug={props.server.app_slug}
-          class="size-5"
-        />
-      }
+      icon={<ConnectedAppIcon appSlug={props.server.app_slug} class="size-5" />}
       title={props.server.server_name}
       description={props.server.app_slug}
       status={

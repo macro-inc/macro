@@ -336,9 +336,7 @@ export function LeftoverRow(props: {
       ))
       .with({ kind: 'pipedream' }, (item) => (
         <IntegrationListRow
-          icon={
-            <ConnectedAppIcon appSlug={item.appSlug} class="size-5" />
-          }
+          icon={<ConnectedAppIcon appSlug={item.appSlug} class="size-5" />}
           name={item.title}
           kind="mcp"
           description="Agents can use this app when you ask them to. Nothing is copied into Macro."

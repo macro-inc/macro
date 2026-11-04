@@ -30,6 +30,7 @@ import type { ServerResponse } from '@service-cognition/generated/schemas';
 import {
   type InfiniteData,
   infiniteQueryOptions,
+  queryOptions,
   useInfiniteQuery,
   useMutation,
   useQuery,
@@ -227,13 +228,8 @@ export function usePipedreamCatalogQuery(search: () => string) {
   return useInfiniteQuery(() => pipedreamCatalogQueryOptions(search().trim()));
 }
 
-/**
- * App logos by slug, from one full-size catalog page. Connection records carry
- * only a slug. That covers all of Macro Connect's catalog, and Pipedream's most
- * popular apps; a connector outside it keeps its fallback icon.
- */
-export function usePipedreamCatalogIconsQuery() {
-  return useQuery(() => ({
+function pipedreamCatalogIconsQueryOptions() {
+  return queryOptions({
     queryKey: KEYS.catalogIcons,
     queryFn: async () =>
       throwOnErr(
@@ -243,7 +239,16 @@ export function usePipedreamCatalogIconsQuery() {
     select: (page: PipedreamCatalogResponse) =>
       new Map(page.servers.map((entry) => [entry.app_slug, entry.icon_url])),
     staleTime: 5 * 60 * 1000,
-  }));
+  });
+}
+
+/**
+ * App logos by slug, from one full-size catalog page. Connection records carry
+ * only a slug. That covers all of Macro Connect's catalog, and Pipedream's most
+ * popular apps; a connector outside it keeps its fallback icon.
+ */
+export function usePipedreamCatalogIconsQuery() {
+  return useQuery(pipedreamCatalogIconsQueryOptions);
 }
 
 function invalidateConnections() {
