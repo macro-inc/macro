@@ -239,7 +239,7 @@ pub struct FocusMessage {
     pub body: Option<String>,
     /// Provider snippet.
     pub snippet: Option<String>,
-    /// The `Date` header, whose offset tells which day the sender's clock showed.
+    /// The `Date` header, whose offset tells which day the writer's clock showed.
     pub date_header: Option<String>,
 }
 
@@ -422,6 +422,6 @@ pub struct DueDateMessage {
 pub struct DueDateInput {
     /// The thread's subject, as context.
     pub subject: Option<String>,
-    /// The messages Jev is shown that have words of their own, oldest first.
+    /// The thread's latest messages with words of their own, oldest first.
     pub messages: Vec<DueDateMessage>,
 }

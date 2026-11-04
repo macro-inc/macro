@@ -186,23 +186,39 @@ fn written_late(date_header: Option<&str>) -> FocusMessage {
 }
 
 #[test]
-fn a_message_counts_from_its_day_in_the_owners_time_zone_first() {
-    // Stored zone over the header's offset.
+fn someone_elses_message_counts_from_the_offset_they_wrote_at() {
+    // Their "tomorrow", written at 03:00 on the 8th, means the 9th, though it was
+    // still the 7th for an owner in Los Angeles.
     let message = written_late(Some("Thu, 8 Oct 2026 03:00:00 +0100"));
-    assert_eq!(written_on(&message, Some(Los_Angeles)), day(2026, 10, 7));
-}
-
-#[test]
-fn with_no_stored_zone_a_message_counts_from_the_offset_it_was_written_at() {
-    let message = written_late(Some("Wed, 7 Oct 2026 21:00:00 -0500"));
-    assert_eq!(written_on(&message, None), day(2026, 10, 7));
+    assert_eq!(written_on(&message, Some(Los_Angeles)), day(2026, 10, 8));
     // A comment after the offset, as many mail servers add.
     let message = written_late(Some("Wed, 7 Oct 2026 21:00:00 -0500 (CDT)"));
     assert_eq!(written_on(&message, None), day(2026, 10, 7));
 }
 
 #[test]
-fn with_no_zone_or_readable_header_a_message_counts_from_its_utc_day() {
+fn the_owners_own_message_counts_from_the_owners_time_zone() {
+    // Mail sent through a service can carry a UTC stamp.
+    let message = FocusMessage {
+        is_sent: true,
+        ..written_late(Some("Thu, 8 Oct 2026 02:00:00 +0000"))
+    };
+    assert_eq!(written_on(&message, Some(Los_Angeles)), day(2026, 10, 7));
+    assert_eq!(written_on(&message, None), day(2026, 10, 8));
+}
+
+#[test]
+fn with_no_readable_header_someone_elses_message_counts_from_the_owners_time_zone() {
+    assert_eq!(
+        written_on(&written_late(None), Some(Los_Angeles)),
+        day(2026, 10, 7)
+    );
+    let unreadable = written_late(Some("yesterday-ish"));
+    assert_eq!(written_on(&unreadable, Some(Los_Angeles)), day(2026, 10, 7));
+}
+
+#[test]
+fn with_nothing_else_to_go_on_a_message_counts_from_its_utc_day() {
     assert_eq!(written_on(&written_late(None), None), day(2026, 10, 8));
     let unreadable = written_late(Some("yesterday-ish"));
     assert_eq!(written_on(&unreadable, None), day(2026, 10, 8));
@@ -244,28 +260,31 @@ fn the_due_date_input_falls_back_to_a_snippet_only_with_no_body() {
 }
 
 #[test]
-fn the_due_date_input_covers_the_messages_jev_is_shown() {
-    let messages = (0..5)
-        .map(|number| message(&format!("Message {number}"), false))
-        .collect::<Vec<_>>();
+fn a_deadline_stays_in_view_through_replies_that_never_mention_it() {
+    let mut messages = vec![message("Please send it by Friday.", false)];
+    messages.extend((0..4).map(|number| message(&format!("Reply {number}"), number % 2 == 0)));
     let thread = thread(messages);
 
     let input = due_date_input(&thread, None);
 
-    let texts = input
-        .messages
-        .iter()
-        .map(|m| m.text.as_str())
-        .collect::<Vec<_>>();
-    assert_eq!(texts, ["Message 2", "Message 3", "Message 4"]);
-    assert_eq!(
-        jev_input(&thread, None)["thread"]["messages"]
-            .as_array()
-            .unwrap()
-            .len(),
-        3
-    );
+    // Past what Jev is shown, whose window would have dropped it.
+    assert_eq!(input.messages.len(), 5);
+    assert_eq!(input.messages[0].text, "Please send it by Friday.");
     assert_eq!(input.subject.as_deref(), Some("Contract"));
+    let shown = jev_input(&thread, None);
+    assert_eq!(shown["thread"]["messages"].as_array().unwrap().len(), 3);
+}
+
+#[test]
+fn the_due_date_input_is_bounded_counting_back_from_the_latest() {
+    let messages = (0..DUE_DATE_MESSAGES + 2)
+        .map(|number| message(&format!("Message {number}"), false))
+        .collect::<Vec<_>>();
+
+    let input = due_date_input(&thread(messages), None);
+
+    assert_eq!(input.messages.len(), DUE_DATE_MESSAGES);
+    assert_eq!(input.messages[0].text, "Message 2");
 }
 
 #[test]

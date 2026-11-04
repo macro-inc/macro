@@ -16,6 +16,10 @@ const MESSAGE_CHARS: usize = 1_500;
 const BUMP_CHARS: usize = 200;
 /// Characters of the owner's profile passed as context.
 const PROFILE_CHARS: usize = 30_000;
+/// Messages the due date extractor reads, counting back from the latest. More than
+/// Jev is shown: a deadline stays open through replies that never mention it, and
+/// nothing else keeps a stored date alive.
+const DUE_DATE_MESSAGES: usize = 8;
 /// Characters of the thread's subject the due date extractor reads.
 const DUE_DATE_SUBJECT_CHARS: usize = 300;
 /// To and Cc addresses shown per message; a distribution list stays readable.
@@ -200,11 +204,6 @@ fn message_json(message: &FocusMessage) -> Value {
     json
 }
 
-/// The messages shown, counting back from the latest.
-fn shown_messages(thread: &FocusThread) -> &[FocusMessage] {
-    &thread.messages[thread.messages.len().saturating_sub(SHOWN_MESSAGES)..]
-}
-
 /// The JSON state Jev classifies: the owner's profile and the thread's latest messages.
 pub(super) fn jev_input(thread: &FocusThread, profile: Option<&str>) -> Value {
     let mut recipient = format!("The recipient's address is {}.", thread.owner_email);
@@ -212,7 +211,7 @@ pub(super) fn jev_input(thread: &FocusThread, profile: Option<&str>) -> Value {
         recipient.push_str("\n\n");
         recipient.push_str(truncate(profile, PROFILE_CHARS));
     }
-    let shown = shown_messages(thread);
+    let shown = &thread.messages[thread.messages.len().saturating_sub(SHOWN_MESSAGES)..];
     json!({
         "recipient": recipient,
         "thread": {
@@ -224,21 +223,23 @@ pub(super) fn jev_input(thread: &FocusThread, profile: Option<&str>) -> Value {
     })
 }
 
-/// The day a message was written: in the owner's time zone when one is stored,
-/// else at the offset its `Date` header gives, else in UTC.
+/// The day a message was written, as its writer's clock showed it, since that is
+/// what their "tomorrow" counts from: the owner's own mail in the owner's time zone,
+/// anyone else's at the offset its `Date` header gives. Each falls back on the other,
+/// then on UTC.
 fn written_on(message: &FocusMessage, time_zone: Option<Tz>) -> NaiveDate {
-    if let Some(time_zone) = time_zone {
-        return message.at.with_timezone(&time_zone).date_naive();
-    }
-    let header_offset = message
+    let in_owner_zone = time_zone.map(|zone| message.at.with_timezone(&zone).date_naive());
+    let at_header_offset = message
         .date_header
         .as_deref()
         .and_then(|header| DateTime::parse_from_rfc2822(header).ok())
-        .map(|date| *date.offset());
-    match header_offset {
-        Some(offset) => message.at.with_timezone(&offset).date_naive(),
-        None => message.at.date_naive(),
-    }
+        .map(|date| message.at.with_timezone(date.offset()).date_naive());
+    let day = if message.is_sent {
+        in_owner_zone.or(at_header_offset)
+    } else {
+        at_header_offset.or(in_owner_zone)
+    };
+    day.unwrap_or_else(|| message.at.date_naive())
 }
 
 /// A message's own words: never its quoted history, whose relative dates belong
@@ -254,10 +255,10 @@ fn own_words(message: &FocusMessage) -> String {
     truncate(&collapsed, MESSAGE_CHARS).to_owned()
 }
 
-/// What the due date extractor reads: the messages Jev is shown, each dated, with
-/// no sender's name or address. A message with no words of its own is left out.
+/// What the due date extractor reads: the thread's latest messages, each dated,
+/// with no sender's name or address. A message with no words of its own is left out.
 pub(super) fn due_date_input(thread: &FocusThread, time_zone: Option<Tz>) -> DueDateInput {
-    let messages = shown_messages(thread)
+    let messages = thread.messages[thread.messages.len().saturating_sub(DUE_DATE_MESSAGES)..]
         .iter()
         .map(|message| DueDateMessage {
             written_on: written_on(message, time_zone),
