@@ -607,6 +607,7 @@ export function useFilterRefinements() {
             },
             values: getValues,
             searchableOptions: assigneePicker.options,
+            preserveOptionOrder: true,
             searchAction: assigneePicker.action,
             get searchFooter() {
               return <AssigneeDiscoveryStatus discovery={assigneePicker} />;

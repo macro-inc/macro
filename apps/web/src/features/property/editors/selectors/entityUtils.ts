@@ -273,3 +273,14 @@ export function sortEntitiesWithSelfFirst<T extends CombinedEntity>(
   result.unshift(self);
   return result;
 }
+
+/** Keep caller-prioritized entities ahead of other matches without changing their relative order. */
+export function prioritizeEntities<T extends { id: string }>(
+  entities: T[],
+  priorityIds: ReadonlySet<string> | undefined
+): T[] {
+  if (!priorityIds?.size) return entities;
+  return entities.toSorted(
+    (a, b) => Number(priorityIds.has(b.id)) - Number(priorityIds.has(a.id))
+  );
+}

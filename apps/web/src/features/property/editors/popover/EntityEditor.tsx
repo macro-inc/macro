@@ -1,4 +1,6 @@
+import { t } from '@app/lib/i18n';
 import { PickerSheet } from '@components/app/mobile/PickerSheet';
+import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import {
@@ -7,13 +9,15 @@ import {
 } from '@property/utils/entityConversion';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { createSignal, Show, Suspense } from 'solid-js';
+import { createMemo, createSignal, Show, Suspense } from 'solid-js';
 import { useProperty } from '../../core/context';
 import { useAgentAssignees } from '../../queries/agent-assignees';
 import { useTeamMembers } from '../../queries/team-members';
 import type { EntityProperty, PropertyApiValues } from '../../types';
 import { isEntityProperty } from '../../utils';
+import { useQuickAccessEntities } from '../selectors/entityUtils';
 import { PropertyEntitySelector } from '../selectors/PropertyEntitySelector';
+import { scopedUserOptions } from '../selectors/scoped-user-options';
 import { EditorPopover } from './EditorPopover';
 
 type EntityEditorProps = {
@@ -114,6 +118,29 @@ function EntityEditorSelector(
     property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES;
   const agents = useAgentAssignees(() => isAssignees);
   const team = useTeamMembers(() => isCompanyOwner || isAssignees);
+  const [findingOtherPeople, setFindingOtherPeople] = createSignal(false);
+  const { items: people } = useQuickAccessEntities(() => 'USER');
+  const users = createMemo(() => {
+    if (!isAssignees) return team.users();
+    return scopedUserOptions(
+      [...agents(), ...team.users()],
+      people().map((item) => item.data),
+      entityReferencesToIdSet(props.draft.selectedRefs()),
+      findingOtherPeople()
+    );
+  });
+  const priorityIds = createMemo(
+    () =>
+      new Set(
+        users()
+          .filter((user) => isBotPrincipalId(user.id))
+          .map((user) => user.id)
+      )
+  );
+  const showRosterStatus = () =>
+    (isCompanyOwner || isAssignees) &&
+    !findingOtherPeople() &&
+    (team.isLoading() || team.isError());
 
   return (
     <>
@@ -128,13 +155,21 @@ function EntityEditorSelector(
             placeholder: `${property.isMultiSelect ? 'Add' : 'Change'} ${property.displayName.toLowerCase()}...`,
             specificEntityType: property.specificEntityType,
             selfFilter: props.selfFilter,
-            users: isCompanyOwner || isAssignees ? team.users : undefined,
-            allowOtherUsers: isAssignees,
-            usersLoading: team.isLoading,
-            usersError: team.isError,
-            additionalUsers: agents,
+            users: isCompanyOwner || isAssignees ? users : undefined,
             fillHeight: props.fillHeight,
           }}
+          priorityIds={isAssignees ? priorityIds() : undefined}
+          action={
+            isAssignees
+              ? {
+                  label: findingOtherPeople()
+                    ? t('viewMenus.backToTeam')
+                    : t('viewMenus.findOtherPeople'),
+                  onSelect: () => setFindingOtherPeople((value) => !value),
+                }
+              : undefined
+          }
+          emptyState={showRosterStatus() ? null : undefined}
           selectedOptions={() =>
             entityReferencesToIdSet(props.draft.selectedRefs())
           }
@@ -152,6 +187,13 @@ function EntityEditorSelector(
           onCancel={props.onCancel}
         />
       </Suspense>
+      <Show when={showRosterStatus()}>
+        <div role="status" class="shrink-0 px-3 py-2 text-sm text-ink-muted">
+          {team.isLoading()
+            ? t('viewMenus.loadingTeamMembers')
+            : t('viewMenus.teamMembersUnavailable')}
+        </div>
+      </Show>
       <Show
         when={
           props.selfFilter?.entityType === 'INITIATIVE' &&

@@ -1158,9 +1158,10 @@ with the PR's status, title, `owner/repo#N`, and line changes. Clicking it opens
 Macro in a new split (in place on touch devices); a PR Macro has not synced yet opens on
 GitHub instead.
 
-Assignees initially lists and searches current team members plus available
-agents. Choose **Find other people…** to search other eligible people from the
-existing contacts pool, then **Back to team members** to return without losing
+Assignees initially lists and searches available agents followed by current team
+members. Agents stay above people, including people already selected. Choose
+**Find other people…** to search other eligible people from the existing contacts
+pool, then **Back to team members** to return without losing
 picks. Selected outsiders stay visible and removable, even after leaving the team
 or disappearing from contacts. Each new opening starts in team mode. Discovery
 does not invite arbitrary email addresses or select CRM-only contact records.

@@ -210,6 +210,8 @@ export type ListFilterGroup<
   defaultOptionId?: TOptionId;
   searchPlaceholder?: string;
   contentClass?: string;
+  /** Keep the source ordering instead of promoting selected options. */
+  preserveOrder?: boolean;
   action?: SearchableSelectAction;
   /** Optional content below a searchable group's options. */
   footer?: JSX.Element;
@@ -429,6 +431,7 @@ export function ListFilterDropdown<
                   activeIds={() => selectedOptionIds(group())}
                   onChange={(ids) => setSelectedOptionIds(group(), ids)}
                   placeholder={group().searchPlaceholder}
+                  preserveOrder={group().preserveOrder}
                   action={group().action}
                   footer={group().footer}
                   onOpenChange={group().onOpenChange}

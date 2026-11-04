@@ -193,6 +193,31 @@ beforeAll(() => {
 afterEach(cleanup);
 
 describe('assigning an agent through task and project properties', () => {
+  it.each([EntityEditor, EntitySheetEditor])(
+    'offers an agent before an already-selected person for keyboard assignment',
+    async (Editor) => {
+      const onSave = setup(undefined, property, Editor);
+      fireEvent.keyDown(screen.getByPlaceholderText('Add assignees...'), {
+        key: 'Enter',
+      });
+      fireEvent.click(
+        screen.getByText(Editor === EntitySheetEditor ? 'Done' : 'Dismiss')
+      );
+      await waitFor(() =>
+        expect(onSave).toHaveBeenCalledExactlyOnceWith(
+          property,
+          {
+            valueType: 'ENTITY',
+            refs: [
+              { entity_id: userId, entity_type: 'USER' },
+              { entity_id: agentId, entity_type: 'USER' },
+            ],
+          },
+          new Map([[agentId, 'Research assistant']])
+        )
+      );
+    }
+  );
   it.each([
     { name: 'new task', selfFilter: undefined },
     {

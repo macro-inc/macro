@@ -1,4 +1,3 @@
-import { t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { useEmail, useUserId } from '@core/context/user';
@@ -25,6 +24,7 @@ import {
   createMemo,
   createSignal,
   For,
+  type JSX,
   onCleanup,
   onMount,
   Show,
@@ -36,6 +36,7 @@ import {
   getEntityTimestampedItem,
   getEntityType,
   isChannelEntity,
+  prioritizeEntities,
   quickAccessItemToEntity,
   sortEntitiesWithSelfFirst,
   threadMapper,
@@ -43,7 +44,6 @@ import {
   userToEntity,
 } from './entityUtils';
 import { OptionCheckBox } from './OptionCheckBox';
-import { scopedUserOptions } from './scoped-user-options';
 import type { EntitySelectorConfig, PinnedOption } from './types';
 
 type EntityInputProps = {
@@ -57,6 +57,12 @@ type EntityInputProps = {
   /** Escape in the search; `onClose` when absent, as a popover saves on close. */
   onCancel?: () => void;
   pinnedOptions?: PinnedOption[];
+  /** Caller-prioritized ids stay ahead of other matching entities. */
+  priorityIds?: ReadonlySet<string>;
+  /** Optional action row, reachable through the same keyboard navigation. */
+  action?: { label: string; onSelect: () => void };
+  /** Override empty-result content; null hides the default message. */
+  emptyState?: JSX.Element;
 };
 
 function getEntityTypePluralLabel(
@@ -119,17 +125,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const [inputValue, setInputValue] = createSignal('');
   const [searchTerm, setSearchTerm] = createSignal('');
   const [selectedIndex, setSelectedIndex] = createSignal(0);
-  const [findOtherUsers, setFindOtherUsers] = createSignal(false);
   const openedSelectedIds = new Set(props.selectedOptions());
-  const hasUserDiscovery = () =>
-    props.config.specificEntityType === 'USER' &&
-    !!props.config.users &&
-    props.config.allowOtherUsers === true;
-  const toggleUserDiscovery = () => {
-    setFindOtherUsers((value) => !value);
-    setSelectedIndex(0);
-    searchInputRef.focus();
-  };
   const keyboardMode = useKeyPressed(100);
 
   // Pinned options filtered by search term
@@ -151,6 +147,11 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   createEffect(() => debouncedSetSearchTerm(inputValue()));
 
   let searchInputRef!: HTMLInputElement;
+  const runAction = () => {
+    props.action?.onSelect();
+    setSelectedIndex(0);
+    searchInputRef.focus();
+  };
 
   // Get self-filter context from config
   const selfFilterEntityType = () => props.config.selfFilter?.entityType;
@@ -207,9 +208,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   });
 
   const isLoadingEntities = createMemo(() => {
-    if (props.config.users && !findOtherUsers()) {
-      return props.config.usersLoading?.() ?? false;
-    }
+    if (props.config.users) return false;
     if (needsEmailSearch()) {
       return (
         emailsQuery.isLoading ||
@@ -220,26 +219,15 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     return isQuickAccessLoading();
   });
 
-  // A scoped pool still offers agents and keeps existing outsiders removable.
+  // An explicit user pool replaces Quick Access options.
   const scopedUserEntities = createMemo(() => {
     if (props.config.specificEntityType !== 'USER' || !props.config.users) {
       return undefined;
     }
-    const users = [
+    return [
       ...props.config.users(),
       ...(props.config.additionalUsers?.() ?? []),
-    ];
-    const pool = hasUserDiscovery()
-      ? scopedUserOptions(
-          users,
-          quickAccessItems().flatMap((item) =>
-            item.kind === 'user' ? [item.data] : []
-          ),
-          props.selectedOptions(),
-          findOtherUsers()
-        )
-      : users;
-    return pool.map((user) => userToEntity(augmentUserWithDmActivity(user)));
+    ].map((user) => userToEntity(augmentUserWithDmActivity(user)));
   });
 
   // Convert quickAccess items to CombinedEntity format.
@@ -335,15 +323,17 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       : () => true;
 
     // Get visible entities based on search
-    // Sort self to top BEFORE slicing to ensure self appears even if not in top 50 by default
+    // Apply caller priority before the visible-result cap.
     const localResults = term
-      ? entitySearch(allEntities, term)
+      ? prioritizeEntities(
+          entitySearch(allEntities, term).map((result) => result.item),
+          props.priorityIds
+        )
           .slice(0, MAX_SEARCH_RESULTS)
-          .map((result) => result.item)
           .filter(excludeFilter)
-      : sortEntitiesWithSelfFirst(
-          allEntities.filter(excludeFilter),
-          userId
+      : prioritizeEntities(
+          sortEntitiesWithSelfFirst(allEntities.filter(excludeFilter), userId),
+          props.priorityIds
         ).slice(0, MAX_VISIBLE_ENTITIES_NO_SEARCH);
 
     // For THREAD or generic entity: merge local + server results
@@ -362,7 +352,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   // Sort entities with selected items first when not searching. Self is
   // already pinned to the top within `filteredEntities`; this layers
   // selected-first on top of that ordering.
-  const sortedEntities = useSelectedFirst({
+  const selectedFirstEntities = useSelectedFirst({
     items: filteredEntities,
     allItems: entities,
     selectedIds: props.selectedOptions,
@@ -370,15 +360,18 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     getId: (e: CombinedEntity) => e.id,
   });
 
-  const selectedEntityCountAtOpen = createMemo(() => {
-    if (!props.config.isMultiSelect || searchTerm()) return 0;
-    return sortedEntities().filter((entity) => openedSelectedIds.has(entity.id))
-      .length;
-  });
-  const shouldShowSelectedDivider = (index: number) =>
-    selectedEntityCountAtOpen() > 0 &&
-    selectedEntityCountAtOpen() < sortedEntities().length &&
-    index === selectedEntityCountAtOpen();
+  const sortedEntities = createMemo(() =>
+    prioritizeEntities(selectedFirstEntities(), props.priorityIds)
+  );
+  const shouldShowSelectedDivider = (index: number) => {
+    if (!props.config.isMultiSelect || searchTerm() || index === 0)
+      return false;
+    const items = sortedEntities();
+    return (
+      openedSelectedIds.has(items[index - 1].id) &&
+      !openedSelectedIds.has(items[index].id)
+    );
+  };
 
   const toggleEntity = (entity: CombinedEntity) => {
     const entityType = getEntityType(entity);
@@ -435,7 +428,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
   const resultCount = () =>
     pinnedCount() + sortedEntities().length + (customEmail() ? 1 : 0);
-  const totalCount = () => resultCount() + (hasUserDiscovery() ? 1 : 0);
+  const totalCount = () => resultCount() + (props.action ? 1 : 0);
 
   // Reset selected index to top when search term or list changes
   createEffect(() => {
@@ -475,8 +468,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       } else if (idx < pCount + sortedEntities().length) {
         const entity = sortedEntities()[idx - pCount];
         if (entity) toggleEntity(entity);
-      } else if (hasUserDiscovery() && idx === resultCount()) {
-        toggleUserDiscovery();
+      } else if (props.action && idx === resultCount()) {
+        runAction();
       } else {
         const entity = customEmailEntity();
         if (entity) toggleEntity(entity);
@@ -520,19 +513,6 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         </div>
       </div>
 
-      <Show
-        when={
-          props.config.users &&
-          !findOtherUsers() &&
-          (props.config.usersLoading?.() || props.config.usersError?.())
-        }
-      >
-        <div role="status" class="px-3 py-2 text-sm text-ink-muted">
-          {props.config.usersLoading?.()
-            ? t('viewMenus.loadingTeamMembers')
-            : t('viewMenus.teamMembersUnavailable')}
-        </div>
-      </Show>
       <Show when={resultCount() > 0}>
         {/* Picking a row keeps focus in the search field: a tap that moved
             it would drop the phone keyboard until the refocus below. iOS
@@ -730,23 +710,22 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         </div>
       </Show>
 
-      <Show
-        when={
-          resultCount() === 0 &&
-          !(
-            props.config.users &&
-            !findOtherUsers() &&
-            (props.config.usersLoading?.() || props.config.usersError?.())
-          )
-        }
-      >
-        <div class="text-center py-4 text-ink-muted text-sm">
-          <Show when={!isLoadingEntities()} fallback={<span>Loading...</span>}>
-            No {getEntityTypePluralLabel(props.config.specificEntityType)} found
-          </Show>
-        </div>
+      <Show when={resultCount() === 0}>
+        {props.emptyState !== undefined ? (
+          props.emptyState
+        ) : (
+          <div class="text-center py-4 text-ink-muted text-sm">
+            <Show
+              when={!isLoadingEntities()}
+              fallback={<span>Loading...</span>}
+            >
+              No {getEntityTypePluralLabel(props.config.specificEntityType)}{' '}
+              found
+            </Show>
+          </div>
+        )}
       </Show>
-      <Show when={hasUserDiscovery()}>
+      <Show when={props.action}>
         <div
           class="shrink-0 border-t border-edge-muted p-1.5"
           onPointerDown={keepSearchFocus}
@@ -760,14 +739,12 @@ export function PropertyEntitySelector(props: EntityInputProps) {
               'justify-start',
               selectedIndex() === resultCount() && 'bg-hover'
             )}
-            onClick={toggleUserDiscovery}
+            onClick={runAction}
             onMouseEnter={() => {
               if (!keyboardMode()) setSelectedIndex(resultCount());
             }}
           >
-            {findOtherUsers()
-              ? t('viewMenus.backToTeam')
-              : t('viewMenus.findOtherPeople')}
+            {props.action?.label}
           </Button>
         </div>
       </Show>

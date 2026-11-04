@@ -5,9 +5,11 @@ import type {
 } from '@app/features/next-soup/soup-view/filters-bar/searchable-multi-select';
 import { t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
+import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { useUserId } from '@core/context/user';
 import type { IUser } from '@core/user/types';
 import CircleDashedIcon from '@icon/system/regular/circle-dashed.svg';
+import { useAgentAssignees } from '@property/queries/agent-assignees';
 import { useTeamMembers } from '@property/queries/team-members';
 import { useContacts } from '@queries/contacts/contacts';
 import { Button } from '@ui';
@@ -32,6 +34,7 @@ export function useAssigneePicker(
 ) {
   const contacts = useContacts(enabled);
   const team = useTeamMembers(enabled);
+  const agents = useAgentAssignees(enabled);
   const userId = useUserId();
   const [discovering, setDiscovering] = createSignal(false);
 
@@ -40,6 +43,7 @@ export function useAssigneePicker(
     const people = new Map<string, IUser>();
     for (const contact of contacts()) people.set(contact.id, contact);
     for (const member of team.users()) people.set(member.id, member);
+    for (const agent of agents()) people.set(agent.id, agent);
 
     const option = (id: string): SearchableOption => ({
       id,
@@ -56,6 +60,7 @@ export function useAssigneePicker(
       result.push(option(id));
     };
 
+    for (const agent of agents()) add(agent.id);
     if (uid) add(uid);
     result.push({
       id: NO_ASSIGNEE,
@@ -69,7 +74,9 @@ export function useAssigneePicker(
     if (discovering()) {
       for (const contact of contacts()) add(contact.id);
     }
-    return result;
+    return result.toSorted(
+      (a, b) => Number(isBotPrincipalId(b.id)) - Number(isBotPrincipalId(a.id))
+    );
   });
 
   return {

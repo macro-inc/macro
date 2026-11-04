@@ -75,10 +75,10 @@ live search. Closing Search clears the input and its unsent suggested form.
 For Search intent, extraction selects a search type before extracting only that
 type's supported filters. Task status/priority/assignee/creator filters and channel
 In/From filters use the same controls and resolution as desktop Command K.
-The task Assignee facet initially lists and searches team members, keeping
-selected outsiders removable. **Find other people…** explicitly opens the broader
-people pool; **Back to team members** preserves picks, and reopening starts in
-team mode. Desktop chips and the mobile filter drawer share this behavior.
+The task Assignee facet initially lists and searches available agents before team
+members, including selected people. Selected outsiders remain removable.
+**Find other people…** explicitly opens the broader people pool; **Back to team
+members** preserves picks, and reopening starts in team mode. Desktop chips and the mobile filter drawer share this behavior.
 Created by, channel senders, and call speakers retain their existing people pools.
 The shared global-search filters and results update live above the bar. Open a
 filtered result directly; there is no separate Search submit action.

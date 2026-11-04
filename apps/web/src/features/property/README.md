@@ -82,9 +82,10 @@ title-row tags retain their compact height.
 
 ## Assignee selection
 
-The system Assignees property uses the current team roster, plus available
-agents. **Find other people…** explicitly expands to the existing Quick Access
-people pool; **Back to team members** restores the roster without dropping picks.
+The system Assignees property lists available agents before the current team
+roster, including people who are already selected. **Find other people…** explicitly
+expands to the existing Quick Access people pool; **Back to team members** restores
+the roster without dropping picks.
 Already-selected outsiders remain visible and removable, including references
 absent from contacts. Closing and reopening starts in team mode.
 
@@ -93,8 +94,12 @@ editors, and touch picker sheets. References remain `USER` values; discovery
 does not add arbitrary email addresses or CRM-only records. Company owner stays
 strictly team-only, and custom people properties keep their existing pool.
 `queries/team-members.ts` shares the non-suspending roster with Assignee filters.
-The command-menu composer/bulk editor lives in `editor/entity-property-editor.tsx`;
-its source and the row/sheet picker share `editors/selectors/scoped-user-options.ts`.
+The property-aware wrapper in `editors/popover/EntityEditor.tsx` owns roster and
+contacts switching, outsider retention, and roster-status UI. Keep that policy out
+of `PropertyEntitySelector`; its extension points are generic actions, empty-state
+content, and priority ids. The command-menu composer/bulk editor lives in
+`editor/entity-property-editor.tsx`; both editor compositions share
+`editors/selectors/scoped-user-options.ts`.
 Removing an outsider removes that row from team mode immediately; finding that
 person again requires explicit discovery.
 

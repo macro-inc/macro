@@ -900,6 +900,7 @@ export const UnifiedFilterDropdown = (
                       activeIds={assigneeFilter}
                       onChange={handleAssigneeChange}
                       placeholder={t('viewMenus.searchAssignees')}
+                      preserveOrder
                       action={assigneePicker.action()}
                       footer={
                         <AssigneeDiscoveryStatus discovery={assigneePicker} />

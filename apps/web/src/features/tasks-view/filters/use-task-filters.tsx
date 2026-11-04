@@ -9,6 +9,7 @@ import {
 } from '@app/features/soup/assignee-picker';
 import { addUnique, removeValue } from '@app/lib/signals/store-array-updaters';
 import { UserIcon } from '@core/component/UserIcon';
+import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { useUserId } from '@core/context/user';
 import { idToDisplayName } from '@core/user/util';
 import { PropertyValueIcon } from '@property/component/propertyValue';
@@ -184,7 +185,11 @@ export function useTaskFilters() {
           ...assigneePicker
             .options()
             .filter((option) => option.id !== NO_ASSIGNEE),
-        ],
+        ].toSorted(
+          (a, b) =>
+            Number(isBotPrincipalId(b.id)) - Number(isBotPrincipalId(a.id))
+        ),
+        preserveOrder: true,
         action: assigneePicker.action(),
         footer: <AssigneeDiscoveryStatus discovery={assigneePicker} />,
         onOpenChange: (open) => {

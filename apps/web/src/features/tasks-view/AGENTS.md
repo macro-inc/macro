@@ -46,7 +46,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Save filters, relative due dates or valid calendar bounds, selected layout, grouping, and ordered sort directions; keep text search and scroll state local, and capture implicit person conditions as normal OR-valued facets.
 - Preserve stable tag/property bindings when labels disappear; skip unsupported or malformed conditions without discarding supported filters.
 - Label the semantic viewer token Me, explain it with “Matches whoever opens this saved view,” and resolve it only when executing a filter; a selected fixed user stays fixed.
-- Keep Assignee options team-first with explicit other-people discovery; preserve selected outsiders, the semantic Me token, broad Created by options, and per-opening discovery reset.
+- List Assignee agents before people, then use team members with explicit other-people discovery; preserve selected outsiders, the semantic Me token, broad Created by options, and per-opening discovery reset.
 - Keep saved views on All Tasks with every restriction in editable facets; accept only the final v1 person-filter format, without a separate Scope control.
 - Do not persist temporary saved-view filters, including due-date predicates, in entry snapshots; detail navigation discards those edits but retains the saved-view ID.
 - Pass saved-view state through the existing Tasks search codec; split URLs namespace it as `s0.tasks.savedView`.

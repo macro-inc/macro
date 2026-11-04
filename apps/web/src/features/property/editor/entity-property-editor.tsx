@@ -24,8 +24,11 @@ import {
   type CombinedEntity,
   getEntityName,
   getEntityType,
+  prioritizeEntities,
+  useQuickAccessEntities,
 } from '../editors/selectors/entityUtils';
 import { OptionCheckBox } from '../editors/selectors/OptionCheckBox';
+import { scopedUserOptions } from '../editors/selectors/scoped-user-options';
 import { usePropertyEntityDisplay } from '../hooks/usePropertyEntityDisplay';
 import { useAgentAssignees } from '../queries/agent-assignees';
 import { useTeamMembers } from '../queries/team-members';
@@ -147,16 +150,33 @@ export function EntityPropertyEditor(props: {
   const localSelectedIds = createMemo(
     () => new Set(localSelectedRefs().map((ref) => ref.entity_id))
   );
+  const { items: people } = useQuickAccessEntities(() => 'USER');
+  const users = createMemo(() => {
+    if (!isCompanyOwner() && !isAssignees()) return undefined;
+    const pool = [...agents(), ...team.users()];
+    if (!isAssignees()) return pool;
+    return scopedUserOptions(
+      pool,
+      people().map((item) => item.data),
+      localSelectedIds(),
+      findingOtherPeople()
+    );
+  });
+  const priorityIds = createMemo(
+    () =>
+      new Set(
+        users()
+          ?.filter((user) => isBotPrincipalId(user.id))
+          .map((user) => user.id)
+      )
+  );
   const { entities } = useEntitiesForProperty(
     () => props.property,
     props.searchValue,
     {
-      users: () =>
-        isCompanyOwner() || isAssignees()
-          ? [...team.users(), ...agents()]
-          : undefined,
+      users,
       selectedIds: () => (isAssignees() ? localSelectedIds() : undefined),
-      includeOtherUsers: () => isAssignees() && findingOtherPeople(),
+      priorityIds: () => (isAssignees() ? priorityIds() : undefined),
     }
   );
 
@@ -171,16 +191,11 @@ export function EntityPropertyEditor(props: {
       (entity) => !selectedAtOpen.has(entity.id)
     );
 
-    return [...selected, ...remaining];
+    return prioritizeEntities(
+      [...selected, ...remaining],
+      isAssignees() ? priorityIds() : undefined
+    );
   });
-
-  const selectedGroupSize = createMemo(() =>
-    canGroupMultiValues()
-      ? orderedEntities().filter((entity) =>
-          orderedSelectedIds().has(entity.id)
-        ).length
-      : 0
-  );
 
   const searchQuery = () => props.searchValue().trim();
   const showClearAllRow = () =>
@@ -209,7 +224,10 @@ export function EntityPropertyEditor(props: {
         type: 'entity',
         entity,
         separatorBefore:
-          canGroupMultiValues() && index === selectedGroupSize() && index > 0,
+          canGroupMultiValues() &&
+          index > 0 &&
+          orderedSelectedIds().has(orderedEntities()[index - 1].id) &&
+          !orderedSelectedIds().has(entity.id),
       });
     }
 

@@ -458,6 +458,7 @@ export function useSearchFacets(
       activeIds: controller.taskAssignees,
       onChange: controller.setTaskAssignees,
     }),
+    preserveOrder: true,
     action: assigneePicker.action,
     footer: () => <AssigneeDiscoveryStatus discovery={assigneePicker} />,
     onPickerClose: () => assigneePicker.setDiscovering(false),
