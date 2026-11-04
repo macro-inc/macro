@@ -111,6 +111,13 @@ tools — hexagonal, heavily feature-gated.
   delivery on a tracking failure, and count opens only for sent messages.
   Tokens are stored per message, so a retried send or Outlook draft revision
   rebuilds the same URL; keep it that way or the draft fingerprints drift.
+- Person profiles (`domain/person_profiles.rs`) come from Apollo.io bulk
+  people enrichment (`outbound/apollo_person_resolver.rs`, feature `apollo`),
+  never LinkedIn scraping. `email_person_profiles` caches one row per
+  lowercased address for every viewer, misses included, for
+  `REFRESH_AFTER`; a thread read looks up at most one Apollo batch, skips the
+  viewer's own inboxes, and keeps only high/medium-confidence matches. An
+  unavailable Apollo stores nothing, so the next read retries.
 - Outlook organization commands only run in their link's current
   `sync_generation`. Anything that bumps it must rebind unfinished commands as
   `pending`, since claims skip `confirming` ones while those still block later

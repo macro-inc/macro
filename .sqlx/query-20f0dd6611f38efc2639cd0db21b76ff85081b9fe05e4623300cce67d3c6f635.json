@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.address AS \"address!\"\n            FROM (\n                SELECT LOWER(c.email_address) AS address, m.internal_date_ts AS seen_at\n                FROM email_messages m\n                JOIN email_contacts c ON c.id = m.from_contact_id\n                WHERE m.thread_id = $1 AND NOT m.is_draft\n                UNION ALL\n                SELECT LOWER(c.email_address), m.internal_date_ts\n                FROM email_messages m\n                JOIN email_message_recipients r ON r.message_id = m.id\n                JOIN email_contacts c ON c.id = r.contact_id\n                WHERE m.thread_id = $1 AND NOT m.is_draft\n            ) p\n            GROUP BY p.address\n            ORDER BY MIN(p.seen_at) NULLS LAST, p.address\n            LIMIT $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "address!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "20f0dd6611f38efc2639cd0db21b76ff85081b9fe05e4623300cce67d3c6f635"
+}

@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT email_address, linkedin_url, headline, title, organization_name, photo_url\n            FROM email_person_profiles\n            WHERE email_address = ANY($1) AND resolved_at >= $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email_address",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "linkedin_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "headline",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "organization_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "photo_url",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "e3871ee0294d202f0e577c425761b73a840e83e3f12d843b6e024b7e06e8edbd"
+}

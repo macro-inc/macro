@@ -21,6 +21,8 @@ pub mod invitation_resolution;
 pub mod mailbox;
 pub mod models;
 #[cfg(feature = "ports")]
+pub mod person_profiles;
+#[cfg(feature = "ports")]
 pub mod read_receipts;
 pub mod senders;
 

@@ -1,3 +1,5 @@
+#[cfg(feature = "apollo")]
+pub mod apollo_person_resolver;
 #[cfg(feature = "outbound")]
 mod email_pg_repo;
 #[cfg(feature = "http_client")]
@@ -10,6 +12,8 @@ mod gmail_sender_provider;
 mod gmail_token_provider;
 #[cfg(feature = "outbound")]
 pub mod invitation_pg;
+#[cfg(feature = "outbound")]
+pub mod person_profiles_pg;
 #[cfg(feature = "outbound")]
 pub mod read_receipts_pg;
 #[cfg(feature = "s3")]
