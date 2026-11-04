@@ -6,6 +6,7 @@ export default {
   openCategory: 'Open category',
   openCategoryNamed: 'Open {{category}}',
   createNewSplit: 'Create new split',
+  createNewSplitBelow: 'Create new split below',
   toggleSettings: 'Go to Settings',
   account: 'Account',
   logout: 'Logout',

@@ -1,6 +1,6 @@
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { AgentsViewSkeleton } from '@app/features/agents-view/agents-view-skeleton';
-import { MobileWebSignup } from '@app/features/auth/auth';
+import { AgentSignup, MobileWebSignup } from '@app/features/auth/auth';
 import { CalendarViewSkeleton } from '@app/features/calendar-view/calendar-view-skeleton';
 import { ChannelInviteAcceptance } from '@app/features/channel-invitations/ChannelInviteAcceptance';
 import { ChannelsViewSkeleton } from '@app/features/channels-view/channels-view-skeleton';
@@ -51,6 +51,7 @@ import {
   DriveCallRouteView,
   DriveDetailView,
   DriveRouteView,
+  EmailComposeRouteView,
   EmailDetailRouteView,
   FoldersRouteView,
   FormRespondRoutePage,
@@ -85,6 +86,9 @@ import {
 import {
   activityRoute,
   agentChatsRoute,
+  agentSetupDoneRoute,
+  agentSetupRoute,
+  agentSignupRoute,
   agentsRoute,
   agentsViewRoute,
   appRoute,
@@ -118,6 +122,7 @@ import {
   driveSplitRoute,
   driveTabDocumentRoute,
   driveTabRoute,
+  emailComposeRoute,
   emailSignupCallbackRoute,
   emailSplitRoute,
   emailThreadRoute,
@@ -170,6 +175,14 @@ import {
   withMeetingShell,
 } from './shells';
 
+const AgentSetupPage = lazyNamed(
+  () => import('@app/features/agent-setup/agent-setup-page'),
+  'AgentSetupPage'
+);
+const AgentSetupDonePage = lazyNamed(
+  () => import('@app/features/agent-setup/agent-setup-page'),
+  'AgentSetupDonePage'
+);
 const ExternalChatRouteView = lazyNamed(
   () => import('@app/features/external-view/route-views'),
   'ExternalChatRouteView'
@@ -252,6 +265,12 @@ export function AppRouterView() {
       <Route definition={authRoute} component={AuthShell}>
         <Route definition={taskSlugRoute} component={TaskSlugPage} />
         <Route definition={signupRoute} component={SignupPage} />
+        <Route definition={agentSignupRoute} component={AgentSignup} />
+        <Route definition={agentSetupRoute} component={AgentSetupPage} />
+        <Route
+          definition={agentSetupDoneRoute}
+          component={AgentSetupDonePage}
+        />
         <Route
           definition={emailSignupCallbackRoute}
           component={EmailCallback}
@@ -372,6 +391,10 @@ export function AppRouterView() {
           component={MailRouteView}
           loading={EmailViewSkeleton}
         >
+          <Route
+            definition={emailComposeRoute}
+            component={EmailComposeRouteView}
+          />
           <Route
             definition={emailThreadRoute}
             component={EmailDetailRouteView}

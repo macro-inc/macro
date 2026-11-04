@@ -1,4 +1,5 @@
-import { ZoneContextManager } from '@macro-inc/observability/zone';
+import { Telemetry } from '@macro-inc/observability';
+import { StackContextManager } from '@macro-inc/observability/web';
 import { context, propagation, trace } from '@opentelemetry/api';
 import { W3CTraceContextPropagator } from '@opentelemetry/core';
 import {
@@ -6,7 +7,7 @@ import {
   type ReadableSpan,
 } from '@opentelemetry/sdk-trace-base';
 import { transferEmailDraft } from '@queries/email/draft';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, expect, it, vi } from 'vitest';
 import type { EmailInbox } from '../context/compose-capabilities';
 import { createDraftSession } from './draft-session';
 import { createDraftTransfer } from './draft-transfer';
@@ -14,7 +15,7 @@ import { createDraftTransfer } from './draft-transfer';
 const finished: ReadableSpan[] = [];
 let open = 0;
 let settled: (() => void) | undefined;
-context.setGlobalContextManager(new ZoneContextManager().enable());
+context.setGlobalContextManager(new StackContextManager().enable());
 propagation.setGlobalPropagator(new W3CTraceContextPropagator());
 trace.setGlobalTracerProvider(
   new BasicTracerProvider({
@@ -42,6 +43,14 @@ function spansSettled() {
         settled = resolve;
       });
 }
+
+beforeAll(async () => {
+  await Telemetry.init({
+    serviceName: 'test',
+    environment: 'test',
+    enabled: async () => true,
+  });
+});
 
 const outlook: EmailInbox = {
   id: 'outlook-inbox',

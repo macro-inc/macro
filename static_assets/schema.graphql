@@ -604,6 +604,445 @@ input CreateSavedViewInput {
 }
 
 """
+Match the checked or unchecked state of a cell.
+"""
+input DatabaseViewCheckboxTest {
+	"""
+	Whether the cell must be checked.
+	"""
+	checked: Boolean!
+}
+
+"""
+How the conditions within a filter group combine.
+"""
+enum DatabaseViewConjunction {
+	"""
+	Require every condition.
+	"""
+	AND
+	"""
+	Require at least one condition.
+	"""
+	OR
+}
+
+"""
+An ordering comparison between instants.
+"""
+enum DatabaseViewDateOperator {
+	"""
+	The instant is before the comparison instant.
+	"""
+	BEFORE
+	"""
+	The instant is after the comparison instant.
+	"""
+	AFTER
+	"""
+	The instant is at or before the comparison instant.
+	"""
+	ON_OR_BEFORE
+	"""
+	The instant is at or after the comparison instant.
+	"""
+	ON_OR_AFTER
+}
+
+"""
+How a date range relates to a day.
+"""
+enum DatabaseViewDateRangeOperator {
+	"""
+	The range overlaps the day.
+	"""
+	CONTAINS
+	"""
+	The range misses the day, or is empty.
+	"""
+	DOES_NOT_CONTAIN
+	"""
+	The range ends before the day.
+	"""
+	ENDS_BEFORE
+	"""
+	The range ends on or after the day.
+	"""
+	ENDS_ON_OR_AFTER
+	"""
+	The range starts after the day.
+	"""
+	STARTS_AFTER
+	"""
+	The range starts on or before the day.
+	"""
+	STARTS_ON_OR_BEFORE
+}
+
+"""
+Compare a date range cell with the day starting at a UTC instant.
+"""
+input DatabaseViewDateRangeTest {
+	"""
+	The comparison to apply.
+	"""
+	operator: DatabaseViewDateRangeOperator!
+	"""
+	The start of the day compared against.
+	"""
+	value: DateTime!
+}
+
+"""
+Compare a date cell with a UTC instant.
+"""
+input DatabaseViewDateTest {
+	"""
+	The comparison to apply.
+	"""
+	operator: DatabaseViewDateOperator!
+	"""
+	The value to compare the cell against.
+	"""
+	value: DateTime!
+}
+
+"""
+Compare referenced entity identities with a set of entities.
+"""
+input DatabaseViewEntitiesTest {
+	"""
+	The comparison to apply.
+	"""
+	operator: DatabaseViewSetOperator!
+	"""
+	Referenced entity identities.
+	"""
+	entities: [String!]!
+}
+
+"""
+A typed predicate on one column placement.
+"""
+input DatabaseViewFilterCondition {
+	"""
+	Column placement identity within the selected table.
+	"""
+	column: ID!
+	"""
+	The comparison appropriate for this column.
+	"""
+	test: DatabaseViewFilterTest!
+}
+
+"""
+A conjunction of column conditions or nested groups.
+"""
+input DatabaseViewFilterGroup {
+	"""
+	Require every condition or at least one condition.
+	"""
+	conjunction: DatabaseViewConjunction!
+	"""
+	Column tests or nested groups.
+	"""
+	conditions: [DatabaseViewFilterNode!]!
+}
+
+"""
+Exactly one column condition or nested filter group.
+"""
+input DatabaseViewFilterNode @oneOf {
+	"""
+	A predicate on one column.
+	"""
+	condition: DatabaseViewFilterCondition
+	"""
+	A nested group of predicates.
+	"""
+	group: DatabaseViewFilterGroup
+}
+
+"""
+Exactly one test compatible with the selected column type.
+"""
+input DatabaseViewFilterTest @oneOf {
+	"""
+	Test cell emptiness.
+	"""
+	presence: DatabaseViewPresenceTest
+	"""
+	Test a text or link cell.
+	"""
+	text: DatabaseViewTextTest
+	"""
+	Test a numeric cell.
+	"""
+	number: DatabaseViewNumberTest
+	"""
+	Test a date cell.
+	"""
+	date: DatabaseViewDateTest
+	"""
+	Test a date range cell against a day.
+	"""
+	dateRange: DatabaseViewDateRangeTest
+	"""
+	Test a checkbox cell.
+	"""
+	checkbox: DatabaseViewCheckboxTest
+	"""
+	Test selected option identities.
+	"""
+	options: DatabaseViewOptionsTest
+	"""
+	Test referenced entity identities.
+	"""
+	entities: DatabaseViewEntitiesTest
+}
+
+"""
+A numeric equality or ordering comparison.
+"""
+enum DatabaseViewNumberOperator {
+	"""
+	The value equals the comparison value.
+	"""
+	IS
+	"""
+	The value differs from the comparison value.
+	"""
+	IS_NOT
+	"""
+	The number is greater than the comparison value.
+	"""
+	GREATER_THAN
+	"""
+	The number is at least the comparison value.
+	"""
+	GREATER_THAN_OR_EQUAL
+	"""
+	The number is less than the comparison value.
+	"""
+	LESS_THAN
+	"""
+	The number is at most the comparison value.
+	"""
+	LESS_THAN_OR_EQUAL
+}
+
+"""
+Compare a numeric cell with a finite number.
+"""
+input DatabaseViewNumberTest {
+	"""
+	The comparison to apply.
+	"""
+	operator: DatabaseViewNumberOperator!
+	"""
+	The value to compare the cell against.
+	"""
+	value: Float!
+}
+
+"""
+Compare selected option identities with a set of options.
+"""
+input DatabaseViewOptionsTest {
+	"""
+	The comparison to apply.
+	"""
+	operator: DatabaseViewSetOperator!
+	"""
+	Option identities from the selected column.
+	"""
+	options: [ID!]!
+}
+
+"""
+The requested cell-presence condition.
+"""
+enum DatabaseViewPresenceOperator {
+	"""
+	The cell has no value.
+	"""
+	IS_EMPTY
+	"""
+	The cell has a value.
+	"""
+	IS_NOT_EMPTY
+}
+
+"""
+Test whether the cell has a value.
+"""
+input DatabaseViewPresenceTest {
+	"""
+	The comparison to apply.
+	"""
+	operator: DatabaseViewPresenceOperator!
+}
+
+"""
+Filtering and ordering applied to the entire table before pagination.
+"""
+input DatabaseViewQueryInput {
+	"""
+	Optional filter; omission includes every row.
+	"""
+	filter: DatabaseViewFilterGroup
+	"""
+	Ordering keys in priority order; omission uses manual row order.
+	"""
+	sort: [DatabaseViewSort!]! = []
+}
+
+"""
+A table view and its optional continuation, with a bounded page size.
+"""
+input DatabaseViewRowsInput {
+	"""
+	The table within the authorized database.
+	"""
+	tableId: ID!
+	"""
+	The complete filtering and ordering definition.
+	"""
+	query: DatabaseViewQueryInput!
+	"""
+	The preceding page’s opaque cursor; omit for the first page.
+	"""
+	cursor: String
+	"""
+	Page size from 1 through 500; defaults to 500.
+	"""
+	limit: Int
+}
+
+"""
+Membership and order belong to this page; row facts retain their shared identity.
+"""
+type DatabaseViewRowsPage {
+	"""
+	Rows in global view order, hydrated as canonical Soup entities.
+	"""
+	items: [GraphqlSoupDatabaseRow!]!
+	"""
+	Continuation for the next page; absent at the end of the result.
+	"""
+	nextCursor: String
+	"""
+	Table version against which this page was selected.
+	"""
+	version: Int!
+}
+
+"""
+A membership condition for single- or multi-valued cells.
+"""
+enum DatabaseViewSetOperator {
+	"""
+	The single-valued cell matches one supplied identity.
+	"""
+	IS_ANY_OF
+	"""
+	The single-valued cell matches no supplied identity.
+	"""
+	IS_NONE_OF
+	"""
+	The cell contains at least one supplied identity.
+	"""
+	HAS_ANY
+	"""
+	The cell contains every supplied identity.
+	"""
+	HAS_ALL
+	"""
+	The cell contains no supplied identity.
+	"""
+	HAS_NONE
+}
+
+"""
+One ordering key; earlier keys take precedence.
+"""
+input DatabaseViewSort {
+	"""
+	Column placement identity within the selected table.
+	"""
+	column: ID!
+	"""
+	Ascending or descending value order.
+	"""
+	direction: DatabaseViewSortDirection!
+}
+
+"""
+The direction of a view ordering key.
+"""
+enum DatabaseViewSortDirection {
+	"""
+	Order values from lowest to highest.
+	"""
+	ASCENDING
+	"""
+	Order values from highest to lowest.
+	"""
+	DESCENDING
+}
+
+"""
+A text equality or substring comparison.
+"""
+enum DatabaseViewTextOperator {
+	"""
+	The value equals the comparison value.
+	"""
+	IS
+	"""
+	The value differs from the comparison value.
+	"""
+	IS_NOT
+	"""
+	The text contains the comparison string.
+	"""
+	CONTAINS
+	"""
+	The text does not contain the comparison string.
+	"""
+	DOES_NOT_CONTAIN
+	"""
+	The text starts with the comparison string.
+	"""
+	STARTS_WITH
+	"""
+	The text ends with the comparison string.
+	"""
+	ENDS_WITH
+}
+
+"""
+Compare a text or link cell with a string.
+"""
+input DatabaseViewTextTest {
+	"""
+	The comparison to apply.
+	"""
+	operator: DatabaseViewTextOperator!
+	"""
+	The value to compare the cell against.
+	"""
+	value: String!
+}
+
+"""
+Implement the DateTime<Utc> scalar
+
+The input/output is a string in RFC3339 format.
+"""
+scalar DateTime
+
+"""
 Delete an event, one occurrence, or an occurrence onward.
 """
 input DeleteCalendarEventInput {
@@ -1357,6 +1796,24 @@ enum GraphqlAgentPullRequestState {
 	The pull request was merged.
 	"""
 	MERGED
+}
+
+"""
+Who or what archived an agent session.
+"""
+enum GraphqlAgentSessionArchiveCause {
+	"""
+	A person archived it.
+	"""
+	USER
+	"""
+	Every pull request linked to it closed, with at least one merged.
+	"""
+	PULL_REQUEST_MERGED
+	"""
+	The runtime session backing it was deliberately closed.
+	"""
+	RUNTIME_CLOSED
 }
 
 """
@@ -3966,7 +4423,8 @@ enum GraphqlEmailFocusCategory {
 	"""
 	OTHER
 	"""
-	A calendar invite, update or RSVP.
+	In Focus, a reschedule, update, cancellation or proposed new time for an
+	event that isn't over. Left out, a new invite or an RSVP notice.
 	"""
 	CALENDAR
 	"""
@@ -4210,15 +4668,18 @@ type GraphqlEmailThreadFocus {
 	"""
 	category: GraphqlEmailFocusCategory!
 	"""
-	Sort key for the Focus list, 0 to 100.
+	How much the thread matters, 0 to 100.
 	"""
 	importance: Int!
 	"""
-	The latest message waits on the owner's answer.
+	Someone else sent the latest message and it waits on the owner's answer.
+	Never true together with `needs_follow_up`.
 	"""
 	needsReply: Boolean!
 	"""
-	An open loop the owner should come back to.
+	The owner sent the latest message and should come back to the thread: it
+	has an open loop or has waited for an answer. Never true together with
+	`needs_reply`.
 	"""
 	needsFollowUp: Boolean!
 	"""
@@ -5970,7 +6431,7 @@ type GraphqlNewNotification {
 """
 Typed GraphQL union containing every supported notification event payload.
 """
-union GraphqlNotifEvent = GraphqlExternalChatMessageMetadata | GraphqlEntityAccessGrantedMetadata | GraphqlEntityAccessRequestedMetadata | GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlInitiativeDiscussionMetadata | GraphqlCrmDiscussionMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelMessageReactionMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata | GraphqlCalendarEventJoinRequestMetadata | GraphqlWhatsappGroupMessageMetadata
+union GraphqlNotifEvent = GraphqlExternalChatMessageMetadata | GraphqlEntityAccessGrantedMetadata | GraphqlEntityAccessRequestedMetadata | GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlInitiativeDiscussionMetadata | GraphqlCrmDiscussionMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelMessageReactionMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata | GraphqlCalendarEventJoinRequestMetadata | GraphqlRoutineRunFinishedMetadata | GraphqlWhatsappGroupMessageMetadata
 
 """
 A notification associated with a shared entity, including entities outside Soup.
@@ -6760,6 +7221,24 @@ type GraphqlRepliedToDocumentCommentThreadMetadata {
 }
 
 """
+Metadata for a finished routine run.
+"""
+type GraphqlRoutineRunFinishedMetadata {
+	"""
+	Routine id.
+	"""
+	routineId: ID!
+	"""
+	Routine name when it ran.
+	"""
+	routineName: String!
+	"""
+	Whether the run succeeded.
+	"""
+	succeeded: Boolean!
+}
+
+"""
 A saved filter definition, not a snapshot of matching entities.
 """
 type GraphqlSavedView {
@@ -6921,6 +7400,10 @@ type GraphqlScheduledActionEventFilter {
 	"""
 	payloadMatch: [String!]!
 	"""
+	The task property that must have changed, and the values it must gain.
+	"""
+	property: GraphqlScheduledActionPropertySelector
+	"""
 	Yes/no question the triggering content must answer with yes before the routine runs.
 	"""
 	condition: String
@@ -7040,6 +7523,20 @@ type GraphqlScheduledActionMultipleTrigger {
 	Events that can also trigger this routine.
 	"""
 	events: GraphqlScheduledActionEventsTrigger
+}
+
+"""
+A task property a filter watches.
+"""
+type GraphqlScheduledActionPropertySelector {
+	"""
+	The property definition that must have changed.
+	"""
+	definitionId: ID!
+	"""
+	Select option or referenced entity ids, one of which the change must add. Empty matches any change.
+	"""
+	values: [String!]!
 }
 
 """
@@ -7285,7 +7782,16 @@ type GraphqlSoupAgentSession implements GraphqlSoupEntity {
 	"""
 	Whether the session is archived and read-only.
 	"""
-	isArchived: Boolean!
+	isArchived: Boolean! @deprecated(reason: "Use archivedBy. Remove after 2026-12-03.")
+	"""
+	Who or what archived the session, or null while it is active. An archived session is
+	read-only.
+	"""
+	archivedBy: GraphqlAgentSessionArchiveCause
+	"""
+	When the session was archived, or null while it is active.
+	"""
+	archivedAt: String
 	"""
 	The principal identifier of the owner.
 	"""
@@ -8155,17 +8661,29 @@ type GraphqlSoupCrmContact implements GraphqlSoupEntity {
 	"""
 	teamId: ID!
 	"""
-	Parent company.
+	Parent company; null for a contact without a company.
 	"""
-	companyId: ID!
+	parentCompanyId: ID
 	"""
-	Parent company's display name.
+	Parent company's display name; null without a company.
 	"""
-	companyName: String!
+	parentCompanyName: String
 	"""
-	Full email address.
+	Full email address; null for a contact added by name alone.
 	"""
-	email: String!
+	emailAddress: String
+	"""
+	Parent company, or the nil ID for a contact without a company.
+	"""
+	companyId: ID! @deprecated(reason: "Use parentCompanyId. Remove after 2026-12-10.")
+	"""
+	Parent company's display name, or empty without a company.
+	"""
+	companyName: String! @deprecated(reason: "Use parentCompanyName. Remove after 2026-12-10.")
+	"""
+	Full email address, or empty for a contact added by name alone.
+	"""
+	email: String! @deprecated(reason: "Use emailAddress. Remove after 2026-12-10.")
 	"""
 	Team-local display name.
 	"""
@@ -9639,6 +10157,10 @@ type GraphqlUser {
 	"""
 	id: ID!
 	"""
+	A page filtered and ordered across the entire authorized table.
+	"""
+	databaseViewRows(databaseId: ID!, input: DatabaseViewRowsInput!): DatabaseViewRowsPage!
+	"""
 	One initiative accessible to the authenticated viewer.
 	"""
 	initiative(initiativeId: ID!): GraphqlSoupInitiative!
@@ -9737,10 +10259,10 @@ type GraphqlUser {
 	"""
 	emailThread(input: EmailThreadInput!): GraphqlSoupEmailThread
 	"""
-	The viewer's Focus: signal threads in their own inboxes worth their
-	attention, highest priority first (importance, halved for every 2 days
-	since the latest inbound mail), with mail in the last `days` days
-	(default 30, at most 90). Each thread's `focus` field explains why.
+	The viewer's Focus: threads in their own inboxes worth their attention,
+	newest first by latest message time in either direction, with mail in
+	the last `days` days (default 30, at most 90). Each thread carries a
+	`focus` field that explains why.
 	"""
 	emailFocus(days: Int): [GraphqlSoupEmailThread!]!
 	"""
@@ -11374,6 +11896,10 @@ directive @oneOf on INPUT_OBJECT
 Directs the executor to skip this field or fragment when the `if` argument is true.
 """
 directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Provides a scalar specification URL for specifying the behavior of custom scalar types.
+"""
+directive @specifiedBy(url: String!) on SCALAR
 schema {
 	query: SoupQueryRoot
 	mutation: CompleteMutationRoot

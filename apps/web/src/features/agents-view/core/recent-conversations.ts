@@ -4,6 +4,7 @@ import type {
   EntityData,
   WithNotification,
 } from '@entity';
+import { isSessionArchived } from '@service-agent-harness/session-archive';
 import { type AgentKind, kindForHarness, modeForKind } from './agent-kind';
 import type { AgentsMode } from './mode';
 
@@ -94,7 +95,7 @@ export type PartitionedConversations = {
 };
 
 const isArchived = (conversation: AgentConversationEntity) =>
-  conversation.type === 'agent_session' && conversation.isArchived;
+  conversation.type === 'agent_session' && isSessionArchived(conversation);
 
 /** Splits archived agent sessions out, keeping the query's newest-first order. */
 export function partitionArchived(

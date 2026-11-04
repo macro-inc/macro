@@ -111,6 +111,27 @@ export const signupRoute = defineRoute({
   externalSearch: '*',
 });
 
+/** Signup for an AI agent: Google or email only, then its SDK token. */
+export const agentSignupRoute = defineRoute({
+  id: 'agent-signup',
+  path: 'signup/agent',
+  externalSearch: '*',
+});
+
+/** A new agent's SDK token and first steps, as a markdown page. */
+export const agentSetupRoute = defineRoute({
+  id: 'agent-setup',
+  path: 'agent-setup',
+  externalSearch: '*',
+});
+
+/** Confirms an agent saved its token, then opens the app. */
+export const agentSetupDoneRoute = defineRoute({
+  id: 'agent-setup-done',
+  path: 'agent-setup/done',
+  externalSearch: '*',
+});
+
 export const emailSignupCallbackRoute = defineRoute({
   id: 'email-signup-callback',
   path: EMAIL_SIGNUP_CALLBACK_PATH,
@@ -506,6 +527,14 @@ export const agentsViewRoute = defineRoute({
   search: '*' as const,
   externalSearch: ['createAgent'],
   claim: () => ({ namespace: 'component', id: 'agents' }),
+});
+
+/** A new email, composed beside the list on desktop. */
+export const emailComposeRoute = defineRoute({
+  id: 'mail-compose',
+  path: 'new',
+  // Each open is a fresh composer, even in a Mail view already composing.
+  remountKey: (_params, { entryId }) => entryId,
 });
 
 export const emailThreadRoute = defineRoute({

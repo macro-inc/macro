@@ -65,15 +65,25 @@ function triggerBody(trigger: RoutineTriggerOptions): ActionTrigger {
 export interface RoutineOptions {
   /** Display name. */
   name: string;
-  /** Schedules or Macro events that start the routine. */
+  /**
+   * Schedules or Macro events that start the routine. A cron `schedule` has 6
+   * or 7 fields: `sec min hour day-of-month month day-of-week [year]`.
+   */
   trigger: RoutineTriggerOptions;
   /** Instructions delivered to the agent. */
   prompt: string;
   /** Original user instructions. */
   userPrompt: string;
-  /** Model override. */
+  /**
+   * Model to run the task, e.g. `anthropic/claude-sonnet-5-5`, or the model
+   * override for `agent`. Set `model`, `agent`, or both.
+   */
   model?: RoutineModelId;
-  /** Agent to run the task. */
+  /**
+   * Agent to run the task: a built-in agent, or one the caller owns or can
+   * use, including one on a self-hosted runtime. Access is checked on save and
+   * again on every run. Set `model`, `agent`, or both.
+   */
   agent?: Agent;
   /** Whether triggers can start executions. Defaults to true on creation. */
   enabled?: boolean;
@@ -86,6 +96,16 @@ export interface RoutineOptions {
 
 /** A scheduled or event-triggered agent task. */
 export class Routine extends MacroEntity<ScheduledActionResponse> {
+  /** The routine's URL in the Macro web app; hand it to users as the link. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/routines/${this.id}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
+  }
+
   /** Construct a lazy routine handle. */
   static byId(client: MacroClient, id: string): Routine {
     return new Routine(client, id);

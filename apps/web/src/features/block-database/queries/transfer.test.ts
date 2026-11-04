@@ -147,6 +147,7 @@ const database: DatabaseDetail = {
     owner_id: 'owner',
     created_at: '',
     trashed_at: null,
+    project_id: null,
   },
   grant: 'view',
   tables: [table],

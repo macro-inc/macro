@@ -1,9 +1,10 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import UsersThree from '@icon/system/regular/users-three.svg';
-import { Button, Input, ToggleSwitch } from '@ui';
+import { Button, Input, ToggleSwitch, Tooltip } from '@ui';
 import { ResultAsync } from 'neverthrow';
 import { createSignal, Show } from 'solid-js';
 import { AudiencePanel } from '../components/share/audience-panel';
+import { BrandingPanel } from '../components/share/branding-panel';
 import {
   type FormMetadataPatch,
   type FormWriteFailure,
@@ -19,7 +20,8 @@ import type { Preview } from '../primitives/create-preview';
 
 /**
  * The Share tab (RFC 02 §2, §6): who can respond, the respond link, whether
- * the form takes responses and until when, and the people it is shared with
+ * the form takes responses and until when, whether responses and names are
+ * shared, how the respond page is branded, and the people it is shared with
  * through the share dialog.
  */
 export function ShareTabView(props: {
@@ -35,6 +37,12 @@ export function ShareTabView(props: {
   const isOwner = () => props.detail.access === 'owner';
   const canEdit = () => props.detail.access !== 'view';
   const [pending, setPending] = createSignal(false);
+  const summary = context.responses.createSummary(
+    () => form().id,
+    () => isOwner()
+  );
+  /** Whether the form is anonymous is fixed once anyone has responded. */
+  const anonymityLocked = () => (summary.value()?.submitted ?? 0) > 0;
   const writes = new Set<ResultAsync<void, FormWriteFailure>>();
   props.trackWrites(() =>
     ResultAsync.combine([...writes]).map(() => undefined)
@@ -170,6 +178,41 @@ export function ShareTabView(props: {
               )
             }
           />
+          <ToggleSwitch
+            size="md"
+            label="Share responses with team"
+            labelClass="text-sm text-ink"
+            checked={form().responsesVisible}
+            disabled={!isOwner() || pending()}
+            onChange={(responsesVisible) =>
+              fireAndForget(
+                update({ responsesVisible }, 'Sharing responses'),
+                'form-share'
+              )
+            }
+          />
+          <Tooltip
+            label={
+              anonymityLocked()
+                ? 'People have responded, so this can’t change.'
+                : 'Nobody in Macro, you included, sees who gave which response.'
+            }
+            class="self-start"
+          >
+            <ToggleSwitch
+              size="md"
+              label="Anonymous"
+              labelClass="text-sm text-ink"
+              checked={form().anonymous}
+              disabled={!isOwner() || pending() || anonymityLocked()}
+              onChange={(anonymous) =>
+                fireAndForget(
+                  update({ anonymous }, 'Anonymous responses'),
+                  'form-share'
+                )
+              }
+            />
+          </Tooltip>
           <label class="flex flex-col gap-1">
             <span class="text-xs font-medium text-ink-muted">
               Confirmation message
@@ -193,11 +236,17 @@ export function ShareTabView(props: {
           </label>
           <Show when={!isOwner()}>
             <p class="text-xs text-ink-muted">
-              Only the owner can change who responds, close the form or show
-              results.
+              Only the owner can change who responds, close the form, show
+              results, share responses or make them anonymous.
             </p>
           </Show>
         </div>
+        <BrandingPanel
+          branding={form().branding}
+          canEdit={canEdit()}
+          pending={pending()}
+          onChange={update}
+        />
         <div class="flex items-center gap-3 rounded-xl border border-edge bg-surface p-4">
           <UsersThree
             class="size-5 shrink-0 text-ink-muted"

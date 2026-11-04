@@ -3,7 +3,7 @@ use nix::{
     unistd::{ForkResult, fork},
 };
 use rs_libreoffice_bindings::Office;
-use std::{borrow::Cow, fs::File, io::Write, thread, time::Duration};
+use std::{borrow::Cow, fs::File, io::Write, path::Path, thread, time::Duration};
 
 use anyhow::Context;
 use model::convert::ConvertQueueMessage;
@@ -184,7 +184,8 @@ pub async fn convert(
 /// child process, killing it after `max_wait`.
 ///
 /// The child process keeps a LibreOffice crash or hang from taking down the
-/// worker.
+/// worker. LibreOffice writes its scratch files into the input file's folder,
+/// so removing that folder cleans up after the child however it ended.
 pub(crate) fn run_lok_conversion(
     job_id: &str,
     office_path: &str,
@@ -194,6 +195,12 @@ pub(crate) fn run_lok_conversion(
     filter: &str,
     max_wait: Duration,
 ) -> anyhow::Result<()> {
+    let job_folder = Path::new(in_file_path)
+        .parent()
+        .map(std::path::absolute)
+        .context("input file should be inside a job folder")?
+        .context("unable to resolve job folder")?;
+
     let mut child_pids = vec![];
     match unsafe { fork() } {
         Ok(ForkResult::Parent { child }) => {
@@ -204,6 +211,10 @@ pub(crate) fn run_lok_conversion(
             tracing::info!(job_id=%job_id, "child process: initializing lok");
             let result: anyhow::Result<()> = (|| {
                 std::env::set_var("SAL_LOG", "");
+                // LibreOffice deletes its TMPDIR scratch files only in its own
+                // teardown, which a child killed at its timeout, crashed, or
+                // ended with `_exit` below never runs.
+                std::env::set_var("TMPDIR", &job_folder);
                 let office = Office::new(office_path)
                     .map_err(|e| anyhow::anyhow!(e))
                     .context("unable to initialize lok")?;

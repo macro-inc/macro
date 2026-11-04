@@ -158,6 +158,11 @@ export class Chat extends PropertiedEntity<ChatDetail> implements Mentionable {
     return `${this.client.webAppUrl}/app/chat/${this.id}`;
   }
 
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
+  }
+
   /** Search chats by name and content, most relevant first, auto-paginated. */
   static search = entitySearch({
     filters: { chat_filters: {} },

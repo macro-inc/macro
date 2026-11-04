@@ -1,5 +1,7 @@
 import { useAccessRequestInvalidations } from '@app/features/access-requests/use-access-request-invalidations';
 import { IncomingMeetingInvitationsProvider } from '@app/features/meetings/incoming-meeting-invitations';
+import { quietHoursMute } from '@app/features/notification-sounds/core/quiet-hours';
+import { readNotificationSoundSettings } from '@app/features/notification-sounds/primitives/sound-settings';
 import {
   notificationSoundFor,
   useNotificationSounds,
@@ -55,6 +57,17 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
   const userId = useUserId();
   let notificationUpdatePrompted = false;
   async function deliverNotification(notification: UnifiedNotification) {
+    const id = userId();
+    if (
+      id &&
+      quietHoursMute(
+        notification.notification_metadata.tag,
+        readNotificationSoundSettings(id).quietHours,
+        new Date()
+      )
+    ) {
+      return;
+    }
     if (notifInterface === 'not-supported') return;
     const layoutManager = globalSplitManager();
     if (!layoutManager) return;

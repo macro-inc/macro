@@ -1,3 +1,4 @@
+import { useFlow } from '@app/observability/flow';
 import { CollabProvider } from '@core/component/LexicalMarkdown/collaboration/CollabProvider';
 import type { MarkdownEditorErrors } from '@core/component/LexicalMarkdown/constants';
 import type { PluginManager } from '@core/component/LexicalMarkdown/plugins';
@@ -6,7 +7,6 @@ import type { NodeIdMappings } from '@macro-inc/lexical-core';
 import type { LexicalEditor } from 'lexical';
 import type { Accessor, Setter } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
-import { endDocumentSpan, resumeDocumentSpan } from '../observability';
 
 // The sync tags and force-sync command live with the generic provider now;
 // re-exported here so existing md-block imports keep working.
@@ -34,6 +34,7 @@ export type MarkdownCollabProviderProps = {
  * the block's document tracing spans, with the CollabStatus chrome.
  */
 export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
+  const flow = useFlow();
   const { documentSource, permissions, state } = useMarkdownDocument();
   const syncSource = () => {
     const source = documentSource();
@@ -56,10 +57,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
       canEdit={permissions.canEdit}
       canComment={permissions.canComment}
       editorError={state.editor.error}
-      observability={{
-        resumeSpan: resumeDocumentSpan,
-        endSpan: endDocumentSpan,
-      }}
+      span={flow.span}
     />
   );
 }

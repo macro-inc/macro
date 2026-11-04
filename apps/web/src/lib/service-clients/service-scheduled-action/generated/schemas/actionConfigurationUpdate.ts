@@ -12,7 +12,7 @@ import type { ActionKind } from './actionKind';
 import type { ActionTrigger } from './actionTrigger';
 
 /**
- * Canonical configuration replacement. Activation has its own endpoint, so
+ * Configuration replacement, the update body. Activation has its own endpoint, so
 omitting `enabled` keeps the stored value; omitting `run_visibility` keeps
 it too, so clients that predate the setting do not reset it.
  */

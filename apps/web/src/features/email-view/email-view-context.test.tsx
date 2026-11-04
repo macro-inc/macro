@@ -1,3 +1,10 @@
+vi.mock('@components/app/GlobalAppState', () => ({
+  useGlobalNotificationSource: () => ({}),
+}));
+vi.mock('@notifications/mark-row-seen', () => ({
+  markRowNotificationsSeenOnOpen: vi.fn(),
+}));
+
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import { cleanup, render } from '@solidjs/testing-library';
 import { createStore } from 'solid-js/store';
@@ -42,6 +49,7 @@ vi.mock('@app/lib/split-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@app/lib/split-router')>()),
   useNavigate: () => mocks.navigate,
   useRouteParams: () => mocks.useRouteParams(),
+  useMatches: () => () => [],
   createSearchParams: () => [
     {
       get tab() {

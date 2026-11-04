@@ -10,6 +10,8 @@ export type ActivityRowView = {
   id: string;
   label: string;
   status: 'running' | 'completed' | 'failed' | 'interrupted';
+  /** What the step put in front of the person; see `AgentActivity`. */
+  card?: unknown;
 };
 
 /**

@@ -20,6 +20,7 @@ fn pd(slug: &str, enabled: bool) -> PipedreamConnection {
         server_name: slug.into(),
         account_id: "account".into(),
         enabled,
+        provider: pipedream_mcp::domain::models::ConnectionProvider::Pipedream,
     }
 }
 

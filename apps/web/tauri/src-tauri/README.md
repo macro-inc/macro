@@ -82,6 +82,20 @@ crash/termination reports are needed for that distinction. Native counters
 require a full app release, while the frontend remains compatible with older
 binaries.
 
+An update reload normally lands while the page is hidden, which is harmless for
+a list and fatal for anything the page is waiting on. A native auth sheet is the
+sharp case: leaving the app for a sign-in code hides the page, the reload drops
+the JavaScript awaiting the sheet, and the finished sign-in has nowhere to go.
+`holdAutomaticReload` covers this work on the page and sends
+`set_bundle_reload_hold` here, because the mobile foreground handler applies a
+completed bundle without asking the page. `apply_update` then answers `Held` and
+the bundle stays pending until the next hide or foreground after the release.
+Each document sends its hold state on mount, so a hold whose owner died cannot
+block updates until the next launch. Desktop has no foreground handler to hold
+and does not call the command. Mobile requires it, so the mobile native floors
+must reach a binary that has it; below that floor no bundle applies, so no
+update reload can land on a sheet.
+
 `frontend_instance_id` is generated once per document and attached to every
 PostHog event (including automatic exceptions/pageviews) and OTel resource.
 `native_instance_id` joins both systems to the host launch. A new frontend ID
@@ -167,6 +181,26 @@ UPDATE_NATIVE_DIAGNOSTIC_TYPES=1 cargo test --manifest-path apps/web/tauri/Cargo
 ```
 
 The same tests without that environment variable check for drift.
+
+## Linux rendering diagnostics
+
+The app leaves WebKitGTK hardware acceleration and DMABUF negotiation at their
+platform defaults. WebKit's default hardware acceleration policy is `ALWAYS`,
+subject to system support; an available GPU, compatible driver, display server,
+and WebKitGTK build determine the actual rendering path. See the upstream
+[hardware policy](https://webkitgtk.org/reference/webkit2gtk/stable/property.Settings.hardware-acceleration-policy.html)
+and [graphics architecture](https://docs.webkit.org/Ports/WebKitGTK%20and%20WPE%20WebKit/Graphics.html).
+
+Distinguish software-only test machines from GPU-equipped desktops. Check device
+access (`/dev/dri`), the actual EGL renderer in the app's runtime environment,
+and driver/display compatibility. A masked JavaScript WebGL renderer string is
+not reliable hardware evidence. Do not globally disable compositing or DMABUF as
+a performance workaround: that can force more painting onto the CPU. Continuous
+status animations must stay inexpensive on software compositing too.
+
+Run native performance investigations, including all WebKit child processes,
+in the memory-capped scope from the
+[running guide](../../../../docs/development/running-locally.md).
 
 ## Running in development
 

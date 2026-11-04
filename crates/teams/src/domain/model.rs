@@ -366,6 +366,8 @@ pub struct TeamInviteDetails {
     pub created_at: DateTime<Utc>,
     /// When the invite was last sent
     pub last_sent_at: DateTime<Utc>,
+    /// Whether the invite creates an agent account
+    pub is_agent: bool,
 }
 
 /// Deserializes an optional field while preserving explicit `null` values.
@@ -588,6 +590,8 @@ pub struct TeamInvite<'a> {
     pub team_invite_id: uuid::Uuid,
     /// The email of the user
     pub email: Email<Lowercase<'a>>,
+    /// Whether the invite creates an agent account
+    pub is_agent: bool,
 }
 
 impl TeamInvite<'static> {
@@ -597,6 +601,7 @@ impl TeamInvite<'static> {
             team_id: self.team_id,
             team_invite_id: self.team_invite_id,
             email: self.email.to_owned(),
+            is_agent: self.is_agent,
         }
     }
 }
@@ -623,6 +628,8 @@ pub struct DueInviteReminder {
     pub paying: bool,
     /// Whether the team has a subscription
     pub has_subscription: bool,
+    /// Whether the invite creates an agent account
+    pub is_agent: bool,
 }
 
 /// Snapshot of a team invite before it is accepted.
@@ -642,6 +649,8 @@ pub struct TeamInviteSnapshot<'a> {
     pub created_at: DateTime<Utc>,
     /// When the invite was last sent
     pub last_sent_at: DateTime<Utc>,
+    /// Whether the invite creates an agent account
+    pub is_agent: bool,
 }
 
 /// Result of accepting a team invite, including the data needed to roll it back.

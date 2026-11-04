@@ -161,6 +161,12 @@ Checkpoint v14 rehydrates older projections without wiping normalized records or
 queued mutations. General Soup still uses its existing server pagination; filter-only
 offline checks use an ungrouped view with a created/updated timestamp sort.
 
+The email Focus list is not a Soup list the cache maintains: membership comes from
+the worker's classifications, so it reads `user.emailFocus` again when told to. See
+the [Focus walkthrough](email.md) and `useEmailFocusQuery`. A list like it pushes
+over the connection gateway and refreshes through `createVisibleRefresh`, which
+holds a hidden tab to one read when it next shows.
+
 Realtime Soup batches coalesce repeated entity IDs (including entity type), keeping
 that entity's last operation in the batch. Emitted `SoupUpdated` items are non-null.
 If viewer-scoped hydration finds no item, the backend logs and omits that update;

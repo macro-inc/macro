@@ -12,10 +12,35 @@ const native = vi.hoisted(() => ({
   invoke: vi.fn(),
 }));
 
-vi.mock(
-  '@core/component/Toast/Toast',
-  () => import('@core/component/Toast/tests/fake-toast')
-);
+vi.mock('@core/component/Toast/Toast', async () => {
+  const fake = await import('@core/component/Toast/tests/fake-toast');
+  return {
+    ...fake,
+    toast: {
+      ...fake.toast,
+      custom: (
+        config: Parameters<typeof fake.toast.custom>[0],
+        options?: { onUserDismiss?: () => void }
+      ) => {
+        let id: number;
+        id = fake.toast.custom({
+          ...config,
+          actions: [
+            ...(config.actions ?? []),
+            {
+              label: 'Dismiss',
+              onClick: () => {
+                options?.onUserDismiss?.();
+                fake.toast.dismiss(id);
+              },
+            },
+          ],
+        });
+        return id;
+      },
+    },
+  };
+});
 vi.mock('@core/util/platform', () => ({
   isPlatform: (platform: string) => platform === 'android',
 }));
@@ -70,6 +95,9 @@ describe('full-screen call prompt', () => {
     expect(native.invoke).toHaveBeenCalledWith(
       'plugin:call-kit|open_full_screen_intent_settings'
     );
+    expect(
+      localStorage.getItem('full-screen-call-prompt-dismissed')
+    ).toBeNull();
 
     // Back from Settings without allowing it.
     const checks = accessChecks();
@@ -85,7 +113,11 @@ describe('full-screen call prompt', () => {
 
   it('stays hidden on this device once dismissed', async () => {
     const first = renderPrompt();
-    fireEvent.click(await screen.findByRole('button', { name: 'Hide' }));
+    expect(screen.queryByRole('button', { name: 'Hide' })).toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: 'Dismiss' }));
+    expect(localStorage.getItem('full-screen-call-prompt-dismissed')).toBe(
+      'true'
+    );
     expect(screen.queryByText(title)).toBeNull();
     first.unmount();
 

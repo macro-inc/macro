@@ -58,12 +58,19 @@ retains notification ACP inputs and their replies; the transcript fold separatel
 omits system input from its message projection. PresentReview, GetReview and
 DecideReview are eager internal tools in both standard and code modes.
 
+- Owner memory is composed by the memory domain on each read; daily generation is hosted by cognition, not agent turns.
+
 ## Checks
 
 - `cargo test -p agent_inmem` (`SQLX_OFFLINE` unset).
 
 ## Gotchas
 
+- Owners with `auto-skills` (`domain::entity_routing`) route SDK entities on
+  code-mode turns: the prompt is `routed_prompt` (no area guidance) and the
+  entities `select_documentation` picks bring their `@agent` guide with their
+  index into the turn part. Everyone else keeps `prompt`, which inlines every
+  guide.
 - `auto` is a picker entry, not a routable id: `RigTurnEngine` asks its
   `AutoModelSelector` (Jev through cognition's named decisions, 1 s budget) per turn and runs
   Opus 5.5 (hard), GPT-6.1 Sol (mid) or Gemini 3.8 Flash (simple, and

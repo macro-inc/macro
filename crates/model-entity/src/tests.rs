@@ -79,8 +79,3 @@ fn form_round_trips_as_snake_case() {
     assert_eq!(EntityType::Form.as_ref(), "form");
     assert_eq!(EntityType::from_str("form").unwrap(), EntityType::Form);
 }
-
-#[test]
-fn form_is_not_an_entity_access_entity() {
-    assert!(!EntityType::Form.is_valid_entity_access_entity());
-}

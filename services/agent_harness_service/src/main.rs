@@ -23,6 +23,7 @@ mod model_providers;
 mod permission_policy;
 mod preview;
 mod public_mcp;
+mod pull_request_archive;
 mod routine_sessions;
 mod runtime_commands;
 mod scheduling;
@@ -78,6 +79,7 @@ use agent_harness::outbound::github_branches::GithubRepositoryBranches;
 use agent_harness::outbound::github_repositories::GithubReachableRepositories;
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
 use agent_harness::outbound::notifications::IngressAgentSessionNotifier;
+use agent_harness::outbound::primary_calendar_time_zones::PrimaryCalendarTimeZones;
 use agent_harness::outbound::prompt_mentions::{LexicalPromptMentions, PgSessionAccess};
 use agent_harness::outbound::routing::RoutedContainerManager;
 use agent_harness::outbound::runtime_registry::{HarnessKeyedConnections, RuntimeRegistry};
@@ -152,10 +154,12 @@ use macro_service_urls::{
     StaticFilePublicUrl, StaticFileServiceUrl,
 };
 use mcp_client::domain::models::AesKey;
+use mcp_client::outbound::NativeServerStore;
 use mcp_client::outbound::pg_server_repo::PgServerRepo;
 use model_providers::{CursorModels, InMemoryModels, MacrodModels, VisibleHarnessAccess};
 use permission_policy::PgPermissionPolicySource;
 use pipedream_mcp::outbound::api::{PipedreamClient, PipedreamConfig};
+use pipedream_mcp::outbound::dispatch::ConnectorBackends;
 use pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo;
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
@@ -467,10 +471,15 @@ async fn run() -> anyhow::Result<()> {
     let mcp_connections = Arc::new(PgConnectionRepo::new(pool.clone()));
     // Custom MCP servers - the ones a person added by URL - in the same rows
     // agent_harness_service::cognition manages, under the same encryption key, so
-    // the proxy can refresh a stored grant and persist what comes back.
+    // the proxy can refresh a stored grant and persist what comes back. GitHub
+    // is authorized by the account link instead.
     let mcp_credentials_key = AesKey::try_from(config.mcp_credentials_key_secret_name.as_ref())
         .context("invalid MCP credentials encryption key")?;
-    let mcp_servers = Arc::new(PgServerRepo::new(pool.clone(), mcp_credentials_key));
+    let linked_github = config.linked_github_tokens()?;
+    let mcp_servers = Arc::new(NativeServerStore::new(
+        PgServerRepo::new(pool.clone(), mcp_credentials_key),
+        linked_github.clone(),
+    ));
 
     // The client that addresses Pipedream's remote MCP server, built from the
     // same credentials `agent_harness_service::cognition` uses.
@@ -486,6 +495,18 @@ async fn run() -> anyhow::Result<()> {
         allowed_origins: Vec::new(),
     })
     .context("failed to build Pipedream client")?;
+    // Grants held by Macro Connect are reached through its MCP gateway; a
+    // user on Connect alone gets no Pipedream grant.
+    let mut connectors = ConnectorBackends::new(
+        Arc::new(pipedream),
+        ai_tools::connect_adapter(config.connect_customer_key.value())?,
+    );
+    if let Some(rollout) = ai_tools::macro_connect_rollout(
+        config.posthog_api_key.value(),
+        config.posthog_host.value(),
+    )? {
+        connectors = connectors.with_rollout(rollout);
+    }
 
     // Every session's MCP servers: Macro's own under the reserved `macro`
     // slug, the owner's custom servers by URL key, then the owner's Pipedream
@@ -494,7 +515,7 @@ async fn run() -> anyhow::Result<()> {
     // single-user and minutes from expiry.
     let mcp_credentials = WithMacroMcp::new(
         WithCustomMcp::new(
-            PipedreamMcpCredentials::new(Arc::clone(&mcp_connections), pipedream),
+            PipedreamMcpCredentials::new(Arc::clone(&mcp_connections), connectors),
             Arc::clone(&mcp_servers),
         ),
         MacroApiTokenSigner::new(
@@ -574,6 +595,7 @@ async fn run() -> anyhow::Result<()> {
         config.enable_ai_usage_enforcement,
         config.ai_pricing(),
         recorder.clone(),
+        linked_github,
     )
     .await
     .context("failed to build the in-memory agent tool context")?;
@@ -593,6 +615,7 @@ async fn run() -> anyhow::Result<()> {
         pool.clone(),
         std::net::SocketAddr::from(([127, 0, 0, 1], config.port)),
         http_ready,
+        Arc::clone(&notifications),
     )
     .await?;
     let scheduling_router = scheduling_runtime.router.clone();
@@ -636,24 +659,29 @@ async fn run() -> anyhow::Result<()> {
         }
         None => None,
     };
+    // One flag client for every per-user agent rollout.
+    let feature_flags = config
+        .posthog_api_key
+        .value()
+        .map(|key| {
+            feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+                config
+                    .posthog_host
+                    .value()
+                    .unwrap_or("https://us.i.posthog.com"),
+                key.to_owned(),
+                std::time::Duration::from_secs(3),
+            )
+            .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))
+        })
+        .transpose()?;
     // `ai-code-mode` decides, per user, whether agent sessions hide
     // SDK-covered tools and whether the public MCP lists only code mode.
     let code_mode_selector: Option<Arc<dyn agent_inmem::domain::tool_mode::ToolModeSelector>> =
-        match (&code_runner, config.posthog_api_key.value()) {
-            (Some(_), Some(key)) => {
-                let flags = feature_flags::outbound::posthog::PostHogFeatureFlags::new(
-                    config
-                        .posthog_host
-                        .value()
-                        .unwrap_or("https://us.i.posthog.com"),
-                    key.to_owned(),
-                    std::time::Duration::from_secs(3),
-                )
-                .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
-                Some(Arc::new(
-                    agent_inmem::domain::tool_mode::FlaggedToolMode::new(flags),
-                ))
-            }
+        match (&code_runner, &feature_flags) {
+            (Some(_), Some(flags)) => Some(Arc::new(
+                agent_inmem::domain::tool_mode::FlaggedToolMode::new(flags.clone()),
+            )),
             _ => None,
         };
     let public_code_mode = match (&code_runner, &code_mode_selector) {
@@ -731,6 +759,18 @@ async fn run() -> anyhow::Result<()> {
         connection_gateway.clone(),
         session_audience.clone(),
     );
+    let auto_archive_settings = agent_session::domain::auto_archive::AutoArchiveService::new(
+        session_repo.clone(),
+        session_metadata_realtime.clone(),
+    );
+    let pull_request_archive = agent_session::domain::auto_archive::AutoArchiveService::new(
+        session_repo.clone(),
+        session_metadata_realtime.clone(),
+    );
+    let runtime_close_archive = agent_session::domain::auto_archive::AutoArchiveService::new(
+        session_repo.clone(),
+        session_metadata_realtime.clone(),
+    );
     let session_tasks: Arc<dyn agent_session::domain::session_task::SessionTasks> = Arc::new(
         agent_session::domain::session_task::SessionTaskService::new(
             session_repo.clone(),
@@ -769,6 +809,7 @@ async fn run() -> anyhow::Result<()> {
             cognition: tool_context.cognition_tool_context.service.clone(),
             reviews: reviews_cell.clone(),
             gate: owner_tool_gate.clone(),
+            app_url: macro_service_urls::AppServiceUrl::new()?.as_str().into(),
         },
     );
     // One connector for the agent and the telemetry catalog. It pools each
@@ -787,6 +828,13 @@ async fn run() -> anyhow::Result<()> {
         RigTurnEngine::new(pool.clone(), tool_context.clone()).with_gate(owner_tool_gate);
     if let Some(selector) = &code_mode_selector {
         inmem_engine = inmem_engine.with_tool_mode(Arc::clone(selector));
+    }
+    // `auto-skills` decides, per user, whether code-mode turns load the SDK
+    // areas a request needs instead of carrying every area's guidance.
+    if let Some(flags) = &feature_flags {
+        inmem_engine = inmem_engine.with_entity_routing(Arc::new(
+            agent_inmem::domain::entity_routing::FlaggedEntityRouting::new(flags.clone()),
+        ));
     }
     let inmem_model_engine: Arc<dyn TurnEngine> = Arc::new(inmem_engine);
     // Normalize uploaded images before any provider sees them. In addition to
@@ -1136,13 +1184,24 @@ async fn run() -> anyhow::Result<()> {
         LexicalPromptMentions::new(lexical.clone(), PgSessionAccess::new(pool.clone()));
     let prompt_context =
         MessagePromptContextAdapter::new(message_service.clone(), Arc::clone(&entity_access));
-    let prompt_composer = LexicalAgentPromptComposer::new(lexical);
+    let prompt_composer = LexicalAgentPromptComposer::new(
+        lexical,
+        PrimaryCalendarTimeZones::new(calendar_events::domain::service::CalendarService::new(
+            calendar_events::outbound::pg::PgCalendarRepository::new(pool.clone()),
+        )),
+    );
 
     // One connection per harness, shared by every session of every agent
     // bound to it. Held here because the gateway puts dialed-in sockets into
     // it and the harness takes sessions out of it. Attach/detach is mirrored
     // to the harnesses table so the settings page can show connection state.
-    let runtimes = RuntimeRegistry::with_presence(Arc::new(PgHarnessPresence::new(pool.clone())));
+    // Each dial also reports which sessions its runtime still serves, which
+    // the harness loads once it exists below.
+    let (live_sessions, mut live_session_reports) = tokio::sync::mpsc::unbounded_channel();
+    let runtimes = RuntimeRegistry::with_presence(
+        Arc::new(PgHarnessPresence::new(pool.clone())),
+        live_sessions,
+    );
     // Read once, here, rather than at every session this deployment opens: a
     // URL that names no repository is a misconfiguration of the deployment,
     // and refusing it at startup is the difference between one loud failure
@@ -1285,6 +1344,17 @@ async fn run() -> anyhow::Result<()> {
     reviews_cell
         .set(reviews.clone())
         .map_err(|_| anyhow::anyhow!("Review service was initialized twice"))?;
+    let reattaching = Arc::clone(&harness);
+    tokio::spawn(async move {
+        while let Some(live) = live_session_reports.recv().await {
+            let harness = Arc::clone(&reattaching);
+            tokio::spawn(async move {
+                harness
+                    .reattach_live_sessions(live.harness, live.acp_sessions, live.span)
+                    .await;
+            });
+        }
+    });
     let warm_cleanup = Arc::clone(&harness);
     let session_visibility_repo = session_repo.clone();
     tokio::spawn(async move {
@@ -1335,8 +1405,19 @@ async fn run() -> anyhow::Result<()> {
     );
 
     // Close the loop: turn ends observed by the session actors drain the
-    // harness's prompt queue, and capture what the turn changed.
-    turn_observer.bind((harness.clone(), CaptureOnTurnEnd::new(changes.clone())));
+    // harness's prompt queue and capture what the turn changed, and a
+    // runtime closed on purpose archives its session when its owner opted in.
+    let auto_archive_tasks = tokio_util::task::TaskTracker::new();
+    turn_observer.bind((
+        harness.clone(),
+        (
+            CaptureOnTurnEnd::new(changes.clone()),
+            agent_harness::domain::runtime_closed::ArchiveOnRuntimeClosed::new(
+                runtime_close_archive,
+                auto_archive_tasks.clone(),
+            ),
+        ),
+    ));
     held_tool_calls.bind(harness.clone());
     let runtime_command_models = macrod_models.clone();
     let runtime_command_redis = redis.clone();
@@ -1501,6 +1582,7 @@ async fn run() -> anyhow::Result<()> {
             (*harness).clone(),
             routine_sessions::PipedreamConnectedApps(PgConnectionRepo::new(pool.clone())),
         ),
+        session_repo.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     let gateway_state = RuntimeGatewayState::new(
@@ -1570,6 +1652,13 @@ async fn run() -> anyhow::Result<()> {
                 MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
             ),
         );
+    let auto_archive = agent_session::inbound::axum_router::auto_archive::agent_auto_archive_router(
+        AgentSessionRouterState::new(
+            auto_archive_settings,
+            entity_access.clone(),
+            MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        ),
+    );
     let code_executions = agent_code_mode::inbound::axum_router::code_execution_router(
         agent_code_mode::inbound::axum_router::CodeExecutionRouterState::new(
             code_mode,
@@ -1646,6 +1735,7 @@ async fn run() -> anyhow::Result<()> {
             .with_capabilities(capabilities)
             .with_mode_choice(mode_choice)
             .with_pull_requests(pull_requests)
+            .with_auto_archive(auto_archive)
             .with_tool_approvals(tool_approval_answers)
             .with_app_connections(app_connections)
             .with_code_executions(code_executions)
@@ -1794,6 +1884,21 @@ async fn run() -> anyhow::Result<()> {
             messages: message_service,
         },
     ));
+
+    let pull_request_archive_shutdown = service_shutdown.clone();
+    let pull_request_archive_brokers = config.kafka_brokers.as_ref().to_owned();
+    tokio::spawn(async move {
+        if let Err(error) = pull_request_archive::run(
+            &pull_request_archive_brokers,
+            &pull_request_archive,
+            pull_request_archive_shutdown.clone(),
+        )
+        .await
+        {
+            tracing::error!(error = ?error, "pull request auto-archive consumer stopped");
+            pull_request_archive_shutdown.cancel();
+        }
+    });
 
     let egress_port = config.egress_port;
     let egress_shutdown = service_shutdown.clone();
@@ -1963,6 +2068,7 @@ async fn run() -> anyhow::Result<()> {
                                 | HarnessCommand::ToolApproval(_)
                                 | HarnessCommand::PresentTool { .. }
                                 | HarnessCommand::SessionStopped { .. }
+                                | HarnessCommand::Reattach
                                 | HarnessCommand::DrainNotifications => "agent_trigger.unexpected",
                             };
                             tracing::Span::current().record("macro.event.type", event_type);
@@ -2050,6 +2156,8 @@ async fn run() -> anyhow::Result<()> {
     notification_cancel.cancel();
     notification_tasks.close();
     notification_tasks.wait().await;
+    auto_archive_tasks.close();
+    auto_archive_tasks.wait().await;
     http.abort();
     trigger.abort();
     egress_http.abort();
