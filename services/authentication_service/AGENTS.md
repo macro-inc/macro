@@ -84,6 +84,8 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 
 ## Agent accounts
 
+- An agent can do everything a person can, including inviting other agents. Do
+  not gate actions on `isAgent`; it only changes signup and labeling.
 - `User."isAgent"` is set once, in the FusionAuth `user.create` webhook, from
   `is_agent` on `/login/passwordless` (carried as FusionAuth user data) or a
   pending agent `team_invite`. Agents skip the seeded content, Loops, and Meta.
