@@ -54,6 +54,11 @@ async fn mount_catalog(server: &MockServer) {
                 "id": "slack", "name": "Slack", "description": "Messages",
                 "access": ["mcp"], "mcp_url": "https://mcp.slack.com/mcp", "icon_url": null,
                 "pipedream_app_slugs": ["slack", "slack_v2"]
+            },
+            {
+                "id": "mercury", "name": "Mercury", "description": "Bank accounts",
+                "access": ["mcp"], "mcp_url": "https://mcp.mercury.com/mcp", "icon_url": null,
+                "pipedream_app_slugs": []
             }
         ])))
         .expect(1)
@@ -97,6 +102,22 @@ async fn maps_pipedream_slugs_to_connect_apps_from_one_cached_catalog() {
         .unwrap();
     assert_eq!(page.entries.len(), 1);
     assert_eq!(page.entries[0].app_slug, "slack");
+
+    // An app Pipedream doesn't have goes by its Connect id.
+    let mercury = connect.app_for_slug("mercury").await.unwrap().unwrap();
+    assert_eq!(mercury.app_id, "mercury");
+    assert!(
+        connect
+            .retrieve(&user(), "mercury")
+            .await
+            .unwrap()
+            .is_some()
+    );
+    let page = connect
+        .search(&user(), Some("merc"), None, 10)
+        .await
+        .unwrap();
+    assert_eq!(page.entries[0].app_slug, "mercury");
     // `expect(1)` on the catalog mock checks the cache on drop.
 }
 

@@ -22,6 +22,7 @@ export function CrmEmptyState(
   const {
     host,
     activeTab,
+    peopleVisibility,
     queryFilters,
     searchText,
     setSearchText,
@@ -82,9 +83,23 @@ export function CrmEmptyState(
       </Match>
       <Match when={activeTab() === 'people' && !!peopleSearch()}>
         <CrmListSearchEmpty
-          title="No matching people"
+          title={
+            peopleVisibility.showRemoved()
+              ? 'No matching removed people'
+              : 'No matching people'
+          }
           description="Try a different name or email address."
           onClearSearch={props.onClearPeopleSearch}
+        />
+      </Match>
+      <Match when={peopleVisibility.showRemoved()}>
+        <CrmListEmpty
+          title="No removed people"
+          description="Removed people from this team will appear here."
+          action={{
+            label: 'Show active people',
+            onClick: () => peopleVisibility.setShowRemoved(false),
+          }}
         />
       </Match>
       <Match when={activeTab() === 'people' && props.filtered}>

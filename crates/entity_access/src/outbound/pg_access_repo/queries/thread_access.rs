@@ -187,7 +187,8 @@ pub async fn get_thread_access(
     //     no role (member, admin, or owner) can see threads through CRM
     //     grant for participants tracked there.
     //   * contact.hidden or company.hidden is a SOFT opt-out — admins and
-    //     owners see hidden CRM rows; only plain members are blocked.
+    //     owners see hidden CRM rows; only plain members are blocked. A
+    //     contact without a company opts out through its own hidden flag.
     //
     // Untracked external addresses default to allowed.
     let crm_fut = sqlx::query_scalar!(
@@ -239,13 +240,15 @@ pub async fn get_thread_access(
                   SELECT 1
                   FROM participants p
                   JOIN crm_contacts ct ON ct.email = p.email
-                  JOIN crm_companies c ON c.id = ct.company_id
-                  WHERE c.team_id = st.team_id
+                  -- Contacts without a company opt out through their own
+                  -- hidden flag; email_sync is a company setting.
+                  LEFT JOIN crm_companies c ON c.id = ct.company_id
+                  WHERE ct.team_id = st.team_id
                     AND split_part(p.email, '@', 2) <> split_part(LOWER($2), '@', 2)
                     AND (
-                        NOT c.email_sync
+                        NOT COALESCE(c.email_sync, TRUE)
                         OR (
-                            (ct.hidden OR c.hidden)
+                            (ct.hidden OR COALESCE(c.hidden, FALSE))
                             AND st.team_role = 'member'
                         )
                     )
@@ -484,13 +487,13 @@ async fn explain_thread_crm(
               SELECT 1
               FROM participants p
               JOIN crm_contacts ct ON ct.email = p.email
-              JOIN crm_companies c ON c.id = ct.company_id
-              WHERE c.team_id = st.team_id
+              LEFT JOIN crm_companies c ON c.id = ct.company_id
+              WHERE ct.team_id = st.team_id
                 AND split_part(p.email, '@', 2) <> split_part(LOWER($2), '@', 2)
                 AND (
-                    NOT c.email_sync
+                    NOT COALESCE(c.email_sync, TRUE)
                     OR (
-                        (ct.hidden OR c.hidden)
+                        (ct.hidden OR COALESCE(c.hidden, FALSE))
                         AND st.team_role = 'member'
                     )
                 )

@@ -4,14 +4,14 @@ A persistent review remains actionable after the code execution ends.
 
 ## Extends
 
-- [`MacroEntity`](../../../entity/classes/MacroEntity.md)\<[`ReviewRecord`](../../../../../generated/agent-harness/types.gen/type-aliases/ReviewRecord.md)\>
+- [`MacroEntity`](../../../entity/classes/MacroEntity.md)\<`ReviewRecord`\>
 
 ## Properties
 
 | Property | Modifier | Type | Inherited from |
 | ------ | ------ | ------ | ------ |
 | <a id="property-id"></a> `id` | `public readonly` | `string` | [`MacroEntity`](../../../entity/classes/MacroEntity.md).[`id`](../../../entity/classes/MacroEntity.md#property-id) |
-| <a id="property-kind"></a> `kind` | `readonly` | () => `Promise`\<[`ReviewKind`](../../../../../generated/agent-harness/types.gen/type-aliases/ReviewKind.md)\> | - |
+| <a id="property-kind"></a> `kind` | `readonly` | () => `Promise`\<`"calendar"` \| `"email"` \| `"import"`\> | - |
 | <a id="property-title"></a> `title` | `readonly` | () => `Promise`\<`string`\> | - |
 
 ## Methods
@@ -38,13 +38,13 @@ A persistent review remains actionable after the code execution ends.
 
 ### reference()
 
-> **reference**(): `Promise`\<\{ `id`: `string`; `kind`: [`ReviewKind`](../../../../../generated/agent-harness/types.gen/type-aliases/ReviewKind.md); \}\>
+> **reference**(): `Promise`\<\{ `id`: `string`; `kind`: `"calendar"` \| `"email"` \| `"import"`; \}\>
 
 Compact reference for main()'s returned reviews array.
 
 #### Returns
 
-`Promise`\<\{ `id`: `string`; `kind`: [`ReviewKind`](../../../../../generated/agent-harness/types.gen/type-aliases/ReviewKind.md); \}\>
+`Promise`\<\{ `id`: `string`; `kind`: `"calendar"` \| `"email"` \| `"import"`; \}\>
 
 ***
 
@@ -82,15 +82,15 @@ Submit the saved pending drafts. Never retries a conflict or ambiguous send.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`ReviewRecord`](../../../../../generated/agent-harness/types.gen/type-aliases/ReviewRecord.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`ReviewRecord_Serialize`](../../../../../generated/agent-reviews/type-aliases/ReviewRecord_Serialize.md); `id`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`ReviewRecord`](../../../../../generated/agent-harness/types.gen/type-aliases/ReviewRecord.md); `id`: `string`; \}
+\{ `detail?`: [`ReviewRecord_Serialize`](../../../../../generated/agent-reviews/type-aliases/ReviewRecord_Serialize.md); `id`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
-| `detail?` | [`ReviewRecord`](../../../../../generated/agent-harness/types.gen/type-aliases/ReviewRecord.md) |
+| `detail?` | [`ReviewRecord_Serialize`](../../../../../generated/agent-reviews/type-aliases/ReviewRecord_Serialize.md) |
 | `id` | `string` |
 
 #### Inherited from
@@ -166,7 +166,7 @@ Present a review in a session without requiring a code execution.
 | ------ | ------ |
 | `client` | `MacroClient` |
 | `session` | [`AgentSession`](../../agent-session/classes/AgentSession.md) |
-| `record` | [`ReviewRecord`](../../../../../generated/agent-harness/types.gen/type-aliases/ReviewRecord.md) |
+| `record` | [`ReviewRecord_Serialize`](../../../../../generated/agent-reviews/type-aliases/ReviewRecord_Serialize.md) |
 
 #### Returns
 

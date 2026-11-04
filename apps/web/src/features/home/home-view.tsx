@@ -27,6 +27,11 @@ import { HomeViewProvider, useHomeView } from './home-view-context';
 import { homeTour } from './tour';
 import type { HomeViewStateOptions } from './types';
 
+const HomeProjectPreview = lazyNamed(
+  () => import('./components/HomeProjectPreview'),
+  'HomeProjectPreview'
+);
+
 // The calendar grid (FullCalendar) only loads once Home's calendar route opens.
 const CalendarView = lazyNamed(
   () => import('@app/features/calendar-view/calendar-view'),
@@ -261,13 +266,20 @@ function HomeDetailRouteContent() {
 
   return (
     <DebugSuspense name="HomeView.detail-content">
-      <PreviewPanel
-        target={previewTarget()}
-        navigationRequest={previewNavigationRequest()}
-        orchestrator={orchestrator}
-        splitPanelContext={panel}
-        headerLeading={<HomeReturnBreadcrumb onReturn={closePreview} />}
-      />
+      <Show
+        when={previewTarget()?.blockType === 'initiative'}
+        fallback={
+          <PreviewPanel
+            target={previewTarget()}
+            navigationRequest={previewNavigationRequest()}
+            orchestrator={orchestrator}
+            splitPanelContext={panel}
+            headerLeading={<HomeReturnBreadcrumb onReturn={closePreview} />}
+          />
+        }
+      >
+        <HomeProjectPreview />
+      </Show>
     </DebugSuspense>
   );
 }

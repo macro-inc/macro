@@ -938,10 +938,10 @@ where
         .await
     }
 
-    /// The viewer's Focus: signal threads in their own inboxes worth their
-    /// attention, highest priority first (importance, halved for every 2 days
-    /// since the latest inbound mail), with mail in the last `days` days
-    /// (default 30, at most 90). Each thread's `focus` field explains why.
+    /// The viewer's Focus: threads in their own inboxes worth their attention,
+    /// newest first by latest message time in either direction, with mail in
+    /// the last `days` days (default 30, at most 90). Each thread carries a
+    /// `focus` field that explains why.
     async fn email_focus(
         &self,
         ctx: &Context<'_>,

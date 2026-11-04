@@ -111,6 +111,13 @@ function fetchCached<Data>(options: {
   return new ResultAsync(catchToResult(() => queryClient.fetchQuery(options)));
 }
 
+/** Share the initial block load with the mounted view's schema query. */
+export function fetchDatabaseDetail(
+  id: string
+): ResultAsync<DatabaseDetail, ResultError[]> {
+  return fetchCached(databaseDetailQueryOptions(id));
+}
+
 /** {@link useViewerDatabases}, read once. */
 export function fetchViewerDatabases(): ResultAsync<
   DatabaseDetail[],

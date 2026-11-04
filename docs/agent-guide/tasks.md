@@ -615,6 +615,10 @@ row remounts must reuse complete cached identities without new
 permission refreshes remain separate. Hold a cold folder-preview or identity
 request while scrolling on desktop and phone: only the row metadata may show
 loading, and the list must remain mounted at the same scroll position.
+After a project read is denied, scroll its row out of view and back: the cached
+label must remain hidden until a new authorized response succeeds. Switch viewers
+while retaining cached rows: mismatched identities must reauthorize immediately,
+without exposing the previous viewer's data or repeatedly retrying a failed read.
 
 ## Reviews view
 
@@ -968,7 +972,9 @@ refreshes in the background to include the new row. If creation fails, the
 composer reopens as a popover with the draft and the error.
 Closing the popover without submitting keeps the underlying view open.
 
-Opening a project keeps the Tasks workspace and its navigation. The top bar
+Opening a project from Tasks keeps the Tasks workspace and its navigation.
+Home rows instead preview it inline with a Home return breadcrumb; touch and
+explicit split activation still use this full Tasks workspace. The top bar
 shows the Projects return breadcrumb and the project name, with the same Share
 and side-panel controls as task detail. `Project actions` (the dots button
 after the name) opens the row context menu's entries for this project,
@@ -1283,3 +1289,7 @@ mention, and mention menu row, including completing and reopening without a relo
 The Task, Subtask, Project, and Tag entries use a wide menu with original icons and muted descriptions. Subtask opens a parent-task picker, then the normal task composer. Saving includes the selected Parent task property; if that link cannot be confirmed, keep the created task and show a warning instead of asking the user to create it again. Canceling either step creates nothing.
 
 ![Described task creation choices](images/creation-menu-descriptions.png)
+
+Opening a row clears its unread state immediately; direct details mark read when
+ready. See [reading items](notifications.md#reading-items) for failure, keyboard,
+mobile, and email inbox checks.

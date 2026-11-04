@@ -207,6 +207,15 @@ telemetry with its own volume budget.
 - Agent/ACP messages: `genai_telemetry::propagation::inject` / `set_parent`
   carry context in `_meta`; GenAI spans follow CS-55.
 - Spawned tasks take the span with them (`.instrument(span)`) or link to it.
+- Datadog files a client span that carries an HTTP method as operation
+  `http.client.request` with resource `<METHOD> <url.template>`, whatever the
+  span is called; set `operation.name` on it to keep it findable by name
+  (`outlook.graph_request` does). Internal spans keep their name as
+  `resource_name`.
+- Record numeric span fields as `i64`: `tracing-opentelemetry` has no
+  unsigned type and exports `u16`/`u32`/`u64`/`usize` values as strings.
+- Background loops start one root span per claimed unit of work, not per poll,
+  so idle polling exports nothing.
 
 ## Worked examples
 

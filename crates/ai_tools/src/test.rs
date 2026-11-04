@@ -122,6 +122,29 @@ fn coding_dispatch_is_available_to_every_host_but_not_internal_subagents() {
 }
 
 #[test]
+fn code_mode_starts_agents_through_the_sdk_instead_of_dispatch_tools() {
+    let tools = tools_for_agent_code_mode();
+    let prompt = tools.prompt.to_string();
+    for name in ["ListCodingAgents", "DispatchCodingAgent"] {
+        assert!(!tools.toolset.tools.contains_key(name), "{name}");
+        assert!(
+            !tools.deferred.iter().any(|tool| tool.name == name),
+            "{name}"
+        );
+        assert!(!prompt.contains(name), "{name}");
+    }
+    assert!(tools.toolset.tools.contains_key("ListAgentUpdates"));
+    assert!(prompt.contains("macro.agents.list()"));
+    assert!(prompt.contains("macro.agentSessions.createManaged"));
+    assert!(
+        !tools_for(AiHost::AgentSession)
+            .prompt
+            .to_string()
+            .contains("createManaged")
+    );
+}
+
+#[test]
 fn project_workflows_are_available_in_every_host_alongside_folder_and_property_tools() {
     let names = [
         "ListInitiatives",
@@ -650,7 +673,6 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         "EditPresentation",
         "EditDocument",
         "Subagent",
-        "DispatchCodingAgent",
         "SearchTools",
         "LoadTools",
         "DiscoverConnectors",

@@ -242,6 +242,122 @@
         }
       }
     },
+    "/unsubscribe/items": {
+      "post": {
+        "tags": ["unsubscribe::items"],
+        "summary": "Atomically mute or snooze items for the authenticated user.",
+        "operationId": "unsubscribe_items",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkSetItemsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["unsubscribe::items"],
+        "summary": "Atomically resume delivery for the authenticated user's items.",
+        "operationId": "remove_unsubscribe_items",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkRemoveItemsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/unsubscribe/mute": {
       "post": {
         "tags": ["unsubscribe::unsubscribe_all"],
@@ -1294,6 +1410,47 @@
           }
         }
       },
+      "BulkItem": {
+        "type": "object",
+        "required": ["item_type", "item_id"],
+        "properties": {
+          "item_id": {
+            "type": "string"
+          },
+          "item_type": {
+            "$ref": "#/components/schemas/EntityType"
+          }
+        }
+      },
+      "BulkRemoveItemsRequest": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BulkItem"
+            }
+          }
+        }
+      },
+      "BulkSetItemsRequest": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BulkItem"
+            }
+          },
+          "snoozed_until": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "A future resume time. Omit to mute indefinitely."
+          }
+        }
+      },
       "CalendarEventJoinRequestMetadata": {
         "type": "object",
         "description": "A channel member who sees a calendar event only through a channel share\nasked the person who shared it to add them as a guest. Sent to the sharer,\nwith the requester as sender.",
@@ -2316,6 +2473,10 @@
           "inviteePlan": {
             "$ref": "#/components/schemas/InviteePlan",
             "description": "What the invitee gets by joining, as the team stood when the invite was sent."
+          },
+          "isAgent": {
+            "type": "boolean",
+            "description": "Whether the invite creates an agent account."
           },
           "reminder": {
             "type": "boolean",

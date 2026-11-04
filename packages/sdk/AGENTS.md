@@ -19,11 +19,16 @@ enforced by the ordinary backend APIs.
   contact sets are 404, but authorization/service errors must propagate.
 - `src/entities/sharing/`, `messages/`: scoped access requests and message threads.
 - `src/entities/databases/query.ts`: SQL statements, typed table/row references and version guards.
-- `src/entities/crm/pipeline.ts`: pipeline-authorized table/row handles.
+- `src/entities/crm/pipeline.ts`: pipeline-authorized table/row/view handles;
+  `PipelineTable.views()` returns views whose `positions()` reads saved board order.
 - `src/entities/external-chat/`: added provider chats (`macro.externalChats`, entity type
   `external_chat`) and their message/send/upload/participant handles.
 - `src/entities/whatsapp/`: the owner's WhatsApp account and chat list; `WhatsAppChat.add()`
   returns an `ExternalChat`.
+- `src/entities/me/`: `macro.me.update()` sets the caller's name and profile
+  picture; `macro.me.uploadProfilePicture()` stores the image through the auth
+  service, because static file storage does not accept API keys. `team.invite(emails, { agent: true })`
+  invites agents; their token only ever appears in the web app's setup modal.
 - `src/entities/images/`: `macro.images.generate()` (cognition
   `POST /images/generate`, admitted against the user's AI allowance) returns a
   sized `GeneratedImage`; `StaticImage` handles attach to `channel.send(text,
@@ -34,6 +39,7 @@ enforced by the ordinary backend APIs.
 
 - Keep handwritten behavior in `src/`; never edit `generated/` or `specs/`.
 - Keep WhatsApp pairing, passkeys, connection setup/disconnect and rollout configuration out of the handwritten public SDK; operate on accounts linked in the app, with personal bearer sessions for account/access controls. External chat sends/uploads accept the connection owner's session or own API token; bots never send.
+- Keep notification mute, unmute, and snooze endpoints, including bulk item preferences, in the app-only coverage exclusions.
 - Keep `external-chat/` provider-neutral; provider-specific reads (WhatsApp community chats) branch on `provider` with an exhaustive match.
 - Use existing entity handles for reads and mutations. Follow the
   [SDK rule](../../.agents/rules/sdk.md) and `add-sdk-endpoint` skill.
@@ -76,6 +82,8 @@ the existing gateway prefixes.
   in step.
 - Regenerate Rust OpenAPI and web service clients before `bun run sync-specs &&
   bun run generate`; do not copy deployed schemas over a local API change.
+- Run `bun run generate` to regenerate SDK clients and normalize whitespace-only
+  lines; do not hand-edit generated output to satisfy whitespace checks.
 - Regenerate `../sdk-docs/reference` after SDK source or generated type changes;
   run that package's checks because web CI verifies the reference is current.
   Also run `bun packages/code-mode-sdk/scripts/generate.ts` from the root and

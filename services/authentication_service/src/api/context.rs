@@ -227,6 +227,9 @@ pub(crate) struct ApiContext {
     >,
     pub document_storage_service_client:
         Arc<document_storage_service_client::DocumentStorageServiceClient>,
+    pub static_file_service_client: Arc<static_file_service_client::StaticFileServiceClient>,
+    /// Browser-facing base URL of static files, which profile pictures use.
+    pub static_file_public_url: String,
     pub user_deletion: Arc<
         crate::outbound::user_deletion::UserDeletionAdapter<
             TeamsServiceType,
