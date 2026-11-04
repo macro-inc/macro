@@ -152,7 +152,7 @@ fn resolve_due_date(
     for fact in &facts.deadlines {
         let message = messages.get(fact.message).ok_or(InputError::Extraction)?;
         let due = resolve::date(&fact.date, &message.text, message.written_on)?;
-        if !closed_through.is_some_and(|closed| fact.message <= closed) {
+        if closed_through.is_none_or(|closed| fact.message > closed) {
             open.push((fact, message.written_on, due));
         }
     }
