@@ -32,8 +32,12 @@ impl AgentRuntimeDirectory for PgAgentRuntimeDirectory {
             self.repo.get_agent(bot_id).await.map_err(|error| {
                 HarnessError::RuntimeDirectory(rootcause::report!(error).into())
             })?;
+        // An external agent's runtime lives outside Macro; nothing here
+        // serves it.
         Ok(agent
-            .filter(|agent| agent.bot.has_agent)
+            .filter(|agent| {
+                agent.bot.has_agent && agent.harness != harness_id::EXTERNAL_HARNESS_SLUG
+            })
             .map(|agent| AgentRuntimeConfig {
                 kind: AgentKind::from_harness(&agent.harness),
                 model: agent.default_model,

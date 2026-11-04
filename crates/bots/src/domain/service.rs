@@ -240,6 +240,20 @@ fn validate_update_agent_request(req: &UpdateAgentRequest) -> Result<(), BotErro
     validate_agent_fields(req.into())
 }
 
+/// An external agent's runtime lives outside Macro and is registered with
+/// its own token and endpoint, so no update moves an agent onto or off the
+/// external harness: one would leave an outside runtime receiving the events
+/// of an agent Macro now also runs, the other an agent nothing serves.
+fn validate_harness_kept(current: &Agent, req: &UpdateAgentRequest) -> Result<(), BotError> {
+    let is_external = |harness: &str| harness == harness_id::EXTERNAL_HARNESS_SLUG;
+    if is_external(&current.harness) != is_external(&req.harness) {
+        return Err(BotError::BadRequest(
+            "an agent cannot move onto or off the external harness".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 fn token_candidate_is_valid(candidate: &BotTokenCandidate, now: &DateTime<Utc>) -> bool {
     candidate.token.revoked_at.is_none()
         && candidate
@@ -588,6 +602,7 @@ where
             .map_err(|err| BotError::Repo(err.into()))?
             .ok_or_else(|| BotError::NotFound("agent not found".to_string()))?;
         validate_update_agent_request(&req)?;
+        validate_harness_kept(&existing, &req)?;
         reject_unknown_mcp_apps(&self.mcp_apps, &req.mcp, existing.mcp.servers()).await?;
         self.replace_agent(caller, &current, req).await
     }
@@ -620,6 +635,7 @@ where
             .ok_or_else(|| BotError::NotFound("agent not found".to_string()))?;
         let update = req.apply_to(&agent);
         validate_update_agent_request(&update)?;
+        validate_harness_kept(&agent, &update)?;
         reject_unknown_mcp_apps(&self.mcp_apps, &update.mcp, agent.mcp.servers()).await?;
         self.replace_agent(caller, &current, update).await
     }

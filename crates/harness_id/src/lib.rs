@@ -20,6 +20,11 @@ mod test;
 /// the harness row id.
 pub const MACROD_HARNESS_SLUG: &str = "macrod";
 
+/// Runtime slug persisted on external agents: their runtime lives outside
+/// Macro, receives the agent's events by webhook or by polling, and answers
+/// through the external agent API. Nothing in Macro runs them.
+pub const EXTERNAL_HARNESS_SLUG: &str = "external";
+
 /// A harness id UUID.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
