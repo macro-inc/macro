@@ -39,6 +39,7 @@ import { EMAIL_TOUR } from '../tour';
 import type { EmailTab } from '../types';
 import { useVisibleEmailTab } from '../use-visible-email-tab';
 import { EmailInboxList } from './EmailInboxSelector';
+import { EmailSidebarLabels } from './EmailSidebarLabels';
 
 // Email is personal, so the sidebar lists only the user's own tags.
 const SIDEBAR_TAG_SCOPES: readonly TagScope[] = ['user'];
@@ -239,6 +240,8 @@ export function EmailSidebar() {
         </Show>
 
         <EmailNavigation />
+
+        <EmailSidebarLabels />
 
         <div ref={tourTarget(EMAIL_TOUR.tags)}>
           <SidebarTagsSection

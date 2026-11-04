@@ -43,7 +43,11 @@ import {
   type SetStoreFunction,
   type Store,
 } from 'solid-js/store';
-import { DEFAULT_EMAIL_FOCUS_SORT, DEFAULT_EMAIL_TAB } from './constants';
+import {
+  DEFAULT_EMAIL_FOCUS_SORT,
+  DEFAULT_EMAIL_TAB,
+  LABEL_FACET_ID,
+} from './constants';
 import {
   emailDetailSearch,
   emailTabSearch,
@@ -93,6 +97,8 @@ export type EmailViewContext = {
    * lands on the All tab. Clearing keeps the current tab.
    */
   showTags: (tagIds: string[]) => void;
+  /** Shows the given provider labels across the whole mailbox, like `showTags`. */
+  showLabels: (labelNames: string[]) => void;
   /**
    * Filters by a single tag without changing tabs. Used by the inline
    * "filter by tag" button on entity rows.
@@ -100,6 +106,8 @@ export type EmailViewContext = {
   filterByTag: (optionId: string) => void;
   /** The selected tags' names on All, where they alone scope the list. */
   tagViewTitle: Accessor<string | undefined>;
+  /** The selected labels' names on All, where they alone scope the list. */
+  labelViewTitle: Accessor<string | undefined>;
   source: EmailDataSource;
   list: EmailListController;
   registerListActivationHandler: (
@@ -399,21 +407,28 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
 
   const setFocusSort = (sort: EmailFocusSort) => setState('focusSort', sort);
 
-  // A tag reaches across every mailbox slice, so choosing one from a narrower
-  // tab moves to All; as with `setTab`, that move drops the tab's other filters.
-  const showTags = (tagIds: string[]) => {
+  // A tag or label reaches across every mailbox slice, so choosing one from a
+  // narrower tab moves to All; as with `setTab`, that move drops the tab's
+  // other filters.
+  const showAcrossMailbox = (
+    facetId: 'tags' | typeof LABEL_FACET_ID,
+    optionIds: string[]
+  ) => {
     setState(
       produce((draft) => {
-        const movesToAll = tagIds.length > 0 && draft.tab !== 'all';
+        const movesToAll = optionIds.length > 0 && draft.tab !== 'all';
         if (movesToAll) draft.tab = 'all';
         draft.facets = normalizeFacetSelection({
           ...(movesToAll ? {} : draft.facets),
-          tags: tagIds,
+          [facetId]: optionIds,
         });
       })
     );
     closeThread();
   };
+  const showTags = (tagIds: string[]) => showAcrossMailbox('tags', tagIds);
+  const showLabels = (labelNames: string[]) =>
+    showAcrossMailbox(LABEL_FACET_ID, labelNames);
 
   // Filters by a single tag without changing tabs. Used by the inline
   // "filter by tag" button on entity rows.
@@ -432,6 +447,12 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       .filter((tag) => tagIds.includes(tag.id))
       .map((tag) => tag.label);
     return labels.length > 0 ? labels.join(', ') : undefined;
+  };
+
+  const labelViewTitle = () => {
+    const labelNames = state.facets[LABEL_FACET_ID] ?? [];
+    if (state.tab !== 'all' || labelNames.length === 0) return undefined;
+    return labelNames.join(', ');
   };
 
   const [readingPane, setReadingPane] = usePreference(
@@ -456,8 +477,10 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     setFacets,
     setFocusSort,
     showTags,
+    showLabels,
     filterByTag,
     tagViewTitle,
+    labelViewTitle,
     source,
     list,
     registerListActivationHandler,

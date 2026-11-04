@@ -24,6 +24,7 @@ vi.mock('@app/features/email-message/components/email-user-tooltip', () => ({
   EmailUserTooltip: (props: ParentProps) => <>{props.children}</>,
 }));
 vi.mock('@property/tags', () => ({ InlineFetchedEntityTagsPill: () => null }));
+vi.mock('./views/thread-labels', () => ({ ThreadLabels: () => null }));
 vi.mock('@queries/email/thread', () => ({ useThreadQuery: mocks.query }));
 vi.mock('@queries/email/draft-cache', () => ({
   clearSavedDraftThreadCache: mocks.clearDraft,

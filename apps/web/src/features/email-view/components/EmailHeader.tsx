@@ -34,10 +34,11 @@ export type EmailHeaderProps = {
 };
 
 export function EmailViewBreadcrumbItem() {
-  const { state, tagViewTitle } = useEmailView();
+  const { state, tagViewTitle, labelViewTitle } = useEmailView();
   const inboxSelected = () => !isTouchDevice() && isEmailInboxTab(state.tab);
   const tabTitle = () =>
     tagViewTitle() ??
+    labelViewTitle() ??
     (inboxSelected()
       ? 'Inbox'
       : (EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email'));
@@ -82,7 +83,8 @@ export function EmailViewBreadcrumbItem() {
 export function EmailHeader(props: EmailHeaderProps) {
   const panel = useSplitPanelOrThrow();
   const { openWithSplit } = useSplitLayout();
-  const { state, setState, setTab, tagViewTitle } = useEmailView();
+  const { state, setState, setTab, tagViewTitle, labelViewTitle } =
+    useEmailView();
   const [filterOpen, setFilterOpen] = createSignal(false);
   let focusSearch: (() => void) | undefined;
   const searchTarget = tourTarget(EMAIL_TOUR.search);
@@ -95,6 +97,7 @@ export function EmailHeader(props: EmailHeaderProps) {
     }));
   const selectedTabLabel = () =>
     tagViewTitle() ??
+    labelViewTitle() ??
     (inboxSelected()
       ? 'Inbox'
       : (EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email'));

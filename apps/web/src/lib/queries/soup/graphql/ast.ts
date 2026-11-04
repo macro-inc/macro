@@ -485,6 +485,8 @@ function mapEmailLiteral(literal: unknown): GraphqlEmailLiteralInput {
       return { owner: mapString(value, 'owner') };
     case 'ProjectId':
       return { projectId: mapString(value, 'projectId') };
+    case 'Label':
+      return { label: mapString(value, 'label') };
     case 'Importance':
       return { importance: mapBoolean(value, 'importance') };
     case 'NotificationState':

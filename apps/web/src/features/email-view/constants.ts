@@ -4,6 +4,9 @@
  * Focus comes last so the Signal/Noise pair keeps its position and hotkeys;
  * the Inbox tabs and the touch layouts draw it before them.
  */
+/** The facet id selected provider label names are stored under. */
+export const LABEL_FACET_ID = 'labels';
+
 export const EMAIL_TAB_IDS = [
   'important',
   'noise',

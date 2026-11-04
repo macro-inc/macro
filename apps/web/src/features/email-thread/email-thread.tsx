@@ -51,6 +51,7 @@ import {
   EmailThreadSurface,
   type EmailThreadSurfaceProps,
 } from './views/email-thread-surface';
+import { ThreadLabels } from './views/thread-labels';
 
 export type EmailThreadProps = Omit<
   EmailThreadSurfaceProps,
@@ -110,18 +111,24 @@ export function EmailThread(props: EmailThreadProps) {
           <EmailMessageOperation message={message} />
         ) : undefined,
       renderTags: () => (
-        <Suspense
-          fallback={
-            <span class="h-6 w-24 rounded-full bg-skeleton skeleton-shimmer" />
-          }
-        >
-          <InlineFetchedEntityTagsPill
-            entityId={props.threadId()}
-            entityType="THREAD"
-            class="bg-surface-2"
-            showAddButton
-          />
-        </Suspense>
+        <span class="inline-flex flex-wrap items-center gap-2">
+          {/* The label catalog loads apart from the tags; neither waits. */}
+          <Suspense>
+            <ThreadLabels messages={source.thread()?.messages ?? []} />
+          </Suspense>
+          <Suspense
+            fallback={
+              <span class="h-6 w-24 rounded-full bg-skeleton skeleton-shimmer" />
+            }
+          >
+            <InlineFetchedEntityTagsPill
+              entityId={props.threadId()}
+              entityType="THREAD"
+              class="bg-surface-2"
+              showAddButton
+            />
+          </Suspense>
+        </span>
       ),
       renderInvitation: (
         message: EmailMessage,

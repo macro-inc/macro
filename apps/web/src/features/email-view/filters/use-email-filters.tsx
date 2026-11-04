@@ -2,8 +2,11 @@ import type { ListFilterGroup } from '@app/components/view-shell';
 import type { FacetSelection } from '@app/features/soup';
 import { addUnique, removeValue } from '@app/lib/signals/store-array-updaters';
 import { EntityIcon } from '@core/component/EntityIcon';
+import TagSimpleIcon from '@icon/system/regular/tag-simple.svg';
 import { useTagFilterGroup } from '@property/tags/use-tag-filter-group';
+import { useEmailLabelNamesQuery } from '@queries/email/labels';
 import { type Accessor, createMemo } from 'solid-js';
+import { LABEL_FACET_ID } from '../constants';
 import { useEmailView } from '../email-view-context';
 import type { EmailFilterGroupId } from '../types';
 import { EMAIL_FILTER_GROUPS, EMAIL_FOCUS_FILTER_GROUP } from './email-facets';
@@ -35,6 +38,23 @@ const FOCUS_FILTER_GROUPS: EmailFilterGroup[] = [
   ),
 ];
 
+/** Gmail labels and Outlook categories; an option's id is the label name. */
+function useLabelFilterGroup() {
+  const labelNames = useEmailLabelNamesQuery();
+  return createMemo(
+    (): EmailFilterGroup => ({
+      id: LABEL_FACET_ID,
+      label: 'Labels',
+      searchPlaceholder: 'Filter by label...',
+      options: (labelNames.isSuccess ? labelNames.data : []).map((name) => ({
+        id: name,
+        label: name,
+        icon: () => <TagSimpleIcon class="size-3.5" />,
+      })),
+    })
+  );
+}
+
 /** Shared selection semantics for the desktop menu and mobile drawer. */
 export function useEmailFilters() {
   const { state, setFacets } = useEmailView();
@@ -53,9 +73,11 @@ export function createEmailFilters(
   isFocus: Accessor<boolean> = () => false
 ) {
   const tagGroup = useTagFilterGroup();
-  // Tags come last: the static groups are short, the tag list grows with use.
+  const labelGroup = useLabelFilterGroup();
+  // Labels and tags come last: the static groups are short, those lists grow with use.
   const groups = createMemo((): EmailFilterGroup[] => [
     ...(isFocus() ? FOCUS_FILTER_GROUPS : STATIC_FILTER_GROUPS),
+    ...(labelGroup().options.length > 0 ? [labelGroup()] : []),
     ...(tagGroup().options.length > 0 ? [tagGroup()] : []),
   ]);
   const groupFor = (groupId: string) =>

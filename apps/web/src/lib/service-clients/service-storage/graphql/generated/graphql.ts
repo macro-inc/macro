@@ -1076,36 +1076,38 @@ export type GraphqlEmailFilterAst = {
 /** GraphQL input representing the email literal. */
 export type GraphqlEmailLiteral =
   {   /** The bcc option. */
-  bcc: GraphqlEmailValue; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; inboxVisible?: never; notificationState?: never; owner?: never; projectId?: never; read?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; viewedAt?: never; }
+  bcc: GraphqlEmailValue; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; inboxVisible?: never; label?: never; notificationState?: never; owner?: never; projectId?: never; read?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; viewedAt?: never; }
   |  { bcc?: never;   /** The calendar only option. */
-  calendarOnly: boolean; cc?: never; createdAt?: never; importance?: never; inboxVisible?: never; notificationState?: never; owner?: never; projectId?: never; read?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; viewedAt?: never; }
+  calendarOnly: boolean; cc?: never; createdAt?: never; importance?: never; inboxVisible?: never; label?: never; notificationState?: never; owner?: never; projectId?: never; read?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; viewedAt?: never; }
   |  { bcc?: never; calendarOnly?: never;   /** The cc option. */
-  cc: GraphqlEmailValue; createdAt?: never; importance?: never; inboxVisible?: never; notificationState?: never; owner?: never; projectId?: never; read?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; viewedAt?: never; }
+  cc: GraphqlEmailValue; createdAt?: never; importance?: never; inboxVisible?: never; label?: never; notificationState?: never; owner?: never; projectId?: never; read?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; viewedAt?: never; }
   |  { bcc?: never; calendarOnly?: never; cc?: never;   /** The created at option. */
-  createdAt: GraphqlDateLiteral; importance?: never; inboxVisible?: never; notificationState?: never; owner?: never; projectId?: never; read?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; viewedAt?: never; }
+  createdAt: GraphqlDateLiteral; importance?: never; inboxVisible?: never; label?: never; notificationState?: never; owner?: never; projectId?: never; read?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; viewedAt?: never; }
   |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never;   /** The importance option. */
-  importance: boolean; inboxVisible?: never; notificationState?: never; owner?: never; projectId?: never; read?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; viewedAt?: never; }
+  importance: boolean; inboxVisible?: never; label?: never; notificationState?: never; owner?: never; projectId?: never; read?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; viewedAt?: never; }
   |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never;   /** Inbox visibility: false selects archived (done) mail, independently of notifications. */
-  inboxVisible: boolean; notificationState?: never; owner?: never; projectId?: never; read?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; viewedAt?: never; }
-  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; inboxVisible?: never;   /** Exact notification state for the requester. */
+  inboxVisible: boolean; label?: never; notificationState?: never; owner?: never; projectId?: never; read?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; viewedAt?: never; }
+  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; inboxVisible?: never;   /** A provider label (Gmail label or Outlook category) by display name. */
+  label: string; notificationState?: never; owner?: never; projectId?: never; read?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; viewedAt?: never; }
+  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; inboxVisible?: never; label?: never;   /** Exact notification state for the requester. */
   notificationState: NotificationState; owner?: never; projectId?: never; read?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; viewedAt?: never; }
-  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; inboxVisible?: never; notificationState?: never;   /** The owner option. */
+  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; inboxVisible?: never; label?: never; notificationState?: never;   /** The owner option. */
   owner: string | number; projectId?: never; read?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; viewedAt?: never; }
-  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; inboxVisible?: never; notificationState?: never; owner?: never;   /** The project id option. */
+  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; inboxVisible?: never; label?: never; notificationState?: never; owner?: never;   /** The project id option. */
   projectId: string; read?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; viewedAt?: never; }
-  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; inboxVisible?: never; notificationState?: never; owner?: never; projectId?: never;   /** The email thread read flag, independent of notification state. */
+  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; inboxVisible?: never; label?: never; notificationState?: never; owner?: never; projectId?: never;   /** The email thread read flag, independent of notification state. */
   read: boolean; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; viewedAt?: never; }
-  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; inboxVisible?: never; notificationState?: never; owner?: never; projectId?: never; read?: never;   /** The recipient option. */
+  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; inboxVisible?: never; label?: never; notificationState?: never; owner?: never; projectId?: never; read?: never;   /** The recipient option. */
   recipient: GraphqlEmailValue; sender?: never; shared?: never; threadId?: never; updatedAt?: never; viewedAt?: never; }
-  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; inboxVisible?: never; notificationState?: never; owner?: never; projectId?: never; read?: never; recipient?: never;   /** The sender option. */
+  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; inboxVisible?: never; label?: never; notificationState?: never; owner?: never; projectId?: never; read?: never; recipient?: never;   /** The sender option. */
   sender: GraphqlEmailValue; shared?: never; threadId?: never; updatedAt?: never; viewedAt?: never; }
-  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; inboxVisible?: never; notificationState?: never; owner?: never; projectId?: never; read?: never; recipient?: never; sender?: never;   /** The shared option. */
+  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; inboxVisible?: never; label?: never; notificationState?: never; owner?: never; projectId?: never; read?: never; recipient?: never; sender?: never;   /** The shared option. */
   shared: GraphqlSharedEmailFilter; threadId?: never; updatedAt?: never; viewedAt?: never; }
-  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; inboxVisible?: never; notificationState?: never; owner?: never; projectId?: never; read?: never; recipient?: never; sender?: never; shared?: never;   /** The thread id option. */
+  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; inboxVisible?: never; label?: never; notificationState?: never; owner?: never; projectId?: never; read?: never; recipient?: never; sender?: never; shared?: never;   /** The thread id option. */
   threadId: string | number; updatedAt?: never; viewedAt?: never; }
-  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; inboxVisible?: never; notificationState?: never; owner?: never; projectId?: never; read?: never; recipient?: never; sender?: never; shared?: never; threadId?: never;   /** The updated at option. */
+  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; inboxVisible?: never; label?: never; notificationState?: never; owner?: never; projectId?: never; read?: never; recipient?: never; sender?: never; shared?: never; threadId?: never;   /** The updated at option. */
   updatedAt: GraphqlDateLiteral; viewedAt?: never; }
-  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; inboxVisible?: never; notificationState?: never; owner?: never; projectId?: never; read?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never;   /** The per-viewer viewed at option. */
+  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; inboxVisible?: never; label?: never; notificationState?: never; owner?: never; projectId?: never; read?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never;   /** The per-viewer viewed at option. */
   viewedAt: GraphqlDateLiteral; };
 
 /** Email provider for an authenticated user's linked inbox. */

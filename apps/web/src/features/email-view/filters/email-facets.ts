@@ -14,6 +14,7 @@ import {
 } from '@app/features/soup';
 import type { EntityIconSelector } from '@core/component/EntityIcon';
 import type { EmailEntity, EmailFocus, EntityData } from '@entity';
+import { LABEL_FACET_ID } from '../constants';
 import type { EmailFilterGroupId, EmailFilterOptionId } from '../types';
 
 type EmailFilterOption = {
@@ -114,6 +115,18 @@ function focusOption(
   };
 }
 
+/** Option ids are label names, so one option covers that label in every inbox. */
+function labelFacetOption(
+  name: string
+): FacetOption<EmailEntity, EmailFacetContext> {
+  return {
+    id: name,
+    clause: { ef: clause.eq('emailLabel', name) },
+    predicate: (email) =>
+      email.labels?.some((label) => label.name === name) ?? false,
+  };
+}
+
 const EMAIL_FOCUS_OPTIONS: EmailFacetOption[] = [
   focusOption(
     'focus-reply-needed',
@@ -129,6 +142,7 @@ export const EMAIL_FACETS: Facet<EmailEntity, EmailFacetContext>[] = [
   { id: 'attachments', mode: 'or', options: EMAIL_ATTACHMENT_OPTIONS },
   { id: 'calendar', mode: 'or', options: EMAIL_CALENDAR_OPTIONS },
   { id: 'focus', mode: 'or', options: EMAIL_FOCUS_OPTIONS },
+  { id: LABEL_FACET_ID, mode: 'or', options: labelFacetOption },
   {
     id: TAG_FACET_ID,
     mode: 'or',

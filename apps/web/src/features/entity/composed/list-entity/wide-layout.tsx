@@ -1,5 +1,6 @@
 import { formatCallDuration } from '@block-call/utils';
 import { EntityRowTags } from '@property/tags';
+import { shownLabelNames } from '@queries/email/labels';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { cn } from '@ui';
@@ -9,6 +10,7 @@ import {
   CallStatusBadge,
   SharedBadge,
 } from '../../components/Badges';
+import { EmailLabelPills } from '../../components/EmailLabelPills';
 import { GithubLabelPills } from '../../components/GithubLabelPill';
 import { MultiSelectCheckbox } from '../../components/MultiSelectCheckbox';
 import { ProjectBreadCrumb } from '../../components/ProjectBreadCrumb';
@@ -252,12 +254,15 @@ export function WideLayout(props: LayoutProps) {
         </Show>
         <Show when={isEmailEntity(props.entity) && props.entity}>
           {(entity) => (
-            <RowTags
-              entityId={entity().id}
-              entityType={EntityType.THREAD}
-              properties={entity().properties}
-              onFilterByTag={props.onFilterByTag}
-            />
+            <>
+              <EmailLabelPills names={shownLabelNames(entity().labels ?? [])} />
+              <RowTags
+                entityId={entity().id}
+                entityType={EntityType.THREAD}
+                properties={entity().properties}
+                onFilterByTag={props.onFilterByTag}
+              />
+            </>
           )}
         </Show>
         <Show when={isChatEntity(props.entity) && props.entity}>

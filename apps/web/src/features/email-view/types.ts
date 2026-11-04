@@ -9,6 +9,7 @@ export type EmailFilterGroupId =
   | 'attachments'
   | 'calendar'
   | 'focus'
+  | 'labels'
   | 'tags';
 
 export type EmailFilterOptionId =

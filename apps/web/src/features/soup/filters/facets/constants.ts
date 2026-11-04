@@ -126,6 +126,7 @@ export const FILTER_TARGETS = {
     emailImportance: { backend: 'Importance', domain: [true, false] },
     emailShared: { backend: 'Shared' },
     emailCalendarOnly: { backend: 'CalendarOnly', domain: [true, false] },
+    emailLabel: { backend: 'Label' },
     emailUpdatedAt: { backend: 'ua', compile: 'dateRange' },
   },
 
@@ -310,6 +311,8 @@ type FilterTargetsMeta = {
     emailImportance: boolean;
     emailShared: 'exclude' | 'include' | 'only';
     emailCalendarOnly: boolean;
+    /** Provider label (Gmail label, Outlook category) display names. */
+    emailLabel: string[];
     emailUpdatedAt: DateRangeFilter;
   };
 

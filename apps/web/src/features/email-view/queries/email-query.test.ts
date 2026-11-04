@@ -300,6 +300,18 @@ describe('buildEmailQuery', () => {
     });
   });
 
+  it('refines by selected provider labels by name, any of them', () => {
+    const tree = JSON.stringify(
+      buildEmailQuery(
+        contextFor({ facets: { labels: ['Clients/Acme', 'Invoices'] } })
+      ).body.ef
+    );
+
+    expect(tree).toContain(JSON.stringify({ l: { Label: 'Clients/Acme' } }));
+    expect(tree).toContain(JSON.stringify({ l: { Label: 'Invoices' } }));
+    expect(tree).toContain('"|"');
+  });
+
   it('keeps an unresolved tag selection from filtering', () => {
     const plain = buildEmailQuery(contextFor()).body;
     const withUnknownTag = buildEmailQuery(
