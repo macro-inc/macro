@@ -24,11 +24,13 @@ import {
   type CombinedEntity,
   getEntityName,
   getEntityType,
-  prioritizeEntities,
   useQuickAccessEntities,
 } from '../editors/selectors/entityUtils';
 import { OptionCheckBox } from '../editors/selectors/OptionCheckBox';
-import { scopedUserOptions } from '../editors/selectors/scoped-user-options';
+import {
+  nonTeamUserOptions,
+  scopedUserOptions,
+} from '../editors/selectors/scoped-user-options';
 import { usePropertyEntityDisplay } from '../hooks/usePropertyEntityDisplay';
 import { useAgentAssignees } from '../queries/agent-assignees';
 import { useTeamMembers } from '../queries/team-members';
@@ -150,14 +152,24 @@ export function EntityPropertyEditor(props: {
   const localSelectedIds = createMemo(
     () => new Set(localSelectedRefs().map((ref) => ref.entity_id))
   );
-  const { items: people } = useQuickAccessEntities(() => 'USER');
+  const { items: people, isLoading: peopleLoading } = useQuickAccessEntities(
+    () => 'USER'
+  );
+  const otherPeople = createMemo(() =>
+    nonTeamUserOptions(
+      [...agents(), ...team.users()],
+      people().map((item) => item.data)
+    )
+  );
   const users = createMemo(() => {
     if (!isCompanyOwner() && !isAssignees()) return undefined;
     const pool = [...agents(), ...team.users()];
     if (!isAssignees()) return pool;
     return scopedUserOptions(
       pool,
-      people().map((item) => item.data),
+      findingOtherPeople() && (team.isLoading() || team.isError())
+        ? []
+        : people().map((item) => item.data),
       localSelectedIds(),
       findingOtherPeople()
     );
@@ -191,10 +203,7 @@ export function EntityPropertyEditor(props: {
       (entity) => !selectedAtOpen.has(entity.id)
     );
 
-    return prioritizeEntities(
-      [...selected, ...remaining],
-      isAssignees() ? priorityIds() : undefined
-    );
+    return [...selected, ...remaining];
   });
 
   const searchQuery = () => props.searchValue().trim();
@@ -335,17 +344,25 @@ export function EntityPropertyEditor(props: {
         </CommandMenuEmptyState>
       }
     >
-      <Show
-        when={
-          isAssignees() &&
-          !findingOtherPeople() &&
-          (team.isLoading() || team.isError())
-        }
-      >
+      <Show when={isAssignees() && (team.isLoading() || team.isError())}>
         <div role="status" class="px-3 py-2 text-sm text-ink-muted">
           {team.isLoading()
             ? t('viewMenus.loadingTeamMembers')
             : t('viewMenus.teamMembersUnavailable')}
+        </div>
+      </Show>
+      <Show
+        when={
+          isAssignees() &&
+          findingOtherPeople() &&
+          !team.isLoading() &&
+          !team.isError() &&
+          !peopleLoading() &&
+          otherPeople().length === 0
+        }
+      >
+        <div role="status" class="px-3 py-2 text-sm text-ink-muted">
+          {t('viewMenus.noOtherPeople')}
         </div>
       </Show>
       <CommandMenuList

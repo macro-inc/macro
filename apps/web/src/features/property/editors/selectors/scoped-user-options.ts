@@ -2,19 +2,37 @@ import { isBotPrincipalId } from '@core/constant/macroAgent';
 import type { IUser } from '@core/user';
 import { idToDisplayName, idToEmail } from '@core/user/util';
 
-/** Keep selected outsiders available without exposing unselected contacts. */
+/** Eligible people outside the roster, excluding agents. */
+export function nonTeamUserOptions(
+  users: IUser[],
+  otherUsers: IUser[]
+): IUser[] {
+  const userIds = new Set(users.map((user) => user.id));
+  return otherUsers.filter(
+    (user) => !userIds.has(user.id) && !isBotPrincipalId(user.id)
+  );
+}
+
+/** Switch between the roster and other people while retaining selections and agents. */
 export function scopedUserOptions(
   users: IUser[],
   otherUsers: IUser[],
   selectedIds: ReadonlySet<string>,
-  includeOtherUsers: boolean
+  discovering: boolean
 ): IUser[] {
-  const options = new Map(users.map((user) => [user.id, user]));
-  for (const user of otherUsers) {
-    if (options.has(user.id)) continue;
-    if (includeOtherUsers || selectedIds.has(user.id)) {
-      options.set(user.id, user);
-    }
+  const options = new Map(
+    users
+      .filter(
+        (user) =>
+          !discovering || selectedIds.has(user.id) || isBotPrincipalId(user.id)
+      )
+      .map((user) => [user.id, user])
+  );
+  const available = discovering
+    ? nonTeamUserOptions(users, otherUsers)
+    : otherUsers.filter((user) => selectedIds.has(user.id));
+  for (const user of available) {
+    if (!options.has(user.id)) options.set(user.id, user);
   }
   for (const id of selectedIds) {
     if (options.has(id)) continue;

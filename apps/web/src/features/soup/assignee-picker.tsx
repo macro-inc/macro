@@ -9,9 +9,10 @@ import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { useUserId } from '@core/context/user';
 import type { IUser } from '@core/user/types';
 import CircleDashedIcon from '@icon/system/regular/circle-dashed.svg';
+import { nonTeamUserOptions } from '@property/editors/selectors/scoped-user-options';
 import { useAgentAssignees } from '@property/queries/agent-assignees';
 import { useTeamMembers } from '@property/queries/team-members';
-import { useContacts } from '@queries/contacts/contacts';
+import { useContacts, useContactsQuery } from '@queries/contacts/contacts';
 import { Button } from '@ui';
 import { type Accessor, createMemo, createSignal, Show } from 'solid-js';
 
@@ -33,13 +34,18 @@ export function useAssigneePicker(
   enabled: Accessor<boolean>
 ) {
   const contacts = useContacts(enabled);
+  const contactsQuery = useContactsQuery(enabled);
   const team = useTeamMembers(enabled);
   const agents = useAgentAssignees(enabled);
   const userId = useUserId();
   const [discovering, setDiscovering] = createSignal(false);
+  const otherPeople = createMemo(() =>
+    nonTeamUserOptions(team.users(), contacts())
+  );
 
   const options = createMemo(() => {
     const uid = userId();
+    const selectedIds = new Set(activeIds());
     const people = new Map<string, IUser>();
     for (const contact of contacts()) people.set(contact.id, contact);
     for (const member of team.users()) people.set(member.id, member);
@@ -70,12 +76,15 @@ export function useAssigneePicker(
     for (const id of activeIds()) {
       if (id !== NO_ASSIGNEE) add(id);
     }
-    for (const member of team.users()) add(member.id);
-    if (discovering()) {
-      for (const contact of contacts()) add(contact.id);
+    if (!discovering()) {
+      for (const member of team.users()) add(member.id);
+    } else if (!team.isLoading() && !team.isError()) {
+      for (const contact of otherPeople()) add(contact.id);
     }
     return result.toSorted(
-      (a, b) => Number(isBotPrincipalId(b.id)) - Number(isBotPrincipalId(a.id))
+      (a, b) =>
+        Number(selectedIds.has(b.id)) - Number(selectedIds.has(a.id)) ||
+        Number(isBotPrincipalId(b.id)) - Number(isBotPrincipalId(a.id))
     );
   });
 
@@ -93,6 +102,8 @@ export function useAssigneePicker(
     }),
     isLoading: team.isLoading,
     isError: team.isError,
+    otherPeopleEmpty: () =>
+      contactsQuery.isSuccess && otherPeople().length === 0,
   };
 }
 
@@ -123,16 +134,26 @@ export function AssigneeDiscoveryStatus(props: {
 }) {
   return (
     <>
-      <Show
-        when={!props.discovery.discovering() && props.discovery.isLoading()}
-      >
+      <Show when={props.discovery.isLoading()}>
         <div class="px-2 py-1 text-xs text-ink-muted">
           {t('viewMenus.loadingTeamMembers')}
         </div>
       </Show>
-      <Show when={!props.discovery.discovering() && props.discovery.isError()}>
+      <Show when={props.discovery.isError()}>
         <div class="px-2 py-1 text-xs text-ink-muted">
           {t('viewMenus.teamMembersUnavailable')}
+        </div>
+      </Show>
+      <Show
+        when={
+          props.discovery.discovering() &&
+          !props.discovery.isLoading() &&
+          !props.discovery.isError() &&
+          props.discovery.otherPeopleEmpty()
+        }
+      >
+        <div role="status" class="px-2 py-1 text-xs text-ink-muted">
+          {t('viewMenus.noOtherPeople')}
         </div>
       </Show>
     </>

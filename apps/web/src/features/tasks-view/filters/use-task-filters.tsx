@@ -187,6 +187,8 @@ export function useTaskFilters() {
             .filter((option) => option.id !== NO_ASSIGNEE),
         ].toSorted(
           (a, b) =>
+            Number(state.facets.assignees?.includes(b.id) ?? false) -
+              Number(state.facets.assignees?.includes(a.id) ?? false) ||
             Number(isBotPrincipalId(b.id)) - Number(isBotPrincipalId(a.id))
         ),
         preserveOrder: true,

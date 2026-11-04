@@ -318,7 +318,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     const localResults = term
       ? prioritizeEntities(
           entitySearch(allEntities, term).map((result) => result.item),
-          props.priorityIds
+          props.priorityIds,
+          props.priorityIds ? props.selectedOptions() : undefined
         )
           .slice(0, MAX_SEARCH_RESULTS)
           .filter(excludeFilter)
@@ -343,7 +344,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   // Sort entities with selected items first when not searching. Self is
   // already pinned to the top within `filteredEntities`; this layers
   // selected-first on top of that ordering.
-  const selectedFirstEntities = useSelectedFirst({
+  const sortedEntities = useSelectedFirst({
     items: filteredEntities,
     allItems: entities,
     selectedIds: props.selectedOptions,
@@ -351,9 +352,6 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     getId: (e: CombinedEntity) => e.id,
   });
 
-  const sortedEntities = createMemo(() =>
-    prioritizeEntities(selectedFirstEntities(), props.priorityIds)
-  );
   const shouldShowSelectedDivider = (index: number) => {
     if (!props.config.isMultiSelect || searchTerm() || index === 0)
       return false;

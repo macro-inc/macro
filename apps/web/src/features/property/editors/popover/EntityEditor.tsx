@@ -17,7 +17,10 @@ import type { EntityProperty, PropertyApiValues } from '../../types';
 import { isEntityProperty } from '../../utils';
 import { useQuickAccessEntities } from '../selectors/entityUtils';
 import { PropertyEntitySelector } from '../selectors/PropertyEntitySelector';
-import { scopedUserOptions } from '../selectors/scoped-user-options';
+import {
+  nonTeamUserOptions,
+  scopedUserOptions,
+} from '../selectors/scoped-user-options';
 import { EditorPopover } from './EditorPopover';
 
 type EntityEditorProps = {
@@ -119,12 +122,22 @@ function EntityEditorSelector(
   const agents = useAgentAssignees(() => isAssignees);
   const team = useTeamMembers(() => isCompanyOwner || isAssignees);
   const [findingOtherPeople, setFindingOtherPeople] = createSignal(false);
-  const { items: people } = useQuickAccessEntities(() => 'USER');
+  const { items: people, isLoading: peopleLoading } = useQuickAccessEntities(
+    () => 'USER'
+  );
+  const otherPeople = createMemo(() =>
+    nonTeamUserOptions(
+      [...agents(), ...team.users()],
+      people().map((item) => item.data)
+    )
+  );
   const users = createMemo(() => {
     if (!isAssignees) return team.users();
     return scopedUserOptions(
       [...agents(), ...team.users()],
-      people().map((item) => item.data),
+      findingOtherPeople() && (team.isLoading() || team.isError())
+        ? []
+        : people().map((item) => item.data),
       entityReferencesToIdSet(props.draft.selectedRefs()),
       findingOtherPeople()
     );
@@ -138,9 +151,7 @@ function EntityEditorSelector(
       )
   );
   const showRosterStatus = () =>
-    (isCompanyOwner || isAssignees) &&
-    !findingOtherPeople() &&
-    (team.isLoading() || team.isError());
+    (isCompanyOwner || isAssignees) && (team.isLoading() || team.isError());
 
   return (
     <>
@@ -192,6 +203,20 @@ function EntityEditorSelector(
           {team.isLoading()
             ? t('viewMenus.loadingTeamMembers')
             : t('viewMenus.teamMembersUnavailable')}
+        </div>
+      </Show>
+      <Show
+        when={
+          isAssignees &&
+          findingOtherPeople() &&
+          !team.isLoading() &&
+          !team.isError() &&
+          !peopleLoading() &&
+          otherPeople().length === 0
+        }
+      >
+        <div role="status" class="shrink-0 px-3 py-2 text-sm text-ink-muted">
+          {t('viewMenus.noOtherPeople')}
         </div>
       </Show>
       <Show

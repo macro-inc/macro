@@ -82,10 +82,11 @@ title-row tags retain their compact height.
 
 ## Assignee selection
 
-The system Assignees property lists available agents before the current team
-roster, including people who are already selected. **Find other people…** explicitly
-expands to the existing Quick Access people pool; **Back to team members** restores
-the roster without dropping picks.
+The system Assignees property lists selected assignees first, then available
+agents, then the current team roster. **Find other people…** switches to eligible
+non-team people from the existing Quick Access people pool while retaining selected
+assignees and agents; **Back to team members** restores the roster without dropping
+picks. An empty non-team pool shows **No other people available.**
 Already-selected outsiders remain visible and removable, including references
 absent from contacts. Closing and reopening starts in team mode.
 

@@ -18,6 +18,7 @@ import { EntityEditor, EntitySheetEditor } from './EntityEditor';
 
 const agentId = 'bot|00000000-0000-0000-0000-000000000123';
 const userId = 'macro|alice@example.com';
+const roster = vi.hoisted(() => ({ includeOutside: false }));
 
 vi.mock('@core/context/user', () => ({
   useEmail: () => () => 'alice@example.com',
@@ -101,6 +102,9 @@ vi.mock('@queries/team/teams', () => ({
       members: [
         { user_id: 'macro|alice@example.com' },
         { user_id: 'macro|teammate@example.com' },
+        ...(roster.includeOutside
+          ? [{ user_id: 'macro|outside@example.com' }]
+          : []),
       ],
     },
   }),
@@ -190,13 +194,31 @@ beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn();
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  roster.includeOutside = false;
+});
 
 describe('assigning an agent through task and project properties', () => {
-  it.each([EntityEditor, EntitySheetEditor])(
-    'offers an agent before an already-selected person for keyboard assignment',
-    async (Editor) => {
+  it.each([
+    { Editor: EntityEditor, search: false },
+    { Editor: EntitySheetEditor, search: false },
+    { Editor: EntityEditor, search: true },
+    { Editor: EntitySheetEditor, search: true },
+  ])(
+    'keeps selected people above agents for keyboard assignment (search: $search)',
+    async ({ Editor, search }) => {
       const onSave = setup(undefined, property, Editor);
+      if (search) {
+        const input = screen.getByPlaceholderText('Add assignees...');
+        fireEvent.input(input, { target: { value: 'no-match' } });
+        await waitFor(() => expect(screen.queryByText('Alice')).toBeNull());
+        fireEvent.input(input, { target: { value: 'a' } });
+        await screen.findByText('Alice');
+      }
+      fireEvent.keyDown(screen.getByPlaceholderText('Add assignees...'), {
+        key: 'ArrowDown',
+      });
       fireEvent.keyDown(screen.getByPlaceholderText('Add assignees...'), {
         key: 'Enter',
       });
@@ -312,6 +334,18 @@ describe('team-first assignees', () => {
       const onSave = setup(undefined, property, Editor);
       expect(screen.getByText('Teammate')).toBeTruthy();
       expect(screen.queryByText('Outside')).toBeNull();
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Find other people…' })
+      );
+      expect(screen.queryByText('Teammate')).toBeNull();
+      expect(screen.getByText('Alice')).toBeTruthy();
+      expect(screen.getByText('Research assistant')).toBeTruthy();
+      expect(await screen.findByText('Outside')).toBeTruthy();
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Back to team members' })
+      );
+      expect(screen.getByText('Teammate')).toBeTruthy();
+      expect(screen.queryByText('Outside')).toBeNull();
       const input = screen.getByPlaceholderText('Add assignees...');
       fireEvent.input(input, { target: { value: 'outside' } });
       await waitFor(() => expect(screen.queryByText('Teammate')).toBeNull());
@@ -342,6 +376,22 @@ describe('team-first assignees', () => {
       );
     }
   );
+
+  it('reports an empty non-team pool instead of showing the same teammates', () => {
+    roster.includeOutside = true;
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Find other people…' }));
+    expect(screen.getByRole('status').textContent).toBe(
+      'No other people available.'
+    );
+    expect(screen.queryByText('Teammate')).toBeNull();
+    expect(screen.queryByText('Outside')).toBeNull();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Back to team members' })
+    );
+    expect(screen.getByText('Teammate')).toBeTruthy();
+    expect(screen.getByText('outside@example.com')).toBeTruthy();
+  });
 
   it('removes a selected outsider missing from contacts without discovery', async () => {
     const assigned: EntityProperty = {

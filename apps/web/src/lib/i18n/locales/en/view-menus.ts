@@ -121,6 +121,7 @@ export default {
   backToTeam: 'Back to team members',
   loadingTeamMembers: 'Loading team members…',
   teamMembersUnavailable: 'Team members could not be loaded.',
+  noOtherPeople: 'No other people available.',
   createdBy: 'Created by',
   searchCreators: 'Search creators...',
   searchCreatorsLabel: 'Search creators',

@@ -179,7 +179,8 @@ export function useEntitiesForProperty(
 
     const localResults = prioritizeEntities(
       entitySearch(available, query).map((result) => result.item),
-      options?.priorityIds?.()
+      options?.priorityIds?.(),
+      options?.selectedIds?.()
     ).slice(0, MAX_RESULTS);
 
     if (needsEmailSearch()) {
