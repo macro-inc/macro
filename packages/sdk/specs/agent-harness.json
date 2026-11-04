@@ -1626,6 +1626,195 @@
         }
       }
     },
+    "/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "List the connected apps and custom MCP servers the session's agent may use.",
+        "operationId": "list_execution_connected_apps",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "execution_id",
+            "in": "path",
+            "description": "A running execution of the session's current turn",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ConnectedApp"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/{kind}/{key}/calls": {
+      "post": {
+        "tags": ["agent-sessions"],
+        "summary": "Call one tool of a connected app as the execution's account.",
+        "operationId": "call_connected_app_tool",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "execution_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ConnectedAppKind"
+            }
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "description": "The app's slug or custom server key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CallConnectedTool"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectedToolResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/{kind}/{key}/tools": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "List the tools one connected app serves.",
+        "operationId": "list_connected_app_tools",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "execution_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ConnectedAppKind"
+            }
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "description": "The app's slug or custom server key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ConnectedTool"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/agent-sessions/{session_id}/code-executions/{execution_id}/reviews": {
       "get": {
         "tags": ["agent-sessions"],
@@ -4153,6 +4342,22 @@
         },
         "additionalProperties": false
       },
+      "CallConnectedTool": {
+        "type": "object",
+        "description": "Call one tool of a connected app.",
+        "required": ["tool"],
+        "properties": {
+          "arguments": {
+            "type": "object",
+            "description": "The tool's arguments, matching its input schema."
+          },
+          "tool": {
+            "type": "string",
+            "description": "The tool's name on its server."
+          }
+        },
+        "additionalProperties": false
+      },
       "CallSearchSuggestions": {
         "type": "object",
         "description": "Call search supports speakers, channels and attendance status.",
@@ -4439,6 +4644,71 @@
           "openPullRequests": {
             "type": "boolean",
             "description": "Whether new coding sessions deliver their work as a pull request."
+          }
+        }
+      },
+      "ConnectedApp": {
+        "type": "object",
+        "description": "A connected app the session's agent may use.",
+        "required": ["kind", "key", "name"],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "The app's slug, or its custom server key."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ConnectedAppKind",
+            "description": "Which store the app comes from."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name, e.g. `Slack` or the owner's name for a custom server."
+          }
+        }
+      },
+      "ConnectedAppKind": {
+        "type": "string",
+        "description": "Which store a connected app comes from.",
+        "enum": ["app", "custom"]
+      },
+      "ConnectedTool": {
+        "type": "object",
+        "description": "One tool a connected app serves.",
+        "required": ["name", "inputSchema"],
+        "properties": {
+          "description": {
+            "type": ["string", "null"],
+            "description": "What the server says the tool does."
+          },
+          "inputSchema": {
+            "type": "object",
+            "description": "JSON Schema for the tool's arguments."
+          },
+          "name": {
+            "type": "string",
+            "description": "The tool's name on its server."
+          }
+        }
+      },
+      "ConnectedToolResult": {
+        "type": "object",
+        "description": "A connected tool's answer: MCP's `CallToolResult`.",
+        "required": ["isError", "content"],
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "MCP content blocks, e.g. `{type: \"text\", text}`."
+          },
+          "isError": {
+            "type": "boolean",
+            "description": "The tool failed, or could not run; `content` says why."
+          },
+          "structuredContent": {
+            "type": ["object", "null"],
+            "description": "Structured output, for tools that declare an output schema."
           }
         }
       },

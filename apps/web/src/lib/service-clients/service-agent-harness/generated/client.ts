@@ -22,9 +22,14 @@ import type {
   AppConnectedRequest,
   AutoArchiveOverridesBody,
   AutoArchivePreferencesBody,
+  CallConnectedTool,
   ClassifyInputRequest,
   ClassifyInputResponse,
   CodingPreferencesBody,
+  ConnectedApp,
+  ConnectedAppKind,
+  ConnectedTool,
+  ConnectedToolResult,
   ControlRequest,
   ControlResponse,
   CreateAgentSessionRequest,
@@ -2022,6 +2027,218 @@ export const getCodeExecution = async (
     status: res.status,
     headers: res.headers,
   } as getCodeExecutionResponse;
+};
+
+/**
+ * @summary List the connected apps and custom MCP servers the session's agent may use.
+ */
+export type listExecutionConnectedAppsResponse200 = {
+  data: ConnectedApp[];
+  status: 200;
+};
+
+export type listExecutionConnectedAppsResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type listExecutionConnectedAppsResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type listExecutionConnectedAppsResponseSuccess =
+  listExecutionConnectedAppsResponse200 & {
+    headers: Headers;
+  };
+export type listExecutionConnectedAppsResponseError = (
+  | listExecutionConnectedAppsResponse403
+  | listExecutionConnectedAppsResponse404
+) & {
+  headers: Headers;
+};
+
+export type listExecutionConnectedAppsResponse =
+  | listExecutionConnectedAppsResponseSuccess
+  | listExecutionConnectedAppsResponseError;
+
+export const getListExecutionConnectedAppsUrl = (
+  sessionId: string,
+  executionId: string
+) => {
+  return `/agent-sessions/${sessionId}/code-executions/${executionId}/connected-apps`;
+};
+
+export const listExecutionConnectedApps = async (
+  sessionId: string,
+  executionId: string,
+  options?: RequestInit
+): Promise<listExecutionConnectedAppsResponse> => {
+  const res = await fetch(
+    getListExecutionConnectedAppsUrl(sessionId, executionId),
+    {
+      ...options,
+      method: 'GET',
+    }
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listExecutionConnectedAppsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listExecutionConnectedAppsResponse;
+};
+
+/**
+ * @summary Call one tool of a connected app as the execution's account.
+ */
+export type callConnectedAppToolResponse200 = {
+  data: ConnectedToolResult;
+  status: 200;
+};
+
+export type callConnectedAppToolResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type callConnectedAppToolResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type callConnectedAppToolResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type callConnectedAppToolResponseSuccess =
+  callConnectedAppToolResponse200 & {
+    headers: Headers;
+  };
+export type callConnectedAppToolResponseError = (
+  | callConnectedAppToolResponse400
+  | callConnectedAppToolResponse403
+  | callConnectedAppToolResponse404
+) & {
+  headers: Headers;
+};
+
+export type callConnectedAppToolResponse =
+  | callConnectedAppToolResponseSuccess
+  | callConnectedAppToolResponseError;
+
+export const getCallConnectedAppToolUrl = (
+  sessionId: string,
+  executionId: string,
+  kind: ConnectedAppKind,
+  key: string
+) => {
+  return `/agent-sessions/${sessionId}/code-executions/${executionId}/connected-apps/${kind}/${key}/calls`;
+};
+
+export const callConnectedAppTool = async (
+  sessionId: string,
+  executionId: string,
+  kind: ConnectedAppKind,
+  key: string,
+  callConnectedTool: CallConnectedTool,
+  options?: RequestInit
+): Promise<callConnectedAppToolResponse> => {
+  const res = await fetch(
+    getCallConnectedAppToolUrl(sessionId, executionId, kind, key),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(callConnectedTool),
+    }
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: callConnectedAppToolResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as callConnectedAppToolResponse;
+};
+
+/**
+ * @summary List the tools one connected app serves.
+ */
+export type listConnectedAppToolsResponse200 = {
+  data: ConnectedTool[];
+  status: 200;
+};
+
+export type listConnectedAppToolsResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type listConnectedAppToolsResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type listConnectedAppToolsResponseSuccess =
+  listConnectedAppToolsResponse200 & {
+    headers: Headers;
+  };
+export type listConnectedAppToolsResponseError = (
+  | listConnectedAppToolsResponse403
+  | listConnectedAppToolsResponse404
+) & {
+  headers: Headers;
+};
+
+export type listConnectedAppToolsResponse =
+  | listConnectedAppToolsResponseSuccess
+  | listConnectedAppToolsResponseError;
+
+export const getListConnectedAppToolsUrl = (
+  sessionId: string,
+  executionId: string,
+  kind: ConnectedAppKind,
+  key: string
+) => {
+  return `/agent-sessions/${sessionId}/code-executions/${executionId}/connected-apps/${kind}/${key}/tools`;
+};
+
+export const listConnectedAppTools = async (
+  sessionId: string,
+  executionId: string,
+  kind: ConnectedAppKind,
+  key: string,
+  options?: RequestInit
+): Promise<listConnectedAppToolsResponse> => {
+  const res = await fetch(
+    getListConnectedAppToolsUrl(sessionId, executionId, kind, key),
+    {
+      ...options,
+      method: 'GET',
+    }
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listConnectedAppToolsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listConnectedAppToolsResponse;
 };
 
 /**

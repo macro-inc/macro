@@ -23,6 +23,10 @@ enforced by the ordinary backend APIs.
   `PipelineTable.views()` returns views whose `positions()` reads saved board order.
 - `src/entities/external-chat/`: added provider chats (`macro.externalChats`, entity type
   `external_chat`) and their message/send/upload/participant handles.
+- `src/entities/connected-apps/`: `macro.connectedApps.list(execution)` returns the
+  connected apps and custom MCP servers a running code execution's session
+  agent was given; `app.tools()` and `tool.call(args)` go through the harness,
+  which stamps the credential. Only works inside a running execution.
 - `src/entities/whatsapp/`: the owner's WhatsApp account and chat list; `WhatsAppChat.add()`
   returns an `ExternalChat`.
 - `src/entities/me/`: `macro.me.update()` sets the caller's name and profile

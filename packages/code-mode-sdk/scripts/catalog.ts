@@ -17,6 +17,7 @@ export const entityDirectories: readonly string[] = [
   'calendar',
   'calls',
   'channels',
+  'connected-apps',
   'crm',
   'databases',
   'documents',

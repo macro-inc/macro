@@ -776,6 +776,22 @@ export type CalendarSuggestions = {
 };
 
 /**
+ * Call one tool of a connected app.
+ */
+export type CallConnectedTool = {
+    /**
+     * The tool's arguments, matching its input schema.
+     */
+    arguments?: {
+        [key: string]: unknown;
+    };
+    /**
+     * The tool's name on its server.
+     */
+    tool: string;
+};
+
+/**
  * Call search supports speakers, channels and attendance status.
  */
 export type CallSearchSuggestions = {
@@ -994,6 +1010,71 @@ export type CodingPreferencesBody = {
      * Whether new coding sessions deliver their work as a pull request.
      */
     openPullRequests: boolean;
+};
+
+/**
+ * A connected app the session's agent may use.
+ */
+export type ConnectedApp = {
+    /**
+     * The app's slug, or its custom server key.
+     */
+    key: string;
+    /**
+     * Which store the app comes from.
+     */
+    kind: ConnectedAppKind;
+    /**
+     * Display name, e.g. `Slack` or the owner's name for a custom server.
+     */
+    name: string;
+};
+
+/**
+ * Which store a connected app comes from.
+ */
+export type ConnectedAppKind = 'app' | 'custom';
+
+/**
+ * One tool a connected app serves.
+ */
+export type ConnectedTool = {
+    /**
+     * What the server says the tool does.
+     */
+    description?: string | null;
+    /**
+     * JSON Schema for the tool's arguments.
+     */
+    inputSchema: {
+        [key: string]: unknown;
+    };
+    /**
+     * The tool's name on its server.
+     */
+    name: string;
+};
+
+/**
+ * A connected tool's answer: MCP's `CallToolResult`.
+ */
+export type ConnectedToolResult = {
+    /**
+     * MCP content blocks, e.g. `{type: "text", text}`.
+     */
+    content: Array<{
+        [key: string]: unknown;
+    }>;
+    /**
+     * The tool failed, or could not run; `content` says why.
+     */
+    isError: boolean;
+    /**
+     * Structured output, for tools that declare an output schema.
+     */
+    structuredContent?: {
+        [key: string]: unknown;
+    } | null;
 };
 
 /**
@@ -3262,6 +3343,83 @@ export type GetCodeExecutionResponses = {
 };
 
 export type GetCodeExecutionResponse = GetCodeExecutionResponses[keyof GetCodeExecutionResponses];
+
+export type ListExecutionConnectedAppsData = {
+    body?: never;
+    path: {
+        session_id: string;
+        /**
+         * A running execution of the session's current turn
+         */
+        execution_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps';
+};
+
+export type ListExecutionConnectedAppsErrors = {
+    403: unknown;
+    404: unknown;
+};
+
+export type ListExecutionConnectedAppsResponses = {
+    200: Array<ConnectedApp>;
+};
+
+export type ListExecutionConnectedAppsResponse = ListExecutionConnectedAppsResponses[keyof ListExecutionConnectedAppsResponses];
+
+export type CallConnectedAppToolData = {
+    body: CallConnectedTool;
+    path: {
+        session_id: string;
+        execution_id: string;
+        kind: ConnectedAppKind;
+        /**
+         * The app's slug or custom server key
+         */
+        key: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/{kind}/{key}/calls';
+};
+
+export type CallConnectedAppToolErrors = {
+    400: unknown;
+    403: unknown;
+    404: unknown;
+};
+
+export type CallConnectedAppToolResponses = {
+    200: ConnectedToolResult;
+};
+
+export type CallConnectedAppToolResponse = CallConnectedAppToolResponses[keyof CallConnectedAppToolResponses];
+
+export type ListConnectedAppToolsData = {
+    body?: never;
+    path: {
+        session_id: string;
+        execution_id: string;
+        kind: ConnectedAppKind;
+        /**
+         * The app's slug or custom server key
+         */
+        key: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/{kind}/{key}/tools';
+};
+
+export type ListConnectedAppToolsErrors = {
+    403: unknown;
+    404: unknown;
+};
+
+export type ListConnectedAppToolsResponses = {
+    200: Array<ConnectedTool>;
+};
+
+export type ListConnectedAppToolsResponse = ListConnectedAppToolsResponses[keyof ListConnectedAppToolsResponses];
 
 export type ListExecutionReviewsData = {
     body?: never;

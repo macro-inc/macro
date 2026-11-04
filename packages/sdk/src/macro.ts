@@ -8,6 +8,7 @@ import { CalendarNamespace } from './entities/calendar/namespace';
 import { CallRecordNamespace } from './entities/calls/namespace';
 import { ChannelNamespace } from './entities/channels/namespace';
 import { ChatNamespace } from './entities/chats/namespace';
+import { ConnectedAppNamespace } from './entities/connected-apps/namespace';
 import { CrmNamespace } from './entities/crm/namespace';
 import { DatabaseNamespace } from './entities/databases/namespace';
 import { DocumentNamespace } from './entities/documents/namespace';
@@ -49,6 +50,11 @@ export type {
   StructuredCompletionResponse,
 } from './entities/ai/namespace';
 export type { CallMessage } from './entities/calls/message';
+export {
+  ConnectedApp,
+  ConnectedTool,
+} from './entities/connected-apps/connected-app';
+export { ConnectedAppNamespace } from './entities/connected-apps/namespace';
 export {
   type AddColumnOptions,
   type ApplyOpsOptions,
@@ -149,6 +155,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   readonly email: EmailNamespace;
 
+  /** Call the user's connected apps and MCP servers from a code execution. */
+  readonly connectedApps: ConnectedAppNamespace;
+
   readonly favorites: FavoritesNamespace;
 
   readonly foreignEntities: ForeignEntityNamespace;
@@ -220,6 +229,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.databases = new DatabaseNamespace(client);
     this.documents = new DocumentNamespace(client);
     this.email = new EmailNamespace(client);
+    this.connectedApps = new ConnectedAppNamespace(client);
     this.favorites = new FavoritesNamespace(client);
     this.foreignEntities = new ForeignEntityNamespace(client);
     this.forms = new FormNamespace(client);
@@ -279,6 +289,10 @@ export { UserApiKey } from './entities/api-keys/api-key';
 export { ChannelActivity } from './entities/channels/activity';
 export { ChannelPicture } from './entities/channels/picture';
 export { ChatGeneration, ChatMessage } from './entities/chats/generation';
+export type {
+  ConnectedAppKind,
+  ConnectedToolResult,
+} from './entities/connected-apps/connected-app';
 export {
   CrmPipeline,
   PipelineColumn,
