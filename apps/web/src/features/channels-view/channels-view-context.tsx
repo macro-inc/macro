@@ -75,6 +75,7 @@ export type ChannelsViewContext = {
     section: ChannelSectionKey,
     preferences: ChannelSectionPreferences
   ) => void;
+  setSectionOrder: (sections: ChannelSectionKey[]) => void;
   setAsideWidth: (width: number) => void;
 };
 
@@ -101,6 +102,7 @@ function createInitialState(
       threads: initial.sortBy?.threads ?? CHANNELS_DEFAULT_SORT_BY.threads,
     },
     sectionPreferences: { ...initial.sectionPreferences },
+    sectionOrder: initial.sectionOrder ?? [],
     asideWidth: clampChannelsRailWidth(
       initial.asideWidth ?? CHANNELS_DEFAULT_RAIL_WIDTH
     ),
@@ -134,6 +136,7 @@ export const [ChannelsViewProvider, useChannelsView] =
           restoreEntryState: props.initialState === undefined,
           restoreLocalState: props.initialState === undefined,
           restorePreferences: shouldRestorePreferences(initial),
+          restoreSectionOrder: initial.sectionOrder === undefined,
         })
       );
 
@@ -267,6 +270,7 @@ export const [ChannelsViewProvider, useChannelsView] =
             ...current,
             [section]: { ...current[section], ...preferences },
           })),
+        setSectionOrder: (sections) => setState('sectionOrder', sections),
         setAsideWidth: (width) =>
           setState('asideWidth', clampChannelsRailWidth(width)),
       };

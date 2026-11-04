@@ -20,7 +20,7 @@ vi.mock('@app/features/soup', async () => ({
   ...(await import('@app/features/soup/collection/rows')),
   ...(await import('@app/features/soup/collection/row-store')),
   ...(await import('@app/features/soup/collection/transforms')),
-  useSearchContext: () => ({ entityPool: () => [] }),
+  useSearchContext: () => ({ entityPool: () => [], routinePool: () => [] }),
   createSearchState: () => {
     fixture.searchState();
     return {

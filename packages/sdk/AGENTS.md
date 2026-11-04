@@ -19,7 +19,8 @@ enforced by the ordinary backend APIs.
   contact sets are 404, but authorization/service errors must propagate.
 - `src/entities/sharing/`, `messages/`: scoped access requests and message threads.
 - `src/entities/databases/query.ts`: SQL statements, typed table/row references and version guards.
-- `src/entities/crm/pipeline.ts`: pipeline-authorized table/row handles.
+- `src/entities/crm/pipeline.ts`: pipeline-authorized table/row/view handles;
+  `PipelineTable.views()` returns views whose `positions()` reads saved board order.
 - `src/entities/external-chat/`: added provider chats (`macro.externalChats`, entity type
   `external_chat`) and their message/send/upload/participant handles.
 - `src/entities/whatsapp/`: the owner's WhatsApp account and chat list; `WhatsAppChat.add()`
@@ -34,6 +35,7 @@ enforced by the ordinary backend APIs.
 
 - Keep handwritten behavior in `src/`; never edit `generated/` or `specs/`.
 - Keep WhatsApp pairing, passkeys, connection setup/disconnect and rollout configuration out of the handwritten public SDK; operate on accounts linked in the app, with personal bearer sessions for account/access controls. External chat sends/uploads accept the connection owner's session or own API token; bots never send.
+- Keep notification mute, unmute, and snooze endpoints, including bulk item preferences, in the app-only coverage exclusions.
 - Keep `external-chat/` provider-neutral; provider-specific reads (WhatsApp community chats) branch on `provider` with an exhaustive match.
 - Use existing entity handles for reads and mutations. Follow the
   [SDK rule](../../.agents/rules/sdk.md) and `add-sdk-endpoint` skill.
@@ -74,19 +76,14 @@ the existing gateway prefixes.
   (`isReadOnly` false): Outlook names the mailbox owner as organizer on every
   event of a read-only calendar. `eventRole` and `EventRole::of` must stay
   in step.
-- Calendar notes accept a document handle and the occurrence returned by calendar
-  reads. `CalendarNote` owns optional team sharing and unlinking; clearing its team
-  sends explicit null and never changes the document's other permissions.
-  `Document.meetingNotes()` discovers visible meeting links for readers and
-  durable grants for owners to revoke after losing
-  meeting access.
 - Regenerate Rust OpenAPI and web service clients before `bun run sync-specs &&
   bun run generate`; do not copy deployed schemas over a local API change.
+- Run `bun run generate` to regenerate SDK clients and normalize whitespace-only
+  lines; do not hand-edit generated output to satisfy whitespace checks.
 - Regenerate `../sdk-docs/reference` after SDK source or generated type changes;
   run that package's checks because web CI verifies the reference is current.
-- Run `bun run generate` and the checks in `../code-mode-sdk` after SDK changes
-  to keep the embedded Deno bundle, agent documentation, and operation catalog current.
-  Commit `crates/agent_code_mode/src/domain/documentation.json`; CI's Typecheck
+  Also run `bun packages/code-mode-sdk/scripts/generate.ts` from the root and
+  commit `crates/agent_code_mode/src/domain/documentation.json`; CI's Typecheck
   fails when it is stale.
 - `generated/agent-fold/` is not from OpenAPI: `cargo run -p agent_fold --bin
   export_types` writes it, and `foldedLog()` casts the opaque wire schema to it.
@@ -107,6 +104,13 @@ the existing gateway prefixes.
   assigned, Not started), so `Task.create` spells them out when it sends any.
 - Meeting list lookup only covers the owner's newest 100 standalone meetings;
   handles seeded from invitations retain their token for refetching after writes.
+- Team routes act on the caller's current team, which the auth service
+  resolves from the principal. `Team.invite` and `Team.invites` send the
+  handle's `team_id`, which the route checks in the same request (409 on a
+  mismatch); `members` checks the team in the `GET /team` response it reads.
+  `/team/invite` answers 304 when it created no invite; `Team.invite` reports
+  that as `false`. A 204 from `GET /team` (no team) parses as an empty
+  object, not `undefined`.
 - Keep access-request resolution snapshots: resolved requests leave pending lists.
 - Pipeline schema reads share the parent's cache; successful op batches clear it.
 - Email sends and other writes against hosted data are real actions; use mocks

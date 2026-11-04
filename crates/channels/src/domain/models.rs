@@ -833,6 +833,8 @@ pub struct MutatedMessage {
     pub sender_id: ChannelSender<'static>,
     /// For an agent (bot) message, the id of the user who triggered it.
     pub triggered_by: Option<String>,
+    /// The client the user triggered it through, such as "Claude Code".
+    pub triggered_via: Option<String>,
     /// Message body.
     pub content: String,
     /// Created timestamp.

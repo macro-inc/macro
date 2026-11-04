@@ -253,6 +253,9 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "CreateSkill"
                 | "Decide"
                 | "GenerateObject"
+                // macro.agents.list() and macro.agentSessions.createManaged.
+                | "ListCodingAgents"
+                | "DispatchCodingAgent"
         )
 }
 
@@ -270,7 +273,7 @@ impl SessionCodeMode for CodeModeService {
         if self.0.executor.is_none() {
             return Err(CodeModeError::Unavailable);
         }
-        if session.is_archived {
+        if session.is_archived() {
             return Err(CodeModeError::Forbidden);
         }
         if self.0.turns.active(session.id).await? != Some(turn) || cancel.is_cancelled() {

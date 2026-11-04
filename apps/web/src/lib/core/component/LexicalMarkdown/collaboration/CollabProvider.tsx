@@ -17,6 +17,7 @@ import {
   loroSyncState,
 } from '@core/component/LexicalMarkdown/utils';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   $isCodeHighlightNode,
   $isCodeNode,
@@ -69,16 +70,9 @@ import {
   onCleanup,
   type Setter,
 } from 'solid-js';
+import { FLUSH_COLLABORATION_COMMAND } from './flush';
 
 type MutatedNodes = UpdateListenerPayload['mutatedNodes'];
-
-/** Hooks into the caller's tracing, all optional. */
-export type CollabObservability = {
-  /** Resume the caller's open span for this session id, if any. */
-  resumeSpan?: (id: string) => Span | undefined;
-  /** End the caller's span for this session id. */
-  endSpan?: (id: string) => void;
-};
 
 export type CollabProviderProps = {
   editor: LexicalEditor;
@@ -106,7 +100,8 @@ export type CollabProviderProps = {
   canComment: Accessor<boolean | undefined>;
   /** External error state; the engine stops when it becomes non-null. */
   editorError: Accessor<MarkdownEditorErrors | null>;
-  observability?: CollabObservability;
+  /** Caller-owned load context; the provider never ends it. */
+  span?: Span;
   /** Optional status UI (e.g. the md block's CollabStatus chrome). */
   statusChrome?: JSX.Element;
 };
@@ -134,10 +129,6 @@ export function CollabProvider(props: CollabProviderProps) {
 
   if (!syncSource()) return null;
 
-  const resumeSpan = (id: string): Span | undefined =>
-    props.observability?.resumeSpan?.(id);
-  const endSpan = (id: string): void => props.observability?.endSpan?.(id);
-
   const awareness = createAwareness(
     loroManager.peerIdStr,
     userId(),
@@ -152,6 +143,7 @@ export function CollabProvider(props: CollabProviderProps) {
   const walSyncer = createWALSyncSource(syncSource()!);
   const syncEngine = createSyncEngine({
     loroManager,
+    parentSpan: props.span,
     awareness,
     syncs: { wal: walSyncer, live: syncSource()! },
     bindings: {
@@ -164,6 +156,32 @@ export function CollabProvider(props: CollabProviderProps) {
       syncSource()!.documentId
     ),
   });
+
+  onCleanup(
+    props.editor.registerCommand(
+      FLUSH_COLLABORATION_COMMAND,
+      (complete) => {
+        const state = loroSyncState(props.editor.getEditorState());
+        const flush = async () => {
+          try {
+            if (!syncEngine.isRunning()) {
+              complete(false);
+              return;
+            }
+            await syncEngine.syncStateToLoro({ ...state });
+            await walSyncer.flush();
+            complete((await walSyncer.summary()).dirty === 0);
+          } catch (error) {
+            Telemetry.error(error, { surface: 'comment-flush' });
+            complete(false);
+          }
+        };
+        fireAndForget(flush(), 'comment-flush');
+        return true;
+      },
+      COMMAND_PRIORITY_NORMAL
+    )
+  );
 
   const { refreshRemoteCursors, RemoteCursorsOverlay } = useRemoteCursors({
     loroManager: loroManager,
@@ -509,7 +527,7 @@ export function CollabProvider(props: CollabProviderProps) {
               message:
                 'editor init: no state from loroManager — editor will NOT become ready (skeleton stays)',
             });
-            endSpan(syncSource()!.documentId);
+            props.span?.error('Editor initial state is missing');
             return;
           }
 
@@ -551,8 +569,8 @@ export function CollabProvider(props: CollabProviderProps) {
                 message:
                   'editor init: initializeEditorWithVersionedState failed',
               });
+              props.span?.error('Editor initialization failed');
               props.setEditorError(initError);
-              endSpan(syncSource()!.documentId);
               return;
             }
           }
@@ -564,9 +582,7 @@ export function CollabProvider(props: CollabProviderProps) {
             props.editor.dispatchCommand(FORCE_SYNC_COMMAND, undefined);
           }
           props.setEditorReady(true);
-          const documentId = syncSource()!.documentId;
-          resumeSpan(documentId)?.event('editor.ready');
-          endSpan(documentId);
+          props.span?.event('editor.ready');
           logSyncService({
             documentId: syncSource()!.documentId,
             level: 'info',
@@ -597,8 +613,6 @@ export function CollabProvider(props: CollabProviderProps) {
   onCleanup(() => {
     syncEngine.stop();
     walSyncer.destroy();
-    const documentId = syncSource()?.documentId;
-    if (documentId) endSpan(documentId);
   });
 
   return (

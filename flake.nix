@@ -10,7 +10,7 @@
     crane.url = "github:ipetkov/crane";
     crane-tauri.url = "github:JPHutchins/crane-tauri";
     tauri-cef = {
-      url = "github:macro-inc/tauri/285fb6b1cb2fc20666da1688f4c74e240a100035";
+      url = "github:macro-inc/tauri/4b8a46f15c0a54a5c06a1486cd5432d444c17bd8";
       flake = false;
     };
   };

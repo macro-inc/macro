@@ -70,7 +70,12 @@ In every composer `Cmd+Shift+.`, `Cmd+Shift+,` and `Cmd+Shift+D` discard the
 draft exactly like its trash button, `Cmd+Shift+U` opens the attach picker, and
 `Cmd+Shift+X`, `7`, `8` and `9` apply strikethrough, numbered list, bulleted
 list and quote. Check discard from both a reply (the reply closes) and
-standalone compose (the view goes back), with focus in the body.
+standalone compose (the view goes back), with focus in the body. The same
+three keys discard the drafts on the focused or selected rows of a list (Email
+or a soup view) that carry the Draft badge. The thread keeps its row and its
+place, even though its sort time falls back to the last real message, until
+the tab, filters, or sort change; only the badge and preview change back to
+that message. Check it on a reply draft in All: the row must not move.
 
 Star and mute feedback reports what happened to the write. With GraphQL Soup
 enabled, a star queued while offline toasts that it is waiting to sync (for
@@ -126,7 +131,10 @@ further reloads, even while an offline edit is still queued.
 Opening an attachment opens it in a split from its Drive copy, except a
 calendar file: it opens its event (see the calendar invitations section of the
 calendar guide), or downloads when Macro could not read one, and creates no
-Drive file.
+Drive file. Every received attachment chip, of any file type, has a download
+button joined to the filename that saves the file without opening it. Images
+and videos keep their previews and get the same chip. Cloud-reference chips
+stay open-only.
 
 Imported Outlook attachments keep their provider identity, including inline
 images. Cloud-reference attachment chips open the original Outlook message.
@@ -356,6 +364,38 @@ the backend schema containing `setEmailThreadArchived` and
 Browser WASM and native cache builds must include the regenerated schema metadata;
 native offline archive support therefore requires a full app build, not just OTA.
 
+### Spam and Trash
+
+The desktop sidebar and mobile tabs include **Spam** and **Trash**. Spam reads
+Gmail Spam or Outlook Junk; Trash reads Gmail Trash or Outlook Deleted Items.
+Account, alias, and facet filters stay within the selected folder. Mixed threads
+show their latest message in that folder, and folder membership is checked before
+pagination. These views load server pages; full-text search and offline predicate
+filtering are not available for them yet.
+
+Spam and Trash order threads by their latest message in that folder. Reading a thread or receiving a newer message outside the folder does not change that folder cursor. Pending provider moves affect folder membership immediately.
+
+Use **Not spam** on a Spam row or **Restore** on a Trash row. The same
+action appears in the selection toolbar for bulk restores, including on mobile.
+Outlook restores received mail to Inbox and provider drafts to Drafts. Gmail removes
+the Spam or Trash label and preserves the remaining labels; it does not add Inbox.
+Gmail restores update the canonical preview and ordering immediately, before the
+queued provider write completes.
+Outlook uses pending mailbox operations, and the thread's operation notice shows
+provider confirmation or failure. Gmail uses the existing queued label-sync path
+and does not expose those operation notices. A success toast means the request was
+accepted, not that the provider has confirmed it. Read/unread actions and provider
+sync events refresh the isolated folder lists. Outlook operation polling runs
+while the thread is open; otherwise
+folder refresh follows the provider sync event. The unread facet remains
+thread-level, so an unread reply outside Spam can make its Spam row unread.
+Bulk restores limit concurrent requests. Failed requests remain retryable, and a partial
+bulk failure does not undo successful restores. While a restore is pending, switch
+folders and select another row; completing the old restore must preserve the new
+selection. The same applies to selecting different rows in the original folder.
+Restoring an individual row also preserves selections on other rows.
+No permanent-delete action is added.
+
 ### Cached Mail filtering
 
 The per-query caches for email threads, channels, and native offline document
@@ -394,7 +434,7 @@ headers use the selected Mail view's indexed timestamps, not a preview cached fr
 another view. Drafts and Sent display their latest eligible message snapshot, even
 when a newer normal message is the ALL preview; no message bodies are needed.
 Sent also requires a canonical outbound timestamp. Trashed messages cannot supply
-any preview. All Mail also excludes spam/junk, including its cached preview and
+these cached previews. All Mail also excludes spam/junk, including its cached preview and
 non-draft baseline after draft edits. Mixed threads show the latest message outside
 spam and trash; excluded messages must not consume a page slot. Drafts and Sent
 keep their own canonical preview membership. Mail profiles v5/v6 require fresh
@@ -519,10 +559,13 @@ In the new Email view, ordinary row activation opens the thread inside
 `/app/component/mail`. On desktop the thread's header has a Back arrow instead
 of breadcrumbs; it returns to the filtered list (hidden in the reading pane,
 where the list is already beside the thread). The subject, tags and
-participants stay put while only the messages scroll. Pressing `Escape` in the open thread
-with focus outside any input does the same once there is nothing left to unwind
-(an open reply, an expanded body, or a focused message each take one `Escape`
-first); the list keeps the row you came from focused and comes back at the same
+participants stay put while only the messages scroll. The full subject, including
+its last word beside the title action, supports text selection. Pressing `Escape`
+in the open thread with focus outside any input returns to the originating list
+once there is nothing left to unwind (an open reply, an expanded body, or a
+focused message each take one `Escape` first). In the reading pane, it restores
+list focus without closing the thread. The list keeps the row you came from
+focused and comes back at the same
 scroll position, scrolling only if j/k in the thread moved focus off screen. If
 the focused row leaves the list without a list `e` (a reply in Signal marks it
 done, or another device archives it), focus moves to the row that took its
@@ -830,8 +873,8 @@ open shadow root: Playwright text locators can reach them, but a card's ordinary
 
 ### Read receipts
 
-With `enable-email-read-receipts` on and read receipts turned on for an inbox
-(see [Settings](settings.md#email-read-receipts)), messages sent from that
+With `enable-email-read-receipts` on and read receipts on for an inbox, which
+is the default (see [Settings](settings.md#email-read-receipts)), messages sent from that
 inbox show **Opened** or **Not opened** beside the date in the expanded
 message header. The desktop tooltip and the expanded header details (tap the
 header caret on touch) give the count and first and last open times. Only
@@ -1369,3 +1412,7 @@ On desktop, drag a tag from the sidebar onto an email row. Its existing tags
 remain; dropping onto a selected row applies the tag to every taggable selected
 row. The dragged chip shows the tag color and name, and the target gets an outline.
 Clicking the tag still filters the list. Mobile uses the existing tag menu.
+
+Opening a row clears its unread state immediately; direct details mark read when
+ready. See [reading items](notifications.md#reading-items) for failure, keyboard,
+mobile, and email inbox checks.

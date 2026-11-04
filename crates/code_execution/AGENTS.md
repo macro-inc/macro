@@ -25,6 +25,10 @@ run under a plain user token (public MCP) has. APIs that ask a program to
 confirm what a person picks by opening something read it; the calendar
 mutation routes demand the copy's `inbox` from such requests.
 
+The bootstrap bans timers before importing `main.mjs`, and the import map points
+node timer and worker modules at `timers.mjs`. The bundled SDK's only timer is
+the SSE reconnect delay, so a reconnecting event stream fails the same way.
+
 The bootstrap replaces a result's `data` larger than `Limits::max_result_bytes`
 with an outline and preview, keeping `reviews`; the frame limit stays the backstop.
 

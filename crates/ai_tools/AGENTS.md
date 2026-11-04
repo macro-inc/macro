@@ -76,12 +76,14 @@ edit capability but calls no nested model and emits no additional model charge; 
 
 - Executable toolsets exclude legacy chats in every host and code mode. Keep historical parsing compatibility only in `frontend_compat.rs`; never merge it into provider schemas.
 
+- `src/memory.rs` wires private memory tools and read-only research; `src/bin/memory.rs` runs awaited one-user generation.
+
 ## Checks
 
 - `cargo test -p ai_tools` (`SQLX_OFFLINE` unset).
 - After adding/changing a tool: `cargo run -p ai_tools --bin gen_tool_schemas`
   and `--bin gen_ai_request_schemas` to refresh generated frontend schemas.
-- Regenerate DisplayResults entity-reference enums from `apps/web` with `bun run gen-dynamic-ui-schema` after canonical entity changes.
+- `DisplayResults` decodes its view with `dynamic_ui` and returns it; readers render the result, never the arguments. Its schema comes from `dynamic_ui::View`.
 
 ## Related
 

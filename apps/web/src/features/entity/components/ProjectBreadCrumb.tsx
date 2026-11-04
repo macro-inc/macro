@@ -1,9 +1,10 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { t } from '@app/lib/i18n';
 import FolderIcon from '@icon/system/regular/folder-simple.svg';
+import { queryReadyGate } from '@queries/gate';
 import { useProjectPreviewQuery } from '@queries/storage/project-preview';
 import { buttonClasses, cn, HoverCard } from '@ui';
-import { Show, Suspense } from 'solid-js';
+import { Show } from 'solid-js';
 import type { ProjectContainedEntity, ProjectEntity } from '../types/entity';
 import { truncatedPath } from '../utils/path';
 
@@ -16,11 +17,13 @@ export function ProjectBreadCrumb(props: {
 }) {
   const projectQuery = useProjectPreviewQuery(() => props.entity.projectId);
   const fullPath = () =>
-    projectQuery.data?.path.join('/') || projectQuery.data?.name;
+    queryReadyGate(projectQuery)
+      ? projectQuery.data.path.join('/') || projectQuery.data.name
+      : undefined;
 
   const handleClick = (e: MouseEvent) => {
     e.preventDefault();
-    if (!projectQuery.isSuccess) return;
+    if (!projectQuery.isSuccess || !queryReadyGate(projectQuery)) return;
     e.stopPropagation();
 
     const data = projectQuery.data;
@@ -44,7 +47,7 @@ export function ProjectBreadCrumb(props: {
         variant: 'ghost',
         size: 'xs',
         class: cn(
-          'min-w-0 max-w-full gap-1 border-0 font-normal text-link not-data-disabled:hover:text-link-hover not-data-disabled:active:text-link-hover popup-open:text-link-hover',
+          'min-w-0 max-w-full gap-1 border-0 font-normal',
           props.collapsed ? 'size-6 p-0 touch:size-9' : 'h-auto px-2 py-0.5'
         ),
       })}
@@ -53,7 +56,7 @@ export function ProjectBreadCrumb(props: {
       content={
         <div class="min-w-48 max-w-72">
           <div class="mb-1.5 flex items-center gap-2 border-b border-edge pb-1.5 text-ink-muted">
-            <FolderIcon class="size-3.5 shrink-0 text-link" />
+            <FolderIcon class="size-3.5 shrink-0" />
             <span class="text-xs">{t('create.folderLabel')}</span>
           </div>
           <div class="px-2 py-0.5 text-xs leading-5 text-ink-muted wrap-anywhere">
@@ -64,15 +67,20 @@ export function ProjectBreadCrumb(props: {
     >
       <FolderIcon class="size-4 shrink-0 mobile:size-5" />
       <Show when={!props.collapsed}>
-        <Suspense fallback={<ListSkeleton.Bar class="h-2 w-10" />}>
-          <Show when={projectQuery.data}>
-            {(data) => (
-              <div class="truncate">
-                {truncatedPath(data().path, MAX_PATH_LENGTH)}
-              </div>
-            )}
-          </Show>
-        </Suspense>
+        <Show
+          when={queryReadyGate(projectQuery) ? projectQuery.data : undefined}
+          fallback={
+            projectQuery.isPending ? (
+              <ListSkeleton.Bar class="h-2 w-10" />
+            ) : undefined
+          }
+        >
+          {(data) => (
+            <div class="truncate">
+              {truncatedPath(data().path, MAX_PATH_LENGTH)}
+            </div>
+          )}
+        </Show>
       </Show>
     </HoverCard>
   );

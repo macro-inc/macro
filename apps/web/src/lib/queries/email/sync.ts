@@ -1,5 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_INBOX_SYNC_STATUS } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { queryClient } from '@queries/client';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import {
@@ -10,6 +11,7 @@ import {
 } from '@service-email/generated/schemas';
 import { leadingAndTrailing, throttle } from '@solid-primitives/scheduled';
 import { clearBackfillProgress, setBackfillProgress } from './backfill';
+import { invalidateEmailFolderQueries } from './folder-cache';
 import { emailKeys } from './keys';
 import { invalidateEmailLinks } from './link';
 
@@ -18,6 +20,12 @@ const BACKFILL_SOUP_REFRESH_INTERVAL = 5_000;
 const throttledBackfillSoupRefresh = leadingAndTrailing(
   throttle,
   invalidateAllSoup,
+  BACKFILL_SOUP_REFRESH_INTERVAL
+);
+
+const throttledFolderRefresh = leadingAndTrailing(
+  throttle,
+  () => fireAndForget(invalidateEmailFolderQueries(), 'email-folders'),
   BACKFILL_SOUP_REFRESH_INTERVAL
 );
 
@@ -34,9 +42,8 @@ function asRefreshEmailEvent(payload: unknown): RefreshEmailEvent | undefined {
 /**
  * Handles `refresh_email` websocket events. Steady-state mutations
  * (`upsert_message`, `update_labels`, `delete_message`) already invalidate soup
- * through the notification-driven path, and reacting to them again would
- * double-refetch, so only `backfill_progress`, `backfill`, `link_removed`, and
- * `photo_synced` act here.
+ * through the notification-driven path. Spam/Trash use isolated REST previews,
+ * so refresh those lists explicitly without refetching cache-maintained views.
  *
  * Backfill produces no notifications, so these are its only refresh signals.
  * `backfill_progress` carries live progress: it refetches soup (throttled,
@@ -55,6 +62,7 @@ export function handleRefreshEmail(payload: unknown): void {
     event.event === 'update_labels' ||
     event.event === 'delete_message'
   ) {
+    throttledFolderRefresh();
     queryClient.invalidateQueries({
       queryKey: emailKeys.composeDraftState._def,
     });

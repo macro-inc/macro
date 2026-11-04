@@ -34,7 +34,7 @@ impl PgMailboxSync {
         &self,
         lease: &CatalogLease,
         folders: &[MailFolder],
-    ) -> Result<(), MailboxError> {
+    ) -> Result<Option<ImportCompleted>, MailboxError> {
         let mut tx = self.db.begin().await.map_err(db_error)?;
         // Serialize against disconnect/reconnect before touching the shared catalog.
         let current = sqlx::query!(
@@ -148,8 +148,9 @@ impl PgMailboxSync {
             WHERE s.link_id = $1 AND s.generation = $2 AND s.kind = 'mail_folder'
                 AND f.link_id = s.link_id AND f.provider_id = s.scope_id AND f.deleted_at IS NOT NULL
         "#,lease.mailbox.link_id,lease.mailbox.sync_generation).execute(&mut *tx).await.map_err(db_error)?;
-        Self::queue_attachment_recheck(&mut tx, lease.mailbox).await?;
-        tx.commit().await.map_err(db_error)
+        let import_completed = Self::settle_import(&mut tx, lease.mailbox).await?;
+        tx.commit().await.map_err(db_error)?;
+        Ok(import_completed)
     }
 
     pub(super) async fn release_catalog_lease(

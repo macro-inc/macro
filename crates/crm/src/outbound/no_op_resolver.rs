@@ -2,8 +2,8 @@
 //!
 //! Used by binaries that construct a [`CrmService`] without carrying a
 //! metadata provider — HTTP API servers, MCP, and agent tools. Wiring a
-//! real resolver into each of them would force them to carry the reqwest
-//! + scraper deps and provider credentials. Companies they create get a
+//! real resolver into each of them would add website-fetching dependencies
+//! and network work to their request paths. Companies they create get a
 //! pending `crm_domain_directory` entry, which the email pubsub workers'
 //! enrichment worker resolves with the real resolver.
 //!

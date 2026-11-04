@@ -128,6 +128,7 @@ export function PriorityCollapseOverflowSensor(
       props.controller.collapser.register({
         id: `truncate-last-resort-${createUniqueId()}`,
         priority: TRUNCATE_LAST_RESORT_PRIORITY,
+        reclaimSpaceOnExpand: true,
         collapsed: capped,
         setCollapsed: (value) => setCapped(value),
       })
