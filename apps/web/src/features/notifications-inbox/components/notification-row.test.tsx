@@ -11,8 +11,9 @@ const setup = (overrides: Partial<NotificationRowProps> = {}) => {
     <NotificationRow
       id="row"
       icon={<span />}
-      title="Launch plan"
-      detail="Sam and Ana commented"
+      who="Sam and Ana commented"
+      what="Launch plan"
+      body="Can we move the date?"
       time="2m"
       count={3}
       unfolded={unfolded()}
@@ -52,6 +53,29 @@ describe('NotificationRow', () => {
 
     expect(onToggleStack).toHaveBeenCalledTimes(2);
     expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('says only what it has to say', () => {
+    render(() => (
+      <NotificationRow
+        id="row"
+        icon={<span />}
+        who="Dana assigned you a task"
+        time="2m"
+        count={1}
+        unfolded={false}
+        unseen
+        highlighted={false}
+        onClick={() => {}}
+        onHover={() => {}}
+        onDone={() => {}}
+        onToggleStack={() => {}}
+      />
+    ));
+
+    expect(screen.getByText('Dana assigned you a task')).toBeTruthy();
+    expect(document.querySelector('[data-card-what]')).toBeNull();
+    expect(document.querySelector('[data-card-body]')).toBeNull();
   });
 
   it('offers no button for a single notification', () => {

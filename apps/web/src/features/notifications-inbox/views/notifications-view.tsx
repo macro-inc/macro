@@ -77,6 +77,7 @@ import type { InboxDecision } from '../core/inbox-row';
 import {
   describeInboxCard,
   describeStackItem,
+  inboxCardKind,
 } from '../primitives/describe-row';
 import {
   createInboxListItems,
@@ -530,11 +531,13 @@ export function NotificationsView(props: NotificationsViewProps) {
           icon={
             <InboxSenderAvatar
               notification={card.row().content.notifications[0]}
-              type={card.row().type}
+              kind={inboxCardKind(card.row())}
+              badged
             />
           }
-          title={display().title}
-          detail={display().detail}
+          who={display().who}
+          what={display().what}
+          body={display().body}
           time={formatTimestamp(new Date(card.row().latestAt))}
           count={card.row().count}
           unfolded={stacks.isExpanded(card.row().id)}
@@ -593,7 +596,7 @@ export function NotificationsView(props: NotificationsViewProps) {
         icon={
           <InboxSenderAvatar
             notification={entry.notification()}
-            type={entry.row().type}
+            kind={inboxCardKind(entry.row())}
           />
         }
         by={item().by}
@@ -633,9 +636,10 @@ export function NotificationsView(props: NotificationsViewProps) {
           </div>
           <For each={[0, 1, 2, 3, 4]}>
             {() => (
-              <ListSkeleton.Row class="mb-2.5 h-[63px] gap-2.5 rounded-xl px-[13px] mobile:mb-3 mobile:h-[71px]">
+              <ListSkeleton.Row class="mb-2.5 h-[83px] gap-2.5 rounded-xl px-[13px] mobile:mb-3 mobile:h-[89px]">
                 <ListSkeleton.Bar class="size-6 shrink-0 rounded-full mobile:size-10" />
                 <div class="flex min-w-0 flex-1 flex-col gap-2">
+                  <ListSkeleton.Bar class="w-1/3" />
                   <ListSkeleton.Bar class="w-1/2" />
                   <ListSkeleton.Bar class="w-4/5" />
                 </div>
@@ -703,7 +707,7 @@ export function NotificationsView(props: NotificationsViewProps) {
               scrollRef={viewport()}
               startMargin={isTouchDevice() ? (topSpacerSize.height ?? 0) : 0}
               bufferSize={500}
-              itemSize={73}
+              itemSize={95}
               keepMounted={
                 list.focus.index() >= 0 ? [list.focus.index()] : undefined
               }

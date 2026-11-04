@@ -10,7 +10,7 @@ import type {
   NotificationInboxRow,
   NotificationsInboxContext,
 } from '../context/notifications-inbox-context';
-import type { InboxStackItem } from '../core/inbox-row';
+import type { InboxCardKind, InboxStackItem } from '../core/inbox-row';
 
 /**
  * What a row says: a muted "actor verb place" line and its subject. The line
@@ -22,10 +22,14 @@ export type InboxRowDisplay = {
   subject: string;
 };
 
-/** What a card says: what it is about, then who. */
+/** What a card says, in as many lines as it has something to say. */
 export type InboxCardDisplay = {
-  title: string;
-  detail: string;
+  /** Who did it, and what they did when that isn't obvious. */
+  who: string;
+  /** What it is about: a subject, channel, document, session or task. */
+  what?: string;
+  /** What was said, as Markdown. */
+  body?: string;
 };
 
 type Names = Pick<NotificationsInboxContext, 'userName' | 'senderName'>;
@@ -289,60 +293,165 @@ const rootMessage = (row: NotificationInboxRow) => {
   return undefined;
 };
 
+/** What a notification says, beyond what its card already names. */
+const spokenText = (notification: UnifiedNotification) =>
+  match(notification.notification_metadata)
+    .with({ tag: 'new_email' }, ({ content }) => content.snippet)
+    .with(
+      { tag: 'channel_invite' },
+      ({ content }) => content.messageContent ?? undefined
+    )
+    .otherwise(() => getNotificationContent(notification));
+
+/** Drops a line that repeats one above it, and never leaves the first empty. */
+const withoutRepeats = (
+  card: { who: string; what?: string; body?: string },
+  fallback: string
+): InboxCardDisplay => {
+  const what = card.what && card.what !== card.who ? card.what : undefined;
+  const body =
+    card.body && card.body !== card.who && card.body !== card.what
+      ? card.body
+      : undefined;
+  if (card.who) return { who: card.who, what, body };
+  return what ? { who: what, body } : { who: body ?? fallback };
+};
+
 /**
- * Describe a row's card. A single notification says what it is about and who
- * did it; a stack names what its notifications share (the message, channel,
- * session, document or thread) and everyone in it.
+ * Describe a row's card, as a stack or one notification: who did it, what it is
+ * about when that isn't who, and what was said. Cards are only as tall as they
+ * have something to say: an email has all three lines, a message in a channel
+ * has no middle one, and a task has no last one.
  */
 export function describeInboxCard(
   row: NotificationInboxRow,
   names: Names
 ): InboxCardDisplay {
-  const single = describeInboxRow(row, names);
-  const latest = row.content.notifications[0];
-  if (row.count <= 1 || !latest) {
-    return { title: single.subject, detail: single.action };
-  }
-
   const entityName = row.content.entity.name;
-  const senders = row.content.notifications.map(
-    (notification) => senderOf(row, notification, names) ?? ''
-  );
-  const who = nameList(senders.filter((sender) => sender !== ''));
-  const place = channelPlace(
-    latest.notification_metadata.content as ChannelContent
-  );
-  const target = getNotificationTargetName(latest);
+  const latest = row.content.notifications[0];
+  if (!latest) return { who: entityName };
 
-  return match(row.type)
-    .with('channel_thread', 'channel_mention', () => ({
-      title: rootMessage(row) ?? single.subject,
-      detail: place ? `${who} in ${place}` : who,
-    }))
-    .with('channel_messages', () =>
-      place
-        ? { title: place, detail: `${who} posted` }
-        : { title: who || entityName, detail: single.subject }
+  const single = describeInboxRow(row, names);
+  const metadata = latest.notification_metadata;
+  const isStack = row.count > 1;
+  const sender = senderOf(row, latest, names);
+  const senders = row.content.notifications
+    .map((notification) => senderOf(row, notification, names) ?? '')
+    .filter((name) => name !== '');
+  const who = isStack ? nameList(senders) : (sender ?? '');
+  const spoken = spokenText(latest);
+  // A stack with several people says who said its newest line.
+  const body =
+    spoken && sender && new Set(senders).size > 1
+      ? `${sender}: ${spoken}`
+      : spoken;
+  const place = channelPlace(metadata.content as ChannelContent);
+  const target = getNotificationTargetName(latest);
+  const inPlace = (text: string) => (place ? `${text} in ${place}` : text);
+  // A message says itself, and its badge says when it is a mention.
+  const channelDeed = () =>
+    metadata.tag === 'channel_message_send' ||
+    metadata.tag === 'channel_mention'
+      ? who
+      : join(who, stackVerb(latest));
+
+  const card = match(row.type)
+    .with('channel_thread', 'channel_mention', () =>
+      isStack
+        ? { who: inPlace(who), what: rootMessage(row), body }
+        : { who: inPlace(channelDeed()), body }
     )
+    .with('channel_messages', () => {
+      if (isStack) {
+        return place ? { who, what: place, body } : { who, body };
+      }
+      if (metadata.tag !== 'channel_invite') {
+        return { who: inPlace(channelDeed()), body };
+      }
+      return metadata.content.isDirectMessage
+        ? { who: single.action, body }
+        : {
+            who: join(who, 'invited you'),
+            what: metadata.content.channelName,
+            body,
+          };
+    })
     .with(
       'discussion_mention',
       'discussion_messages',
       'discussion_thread',
       () => ({
-        title: target ?? entityName,
-        detail: `${who} commented`,
+        who: isStack ? `${who} commented` : join(who, stackVerb(latest)),
+        what: target ?? entityName,
+        body,
       })
     )
     .with('agent', () => ({
-      title: target ?? entityName,
-      detail: join(who, stackVerb(latest)),
+      who: join(who, stackVerb(latest)),
+      what: target ?? entityName,
+      body,
     }))
     .with('pull_request', () => ({
-      title: entityName,
-      detail: join(who, stackVerb(latest)),
+      who: join(who, stackVerb(latest)),
+      what: entityName,
+      // Its status repeats the title, so it names the pull request instead.
+      body: spoken && spoken !== entityName ? body : target,
     }))
-    .with('email', () => ({ title: single.subject, detail: who }))
-    .otherwise(() => ({ title: single.subject, detail: single.action }));
+    .with('email', () =>
+      metadata.tag === 'reminder'
+        ? { who: single.action, what: single.subject }
+        : { who, what: single.subject, body }
+    )
+    .with('calendar_event', () =>
+      metadata.tag === 'calendar_event_reminder'
+        ? { who: 'Upcoming event', what: single.subject, body: spoken }
+        : { who: single.action, what: single.subject }
+    )
+    .with(
+      'task',
+      'calendar_join_request',
+      'access_requested',
+      'access_granted',
+      () => ({ who: single.action, what: single.subject })
+    )
+    .with('other', () => ({ who: single.action, body: single.subject }))
+    .exhaustive();
+
+  return withoutRepeats(card, entityName);
+}
+
+/**
+ * The kind of notification a row is. A stack's newest notification decides,
+ * except that a mention stays one: it is why the row is there.
+ */
+export function inboxCardKind(row: NotificationInboxRow): InboxCardKind {
+  const metadata = row.content.notifications[0]?.notification_metadata;
+  const isDirect =
+    (metadata?.content as ChannelContent | undefined)?.channelType ===
+    'directMessage';
+  return match(row.type)
+    .returnType<InboxCardKind>()
+    .with('channel_mention', 'discussion_mention', () => 'mention')
+    .with('channel_thread', () =>
+      metadata?.tag === 'channel_message_reaction' ? 'reaction' : 'reply'
+    )
+    .with('channel_messages', () => {
+      if (metadata?.tag === 'channel_invite') return 'invite';
+      if (metadata?.tag === 'channel_message_reaction') return 'reaction';
+      return isDirect ? 'message' : 'channel';
+    })
+    .with('discussion_thread', () => 'reply')
+    .with('discussion_messages', () => 'comment')
+    .with('email', () => (metadata?.tag === 'reminder' ? 'reminder' : 'email'))
+    .with('agent', () => 'agent')
+    .with('task', () => 'task')
+    .with('pull_request', () => 'pull_request')
+    .with('calendar_event', 'calendar_join_request', () => 'event')
+    .with('access_requested', 'access_granted', () => 'access')
+    .with('other', () =>
+      metadata?.tag === 'invite_to_team' ? 'invite' : 'other'
+    )
+    .exhaustive();
 }
 
 /** Describe one notification of a stack, without the place its card names. */

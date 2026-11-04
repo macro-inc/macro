@@ -19,11 +19,17 @@ entity's comments stay on one card even when one mentions you. The server decide
 all of this (`crates/notification_inbox/src/domain/rows.rs`), so live updates and
 reads stack the same way. A card shows who it is from (an avatar, an initial for a
 sender known only by name such as an email's, or the kind of notification for a
-reminder), then what it is about, then who did what (for example **&lt;first
-name&gt; assigned you a task**), with an unread dot. Several notifications on a row
-make a stack, with paper edges and a count: its title is what they share (the
-top-level message when a notification carries it, else the newest message; the
-channel, person, session, document or thread) and its second line names who.
+reminder), with a badge on the avatar's corner saying what kind it is (Channel,
+Message, Mention, Reply, Reaction, Email, Comment, Invite, Access, Agent, Task, Pull
+request, Event or Reminder; a stack's newest notification decides, except that a
+mention stays one). It is as tall as it has something to say: who did it (for example
+**&lt;first name&gt; assigned you a task**), with an unread dot; what it is about;
+and up to two lines of what was said. An email has all three (sender, subject,
+snippet), a message in a channel has no middle line, and a task has no last one.
+Several notifications on a row make a stack, with paper edges and a count: it names
+who, what they share (the top-level message when a notification carries it, the
+channel, session, document or thread), and the newest line, with its sender when
+there are several people.
 Choosing a stack opens it and leaves it folded; only its count button unfolds it,
 as sections of the card, one per notification. Each opens that notification:
 its message or reply, its comment, or an agent's turn. A channel invite and an

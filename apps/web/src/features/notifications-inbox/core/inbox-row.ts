@@ -65,6 +65,24 @@ export type InboxRow<Content> = {
   content: Content;
 };
 
+/** The kind of notification a card names on its avatar. */
+export type InboxCardKind =
+  | 'channel'
+  | 'message'
+  | 'mention'
+  | 'reply'
+  | 'reaction'
+  | 'email'
+  | 'comment'
+  | 'invite'
+  | 'access'
+  | 'agent'
+  | 'task'
+  | 'pull_request'
+  | 'event'
+  | 'reminder'
+  | 'other';
+
 /** One notification inside an unfolded stack. */
 export type InboxStackItem = {
   id: string;

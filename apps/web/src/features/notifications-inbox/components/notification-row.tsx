@@ -1,6 +1,9 @@
 import { t } from '@app/lib/i18n';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
+import {
+  twoLineClampMarkdownTheme,
+  unifiedListMarkdownTheme,
+} from '@core/component/LexicalMarkdown/theme';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import { Button, cn } from '@ui';
@@ -11,10 +14,12 @@ export type NotificationRowProps = {
   id: string;
   /** Who it is from. */
   icon: JSX.Element;
-  /** What the card is about: a subject, message, channel or document. */
-  title: string;
-  /** Who did what. */
-  detail: string;
+  /** Who did it. */
+  who: string;
+  /** What it is about: a subject, channel, document, session or task. */
+  what?: string;
+  /** What was said, as Markdown; at most two lines show. */
+  body?: string;
   /** When the newest notification arrived, already formatted. */
   time: string;
   /** How many notifications the row stands for. */
@@ -31,12 +36,13 @@ export type NotificationRowProps = {
 };
 
 /**
- * One notification inbox row, as a card: who it is from, what it is about, then
- * who did what. Choosing it opens it. Several notifications show as a stack with
- * paper edges, and its own button unfolds them below the card, which they
- * continue. With a pointer, the time and Mark done appear on hover; touch shows
- * the time and marks done by swiping the row. A phone shows larger text, and a
- * read card gives up its fill and fades, so unread ones stand out at a glance.
+ * One notification inbox row, as a card as tall as it has something to say: who
+ * did it, what it is about, and what was said. Choosing it opens it. Several
+ * notifications show as a stack with paper edges, and its own button unfolds them
+ * below the card, which they continue. With a pointer, the time and Mark done
+ * appear on hover; touch shows the time and marks done by swiping the row. A
+ * phone shows larger text, and a read card gives up its fill and fades, so unread
+ * ones stand out at a glance.
  */
 export function NotificationRow(props: NotificationRowProps) {
   const isStack = () => props.count > 1;
@@ -60,14 +66,17 @@ export function NotificationRow(props: NotificationRowProps) {
       <div
         role="gridcell"
         class={cn(
-          'relative z-1 border',
+          // The avatar's badge cuts itself out in this color.
+          'relative z-1 border bg-(--inbox-card-surface)',
           isOpen() ? 'rounded-t-xl border-b-0' : 'rounded-xl',
           props.highlighted
-            ? 'border-edge-frame bg-control-raised'
-            : 'border-edge-button bg-control not-touch:hover:bg-surface-3',
+            ? 'border-edge-frame [--inbox-card-surface:var(--color-control-raised)]'
+            : 'border-edge-button [--inbox-card-surface:var(--color-control)] not-touch:hover:[--inbox-card-surface:var(--color-surface-3)]',
           // A tap leaves the card focused, which mustn't look like unread.
           'mobile:border-edge-button',
-          props.unseen ? 'mobile:bg-control' : 'mobile:bg-transparent'
+          props.unseen
+            ? 'mobile:[--inbox-card-surface:var(--color-control)]'
+            : 'mobile:[--inbox-card-surface:var(--color-panel)]'
         )}
       >
         <div class="flex gap-2.5 px-3 py-3 touch:min-h-[44px]">
@@ -81,9 +90,9 @@ export function NotificationRow(props: NotificationRowProps) {
             {/* Leaves room for Mark done, which appears on hover. */}
             <div class="flex min-w-0 items-center gap-2 not-touch:group-hover/notification:pr-6">
               <span
-                data-card-title=""
+                data-card-who=""
                 class={cn(
-                  'min-w-0 flex-1 truncate text-sm mobile:text-base',
+                  'min-w-0 flex-1 truncate text-sm mobile:text-base mobile:leading-[22px]',
                   props.unseen
                     ? 'font-medium text-ink'
                     : 'text-ink-muted mobile:text-ink-extra-muted'
@@ -91,35 +100,20 @@ export function NotificationRow(props: NotificationRowProps) {
               >
                 {/* Message and comment text carries mention and link markup. */}
                 <StaticMarkdown
-                  markdown={props.title}
+                  markdown={props.who}
                   singleLine
                   theme={unifiedListMarkdownTheme}
                 />
               </span>
-              <Show when={props.unseen}>
-                <span
-                  aria-label={t('notificationsInbox.unread')}
-                  data-unread-dot=""
-                  class="size-1.5 shrink-0 rounded-full bg-accent not-touch:group-hover/notification:hidden mobile:size-2"
-                />
-              </Show>
-            </div>
-            <div
-              class={cn(
-                'mt-[3px] flex min-w-0 items-center gap-2 text-xs mobile:text-[13px] mobile:leading-[18px]',
-                props.unseen
-                  ? 'text-ink-extra-muted mobile:text-ink-muted'
-                  : 'text-ink-extra-muted/80'
-              )}
-            >
-              <span data-card-detail="" class="min-w-0 flex-1 truncate">
-                <StaticMarkdown
-                  markdown={props.detail}
-                  singleLine
-                  theme={unifiedListMarkdownTheme}
-                />
-              </span>
-              <span class="hidden shrink-0 touch:block not-touch:group-hover/notification:block">
+              <span
+                data-card-time=""
+                class={cn(
+                  'hidden shrink-0 text-xs touch:block not-touch:group-hover/notification:block mobile:text-[13px] mobile:leading-[18px]',
+                  props.unseen
+                    ? 'text-ink-extra-muted mobile:text-ink-muted'
+                    : 'text-ink-extra-muted/80'
+                )}
+              >
                 {props.time}
               </span>
               <Show when={isStack()}>
@@ -154,7 +148,53 @@ export function NotificationRow(props: NotificationRowProps) {
                   />
                 </Button>
               </Show>
+              <Show when={props.unseen}>
+                <span
+                  aria-label={t('notificationsInbox.unread')}
+                  data-unread-dot=""
+                  class="size-1.5 shrink-0 rounded-full bg-accent not-touch:group-hover/notification:hidden mobile:size-2"
+                />
+              </Show>
             </div>
+            <Show when={props.what}>
+              {(what) => (
+                <div
+                  data-card-what=""
+                  class={cn(
+                    'mt-px truncate text-[13px] leading-[18px] mobile:text-sm mobile:leading-5',
+                    props.unseen
+                      ? 'text-ink'
+                      : 'text-ink-muted mobile:text-ink-extra-muted'
+                  )}
+                >
+                  <StaticMarkdown
+                    markdown={what()}
+                    singleLine
+                    theme={unifiedListMarkdownTheme}
+                  />
+                </div>
+              )}
+            </Show>
+            <Show when={props.body}>
+              {(body) => (
+                <div
+                  data-card-body=""
+                  class={cn(
+                    'mt-0.5 text-xs mobile:text-[13px] mobile:leading-[18px]',
+                    props.unseen
+                      ? 'text-ink-extra-muted'
+                      : 'text-ink-extra-muted/80'
+                  )}
+                >
+                  {/* An agent's message can run to many paragraphs and lists. */}
+                  <StaticMarkdown
+                    markdown={body()}
+                    singleLine
+                    theme={twoLineClampMarkdownTheme}
+                  />
+                </div>
+              )}
+            </Show>
             <Show when={props.actions}>
               <div
                 class="mt-2.5 flex flex-wrap gap-2"
