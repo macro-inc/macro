@@ -33,7 +33,7 @@ const hasKnownSender = (notification: UnifiedNotification) =>
  * knows by name, such as an email's, or the kind of notification for one that
  * comes from no one, such as a reminder. With `badged`, a person's avatar also
  * says what kind of notification it is on its corner, in the color of the entity
- * it is on. A phone shows it larger.
+ * it is on. A phone shows it larger, and `compact` smaller, for inside a stack.
  */
 export function InboxSenderAvatar(props: {
   notification: UnifiedNotification | undefined;
@@ -41,6 +41,7 @@ export function InboxSenderAvatar(props: {
   /** What the notification is on, which colors its kind. */
   entity: EntityData;
   badged?: boolean;
+  compact?: boolean;
 }) {
   const known = () =>
     props.notification && hasKnownSender(props.notification)
@@ -52,10 +53,15 @@ export function InboxSenderAvatar(props: {
       ?.trim()
       .charAt(0)
       .toUpperCase();
-  const size = () => (isMobile() ? 'lg' : 'md');
+  const size = () => {
+    if (props.compact) return isMobile() ? 'md' : 'sm';
+    return isMobile() ? 'lg' : 'md';
+  };
+  const frame = () =>
+    props.compact ? 'size-4 mobile:size-6' : 'size-6 mobile:size-10';
 
   const Person = (person: { children: JSX.Element }) => (
-    <span class="relative block size-6 mobile:size-10">
+    <span class={cn('relative block', frame())}>
       {person.children}
       <Show when={props.badged}>
         <Tooltip
@@ -88,11 +94,19 @@ export function InboxSenderAvatar(props: {
       fallback={
         <span
           class={cn(
-            'flex size-6 items-center justify-center rounded-full border border-edge-button mobile:size-10',
+            'flex items-center justify-center rounded-full border border-edge-button',
+            frame(),
             inboxEntityColor(props.entity)
           )}
         >
-          <InboxKindIcon kind={props.kind} class="size-3.5 mobile:size-5" />
+          <InboxKindIcon
+            kind={props.kind}
+            class={
+              props.compact
+                ? 'size-2.5 mobile:size-3.5'
+                : 'size-3.5 mobile:size-5'
+            }
+          />
         </span>
       }
     >

@@ -55,6 +55,17 @@ describe('NotificationRow', () => {
     expect(onClick).not.toHaveBeenCalled();
   });
 
+  it('leaves the newest line to the drawer while it is open', () => {
+    setup();
+    expect(screen.getByText('Can we move the date?')).toBeTruthy();
+
+    fireEvent.click(toggle());
+    expect(screen.queryByText('Can we move the date?')).toBeNull();
+
+    fireEvent.click(toggle());
+    expect(screen.getByText('Can we move the date?')).toBeTruthy();
+  });
+
   it('says only what it has to say', () => {
     render(() => (
       <NotificationRow

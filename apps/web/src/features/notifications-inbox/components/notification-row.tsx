@@ -27,6 +27,8 @@ export type NotificationRowProps = {
   unfolded: boolean;
   unseen: boolean;
   highlighted: boolean;
+  /** Another stack is open, so this card steps back. */
+  receded?: boolean;
   /** Buttons that act on the notification, below its text. */
   actions?: JSX.Element;
   onClick: (event: MouseEvent) => void;
@@ -39,7 +41,8 @@ export type NotificationRowProps = {
  * One notification inbox row, as a card as tall as it has something to say: who
  * did it, what it is about, and what was said. Choosing it opens it. Several
  * notifications show as a stack with paper edges, and its own button unfolds them
- * below the card, which they continue. With a pointer, Mark done takes the time's
+ * into a drawer below the card, which rises and no longer repeats the newest line.
+ * With a pointer, Mark done takes the time's
  * place on hover and nothing else moves; touch marks done by swiping the row. A
  * phone shows larger text, and a read card gives up its fill and fades, so unread
  * ones stand out at a glance.
@@ -47,6 +50,21 @@ export type NotificationRowProps = {
 export function NotificationRow(props: NotificationRowProps) {
   const isStack = () => props.count > 1;
   const isOpen = () => isStack() && props.unfolded;
+  const surface = () => {
+    if (isOpen()) {
+      return 'border-edge-frame [--inbox-card-surface:var(--color-control-raised)]';
+    }
+    return cn(
+      props.highlighted
+        ? 'border-edge-frame [--inbox-card-surface:var(--color-control-raised)]'
+        : 'border-edge-button [--inbox-card-surface:var(--color-control)] not-touch:hover:[--inbox-card-surface:var(--color-surface-3)]',
+      // A tap leaves the card focused, which mustn't look like unread.
+      'mobile:border-edge-button',
+      props.unseen
+        ? 'mobile:[--inbox-card-surface:var(--color-control)]'
+        : 'mobile:[--inbox-card-surface:var(--color-panel)]'
+    );
+  };
   return (
     <div
       id={props.id}
@@ -56,7 +74,8 @@ export function NotificationRow(props: NotificationRowProps) {
       data-stack={isStack() ? '' : undefined}
       data-unfolded={isOpen() ? '' : undefined}
       class={cn(
-        'group/notification relative w-full min-w-0 flex-1 px-3',
+        'group/notification relative w-full min-w-0 flex-1 px-3 transition-opacity',
+        props.receded && 'opacity-40 not-touch:hover:opacity-100',
         isStack() && !props.unfolded && 'pb-5 mobile:pb-5.5',
         !isStack() && 'pb-2.5 mobile:pb-3'
       )}
@@ -69,19 +88,15 @@ export function NotificationRow(props: NotificationRowProps) {
           // The avatar's badge cuts itself out in this color.
           'relative z-1 border bg-(--inbox-card-surface)',
           isOpen() ? 'rounded-t-xl border-b-0' : 'rounded-xl',
-          props.highlighted
-            ? 'border-edge-frame [--inbox-card-surface:var(--color-control-raised)]'
-            : 'border-edge-button [--inbox-card-surface:var(--color-control)] not-touch:hover:[--inbox-card-surface:var(--color-surface-3)]',
-          // A tap leaves the card focused, which mustn't look like unread.
-          'mobile:border-edge-button',
-          props.unseen
-            ? 'mobile:[--inbox-card-surface:var(--color-control)]'
-            : 'mobile:[--inbox-card-surface:var(--color-panel)]'
+          surface()
         )}
       >
         <div class="flex gap-3 px-3 py-3 touch:min-h-[44px]">
           <span
-            class={cn('shrink-0', !props.unseen && 'mobile:opacity-60')}
+            class={cn(
+              'shrink-0',
+              !props.unseen && !isOpen() && 'mobile:opacity-60'
+            )}
             data-card-avatar=""
           >
             {props.icon}
@@ -189,7 +204,8 @@ export function NotificationRow(props: NotificationRowProps) {
                 </div>
               )}
             </Show>
-            <Show when={props.body}>
+            {/* The drawer starts with the newest line, so it isn't said twice. */}
+            <Show when={isOpen() ? undefined : props.body}>
               {(body) => (
                 <div
                   data-card-body=""

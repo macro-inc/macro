@@ -272,6 +272,9 @@ export function NotificationsView(props: NotificationsViewProps) {
   // and a stack stays open through it.
   const stacks = createDisclosureState();
   const listItems = createInboxListItems(rows, stacks.isExpanded);
+  const anyStackOpen = createMemo(() =>
+    rows().some((row) => row.count > 1 && stacks.isExpanded(row.id))
+  );
   const rowsById = createMemo(
     () => new Map(rows().map((row) => [row.id, row] as const))
   );
@@ -524,6 +527,13 @@ export function NotificationsView(props: NotificationsViewProps) {
 
   const RowCard = (card: { row: () => NotificationInboxRow }) => {
     const display = createMemo(() => describeInboxCard(card.row(), context));
+    const highlighted = () =>
+      list.focus.key() === card.row().id ||
+      (selection.selected()?.id === card.row().id &&
+        // A chosen notification shows on its own line while it's visible.
+        !(
+          selection.selectedNotification() && stacks.isExpanded(card.row().id)
+        ));
     return (
       <SwipeToDone row={card.row()}>
         <NotificationRow
@@ -543,14 +553,11 @@ export function NotificationsView(props: NotificationsViewProps) {
           count={card.row().count}
           unfolded={stacks.isExpanded(card.row().id)}
           unseen={card.row().unseen}
-          highlighted={
-            list.focus.key() === card.row().id ||
-            (selection.selected()?.id === card.row().id &&
-              // A chosen notification shows on its own line while it's visible.
-              !(
-                selection.selectedNotification() &&
-                stacks.isExpanded(card.row().id)
-              ))
+          highlighted={highlighted()}
+          receded={
+            anyStackOpen() &&
+            !stacks.isExpanded(card.row().id) &&
+            !highlighted()
           }
           onHover={() => list.focus.set(card.row().id, { reason: 'hover' })}
           onClick={(event) =>
@@ -599,18 +606,22 @@ export function NotificationsView(props: NotificationsViewProps) {
             notification={entry.notification()}
             kind={inboxCardKind(entry.row())}
             entity={entry.row().content.entity}
+            compact
           />
         }
         by={item().by}
         text={item().text}
         time={formatTimestamp(item().at)}
+        first={
+          entry.row().content.notifications[0]?.id ===
+          entry.place.notificationId
+        }
         last={isLast()}
         more={
           isLast()
             ? entry.row().count - entry.row().content.notifications.length
             : 0
         }
-        unseen={entry.row().unseen}
         highlighted={
           list.focus.key() === entry.place.id ||
           selection.selectedNotification()?.id === entry.place.notificationId
