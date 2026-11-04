@@ -2755,6 +2755,9 @@ survives, and cancelling lets another comment open without changing document tex
 Document typing briefly pauses during anchor publication so pending text is
 flushed before the highlight is saved. Repeat posting and starting another comment
 with both edit and comment-only access; creating a document tests the owner path.
+For comment-only access, use a document no editor has opened since it was
+created: a commenter's session writes nothing to the document, so its comments
+still post.
 Also withhold a collaborator's update before posting: catch up its missing history
 before publishing the highlight, preserving both the remote text and the comment.
 Confirm the posted comment appears in a separate browser, since reopening the

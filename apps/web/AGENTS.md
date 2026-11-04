@@ -1109,7 +1109,9 @@ Keep collaborative drafts as cursor-based overlays outside the shared editor tre
 Flush pending text, catch up missing server history before publication, then
 publish the mark from an isolated peer with `PeerCommentUpdate`,
 and post the message only after acknowledgement. Refused operations never enter
-the editor's WAL. Preserve input on failure. Cancelled publications retry mark
+the editor's WAL, so a session without edit access writes nothing to Loro, not
+even state its editor derives; only editors remove a deleted comment's mark.
+Preserve input on failure. Cancelled publications retry mark
 cleanup from the user/document-scoped IndexedDB queue; preserve marks when a
 message request's outcome is uncertain. Keep failed cleanup entries queued without
 blocking later entries. Overlapping comments must retain each
@@ -1118,8 +1120,8 @@ Comment controls preserve editor focus on both pointerdown and mousedown.
 The backend-free browser regression is
 `bunx playwright test --config src/features/block-md/comments/browser-test/playwright.config.ts`.
 It exercises selection, press, cancel, retry, and repeated posting in editor and
-commenter modes. The collaboration fixture includes concurrent remote edits and
-rejected updates; provider tests cover message metadata arriving on either side
+commenter modes. The collaboration fixture includes concurrent remote edits,
+rejected updates, and a server that refuses a commenter's non-comment updates; provider tests cover message metadata arriving on either side
 of posting, multi-paragraph anchors, saved ranges, and cancellation during posting.
 
 ## Performance
