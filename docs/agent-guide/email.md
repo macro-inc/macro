@@ -139,15 +139,14 @@ address-book name when it is absent. Multiple people or bots sending through
 one address (such as GitHub notifications) retain distinct names within and
 across threads. Verify in Mail and in Search with the Email filter and an empty
 query: load more threads from the same address, then check that existing row
-names do not change. Repeat with a text query to exercise the search-service
-results.
+names and their hover cards do not change. Repeat with a text query to exercise
+the search-service results.
 
-A sender's name in a Mail row, and the sender's name and picture in a collapsed
-thread message, are part of the row: clicking or tapping them opens that email
-or message. They open no person card, because a card covers the rows below it
-and the next click on a sender would land on the card, then on the wrong row.
-The expanded message header keeps the sender and recipient cards. The
-backend-free desktop/phone regression is
+Hovering a sender's name in a Mail row or a collapsed thread message shows the
+sender's card. Clicking the name, or anywhere else on the row, opens that email
+or message; clicking inside the card (its actions, padding, or name) never
+opens the row underneath. On touch, tapping a collapsed message's sender
+picture opens the message. The backend-free desktop/phone regression is
 `bunx playwright test --config src/features/entity/browser-test/playwright.config.ts`
 from `apps/web`.
 

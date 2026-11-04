@@ -24,36 +24,54 @@ async function dwell(page: Page, target: Locator) {
   await page.waitForTimeout(600);
 }
 
-/** Move down to a target the way a pointer does, then click it. */
-async function moveAndClick(page: Page, target: Locator) {
+/** Hover a sender until its card shows; the first card on a cold page loads late. */
+async function openCard(page: Page, sender: Locator, card: Locator) {
+  await expect(async () => {
+    await dwell(page, sender);
+    await expect(card).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 30_000 });
+}
+
+async function click(page: Page, target: Locator) {
   const box = await target.boundingBox();
   if (!box) throw new Error('Target is not laid out');
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, {
-    steps: 10,
+    steps: 5,
   });
-  await page.waitForTimeout(200);
   await page.mouse.down();
   await page.mouse.up();
 }
 
 for (const list of ['list-narrow', 'list-wide']) {
-  test(`${list}: clicking the next row's sender opens that email`, async ({
+  test(`${list}: hovering a sender shows the card; the row, not the card, opens the email`, async ({
     page,
   }) => {
     const rows = page.getByTestId(list);
-    await dwell(page, rows.getByText('Ada Lovelace'));
-    await moveAndClick(page, rows.getByText('Alan Turing'));
-    await expect(page.getByLabel('Opened threads')).toHaveText('thread-2');
+    const sender = rows.getByText('Ada Lovelace');
+    const card = page.getByText('sender1@example.com');
+    await openCard(page, sender, card);
+
+    await click(page, card);
+    await expect(page.getByLabel('Opened threads')).toHaveText('');
+
+    await click(page, sender);
+    await expect(page.getByLabel('Opened threads')).toHaveText('thread-1');
   });
 }
 
-test("thread: clicking the next collapsed message's sender opens that message", async ({
+test('thread: hovering a collapsed sender shows the card; the message, not the card, opens', async ({
   page,
 }) => {
   const thread = page.getByTestId('thread');
-  await dwell(page, thread.getByText('Ada', { exact: true }));
-  await moveAndClick(page, thread.getByText('Alan', { exact: true }));
-  await expect(page.getByLabel('Expanded messages')).toHaveText('message-2');
+  const sender = thread.getByText('Ada', { exact: true });
+  const card = page.getByText('sender1@example.com');
+  await openCard(page, sender, card);
+
+  await click(page, card);
+  await expect(page.getByLabel('Expanded messages')).toHaveText('');
+
+  await click(page, sender);
+  await expect(page.getByLabel('Expanded messages')).toHaveText('message-1');
 });
 
 test.describe('touch', () => {

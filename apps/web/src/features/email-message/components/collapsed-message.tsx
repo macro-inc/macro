@@ -1,13 +1,15 @@
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
-import { Tooltip } from '@ui';
+import { cn, Tooltip } from '@ui';
 import { createMemo, type JSX, Show } from 'solid-js';
 import { getSenderDisplayName } from '../core/email-user';
 import { formatFullDate, formatShortDate } from '../core/format-email-date';
+import { EmailUserTooltip } from './email-user-tooltip';
 
 interface CollapsedMessageProps {
   message: EmailMessage;
   avatar?: JSX.Element;
   currentUserEmail?: string;
+  isTouch?: boolean;
 }
 
 /** Collapsed thread row: sender, snippet, date. The chrome is MessageCard's. */
@@ -35,14 +37,20 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
   return (
     <div class="min-w-0 grid grid-cols-[7rem_minmax(0,1fr)_4.5rem] items-center gap-x-2 @max-[480px]/message:grid-cols-[minmax(0,1fr)_auto] @max-[480px]/message:gap-y-2">
       <div class="flex items-center min-h-6 gap-2 min-w-0 text-sm @max-[480px]/message:col-start-1 @max-[480px]/message:row-start-1">
-        {/* The whole collapsed row opens the message, so its sender is not a
-            person-card trigger: a card here covers the messages below it, and
-            a tap on the avatar would open the card instead of the message. */}
-        <div class="shrink-0 flex justify-center items-center size-6 pointer-events-none">
+        {/* On touch the picture's tap would open the sender's card; in a
+            collapsed row it belongs to the row, which opens the message. */}
+        <div
+          class={cn(
+            'shrink-0 flex justify-center items-center size-6',
+            props.isTouch && 'pointer-events-none'
+          )}
+        >
           {props.avatar}
         </div>
         <div class="min-w-0">
-          <span class="text-ink line-clamp-1">{senderDisplay()}</span>
+          <EmailUserTooltip recipient={props.message.from}>
+            <span class="text-ink line-clamp-1">{senderDisplay()}</span>
+          </EmailUserTooltip>
         </div>
       </div>
       <div class="min-w-0 text-base text-ink-extra-muted overflow-hidden text-ellipsis whitespace-nowrap @max-[480px]/message:col-span-full @max-[480px]/message:row-start-2 @max-[480px]/message:whitespace-normal @max-[480px]/message:line-clamp-2 mobile:line-clamp-1">

@@ -913,10 +913,12 @@ The backend-free browser regression is
 
 ### Senders in email rows
 
-Keep person cards off the senders in Mail rows and collapsed thread messages:
-a card covers the rows below it, and portaled content bubbles clicks to the row
-that opened it, so the next click on a sender opens the wrong email. The
-backend-free desktop/phone regression is
+Sender names in Mail rows and collapsed thread messages keep their person card
+on hover; clicking the name or anywhere else on the row opens the email.
+Cards opened from a row use `HoverCard`'s `isolateClicks`: Solid delivers
+portaled events through the component tree, so without it a click on the card
+also opens the row that opened it. On touch, a collapsed message's picture lets
+the tap through to the row. The backend-free desktop/phone regression is
 `bunx playwright test --config src/features/entity/browser-test/playwright.config.ts`.
 
 ### Enter on a property pill

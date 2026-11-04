@@ -10,8 +10,11 @@ import {
   createEffect,
   createSignal,
   onCleanup,
+  Show,
   useContext,
 } from 'solid-js';
+
+const stopPropagation = (event: Event) => event.stopPropagation();
 
 type NestedHoverCardContext = {
   count: () => number;
@@ -129,6 +132,12 @@ export type HoverCardComponentProps = {
    * surface below.
    */
   passThroughPointerEvents?: boolean;
+  /**
+   * Keep presses inside the card from reaching the trigger's ancestors. Solid
+   * delivers portaled events through the component tree, so without this a
+   * click anywhere on a card opened from a list row also activates that row.
+   */
+  isolateClicks?: boolean;
   /** Callback when open state changes */
   onOpenChange?: (open: boolean) => void;
   /**
@@ -413,7 +422,16 @@ export function HoverCard(props: HoverCardComponentProps) {
               entry,
             }}
           >
-            {props.content}
+            <Show when={props.isolateClicks} fallback={props.content}>
+              <div
+                class="contents"
+                onClick={stopPropagation}
+                onMouseDown={stopPropagation}
+                onPointerDown={stopPropagation}
+              >
+                {props.content}
+              </div>
+            </Show>
           </HoverCardPortalNestedPreviewOpenContext.Provider>
         </KobalteHoverCard.Content>
       </KobalteHoverCard.Portal>
