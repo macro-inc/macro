@@ -3,7 +3,7 @@
 //! Unlike [`crate::workflows::deploy_ai_editing_worker`] this worker is Rust, so
 //! the job needs a toolchain and the wasm target. Call/dispatch-only: push
 //! deploys to dev come through [`crate::workflows::deploy_on_push`] (which owns
-//! the path gating) and prod deploys through `release-production`. Generated
+//! deployment ordering) and prod deploys through `release-production`. Generated
 //! into `deploy_sync_service.yml`.
 
 use anyhow::Result;
@@ -77,8 +77,10 @@ fn deploy() -> Job {
         .add_step(add_wasm_target())
         .add_step(setup_node())
         .add_step(install_deps())
+        .add_step(check_secrets())
         .add_step(apply_d1_migrations())
         .add_step(deploy_step())
+        .add_step(wait_for_active_objects())
 }
 
 /// [`steps::setup_rust_light`] installs the channel explicitly, which skips
@@ -101,6 +103,17 @@ fn install_deps() -> Step<Run> {
         .working_directory(xtask_paths::repo_dir!("services/sync-service"))
 }
 
+/// Fail before migrations or deployment if commenter validation cannot authenticate.
+fn check_secrets() -> Step<Run> {
+    Step::new("Check required secrets")
+        .run(format!(
+            "node scripts/check-deploy-secrets.mjs {ENVIRONMENT}"
+        ))
+        .working_directory(xtask_paths::repo_dir!("services/sync-service"))
+        .add_env(("CLOUDFLARE_API_TOKEN", vars::CLOUDFLARE_API_TOKEN))
+        .add_env(("CLOUDFLARE_ACCOUNT_ID", vars::CLOUDFLARE_ACCOUNT_ID))
+}
+
 /// Migrate first: new code against an already-migrated D1 is safe, the reverse
 /// is a live error.
 fn apply_d1_migrations() -> Step<Run> {
@@ -120,4 +133,11 @@ fn deploy_step() -> Step<Run> {
         .working_directory(xtask_paths::repo_dir!("services/sync-service"))
         .add_env(("CLOUDFLARE_API_TOKEN", vars::CLOUDFLARE_API_TOKEN))
         .add_env(("CLOUDFLARE_ACCOUNT_ID", vars::CLOUDFLARE_ACCOUNT_ID))
+}
+
+/// Active Durable Objects can defer code adoption for 300 seconds by default.
+/// Keep dependent clients behind that window without forcing sessions to reset
+/// early. Keep this delay aligned with any future `code_update_strategy` change.
+fn wait_for_active_objects() -> Step<Run> {
+    Step::new("Wait for active Durable Objects to update").run("sleep 300")
 }

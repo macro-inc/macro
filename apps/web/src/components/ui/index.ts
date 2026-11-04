@@ -140,6 +140,10 @@ export { Layer } from './components/Layer';
 export { LogoProgress } from './components/LogoProgress';
 export type { NavRowProps } from './components/NavRow';
 export { NavRow } from './components/NavRow';
+export {
+  NotificationStack,
+  type NotificationStackProps,
+} from './components/NotificationStack';
 export type {
   NumberUnitInputDecrementProps,
   NumberUnitInputIncrementProps,
@@ -181,6 +185,8 @@ export type {
   SliderTrackProps,
 } from './components/Slider';
 export { Slider } from './components/Slider';
+export type { SpinnerProps, SpinnerSize } from './components/Spinner';
+export { Spinner } from './components/Spinner';
 export { Surface } from './components/Surface';
 export { TabSelector } from './components/TabSelector';
 export type {

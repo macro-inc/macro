@@ -24,6 +24,7 @@ pub use models_databases::{
     ChangeId, ColumnId, DatabaseId, OptionId, QueryId, RowId, TableId, TableVersion, TakenId,
 };
 
+use crate::domain::derivation::Derivation;
 use crate::domain::journal::{JournalPlan, RestoredRow};
 
 /// Identifier of a `models_properties` property definition bound as a column.
@@ -44,6 +45,9 @@ pub struct Database {
     /// Set when trashed.
     #[schema(required = true)]
     pub trashed_at: Option<DateTime<Utc>>,
+    /// The folder it is filed in; `null` at the root.
+    #[schema(required = true)]
+    pub project_id: Option<String>,
 }
 
 /// One table (tab) of a database.
@@ -478,6 +482,8 @@ pub enum Write {
         /// when the insert puts back rows a removal took; empty to mint
         /// new ones after the table's last row.
         restored: Vec<RestoredRow>,
+        /// The derived columns whose cells the rows' cells feed.
+        derivation: Option<Derivation>,
     },
     /// Set (or, with `None`, clear) cells of existing rows of the table.
     UpdateRows {
@@ -485,6 +491,9 @@ pub enum Write {
         table_id: TableId,
         /// Each row with its cells.
         rows: Vec<(RowId, CellChanges)>,
+        /// The derived columns whose cells the written cells feed, derived
+        /// again on these rows.
+        derivation: Option<Derivation>,
     },
     /// Remove rows of the table with their cells.
     DeleteRows {
@@ -643,6 +652,9 @@ pub struct Writes {
     pub expected_versions: Vec<(TableId, TableVersion)>,
     /// What the batch's journal entries are built from.
     pub journal: JournalPlan,
+    /// The derived columns its schema changes affect, derived again on
+    /// every row of their tables once its writes are applied.
+    pub derivations: Vec<Derivation>,
 }
 
 impl Writes {

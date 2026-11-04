@@ -104,6 +104,7 @@ function createModel(props: MagicChipDecoratorProps) {
 const prompt: FoldedMessage = {
   requestId: null,
   agentSessionId: 'session',
+  key: '0:user',
   turn: 0,
   author: { kind: 'user', userId: 'macro|wolf@macro.com' },
   parts: [{ kind: 'text', text: 'Say hi' }],
@@ -117,6 +118,7 @@ const prompt: FoldedMessage = {
 const response: FoldedMessage = {
   requestId: null,
   agentSessionId: 'session',
+  key: '0:agent',
   turn: 0,
   author: { kind: 'agent' },
   parts: [{ kind: 'text', text: 'Hi!' }],
@@ -239,6 +241,7 @@ describe('createMagicChipModel', () => {
         {
           ...openResponse,
           turn: 4,
+          key: '4:agent',
           parts: [
             {
               kind: 'tool_use',
@@ -468,6 +471,7 @@ describe('createMagicChipModel', () => {
       {
         ...openResponse,
         turn: 3,
+        key: '3:agent',
         parts: [{ kind: 'text', text: 'Newest stream' }],
       },
     ]);
@@ -479,6 +483,7 @@ describe('createMagicChipModel', () => {
       {
         ...response,
         turn: 1,
+        key: '1:agent',
         parts: [{ kind: 'text', text: 'Late old patch' }],
       },
     ]);
@@ -487,6 +492,7 @@ describe('createMagicChipModel', () => {
       {
         ...response,
         turn: 3,
+        key: '3:agent',
         parts: [{ kind: 'text', text: 'Newest answer' }],
       },
     ]);

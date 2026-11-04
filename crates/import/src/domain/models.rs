@@ -165,6 +165,7 @@ impl ImportSource {
     Serialize,
     Deserialize,
     JsonSchema,
+    specta::Type,
     ToSchema,
     strum::EnumString,
     strum::AsRefStr,
@@ -278,6 +279,7 @@ pub enum Initiator {
     Deserialize,
     ToSchema,
     JsonSchema,
+    specta::Type,
     strum::EnumString,
     strum::AsRefStr,
 )]
@@ -900,7 +902,17 @@ pub struct ImportRun {
 
 /// What a planning run has found in the source so far.
 #[derive(
-    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema,
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    specta::Type,
+    ToSchema,
 )]
 #[serde(rename_all = "camelCase")]
 pub struct ScanCounts {
@@ -921,7 +933,9 @@ pub struct ImportState {
 }
 
 /// One object a workspace import report calls out.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, specta::Type, ToSchema,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct NotionReportItem {
     /// The ledger row.
@@ -939,7 +953,9 @@ pub struct NotionReportItem {
 }
 
 /// Where a Notion workspace import stands.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema)]
+#[derive(
+    Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, specta::Type, ToSchema,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct NotionImportReport {
     /// Provider items skipped because they were unreadable, or optional features unavailable.

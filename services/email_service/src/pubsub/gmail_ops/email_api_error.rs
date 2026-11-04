@@ -25,7 +25,9 @@ fn error_policy(error: &EmailApiError) -> ErrorPolicy {
     // here rather than silently dropping the operation as permanent.
     match error {
         EmailApiError::RateLimited { .. } => ErrorPolicy::RateLimited,
-        EmailApiError::Transient { .. } => ErrorPolicy::Retry,
+        EmailApiError::Transient { .. } | EmailApiError::CredentialsUnavailable { .. } => {
+            ErrorPolicy::Retry
+        }
         EmailApiError::AuthRequired
         | EmailApiError::Forbidden
         | EmailApiError::NotFound
@@ -93,7 +95,9 @@ fn rate_limit_route(retry_worker: bool) -> RateLimitRoute {
 fn processing_error(error: EmailApiError, retryable: bool) -> ProcessingError {
     let reason = match error {
         EmailApiError::RateLimited { .. } => FailureReason::GmailApiRateLimited,
-        EmailApiError::Transient { .. } => FailureReason::GmailApiUnavailable,
+        EmailApiError::Transient { .. } | EmailApiError::CredentialsUnavailable { .. } => {
+            FailureReason::GmailApiUnavailable
+        }
         EmailApiError::AuthRequired => FailureReason::AccessTokenFetchFailed,
         EmailApiError::OutdatedCursor => FailureReason::OutdatedHistoryId,
         EmailApiError::Forbidden

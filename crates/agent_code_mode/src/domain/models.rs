@@ -7,9 +7,15 @@ use serde_json::Value;
 use utoipa::ToSchema;
 
 /// Caller-selected UUID persisted in tool input before execution begins.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema, specta::Type,
+)]
 #[serde(transparent)]
-pub struct ExecutionId(#[schemars(with = "String")] Uuid);
+pub struct ExecutionId(
+    #[schemars(with = "String")]
+    #[specta(type = String)]
+    Uuid,
+);
 
 impl ExecutionId {
     /// Mint an execution identity.

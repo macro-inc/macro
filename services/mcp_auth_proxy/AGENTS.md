@@ -69,11 +69,14 @@ and other library consumers. Both retain OAuth metadata, CORS, and bearer auth.
   (`infra/stacks/fusionauth-instance/origins.ts`). `/authorize` withholds the
   client's Referer from FusionAuth, so a new client needs no origin entry.
   See README "Origin versus redirect URI".
-- Every `/authorize` response sets the `__Host-macro_mcp_oauth` cookie and
-  `/oauth/callback` requires it. Don't drop the check for trusted clients or
-  relax the cookie to `SameSite=None`; see README "Consent and browser binding".
+- Every `/authorize` response except the sign-in chooser sets the
+  `__Host-macro_mcp_oauth` cookie and `/oauth/callback` requires it. Don't drop
+  the check for trusted clients or relax the cookie to `SameSite=None`; see
+  README "Consent and browser binding".
   The consent page's CSP has no `form-action`: browsers apply it to the
   form's redirect to FusionAuth.
+- The consent form re-posts the authorize request, so a new `AuthorizeRequest`
+  field needs a hidden input in `templates/consent.html`.
 - `client_id` is not a secret; every endpoint must still check it against a
   live registration — see README "Which client a grant belongs to" before
   changing token/refresh validation.

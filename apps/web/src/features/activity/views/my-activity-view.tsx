@@ -1,5 +1,6 @@
 import { ViewSidebar } from '@app/components/view-shell';
 import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-header';
+import { usePending } from '@app/observability/flow';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -87,6 +88,11 @@ export function MyActivityView(props: {
 }) {
   const context = useActivityContext();
   const state = createMyActivityState(context, () => props.scope);
+  usePending('activity.feed', () => state.feed().t === 'loading');
+  usePending(
+    'activity.overview',
+    () => props.scope !== 'team' && state.overview().t === 'loading'
+  );
   const [scroller, setScroller] = createSignal<HTMLDivElement>();
   const [topSpacer, setTopSpacer] = createSignal<HTMLDivElement>();
   const topSpacerSize = createElementSize(topSpacer);

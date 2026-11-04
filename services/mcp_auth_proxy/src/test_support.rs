@@ -15,7 +15,7 @@ use crate::domain::{
     models::{
         AccessToken, AuthorizeRequest, CallbackRequest, ClientRegistrationRequest,
         IssuedAuthorizationCode, PendingAuthorization, RefreshToken, RefreshTokenBinding,
-        RegisteredClient, UpstreamTokens, UserConsent,
+        RegisteredClient, SignInMethod, UpstreamTokens, UserConsent,
     },
     ports::{
         ClientRegistrationStore, GrantRevokedFuture, OAuthProvider, RefreshTokenBindingFuture,
@@ -264,8 +264,16 @@ impl FakeOAuthProvider {
 }
 
 impl OAuthProvider for FakeOAuthProvider {
-    fn construct_authorize_url(&self, state: &str) -> anyhow::Result<String> {
-        Ok(format!("https://upstream.example/authorize?state={state}"))
+    fn construct_authorize_url(
+        &self,
+        state: &str,
+        sign_in: SignInMethod,
+    ) -> anyhow::Result<String> {
+        let page = match sign_in {
+            SignInMethod::Google => "authorize",
+            SignInMethod::Login => "login",
+        };
+        Ok(format!("https://upstream.example/{page}?state={state}"))
     }
 
     fn exchange_authorization_code<'a>(&'a self, _code: &'a str) -> UpstreamTokensFuture<'a> {
@@ -345,7 +353,7 @@ impl Harness {
         let provider = Arc::new(provider);
         let service = McpAuthProxyServiceImpl::new(McpAuthProxyServiceDeps {
             public_url: "https://mcp.macro.com".to_owned(),
-            redirect_uri_policy: RedirectUriPolicy::new(["claude.ai"]),
+            redirect_uri_policy: RedirectUriPolicy::new(["claude.ai", "chatgpt.com"]),
             inflight_auth: Arc::clone(&inflight),
             client_registrations: Arc::clone(&registry) as Arc<dyn ClientRegistrationStore>,
             refresh_token_bindings: Arc::clone(&registry) as Arc<dyn RefreshTokenBindingStore>,
@@ -387,6 +395,7 @@ impl Harness {
             state: "client-state".to_owned(),
             code_challenge: code_challenge.to_owned(),
             code_challenge_method: "S256".to_owned(),
+            sign_in: None,
             scope: None,
         }
     }

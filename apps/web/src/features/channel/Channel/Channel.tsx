@@ -5,6 +5,9 @@ import {
 import { AgentConversationsProvider } from '@app/features/agent-conversations/agent-conversations-provider';
 import { AgentDmComposer } from '@app/features/agent-dms/agent-dm-composer';
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
+import { taskSourceComposerContext } from '@app/features/task-composer/source-context';
+import { usePending } from '@app/observability/flow';
+import { startUiOperation } from '@app/observability/ui-operation';
 import { createActivityTracker } from '@channel/activity-tracker';
 import { useStartChannelCall } from '@channel/Call/use-start-channel-call';
 import { DebugSuspense } from '@channel/DebugSuspense';
@@ -233,6 +236,7 @@ export function Channel(props: ChannelProps) {
     () => ({ type: 'channel', id: (() => props.channelId)() }),
     targetMessageController.loadAroundMessageId
   );
+  usePending('channel.messages', () => messagesQuery.isLoading);
   const isTargetMessageMissing = () =>
     targetMessageController.loadAroundMessageId() !== undefined &&
     isMissingMessageError(messagesQuery.error);
@@ -496,6 +500,11 @@ export function Channel(props: ChannelProps) {
         type: 'component',
         id: 'task-compose',
         params: {
+          composerContext: taskSourceComposerContext({
+            entity_type: 'CHANNEL',
+            entity_id: props.channelId,
+            specific_message_id: ctx.message.id,
+          }),
           initialTitle: title,
           initialContent: buildChannelMessageMention(ctx.message),
           initialAssigneeIds:
@@ -685,19 +694,26 @@ export function Channel(props: ChannelProps) {
     });
 
     const optimisticId = newMessageId();
+    // Send to the optimistic message's paint; channel.send follows delivery.
+    const sendUi = startUiOperation('message.send', {
+      attributes: { 'channel.id': channelId, 'message.id': optimisticId },
+    });
     fireAndForget(
       Telemetry.span('channel.send', async (span) => {
         span.setAttr('message.id', optimisticId);
         span.setAttr('channel.id', channelId);
         try {
           await sendMessageMutation.mutateAsync({
+            parentSpan: span,
             parent: { type: 'channel', id: channelId },
             senderId,
             optimisticId,
+            onOptimisticInsert: sendUi.afterPaint,
             ...payload,
           });
           span.setAttr('composer.outcome', 'succeeded');
         } catch {
+          sendUi.finish('error');
           span.error('Channel send failed');
           const handle = channelInputHandle();
           if (

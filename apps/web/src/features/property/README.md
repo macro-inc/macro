@@ -51,6 +51,16 @@ Editable list cells use the shared ghost `Property.Pill` styling. Project hover
 cards use a cube header with the assigned value below it; empty Project hover
 cards retain the one-line empty message.
 
+The single-item Source property uses `SourceLinkPill` in composers, inline pills,
+and the side panel: its item opens through the shared mention-link navigation,
+including `specific_message_id`; its caret opens the host's existing picker.
+Inline Source pills use the link glyph instead of a `Source:` prefix, followed by
+the item's icon and title; side panels retain the separate property label.
+Let the linked item's renderer fill its icon slot with `iconSize: 'fill'`; a
+fixed-size child in a smaller wrapper shifts the icon below the label.
+Empty Source values use the same link glyph; unsupported references retain the
+ordinary property editor.
+
 `EntityRowTags.collapse` connects to the host's shared priority-overflow controller.
 Show at most three individual chips by default and keep the rest in overflow.
 Measure actual title, tag, and control widths; collapse more trailing chips when
@@ -60,8 +70,21 @@ tags. For multiple tags, label the overflow chip “N tags” when every tag is
 collapsed; use “+N tags” only when individual tag chips remain visible.
 Hidden tags keep the existing overflow picker and hover actions. Keep the visible
 chip count stable while a picker or its nested editor is active so resizing
-cannot discard the editing session. Hosts without a controller retain their
-explicit or default chip limit.
+cannot discard the editing session. A live sorted insertion keeps the active
+chip visible within that count, then restores normal order on close. Key visible
+chips by option ID so refreshed tag objects do not remount a picker or leave
+collapse paused. Release active-picker state when a live update deletes its chip
+or overflow trigger. While the tag picker is open, reconcile remote selections
+and deleted options without resetting staged additions or removals. Preserve
+staged intent through deletion rollbacks; exclude missing options when saving.
+When editing ends, immediately re-evaluate new tags against the title's full
+width, even if the title is already truncated.
+Hosts without a controller retain their explicit or default chip limit.
+After confirmed GraphQL tag writes, refresh only lists the normalized cache cannot
+maintain so stale reads do not replace the committed selection. Match option-filtered
+lists by property definition as well as sorted/grouped lists; leave unrelated lists
+alone. Use the write's actual transport for refresh scope, even if the feature flag
+changes while saving. REST writes retain refreshes for cache-maintained readers.
 Tag chips, overflow chips, and inline tag pills retain their compact desktop
 height on touch instead of adopting the shared button touch minimum. Only
 the task-detail title-row tags selector uses the 36px touch target; document

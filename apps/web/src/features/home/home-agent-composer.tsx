@@ -13,6 +13,7 @@ import { buildAgentPrompt } from '@app/features/agents-view/queries/composer-pro
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createPersistedComposerDraft,
+  HOME_CONVERSATION_ATTACHMENTS_KEY,
   HOME_CONVERSATION_DRAFT_KEY,
 } from '../agents-view/primitives/composer-draft';
 import { createAgentRosterSource } from '../agents-view/queries/agent-roster-source';
@@ -96,6 +97,7 @@ export function HomeAgentComposer(props: { autoFocus?: boolean }) {
         rosterLoading={roster.loading()}
         availabilityLoading={roster.availabilityLoading()}
         draft={draft()}
+        attachmentsKey={HOME_CONVERSATION_ATTACHMENTS_KEY}
         onDraftChange={(value) => {
           draftVersion++;
           setDraft(value);

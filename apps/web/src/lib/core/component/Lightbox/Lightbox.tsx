@@ -34,6 +34,8 @@ const SpinnerIcon: Component<JSX.SvgSVGAttributes<SVGSVGElement>> = (p) => (
 type LightboxProps = {
   // Current image to display
   src: Accessor<string | undefined>;
+  // Match the source image's CORS mode when the host does not supply CORP.
+  crossOrigin?: JSX.ImgHTMLAttributes<HTMLImageElement>['crossorigin'];
   // Used for the download filename
   imageId: Accessor<string>;
   // Optional pre-fetched blob override (e.g. DSS images). Falls back to fetching `src`.
@@ -182,6 +184,7 @@ export function Lightbox(props: LightboxProps) {
               }
             >
               <img
+                crossorigin={props.crossOrigin}
                 class="size-full sm:min-w-50 sm:max-h-[80vh] object-contain select-none"
                 style={{ '-webkit-touch-callout': 'none' }}
                 src={props.src()}

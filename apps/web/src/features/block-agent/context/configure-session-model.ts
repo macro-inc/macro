@@ -49,7 +49,10 @@ export function sessionConfigReported(
 
 /** Validate against the model's confirmed runtime snapshot before setting effort. */
 export async function configureSessionModel(
-  session: Pick<AgentSession, 'issue' | 'snapshot' | 'subscribe'>,
+  session: Pick<
+    AgentSession,
+    'id' | 'issue' | 'snapshot' | 'subscribe' | 'refresh' | 'retract'
+  >,
   model: string | undefined,
   effort?: EffortSelection
 ) {

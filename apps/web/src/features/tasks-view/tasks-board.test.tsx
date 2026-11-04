@@ -1,3 +1,10 @@
+vi.mock('@components/app/GlobalAppState', () => ({
+  useGlobalNotificationSource: () => ({}),
+}));
+vi.mock('@notifications/mark-row-seen', () => ({
+  markRowNotificationsSeenOnOpen: vi.fn(),
+}));
+
 import type {
   EntityActionListState,
   EntityActionViewContext,

@@ -70,15 +70,14 @@ where
 
 /// Get the authenticated user's latest memory.
 ///
-/// Returns the current memory if one exists. If the memory is stale or missing,
-/// a background generation is triggered and the endpoint returns the stale
-/// memory (200) or 404 if none exists yet.
+/// Compose stored private preferences, latest activity, and current team profiles.
+/// Enrolls the caller for daily refresh; generation never runs on this request.
 #[utoipa::path(
     get,
     path = "/memory",
     responses(
         (status = 200, description = "Latest memory for the user", body = MemoryResponse),
-        (status = 404, description = "No memory exists for this user yet (generation triggered)"),
+        (status = 404, description = "No composed memory exists for this user yet"),
         (status = 500, description = "Internal server error", body = MemoryErrorBody),
     ),
     tag = "memory"
@@ -93,7 +92,7 @@ pub async fn get_memory_handler<T: MemoryService, Auth: MacroAuthorizationServic
 ) -> Response {
     let user = user.authorization.user;
 
-    match service.get_or_generate_memory(user.macro_user_id).await {
+    match service.get_memory(user.macro_user_id).await {
         Ok(Some(memory)) => Json(MemoryResponse { memory }).into_response(),
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(e) => {

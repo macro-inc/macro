@@ -15,6 +15,10 @@ import {
   useContext,
 } from 'solid-js';
 import {
+  createLayoutAnimation,
+  type LayoutAnimationItem,
+} from '../drag-drop/create-layout-animation';
+import {
   Kanban,
   KanbanCard,
   KanbanCardInsertion,
@@ -23,10 +27,6 @@ import {
   KanbanLane,
   useKanbanDropTarget,
 } from './kanban';
-import {
-  createKanbanAnimation,
-  type KanbanAnimationItem,
-} from './kanban-animation';
 import {
   CardActions,
   CardFields,
@@ -107,14 +107,14 @@ function Root(props: {
     revealGeneration += 1;
     setReveal({ kind, toLane, scope: props.animationScope });
   }
-  const motion = createKanbanAnimation({
+  const motion = createLayoutAnimation({
     viewport: () => viewport,
     items: () => {
       if (!viewport) {
         return [];
       }
 
-      const items: KanbanAnimationItem[] = [];
+      const items: LayoutAnimationItem[] = [];
 
       for (const layout of viewport.querySelectorAll<HTMLElement>(
         '[data-kanban-board-column]'

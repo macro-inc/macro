@@ -6,10 +6,11 @@ export default {
   team_channels: 'Team channels',
   namedTeamChannels: '{{name}} channels',
   channels: 'Channels',
+  allChannels: 'All channels',
   direct_messages: 'Direct messages',
   empty: 'No conversations yet',
   emptyFavorites: 'Star conversations to keep them here.',
-  emptySection: 'Drag conversations here to organize them.',
+  emptySection: 'No channels in this section.',
   emptySmartSection: 'No conversations match this rule.',
   noResults: 'No matching conversations',
   loadMore: 'Load more',
@@ -35,7 +36,7 @@ export default {
   markLabelReadFailed: 'Failed to mark channel label as read',
   muteAllChannels: 'Mute all channels',
   unmuteAllChannels: 'Unmute all channels',
-  snoozeAllChannels: 'Snooze all channels…',
+  snoozeAllChannels: 'Snooze all channels',
   notificationsFailed:
     'Could not update section notifications. Please try again.',
   deleteForEveryone: 'Delete for everyone',
@@ -47,6 +48,8 @@ export default {
   collapseSection: 'Collapse section',
   resizeSection: 'Resize {{name}}',
   resizeSectionHint: 'Drag to resize. Double-click to reset.',
+  reorderSection: 'Reorder {{name}}',
+  reorderSectionHint: 'Drag to reorder.',
   expandAllSections: 'Expand all sections',
   collapseAllSections: 'Collapse all sections',
   loading: 'Loading sections…',
@@ -63,6 +66,23 @@ export default {
   sharedShort: 'Shared',
   personal: 'Personal',
   shared: 'Shared with team',
+  sharingHelpLabel: 'About shared sections',
+  sharingHelp:
+    'Team members can see and organize shared sections. Only team channels can be added.',
+  checkingSharing: 'Checking channel eligibility…',
+  sharingIneligibleChannels:
+    'This section contains channels outside your team. Remove them before sharing.',
+  sharingUnavailableChannels:
+    'All section channels must be available to you before changing sharing.',
+  makePersonalTitle: 'Make section personal?',
+  makePersonalBody:
+    '“{{name}}” will disappear from your teammates’ sidebars. Its channels will remain unchanged.',
+  makePersonal: 'Make personal',
+  sharedSectionHint: 'Shared with your team. Team channels only.',
+  cannotDropHere: 'This item cannot be added here.',
+  smartSectionDropHint: 'Smart sections add channels by name, not by dragging.',
+  alreadyInSection: 'This channel is already in this section.',
+  reorderingSection: 'Reordering section',
   personalDescription: 'Only you can see and organize this section.',
   teamDescription: 'Everyone on your team can see and organize this section.',
   addToSection: 'Add to section',
@@ -98,5 +118,36 @@ export default {
   reorderFavoritesFailed: 'Could not reorder favorites. Please try again.',
   unreadOnly: 'Unread only',
   noUnreadConversations: 'No unread conversations',
+  addChannels: 'Add channels',
+  addChannelsTo: 'Add channels to “{{name}}”',
+  searchChannels: 'Search channels',
+  loadingChannels: 'Loading channels…',
+  channelsUnavailable: 'Could not load channels.',
+  noChannelsToAdd: 'No more channels are available to add.',
+  teamChannelsOnly: 'Team channels only',
+  addPersonalChannelsHint:
+    'Add any joined channel. Moves channels from other personal sections.',
+  addSharedChannelsHint:
+    'Add joined team channels. Moves channels from other shared sections.',
+  addSelectedChannels: {
+    one: 'Add {{count}} channel',
+    other: 'Add {{count}} channels',
+  },
+  addedChannels: {
+    one: 'Added {{count}} channel',
+    other: 'Added {{count}} channels',
+  },
+  addChannelsFailed: {
+    one: '{{count}} channel could not be added. Retry to add it.',
+    other: '{{count}} channels could not be added. Retry to add them.',
+  },
+  editRule: 'Edit rule',
+  showAllChannels: 'Show all channels',
+  matchCount: {
+    one: '{{count}} matching channel',
+    other: '{{count}} matching channels',
+  },
+  noMatchingTeamChannels:
+    'No joined team channels match this name. Try a different rule or use a personal section.',
   cancel: 'Cancel',
 };

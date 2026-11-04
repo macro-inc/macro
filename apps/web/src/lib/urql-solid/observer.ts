@@ -1,8 +1,9 @@
-import type { Client } from '@urql/core';
+import type { Client, OperationContext } from '@urql/core';
 
 /** Query options accepted by the shared Solid observer adapter. */
 export type ObserverClientOptions = {
   client?: Client;
+  context?: Partial<OperationContext>;
 };
 
 /** Why an active urql execution reached its terminal lifecycle handler. */

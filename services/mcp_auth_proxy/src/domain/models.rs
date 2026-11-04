@@ -216,6 +216,18 @@ pub struct IssuedAuthorizationCode {
     pub access_token_expires_at: SystemTime,
 }
 
+/// How a user signs in upstream during an authorize flow.
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, strum::Display)]
+#[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
+pub enum SignInMethod {
+    /// Straight to Google, the default for every client.
+    #[default]
+    Google,
+    /// FusionAuth's login page: password and every other provider.
+    Login,
+}
+
 /// OAuth authorize request from the MCP client.
 #[derive(Clone, Deserialize)]
 pub struct AuthorizeRequest {
@@ -231,6 +243,9 @@ pub struct AuthorizeRequest {
     pub code_challenge: String,
     /// Expected to be `S256`.
     pub code_challenge_method: String,
+    /// The sign-in the user picked on the chooser, when it was shown.
+    #[serde(default)]
+    pub sign_in: Option<SignInMethod>,
     /// Optional requested scopes.
     #[serde(default)]
     pub scope: Option<String>,

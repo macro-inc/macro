@@ -1,7 +1,5 @@
 //! Unified entity-mutation capability impls for projects.
 
-use std::collections::HashSet;
-
 use entity_access::domain::models::{
     AccessError, EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel,
 };
@@ -9,7 +7,7 @@ use entity_access_management::domain::ports::EntityAccessManagementService;
 use entity_mutation::{
     DeleteEntityPermanently, EntityMutationEffect, EntityMutationErrorCode, MoveEntity,
     RenameEntity, RestoreEntity, TrashEntity, UpdateEntitySharePolicy,
-    capability::MoveEntityRequest,
+    capability::MoveEntityRequest, project_refs,
 };
 use macro_event_broker::MacroEventBroker;
 use model::project::{BasicProject, request::PatchProjectRequestV2};
@@ -59,16 +57,6 @@ fn access_error(error: AccessError) -> EntityMutationErrorCode {
             EntityMutationErrorCode::internal(rootcause::report!(error))
         }
     }
-}
-
-/// Build affected project entities from optional container ids.
-fn project_refs(ids: impl IntoIterator<Item = Option<String>>) -> Vec<Entity<'static>> {
-    let mut seen = HashSet::new();
-    ids.into_iter()
-        .flatten()
-        .filter(|id| !id.is_empty() && seen.insert(id.clone()))
-        .map(|id| EntityType::Project.with_entity_string(id))
-        .collect()
 }
 
 /// Deduplicate effects while preserving their domain-defined order.

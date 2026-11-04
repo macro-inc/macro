@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import {
   confirmSessionExpired,
+  ensureFreshSession,
   fetchToken,
   fetchWithToken,
   unsetTokenPromise,
@@ -66,6 +67,56 @@ describe('fetchWithToken refresh latch', () => {
 
   const refreshCalls = () =>
     mockFetch.mock.calls.filter(([input]) => isRefresh(input)).length;
+
+  test('reuses a recent successful refresh only for proactive socket setup', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(100_000);
+    mockFetch.mockResolvedValue(jsonResponse(200));
+    await fetchToken();
+    await ensureFreshSession();
+    await ensureFreshSession();
+    expect(refreshCalls()).toBe(1);
+    await fetchToken();
+    expect(refreshCalls()).toBe(2);
+    vi.setSystemTime(130_000);
+    await ensureFreshSession();
+    expect(refreshCalls()).toBe(3);
+    unsetTokenPromise();
+    await ensureFreshSession();
+    expect(refreshCalls()).toBe(4);
+  });
+
+  test('does not reuse a refresh after the clock moves backwards', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(100_000);
+    mockFetch.mockResolvedValue(jsonResponse(200));
+    await ensureFreshSession();
+    vi.setSystemTime(90_000);
+    await ensureFreshSession();
+    expect(refreshCalls()).toBe(2);
+  });
+
+  test('a 401 forces refresh even after successful socket setup', async () => {
+    mockFetch.mockImplementation(async (input) =>
+      isRefresh(input) ? jsonResponse(200) : jsonResponse(401)
+    );
+    await ensureFreshSession();
+    await fetchWithToken(RESOURCE_URL);
+    expect(refreshCalls()).toBe(2);
+  });
+
+  test('a reset prevents an old successful refresh from being reused', async () => {
+    const response = deferred<Response>();
+    mockFetch
+      .mockReturnValueOnce(response.promise)
+      .mockResolvedValue(jsonResponse(200));
+    const oldRefresh = fetchToken();
+    unsetTokenPromise();
+    response.resolve(jsonResponse(200));
+    await oldRefresh;
+    await ensureFreshSession();
+    expect(refreshCalls()).toBe(2);
+  });
 
   test('fires at most one doomed refresh across sequential 401s', async () => {
     mockFetch.mockImplementation((input) =>

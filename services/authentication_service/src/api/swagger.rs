@@ -20,6 +20,7 @@ use teams::domain::model::{
     PatchTeamRequest, PatchTeamUserRole, Team, TeamInviteDetails, TeamInviteLinkTeam,
     TeamInviteLinkToken, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
 };
+use teams::inbound::axum_router::domain_notice::SendDomainNoticeResponse;
 use teams::inbound::axum_router::get_team_invites::TeamInvitesResponse as TeamTeamInvitesResponse;
 use teams::inbound::axum_router::get_user_invites::TeamInvitesResponse as UserTeamInvitesResponse;
 use teams::inbound::axum_router::invite_link::{
@@ -146,6 +147,9 @@ use model::user::{
                 user::delete_user::handler,
                 user::post_profile_pictures::handler,
                 user::put_profile_picture::handler,
+                user::put_profile_picture_file::create_upload_handler,
+                user::put_profile_picture_file::handler,
+                user::agent_setup::handler,
                 user::put_name::handler,
                 user::get_name::handler,
                 user::patch_user_group::handler,
@@ -191,6 +195,7 @@ use model::user::{
                 teams::inbound::axum_router::patch_team::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::patch_team_crm_settings::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::toggle_auto_join_domain::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::domain_notice::handler::<crate::api::context::DomainNoticeServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::toggle_non_admin_invites::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::reject_invitation::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::get_user_invites::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
@@ -244,6 +249,10 @@ use model::user::{
                         UserProfilePicture,
                         AppleLoginRequest,
                         ProfilePictureQueryParams,
+                        crate::api::user::put_profile_picture_file::PutProfilePictureFileRequest,
+                        crate::api::user::put_profile_picture_file::CreateProfilePictureUploadRequest,
+                        crate::api::user::put_profile_picture_file::ProfilePictureUpload,
+                        crate::api::user::agent_setup::AgentSetupResponse,
                         PutUserNameQueryParams,
                         UserName,
                         UserLanguage,
@@ -359,6 +368,7 @@ use model::user::{
                         PatchTeamCrmSettingsRequest,
                         PatchTeamCrmSettingsResponse,
                         ToggleAutoJoinDomainResponse,
+                        SendDomainNoticeResponse,
                         ToggleNonAdminInvitesResponse,
                         TeamInviteLinkResponse,
                         CreatedTeamInviteLinkResponse,

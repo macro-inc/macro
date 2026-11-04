@@ -49,6 +49,7 @@ import type {
   UserQuota,
 } from './generated/schemas';
 import type { AgentApiKey } from './generated/schemas/agentApiKey';
+import type { AgentSetupResponse } from './generated/schemas/agentSetupResponse';
 import type { AppleLoginRequest } from './generated/schemas/appleLoginRequest';
 import type { CreatedTeamInviteLinkResponse } from './generated/schemas/createdTeamInviteLinkResponse';
 import type { CreateGtmInviteLinkRequest } from './generated/schemas/createGtmInviteLinkRequest';
@@ -75,6 +76,7 @@ import type { ProfilePictures } from './generated/schemas/profilePictures';
 import type { PublicGtmInviteLink } from './generated/schemas/publicGtmInviteLink';
 import type { PutProfilePictureParams } from './generated/schemas/putProfilePictureParams';
 import type { PutUserNameQueryParams } from './generated/schemas/putUserNameQueryParams';
+import type { SendDomainNoticeResponse } from './generated/schemas/sendDomainNoticeResponse';
 import type { StatusUpdate } from './generated/schemas/statusUpdate';
 import type { SystemStatus } from './generated/schemas/systemStatus';
 import type { SystemStatusHistory } from './generated/schemas/systemStatusHistory';
@@ -464,6 +466,12 @@ export const authServiceClient = {
       )
     ).map((result) => result);
   },
+  async agentSetup() {
+    return await fetchWithAuth<AgentSetupResponse>(
+      `${authHost}/user/agent_setup`,
+      { method: 'POST' }
+    );
+  },
   async putProfilePicture(args: PutProfilePictureParams) {
     return (
       await fetchWithAuth<EmptyResponse>(
@@ -665,6 +673,7 @@ export const authServiceClient = {
       name: data.name,
       licenseStatus: data.licenseStatus,
       tutorialComplete: data.tutorialComplete,
+      isAgent: data.isAgent,
       group: data.group,
       hasChromeExt: data.hasChromeExt,
       authenticated: !!data.userId,
@@ -1397,6 +1406,20 @@ export const authServiceClient = {
         body: JSON.stringify(args),
       })
     ).map(() => undefined);
+  },
+
+  /**
+   * Emails the caller's same-domain contacts who aren't on Macro yet that
+   * the caller's team exists. Call it after inviting, so invitees are
+   * skipped. Admin/Owner only; the server caps a team at 25 recipients.
+   */
+  async sendTeamDomainNotice() {
+    return (
+      await fetchWithAuth<SendDomainNoticeResponse>(
+        `${authHost}/team/domain-notice`,
+        { method: 'POST' }
+      )
+    ).map((result) => result);
   },
 
   async inviteToTeam(args: InviteToTeamRequest) {

@@ -1,5 +1,6 @@
 import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
 import { ParamsProvider } from '@core/component/ParamsProvider';
@@ -12,6 +13,7 @@ import { useIsMacroTeam } from '@core/context/team';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   captureScrollAnchor,
   restoreScrollAnchor,
@@ -45,6 +47,8 @@ import {
   outlineFitsGutter,
   useMarkdownOutline,
 } from './MarkdownOutline';
+import { SkillDescriptionField } from './SkillDescriptionField';
+import { shouldAutofocusDocument } from './should-autofocus-document';
 import { TaskDuplicateMatchPill } from './TaskDuplicateMatches';
 import { TitleEditor } from './TitleEditor';
 import { registerMarkdownCommands } from './useMarkdownCommands';
@@ -95,6 +99,7 @@ export function Notebook(props: {
   autoFocus: boolean;
 }) {
   const { element: blockElement, state } = useMarkdownDocument();
+  const panel = useSplitPanel();
   const { comments: commentState, params } = state;
   const { md, setMd } = state.editor;
   const { displayName: documentName } = useMarkdownName();
@@ -283,8 +288,10 @@ export function Notebook(props: {
   createEffect(() => {
     if (hasRun) return;
     if (!props.autoFocus) return;
-    if (!blockElement()) return;
-    blockElement()?.focus();
+    const element = blockElement();
+    if (!element) return;
+    if (shouldAutofocusDocument(element, panel?.panelRef() ?? null))
+      element.focus();
     hasRun = true;
   });
 
@@ -372,6 +379,7 @@ export function Notebook(props: {
       >
         <TitleEditor autoFocusOnMount={props.autoFocus} />
         <div class="spacer h-3" />
+        <SkillDescriptionField />
         <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
           <InlineTaskProperties />
           <InlineTaskGithubPullRequests />
@@ -379,6 +387,7 @@ export function Notebook(props: {
         </div>
         <ParamsProvider state={params}>
           <MarkdownEditor
+            autoFocusOnMount={props.autoFocus && !isTouchDevice()}
             resolveAppLink={resolveAppLink}
             loroManager={props.loroManager}
             showLexicalStateDebugger={

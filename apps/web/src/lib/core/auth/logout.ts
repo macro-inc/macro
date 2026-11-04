@@ -32,7 +32,6 @@ import {
 } from '@service-storage/graphql-soup';
 import { raceTimeout } from '@solid-primitives/promise';
 import { createCallback } from '@solid-primitives/rootless';
-import { useNavigate } from '@solidjs/router';
 import { confirmDialog } from '@ui';
 import { getOwner } from 'solid-js';
 import { clearComposerStorage } from './clear-composer-storage';
@@ -45,6 +44,7 @@ const unauthenticatedUserInfo: UserInfoData = {
   name: null,
   licenseStatus: 'inactive',
   tutorialComplete: false,
+  isAgent: false,
   group: null,
   hasChromeExt: false,
   authenticated: false,
@@ -89,7 +89,6 @@ export async function clearLocalAuthSession(
 
 export function useLogout() {
   const analytics = useAnalytics();
-  const navigate = useNavigate();
   const owner = getOwner();
 
   return createCallback(async () => {
@@ -161,7 +160,10 @@ export function useLogout() {
         mode: 'no-cors',
         redirect: 'manual',
       }).catch(() => {});
-      navigate('/login');
+      // Write the login URL directly: the router commits a navigation only
+      // after its transition settles, which lands after the reload has
+      // already restarted the signed-in route with no session to load.
+      window.history.replaceState(null, '', '#/login');
       // Native login reuses this WebView. End the document lifetime so queued
       // editor callbacks can never adopt the next account's draft session.
       reloadApp('logout');
