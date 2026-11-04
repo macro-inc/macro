@@ -117,6 +117,14 @@ async fn empty_toolset_lists_no_tools() {
 /// characters. Assert it against the toolset the server actually exposes, so a
 /// newly added tool can't quietly regress the submission.
 #[test]
+fn tools_hidden_from_chatgpt_still_exist() {
+    let tools = ai_tools::tools_for(ai_tools::AiHost::Mcp);
+    for name in HIDDEN_FROM_CHATGPT {
+        assert!(tools.toolset.tools.contains_key(name), "{name} was renamed");
+    }
+}
+
+#[test]
 fn every_exposed_tool_meets_directory_requirements() {
     let tools = ai_tools::tools_for(ai_tools::AiHost::Mcp);
     assert!(
@@ -405,7 +413,32 @@ mod code_mode {
         }
     }
 
-    const DIRECT_TOOLS: [&str; 4] = [
+    #[derive(Deserialize, schemars::JsonSchema)]
+    #[schemars(title = "Subagent", description = "Delegate a task.")]
+    struct Subagent {}
+    impl ToolAnnotated for Subagent {
+        const ANNOTATIONS: ToolAnnotations = ToolAnnotations::destructive("Delegate a task");
+    }
+    #[async_trait::async_trait]
+    impl ai_toolset::AsyncTool<()> for Subagent {
+        type Output = serde_json::Value;
+        async fn call(
+            &self,
+            _: ai_toolset::ServiceContext<()>,
+            _: ai_toolset::RequestContext,
+        ) -> ai_toolset::ToolResult<Self::Output> {
+            Ok(serde_json::json!({"ok": true}))
+        }
+    }
+
+    const DIRECT_TOOLS: [&str; 5] = [
+        "EditDocument",
+        "ListCalendarEvents",
+        "NameSearch",
+        "ReadContent",
+        "Subagent",
+    ];
+    const CHATGPT_TOOLS: [&str; 4] = [
         "EditDocument",
         "ListCalendarEvents",
         "NameSearch",
@@ -418,7 +451,8 @@ mod code_mode {
                 .add_tool::<NameSearch, ()>()
                 .add_tool::<ReadContent, ()>()
                 .add_tool::<EditDocument, ()>()
-                .add_tool::<ListCalendarEvents, ()>(),
+                .add_tool::<ListCalendarEvents, ()>()
+                .add_tool::<Subagent, ()>(),
         )
     }
 
@@ -507,6 +541,94 @@ mod code_mode {
             .await
             .unwrap();
         serde_json::from_slice(&bytes).unwrap()
+    }
+
+    fn mcp_client(name: &str) -> Option<ToolCaller> {
+        Some(ToolCaller::McpClient {
+            name: Some(name.to_owned()),
+        })
+    }
+
+    #[tokio::test]
+    async fn chatgpt_lists_standard_tools_for_a_flagged_user() {
+        let app = app(Arc::new(Runs::default()));
+        let listed = rpc_as(
+            app.clone(),
+            FLAGGED,
+            mcp_client("ChatGPT"),
+            "tools/list",
+            serde_json::json!({}),
+        )
+        .await;
+        assert_eq!(tool_names(&listed), CHATGPT_TOOLS);
+
+        let nameless = rpc_as(
+            app.clone(),
+            FLAGGED,
+            Some(ToolCaller::McpClient { name: None }),
+            "tools/list",
+            serde_json::json!({}),
+        )
+        .await;
+        assert_eq!(tool_names(&nameless), CHATGPT_TOOLS);
+
+        let other = rpc_as(
+            app,
+            FLAGGED,
+            mcp_client("Claude"),
+            "tools/list",
+            serde_json::json!({}),
+        )
+        .await;
+        assert!(tool_names(&other).contains(&"ExecuteCode".to_owned()));
+    }
+
+    #[tokio::test]
+    async fn chatgpt_cannot_call_a_hidden_tool() {
+        let response = rpc_as(
+            app(Arc::new(Runs::default())),
+            UNFLAGGED,
+            mcp_client("ChatGPT"),
+            "tools/call",
+            serde_json::json!({"name": "Subagent", "arguments": {}}),
+        )
+        .await;
+        assert!(
+            response["error"]["message"]
+                .as_str()
+                .is_some_and(|message| message.contains("not found")),
+            "{response}"
+        );
+
+        let other = rpc_as(
+            app(Arc::new(Runs::default())),
+            UNFLAGGED,
+            mcp_client("Claude"),
+            "tools/call",
+            serde_json::json!({"name": "Subagent", "arguments": {}}),
+        )
+        .await;
+        assert!(other.get("error").is_none(), "{other}");
+    }
+
+    #[tokio::test]
+    async fn chatgpt_cannot_run_code_for_a_flagged_user() {
+        let runs = Arc::new(Runs::default());
+        let response = rpc_as(
+            app(runs.clone()),
+            FLAGGED,
+            mcp_client("ChatGPT"),
+            "tools/call",
+            serde_json::json!({"name": "ExecuteCode", "arguments": {"source": "1"}}),
+        )
+        .await;
+        assert!(
+            response["error"]["message"]
+                .as_str()
+                .is_some_and(|message| message.contains("not found")),
+            "{response}"
+        );
+        assert!(runs.0.lock().unwrap().is_empty());
     }
 
     fn tool_names(response: &serde_json::Value) -> Vec<String> {
