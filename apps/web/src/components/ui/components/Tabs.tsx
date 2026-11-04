@@ -238,7 +238,7 @@ function PillOption<T extends string>(props: {
           : 'bg-control border-edge-button',
         'shadow-none not-touch:not-data-checked:hover:overlay-hover not-touch:not-data-checked:hover:text-ink',
         'data-checked:overlay-active data-checked:text-ink',
-        'has-focus-visible:ring-2 has-focus-visible:ring-inset has-focus-visible:ring-edge-focus',
+        'has-focus-visible:ring-2 has-focus-visible:ring-inset has-focus-visible:ring-accent',
         'data-disabled:pointer-events-none data-disabled:opacity-50',
         !props.joined &&
           (square()
