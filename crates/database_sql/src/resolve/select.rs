@@ -247,6 +247,19 @@ fn resolve_order(
             None => order_column(scope, items, group_by, name)?,
         },
     };
+    // A row query's select list holds only columns, and its rows are sorted
+    // by column key, so a position or alias names the column it selects.
+    let rows = group_by.is_none()
+        && items
+            .iter()
+            .all(|item| matches!(item, SelectItem::Column(_)));
+    let key = match (key, rows) {
+        (OrderKey::Item(index), true) => match items[index] {
+            SelectItem::Column(column) => OrderKey::Column(column),
+            SelectItem::Aggregate { .. } => OrderKey::Item(index),
+        },
+        (key, _) => key,
+    };
     Ok(Order {
         key,
         direction: order.direction,

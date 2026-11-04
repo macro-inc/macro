@@ -2,6 +2,7 @@ import ArrowBendDownRight from '@icon/system/regular/arrow-bend-down-right.svg';
 import ArrowDown from '@icon/system/regular/arrow-down.svg';
 import ArrowUp from '@icon/system/regular/arrow-up.svg';
 import DotsThree from '@icon/system/regular/dots-three.svg';
+import GitBranch from '@icon/system/regular/git-branch.svg';
 import ShieldCheck from '@icon/system/regular/shield-check.svg';
 import Trash from '@icon/system/regular/trash.svg';
 import { Button, cn, Dropdown } from '@ui';
@@ -17,11 +18,13 @@ export function SectionMenu(props: {
   onMoveUp: () => void;
   onMoveDown: () => void;
   onDelete: () => void;
+  /** Offered on a questions section that may get a condition and has none. */
+  onAddCondition?: () => void;
 }) {
   return (
     <Dropdown>
       <Dropdown.Trigger variant="ghost" size="icon-sm" aria-label={props.label}>
-        <DotsThree />
+        <DotsThree class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
       </Dropdown.Trigger>
       <Dropdown.Content class="w-52">
         <Dropdown.Item disabled={!props.canMoveUp} onSelect={props.onMoveUp}>
@@ -35,6 +38,14 @@ export function SectionMenu(props: {
           <ArrowDown class="size-4" />
           <span class="flex-1">Move down</span>
         </Dropdown.Item>
+        <Show when={props.onAddCondition}>
+          {(onAddCondition) => (
+            <Dropdown.Item onSelect={onAddCondition()}>
+              <GitBranch class="size-4" />
+              <span class="flex-1">Show only when…</span>
+            </Dropdown.Item>
+          )}
+        </Show>
         <Dropdown.Separator class="my-1 h-px bg-edge-divider" />
         <Dropdown.Item class="text-failure-ink" onSelect={props.onDelete}>
           <Trash class="size-4" />
@@ -75,6 +86,8 @@ export function SectionCard(props: {
   menu: JSX.Element;
   /** The other editors who selected this section. */
   editors: JSX.Element;
+  /** The condition the section is shown on, when it has or is getting one. */
+  condition: JSX.Element;
   routing: JSX.Element;
   children: JSX.Element;
   empty: boolean;
@@ -132,6 +145,7 @@ export function SectionCard(props: {
           {props.menu}
         </div>
       </header>
+      {props.condition}
       <div
         data-form-section-list={props.sectionId}
         class="flex flex-col divide-y divide-edge-divider"
@@ -143,6 +157,61 @@ export function SectionCard(props: {
       </div>
       {props.routing}
     </section>
+  );
+}
+
+/**
+ * The condition a questions section is shown on: its sentence, the editor
+ * while open, and the repair for rules naming questions no longer before it.
+ */
+export function SectionCondition(props: {
+  sentence: string | undefined;
+  editing: boolean;
+  editor: JSX.Element;
+  /** Rules testing questions no longer asked before the section. */
+  brokenRules: number;
+  onRepair: () => void;
+  onEdit: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div class="flex flex-col gap-2 border-b border-edge-divider px-4 py-3">
+      <div class="flex min-h-7 items-center gap-2">
+        <GitBranch class="size-3.5 text-ink-muted" aria-hidden="true" />
+        <span class="flex-1 text-xs font-medium text-ink-muted">
+          Show this section only
+        </span>
+        <Show when={!props.editing}>
+          <Button variant="ghost" size="sm" onClick={props.onEdit}>
+            Edit
+          </Button>
+          <Button variant="ghost" size="sm" onClick={props.onRemove}>
+            Remove
+          </Button>
+        </Show>
+      </div>
+      <Show when={props.sentence}>
+        <p class="font-mono text-xs leading-relaxed text-ink wrap-anywhere">
+          {props.sentence}
+        </p>
+      </Show>
+      <Show when={props.brokenRules > 0}>
+        <div
+          role="alert"
+          class="flex flex-wrap items-center gap-2 rounded-lg border border-failure/40 bg-failure-bg px-3 py-2 text-xs text-failure-ink"
+        >
+          <span class="flex-1">
+            {props.brokenRules === 1
+              ? 'A rule checks a question that is no longer before this section. Responses are refused until it is fixed.'
+              : `${props.brokenRules} rules check questions that are no longer before this section. Responses are refused until they are fixed.`}
+          </span>
+          <Button variant="secondary" size="sm" onClick={props.onRepair}>
+            Remove broken rules
+          </Button>
+        </div>
+      </Show>
+      <Show when={props.editing}>{props.editor}</Show>
+    </div>
   );
 }
 
@@ -209,7 +278,7 @@ export function GateCard(props: {
                 ? 'A rule checks a question that is no longer before this gate. Responses are refused until it is fixed.'
                 : `${props.brokenRules} rules check questions that are no longer before this gate. Responses are refused until they are fixed.`}
             </span>
-            <Button variant="outline" size="sm" onClick={props.onRepair}>
+            <Button variant="secondary" size="sm" onClick={props.onRepair}>
               Remove broken rules
             </Button>
           </div>
@@ -241,7 +310,7 @@ export function GateCard(props: {
             when={props.editingRules}
             fallback={
               <Button
-                variant="outline"
+                variant="secondary"
                 size="md"
                 class="self-start"
                 onClick={props.onEditRules}

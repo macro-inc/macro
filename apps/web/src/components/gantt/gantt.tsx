@@ -9,7 +9,7 @@ import {
   type ParentProps,
   untrack,
 } from 'solid-js';
-import { createGanttToday } from './create-gantt-today';
+import { createGanttNow, createGanttToday } from './create-gantt-today';
 import { GanttBar } from './gantt-bar';
 import { GanttChart } from './gantt-chart';
 import {
@@ -35,6 +35,7 @@ import { GanttHeader } from './gantt-header';
 import {
   extendGanttRange,
   type GanttGuide,
+  MAX_GANTT_PIXELS_PER_DAY,
   snapGanttGuide,
   zoomedGanttPixels,
 } from './gantt-interaction';
@@ -52,6 +53,12 @@ import {
   GanttPagination,
   GanttSidebarToggle,
 } from './gantt-sidebar';
+import {
+  GANTT_HOURS_PIXELS_PER_DAY,
+  ganttPosition,
+  MAX_GANTT_HOURS_PIXELS_PER_DAY,
+} from './gantt-time';
+import { GanttUndatedChip } from './gantt-undated-chip';
 import { GanttZoomControls } from './gantt-zoom-controls';
 
 const SIDEBAR_COLLAPSE_WIDTH = 640;
@@ -59,6 +66,16 @@ export function GanttRoot(
   props: ParentProps<{
     range: GanttRange;
     defaultScale?: GanttScale;
+    /**
+     * Shows times of day: zoom continues past days into hours, and a range
+     * drawn at hours zoom is timed rather than whole days.
+     */
+    hours?: boolean;
+    /**
+     * Whether the label drawer starts open; by default it is open on wide
+     * charts. Its toggle still opens and closes it.
+     */
+    defaultSidebar?: 'open' | 'closed';
     labelWidth?: number;
     rowHeight?: number;
     class?: string;
@@ -73,21 +90,36 @@ export function GanttRoot(
         left.start === right.start && left.end === right.end,
     }
   );
-  const [pixelsPerDay, setPixelsPerDay] = createSignal(
+  const hours = () => props.hours ?? false;
+  const maxPixelsPerDay = () =>
+    hours() ? MAX_GANTT_HOURS_PIXELS_PER_DAY : MAX_GANTT_PIXELS_PER_DAY;
+  const [zoom, setPixelsPerDay] = createSignal(
     ganttPixelsPerDay(props.defaultScale ?? 'week')
   );
+  const pixelsPerDay = () => Math.min(zoom(), maxPixelsPerDay());
   const scale = (): GanttScale =>
-    pixelsPerDay() >= 32 ? 'day' : pixelsPerDay() >= 12 ? 'week' : 'month';
+    pixelsPerDay() >= GANTT_HOURS_PIXELS_PER_DAY
+      ? 'hour'
+      : pixelsPerDay() >= 32
+        ? 'day'
+        : pixelsPerDay() >= 12
+          ? 'week'
+          : 'month';
+  const now = createGanttNow(() => scale() === 'hour');
   const [gridVisible, setGridVisible] = createSignal(true);
   const [gridScale, setGridScale] = createSignal<GanttScale>(
-    props.defaultScale ?? 'week'
+    props.defaultScale === 'hour' ? 'day' : (props.defaultScale ?? 'week')
   );
   const [gridStyle, setGridStyle] = createSignal<'solid' | 'dashed'>('solid');
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
   const [extent, setExtent] = createSignal<GanttRange>();
   const [guide, setGuide] = createSignal<GanttGuide>();
   const [editing, setEditing] = createSignal(false);
-  const [sidebarChoice, setSidebarChoice] = createSignal<boolean>();
+  const [sidebarChoice, setSidebarChoice] = createSignal<boolean | undefined>(
+    props.defaultSidebar === undefined
+      ? undefined
+      : props.defaultSidebar === 'open'
+  );
   let sidebarTrigger: HTMLButtonElement | undefined;
   const [scrollZooming, setScrollZooming] = createSignal(false);
   let scrollZoomTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -248,9 +280,32 @@ export function GanttRoot(
 
   const context: GanttContext = {
     today,
+    now,
     range,
     scale,
-    setScale: (value) => setPixelsPerDay(ganttPixelsPerDay(value)),
+    setScale: (value) => {
+      const element = viewport();
+      const pixels = ganttPixelsPerDay(value);
+      // Without hours the period keeps the left edge, as projects expect.
+      if (!element || !hours()) {
+        setPixelsPerDay(pixels);
+        return;
+      }
+      // With hours, keep the middle of what is on screen in place; entering
+      // hours on a view that shows now centers on now.
+      const visible = visibleRange();
+      const current = ganttPosition(new Date());
+      const middle =
+        value === 'hour' && current >= visible.start && current <= visible.end
+          ? current
+          : (visible.start + visible.end) / 2;
+      setPixelsPerDay(pixels);
+      restoreScroll(
+        middle - Math.max(1, element.clientWidth - labelWidth()) / pixels / 2
+      );
+    },
+    hours,
+    maxPixelsPerDay,
     pixelsPerDay,
     scrollZooming,
     markScrollZoom: () => {
@@ -262,7 +317,7 @@ export function GanttRoot(
     zoomAt: (clientX, delta) => {
       const element = viewport();
       if (!element || extending || editing() || !Number.isFinite(delta)) return;
-      const next = zoomedGanttPixels(pixelsPerDay(), delta);
+      const next = zoomedGanttPixels(pixelsPerDay(), delta, maxPixelsPerDay());
       if (next === pixelsPerDay()) return;
       const offset = Math.max(
         0,
@@ -362,9 +417,26 @@ export function GanttRoot(
           bar.dataset.ganttEnd === undefined
             ? undefined
             : Number(bar.dataset.ganttEnd);
-        return Number.isFinite(start) ? [{ start, end }] : [];
+        const timed = bar.dataset.ganttTimed !== undefined;
+        return Number.isFinite(start) ? [{ start, end, timed }] : [];
       });
       return snapGanttGuide(day, pixelsPerDay(), targets);
+    },
+    fitToday: () => {
+      const element = viewport();
+      const today = toGanttDay(new Date());
+      if (!element || today === undefined) return;
+      const covered = sidebarOpen() ? sidebarWidth() : 0;
+      const visible = Math.max(1, element.clientWidth - labelWidth() - covered);
+      const fitted = Math.min(maxPixelsPerDay(), visible);
+      const start = today - covered / fitted;
+      const current = range();
+      setPixelsPerDay(fitted);
+      extendBounds({
+        start: Math.min(current.start, Math.floor(start) - 1),
+        end: Math.max(current.end, today + 2),
+      });
+      restoreScroll(start);
     },
     scrollToToday: (behavior = 'smooth') => {
       const element = viewport();
@@ -373,7 +445,10 @@ export function GanttRoot(
       const pixels = pixelsPerDay();
       const days = Math.max(1, element.clientWidth - labelWidth()) / pixels;
       const anchor = range().start + element.scrollLeft / pixels;
-      const destination = today + 0.5 - days / 2;
+      // At hours zoom the calendar centers on the current time, not the day.
+      const destination =
+        (scale() === 'hour' ? ganttPosition(new Date()) : today + 0.5) -
+        days / 2;
       const padding = Math.max(30, Math.ceil(element.clientWidth / pixels));
       const current = range();
       // Reserve the complete animation path so no edge rebase interrupts smooth scrolling.
@@ -437,5 +512,6 @@ export const Gantt = {
   DateHint: GanttDateHint,
   CreateArea: GanttCreateArea,
   Bar: GanttBar,
+  UndatedChip: GanttUndatedChip,
   TodayMarker: GanttTodayMarker,
 };

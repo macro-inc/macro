@@ -50,8 +50,10 @@ export function SpreadsheetGoalSeekDialog(props: {
         <div class="mb-4 flex items-center justify-between">
           <Dialog.Title class="text-sm font-semibold">Goal Seek</Dialog.Title>
           <Button
+            variant="ghost"
+            aria-label="Close Goal Seek"
+            tooltip="Close Goal Seek"
             type="button"
-            label="Close Goal Seek"
             size="icon-sm"
             class="order-last text-ink-muted"
             tabIndex={-1}
@@ -115,17 +117,22 @@ export function SpreadsheetGoalSeekDialog(props: {
               <Button
                 type="submit"
                 size="sm"
-                variant="strong"
+                variant="primary"
                 disabled={props.seeking}
               >
                 {props.seeking ? 'Seeking…' : 'OK'}
               </Button>
             }
           >
-            <Button type="button" size="sm" onClick={props.onEdit}>
+            <Button
+              variant="ghost"
+              type="button"
+              size="sm"
+              onClick={props.onEdit}
+            >
               Change cells
             </Button>
-            <Button type="submit" size="sm" variant="strong">
+            <Button type="submit" size="sm" variant="primary">
               {props.solution?.status === 'found' ? 'OK' : 'Use closest value'}
             </Button>
           </Show>

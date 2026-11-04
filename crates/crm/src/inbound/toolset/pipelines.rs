@@ -240,6 +240,8 @@ pub enum ToolFieldType {
     Checkbox,
     /// A date-time.
     Date,
+    /// A span of time, written start/end: 2026-10-12/2026-10-16.
+    DateRange,
     /// URLs.
     Link,
     /// Labels from `options`, such as a stage.
@@ -265,6 +267,7 @@ impl From<FieldKind> for ToolFieldType {
             FieldKind::Number => Self::Number,
             FieldKind::Checkbox => Self::Checkbox,
             FieldKind::Date => Self::Date,
+            FieldKind::DateRange => Self::DateRange,
             FieldKind::Link => Self::Link,
             FieldKind::Select => Self::Select,
             FieldKind::Tags => Self::Tags,
@@ -434,6 +437,7 @@ pub(crate) fn json(value: &FieldValue) -> serde_json::Value {
         }
         FieldValue::Checkbox(checked) => Value::Bool(*checked),
         FieldValue::Date(date) => Value::String(date.to_rfc3339()),
+        FieldValue::DateRange(range) => Value::String(range.iso()),
         FieldValue::Labels(values) | FieldValue::Links(values) | FieldValue::References(values) => {
             many(values)
         }

@@ -8,8 +8,9 @@ import {
 } from '@app/features/soup/search';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useUserId } from '@core/context/user';
-import { type Accessor, createMemo, type Setter } from 'solid-js';
-import { buildSoupSearchRequest } from './search-request';
+import { createLazyMemo } from '@solid-primitives/memo';
+import type { Accessor, Setter } from 'solid-js';
+import { buildSoupSearchRequest } from '../queries/search-request';
 
 interface CreateSearchStateArgs {
   /** Where the search runs, for analytics. */
@@ -46,9 +47,12 @@ export const createSearchState = ({
     assignees: assignees(),
   });
 
-  const { entityPool } = useSearchContext();
-  const localPool = createMemo(() => {
-    const pool = entityPool();
+  const { entityPool, routinePool } = useSearchContext();
+  const localPool = createLazyMemo(() => {
+    const pool =
+      surface() === 'search'
+        ? [...entityPool(), ...routinePool()]
+        : entityPool();
     const activeIds = soup.predicates
       .activeIds()
       .filter((id) => id !== 'explicit-noise');

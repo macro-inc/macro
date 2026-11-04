@@ -9,22 +9,32 @@ export function DatabaseTitle(props: {
   onRename: (name: string) => void;
 }) {
   const [editing, setEditing] = createSignal(false);
-  onMount(() =>
-    props.onEditReady?.(() => {
-      if (props.canEdit) setEditing(true);
-    })
-  );
+  const startEditing = () => {
+    if (props.canEdit) setEditing(true);
+  };
+  onMount(() => props.onEditReady?.(startEditing));
   onCleanup(() => props.onEditReady?.(undefined));
   return (
     <Show
       when={props.canEdit && editing()}
       fallback={
-        <span class="inline-block truncate text-sm font-semibold">
+        <span
+          class="inline-block truncate text-sm font-semibold"
+          onDblClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            startEditing();
+          }}
+        >
           {props.name}
         </span>
       }
     >
-      <span class="flex min-w-0">
+      <span
+        class="flex min-w-0"
+        onClick={(event) => event.stopPropagation()}
+        onDblClick={(event) => event.stopPropagation()}
+      >
         <InlineTitleEditor
           value={props.name}
           placeholder="Untitled database"

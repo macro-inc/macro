@@ -52,6 +52,7 @@ export function presentValue(
       { type: 'number' },
       { type: 'boolean' },
       { type: 'date' },
+      { type: 'date_range' },
       (scalar) => scalar
     )
     .exhaustive(() => undefined);
@@ -75,6 +76,7 @@ function conditionPasses(
           { type: 'number' },
           { type: 'boolean' },
           { type: 'date' },
+          { type: 'date_range' },
           { type: 'options' },
           { type: 'entities' },
           { type: 'rows' },
@@ -122,6 +124,24 @@ function conditionPasses(
         .with('onOrAfter', () => actual >= bound)
         .exhaustive(() => false);
     })
+    .with({ kind: 'dateRange' }, ({ operator, value: expected }) => {
+      if (value.type !== 'date_range') return false;
+      const start = Date.parse(value.value.start);
+      const end = Date.parse(value.value.end);
+      // The test is of the whole day starting at `expected`.
+      const day = Date.parse(expected);
+      if ([start, end, day].some(Number.isNaN)) return false;
+      const nextDay = day + 24 * 60 * 60 * 1000;
+      const overlaps = end >= day && start < nextDay;
+      return match(operator)
+        .with('contains', () => overlaps)
+        .with('doesNotContain', () => !overlaps)
+        .with('endsBefore', () => end < day)
+        .with('endsOnOrAfter', () => end >= day)
+        .with('startsAfter', () => start >= nextDay)
+        .with('startsOnOrBefore', () => start < nextDay)
+        .exhaustive(() => false);
+    })
     .with(
       { kind: 'checkbox' },
       ({ checked }) => value.type === 'boolean' && value.value === checked
@@ -144,6 +164,7 @@ function conditionPasses(
           { type: 'number' },
           { type: 'boolean' },
           { type: 'date' },
+          { type: 'date_range' },
           { type: 'link' },
           { type: 'options' },
           () => undefined

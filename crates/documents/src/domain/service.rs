@@ -17,6 +17,7 @@ use models_permissions::share_permission::{
 };
 use models_properties::EntityReference;
 use models_properties::api::SetPropertyValue;
+use models_properties::service::property_change_source::PropertyChangeSource;
 use std::borrow::Cow;
 use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -79,6 +80,7 @@ use super::response::{
     CreateDocumentResponseData, DocumentMetadataWithContent, DocumentResponse,
     DocumentResponseMetadataWithContent, GetDocumentResponseData, LocationResponseV3,
 };
+use super::skill_description::SkillDescription;
 
 /// The concrete document service implementation.
 pub struct DocumentServiceImpl<
@@ -210,6 +212,23 @@ fn published_document_actors(auth: &EntityAccessAuth) -> PublishedDocumentActors
         EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => {
             PublishedDocumentActors::default()
         }
+    }
+}
+
+/// The dates a document was created with, when its creator supplied them
+/// rather than taking now.
+#[derive(Debug, Clone, Copy)]
+struct DocumentDates {
+    created_at: chrono::DateTime<chrono::Utc>,
+    updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl DocumentDates {
+    fn of(document: &NewDocument) -> Option<Self> {
+        document.created_at.map(|created_at| Self {
+            created_at,
+            updated_at: document.updated_at.unwrap_or(created_at),
+        })
     }
 }
 
@@ -707,11 +726,16 @@ impl<
         })
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "a created document carries its type, folder, dates, content hash, attribution and job"
+    )]
     async fn finish_created_document(
         &self,
         document_metadata: DocumentMetadata,
         file_type: Option<FileType>,
         project_id: Option<uuid::Uuid>,
+        dates: Option<DocumentDates>,
         sha: String,
         attribution: Attribution,
         job_id: Option<String>,
@@ -809,7 +833,20 @@ impl<
                 .entity_access_management_service
                 .add_entity_to_project(&document_uuid, EntityType::Document, project_id)
                 .await.inspect_err(|e| tracing::error!(error=?e, project_id=?project_id, "unable to update entity access for project"));
-            let _ = self.repo.update_project_modified(&project_id_str).await.inspect_err(
+            // A document carrying its own dates dates its folders by them
+            // rather than by now.
+            let updated = match dates {
+                Some(DocumentDates {
+                    created_at,
+                    updated_at,
+                }) => {
+                    self.repo
+                        .extend_project_dates(&project_id_str, created_at, updated_at)
+                        .await
+                }
+                None => self.repo.update_project_modified(&project_id_str).await,
+            };
+            let _ = updated.inspect_err(
                 |e| tracing::error!(error=?e, project_id=?project_id, "unable to update project modified date"),
             );
         }
@@ -1527,6 +1564,7 @@ impl<
         let owner = principal.owner();
         let file_type = document.file_type;
         let project_id = document.project_id;
+        let dates = DocumentDates::of(&document);
         let sha = document.sha.clone();
 
         let share_permission = match document.initial_link_share {
@@ -1553,6 +1591,7 @@ impl<
             document_metadata,
             file_type,
             project_id,
+            dates,
             sha,
             Attribution::from(principal),
             job_id,
@@ -1582,6 +1621,7 @@ impl<
 
         let file_type = args.document.file_type;
         let project_id = args.document.project_id;
+        let dates = DocumentDates::of(&args.document);
         let sha = args.document.sha.clone();
         let attribution = Attribution::direct(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID));
 
@@ -1605,6 +1645,7 @@ impl<
                     document_metadata,
                     file_type,
                     project_id,
+                    dates,
                     sha,
                     attribution,
                     None,
@@ -2151,14 +2192,29 @@ impl<
         })
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(
+        skip(self, entity_access_receipt, credited_user, source),
+        fields(
+            task_id = %entity_access_receipt.entity().entity_id,
+            credit_requested = credited_user.is_some(),
+            has_source = source.is_some()
+        ),
+        err
+    )]
     async fn update_task_status(
         &self,
         entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
+        credited_user: Option<MacroUserIdStr<'static>>,
+        source: Option<PropertyChangeSource>,
         status: &str,
     ) -> Result<(), DocumentError> {
         self.task_properties_service
-            .update_task_status(&entity_access_receipt.entity().entity_id, status)
+            .update_task_status(
+                &entity_access_receipt,
+                credited_user.as_ref(),
+                source.as_ref(),
+                status,
+            )
             .await
             .map_err(DocumentError::Internal)?;
 
@@ -2282,6 +2338,52 @@ impl<
         let state = self.repo.get_team_share(document_id).await?;
 
         Ok(state.into())
+    }
+
+    #[tracing::instrument(err, skip(self, entity_access_receipt, description))]
+    async fn set_skill_description(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
+        description: SkillDescription,
+    ) -> Result<(), DocumentError> {
+        let document_id = &entity_access_receipt.entity().entity_id;
+        let metadata = self
+            .repo
+            .get_document_metadata(document_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+        if metadata.sub_type != Some(DocumentSubType::Skill) {
+            return Err(DocumentError::BadRequest(
+                "only a skill has a description".to_string(),
+            ));
+        }
+        self.repo
+            .set_skill_description(document_id, &description)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))
+    }
+
+    #[tracing::instrument(err, skip(self, description))]
+    async fn describe_new_skill(
+        &self,
+        document_id: &str,
+        description: SkillDescription,
+    ) -> Result<(), DocumentError> {
+        self.repo
+            .set_skill_description(document_id, &description)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))
+    }
+
+    #[tracing::instrument(err, skip(self, document_ids), fields(skills = document_ids.len()))]
+    async fn skill_descriptions(
+        &self,
+        document_ids: &[String],
+    ) -> Result<std::collections::HashMap<String, SkillDescription>, DocumentError> {
+        self.repo
+            .get_skill_descriptions(document_ids)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))
     }
 
     #[tracing::instrument(err, skip(self, entity_access_receipt))]

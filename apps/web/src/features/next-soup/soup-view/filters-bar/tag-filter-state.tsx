@@ -11,10 +11,11 @@ import type { SearchableOption } from './searchable-multi-select';
  * this at the provider boundary prevents each filter surface and virtual row
  * from attaching another observer to the same TanStack query.
  */
-export function createTagFilter(queryFilters: QueryStore) {
+export function createTagOptions() {
   const tagsQuery = useTagsQuery();
 
-  const tagSets = (): TagSetResponse[] => tagsQuery.data ?? [];
+  const tagSets = (): TagSetResponse[] =>
+    tagsQuery.isSuccess ? tagsQuery.data : [];
 
   const defByOption = createMemo(() => {
     const map = new Map<string, string>();
@@ -42,6 +43,18 @@ export function createTagFilter(queryFilters: QueryStore) {
     return map;
   });
 
+  return {
+    hasTags: () => options().length > 0,
+    tagSets,
+    options,
+    optionsById,
+    defByOption,
+  };
+}
+
+export function createTagFilter(queryFilters: QueryStore) {
+  const metadata = createTagOptions();
+  const { defByOption } = metadata;
   const activeIds = createMemo(() =>
     (queryFilters.state.include.tagFilters ?? []).map((tag) => tag.value)
   );
@@ -73,11 +86,7 @@ export function createTagFilter(queryFilters: QueryStore) {
   };
 
   return {
-    hasTags: () => options().length > 0,
-    tagSets,
-    options,
-    optionsById,
-    defByOption,
+    ...metadata,
     activeIds,
     onChange,
   };

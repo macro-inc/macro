@@ -1,0 +1,1 @@
+Only positively requested invitee names or supplied email addresses. Exclude people who must not be invited. A person mentioned as the activity companion, a discussion topic such as guest access, or a negated invitation is not a request to invite them. Return an empty list when no invitation was requested.

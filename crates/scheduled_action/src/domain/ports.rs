@@ -1,10 +1,11 @@
 use super::event_runs::{AuthorizedEventRun, ClaimToken, ConfigurationRevision};
-use super::event_trigger::EventReference;
+use super::event_trigger::{EventName, EventReference};
 use super::execution::ExecutionHandle;
 use super::models::{
-    ActionExecutionRecord, CreateScheduledAction, DispatchEvent, InProgressExecution,
-    ScheduledAction, ScheduledActionUpdate, UpdateScheduledAction,
+    ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, DispatchEvent,
+    InProgressExecution, LastRun, ListedAction, ScheduledAction, ScheduledActionUpdate,
 };
+use super::templates::{RoutineTemplate, ShareRoutineTemplate, TemplateSnapshot};
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{
@@ -15,6 +16,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model_owner::{CreationPrincipal, Owner};
 use rootcause::Report;
+use std::collections::HashMap;
 use tokio::sync::mpsc::{Receiver, Sender};
 use trigger_context::RoutineEvent;
 
@@ -99,6 +101,13 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
         action_id: &Uuid,
     ) -> impl Future<Output = Result<Vec<ActionExecutionRecord>>> + Send;
 
+    /// The latest finished run of each action that has one. Ids without runs
+    /// are omitted.
+    fn last_runs(
+        &self,
+        action_ids: &[Uuid],
+    ) -> impl Future<Output = Result<HashMap<Uuid, LastRun>>> + Send;
+
     /// Advance the cron firing time; event actions are left unchanged.
     fn update_next_run_at(&self, id: &Uuid) -> impl Future<Output = Result<()>> + Send;
 
@@ -145,7 +154,16 @@ pub trait ScheduledActionService: Send + Sync + 'static {
     fn create_action(
         &self,
         principal: &CreationPrincipal,
-        input: CreateScheduledAction,
+        input: ActionConfiguration,
+    ) -> impl Future<Output = Result<ScheduledAction>> + Send;
+
+    /// `create_action` for a routine activated from `template_id`, recorded
+    /// as given: callers check that the template exists.
+    fn create_action_from_template(
+        &self,
+        principal: &CreationPrincipal,
+        input: ActionConfiguration,
+        template_id: Uuid,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     /// Actions `user_id` can access. Legacy clients see cron actions only;
@@ -155,12 +173,12 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         &self,
         user_id: MacroUserIdStr<'static>,
         include_events: bool,
-    ) -> impl Future<Output = Result<Vec<ScheduledAction>>> + Send;
+    ) -> impl Future<Output = Result<Vec<ListedAction>>> + Send;
 
     fn update_action(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
-        input: UpdateScheduledAction,
+        input: ActionConfigurationUpdate,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     /// Change activation without touching configuration. Requesting the
@@ -185,6 +203,56 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Vec<ActionExecutionRecord>>> + Send;
+}
+
+/// Templates shared from routines, keyed by their source routine's ID.
+pub trait RoutineTemplateRepo: Send + Sync + 'static {
+    /// Create the template or replace its snapshot, keeping its creation time.
+    fn upsert_template(
+        &self,
+        snapshot: TemplateSnapshot,
+    ) -> impl Future<Output = Result<RoutineTemplate>> + Send;
+
+    /// A missing template is `Ok(())`.
+    fn delete_template(&self, id: &Uuid) -> impl Future<Output = Result<()>> + Send;
+
+    fn get_template(
+        &self,
+        id: &Uuid,
+    ) -> impl Future<Output = Result<Option<RoutineTemplate>>> + Send;
+}
+
+/// Sharing routines as templates and activating them.
+pub trait RoutineTemplateService: Send + Sync + 'static {
+    /// Share the receipt's routine, or replace its shared snapshot with the
+    /// routine's current configuration.
+    fn share_template(
+        &self,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        input: ShareRoutineTemplate,
+    ) -> impl Future<Output = Result<RoutineTemplate>> + Send;
+
+    /// Stop sharing. Routines already activated from it keep running.
+    fn unshare_template(
+        &self,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Read a template by its unguessable ID for a viewer with sharing enabled.
+    fn get_template(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        id: Uuid,
+    ) -> impl Future<Output = Result<RoutineTemplate>> + Send;
+
+    /// Create the principal's own routine from a shared template. The input
+    /// is the activator's filled-in configuration, validated like any create.
+    fn activate_template(
+        &self,
+        principal: &CreationPrincipal,
+        template_id: Uuid,
+        input: ActionConfiguration,
+    ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 }
 
 pub trait ScheduledActionDispatcher {
@@ -260,4 +328,67 @@ pub trait ScheduledAgentRunner: Send + Sync + 'static {
 
 pub trait ScheduledActionLiveUpdate: Send + Sync + 'static {
     fn publish_update(&self, update: ScheduledActionUpdate) -> impl Future<Output = ()> + Send;
+}
+
+/// What started a finished routine run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunTrigger {
+    /// One of its schedules came due.
+    Scheduled,
+    /// Its owner started it by hand.
+    Manual,
+    /// An event it watches happened.
+    Event(EventName),
+}
+
+/// Who did a routine run's work.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunTarget {
+    /// A model, prompted directly.
+    Model,
+    /// One of the owner's agents.
+    Agent,
+    /// The task could not be read.
+    Unknown,
+}
+
+/// How a routine run ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunEnd {
+    Succeeded,
+    Failed,
+    /// Shutdown or the event worker stopped it.
+    Interrupted,
+    /// The owner's AI allowance refused the run before it started.
+    AiLimitReached,
+}
+
+/// A routine run that started and then ended, whatever the outcome.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FinishedRoutineRun {
+    pub owner: MacroUserIdStr<'static>,
+    pub routine_id: Uuid,
+    pub routine_name: String,
+    pub trigger: RunTrigger,
+    pub target: RunTarget,
+    pub end: RunEnd,
+    pub duration: chrono::Duration,
+}
+
+/// Told about every finished routine run, e.g. for product analytics.
+/// Called on the run's task, so implementations must be quick or spawn.
+pub trait RoutineRunObserver: Send + Sync + 'static {
+    fn run_finished(&self, run: FinishedRoutineRun);
+}
+
+impl RoutineRunObserver for () {
+    fn run_finished(&self, _run: FinishedRoutineRun) {}
+}
+
+/// Tells both observers, in order.
+impl<First: RoutineRunObserver, Second: RoutineRunObserver> RoutineRunObserver for (First, Second) {
+    fn run_finished(&self, run: FinishedRoutineRun) {
+        self.0.run_finished(run.clone());
+        self.1.run_finished(run);
+    }
 }

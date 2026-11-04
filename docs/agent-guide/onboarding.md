@@ -13,6 +13,9 @@ localStorage for that user and removed from the URL after it is applied, so a
 reload keeps later progress. The app shell and the inbox connection callback
 keep `step` when they send a first-run user into onboarding.
 
+Agent accounts never see this flow, including through a direct link; see
+[login](login.md#agent-accounts).
+
 ## Onboarding bypass — `/app/onboarding`
 
 All `@macro.com` accounts see a **Bypass** button on every onboarding step. It
@@ -29,4 +32,6 @@ promotions keep their own terms. Accounts with an existing subscription see
 `Manage subscription`, which opens Stripe billing management instead of creating
 a replacement subscription. The comparison below the offer includes Free,
 Pro, and Max (see [login](login.md#desktop-onboarding)). Customers can also
-purchase plans afterwards in **Settings → Billing**.
+purchase plans afterwards in **Settings → Billing**. Max in that comparison
+starts paid checkout with no trial. A later switch from a Pro trial to Max
+ends the trial and charges Max immediately.

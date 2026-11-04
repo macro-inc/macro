@@ -97,8 +97,8 @@ impl PgChannelLabelsRepo {
                     FROM comms_channels c
                     JOIN comms_channel_participants p
                         ON p.channel_id = c.id AND p.user_id = $3 AND p.left_at IS NULL
-                    WHERE c.channel_type = 'team'
-                    AND (l.team_id IS NULL OR c.team_id = l.team_id)
+                    WHERE ((l.team_id IS NULL AND c.channel_type IN ('team', 'public', 'private'))
+                        OR (l.team_id IS NOT NULL AND c.channel_type = 'team' AND c.team_id = l.team_id))
                     AND ((
                         l.name_contains IS NULL AND EXISTS (
                             SELECT 1 FROM channel_label_channel lc
@@ -125,8 +125,8 @@ impl PgChannelLabelsRepo {
                 CASE WHEN l.name_contains IS NULL THEN
                     (SELECT COUNT(*) FROM channel_label_channel lc
                      JOIN comms_channels c ON c.id = lc.channel_id
-                     WHERE lc.label_id = l.id AND c.channel_type = 'team'
-                         AND (l.team_id IS NULL OR c.team_id = l.team_id))
+                     WHERE lc.label_id = l.id AND ((l.team_id IS NULL AND c.channel_type IN ('team', 'public', 'private'))
+                             OR (l.team_id IS NOT NULL AND c.channel_type = 'team' AND c.team_id = l.team_id)))
                     ELSE cardinality(l.visible_ids)::bigint END as "channel_count!"
             FROM labels l
             ORDER BY l.sort_order, l.created_at, l.id
@@ -144,7 +144,7 @@ impl PgChannelLabelsRepo {
 impl ChannelLabelsRepo for PgChannelLabelsRepo {
     type Err = ChannelLabelsRepoErr;
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(skip_all, err)]
     async fn list_labels(
         &self,
         scope: &ChannelLabelsScope,
@@ -153,7 +153,7 @@ impl ChannelLabelsRepo for PgChannelLabelsRepo {
         self.load_labels(scope, None, viewer).await
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(skip_all, err)]
     async fn get_label(
         &self,
         scope: &ChannelLabelsScope,
@@ -163,7 +163,7 @@ impl ChannelLabelsRepo for PgChannelLabelsRepo {
         Ok(self.load_labels(scope, Some(label_id), viewer).await?.pop())
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(skip_all, err)]
     async fn create_label(
         &self,
         scope: &ChannelLabelsScope,
@@ -177,6 +177,7 @@ impl ChannelLabelsRepo for PgChannelLabelsRepo {
         let user_id = scope.owner_id();
         let name_contains = rule.map(ChannelLabelRule::name_contains);
         let mut tx = self.pool.begin().await?;
+        lock_scope(&mut tx, &scope_key).await?;
         let validity = validate_channels(&mut tx, channel_ids, viewer, Some(scope)).await?;
         if validity != SetChannelLabelOutcome::Updated {
             return Ok(LabelWriteOutcome::InvalidChannel(validity));
@@ -219,7 +220,7 @@ impl ChannelLabelsRepo for PgChannelLabelsRepo {
         }
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(skip_all, err)]
     async fn rename_label(
         &self,
         scope: &ChannelLabelsScope,
@@ -230,6 +231,8 @@ impl ChannelLabelsRepo for PgChannelLabelsRepo {
     ) -> Result<LabelWriteOutcome, Self::Err> {
         let scope_key = scope.key();
         let name_contains = rule.map(ChannelLabelRule::name_contains);
+        let mut tx = self.pool.begin().await?;
+        lock_scope(&mut tx, &scope_key).await?;
         let result = sqlx::query!(
             r#"
             UPDATE channel_label
@@ -241,7 +244,7 @@ impl ChannelLabelsRepo for PgChannelLabelsRepo {
             name,
             name_contains,
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await;
         match result {
             Ok(done) if done.rows_affected() == 0 => return Ok(LabelWriteOutcome::NotFound),
@@ -251,31 +254,149 @@ impl ChannelLabelsRepo for PgChannelLabelsRepo {
             }
             Err(error) => return Err(error.into()),
         }
+        tx.commit().await?;
         match self.get_label(scope, label_id, viewer).await? {
             Some(label) => Ok(LabelWriteOutcome::Written(label)),
             None => Ok(LabelWriteOutcome::NotFound),
         }
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(skip_all, err)]
+    async fn transfer_label(
+        &self,
+        source: &ChannelLabelsScope,
+        target: &ChannelLabelsScope,
+        label_id: Uuid,
+        name: &str,
+        viewer: &MacroUserIdStr<'_>,
+        rule: Option<&ChannelLabelRule>,
+    ) -> Result<LabelWriteOutcome, Self::Err> {
+        let source_key = source.key();
+        let target_key = target.key();
+        let mut tx = self.pool.begin().await?;
+        // Lock both namespaces in a stable order, including concurrent creates
+        // and assignment writes, before inspecting the source's full contents.
+        let mut keys = [&source_key, &target_key];
+        keys.sort();
+        for key in keys {
+            lock_scope(&mut tx, key).await?;
+        }
+        let existing = sqlx::query!(
+            "SELECT name_contains FROM channel_label WHERE scope_key = $1 AND id = $2 FOR UPDATE",
+            source_key,
+            label_id,
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
+        let Some(existing) = existing else {
+            return Ok(LabelWriteOutcome::NotFound);
+        };
+        let channel_ids: Vec<Uuid> = if let Some(pattern) = rule
+            .map(ChannelLabelRule::name_contains)
+            .or(existing.name_contains.as_deref())
+        {
+            // Smart tags have no stored assignments. Inspect all current personal
+            // matches, not a bounded preview or a viewer-relative response.
+            sqlx::query_scalar!(
+                r#"SELECT c.id FROM comms_channels c
+                   JOIN comms_channel_participants p ON p.channel_id = c.id
+                   WHERE p.user_id = $1 AND p.left_at IS NULL
+                     AND (($3::uuid IS NULL AND c.channel_type IN ('team', 'public', 'private'))
+                          OR (c.channel_type = 'team' AND c.team_id = $3))
+                     AND strpos(lower(c.name), lower($2)) > 0
+                   ORDER BY c.id FOR SHARE OF c, p"#,
+                viewer.as_ref(),
+                pattern,
+                source.team_id(),
+            )
+            .fetch_all(&mut *tx)
+            .await?
+        } else {
+            sqlx::query_scalar!(
+                "SELECT channel_id FROM channel_label_channel WHERE scope_key = $1 AND label_id = $2 ORDER BY channel_id FOR UPDATE",
+                source_key,
+                label_id,
+            )
+            .fetch_all(&mut *tx)
+            .await?
+        };
+        let validity = validate_channels(&mut tx, &channel_ids, viewer, Some(target)).await?;
+        if validity != SetChannelLabelOutcome::Updated {
+            return Ok(LabelWriteOutcome::InvalidChannel(validity));
+        }
+        // The composite foreign key is immediate. Remove the old assignment
+        // keys before changing the label's generated scope key, then upsert all
+        // destination assignments in the same transaction.
+        sqlx::query!(
+            "DELETE FROM channel_label_channel WHERE scope_key = $1 AND label_id = $2",
+            source_key,
+            label_id,
+        )
+        .execute(&mut *tx)
+        .await?;
+        let updated = sqlx::query!(
+            r#"UPDATE channel_label
+               SET team_id = $3, user_id = $4, name = $5,
+                   name_contains = COALESCE($6, name_contains),
+                   sort_order = COALESCE((SELECT MAX(sort_order) + 1 FROM channel_label WHERE scope_key = $7), 0),
+                   updated_at = now()
+               WHERE scope_key = $1 AND id = $2"#,
+            source_key,
+            label_id,
+            target.team_id(),
+            target.owner_id(),
+            name,
+            rule.map(ChannelLabelRule::name_contains),
+            target_key,
+        )
+        .execute(&mut *tx)
+        .await;
+        match updated {
+            Ok(_) => {}
+            Err(error) if is_unique_violation(&error) => return Ok(LabelWriteOutcome::NameTaken),
+            Err(error) => return Err(error.into()),
+        }
+        if existing.name_contains.is_none() {
+            sqlx::query!(
+                r#"INSERT INTO channel_label_channel (scope_key, channel_id, label_id)
+                   SELECT $1, channel_id, $2 FROM unnest($3::uuid[]) AS channel_id
+                   ON CONFLICT (scope_key, channel_id) DO UPDATE SET label_id = EXCLUDED.label_id"#,
+                target_key,
+                label_id,
+                &channel_ids,
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+        tx.commit().await?;
+        match self.get_label(target, label_id, viewer).await? {
+            Some(label) => Ok(LabelWriteOutcome::Written(label)),
+            None => Ok(LabelWriteOutcome::NotFound),
+        }
+    }
+
+    #[tracing::instrument(skip_all, err)]
     async fn delete_label(
         &self,
         scope: &ChannelLabelsScope,
         label_id: Uuid,
     ) -> Result<bool, Self::Err> {
         let scope_key = scope.key();
+        let mut tx = self.pool.begin().await?;
+        lock_scope(&mut tx, &scope_key).await?;
         // Assignments cascade; channels and other scopes are unaffected.
         let done = sqlx::query!(
             r#"DELETE FROM channel_label WHERE id = $2 AND scope_key = $1"#,
             scope_key,
             label_id,
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?;
+        tx.commit().await?;
         Ok(done.rows_affected() > 0)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(skip_all, err)]
     async fn set_channel_label(
         &self,
         scope: &ChannelLabelsScope,
@@ -285,6 +406,7 @@ impl ChannelLabelsRepo for PgChannelLabelsRepo {
     ) -> Result<SetChannelLabelOutcome, Self::Err> {
         let scope_key = scope.key();
         let mut tx = self.pool.begin().await?;
+        lock_scope(&mut tx, &scope_key).await?;
         if let Some(label_id) = label_id {
             let label = sqlx::query!(
                 "SELECT id, name_contains FROM channel_label WHERE id = $2 AND scope_key = $1 FOR KEY SHARE",
@@ -329,7 +451,7 @@ impl ChannelLabelsRepo for PgChannelLabelsRepo {
         Ok(SetChannelLabelOutcome::Updated)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(skip_all, err)]
     async fn preview_smart_tag(
         &self,
         scope: &ChannelLabelsScope,
@@ -344,8 +466,8 @@ impl ChannelLabelsRepo for PgChannelLabelsRepo {
                FROM comms_channels c
                JOIN comms_channel_participants p ON p.channel_id = c.id
                WHERE p.user_id = $1 AND p.left_at IS NULL
-                   AND c.channel_type = 'team'
-                   AND ($4::uuid IS NULL OR c.team_id = $4)
+                   AND (($4::uuid IS NULL AND c.channel_type IN ('team', 'public', 'private'))
+                       OR (c.channel_type = 'team' AND c.team_id = $4))
                    AND strpos(lower(c.name), lower($2)) > 0
                ORDER BY lower(c.name), c.id
                LIMIT $3"#,
@@ -378,10 +500,9 @@ async fn validate_channels(
     actor: &MacroUserIdStr<'_>,
     assignment_scope: Option<&ChannelLabelsScope>,
 ) -> Result<SetChannelLabelOutcome, ChannelLabelsRepoErr> {
-    // The valid_team_channel constraint makes team_id present exactly when the
-    // channel type is 'team', so it supplies the domain's eligibility fact.
+    // Lock the channel type and team along with active participation.
     let channels = sqlx::query!(
-        r#"SELECT c.id, c.team_id
+        r#"SELECT c.id, c.team_id, c.channel_type::text as "channel_type!"
            FROM comms_channels c
            JOIN comms_channel_participants p ON p.channel_id = c.id
            WHERE c.id = ANY($1) AND p.user_id = $2 AND p.left_at IS NULL
@@ -394,10 +515,26 @@ async fn validate_channels(
     if channels.len() != channel_ids.len() {
         return Ok(SetChannelLabelOutcome::ChannelNotFound);
     }
-    if assignment_scope
-        .is_some_and(|scope| channels.iter().any(|c| !scope.can_label_channel(c.team_id)))
-    {
+    if assignment_scope.is_some_and(|scope| {
+        channels
+            .iter()
+            .any(|c| !scope.can_label_channel(&c.channel_type, c.team_id))
+    }) {
         return Ok(SetChannelLabelOutcome::ChannelNotLabelable);
     }
     Ok(SetChannelLabelOutcome::Updated)
+}
+
+/// Serialize writes in a namespace before acquiring label and assignment locks.
+async fn lock_scope(
+    tx: &mut Transaction<'_, Postgres>,
+    scope_key: &str,
+) -> Result<(), ChannelLabelsRepoErr> {
+    sqlx::query!(
+        "SELECT pg_advisory_xact_lock(hashtextextended('channel-labels:' || $1, 0))",
+        scope_key,
+    )
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
 }

@@ -1,9 +1,6 @@
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
 import { nativeToolSlug } from '@app/features/onboarding/queries/connected-tools';
-import {
-  assignOauthUrl,
-  reserveOauthPopup,
-} from '@app/features/settings/connections/mcp-oauth';
+import { assignOauthUrl, reserveOauthPopup } from '@core/pipedream/oauth-popup';
 import { Telemetry } from '@macro-inc/observability';
 import {
   useMcpServersQuery,
@@ -46,6 +43,7 @@ function useProductionContext(
           const { authorization_url } = await startMcpAuth.mutateAsync({
             server_url: app.mcpUrl,
             server_name: app.name,
+            parentSpan: span,
           });
           assignOauthUrl(popup, authorization_url);
           span.setAttr('connector.outcome', 'started');

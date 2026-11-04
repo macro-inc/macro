@@ -1,7 +1,8 @@
+import { t } from '@app/lib/i18n';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
 import { ActionDialogShell } from '@ui/components/ActionDialogShell';
-import { Button } from '@ui/components/Button';
+import { Button, type ButtonVariant } from '@ui/components/Button';
 import type { ConfirmDialogProps } from '@ui/components/ConfirmDialog';
 import { createUniqueId, Show } from 'solid-js';
 import { MobileDrawer } from './MobileDrawer';
@@ -12,6 +13,11 @@ export function ConfirmDrawer(props: ConfirmDialogProps) {
   const descriptionId = createUniqueId();
   const close = () => {
     if (!props.pending) props.onOpenChange(false);
+  };
+  const confirmVariant = (): ButtonVariant => {
+    if (props.tone === 'danger') return 'danger';
+    if (props.tone === 'success') return 'success';
+    return 'primary';
   };
   return (
     <MobileDrawer
@@ -45,7 +51,7 @@ export function ConfirmDrawer(props: ConfirmDialogProps) {
                   <Button
                     variant="ghost"
                     size="icon-lg"
-                    aria-label="Close confirmation"
+                    aria-label={t('mobile.closeConfirmation')}
                     class="bg-ink/6"
                     disabled={props.pending}
                     onClick={close}
@@ -69,10 +75,10 @@ export function ConfirmDrawer(props: ConfirmDialogProps) {
                     disabled={props.pending}
                     onClick={close}
                   >
-                    {props.cancelLabel ?? 'Cancel'}
+                    {props.cancelLabel ?? t('mobile.cancel')}
                   </Button>
                   <Button
-                    variant="strong"
+                    variant={confirmVariant()}
                     size="xl"
                     class="min-w-0 flex-1"
                     disabled={props.pending}
@@ -81,7 +87,7 @@ export function ConfirmDrawer(props: ConfirmDialogProps) {
                     <Show when={props.pending}>
                       <SpinnerIcon class="size-4 animate-spin" />
                     </Show>
-                    {props.confirmLabel ?? 'Confirm'}
+                    {props.confirmLabel ?? t('mobile.confirm')}
                   </Button>
                 </ActionDialogShell.Footer>
               </>
@@ -111,21 +117,17 @@ export function ConfirmDrawer(props: ConfirmDialogProps) {
             </MobileDrawer.ScrollBody>
             <div class="shrink-0 px-4 pb-[max(24px,var(--mobile-sheet-safe-padding))]">
               <Button
-                variant="cta"
+                variant={confirmVariant()}
                 size="xl"
                 fullWidth
-                glass={false}
                 class="h-12 rounded-2xl"
-                classList={{
-                  'bg-success text-surface': props.tone === 'success',
-                }}
                 disabled={props.pending}
                 onClick={() => !props.pending && props.onConfirm()}
               >
                 <Show when={props.pending}>
                   <SpinnerIcon class="size-4 animate-spin" />
                 </Show>
-                {props.confirmLabel ?? 'Confirm'}
+                {props.confirmLabel ?? t('mobile.confirm')}
               </Button>
             </div>
           </Show>

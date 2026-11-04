@@ -602,6 +602,12 @@ service_url! {
             dev: "https://document-cognition-dev.macro.com",
             prod: "https://document-cognition.macro.com",
         },
+        /// Macro Connect API base URL: Macro's OAuth broker for MCP connectors.
+        pub ConnectApiUrl {
+            local: "http://localhost:8080",
+            dev: "https://connect-dev.macro.com",
+            prod: "https://connect.macro.com",
+        },
         /// Link unfurl service API URL.
         pub UnfurlServiceUrl {
             local: "http://localhost:8095",

@@ -19,7 +19,6 @@ function DescriptionSession(props: {
         sourceId={props.projectId}
         session={session}
         canEdit={() => props.canEdit}
-        canComment={() => false}
         label="Project description"
         namespace="project-description"
         class="min-h-24 mt-1.5 text-base"
@@ -31,7 +30,7 @@ function DescriptionSession(props: {
         }
       />
       <Show when={session.connectionError()}>
-        <Button size="sm" onClick={props.onRetry}>
+        <Button variant="ghost" size="sm" onClick={props.onRetry}>
           Retry description
         </Button>
       </Show>

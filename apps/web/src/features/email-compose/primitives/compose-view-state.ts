@@ -1,5 +1,6 @@
 import type { LexicalEditor } from 'lexical';
 import type { Accessor, JSX } from 'solid-js';
+import type { EmailCalendarEvents } from '../context/compose-capabilities';
 import type { ComposeBodyActions } from '../context/editor-capabilities';
 import type {
   EmailFormRecipients,
@@ -18,6 +19,7 @@ export interface ComposeContextValue extends ComposeState {
   bodyActions: ComposeBodyActions;
   isMobile: Accessor<boolean>;
   scheduleEnabled: boolean;
+  calendarEvents?: EmailCalendarEvents;
   onUpgrade?: () => void;
   viewerLoading?: Accessor<boolean>;
 }
@@ -62,6 +64,8 @@ export interface ComposeState {
 
   // Status
   disabled: Accessor<boolean>;
+  /** Discard can outlast editing; defaults to `disabled`. */
+  deleteDisabled?: Accessor<boolean>;
   primaryActionDisabled: Accessor<boolean>;
   isSending: Accessor<boolean>;
   isSavingDraft?: Accessor<boolean>;
@@ -85,6 +89,7 @@ export interface ComposeState {
   // From-inbox selection: the inboxes the user can send from, the active one,
   // and a setter to change it.
   fromInboxes?: Accessor<FromInboxOption[]>;
+  inboxesLoading?: Accessor<boolean>;
   selectedInboxId?: Accessor<string | undefined>;
   onSelectInbox?: (inboxId: string, senderEmail?: string) => void;
   hasPaidAccess: Accessor<boolean>;

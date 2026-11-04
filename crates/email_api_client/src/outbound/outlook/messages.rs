@@ -262,6 +262,22 @@ impl MailboxContentReader for OutlookApiClientRepository {
                 message: "Microsoft Graph attachment download was interrupted".into(),
             })
     }
+
+    async fn mime(
+        &self,
+        token: &AccessToken,
+        message_id: &ProviderId,
+    ) -> Result<Vec<u8>, EmailApiError> {
+        let url = self.endpoint(&["me", "messages", message_id.as_str(), "$value"])?;
+        self.request(token, Method::GET, url, None)
+            .await?
+            .bytes()
+            .await
+            .map(|bytes| bytes.to_vec())
+            .map_err(|_| EmailApiError::Transient {
+                message: "Microsoft Graph message download was interrupted".into(),
+            })
+    }
 }
 
 fn reference_url(web_link: Option<&str>) -> String {
@@ -323,6 +339,12 @@ pub(super) fn normalize(
         Some(body) => (Some(body.content), None),
         None => (None, None),
     };
+    let snippet = email_utils::body_replyless::reply_snippet(
+        source.subject.as_deref(),
+        body_html_sanitized.as_deref(),
+        body_text.as_deref(),
+    )
+    .or(source.body_preview);
     let headers =
         serde_json::to_value(source.internet_message_headers).map_err(|_| invalid_response())?;
     let now = Utc::now();
@@ -335,7 +357,7 @@ pub(super) fn normalize(
         global_id: source.internet_message_id,
         link_id,
         subject: source.subject,
-        snippet: source.body_preview,
+        snippet,
         provider_history_id: None,
         internal_date_ts: source.received_date_time.or(source.sent_date_time),
         sent_at: source.sent_date_time,

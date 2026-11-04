@@ -4,9 +4,11 @@ import type {
   AgentTask,
   EventFilter,
   RoutineModelId,
+  RoutineTemplate as RoutineTemplateRecord,
   RoutineTrigger,
   RunVisibility,
   ScheduledActionResponse,
+  TemplateVariable,
 } from '../../../generated/scheduled-action/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
@@ -25,9 +27,15 @@ export type RoutineEventFilter = Omit<EventFilter, 'ids' | 'condition'> & {
   condition?: string;
 };
 
-/** One schedule or set of event selectors. */
+/**
+ * One schedule, one exact time, or one set of event selectors. A `once`
+ * trigger runs a single time at `at` (RFC 3339), within about a second; a time
+ * already past runs as soon as the routine is saved. Use it to check back on
+ * something later instead of waiting inside a program.
+ */
 export type SingleRoutineTrigger =
   | Extract<RoutineTrigger, { type: 'cron' }>
+  | Extract<RoutineTrigger, { type: 'once' }>
   | { type: 'events'; filters: RoutineEventFilter[] };
 
 /** One or multiple routine triggers. */
@@ -38,6 +46,7 @@ export type RoutineTriggerOptions =
 function singleTriggerBody(trigger: SingleRoutineTrigger): RoutineTrigger {
   return match(trigger)
     .with({ type: 'cron' }, (value) => value)
+    .with({ type: 'once' }, (value) => value)
     .with({ type: 'events' }, (value) => ({
       type: 'events' as const,
       filters: value.filters.map(({ entities, ...filter }) => ({
@@ -55,6 +64,7 @@ function triggerBody(trigger: RoutineTriggerOptions): ActionTrigger {
       triggers: value.triggers.map(singleTriggerBody),
     }))
     .with({ type: 'cron' }, singleTriggerBody)
+    .with({ type: 'once' }, singleTriggerBody)
     .with({ type: 'events' }, singleTriggerBody)
     .exhaustive();
 }
@@ -63,15 +73,25 @@ function triggerBody(trigger: RoutineTriggerOptions): ActionTrigger {
 export interface RoutineOptions {
   /** Display name. */
   name: string;
-  /** Schedules or Macro events that start the routine. */
+  /**
+   * Schedules or Macro events that start the routine. A cron `schedule` has 6
+   * or 7 fields: `sec min hour day-of-month month day-of-week [year]`.
+   */
   trigger: RoutineTriggerOptions;
   /** Instructions delivered to the agent. */
   prompt: string;
   /** Original user instructions. */
   userPrompt: string;
-  /** Model override. */
+  /**
+   * Model to run the task, e.g. `anthropic/claude-sonnet-5-5`, or the model
+   * override for `agent`. Set `model`, `agent`, or both.
+   */
   model?: RoutineModelId;
-  /** Agent to run the task. */
+  /**
+   * Agent to run the task: a built-in agent, or one the caller owns or can
+   * use, including one on a self-hosted runtime. Access is checked on save and
+   * again on every run. Set `model`, `agent`, or both.
+   */
   agent?: Agent;
   /** Whether triggers can start executions. Defaults to true on creation. */
   enabled?: boolean;
@@ -84,6 +104,16 @@ export interface RoutineOptions {
 
 /** A scheduled or event-triggered agent task. */
 export class Routine extends MacroEntity<ScheduledActionResponse> {
+  /** The routine's URL in the Macro web app; hand it to users as the link. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/routines/${this.id}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
+  }
+
   /** Construct a lazy routine handle. */
   static byId(client: MacroClient, id: string): Routine {
     return new Routine(client, id);
@@ -125,6 +155,74 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
   readonly owner = this.mappedField('owner', (id) =>
     User.byId(this.client, id),
   );
+
+  /** The shared routine whose template this routine was activated from. */
+  readonly sourceTemplate: () => Promise<Routine | undefined> =
+    this.mappedField('template_id', (id): Routine | undefined =>
+      id ? Routine.byId(this.client, id) : undefined,
+    );
+
+  /** This routine's shared template, or `undefined` when it isn't shared. */
+  async template(): Promise<RoutineTemplate | undefined> {
+    const result = await this.client.scheduledAction.getScheduledActionTemplate(
+      { path: { id: this.id } },
+    );
+    if (result.response?.status === 404) return undefined;
+    return this.toTemplate(unwrap(result));
+  }
+
+  /**
+   * Share this routine as a template, or update its shared snapshot. People
+   * get the template, never the routine, its runs or its results.
+   */
+  async shareAsTemplate(options: {
+    /** What the routine does for someone. */
+    description: string;
+    /** How each user-specific reference fills in when someone activates it. */
+    variables: TemplateVariable[];
+  }): Promise<RoutineTemplate> {
+    return this.toTemplate(
+      unwrap(
+        await this.client.scheduledAction.shareScheduledActionTemplate({
+          path: { id: this.id },
+          body: options,
+        }),
+      ),
+    );
+  }
+
+  /**
+   * Create the caller's own routine from this routine's shared template, with
+   * its references already filled in for them.
+   */
+  async activateTemplate(options: RoutineOptions): Promise<Routine> {
+    return Routine.from(
+      this.client,
+      unwrap(
+        await this.client.scheduledAction.activateScheduledActionTemplate({
+          path: { id: this.id },
+          body: { ...routineBody(options), enabled: options.enabled ?? true },
+        }),
+      ),
+    );
+  }
+
+  private toTemplate(record: RoutineTemplateRecord): RoutineTemplate {
+    return new RoutineTemplate(
+      this,
+      User.byId(this.client, record.author),
+      record,
+    );
+  }
+
+  /** Stop sharing this routine. Routines already activated keep running. */
+  async stopSharingTemplate(): Promise<void> {
+    unwrap(
+      await this.client.scheduledAction.unshareScheduledActionTemplate({
+        path: { id: this.id },
+      }),
+    );
+  }
 
   /** Replace the routine's task and trigger configuration. */
   async update(options: RoutineOptions): Promise<void> {
@@ -179,6 +277,31 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
     await this.mutate((c) =>
       c.scheduledAction.deleteScheduledAction({ path: { id: this.id } }),
     );
+  }
+}
+
+/** A routine shared as a template, which people activate as their own routine. */
+export class RoutineTemplate {
+  constructor(
+    /** The shared routine. */
+    readonly routine: Routine,
+    /** Who shared it. */
+    readonly author: User,
+    /** Template snapshot. */
+    readonly record: RoutineTemplateRecord,
+  ) {}
+
+  /**
+   * Create the caller's own routine from this template, with its references
+   * already filled in for them.
+   */
+  activate(options: RoutineOptions): Promise<Routine> {
+    return this.routine.activateTemplate(options);
+  }
+
+  /** Serialize without the authenticated client. */
+  toJSON() {
+    return this.record;
   }
 }
 

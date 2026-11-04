@@ -8,9 +8,9 @@ import type { EntityReference } from './entityReference';
 import type { SetPropertyValueOneOfOnefiveType } from './setPropertyValueOneOfOnefiveType';
 
 /**
- * Multiple entity references (for multi-select entity properties)
+ * Entity reference
  */
 export type SetPropertyValueOneOfOnefive = {
-  references: EntityReference[];
+  reference: EntityReference;
   type: SetPropertyValueOneOfOnefiveType;
 };

@@ -18,6 +18,12 @@ fn app_dir() -> std::path::PathBuf {
     repo_root().join("apps/web")
 }
 
+fn prepare_dependencies(stage: &Stage) -> Result<()> {
+    let mut prepare = Command::new("bun");
+    prepare.current_dir(app_dir()).args(["run", "dev:prepare"]);
+    stage.run("Preparing frontend dependencies", &mut prepare)
+}
+
 /// Host-facing frontend URL.
 pub fn url(instance: &Instance) -> String {
     format!("http://localhost:{}/app", instance.port(Port::Frontend))
@@ -63,7 +69,12 @@ pub fn static_dir(instance: &Instance) -> std::path::PathBuf {
 /// otherwise compiles DEV from `NODE_ENV=production`, which drops local-only
 /// paths such as passwordless auto-login (`just run_local` uses `vite serve`,
 /// where DEV is already true). Headless `stack up` sets the same origin env.
+///
+/// `VITE_LOCAL_ONLY` makes the bundle count as local, as the dev server does
+/// through `import.meta.hot`, so local-only flags, routes and tools match
+/// `just run_local`.
 pub fn build_static(stage: &Stage, instance: &Instance, mode: Mode) -> Result<()> {
+    prepare_dependencies(stage)?;
     let dist = {
         let mut cmd = Command::new("bun");
         cmd.current_dir(app_dir())
@@ -71,7 +82,8 @@ pub fn build_static(stage: &Stage, instance: &Instance, mode: Mode) -> Result<()
             .env("MODE", "development")
             .env("NODE_ENV", "production")
             .env("VITE_LOCAL_SERVERS", "ALL")
-            .env("VITE_LOCAL_BACKEND_ORIGIN", "same-origin");
+            .env("VITE_LOCAL_BACKEND_ORIGIN", "same-origin")
+            .env("VITE_LOCAL_ONLY", "true");
         if mode.spec().runs_local_infra {
             cmd.env("VITE_AI_EDITING_WORKER_URL", "/ai-editing");
         }
@@ -331,12 +343,7 @@ pub fn start(
              previous run. Free it (`lsof -ti tcp:{port} | xargs kill`) and retry."
         );
     }
-    let mut prepare = Command::new("bash");
-    prepare.current_dir(app_dir()).args([
-        "-lc",
-        "just ensure-cache-wasm && just ensure-agent-fold-wasm",
-    ]);
-    stage.run("Preparing frontend dependencies", &mut prepare)?;
+    prepare_dependencies(stage)?;
 
     // Vite's node-http-proxy WebSocket upgrades hang under Bun (including
     // 1.3.13). Use Node for the dev server, while keeping Bun for dependencies

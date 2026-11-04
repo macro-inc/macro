@@ -210,6 +210,31 @@ export type AgentConversationsDto = {
 };
 
 /**
+ * Which kind of agent a prompt is sent to.
+ */
+export type AgentMode = 'chat' | 'code';
+
+/**
+ * Request body for `POST /agent-mode-choice`.
+ */
+export type AgentModeChoiceRequest = {
+    /**
+     * The prompt the composer is about to send.
+     */
+    prompt: string;
+};
+
+/**
+ * Response body for `POST /agent-mode-choice`.
+ */
+export type AgentModeChoiceResponse = {
+    /**
+     * Which kind of agent should receive the prompt.
+     */
+    mode: AgentMode;
+};
+
+/**
  * One model picker option.
  */
 export type AgentModelDto = {
@@ -514,6 +539,11 @@ export type AgentSessionResponse = {
      */
     acpSessionId?: string | null;
     /**
+     * When the session was archived, or `None` while it is active.
+     */
+    archivedAt?: string | null;
+    archivedBy?: null | ArchiveCause;
+    /**
      * The bot running the agent.
      */
     botId: string;
@@ -541,10 +571,6 @@ export type AgentSessionResponse = {
      * at creation. Absent otherwise, so existing payloads are unchanged.
      */
     instructions?: string | null;
-    /**
-     * Whether the session is archived and read-only.
-     */
-    isArchived: boolean;
     /**
      * Model slug.
      */
@@ -641,6 +667,13 @@ export type AiAdmissionErrorBody = {
 };
 
 /**
+ * Editable fields for ai inference, before submission and identity resolution.
+ */
+export type AiSuggestions = {
+    [key: string]: never;
+};
+
+/**
  * Request body for answering a held tool call.
  */
 export type AnswerToolApprovalRequest = {
@@ -671,7 +704,98 @@ export type AppConnectedRequest = {
     appSlug: string;
 };
 
+/**
+ * Who or what archived a session.
+ */
+export type ArchiveCause = 'user' | 'pull_request_merged' | 'runtime_closed';
+
+/**
+ * One session's choices over its owner's defaults. `null` follows the owner.
+ */
+export type AutoArchiveOverridesBody = {
+    /**
+     * Archive once the session's pull requests merge, or `null` to follow the owner.
+     */
+    onPullRequestMerged?: boolean | null;
+    /**
+     * Archive once the session's runtime session is deliberately closed, or `null` to follow
+     * the owner.
+     */
+    onRuntimeClosed?: boolean | null;
+};
+
+/**
+ * Which triggers archive the caller's sessions when a session has no choice of its own.
+ */
+export type AutoArchivePreferencesBody = {
+    /**
+     * Archive a session once every pull request linked to it is closed and at least one merged.
+     */
+    onPullRequestMerged: boolean;
+    /**
+     * Archive a session once the runtime session backing it is deliberately closed.
+     */
+    onRuntimeClosed: boolean;
+};
+
 export type BotId = string;
+
+/**
+ * Editable fields for calendar inference, before submission and identity resolution.
+ */
+export type CalendarSuggestions = {
+    /**
+     * Suggested Markdown content or outgoing message body.
+     */
+    body?: string | null;
+    /**
+     * Event end as a local wall-clock value in the request's timezone.
+     */
+    end?: string | null;
+    /**
+     * Only populated when an invitation was explicitly requested.
+     */
+    guests?: Array<string>;
+    /**
+     * Human-readable event venue or meeting URL.
+     */
+    location?: string | null;
+    recurrence?: null | RecurrenceSuggestion;
+    /**
+     * Local wall-clock values, interpreted in the request's IANA timezone.
+     */
+    start?: string | null;
+    /**
+     * Verbatim clock phrase whose missing AM/PM required an editable assumption.
+     */
+    start_assumption?: string | null;
+    /**
+     * Suggested note, task, or event title.
+     */
+    title?: string | null;
+};
+
+/**
+ * Call search supports speakers, channels and attendance status.
+ */
+export type CallSearchSuggestions = {
+    /**
+     * Speaker names or supplied addresses.
+     */
+    from: Array<string>;
+    /**
+     * Channel names.
+     */
+    in: Array<string>;
+    /**
+     * Remaining keyword phrase.
+     */
+    query?: string | null;
+    /**
+     * Attendance display value, resolved against supported options by the client.
+     */
+    status?: string | null;
+};
 
 /**
  * Harness names accepted by the capability-discovery endpoint.
@@ -799,6 +923,24 @@ export type ChangesetDto = {
 export type ChangesetSourceDto = 'github_pull_request';
 
 /**
+ * Message filters remain display names until resolved against the user's directory.
+ */
+export type ChannelSearchSuggestions = {
+    /**
+     * Explicit message sender names or addresses.
+     */
+    from: Array<string>;
+    /**
+     * Explicit channel names.
+     */
+    in: Array<string>;
+    /**
+     * Remaining keyword phrase.
+     */
+    query?: string | null;
+};
+
+/**
  * The channel share permission
  */
 export type ChannelSharePermission = {
@@ -810,6 +952,34 @@ export type ChannelSharePermission = {
      * The channel id
      */
     channel_id: string;
+};
+
+/**
+ * A draft snapshot. Revisions are opaque to the server and echoed to the client.
+ */
+export type ClassifyInputRequest = {
+    /**
+     * Opaque client revision used to discard stale predictions.
+     */
+    revision: number;
+    /**
+     * Current draft text to classify without executing it.
+     */
+    text: string;
+};
+
+/**
+ * Ranked-type evidence for a particular client draft revision.
+ */
+export type ClassifyInputResponse = {
+    /**
+     * Revision echoed from the classification request.
+     */
+    revision: number;
+    /**
+     * Independent scores in the fixed intent-question order.
+     */
+    scores: Array<IntentScore>;
 };
 
 /**
@@ -883,9 +1053,10 @@ export type ConversationTurnState = 'queued' | 'running' | 'succeeded' | 'failed
  * say which bot and which directory, and must own that bot. Omitting it asks
  * for a managed session, whose runtime this deployment provisions. A managed
  * request may select an authorized persisted persona with `botId`; omitting
- * it uses the deployment's default coding persona. Fields describing someone
- * else's runtime must still be omitted rather than quietly ignored. Mixing
- * the two shapes is refused rather than guessed at.
+ * it uses the deployment's default coding persona, or Cursor when `repoUrl`
+ * is set. Fields describing someone else's runtime must still be omitted
+ * rather than quietly ignored. Mixing the two shapes is refused rather
+ * than guessed at.
  *
  * Clients serialize this, so both derives are used.
  */
@@ -894,9 +1065,9 @@ export type CreateAgentSessionRequest = {
      * Bot the session runs for. On a managed request this optionally selects
      * a persisted persona the user owns, may use through team membership, or
      * can `@` mention in a shared channel; omitting it uses the deployment's
-     * default coding persona. On an external request, bot callers may omit it
-     * (their own identity is used) and must not name another bot; user callers
-     * must supply a bot they own.
+     * default coding persona, or Cursor when `repoUrl` is set. On an
+     * external request, bot callers may omit it (their own identity is used)
+     * and must not name another bot; user callers must supply a bot they own.
      */
     botId?: string | null;
     /**
@@ -943,6 +1114,12 @@ export type CreateAgentSessionRequest = {
      * control endpoint. Omitted, the session opens idle.
      */
     prompt?: string | null;
+    promptActionId?: null | AgentActionId;
+    /**
+     * Files `prompt` refers to, in the order the user attached them.
+     * Requires `prompt`.
+     */
+    promptAttachments?: Array<PromptAttachment>;
     /**
      * Starting branch for a managed coding session's selected repository.
      * Omitted, the session starts on the repository's default branch.
@@ -951,7 +1128,9 @@ export type CreateAgentSessionRequest = {
     /**
      * Explicit GitHub repository for a managed Cursor session, as one of the
      * urls `GET /agent-repositories` lists for the caller. Access is checked
-     * for the session owner. For external sessions this is informational:
+     * for the session owner. On a managed request that names no `botId`,
+     * this starts the session as Cursor — the only managed persona that
+     * honors a repository. For external sessions this is informational:
      * cloning it is the runtime operator's job.
      */
     repoUrl?: string | null;
@@ -977,26 +1156,13 @@ export type CreateAgentSessionResponse = {
 };
 
 /**
- * Review creation. Drafts are validated by the action's owning adapter.
+ * Review creation. Decoding it validates every draft; creating a review only
+ * presents the drafts, and the account holder acts separately.
  */
 export type CreateReview = {
-    /**
-     * One to one hundred independent drafts. Email: {subject, body: Markdown,
-     * to: [{email, name?}], cc?: [{email, name?}], bcc?: [{email, name?}],
-     * replyingToId?, attachments?: [{documentId}]}. Calendar: {title,
-     * time: {kind: "timed", startsAt: ISO datetime, endsAt: ISO datetime,
-     * timeZone?: IANA zone} or {kind: "allDay", startDate: ISO date,
-     * endDate: exclusive ISO date}, description?, location?, attendees?:
-     * [{email, isOptional?}]}. Import: exactly one draft {source: "notion" | "linear" | "jira"},
-     * presenting the plan ImportFromNotion, ImportFromLinear or ImportFromJira staged.
-     * Creating any review only presents these drafts; the user acts separately.
-     */
-    drafts: Array<unknown>;
+    [key: string]: unknown;
+} & {
     executionId?: null | ExecutionId;
-    /**
-     * Existing UI and action to use.
-     */
-    kind: ReviewKind;
     /**
      * Stack label.
      */
@@ -1125,6 +1291,50 @@ export type ElicitationContentValue = string | boolean | number | number | Array
 export type ElicitationRequestId = number | string;
 
 /**
+ * Email search exposes importance and connected inbox addresses, not sender filters.
+ */
+export type EmailSearchSuggestions = {
+    /**
+     * Explicit importance wording, resolved by the client.
+     */
+    importance?: string | null;
+    /**
+     * Explicit connected inbox addresses, resolved by the client.
+     */
+    inboxes: Array<string>;
+    /**
+     * Remaining keyword phrase.
+     */
+    query?: string | null;
+};
+
+/**
+ * Editable fields for email inference, before submission and identity resolution.
+ */
+export type EmailSuggestions = {
+    /**
+     * Explicit blind-carbon-copy recipient names or supplied email addresses.
+     */
+    bcc?: Array<string>;
+    /**
+     * Suggested Markdown content or outgoing message body.
+     */
+    body?: string | null;
+    /**
+     * Explicit carbon-copy recipient names or supplied email addresses.
+     */
+    cc?: Array<string>;
+    /**
+     * Person or channel names for the client to resolve.
+     */
+    recipients?: Array<string>;
+    /**
+     * Suggested outgoing email subject.
+     */
+    subject?: string | null;
+};
+
+/**
  * A bounded SDK operation observed during execution; not an authorization or write receipt.
  */
 export type ExecutionActivity = {
@@ -1215,6 +1425,47 @@ export type ExternalSessionResponse = {
 };
 
 /**
+ * Draft snapshot and local context used to suggest editable destination fields.
+ */
+export type ExtractInputRequest = {
+    /**
+     * Destination whose fields should be extracted.
+     */
+    intent: InputIntent;
+    /**
+     * Available task fields and display values, never authorized entity IDs.
+     */
+    property_definitions?: Array<InputPropertyDefinition>;
+    /**
+     * Reference instant for interpreting relative dates.
+     */
+    reference_time: string;
+    /**
+     * Opaque client revision used to discard stale suggestions.
+     */
+    revision: number;
+    search_type?: null | SearchType;
+    /**
+     * Original draft text; inference must not execute its instructions.
+     */
+    text: string;
+    /**
+     * IANA timezone for interpreting local dates and clock times.
+     */
+    time_zone: string;
+};
+
+/**
+ * Validated suggestions for a particular client draft revision.
+ */
+export type ExtractInputResponse = InputSuggestions & {
+    /**
+     * Revision echoed from the extraction request.
+     */
+    revision: number;
+};
+
+/**
  * What happened to a file, on the wire.
  */
 export type FileChangeKindDto = 'added' | 'modified' | 'deleted' | 'renamed';
@@ -1231,6 +1482,100 @@ export type GitRefDto = {
      * The commit, when known.
      */
     sha?: string | null;
+};
+
+/**
+ * A destination the composer can prepare, but never execute through inference.
+ */
+export type InputIntent = 'ai' | 'search' | 'email' | 'note' | 'task' | 'calendar' | 'message';
+
+/**
+ * A task property and the display values available for extraction.
+ */
+export type InputPropertyDefinition = {
+    /**
+     * Property display name from the client's catalog.
+     */
+    name: string;
+    /**
+     * Allowed display values; an empty list permits free-text suggestions.
+     */
+    options?: Array<string>;
+};
+
+/**
+ * Suggested display values to resolve against a real task-property catalog.
+ */
+export type InputPropertySuggestion = {
+    /**
+     * Property display name, never an authorized identifier.
+     */
+    name: string;
+    /**
+     * Suggested display values, never authorized entity identifiers.
+     */
+    values: Array<string>;
+};
+
+/**
+ * A single inferred destination together with only its applicable fields.
+ */
+export type InputSuggestions = {
+    intent: 'ai';
+    /**
+     * Editable ai fields.
+     */
+    suggestions: AiSuggestions;
+} | {
+    intent: 'search';
+    /**
+     * Editable search fields.
+     */
+    suggestions: SearchSuggestions;
+} | {
+    intent: 'email';
+    /**
+     * Editable email fields.
+     */
+    suggestions: EmailSuggestions;
+} | {
+    intent: 'note';
+    /**
+     * Editable note fields.
+     */
+    suggestions: NoteSuggestions;
+} | {
+    intent: 'task';
+    /**
+     * Editable task fields.
+     */
+    suggestions: TaskSuggestions;
+} | {
+    intent: 'calendar';
+    /**
+     * Editable calendar fields.
+     */
+    suggestions: CalendarSuggestions;
+} | {
+    intent: 'message';
+    /**
+     * Editable message fields.
+     */
+    suggestions: MessageSuggestions;
+};
+
+/**
+ * Independent yes/no probabilities; these do not sum to one.
+ */
+export type IntentScore = {
+    /**
+     * Destination evaluated by the classifier.
+     */
+    intent: InputIntent;
+    /**
+     * Independent probability between zero and one.
+     */
+    score: number;
 };
 
 /**
@@ -1340,9 +1685,51 @@ export type MessageParent = {
 };
 
 /**
+ * Editable fields for message inference, before submission and identity resolution.
+ */
+export type MessageSuggestions = {
+    /**
+     * Suggested Markdown content or outgoing message body.
+     */
+    body?: string | null;
+    /**
+     * Person or channel names for the client to resolve.
+     */
+    recipients?: Array<string>;
+};
+
+/**
  * Harness names accepted by the model discovery endpoint.
  */
 export type ModelHarnessDto = 'in-memory' | 'cursor' | 'macrod';
+
+/**
+ * Monthly ordinal weekday, such as the first Friday.
+ */
+export type MonthlyWeekday = {
+    /**
+     * One through five, or minus one for last.
+     */
+    ordinal: number;
+    /**
+     * Weekday selected by the ordinal.
+     */
+    weekday: WeekdayCode;
+};
+
+/**
+ * Editable fields for note inference, before submission and identity resolution.
+ */
+export type NoteSuggestions = {
+    /**
+     * Suggested Markdown content or outgoing message body.
+     */
+    body?: string | null;
+    /**
+     * Suggested note, task, or event title.
+     */
+    title?: string | null;
+};
 
 /**
  * The decision carried by an [`AgentPermissionAction`].
@@ -1355,6 +1742,20 @@ export type PermissionAnswer = {
     optionId: string;
 } | {
     kind: 'cancelled';
+};
+
+/**
+ * A view to present.
+ */
+export type PresentView = {
+    executionId?: null | ExecutionId;
+    /**
+     * A dynamic-UI view, in the format of the PresentView schema in
+     * ExecuteCode's description.
+     */
+    view: {
+        [key: string]: unknown;
+    };
 };
 
 /**
@@ -1497,6 +1898,16 @@ export type PullRequestsSessionsResponse = {
 };
 
 /**
+ * A topic for search types without additional supported facets.
+ */
+export type QuerySearchSuggestions = {
+    /**
+     * Remaining keyword phrase after supported filters and instructions.
+     */
+    query?: string | null;
+};
+
+/**
  * One action waiting in a session's queue.
  *
  * Clients deserialize this, so both derives are used.
@@ -1571,6 +1982,53 @@ export type RecordedToolCall = {
 };
 
 /**
+ * Resolved recurrence ending condition accepted by the shared calendar editor.
+ */
+export type RecurrenceEnd = {
+    kind: 'never';
+} | {
+    /**
+     * Positive occurrence count.
+     */
+    count: number;
+    kind: 'after';
+} | {
+    /**
+     * Date resolved against the request's clock and timezone.
+     */
+    date: string;
+    kind: 'on';
+};
+
+/**
+ * Repetition units supported by the shared calendar editor.
+ */
+export type RecurrenceFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+
+/**
+ * Resolved, editable repetition values; the existing calendar serializer builds RRULEs.
+ */
+export type RecurrenceSuggestion = {
+    /**
+     * Weekly weekday selectors.
+     */
+    by_day: Array<WeekdayCode>;
+    /**
+     * Resolved ending condition.
+     */
+    ends: RecurrenceEnd;
+    /**
+     * Repetition unit.
+     */
+    frequency: RecurrenceFrequency;
+    /**
+     * Positive interval.
+     */
+    interval: number;
+    monthly_by_day?: null | MonthlyWeekday;
+};
+
+/**
  * Request body for renaming an agent session.
  */
 export type RenameAgentSessionRequest = {
@@ -1596,9 +2054,11 @@ export type RetryAgentConversationTurnRequest = {
 export type ReviewDecision = {
     action: 'edit';
     /**
-     * Replacement action arguments.
+     * Replacement action arguments, keyed by the review's kind.
      */
-    draft: unknown;
+    draft: {
+        [key: string]: unknown;
+    };
     /**
      * Pending item to update.
      */
@@ -1657,67 +2117,21 @@ export type ReviewDecisionContext = {
 export type ReviewId = string;
 
 /**
- * One editable item and its durable outcome.
- */
-export type ReviewItem = {
-    /**
-     * Validated arguments for the existing composer/action.
-     */
-    draft: unknown;
-    /**
-     * Whether the account holder edited this draft before deciding.
-     */
-    edited?: boolean;
-    /**
-     * Failure or uncertainty description.
-     */
-    error?: string | null;
-    /**
-     * Stable item identity across stack navigation and edits.
-     */
-    id: string;
-    /**
-     * Actual backend response, never a model assertion.
-     */
-    result?: unknown;
-    /**
-     * Current outcome.
-     */
-    status: ReviewItemStatus;
-};
-
-/**
- * Review item state, shared with notification consumers.
- */
-export type ReviewItemStatus = 'pending' | 'submitting' | 'completed' | 'dismissed' | 'unknown';
-
-/**
- * The component and action used to finish a review.
- */
-export type ReviewKind = 'email' | 'calendar' | 'import';
-
-/**
  * Full UI record, fetched outside the model context.
  */
 export type ReviewRecord = {
+    [key: string]: unknown;
+} & {
     /**
-     * Account whose email/calendar the drafts use; historical records use the session owner.
+     * Account whose email/calendar the drafts use.
      */
-    actingUser?: string | null;
+    actingUser: string;
     decision?: null | ReviewDecisionContext;
     executionId?: null | ExecutionId;
     /**
      * Review identity.
      */
     id: ReviewId;
-    /**
-     * Drafts and per-item outcomes.
-     */
-    items: Array<ReviewItem>;
-    /**
-     * Component kind.
-     */
-    kind: ReviewKind;
     /**
      * Durable presentation acknowledgment, separate from user decisions.
      */
@@ -1756,6 +2170,53 @@ export type SandboxSizeBody = {
      * Named compute tier.
      */
     size: SandboxSize;
+};
+
+/**
+ * Only the selected type's fields can appear in a search suggestion.
+ */
+export type SearchSuggestions = (QuerySearchSuggestions & {
+    type: 'all';
+}) | (ChannelSearchSuggestions & {
+    type: 'channels';
+}) | (QuerySearchSuggestions & {
+    type: 'document-or-file';
+}) | (TaskSearchSuggestions & {
+    type: 'task';
+}) | (EmailSearchSuggestions & {
+    type: 'email';
+}) | (CallSearchSuggestions & {
+    type: 'calls';
+}) | (QuerySearchSuggestions & {
+    type: 'folders';
+}) | (QuerySearchSuggestions & {
+    type: 'agent';
+}) | (QuerySearchSuggestions & {
+    type: 'calendar';
+});
+
+/**
+ * Search indexes supported by the shared search editor.
+ */
+export type SearchType = 'all' | 'channels' | 'document-or-file' | 'task' | 'email' | 'calls' | 'folders' | 'agent' | 'calendar';
+
+/**
+ * A session's auto-archive settings and history.
+ */
+export type SessionAutoArchiveResponse = {
+    /**
+     * When a trigger first archived the session. Kept when a person restores it: a session
+     * archives itself at most once.
+     */
+    autoArchivedAt?: string | null;
+    /**
+     * The owner's defaults, which apply where the session has no choice of its own.
+     */
+    defaults: AutoArchivePreferencesBody;
+    /**
+     * The session's own choices.
+     */
+    overrides: AutoArchiveOverridesBody;
 };
 
 /**
@@ -1837,9 +2298,9 @@ export type SessionStatusDto = {
  */
 export type SetAgentSessionArchivedRequest = {
     /**
-     * The requested archive state.
+     * Archive the session, or restore it.
      */
-    isArchived: boolean;
+    archived: boolean;
 };
 
 export type SharePermissionV2 = {
@@ -1868,6 +2329,54 @@ export type StartFreshAgentConversationRequest = {
      * Current session id shown in the conversation metadata.
      */
     sessionId: string;
+};
+
+/**
+ * Task facets match the shared search editor; assignee and creator are distinct.
+ */
+export type TaskSearchSuggestions = {
+    /**
+     * Assigned people's names or supplied addresses.
+     */
+    assignees: Array<string>;
+    /**
+     * Task creators' names or supplied addresses.
+     */
+    created_by: Array<string>;
+    /**
+     * Priority display values for client-side option resolution.
+     */
+    priority: Array<string>;
+    /**
+     * Remaining keyword phrase.
+     */
+    query?: string | null;
+    /**
+     * Status display values for client-side option resolution.
+     */
+    status: Array<string>;
+};
+
+/**
+ * Editable fields for task inference, before submission and identity resolution.
+ */
+export type TaskSuggestions = {
+    /**
+     * Suggested Markdown content or outgoing message body.
+     */
+    body?: string | null;
+    /**
+     * Task deadline as a local ISO date.
+     */
+    due_date?: string | null;
+    /**
+     * Display names/values that the client resolves against available task fields.
+     */
+    properties?: Array<InputPropertySuggestion>;
+    /**
+     * Suggested note, task, or event title.
+     */
+    title?: string | null;
 };
 
 /**
@@ -1928,6 +2437,11 @@ export type WarmAgentSessionResponse = {
 };
 
 /**
+ * RFC weekday values used by the existing recurrence UI.
+ */
+export type WeekdayCode = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU';
+
+/**
  * Just a session id, for the preview variants that carry nothing else.
  *
  * Clients deserialize this, so both derives are used.
@@ -1938,6 +2452,46 @@ export type WithAgentSessionId = {
      */
     id: string;
 };
+
+export type GetAgentAutoArchivePreferencesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/agent-auto-archive-preferences';
+};
+
+export type GetAgentAutoArchivePreferencesErrors = {
+    401: string;
+    500: string;
+};
+
+export type GetAgentAutoArchivePreferencesError = GetAgentAutoArchivePreferencesErrors[keyof GetAgentAutoArchivePreferencesErrors];
+
+export type GetAgentAutoArchivePreferencesResponses = {
+    200: AutoArchivePreferencesBody;
+};
+
+export type GetAgentAutoArchivePreferencesResponse = GetAgentAutoArchivePreferencesResponses[keyof GetAgentAutoArchivePreferencesResponses];
+
+export type PutAgentAutoArchivePreferencesData = {
+    body: AutoArchivePreferencesBody;
+    path?: never;
+    query?: never;
+    url: '/agent-auto-archive-preferences';
+};
+
+export type PutAgentAutoArchivePreferencesErrors = {
+    401: string;
+    500: string;
+};
+
+export type PutAgentAutoArchivePreferencesError = PutAgentAutoArchivePreferencesErrors[keyof PutAgentAutoArchivePreferencesErrors];
+
+export type PutAgentAutoArchivePreferencesResponses = {
+    200: AutoArchivePreferencesBody;
+};
+
+export type PutAgentAutoArchivePreferencesResponse = PutAgentAutoArchivePreferencesResponses[keyof PutAgentAutoArchivePreferencesResponses];
 
 export type DiscoverAgentCapabilitiesHandlerData = {
     body: DiscoverAgentCapabilitiesRequest;
@@ -2124,6 +2678,45 @@ export type RetryAgentConversationTurnResponses = {
 };
 
 export type RetryAgentConversationTurnResponse = RetryAgentConversationTurnResponses[keyof RetryAgentConversationTurnResponses];
+
+export type ChooseAgentModeData = {
+    body: AgentModeChoiceRequest;
+    path?: never;
+    query?: never;
+    url: '/agent-mode-choice';
+};
+
+export type ChooseAgentModeErrors = {
+    /**
+     * The prompt is blank
+     */
+    400: unknown;
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+    /**
+     * The caller cannot start new AI work
+     */
+    402: unknown;
+    /**
+     * Auto mode is not enabled for the caller
+     */
+    403: unknown;
+    /**
+     * The classifier is unconfigured, failed, or timed out
+     */
+    503: unknown;
+};
+
+export type ChooseAgentModeResponses = {
+    /**
+     * The kind of agent the prompt goes to
+     */
+    200: AgentModeChoiceResponse;
+};
+
+export type ChooseAgentModeResponse = ChooseAgentModeResponses[keyof ChooseAgentModeResponses];
 
 export type LoadAgentModelsHandlerData = {
     body: LoadAgentModelsRequest;
@@ -2509,6 +3102,58 @@ export type SetAgentSessionArchivedResponses = {
 };
 
 export type SetAgentSessionArchivedResponse = SetAgentSessionArchivedResponses[keyof SetAgentSessionArchivedResponses];
+
+export type GetAgentSessionAutoArchiveData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/auto-archive';
+};
+
+export type GetAgentSessionAutoArchiveErrors = {
+    401: string;
+    403: string;
+    500: string;
+};
+
+export type GetAgentSessionAutoArchiveError = GetAgentSessionAutoArchiveErrors[keyof GetAgentSessionAutoArchiveErrors];
+
+export type GetAgentSessionAutoArchiveResponses = {
+    200: SessionAutoArchiveResponse;
+};
+
+export type GetAgentSessionAutoArchiveResponse = GetAgentSessionAutoArchiveResponses[keyof GetAgentSessionAutoArchiveResponses];
+
+export type PutAgentSessionAutoArchiveData = {
+    body: AutoArchiveOverridesBody;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/auto-archive';
+};
+
+export type PutAgentSessionAutoArchiveErrors = {
+    401: string;
+    403: string;
+    500: string;
+};
+
+export type PutAgentSessionAutoArchiveError = PutAgentSessionAutoArchiveErrors[keyof PutAgentSessionAutoArchiveErrors];
+
+export type PutAgentSessionAutoArchiveResponses = {
+    200: AutoArchiveOverridesBody;
+};
+
+export type PutAgentSessionAutoArchiveResponse = PutAgentSessionAutoArchiveResponses[keyof PutAgentSessionAutoArchiveResponses];
 
 export type GetAgentSessionChangesData = {
     body?: never;
@@ -3157,3 +3802,87 @@ export type AnswerAgentSessionToolApprovalResponses = {
 };
 
 export type AnswerAgentSessionToolApprovalResponse = AnswerAgentSessionToolApprovalResponses[keyof AnswerAgentSessionToolApprovalResponses];
+
+export type PresentSessionViewData = {
+    body: PresentView;
+    path: {
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/views';
+};
+
+export type PresentSessionViewErrors = {
+    400: unknown;
+    403: unknown;
+};
+
+export type PresentSessionViewResponses = {
+    204: void;
+};
+
+export type PresentSessionViewResponse = PresentSessionViewResponses[keyof PresentSessionViewResponses];
+
+export type ClassifyData = {
+    body: ClassifyInputRequest;
+    path?: never;
+    query?: never;
+    url: '/universal_input/classify';
+};
+
+export type ClassifyErrors = {
+    /**
+     * Invalid input
+     */
+    400: unknown;
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+    /**
+     * AI allowance exhausted
+     */
+    402: unknown;
+    /**
+     * Detection unavailable
+     */
+    503: unknown;
+};
+
+export type ClassifyResponses = {
+    200: ClassifyInputResponse;
+};
+
+export type ClassifyResponse = ClassifyResponses[keyof ClassifyResponses];
+
+export type ExtractData = {
+    body: ExtractInputRequest;
+    path?: never;
+    query?: never;
+    url: '/universal_input/extract';
+};
+
+export type ExtractErrors = {
+    /**
+     * Invalid input
+     */
+    400: unknown;
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+    /**
+     * AI allowance exhausted
+     */
+    402: unknown;
+    /**
+     * Extraction unavailable
+     */
+    503: unknown;
+};
+
+export type ExtractResponses = {
+    200: ExtractInputResponse;
+};
+
+export type ExtractResponse = ExtractResponses[keyof ExtractResponses];

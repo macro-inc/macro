@@ -7,6 +7,7 @@ import PlusIcon from '@icon/system/regular/plus.svg';
 import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
 import SortIcon from '@icon/system/regular/sort-ascending.svg';
 import BoardIcon from '@icon/system/regular/squares-four.svg';
+import { ButtonGroup } from '@ui';
 import { createSignal, For } from 'solid-js';
 import { Button } from '../components/Button';
 import { Tabs } from '../components/Tabs';
@@ -32,37 +33,52 @@ function HeaderDemo() {
       />
       <div class="ml-auto flex shrink-0 items-center gap-2">
         <HeaderActionGroup label="Task filters">
-          <Button size="icon-md" label="Filter tasks">
-            <FilterIcon />
-          </Button>
-          <Button size="icon-md" label="Sort tasks">
-            <SortIcon />
-          </Button>
+          <ButtonGroup.Button
+            aria-label="Filter tasks"
+            tooltip="Filter tasks"
+            size="icon-sm"
+          >
+            <FilterIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+          </ButtonGroup.Button>
+          <ButtonGroup.Button
+            aria-label="Sort tasks"
+            tooltip="Sort tasks"
+            size="icon-sm"
+          >
+            <SortIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+          </ButtonGroup.Button>
         </HeaderActionGroup>
         <HeaderActionGroup label="Task layout">
-          <Button
-            size="icon-md"
-            label="List"
+          <ButtonGroup.Button
+            aria-label="List"
+            tooltip="List"
+            size="icon-sm"
             aria-pressed={layout() === 'list'}
             onClick={() => setLayout('list')}
           >
-            <ListIcon />
-          </Button>
-          <Button
-            size="icon-md"
-            label="Board"
+            <ListIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+          </ButtonGroup.Button>
+          <ButtonGroup.Button
+            aria-label="Board"
+            tooltip="Board"
+            size="icon-sm"
             aria-pressed={layout() === 'board'}
             onClick={() => setLayout('board')}
           >
-            <BoardIcon />
-          </Button>
+            <BoardIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+          </ButtonGroup.Button>
         </HeaderActionGroup>
-        <Button variant="outline" size="md">
-          <PlusIcon />
+        <Button variant="secondary" size="md">
+          <PlusIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           New
         </Button>
-        <Button variant="outline" size="icon-md" label="Search tasks">
-          <SearchIcon />
+        <Button
+          aria-label="Search tasks"
+          tooltip="Search tasks"
+          variant="secondary"
+          size="icon-md"
+        >
+          <SearchIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
     </div>
@@ -86,13 +102,14 @@ function SelectedDemo() {
         onChange={setValue}
       />
       <Button
-        variant="outline"
+        aria-label={open() ? 'Hide details' : 'Show details'}
+        tooltip={open() ? 'Hide details' : 'Show details'}
+        variant="secondary"
         size="icon-md"
-        label={open() ? 'Hide details' : 'Show details'}
         aria-pressed={open()}
         onClick={() => setOpen(!open())}
       >
-        <SidebarIcon />
+        <SidebarIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
       </Button>
     </div>
   );
@@ -117,16 +134,17 @@ function SizesDemo() {
               value="team"
               onChange={() => {}}
             />
-            <Button variant="outline" size={size}>
-              <PlusIcon />
+            <Button variant="secondary" size={size}>
+              <PlusIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
               New
             </Button>
             <Button
-              variant="outline"
+              aria-label="Search"
+              tooltip="Search"
+              variant="secondary"
               size={size === 'sm' ? 'icon-sm' : 'icon-md'}
-              label="Search"
             >
-              <SearchIcon />
+              <SearchIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </div>
         )}

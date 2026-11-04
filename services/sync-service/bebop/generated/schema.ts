@@ -17,7 +17,7 @@
 import { BebopView, BebopRuntimeError, BebopRecord, BebopJson, BebopTypeGuard, Guid, GuidMap } from "bebop";
 
 export const BEBOP_SCHEMA = new Uint8Array ([
-3, 16, 0, 0, 0, 80, 101, 101, 114, 85, 112, 100, 97, 116,
+3, 26, 0, 0, 0, 80, 101, 101, 114, 85, 112, 100, 97, 116,
 101, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 117, 112, 100, 97, 116,
 101, 115, 0, 242, 255, 255, 255, 1, 254, 255, 255, 255, 0,
 105, 100, 0, 245, 255, 255, 255, 0, 80, 101, 101, 114, 65,
@@ -31,45 +31,78 @@ export const BEBOP_SCHEMA = new Uint8Array ([
 115, 104, 111, 116, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 80, 101,
 101, 114, 82, 101, 103, 105, 115, 116, 101, 114, 73, 100,
 0, 1, 0, 0, 8, 0, 0, 0, 1, 1, 112, 101, 101, 114, 105,
-100, 0, 249, 255, 255, 255, 0, 70, 114, 111, 109, 80, 101,
-101, 114, 0, 3, 0, 5, 0, 0, 0, 5, 1, 0, 0, 0, 0, 2, 1, 0,
-0, 0, 3, 2, 0, 0, 0, 4, 3, 0, 0, 0, 5, 4, 0, 0, 0, 82,
-101, 109, 111, 116, 101, 73, 110, 105, 116, 105, 97, 108,
-83, 121, 110, 99, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 115, 110,
-97, 112, 115, 104, 111, 116, 0, 242, 255, 255, 255, 0,
-254, 255, 255, 255, 0, 97, 119, 97, 114, 101, 110, 101,
-115, 115, 0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0,
-82, 101, 109, 111, 116, 101, 85, 112, 100, 97, 116, 101,
-0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 117, 112, 100, 97, 116, 101,
-0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 82, 101,
-109, 111, 116, 101, 65, 119, 97, 114, 101, 110, 101, 115,
-115, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 97, 119, 97, 114, 101,
-110, 101, 115, 115, 0, 242, 255, 255, 255, 0, 254, 255,
-255, 255, 0, 82, 101, 109, 111, 116, 101, 83, 110, 97,
-112, 115, 104, 111, 116, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1,
+100, 0, 249, 255, 255, 255, 0, 80, 101, 101, 114, 67, 111,
+109, 109, 101, 110, 116, 85, 112, 100, 97, 116, 101, 0, 1,
+0, 0, 8, 0, 0, 0, 0, 2, 117, 112, 100, 97, 116, 101, 115,
+0, 242, 255, 255, 255, 1, 254, 255, 255, 255, 0, 105, 100,
+0, 245, 255, 255, 255, 0, 70, 114, 111, 109, 80, 101, 101,
+114, 0, 3, 0, 5, 0, 0, 0, 6, 1, 0, 0, 0, 0, 2, 1, 0, 0, 0,
+3, 2, 0, 0, 0, 4, 3, 0, 0, 0, 5, 4, 0, 0, 0, 6, 5, 0, 0,
+0, 82, 101, 109, 111, 116, 101, 73, 110, 105, 116, 105,
+97, 108, 83, 121, 110, 99, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2,
 115, 110, 97, 112, 115, 104, 111, 116, 0, 242, 255, 255,
-255, 0, 254, 255, 255, 255, 0, 82, 101, 109, 111, 116,
-101, 85, 112, 100, 97, 116, 101, 65, 99, 107, 0, 1, 0, 0,
-4, 0, 0, 0, 0, 1, 105, 100, 0, 245, 255, 255, 255, 0, 82,
-101, 109, 111, 116, 101, 85, 112, 100, 97, 116, 101, 83,
-105, 110, 99, 101, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 117, 112,
-100, 97, 116, 101, 0, 242, 255, 255, 255, 0, 254, 255,
-255, 255, 0, 118, 118, 0, 242, 255, 255, 255, 0, 254, 255,
-255, 255, 0, 70, 114, 111, 109, 82, 101, 109, 111, 116,
-101, 0, 3, 0, 9, 0, 0, 0, 6, 1, 6, 0, 0, 0, 2, 7, 0, 0, 0,
-3, 8, 0, 0, 0, 4, 9, 0, 0, 0, 5, 10, 0, 0, 0, 6, 11, 0, 0,
-0, 79, 112, 101, 114, 97, 116, 105, 111, 110, 0, 1, 0, 0,
-12, 0, 0, 0, 0, 2, 117, 112, 100, 97, 116, 101, 0, 242,
-255, 255, 255, 0, 254, 255, 255, 255, 0, 116, 105, 109,
-101, 115, 116, 97, 109, 112, 0, 243, 255, 255, 255, 0, 79,
-112, 101, 114, 97, 116, 105, 111, 110, 76, 111, 103, 0, 1,
-0, 0, 4, 0, 0, 0, 0, 1, 111, 112, 101, 114, 97, 116, 105,
-111, 110, 115, 0, 242, 255, 255, 255, 0, 13, 0, 0, 0, 0,
-73, 110, 105, 116, 105, 97, 108, 105, 122, 101, 70, 114,
-111, 109, 83, 110, 97, 112, 115, 104, 111, 116, 82, 101,
-113, 117, 101, 115, 116, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1,
-115, 110, 97, 112, 115, 104, 111, 116, 0, 242, 255, 255,
-255, 0, 254, 255, 255, 255, 0, 0, 0, 0, 0
+255, 0, 254, 255, 255, 255, 0, 97, 119, 97, 114, 101, 110,
+101, 115, 115, 0, 242, 255, 255, 255, 0, 254, 255, 255,
+255, 0, 82, 101, 109, 111, 116, 101, 85, 112, 100, 97,
+116, 101, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 117, 112, 100, 97,
+116, 101, 0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0,
+82, 101, 109, 111, 116, 101, 65, 119, 97, 114, 101, 110,
+101, 115, 115, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 97, 119, 97,
+114, 101, 110, 101, 115, 115, 0, 242, 255, 255, 255, 0,
+254, 255, 255, 255, 0, 82, 101, 109, 111, 116, 101, 83,
+110, 97, 112, 115, 104, 111, 116, 0, 1, 0, 0, 4, 0, 0, 0,
+0, 1, 115, 110, 97, 112, 115, 104, 111, 116, 0, 242, 255,
+255, 255, 0, 254, 255, 255, 255, 0, 82, 101, 109, 111,
+116, 101, 85, 112, 100, 97, 116, 101, 65, 99, 107, 0, 1,
+0, 0, 4, 0, 0, 0, 0, 1, 105, 100, 0, 245, 255, 255, 255,
+0, 82, 101, 109, 111, 116, 101, 85, 112, 100, 97, 116,
+101, 83, 105, 110, 99, 101, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2,
+117, 112, 100, 97, 116, 101, 0, 242, 255, 255, 255, 0,
+254, 255, 255, 255, 0, 118, 118, 0, 242, 255, 255, 255, 0,
+254, 255, 255, 255, 0, 70, 114, 111, 109, 82, 101, 109,
+111, 116, 101, 0, 3, 0, 9, 0, 0, 0, 6, 1, 7, 0, 0, 0, 2,
+8, 0, 0, 0, 3, 9, 0, 0, 0, 4, 10, 0, 0, 0, 5, 11, 0, 0, 0,
+6, 12, 0, 0, 0, 79, 112, 101, 114, 97, 116, 105, 111, 110,
+0, 1, 0, 0, 12, 0, 0, 0, 0, 2, 117, 112, 100, 97, 116,
+101, 0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 116,
+105, 109, 101, 115, 116, 97, 109, 112, 0, 243, 255, 255,
+255, 0, 79, 112, 101, 114, 97, 116, 105, 111, 110, 76,
+111, 103, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 111, 112, 101,
+114, 97, 116, 105, 111, 110, 115, 0, 242, 255, 255, 255,
+0, 14, 0, 0, 0, 0, 73, 110, 105, 116, 105, 97, 108, 105,
+122, 101, 70, 114, 111, 109, 83, 110, 97, 112, 115, 104,
+111, 116, 82, 101, 113, 117, 101, 115, 116, 0, 1, 0, 0, 4,
+0, 0, 0, 0, 1, 115, 110, 97, 112, 115, 104, 111, 116, 0,
+242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 82, 111,
+117, 116, 101, 114, 83, 117, 98, 115, 99, 114, 105, 98,
+101, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 100, 111, 99, 73, 100,
+0, 245, 255, 255, 255, 0, 116, 111, 107, 101, 110, 0, 245,
+255, 255, 255, 0, 82, 111, 117, 116, 101, 114, 85, 110,
+115, 117, 98, 115, 99, 114, 105, 98, 101, 0, 1, 0, 0, 4,
+0, 0, 0, 0, 1, 100, 111, 99, 73, 100, 0, 245, 255, 255,
+255, 0, 82, 111, 117, 116, 101, 114, 70, 114, 97, 109,
+101, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 100, 111, 99, 73, 100,
+0, 245, 255, 255, 255, 0, 112, 97, 121, 108, 111, 97, 100,
+0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 84, 111,
+82, 111, 117, 116, 101, 114, 0, 3, 0, 9, 0, 0, 0, 3, 1,
+17, 0, 0, 0, 2, 18, 0, 0, 0, 3, 19, 0, 0, 0, 82, 111, 117,
+116, 101, 114, 83, 117, 98, 115, 99, 114, 105, 98, 101,
+100, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 100, 111, 99, 73, 100,
+0, 245, 255, 255, 255, 0, 82, 111, 117, 116, 101, 114, 83,
+117, 98, 115, 99, 114, 105, 98, 101, 70, 97, 105, 108,
+101, 100, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 100, 111, 99, 73,
+100, 0, 245, 255, 255, 255, 0, 114, 101, 97, 115, 111,
+110, 0, 245, 255, 255, 255, 0, 82, 111, 117, 116, 101,
+114, 68, 111, 99, 70, 114, 97, 109, 101, 0, 1, 0, 0, 8, 0,
+0, 0, 0, 2, 100, 111, 99, 73, 100, 0, 245, 255, 255, 255,
+0, 112, 97, 121, 108, 111, 97, 100, 0, 242, 255, 255, 255,
+0, 254, 255, 255, 255, 0, 82, 111, 117, 116, 101, 114, 68,
+111, 99, 67, 108, 111, 115, 101, 100, 0, 1, 0, 0, 8, 0, 0,
+0, 0, 2, 100, 111, 99, 73, 100, 0, 245, 255, 255, 255, 0,
+114, 101, 97, 115, 111, 110, 0, 245, 255, 255, 255, 0, 70,
+114, 111, 109, 82, 111, 117, 116, 101, 114, 0, 3, 0, 9, 0,
+0, 0, 4, 1, 21, 0, 0, 0, 2, 22, 0, 0, 0, 3, 23, 0, 0, 0,
+4, 24, 0, 0, 0, 0, 0, 0, 0
 ]);
 
 export interface IPeerUpdate extends BebopRecord {
@@ -563,12 +596,131 @@ export class PeerRegisterId implements IPeerRegisterId {
 }
 
 
+export interface IPeerCommentUpdate extends BebopRecord {
+
+  readonly updates: Array<Uint8Array>;
+
+  readonly id: string;
+}
+
+export class PeerCommentUpdate implements IPeerCommentUpdate {
+  public readonly discriminator: number = 6 as 6;
+  public static readonly discriminator: number = 6 as 6;
+  public readonly updates: Array<Uint8Array>;
+  public readonly id: string;
+
+  constructor(record: IPeerCommentUpdate) {
+    this.updates = record.updates;
+    this.id = record.id;
+  }
+
+  /**
+   * Serializes the current instance into a JSON-Over-Bebop string
+   */
+  public stringify(): string {
+    return PeerCommentUpdate.encodeToJSON(this);
+  }
+
+  /**
+   * Serializes the specified object into a JSON-Over-Bebop string
+   */
+  public static encodeToJSON(record: IPeerCommentUpdate): string {
+    return JSON.stringify(record, BebopJson.replacer);
+  }
+
+  /**
+   * Validates that the runtime types of members in the current instance are correct.
+   */
+  public validateTypes(): void {
+    PeerCommentUpdate.validateCompatibility(this);
+  }
+
+  /**
+   * Validates that the specified dynamic object can become an instance of {@link PeerCommentUpdate}.
+   */
+  public static validateCompatibility(record: IPeerCommentUpdate): void {
+    BebopTypeGuard.ensureArray(record.updates, (element) => BebopTypeGuard.ensureArray(element, BebopTypeGuard.ensureUint8));
+    BebopTypeGuard.ensureString(record.id)
+  }
+
+  /**
+   * Unsafely creates an instance of {@link PeerCommentUpdate} from the specified dynamic object. No type checking is performed.
+   */
+  public static unsafeCast(record: any): IPeerCommentUpdate {
+      return new PeerCommentUpdate(record);
+  }
+
+  /**
+   * Creates a new {@link PeerCommentUpdate} instance from a JSON-Over-Bebop string. Type checking is performed.
+   */
+  public static fromJSON(json: string): IPeerCommentUpdate {
+    if (typeof json !== 'string' || json.trim().length === 0) {
+      throw new BebopRuntimeError(`PeerCommentUpdate.fromJSON: expected string`);
+    }
+    const parsed = JSON.parse(json, BebopJson.reviver);
+    PeerCommentUpdate.validateCompatibility(parsed);
+    return PeerCommentUpdate.unsafeCast(parsed);
+  }
+  public encode(): Uint8Array {
+    return PeerCommentUpdate.encode(this);
+  }
+
+  public static encode(record: IPeerCommentUpdate): Uint8Array {
+    const view = BebopView.getInstance();
+    view.startWriting();
+    PeerCommentUpdate.encodeInto(record, view);
+    return view.toArray();
+  }
+
+  public static encodeInto(record: IPeerCommentUpdate, view: BebopView): number {
+    const before = view.length;
+    {
+      const length0 = record.updates.length;
+      view.writeUint32(length0);
+      for (let i0 = 0; i0 < length0; i0++) {
+        view.writeBytes(record.updates[i0]);
+      }
+    }
+    view.writeString(record.id);
+    const after = view.length;
+    return after - before;
+  }
+
+  public static decode(buffer: Uint8Array): IPeerCommentUpdate {
+    const view = BebopView.getInstance();
+    view.startReading(buffer);
+    return PeerCommentUpdate.readFrom(view);
+  }
+
+  public static readFrom(view: BebopView): IPeerCommentUpdate {
+    let field0: Array<Uint8Array>;
+    {
+      let length0 = view.readUint32();
+      field0 = new Array<Uint8Array>(length0);
+      for (let i0 = 0; i0 < length0; i0++) {
+        let x0: Uint8Array;
+        x0 = view.readBytes();
+        field0[i0] = x0;
+      }
+    }
+    let field1: string;
+    field1 = view.readString();
+    let message: IPeerCommentUpdate = {
+      updates: field0,
+      id: field1,
+    };
+    return new PeerCommentUpdate(message);
+  }
+}
+
+
 export type IFromPeerType
   = { discriminator: 1, value: IPeerUpdate }
   | { discriminator: 2, value: IPeerAwareness }
   | { discriminator: 3, value: IPeerRequestSince }
   | { discriminator: 4, value: IPeerRequestSnapshot }
-  | { discriminator: 5, value: IPeerRegisterId };
+  | { discriminator: 5, value: IPeerRegisterId }
+  | { discriminator: 6, value: IPeerCommentUpdate };
 
 export interface IFromPeer extends BebopRecord {
   readonly data: IFromPeerType;
@@ -629,6 +781,14 @@ export class FromPeer implements IFromPeer {
     return this.data.value instanceof PeerRegisterId;
   }
 
+  public static fromPeerCommentUpdate(value: IPeerCommentUpdate) {
+    return new FromPeer({ discriminator: 6, value: new PeerCommentUpdate(value)});
+  }
+
+  public isPeerCommentUpdate(): this is { value: PeerCommentUpdate } & { data: Extract<IFromPeerType, { discriminator: 6 }> } {
+    return this.data.value instanceof PeerCommentUpdate;
+  }
+
 
   /**
    * Serializes the current instance into a JSON-Over-Bebop string
@@ -679,6 +839,10 @@ export class FromPeer implements IFromPeer {
         PeerRegisterId.validateCompatibility(record.data.value);
         break;
       }
+      case 6: {
+        PeerCommentUpdate.validateCompatibility(record.data.value);
+        break;
+      }
       default: {
         throw new Error(`Unknown discriminator for FromPeer: ${discriminator}`);
       }
@@ -705,6 +869,9 @@ export class FromPeer implements IFromPeer {
         }
         case 5: {
           return new FromPeer({ discriminator: 5, value: PeerRegisterId.unsafeCast(record.value) });
+        }
+        case 6: {
+          return new FromPeer({ discriminator: 6, value: PeerCommentUpdate.unsafeCast(record.value) });
         }
       }
       throw new BebopRuntimeError(`Failed to unsafely cast union from discriminator: ${discriminator}`);
@@ -753,6 +920,9 @@ export class FromPeer implements IFromPeer {
       case 5:
         PeerRegisterId.encodeInto(record.data.value, view);
         break;
+      case 6:
+        PeerCommentUpdate.encodeInto(record.data.value, view);
+        break;
     }
     const end = view.length;
     view.fillMessageLength(pos, end - start);
@@ -780,6 +950,8 @@ export class FromPeer implements IFromPeer {
         return this.fromPeerRequestSnapshot(PeerRequestSnapshot.readFrom(view));
       case 5:
         return this.fromPeerRegisterId(PeerRegisterId.readFrom(view));
+      case 6:
+        return this.fromPeerCommentUpdate(PeerCommentUpdate.readFrom(view));
       default:
         view.index = end;
         throw new BebopRuntimeError("Unrecognized discriminator while decoding FromPeer");
@@ -1920,6 +2092,1108 @@ export class InitializeFromSnapshotRequest implements IInitializeFromSnapshotReq
       snapshot: field0,
     };
     return new InitializeFromSnapshotRequest(message);
+  }
+}
+
+
+export interface IRouterSubscribe extends BebopRecord {
+
+  readonly docId: string;
+
+  readonly token: string;
+}
+
+export class RouterSubscribe implements IRouterSubscribe {
+  public readonly discriminator: number = 1 as 1;
+  public static readonly discriminator: number = 1 as 1;
+  public readonly docId: string;
+  public readonly token: string;
+
+  constructor(record: IRouterSubscribe) {
+    this.docId = record.docId;
+    this.token = record.token;
+  }
+
+  /**
+   * Serializes the current instance into a JSON-Over-Bebop string
+   */
+  public stringify(): string {
+    return RouterSubscribe.encodeToJSON(this);
+  }
+
+  /**
+   * Serializes the specified object into a JSON-Over-Bebop string
+   */
+  public static encodeToJSON(record: IRouterSubscribe): string {
+    return JSON.stringify(record, BebopJson.replacer);
+  }
+
+  /**
+   * Validates that the runtime types of members in the current instance are correct.
+   */
+  public validateTypes(): void {
+    RouterSubscribe.validateCompatibility(this);
+  }
+
+  /**
+   * Validates that the specified dynamic object can become an instance of {@link RouterSubscribe}.
+   */
+  public static validateCompatibility(record: IRouterSubscribe): void {
+    BebopTypeGuard.ensureString(record.docId)
+    BebopTypeGuard.ensureString(record.token)
+  }
+
+  /**
+   * Unsafely creates an instance of {@link RouterSubscribe} from the specified dynamic object. No type checking is performed.
+   */
+  public static unsafeCast(record: any): IRouterSubscribe {
+      return new RouterSubscribe(record);
+  }
+
+  /**
+   * Creates a new {@link RouterSubscribe} instance from a JSON-Over-Bebop string. Type checking is performed.
+   */
+  public static fromJSON(json: string): IRouterSubscribe {
+    if (typeof json !== 'string' || json.trim().length === 0) {
+      throw new BebopRuntimeError(`RouterSubscribe.fromJSON: expected string`);
+    }
+    const parsed = JSON.parse(json, BebopJson.reviver);
+    RouterSubscribe.validateCompatibility(parsed);
+    return RouterSubscribe.unsafeCast(parsed);
+  }
+  public encode(): Uint8Array {
+    return RouterSubscribe.encode(this);
+  }
+
+  public static encode(record: IRouterSubscribe): Uint8Array {
+    const view = BebopView.getInstance();
+    view.startWriting();
+    RouterSubscribe.encodeInto(record, view);
+    return view.toArray();
+  }
+
+  public static encodeInto(record: IRouterSubscribe, view: BebopView): number {
+    const before = view.length;
+    view.writeString(record.docId);
+    view.writeString(record.token);
+    const after = view.length;
+    return after - before;
+  }
+
+  public static decode(buffer: Uint8Array): IRouterSubscribe {
+    const view = BebopView.getInstance();
+    view.startReading(buffer);
+    return RouterSubscribe.readFrom(view);
+  }
+
+  public static readFrom(view: BebopView): IRouterSubscribe {
+    let field0: string;
+    field0 = view.readString();
+    let field1: string;
+    field1 = view.readString();
+    let message: IRouterSubscribe = {
+      docId: field0,
+      token: field1,
+    };
+    return new RouterSubscribe(message);
+  }
+}
+
+
+export interface IRouterUnsubscribe extends BebopRecord {
+
+  readonly docId: string;
+}
+
+export class RouterUnsubscribe implements IRouterUnsubscribe {
+  public readonly discriminator: number = 2 as 2;
+  public static readonly discriminator: number = 2 as 2;
+  public readonly docId: string;
+
+  constructor(record: IRouterUnsubscribe) {
+    this.docId = record.docId;
+  }
+
+  /**
+   * Serializes the current instance into a JSON-Over-Bebop string
+   */
+  public stringify(): string {
+    return RouterUnsubscribe.encodeToJSON(this);
+  }
+
+  /**
+   * Serializes the specified object into a JSON-Over-Bebop string
+   */
+  public static encodeToJSON(record: IRouterUnsubscribe): string {
+    return JSON.stringify(record, BebopJson.replacer);
+  }
+
+  /**
+   * Validates that the runtime types of members in the current instance are correct.
+   */
+  public validateTypes(): void {
+    RouterUnsubscribe.validateCompatibility(this);
+  }
+
+  /**
+   * Validates that the specified dynamic object can become an instance of {@link RouterUnsubscribe}.
+   */
+  public static validateCompatibility(record: IRouterUnsubscribe): void {
+    BebopTypeGuard.ensureString(record.docId)
+  }
+
+  /**
+   * Unsafely creates an instance of {@link RouterUnsubscribe} from the specified dynamic object. No type checking is performed.
+   */
+  public static unsafeCast(record: any): IRouterUnsubscribe {
+      return new RouterUnsubscribe(record);
+  }
+
+  /**
+   * Creates a new {@link RouterUnsubscribe} instance from a JSON-Over-Bebop string. Type checking is performed.
+   */
+  public static fromJSON(json: string): IRouterUnsubscribe {
+    if (typeof json !== 'string' || json.trim().length === 0) {
+      throw new BebopRuntimeError(`RouterUnsubscribe.fromJSON: expected string`);
+    }
+    const parsed = JSON.parse(json, BebopJson.reviver);
+    RouterUnsubscribe.validateCompatibility(parsed);
+    return RouterUnsubscribe.unsafeCast(parsed);
+  }
+  public encode(): Uint8Array {
+    return RouterUnsubscribe.encode(this);
+  }
+
+  public static encode(record: IRouterUnsubscribe): Uint8Array {
+    const view = BebopView.getInstance();
+    view.startWriting();
+    RouterUnsubscribe.encodeInto(record, view);
+    return view.toArray();
+  }
+
+  public static encodeInto(record: IRouterUnsubscribe, view: BebopView): number {
+    const before = view.length;
+    view.writeString(record.docId);
+    const after = view.length;
+    return after - before;
+  }
+
+  public static decode(buffer: Uint8Array): IRouterUnsubscribe {
+    const view = BebopView.getInstance();
+    view.startReading(buffer);
+    return RouterUnsubscribe.readFrom(view);
+  }
+
+  public static readFrom(view: BebopView): IRouterUnsubscribe {
+    let field0: string;
+    field0 = view.readString();
+    let message: IRouterUnsubscribe = {
+      docId: field0,
+    };
+    return new RouterUnsubscribe(message);
+  }
+}
+
+
+export interface IRouterFrame extends BebopRecord {
+
+  readonly docId: string;
+
+  readonly payload: Uint8Array;
+}
+
+export class RouterFrame implements IRouterFrame {
+  public readonly discriminator: number = 3 as 3;
+  public static readonly discriminator: number = 3 as 3;
+  public readonly docId: string;
+  public readonly payload: Uint8Array;
+
+  constructor(record: IRouterFrame) {
+    this.docId = record.docId;
+    this.payload = record.payload;
+  }
+
+  /**
+   * Serializes the current instance into a JSON-Over-Bebop string
+   */
+  public stringify(): string {
+    return RouterFrame.encodeToJSON(this);
+  }
+
+  /**
+   * Serializes the specified object into a JSON-Over-Bebop string
+   */
+  public static encodeToJSON(record: IRouterFrame): string {
+    return JSON.stringify(record, BebopJson.replacer);
+  }
+
+  /**
+   * Validates that the runtime types of members in the current instance are correct.
+   */
+  public validateTypes(): void {
+    RouterFrame.validateCompatibility(this);
+  }
+
+  /**
+   * Validates that the specified dynamic object can become an instance of {@link RouterFrame}.
+   */
+  public static validateCompatibility(record: IRouterFrame): void {
+    BebopTypeGuard.ensureString(record.docId)
+    BebopTypeGuard.ensureArray(record.payload, BebopTypeGuard.ensureUint8);
+  }
+
+  /**
+   * Unsafely creates an instance of {@link RouterFrame} from the specified dynamic object. No type checking is performed.
+   */
+  public static unsafeCast(record: any): IRouterFrame {
+      return new RouterFrame(record);
+  }
+
+  /**
+   * Creates a new {@link RouterFrame} instance from a JSON-Over-Bebop string. Type checking is performed.
+   */
+  public static fromJSON(json: string): IRouterFrame {
+    if (typeof json !== 'string' || json.trim().length === 0) {
+      throw new BebopRuntimeError(`RouterFrame.fromJSON: expected string`);
+    }
+    const parsed = JSON.parse(json, BebopJson.reviver);
+    RouterFrame.validateCompatibility(parsed);
+    return RouterFrame.unsafeCast(parsed);
+  }
+  public encode(): Uint8Array {
+    return RouterFrame.encode(this);
+  }
+
+  public static encode(record: IRouterFrame): Uint8Array {
+    const view = BebopView.getInstance();
+    view.startWriting();
+    RouterFrame.encodeInto(record, view);
+    return view.toArray();
+  }
+
+  public static encodeInto(record: IRouterFrame, view: BebopView): number {
+    const before = view.length;
+    view.writeString(record.docId);
+    view.writeBytes(record.payload);
+    const after = view.length;
+    return after - before;
+  }
+
+  public static decode(buffer: Uint8Array): IRouterFrame {
+    const view = BebopView.getInstance();
+    view.startReading(buffer);
+    return RouterFrame.readFrom(view);
+  }
+
+  public static readFrom(view: BebopView): IRouterFrame {
+    let field0: string;
+    field0 = view.readString();
+    let field1: Uint8Array;
+    field1 = view.readBytes();
+    let message: IRouterFrame = {
+      docId: field0,
+      payload: field1,
+    };
+    return new RouterFrame(message);
+  }
+}
+
+/**
+ * Multiplex envelope between the browser and the sync-router (rides the
+ * dedicated DSS /sync/ws socket as binary frames). Inner payloads are the
+ * existing FromPeer/FromRemote unions, already bebop-encoded — the router
+ * forwards them without parsing.
+ */
+export type IToRouterType
+  = { discriminator: 1, value: IRouterSubscribe }
+  | { discriminator: 2, value: IRouterUnsubscribe }
+  | { discriminator: 3, value: IRouterFrame };
+
+export interface IToRouter extends BebopRecord {
+  readonly data: IToRouterType;
+}
+export class ToRouter implements IToRouter {
+
+  public readonly data: IToRouterType;
+
+  private constructor(data: IToRouterType) {
+    this.data = data;
+  }
+
+  public get discriminator() {
+    return this.data.discriminator;
+  }
+
+  public get value() {
+    return this.data.value;
+  }
+
+  public static fromRouterSubscribe(value: IRouterSubscribe) {
+    return new ToRouter({ discriminator: 1, value: new RouterSubscribe(value)});
+  }
+
+  public isRouterSubscribe(): this is { value: RouterSubscribe } & { data: Extract<IToRouterType, { discriminator: 1 }> } {
+    return this.data.value instanceof RouterSubscribe;
+  }
+
+  public static fromRouterUnsubscribe(value: IRouterUnsubscribe) {
+    return new ToRouter({ discriminator: 2, value: new RouterUnsubscribe(value)});
+  }
+
+  public isRouterUnsubscribe(): this is { value: RouterUnsubscribe } & { data: Extract<IToRouterType, { discriminator: 2 }> } {
+    return this.data.value instanceof RouterUnsubscribe;
+  }
+
+  public static fromRouterFrame(value: IRouterFrame) {
+    return new ToRouter({ discriminator: 3, value: new RouterFrame(value)});
+  }
+
+  public isRouterFrame(): this is { value: RouterFrame } & { data: Extract<IToRouterType, { discriminator: 3 }> } {
+    return this.data.value instanceof RouterFrame;
+  }
+
+
+  /**
+   * Serializes the current instance into a JSON-Over-Bebop string
+   */
+  public stringify(): string {
+    return ToRouter.encodeToJSON(this);
+  }
+
+  /**
+   * Serializes the specified object into a JSON-Over-Bebop string
+   */
+  public static encodeToJSON(record: IToRouter): string {
+    delete (record.data.value as any).discriminator;
+    return JSON.stringify(record, BebopJson.replacer);
+  }
+
+  /**
+   * Validates that the runtime types of members in the current instance are correct.
+   */
+  public validateTypes(): void {
+    ToRouter.validateCompatibility(this);
+  }
+
+  /**
+   * Validates that the specified dynamic object can become an instance of {@link ToRouter}.
+   */
+  public static validateCompatibility(record: IToRouter): void {
+    const discriminator = record.data.discriminator;
+    BebopTypeGuard.ensureUint8(discriminator);
+    switch (discriminator) {
+      case 1: {
+        RouterSubscribe.validateCompatibility(record.data.value);
+        break;
+      }
+      case 2: {
+        RouterUnsubscribe.validateCompatibility(record.data.value);
+        break;
+      }
+      case 3: {
+        RouterFrame.validateCompatibility(record.data.value);
+        break;
+      }
+      default: {
+        throw new Error(`Unknown discriminator for ToRouter: ${discriminator}`);
+      }
+    }
+  }
+
+  /**
+   * Unsafely creates an instance of {@link ToRouter} from the specified dynamic object. No type checking is performed.
+   */
+  public static unsafeCast(record: any): ToRouter {
+      const discriminator = record.data.discriminator;
+      switch (discriminator) {
+        case 1: {
+          return new ToRouter({ discriminator: 1, value: RouterSubscribe.unsafeCast(record.value) });
+        }
+        case 2: {
+          return new ToRouter({ discriminator: 2, value: RouterUnsubscribe.unsafeCast(record.value) });
+        }
+        case 3: {
+          return new ToRouter({ discriminator: 3, value: RouterFrame.unsafeCast(record.value) });
+        }
+      }
+      throw new BebopRuntimeError(`Failed to unsafely cast union from discriminator: ${discriminator}`);
+  }
+
+  /**
+   * Creates a new {@link ToRouter} instance from a JSON-Over-Bebop string. Type checking is performed.
+   */
+  public static fromJSON(json: string): ToRouter {
+    if (typeof json !== 'string' || json.trim().length === 0) {
+      throw new BebopRuntimeError(`ToRouter.fromJSON: expected string`);
+    }
+    const parsed = JSON.parse(json, BebopJson.reviver);
+    ToRouter.validateCompatibility(parsed);
+    return ToRouter.unsafeCast(parsed);
+  }
+  public encode(): Uint8Array {
+    return ToRouter.encode(this);
+  }
+
+  public static encode(record: IToRouter): Uint8Array {
+    const view = BebopView.getInstance();
+    view.startWriting();
+    ToRouter.encodeInto(record, view);
+    return view.toArray();
+  }
+
+  public static encodeInto(record: IToRouter, view: BebopView): number {
+    const before = view.length;
+    const pos = view.reserveMessageLength();
+    const start = view.length + 1;
+    view.writeByte(record.data.discriminator);
+    switch (record.data.discriminator) {
+      case 1:
+        RouterSubscribe.encodeInto(record.data.value, view);
+        break;
+      case 2:
+        RouterUnsubscribe.encodeInto(record.data.value, view);
+        break;
+      case 3:
+        RouterFrame.encodeInto(record.data.value, view);
+        break;
+    }
+    const end = view.length;
+    view.fillMessageLength(pos, end - start);
+    const after = view.length;
+    return after - before;
+  }
+
+  public static decode(buffer: Uint8Array): ToRouter {
+    const view = BebopView.getInstance();
+    view.startReading(buffer);
+    return ToRouter.readFrom(view);
+  }
+
+  public static readFrom(view: BebopView): ToRouter {
+    const length = view.readMessageLength();
+    const end = view.index + 1 + length;
+    switch (view.readByte()) {
+      case 1:
+        return this.fromRouterSubscribe(RouterSubscribe.readFrom(view));
+      case 2:
+        return this.fromRouterUnsubscribe(RouterUnsubscribe.readFrom(view));
+      case 3:
+        return this.fromRouterFrame(RouterFrame.readFrom(view));
+      default:
+        view.index = end;
+        throw new BebopRuntimeError("Unrecognized discriminator while decoding ToRouter");
+    }
+  }
+}
+
+
+export interface IRouterSubscribed extends BebopRecord {
+
+  readonly docId: string;
+}
+
+export class RouterSubscribed implements IRouterSubscribed {
+  public readonly discriminator: number = 1 as 1;
+  public static readonly discriminator: number = 1 as 1;
+  public readonly docId: string;
+
+  constructor(record: IRouterSubscribed) {
+    this.docId = record.docId;
+  }
+
+  /**
+   * Serializes the current instance into a JSON-Over-Bebop string
+   */
+  public stringify(): string {
+    return RouterSubscribed.encodeToJSON(this);
+  }
+
+  /**
+   * Serializes the specified object into a JSON-Over-Bebop string
+   */
+  public static encodeToJSON(record: IRouterSubscribed): string {
+    return JSON.stringify(record, BebopJson.replacer);
+  }
+
+  /**
+   * Validates that the runtime types of members in the current instance are correct.
+   */
+  public validateTypes(): void {
+    RouterSubscribed.validateCompatibility(this);
+  }
+
+  /**
+   * Validates that the specified dynamic object can become an instance of {@link RouterSubscribed}.
+   */
+  public static validateCompatibility(record: IRouterSubscribed): void {
+    BebopTypeGuard.ensureString(record.docId)
+  }
+
+  /**
+   * Unsafely creates an instance of {@link RouterSubscribed} from the specified dynamic object. No type checking is performed.
+   */
+  public static unsafeCast(record: any): IRouterSubscribed {
+      return new RouterSubscribed(record);
+  }
+
+  /**
+   * Creates a new {@link RouterSubscribed} instance from a JSON-Over-Bebop string. Type checking is performed.
+   */
+  public static fromJSON(json: string): IRouterSubscribed {
+    if (typeof json !== 'string' || json.trim().length === 0) {
+      throw new BebopRuntimeError(`RouterSubscribed.fromJSON: expected string`);
+    }
+    const parsed = JSON.parse(json, BebopJson.reviver);
+    RouterSubscribed.validateCompatibility(parsed);
+    return RouterSubscribed.unsafeCast(parsed);
+  }
+  public encode(): Uint8Array {
+    return RouterSubscribed.encode(this);
+  }
+
+  public static encode(record: IRouterSubscribed): Uint8Array {
+    const view = BebopView.getInstance();
+    view.startWriting();
+    RouterSubscribed.encodeInto(record, view);
+    return view.toArray();
+  }
+
+  public static encodeInto(record: IRouterSubscribed, view: BebopView): number {
+    const before = view.length;
+    view.writeString(record.docId);
+    const after = view.length;
+    return after - before;
+  }
+
+  public static decode(buffer: Uint8Array): IRouterSubscribed {
+    const view = BebopView.getInstance();
+    view.startReading(buffer);
+    return RouterSubscribed.readFrom(view);
+  }
+
+  public static readFrom(view: BebopView): IRouterSubscribed {
+    let field0: string;
+    field0 = view.readString();
+    let message: IRouterSubscribed = {
+      docId: field0,
+    };
+    return new RouterSubscribed(message);
+  }
+}
+
+
+export interface IRouterSubscribeFailed extends BebopRecord {
+
+  readonly docId: string;
+
+  readonly reason: string;
+}
+
+export class RouterSubscribeFailed implements IRouterSubscribeFailed {
+  public readonly discriminator: number = 2 as 2;
+  public static readonly discriminator: number = 2 as 2;
+  public readonly docId: string;
+  public readonly reason: string;
+
+  constructor(record: IRouterSubscribeFailed) {
+    this.docId = record.docId;
+    this.reason = record.reason;
+  }
+
+  /**
+   * Serializes the current instance into a JSON-Over-Bebop string
+   */
+  public stringify(): string {
+    return RouterSubscribeFailed.encodeToJSON(this);
+  }
+
+  /**
+   * Serializes the specified object into a JSON-Over-Bebop string
+   */
+  public static encodeToJSON(record: IRouterSubscribeFailed): string {
+    return JSON.stringify(record, BebopJson.replacer);
+  }
+
+  /**
+   * Validates that the runtime types of members in the current instance are correct.
+   */
+  public validateTypes(): void {
+    RouterSubscribeFailed.validateCompatibility(this);
+  }
+
+  /**
+   * Validates that the specified dynamic object can become an instance of {@link RouterSubscribeFailed}.
+   */
+  public static validateCompatibility(record: IRouterSubscribeFailed): void {
+    BebopTypeGuard.ensureString(record.docId)
+    BebopTypeGuard.ensureString(record.reason)
+  }
+
+  /**
+   * Unsafely creates an instance of {@link RouterSubscribeFailed} from the specified dynamic object. No type checking is performed.
+   */
+  public static unsafeCast(record: any): IRouterSubscribeFailed {
+      return new RouterSubscribeFailed(record);
+  }
+
+  /**
+   * Creates a new {@link RouterSubscribeFailed} instance from a JSON-Over-Bebop string. Type checking is performed.
+   */
+  public static fromJSON(json: string): IRouterSubscribeFailed {
+    if (typeof json !== 'string' || json.trim().length === 0) {
+      throw new BebopRuntimeError(`RouterSubscribeFailed.fromJSON: expected string`);
+    }
+    const parsed = JSON.parse(json, BebopJson.reviver);
+    RouterSubscribeFailed.validateCompatibility(parsed);
+    return RouterSubscribeFailed.unsafeCast(parsed);
+  }
+  public encode(): Uint8Array {
+    return RouterSubscribeFailed.encode(this);
+  }
+
+  public static encode(record: IRouterSubscribeFailed): Uint8Array {
+    const view = BebopView.getInstance();
+    view.startWriting();
+    RouterSubscribeFailed.encodeInto(record, view);
+    return view.toArray();
+  }
+
+  public static encodeInto(record: IRouterSubscribeFailed, view: BebopView): number {
+    const before = view.length;
+    view.writeString(record.docId);
+    view.writeString(record.reason);
+    const after = view.length;
+    return after - before;
+  }
+
+  public static decode(buffer: Uint8Array): IRouterSubscribeFailed {
+    const view = BebopView.getInstance();
+    view.startReading(buffer);
+    return RouterSubscribeFailed.readFrom(view);
+  }
+
+  public static readFrom(view: BebopView): IRouterSubscribeFailed {
+    let field0: string;
+    field0 = view.readString();
+    let field1: string;
+    field1 = view.readString();
+    let message: IRouterSubscribeFailed = {
+      docId: field0,
+      reason: field1,
+    };
+    return new RouterSubscribeFailed(message);
+  }
+}
+
+
+export interface IRouterDocFrame extends BebopRecord {
+
+  readonly docId: string;
+
+  readonly payload: Uint8Array;
+}
+
+export class RouterDocFrame implements IRouterDocFrame {
+  public readonly discriminator: number = 3 as 3;
+  public static readonly discriminator: number = 3 as 3;
+  public readonly docId: string;
+  public readonly payload: Uint8Array;
+
+  constructor(record: IRouterDocFrame) {
+    this.docId = record.docId;
+    this.payload = record.payload;
+  }
+
+  /**
+   * Serializes the current instance into a JSON-Over-Bebop string
+   */
+  public stringify(): string {
+    return RouterDocFrame.encodeToJSON(this);
+  }
+
+  /**
+   * Serializes the specified object into a JSON-Over-Bebop string
+   */
+  public static encodeToJSON(record: IRouterDocFrame): string {
+    return JSON.stringify(record, BebopJson.replacer);
+  }
+
+  /**
+   * Validates that the runtime types of members in the current instance are correct.
+   */
+  public validateTypes(): void {
+    RouterDocFrame.validateCompatibility(this);
+  }
+
+  /**
+   * Validates that the specified dynamic object can become an instance of {@link RouterDocFrame}.
+   */
+  public static validateCompatibility(record: IRouterDocFrame): void {
+    BebopTypeGuard.ensureString(record.docId)
+    BebopTypeGuard.ensureArray(record.payload, BebopTypeGuard.ensureUint8);
+  }
+
+  /**
+   * Unsafely creates an instance of {@link RouterDocFrame} from the specified dynamic object. No type checking is performed.
+   */
+  public static unsafeCast(record: any): IRouterDocFrame {
+      return new RouterDocFrame(record);
+  }
+
+  /**
+   * Creates a new {@link RouterDocFrame} instance from a JSON-Over-Bebop string. Type checking is performed.
+   */
+  public static fromJSON(json: string): IRouterDocFrame {
+    if (typeof json !== 'string' || json.trim().length === 0) {
+      throw new BebopRuntimeError(`RouterDocFrame.fromJSON: expected string`);
+    }
+    const parsed = JSON.parse(json, BebopJson.reviver);
+    RouterDocFrame.validateCompatibility(parsed);
+    return RouterDocFrame.unsafeCast(parsed);
+  }
+  public encode(): Uint8Array {
+    return RouterDocFrame.encode(this);
+  }
+
+  public static encode(record: IRouterDocFrame): Uint8Array {
+    const view = BebopView.getInstance();
+    view.startWriting();
+    RouterDocFrame.encodeInto(record, view);
+    return view.toArray();
+  }
+
+  public static encodeInto(record: IRouterDocFrame, view: BebopView): number {
+    const before = view.length;
+    view.writeString(record.docId);
+    view.writeBytes(record.payload);
+    const after = view.length;
+    return after - before;
+  }
+
+  public static decode(buffer: Uint8Array): IRouterDocFrame {
+    const view = BebopView.getInstance();
+    view.startReading(buffer);
+    return RouterDocFrame.readFrom(view);
+  }
+
+  public static readFrom(view: BebopView): IRouterDocFrame {
+    let field0: string;
+    field0 = view.readString();
+    let field1: Uint8Array;
+    field1 = view.readBytes();
+    let message: IRouterDocFrame = {
+      docId: field0,
+      payload: field1,
+    };
+    return new RouterDocFrame(message);
+  }
+}
+
+
+export interface IRouterDocClosed extends BebopRecord {
+
+  readonly docId: string;
+
+  readonly reason: string;
+}
+
+export class RouterDocClosed implements IRouterDocClosed {
+  public readonly discriminator: number = 4 as 4;
+  public static readonly discriminator: number = 4 as 4;
+  public readonly docId: string;
+  public readonly reason: string;
+
+  constructor(record: IRouterDocClosed) {
+    this.docId = record.docId;
+    this.reason = record.reason;
+  }
+
+  /**
+   * Serializes the current instance into a JSON-Over-Bebop string
+   */
+  public stringify(): string {
+    return RouterDocClosed.encodeToJSON(this);
+  }
+
+  /**
+   * Serializes the specified object into a JSON-Over-Bebop string
+   */
+  public static encodeToJSON(record: IRouterDocClosed): string {
+    return JSON.stringify(record, BebopJson.replacer);
+  }
+
+  /**
+   * Validates that the runtime types of members in the current instance are correct.
+   */
+  public validateTypes(): void {
+    RouterDocClosed.validateCompatibility(this);
+  }
+
+  /**
+   * Validates that the specified dynamic object can become an instance of {@link RouterDocClosed}.
+   */
+  public static validateCompatibility(record: IRouterDocClosed): void {
+    BebopTypeGuard.ensureString(record.docId)
+    BebopTypeGuard.ensureString(record.reason)
+  }
+
+  /**
+   * Unsafely creates an instance of {@link RouterDocClosed} from the specified dynamic object. No type checking is performed.
+   */
+  public static unsafeCast(record: any): IRouterDocClosed {
+      return new RouterDocClosed(record);
+  }
+
+  /**
+   * Creates a new {@link RouterDocClosed} instance from a JSON-Over-Bebop string. Type checking is performed.
+   */
+  public static fromJSON(json: string): IRouterDocClosed {
+    if (typeof json !== 'string' || json.trim().length === 0) {
+      throw new BebopRuntimeError(`RouterDocClosed.fromJSON: expected string`);
+    }
+    const parsed = JSON.parse(json, BebopJson.reviver);
+    RouterDocClosed.validateCompatibility(parsed);
+    return RouterDocClosed.unsafeCast(parsed);
+  }
+  public encode(): Uint8Array {
+    return RouterDocClosed.encode(this);
+  }
+
+  public static encode(record: IRouterDocClosed): Uint8Array {
+    const view = BebopView.getInstance();
+    view.startWriting();
+    RouterDocClosed.encodeInto(record, view);
+    return view.toArray();
+  }
+
+  public static encodeInto(record: IRouterDocClosed, view: BebopView): number {
+    const before = view.length;
+    view.writeString(record.docId);
+    view.writeString(record.reason);
+    const after = view.length;
+    return after - before;
+  }
+
+  public static decode(buffer: Uint8Array): IRouterDocClosed {
+    const view = BebopView.getInstance();
+    view.startReading(buffer);
+    return RouterDocClosed.readFrom(view);
+  }
+
+  public static readFrom(view: BebopView): IRouterDocClosed {
+    let field0: string;
+    field0 = view.readString();
+    let field1: string;
+    field1 = view.readString();
+    let message: IRouterDocClosed = {
+      docId: field0,
+      reason: field1,
+    };
+    return new RouterDocClosed(message);
+  }
+}
+
+
+export type IFromRouterType
+  = { discriminator: 1, value: IRouterSubscribed }
+  | { discriminator: 2, value: IRouterSubscribeFailed }
+  | { discriminator: 3, value: IRouterDocFrame }
+  | { discriminator: 4, value: IRouterDocClosed };
+
+export interface IFromRouter extends BebopRecord {
+  readonly data: IFromRouterType;
+}
+export class FromRouter implements IFromRouter {
+
+  public readonly data: IFromRouterType;
+
+  private constructor(data: IFromRouterType) {
+    this.data = data;
+  }
+
+  public get discriminator() {
+    return this.data.discriminator;
+  }
+
+  public get value() {
+    return this.data.value;
+  }
+
+  public static fromRouterSubscribed(value: IRouterSubscribed) {
+    return new FromRouter({ discriminator: 1, value: new RouterSubscribed(value)});
+  }
+
+  public isRouterSubscribed(): this is { value: RouterSubscribed } & { data: Extract<IFromRouterType, { discriminator: 1 }> } {
+    return this.data.value instanceof RouterSubscribed;
+  }
+
+  public static fromRouterSubscribeFailed(value: IRouterSubscribeFailed) {
+    return new FromRouter({ discriminator: 2, value: new RouterSubscribeFailed(value)});
+  }
+
+  public isRouterSubscribeFailed(): this is { value: RouterSubscribeFailed } & { data: Extract<IFromRouterType, { discriminator: 2 }> } {
+    return this.data.value instanceof RouterSubscribeFailed;
+  }
+
+  public static fromRouterDocFrame(value: IRouterDocFrame) {
+    return new FromRouter({ discriminator: 3, value: new RouterDocFrame(value)});
+  }
+
+  public isRouterDocFrame(): this is { value: RouterDocFrame } & { data: Extract<IFromRouterType, { discriminator: 3 }> } {
+    return this.data.value instanceof RouterDocFrame;
+  }
+
+  public static fromRouterDocClosed(value: IRouterDocClosed) {
+    return new FromRouter({ discriminator: 4, value: new RouterDocClosed(value)});
+  }
+
+  public isRouterDocClosed(): this is { value: RouterDocClosed } & { data: Extract<IFromRouterType, { discriminator: 4 }> } {
+    return this.data.value instanceof RouterDocClosed;
+  }
+
+
+  /**
+   * Serializes the current instance into a JSON-Over-Bebop string
+   */
+  public stringify(): string {
+    return FromRouter.encodeToJSON(this);
+  }
+
+  /**
+   * Serializes the specified object into a JSON-Over-Bebop string
+   */
+  public static encodeToJSON(record: IFromRouter): string {
+    delete (record.data.value as any).discriminator;
+    return JSON.stringify(record, BebopJson.replacer);
+  }
+
+  /**
+   * Validates that the runtime types of members in the current instance are correct.
+   */
+  public validateTypes(): void {
+    FromRouter.validateCompatibility(this);
+  }
+
+  /**
+   * Validates that the specified dynamic object can become an instance of {@link FromRouter}.
+   */
+  public static validateCompatibility(record: IFromRouter): void {
+    const discriminator = record.data.discriminator;
+    BebopTypeGuard.ensureUint8(discriminator);
+    switch (discriminator) {
+      case 1: {
+        RouterSubscribed.validateCompatibility(record.data.value);
+        break;
+      }
+      case 2: {
+        RouterSubscribeFailed.validateCompatibility(record.data.value);
+        break;
+      }
+      case 3: {
+        RouterDocFrame.validateCompatibility(record.data.value);
+        break;
+      }
+      case 4: {
+        RouterDocClosed.validateCompatibility(record.data.value);
+        break;
+      }
+      default: {
+        throw new Error(`Unknown discriminator for FromRouter: ${discriminator}`);
+      }
+    }
+  }
+
+  /**
+   * Unsafely creates an instance of {@link FromRouter} from the specified dynamic object. No type checking is performed.
+   */
+  public static unsafeCast(record: any): FromRouter {
+      const discriminator = record.data.discriminator;
+      switch (discriminator) {
+        case 1: {
+          return new FromRouter({ discriminator: 1, value: RouterSubscribed.unsafeCast(record.value) });
+        }
+        case 2: {
+          return new FromRouter({ discriminator: 2, value: RouterSubscribeFailed.unsafeCast(record.value) });
+        }
+        case 3: {
+          return new FromRouter({ discriminator: 3, value: RouterDocFrame.unsafeCast(record.value) });
+        }
+        case 4: {
+          return new FromRouter({ discriminator: 4, value: RouterDocClosed.unsafeCast(record.value) });
+        }
+      }
+      throw new BebopRuntimeError(`Failed to unsafely cast union from discriminator: ${discriminator}`);
+  }
+
+  /**
+   * Creates a new {@link FromRouter} instance from a JSON-Over-Bebop string. Type checking is performed.
+   */
+  public static fromJSON(json: string): FromRouter {
+    if (typeof json !== 'string' || json.trim().length === 0) {
+      throw new BebopRuntimeError(`FromRouter.fromJSON: expected string`);
+    }
+    const parsed = JSON.parse(json, BebopJson.reviver);
+    FromRouter.validateCompatibility(parsed);
+    return FromRouter.unsafeCast(parsed);
+  }
+  public encode(): Uint8Array {
+    return FromRouter.encode(this);
+  }
+
+  public static encode(record: IFromRouter): Uint8Array {
+    const view = BebopView.getInstance();
+    view.startWriting();
+    FromRouter.encodeInto(record, view);
+    return view.toArray();
+  }
+
+  public static encodeInto(record: IFromRouter, view: BebopView): number {
+    const before = view.length;
+    const pos = view.reserveMessageLength();
+    const start = view.length + 1;
+    view.writeByte(record.data.discriminator);
+    switch (record.data.discriminator) {
+      case 1:
+        RouterSubscribed.encodeInto(record.data.value, view);
+        break;
+      case 2:
+        RouterSubscribeFailed.encodeInto(record.data.value, view);
+        break;
+      case 3:
+        RouterDocFrame.encodeInto(record.data.value, view);
+        break;
+      case 4:
+        RouterDocClosed.encodeInto(record.data.value, view);
+        break;
+    }
+    const end = view.length;
+    view.fillMessageLength(pos, end - start);
+    const after = view.length;
+    return after - before;
+  }
+
+  public static decode(buffer: Uint8Array): FromRouter {
+    const view = BebopView.getInstance();
+    view.startReading(buffer);
+    return FromRouter.readFrom(view);
+  }
+
+  public static readFrom(view: BebopView): FromRouter {
+    const length = view.readMessageLength();
+    const end = view.index + 1 + length;
+    switch (view.readByte()) {
+      case 1:
+        return this.fromRouterSubscribed(RouterSubscribed.readFrom(view));
+      case 2:
+        return this.fromRouterSubscribeFailed(RouterSubscribeFailed.readFrom(view));
+      case 3:
+        return this.fromRouterDocFrame(RouterDocFrame.readFrom(view));
+      case 4:
+        return this.fromRouterDocClosed(RouterDocClosed.readFrom(view));
+      default:
+        view.index = end;
+        throw new BebopRuntimeError("Unrecognized discriminator while decoding FromRouter");
+    }
   }
 }
 

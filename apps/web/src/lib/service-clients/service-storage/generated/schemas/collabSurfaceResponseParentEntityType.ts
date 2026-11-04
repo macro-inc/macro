@@ -31,4 +31,5 @@ export type CollabSurfaceResponseParentEntityType =
   | 'initiative'
   | 'database'
   | 'database_row'
-  | 'form';
+  | 'form'
+  | 'external_chat';

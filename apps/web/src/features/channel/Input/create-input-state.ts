@@ -16,6 +16,7 @@ type CreateInputStateOptions = {
   mentions: Accessor<ItemMention[]>;
   attachmentTracker: InputAttachmentTracker;
   clearComposer?: () => void;
+  restoreEditor?: (snapshot: InputSnapshot) => void;
   attachFiles?: (files: File[]) => Promise<void> | void;
   clearInput?: () => void;
   callbacks?: InputCallbacks;
@@ -48,6 +49,11 @@ export function createInputState(options: CreateInputStateOptions): InputState {
     // Sending/closing clears the editor once, through the focus-preserving path.
     clearComposer: options.clearComposer ?? options.clearInput,
     reset: view.reset,
+    restoreSnapshot: (snapshot) => {
+      view.setValue(snapshot.value);
+      options.attachmentTracker.setAttachments(snapshot.attachments);
+      options.restoreEditor?.(snapshot);
+    },
     removeTrackedAttachment: (id) =>
       options.attachmentTracker.removeAttachment(id),
     attachFiles: options.attachFiles,

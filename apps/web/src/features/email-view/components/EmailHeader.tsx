@@ -1,6 +1,7 @@
 import {
   useViewControlHotkeys,
   ViewBreadcrumbs,
+  ViewSwitchTrigger,
 } from '@app/components/view-shell';
 import {
   ListHeader,
@@ -15,9 +16,16 @@ import { Tabs } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createSignal, Show } from 'solid-js';
 import { composeEmail } from '../compose-email';
-import { EMAIL_TAB_LABELS, EMAIL_TABS } from '../constants';
+import {
+  canSearchEmailTab,
+  EMAIL_INBOX_TAB_IDS,
+  EMAIL_TAB_LABELS,
+  EMAIL_TABS,
+  isEmailInboxTab,
+} from '../constants';
 import { useEmailView } from '../email-view-context';
 import { EMAIL_TOUR } from '../tour';
+import { useVisibleEmailTab } from '../use-visible-email-tab';
 import { EmailControls } from './EmailControls';
 
 export type EmailHeaderProps = {
@@ -28,8 +36,7 @@ export type EmailHeaderProps = {
 
 export function EmailViewBreadcrumbItem() {
   const { state, tagViewTitle } = useEmailView();
-  const inboxSelected = () =>
-    !isTouchDevice() && (state.tab === 'important' || state.tab === 'noise');
+  const inboxSelected = () => !isTouchDevice() && isEmailInboxTab(state.tab);
   const tabTitle = () =>
     tagViewTitle() ??
     (inboxSelected()
@@ -42,20 +49,33 @@ export function EmailViewBreadcrumbItem() {
       metadata={{ type: 'email-view' }}
       order={0}
     >
-      {(item) => (
-        <ViewBreadcrumbs.Button
-          class="shrink-0 rounded-md hover:bg-hover"
-          isActive={item.isActive()}
-          onClick={item.onSelect}
-        >
-          <span class="truncate @max-[720px]/view-shell:hidden">
-            {tabTitle()}
-          </span>
-          <span class="hidden @max-[720px]/view-shell:inline">
-            {inboxSelected() ? 'Inbox' : 'Email'}
-          </span>
-        </ViewBreadcrumbs.Button>
-      )}
+      {(item) => {
+        const label = () => (
+          <>
+            <span class="truncate @max-[720px]/view-shell:hidden">
+              {tabTitle()}
+            </span>
+            <span class="hidden @max-[720px]/view-shell:inline">
+              {inboxSelected() ? 'Inbox' : 'Email'}
+            </span>
+          </>
+        );
+        const button = () => (
+          <ViewBreadcrumbs.Button
+            class="shrink-0 rounded-md hover:bg-hover"
+            isActive={item.isActive()}
+            onClick={item.onSelect}
+          >
+            {label()}
+          </ViewBreadcrumbs.Button>
+        );
+        // At the list itself the name switches views; deeper, it returns here.
+        return (
+          <Show when={item.isActive()} fallback={button()}>
+            <ViewSwitchTrigger fallback={button()}>{label()}</ViewSwitchTrigger>
+          </Show>
+        );
+      }}
     </ViewBreadcrumbs.Item>
   );
 }
@@ -67,8 +87,13 @@ export function EmailHeader(props: EmailHeaderProps) {
   const [filterOpen, setFilterOpen] = createSignal(false);
   let focusSearch: (() => void) | undefined;
   const searchTarget = tourTarget(EMAIL_TOUR.search);
-  const inboxSelected = () =>
-    state.tab === 'important' || state.tab === 'noise';
+  const isVisible = useVisibleEmailTab();
+  const inboxSelected = () => isEmailInboxTab(state.tab);
+  const inboxTabs = () =>
+    EMAIL_INBOX_TAB_IDS.filter(isVisible).map((id) => ({
+      value: id,
+      label: EMAIL_TAB_LABELS[id],
+    }));
   const selectedTabLabel = () =>
     tagViewTitle() ??
     (inboxSelected()
@@ -79,8 +104,7 @@ export function EmailHeader(props: EmailHeaderProps) {
     focusSearch?.();
     return true;
   };
-  const canSearch = () =>
-    state.tab !== 'scheduled' && state.tab !== 'reminders';
+  const canSearch = () => canSearchEmailTab(state.tab);
 
   // Mail clients search with `/`; elsewhere it opens the app's search view.
   registerHotkey({
@@ -134,11 +158,9 @@ export function EmailHeader(props: EmailHeaderProps) {
             <Tabs
               ref={tourTarget(EMAIL_TOUR.signalNoise)}
               aria-label="Inbox view"
+              size="md"
               class="shrink-0"
-              options={[
-                { value: 'important', label: EMAIL_TAB_LABELS.important },
-                { value: 'noise', label: EMAIL_TAB_LABELS.noise },
-              ]}
+              options={inboxTabs()}
               value={state.tab}
               onChange={setTab}
             />
@@ -158,7 +180,7 @@ export function EmailHeader(props: EmailHeaderProps) {
           onClick={() => composeEmail(openWithSplit, state.inboxIds)}
         />
       </div>
-      <Show when={state.tab !== 'reminders' && state.tab !== 'scheduled'}>
+      <Show when={canSearch()}>
         <ListHeaderSearch
           ref={searchTarget}
           label="Search email"

@@ -1,6 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
+mod language;
+
+pub use language::Language;
+
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
 pub struct UserPermission {
     /// The role the permission is for
@@ -70,6 +74,9 @@ pub struct UserName {
     pub id: String,
     pub first_name: Option<String>,
     pub last_name: Option<String>,
+    /// Whether this is an agent account rather than a person.
+    #[serde(default)]
+    pub is_agent: bool,
 }
 
 // HACK: the zod generator on the FE only likes objects, not arrays, so we build silly structs like these
@@ -84,4 +91,12 @@ pub struct PutUserNameQueryParams {
     pub first_name: Option<String>,
     /// Last Name of user
     pub last_name: Option<String>,
+}
+
+/// The interface language a user picked for themselves. `None` follows their
+/// team's language, else their browser's.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, utoipa::ToSchema)]
+pub struct UserLanguage {
+    /// The user's language, or `None` to use the team's, else the browser's.
+    pub language: Option<Language>,
 }

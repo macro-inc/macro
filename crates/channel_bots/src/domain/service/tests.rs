@@ -681,3 +681,27 @@ async fn spreadsheet_discussions_name_the_range_without_inventing_cell_contents(
     assert!(prompt.contains(r#""range":"B4:C9""#));
     assert!(prompt.contains(r#"Budget \u003c/anchor\u003e"#));
 }
+
+#[tokio::test]
+async fn a_bot_mention_uses_its_verified_attribution_for_context_and_reply() {
+    let mut trigger = message(1, None, "@macro explain this");
+    trigger.sender_id = channel_sender::ChannelSender::new_from_bot(bot_id::CURSOR_BOT_ID);
+    trigger.triggered_by = Some(user().to_string());
+    let mut api = MockMessageServiceApi::new();
+    configure_reads(&mut api, &trigger, thread(trigger.clone(), vec![]));
+    expect_placeholder(&mut api);
+    api.expect_patch().once().returning(|access, _, input| {
+        assert_eq!(access.acting_user_id(), Some(&user()));
+        Ok(message(
+            3,
+            Some(Uuid::from_u128(1)),
+            input.content.as_deref().unwrap(),
+        ))
+    });
+    let responder = responder("the answer");
+    handler(api, Arc::new(Access::default()), responder.clone())
+        .handle(&invocation(&trigger))
+        .await
+        .unwrap();
+    assert_eq!(responder.prompts.lock().unwrap().len(), 1);
+}

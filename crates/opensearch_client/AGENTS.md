@@ -37,11 +37,21 @@ projects.
   `src/upsert/<entity>.rs` + `src/delete/<entity>.rs` → a `src/search/<entity>.rs`
   query if it needs its own search endpoint → wire into
   `services/search_processing_service`.
+- Property DATE filters use the existing nested `properties.date_value` epoch-millisecond projection; emit only supplied inclusive/exclusive bounds and use a negated nested exists query for missing dates.
 
 ## Checks
 
 - `cargo test -p opensearch_client` (`SQLX_OFFLINE` unset; needs a running
   OpenSearch — see `crates/opensearch_query_builder/docker-compose.yml`).
+
+## Gotchas
+
+- Map a failed `.send()` with `OpensearchClientError::request_failed` and a
+  failed body read with `deserialization_failed`. Both take an
+  `OpensearchOperation`: add a variant for a new request rather than passing a
+  name. `request_failed` classifies the cause as a `TransportFailure` (timeout,
+  connect, connection closed, other) and keeps the full source chain in
+  `details`; reqwest's `Display` alone drops the cause.
 
 ## Related
 

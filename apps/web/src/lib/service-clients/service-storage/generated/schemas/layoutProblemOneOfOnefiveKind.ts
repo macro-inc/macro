@@ -10,5 +10,5 @@ export type LayoutProblemOneOfOnefiveKind =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const LayoutProblemOneOfOnefiveKind = {
-  textTooLong: 'textTooLong',
+  conditionNamesLaterColumn: 'conditionNamesLaterColumn',
 } as const;

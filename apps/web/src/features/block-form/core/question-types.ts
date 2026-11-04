@@ -16,6 +16,7 @@ export type QuestionTypeId =
   | 'file'
   | 'datetime'
   | 'date'
+  | 'date-range'
   | 'url'
   | 'checkbox'
   | 'person'
@@ -109,6 +110,13 @@ export const QUESTION_TYPE_CHOICES: readonly QuestionTypeChoice[] = [
     widget: 'date',
   },
   {
+    id: 'date-range',
+    label: 'Time range',
+    group: 'details',
+    kind: { type: 'date_range' },
+    widget: null,
+  },
+  {
     id: 'url',
     label: 'Link',
     group: 'text',
@@ -159,6 +167,7 @@ export function widgetsFor(kind: FormColumnKind): QuestionWidget[] {
     .with(
       { type: 'number' },
       { type: 'boolean' },
+      { type: 'date_range' },
       { type: 'entity' },
       { type: 'relation' },
       () => []
@@ -212,6 +221,7 @@ export function questionTypeOf(
     .with({ type: 'number' }, () => 'number')
     .with({ type: 'boolean' }, () => 'checkbox')
     .with({ type: 'date' }, () => (shown === 'date' ? 'date' : 'datetime'))
+    .with({ type: 'date_range' }, () => 'date-range')
     .with({ type: 'link' }, () => (shown === 'file' ? 'file' : 'url'))
     .with({ type: 'select', multi: false }, () =>
       shown === 'dropdown' ? 'dropdown' : 'choice'
@@ -251,6 +261,7 @@ export function questionTypeLabel(
         { type: 'number' },
         { type: 'boolean' },
         { type: 'date' },
+        { type: 'date_range' },
         { type: 'link' },
         { type: 'select' },
         { type: 'relation' },
@@ -271,6 +282,7 @@ export function sameColumnKind(
       { type: 'number' },
       { type: 'boolean' },
       { type: 'date' },
+      { type: 'date_range' },
       { type: 'link' },
       { type: 'tag' },
       (one) => right.type === one.type

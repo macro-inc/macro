@@ -10,5 +10,5 @@ export type SetPropertyValueOneOfOneoneType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const SetPropertyValueOneOfOneoneType = {
-  multi_select_option: 'multi_select_option',
+  select_option: 'select_option',
 } as const;

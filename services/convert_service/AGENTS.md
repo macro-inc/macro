@@ -38,6 +38,16 @@ synchronously via HTTP or asynchronously via SQS.
   LOK shared library in the environment.
 - The `disable_cleanup`/`disable_worker`/`local_queue` Cargo features gate
   local-dev behavior — don't assume they're enabled in deployed builds.
+- Removing the job folder is the only disk cleanup; the conversion child's
+  `TMPDIR` points there so LibreOffice's scratch files go with it. Anything
+  written elsewhere stays on the task's 20 GiB ephemeral disk until ECS
+  replaces the task. A full disk looks like LibreOffice failing
+  (`loadComponentFromURL returned an empty reference`, `Failed to save
+  document`) next to `No space left on device`; check
+  `ecs.fargate.ephemeral_storage.utilized` before debugging LibreOffice.
+- The convert queue's visibility timeout (`infra/stacks/convert-service`)
+  must stay above `conversion_timeout`; failed messages go to the DLQ after
+  their second receive.
 
 ## Related
 

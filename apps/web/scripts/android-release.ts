@@ -11,6 +11,7 @@ const androidConfigPath = new URL(
   '../tauri/src-tauri/tauri.android.conf.json',
   import.meta.url
 );
+const minNativeBuildPath = new URL('../min-native-build.json', import.meta.url);
 const maxVersionCode = 2_100_000_000;
 const releaseConfigSchema = z
   .object({
@@ -76,6 +77,24 @@ export async function bumpAndroidVersionCode(
   config.bundle.android.versionCode += 1;
   await writeFile(path, `${JSON.stringify(config, null, 2)}\n`);
   return config.bundle.android.versionCode;
+}
+
+const nativeBuildFloorsSchema = z
+  .object({ android: z.number().int().min(1) })
+  .passthrough();
+
+/// Raises the Android floor in min-native-build.json to `versionCode`: after
+/// the next production web deploy, older Android installs stop receiving the
+/// shared frontend bundle and are prompted to update from Google Play.
+export async function raiseAndroidNativeBuildFloor(
+  versionCode: number,
+  path: string | URL = minNativeBuildPath
+) {
+  const floors = nativeBuildFloorsSchema.parse(
+    JSON.parse(await readFile(path, 'utf8'))
+  );
+  floors.android = versionCode;
+  await writeFile(path, `${JSON.stringify(floors, null, 2)}\n`);
 }
 
 const signingSchema = z.object({
@@ -251,8 +270,18 @@ export function verifyAndroidApk(
 if (import.meta.main) {
   const [command, ...args] = process.argv.slice(2);
   try {
-    if (command === 'bump' && args.length === 0) {
-      console.log(await bumpAndroidVersionCode());
+    if (
+      command === 'bump' &&
+      (args.length === 0 || (args.length === 1 && args[0] === '--no-min'))
+    ) {
+      const versionCode = await bumpAndroidVersionCode();
+      if (args.length === 0) {
+        await raiseAndroidNativeBuildFloor(versionCode);
+        console.error(
+          `Raised the Android native build floor to ${versionCode}: after this merges and production deploys, older Android installs are prompted to update.`
+        );
+      }
+      console.log(versionCode);
     } else if (command === 'metadata' && args.length === 2) {
       const [tag, destination] = args;
       const metadata = androidReleaseMetadata(
@@ -284,7 +313,7 @@ if (import.meta.main) {
       );
     } else {
       throw new Error(
-        'Usage: android-release.ts bump | metadata TAG CONFIG | signing DIRECTORY PROPERTIES | ensure-signing DIRECTORY PROPERTIES | verify TAG APK BUILD_TOOLS CERTIFICATE_FILE'
+        'Usage: android-release.ts bump [--no-min] | metadata TAG CONFIG | signing DIRECTORY PROPERTIES | ensure-signing DIRECTORY PROPERTIES | verify TAG APK BUILD_TOOLS CERTIFICATE_FILE'
       );
     }
   } catch (error) {

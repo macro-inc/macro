@@ -3,14 +3,14 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { Button, TextField } from '@ui';
 import { createEffect, createSignal, For, on, Show, Suspense } from 'solid-js';
 import { v7 as newMessageId } from 'uuid';
-import { CallChatPanel } from './components/CallChatPanel';
+import { CallChatBody } from './components/CallChatBody';
 import { useGuestCallChat } from './queries/use-guest-call-chat';
 
 type GuestCallChatProps = {
   callId: string;
   session: { token: string; participantId: string };
-  id: string;
   open: boolean;
+  focusOnOpen?: boolean;
   onClose: () => void;
 };
 
@@ -34,7 +34,8 @@ function GuestCallChatContent(props: GuestCallChatProps) {
   let input!: HTMLTextAreaElement;
   createEffect(
     on([() => props.open, chat.ready], ([open, ready]) => {
-      if (open && ready && !isTouchDevice()) input?.focus();
+      if (open && ready && props.focusOnOpen !== false && !isTouchDevice())
+        input?.focus();
     })
   );
 
@@ -55,8 +56,8 @@ function GuestCallChatContent(props: GuestCallChatProps) {
   }
 
   return (
-    <CallChatPanel
-      {...props}
+    <CallChatBody
+      open={props.open}
       composer={
         <form
           onSubmit={(event) => {
@@ -94,6 +95,7 @@ function GuestCallChatContent(props: GuestCallChatProps) {
             />
           </TextField>
           <Button
+            variant="primary"
             type="submit"
             class="mt-2"
             disabled={!chat.ready() || chat.sending() || !content().trim()}
@@ -115,6 +117,7 @@ function GuestCallChatContent(props: GuestCallChatProps) {
             : 'Could not load chat.'}
         </p>
         <Button
+          variant="ghost"
           type="button"
           onClick={() => fireAndForget(chat.refresh(), 'meetings')}
         >
@@ -140,6 +143,6 @@ function GuestCallChatContent(props: GuestCallChatProps) {
           </div>
         )}
       </For>
-    </CallChatPanel>
+    </CallChatBody>
   );
 }

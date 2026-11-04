@@ -310,7 +310,7 @@ export function FormulaEditor(props: {
           >
             {(column) => (
               <Button
-                variant="outline"
+                variant="secondary"
                 size="xs"
                 disabled={!tools()}
                 onClick={() => {
@@ -347,7 +347,7 @@ export function FormulaEditor(props: {
           Cancel
         </Button>
         <Button
-          variant="cta"
+          variant="primary"
           size="sm"
           disabled={!canSave()}
           onClick={() => fireAndForget(save(), 'database')}

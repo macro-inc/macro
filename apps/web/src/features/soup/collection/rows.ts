@@ -23,6 +23,8 @@ const createSoupRowId = (
 export type CreateSoupEntityRowOptions = {
   groupId?: string;
   occurrenceId?: string;
+  /** Leave the group out of the row id, so moving groups keeps the row. */
+  keyByEntity?: boolean;
 };
 
 export function createSoupEntityRow<TEntity extends SoupEntityIdentity>(
@@ -35,7 +37,7 @@ export function createSoupEntityRow<TEntity extends SoupEntityIdentity>(
       'entity',
       entity.type,
       entity.id,
-      options.groupId,
+      options.keyByEntity ? undefined : options.groupId,
       options.occurrenceId
     ),
     entity,
@@ -125,6 +127,12 @@ export function buildFlatSoupRows<TEntity extends SoupEntityIdentity>(
 }
 
 export type BuildGroupedSoupRowsOptions<TEntity extends SoupEntityIdentity> = {
+  /**
+   * Identify rows by entity alone, for lists where each entity sits in one
+   * group (date buckets). A thread moving to another group then keeps its
+   * row, its DOM and the keyboard cursor instead of becoming a new row.
+   */
+  keyByEntity?: boolean;
   getOccurrenceId?: (
     entity: TEntity,
     index: number,
@@ -137,6 +145,8 @@ export function buildGroupedSoupRows<TEntity extends SoupEntityIdentity>(
   options: BuildGroupedSoupRowsOptions<TEntity> = {}
 ): SoupRow<TEntity>[] {
   const groupIds = new Set<string>();
+  // Keyed by entity, a repeat in another group still needs its own id.
+  const listOccurrences = new Map<string, number>();
   const rows = groups.flatMap((group) => {
     if (groupIds.has(group.id)) {
       throw new Error(
@@ -146,11 +156,14 @@ export function buildGroupedSoupRows<TEntity extends SoupEntityIdentity>(
     groupIds.add(group.id);
 
     const groupRows: SoupRow<TEntity>[] = [createSoupGroupHeaderRow(group)];
-    const occurrences = new Map<string, number>();
+    const occurrences = options.keyByEntity
+      ? listOccurrences
+      : new Map<string, number>();
     group.entities.forEach((entity, index) => {
       groupRows.push(
         createSoupEntityRow(entity, {
           groupId: group.id,
+          keyByEntity: options.keyByEntity,
           occurrenceId:
             options.getOccurrenceId?.(entity, index, group) ??
             nextDuplicateOccurrence(entity, occurrences),

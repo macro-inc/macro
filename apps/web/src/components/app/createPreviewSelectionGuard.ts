@@ -1,5 +1,9 @@
 import type { NavigationStackChangeReason } from '@app/components/navigation-stack/NavigationStack';
+import { globalTabManager } from '@app/signal/tabLayout';
+import { goToChannelMessage } from '@block-channel/utils/link';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 import { createSignal, onCleanup, untrack, useContext } from 'solid-js';
 import {
   type PreviewBlockTarget,
@@ -31,36 +35,87 @@ export function createPreviewSelectionGuard(): PreviewSelectionGuard {
   const panel = useSplitPanelOrThrow();
   const owner = Symbol('inline-preview');
   const [current, setCurrent] = createSignal<ContentIdentity>();
+  const activate = () => {
+    // A background desktop tab stays mounted and keeps its selection, so
+    // showing that selection means bringing the tab up.
+    if (globalTabManager()?.revealSplit(panel.handle.id)) return;
+
+    panel.handle.activate();
+  };
   const unregister = manager.registerOpenViews(() => {
     const content = current();
-    return content
-      ? [{ owner, content, activate: () => panel.handle.activate() }]
-      : [];
+    return content ? [{ owner, content, activate }] : [];
   });
   onCleanup(unregister);
 
-  const identity = (selection: PreviewSelectionInput | undefined) => {
+  const targetFor = (selection: PreviewSelectionInput | undefined) => {
     if (!selection) return;
-    const target =
-      'blockType' in selection ? selection : previewBlockTarget(selection);
+    return 'blockType' in selection ? selection : previewBlockTarget(selection);
+  };
+  const identity = (target: PreviewBlockTarget | undefined) => {
+    if (!target) return;
     return { type: target.blockType, id: target.blockId };
   };
   const canSelect: SelectPreview = (selection, reason = 'navigate') =>
     untrack(() => {
-      const next = identity(selection);
+      const target = targetFor(selection);
+      const next = identity(target);
       const existing = next && manager.findOpenView(next);
       if (existing && existing.owner !== owner) {
         if (reason === 'navigate') {
           existing.activate?.();
-          toast.alert('Content already open');
+          const params = target?.params;
+          const messageId =
+            params && 'channel_message_id' in params
+              ? params.channel_message_id
+              : undefined;
+          const threadId =
+            params && 'channel_thread_id' in params
+              ? params.channel_thread_id
+              : undefined;
+          if (
+            target?.blockType === 'channel' &&
+            typeof messageId === 'string'
+          ) {
+            // Keep the current preview and send the location to its existing owner.
+            fireAndForget(
+              Telemetry.span('channel.navigate_from_preview', async (span) => {
+                span.setAttr('channel.id', target.blockId);
+                span.setAttr('message.id', messageId);
+                try {
+                  await goToChannelMessage(
+                    manager.getOrchestrator(),
+                    target.blockId,
+                    messageId,
+                    typeof threadId === 'string' ? threadId : undefined
+                  );
+                } catch (error) {
+                  span.error(error);
+                  throw error;
+                }
+              }),
+              'preview-selection'
+            );
+          } else {
+            toast.alert('Content already open');
+          }
         }
         return false;
       }
       return true;
     });
-  const select: SelectPreview = (selection, reason) => {
+  // A host's route effect makes the first call as its view mounts. That
+  // selection was already in the URL (a restored tab or layout), so a conflict
+  // yields quietly: moving focus would bounce the user out of the tab they just
+  // opened.
+  let viewMounting = true;
+  const select: SelectPreview = (
+    selection,
+    reason = viewMounting ? 'restore' : 'navigate'
+  ) => {
+    viewMounting = false;
     if (!canSelect(selection, reason)) return false;
-    setCurrent(identity(selection));
+    setCurrent(identity(targetFor(selection)));
     return true;
   };
 

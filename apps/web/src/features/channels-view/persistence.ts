@@ -12,6 +12,7 @@ import { z } from 'zod';
 import {
   CHANNELS_DEFAULT_RAIL_WIDTH,
   CHANNELS_DEFAULT_SORT_BY,
+  clampChannelSectionHeight,
   clampChannelsRailWidth,
 } from './constants';
 import type { ChannelsViewState } from './types';
@@ -38,6 +39,7 @@ const channelsExpandedGroupsSchema = z.preprocess(
   },
   z.object({
     favorites: z.boolean().default(true),
+    team_channels: z.boolean().default(true),
     channels: z.boolean().default(true),
     direct_messages: z.boolean().default(true),
   })
@@ -48,6 +50,7 @@ const channelsEntryStateSchemaWithDefaults = z.object({
   tab: z.enum(['browse', 'recents', 'threads']).default('browse'),
   expandedGroups: channelsExpandedGroupsSchema.default({
     favorites: true,
+    team_channels: true,
     channels: true,
     direct_messages: true,
   }),
@@ -62,6 +65,7 @@ const DEFAULT_CHANNELS_ENTRY_STATE = {
   tab: 'browse',
   expandedGroups: {
     favorites: true,
+    team_channels: true,
     channels: true,
     direct_messages: true,
   },
@@ -78,6 +82,9 @@ const channelsPreferencesSchema = z.object({
     .transform(clampChannelsRailWidth),
   sortBy: z
     .object({
+      team_channels: z
+        .enum(['viewed_at', 'updated_at', 'created_at'])
+        .default(CHANNELS_DEFAULT_SORT_BY.team_channels),
       channels: z
         .enum(['viewed_at', 'updated_at', 'created_at'])
         .default(CHANNELS_DEFAULT_SORT_BY.channels),
@@ -89,6 +96,34 @@ const channelsPreferencesSchema = z.object({
         .default(CHANNELS_DEFAULT_SORT_BY.threads),
     })
     .default(CHANNELS_DEFAULT_SORT_BY),
+  sectionPreferences: z
+    .record(
+      z.string(),
+      z
+        .object({
+          sort: z
+            .enum(['viewed_at', 'updated_at', 'created_at', 'name', 'manual'])
+            .optional(),
+          unreadOnly: z.boolean().optional(),
+          height: z
+            .number()
+            .finite()
+            .transform(clampChannelSectionHeight)
+            .optional(),
+        })
+        .optional()
+    )
+    .default({}),
+  sectionOrder: z
+    .array(
+      z.union([
+        z.enum(['favorites', 'direct_messages', 'team_channels', 'channels']),
+        z.custom<`label:${string}`>(
+          (value) => typeof value === 'string' && value.startsWith('label:')
+        ),
+      ])
+    )
+    .default([]),
 });
 
 type ChannelsPreferences = z.infer<typeof channelsPreferencesSchema>;
@@ -97,6 +132,8 @@ const DEFAULT_CHANNELS_PREFERENCES = {
   version: 1,
   asideWidth: CHANNELS_DEFAULT_RAIL_WIDTH,
   sortBy: CHANNELS_DEFAULT_SORT_BY,
+  sectionPreferences: {},
+  sectionOrder: [],
 } satisfies ChannelsPreferences;
 
 function selectEntryState(state: ChannelsViewState): ChannelsEntryState {
@@ -184,6 +221,7 @@ function createChannelsLocalStateStorage(options: {
 function createChannelsPreferencesStorage(options: {
   userId: Accessor<string | undefined>;
   restore: boolean;
+  restoreSectionOrder: boolean;
 }): PersistenceStorage<ChannelsViewState> {
   let previous: string | undefined;
   const serialize = (state: ChannelsViewState) =>
@@ -191,6 +229,8 @@ function createChannelsPreferencesStorage(options: {
       version: 1,
       asideWidth: clampChannelsRailWidth(state.asideWidth),
       sortBy: state.sortBy,
+      sectionPreferences: state.sectionPreferences,
+      sectionOrder: state.sectionOrder,
     } satisfies ChannelsPreferences);
 
   return {
@@ -213,12 +253,20 @@ function createChannelsPreferencesStorage(options: {
           ...current,
           asideWidth: restored.asideWidth,
           sortBy: restored.sortBy,
+          sectionPreferences: restored.sectionPreferences,
+          sectionOrder: options.restoreSectionOrder
+            ? restored.sectionOrder
+            : current.sectionOrder,
         };
       } catch {
         return {
           ...current,
           asideWidth: DEFAULT_CHANNELS_PREFERENCES.asideWidth,
           sortBy: DEFAULT_CHANNELS_PREFERENCES.sortBy,
+          sectionPreferences: DEFAULT_CHANNELS_PREFERENCES.sectionPreferences,
+          sectionOrder: options.restoreSectionOrder
+            ? DEFAULT_CHANNELS_PREFERENCES.sectionOrder
+            : current.sectionOrder,
         };
       }
     },
@@ -244,12 +292,14 @@ export function createChannelsViewPersistence(options: {
   restoreEntryState?: boolean;
   restoreLocalState?: boolean;
   restorePreferences?: boolean;
+  restoreSectionOrder?: boolean;
 }): MakePersistedStateOptions<ChannelsViewState> {
   return {
     storages: [
       createChannelsPreferencesStorage({
         userId: options.userId,
         restore: options.restorePreferences ?? true,
+        restoreSectionOrder: options.restoreSectionOrder ?? true,
       }),
       createChannelsLocalStateStorage({
         userId: options.userId,

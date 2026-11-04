@@ -3,9 +3,9 @@ import { matchesTokenSubsequences } from '@core/util/string';
 import type { EntityItem, QuickAccessItem } from './types';
 
 const quickAccessSearch = createFreshSearch<QuickAccessItem>({
-  config: { useViewedAt: true },
+  config: { useViewedAt: true, commaSeparatedChannelMatch: true },
   getName: (item) => item.searchText,
-  isChannelItem: (item) => item.bucket === 'channel',
+  isChannelItem: (item) => item.bucket === 'channel' || item.bucket === 'dm',
   getTimestamp: (item) => item.timestamps,
 });
 

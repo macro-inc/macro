@@ -183,7 +183,11 @@ function ActionMenuContent(props: ActionMenuProps) {
         // the very top; float the toolbar fully above so it never covers it.
         position={props.showTimestamp ? 'above' : 'straddle'}
       >
-        <Toolbar size="icon-sm" onClick={(event) => event.stopPropagation()}>
+        <Toolbar
+          size="icon-sm"
+          class="max-w-full flex-wrap"
+          onClick={(event) => event.stopPropagation()}
+        >
           <Show when={props.showTimestamp}>
             <Timestamp format="time" class="px-1.5 whitespace-nowrap" />
             <Toolbar.Divider />

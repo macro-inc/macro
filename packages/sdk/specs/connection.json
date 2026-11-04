@@ -53,6 +53,53 @@
         ]
       }
     },
+    "/message/broadcast": {
+      "post": {
+        "tags": ["message"],
+        "summary": "Sends a message to every open connection on every instance. Delivery is\nbest-effort and asynchronous, so there are no receipts.",
+        "operationId": "broadcast_message_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendMessageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Broadcast accepted"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "internal-api-key": []
+          }
+        ]
+      }
+    },
     "/message/send/{entity_type}/{entity_id}": {
       "post": {
         "tags": ["message"],
@@ -267,7 +314,8 @@
           "initiative",
           "database",
           "database_row",
-          "form"
+          "form",
+          "external_chat"
         ]
       },
       "GenericErrorResponse": {

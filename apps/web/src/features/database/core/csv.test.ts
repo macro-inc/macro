@@ -1,6 +1,11 @@
 import { err } from 'neverthrow';
 import { describe, expect, it } from 'vitest';
-import { databaseCsvMessage, encodeDatabaseCsv, parseDatabaseCsv } from './csv';
+import {
+  databaseCsvMessage,
+  encodeDatabaseCsv,
+  exportedValue,
+  parseDatabaseCsv,
+} from './csv';
 
 describe('database CSV files', () => {
   it('preserves quoted values, mentions, leading zeroes and wide integer identifiers', () => {
@@ -51,6 +56,22 @@ describe('database CSV files', () => {
         ]
       )
     ).toBe('Name,Amount\n"\'=SUM(A1)",-12\n"Doe, Jo",');
+  });
+
+  it('exports a date range as the interval a range cell imports from', () => {
+    expect(
+      exportedValue(
+        {
+          id: 'trip',
+          name: 'Trip',
+          dataType: 'DATE_RANGE',
+          isMultiSelect: false,
+          options: [],
+          writable: true,
+        },
+        '2026-03-01T00:00:00.000Z/2026-03-05T00:00:00.000Z'
+      )
+    ).toBe('2026-03-01T00:00:00.000Z/2026-03-05T00:00:00.000Z');
   });
 
   it('names the import limits the service holds a CSV to', () => {

@@ -1,25 +1,23 @@
 use axum::Json;
-use axum::extract::{FromRef, FromRequestParts, Path, State};
+use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::http::request::Parts;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, patch, post};
 use axum::{Router, routing::get};
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationState, UserOrInternal};
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::ErrorResponse;
-use model::user::UserContext;
-use saved_views::{ExcludedDefaultViewStorage, PgViewStorage, ViewStorage};
+use saved_views::domain::Error as DomainError;
+use saved_views::{ExcludedDefaultViewStorage, PgViewStorage};
 
 pub use saved_views::{ExcludedDefaultView, View, ViewPatch};
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
 use thiserror::Error;
-use tokio::try_join;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::api::ApiContext;
 use crate::api::context::AuthorizationService;
+use crate::service::saved_views::service;
 
 pub fn router() -> Router<ApiContext> {
     Router::new()
@@ -32,19 +30,34 @@ pub fn router() -> Router<ApiContext> {
 
 #[derive(Debug, Error)]
 pub enum SavedViewErr {
+    #[error("saved view service failed")]
+    Domain(#[from] DomainError),
     #[error("An unknown error has occurred")]
     DbErr(#[from] sqlx::Error),
-    #[error("You are not authorized to access this")]
-    Unauthorized,
-    #[error("saved view not found")]
-    NotFound,
-    #[error("bad request {0}")]
-    BadRequest(&'static str),
 }
 
 impl IntoResponse for SavedViewErr {
     fn into_response(self) -> Response {
         match &self {
+            SavedViewErr::Domain(error) => {
+                let status = match error {
+                    DomainError::NotFound => StatusCode::NOT_FOUND,
+                    DomainError::NotOwner => StatusCode::UNAUTHORIZED,
+                    DomainError::Conflict => StatusCode::CONFLICT,
+                    DomainError::Invalid | DomainError::NotMember => StatusCode::BAD_REQUEST,
+                    DomainError::Internal(err) => {
+                        tracing::error!(error=?err);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    }
+                };
+                (
+                    status,
+                    Json(ErrorResponse {
+                        message: error.to_string().into(),
+                    }),
+                )
+                    .into_response()
+            }
             SavedViewErr::DbErr(error) => {
                 tracing::error!(error=?error);
                 (
@@ -55,27 +68,6 @@ impl IntoResponse for SavedViewErr {
                 )
                     .into_response()
             }
-            SavedViewErr::Unauthorized => (
-                StatusCode::UNAUTHORIZED,
-                Json(ErrorResponse {
-                    message: self.to_string().into(),
-                }),
-            )
-                .into_response(),
-            SavedViewErr::NotFound => (
-                StatusCode::NOT_FOUND,
-                Json(ErrorResponse {
-                    message: self.to_string().into(),
-                }),
-            )
-                .into_response(),
-            SavedViewErr::BadRequest(message) => (
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    message: (*message).into(),
-                }),
-            )
-                .into_response(),
         }
     }
 }
@@ -99,58 +91,6 @@ pub struct ExcludeDefaultViewRequest {
     default_view_id: String,
 }
 
-async fn authorize_view_access(
-    storage: &impl ViewStorage<Err = sqlx::Error>,
-    view_id: Uuid,
-    user_id: &str,
-) -> Result<(), SavedViewErr> {
-    let view = storage.get_view(view_id).await.map_err(|e| match e {
-        sqlx::Error::RowNotFound => SavedViewErr::NotFound,
-        e => SavedViewErr::DbErr(e),
-    })?;
-
-    if view.user_id != user_id {
-        return Err(SavedViewErr::Unauthorized);
-    }
-    Ok(())
-}
-
-#[derive(Debug)]
-struct SavedViewOwner(pub UserContext);
-
-impl<S> FromRequestParts<S> for SavedViewOwner
-where
-    S: Send + Sync + 'static,
-    PgPool: FromRef<S>,
-    MacroAuthorizationState<AuthorizationService>: FromRef<S>,
-{
-    type Rejection = SavedViewErr;
-
-    #[tracing::instrument(skip(parts, state), err)]
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let db = PgPool::from_ref(state);
-
-        let user =
-            MacroAuthorizationExtractor::<AuthorizationService, UserOrInternal>::from_request_parts(parts, state)
-                .await
-                .map_err(|_| SavedViewErr::Unauthorized)?;
-
-        let saved_view_id = Path::<SavedViewParams>::from_request_parts(parts, state)
-            .await
-            .map_err(|_| SavedViewErr::BadRequest("Missing saved view id"))?
-            .saved_view_id;
-
-        authorize_view_access(
-            &PgViewStorage::new(db),
-            saved_view_id,
-            user.authorization.user.macro_user_id.as_ref(),
-        )
-        .await?;
-
-        Ok(SavedViewOwner(user.authorization.user.user_context.clone()))
-    }
-}
-
 #[utoipa::path(
         tag = "saved_views",
         get,
@@ -161,25 +101,19 @@ where
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user), fields(user_id=?user.authorization.user.macro_user_id), err)]
+#[tracing::instrument(skip_all, err)]
 async fn get_views_handler(
     State(ctx): State<ApiContext>,
     user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<(StatusCode, Json<ViewsResponse>), SavedViewErr> {
     let pg_view_storage = PgViewStorage::new(ctx.db.clone());
 
-    let (views, excluded_default_views) = try_join!(
-        async {
-            pg_view_storage
-                .get_views_for_user(user.authorization.user.macro_user_id.as_ref())
-                .await
-        },
-        async {
-            pg_view_storage
-                .get_excluded_default_views_for_user(user.authorization.user.macro_user_id.as_ref())
-                .await
-        }
-    )?;
+    let views = service(ctx.db.clone())
+        .legacy_list(user.authorization.user.macro_user_id.as_ref())
+        .await?;
+    let excluded_default_views = pg_view_storage
+        .get_excluded_default_views_for_user(user.authorization.user.macro_user_id.as_ref())
+        .await?;
 
     Ok((
         StatusCode::OK,
@@ -205,15 +139,13 @@ async fn create_view_handler(
     user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Json(create_view_request): Json<CreateViewRequest>,
 ) -> Result<(StatusCode, Json<View>), SavedViewErr> {
-    let pg_view_storage = PgViewStorage::new(ctx.db.clone());
-
-    let new_view = View::new(
-        user.authorization.user.macro_user_id.to_string(),
-        create_view_request.name,
-        create_view_request.config,
-    );
-
-    pg_view_storage.create_view(&new_view).await?;
+    let new_view = service(ctx.db.clone())
+        .legacy_create(
+            user.authorization.user.macro_user_id.as_ref(),
+            create_view_request.name,
+            create_view_request.config,
+        )
+        .await?;
 
     Ok((StatusCode::CREATED, Json(new_view)))
 }
@@ -236,15 +168,15 @@ struct SavedViewParams {
         (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx), fields(user_id=?user_context.user_id), err)]
+#[tracing::instrument(skip_all, fields(view_id = %id), err)]
 async fn delete_view_handler(
     State(ctx): State<ApiContext>,
-    SavedViewOwner(user_context): SavedViewOwner,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Path(SavedViewParams { saved_view_id: id }): Path<SavedViewParams>,
 ) -> Result<StatusCode, SavedViewErr> {
-    let pg_view_storage = PgViewStorage::new(ctx.db.clone());
-
-    pg_view_storage.delete_view(id).await?;
+    service(ctx.db.clone())
+        .legacy_delete(user.authorization.user.macro_user_id.as_ref(), id)
+        .await?;
 
     Ok(StatusCode::OK)
 }
@@ -262,16 +194,21 @@ async fn delete_view_handler(
         (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx), fields(user_id=?user_context.user_id), err)]
+#[tracing::instrument(skip_all, fields(view_id = %id), err)]
 async fn patch_view_handler(
     State(ctx): State<ApiContext>,
-    SavedViewOwner(user_context): SavedViewOwner,
+    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Path(SavedViewParams { saved_view_id: id }): Path<SavedViewParams>,
     Json(patch): Json<ViewPatch>,
 ) -> Result<StatusCode, SavedViewErr> {
-    let pg_view_storage = PgViewStorage::new(ctx.db.clone());
-
-    pg_view_storage.patch_view(id, patch).await?;
+    service(ctx.db.clone())
+        .legacy_patch(
+            user.authorization.user.macro_user_id.as_ref(),
+            id,
+            patch.name.as_deref(),
+            patch.config.as_ref(),
+        )
+        .await?;
 
     Ok(StatusCode::OK)
 }
@@ -286,7 +223,7 @@ async fn patch_view_handler(
         (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user), fields(user_id=?user.authorization.user.macro_user_id), err)]
+#[tracing::instrument(skip_all, err)]
 pub async fn exclude_default_view_handler(
     State(ctx): State<ApiContext>,
     user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,

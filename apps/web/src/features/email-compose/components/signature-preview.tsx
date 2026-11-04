@@ -1,8 +1,9 @@
 import CaretDownIcon from '@icon/system/regular/caret-down.svg?component-solid';
 import InfoIcon from '@icon/system/regular/info.svg';
 import XIcon from '@icon/system/regular/x.svg?component-solid';
+import { sanitizeEmailHtml } from '@macro-inc/email-renderer';
 import { Tooltip } from '@ui';
-import { createEffect, createSignal, Show } from 'solid-js';
+import { createEffect, createSignal, on, Show } from 'solid-js';
 
 // Rendered inside a shadow root so the signature's structural markup (lists,
 // headings, bold) keeps its default styling instead of being flattened by the
@@ -19,41 +20,53 @@ const SHADOW_STYLE = `
   img { max-width: 100%; height: auto; }
 `;
 
+/** Shared by settings and compose; raw drafts are sanitized before mounting. */
+export function SignatureContent(props: {
+  html: string;
+  label?: string;
+  prepareLinks?: (root: ShadowRoot) => void;
+}) {
+  let mountEl!: HTMLDivElement;
+  createEffect(
+    on(
+      () => props.html,
+      (html) => {
+        const root =
+          mountEl.shadowRoot ?? mountEl.attachShadow({ mode: 'open' });
+        root.innerHTML = `<style>${SHADOW_STYLE}</style>${sanitizeEmailHtml(html)}`;
+        for (const anchor of root.querySelectorAll('a[href]')) {
+          anchor.setAttribute('target', '_blank');
+          anchor.setAttribute('rel', 'noopener noreferrer');
+        }
+        props.prepareLinks?.(root);
+      }
+    )
+  );
+  return (
+    <div
+      ref={mountEl}
+      role="region"
+      aria-label={props.label ?? 'Signature preview'}
+      class="ph-no-capture min-w-0 overflow-auto rounded-lg bg-[white] px-4 py-3 text-base [contain:content]"
+    />
+  );
+}
+
 /**
  * Read-only preview of the signature that will be appended to the email on send.
- * The signature is already sanitized server-side; it's rendered as-is so the
- * preview matches what the recipient receives. The dismiss button drops it from
+ * Shares the isolated HTML renderer with settings. The dismiss button drops it from
  * this one message (the parent owns the include/exclude state).
  */
 export function SignaturePreview(props: {
-  /**
-   * Server-sanitized signature HTML. Inserted via innerHTML (the shadow root
-   * scopes CSS/DOM but does NOT block scripts), so callers MUST pass sanitized
-   * HTML — never raw user input. Today the only source is the saved inbox
-   * setting, sanitized server-side.
-   */
+  /** Saved inbox signature HTML. */
   html: string;
   mobile: boolean;
   prepareLinks?: (root: ShadowRoot) => void;
   onDismiss: () => void;
   dismissable?: boolean;
 }) {
-  let mountEl!: HTMLDivElement;
   // Always starts collapsed to just the bar; the user expands to preview it.
   const [expanded, setExpanded] = createSignal(false);
-
-  createEffect(() => {
-    const html = props.html;
-    // Lazily attach (idempotent): a shadow root can only be attached once.
-    const root = mountEl.shadowRoot ?? mountEl.attachShadow({ mode: 'open' });
-    root.innerHTML = `<style>${SHADOW_STYLE}</style>${html}`;
-    for (const a of root.querySelectorAll('a[href]')) {
-      a.setAttribute('target', '_blank');
-      a.setAttribute('rel', 'noopener noreferrer');
-    }
-    // Raw mailto: anchors open the in-app composer instead of the OS mail client
-    props.prepareLinks?.(root);
-  });
 
   return (
     <div class="mt-2 rounded-lg border border-edge-muted">
@@ -77,10 +90,7 @@ export function SignaturePreview(props: {
           {/* Hover-only guidance; hidden on mobile where tooltips never show
               (Settings still points mobile users to desktop). */}
           <Show when={!props.mobile}>
-            <Tooltip
-              label="Edit your signature in Settings -> Connections."
-              as="span"
-            >
+            <Tooltip label="Edit your signature in Settings → Email." as="span">
               <InfoIcon class="size-3.5 text-ink-muted" />
             </Tooltip>
           </Show>
@@ -98,11 +108,9 @@ export function SignaturePreview(props: {
           </Tooltip>
         </Show>
       </div>
-      <div
-        ref={mountEl}
-        class="rounded-b-lg bg-[white] px-3 py-2 text-base"
-        classList={{ hidden: !expanded() }}
-      />
+      <Show when={expanded()}>
+        <SignatureContent html={props.html} prepareLinks={props.prepareLinks} />
+      </Show>
     </div>
   );
 }

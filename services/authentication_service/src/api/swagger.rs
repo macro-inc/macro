@@ -3,20 +3,24 @@ use github::domain::models::{
     EnrichedGithubPullRequest, GithubMergeMethod, GithubPullRequestCheckRun,
     GithubPullRequestComment, GithubPullRequestMergeability, GithubPullRequestMergeabilityEntry,
     GithubPullRequestMergeabilityRequest, GithubPullRequestMergeabilityResponse,
-    GithubPullRequestNumber, GithubPullRequestRef, GithubPullRequestStatus,
+    GithubPullRequestNumber, GithubPullRequestRef, GithubPullRequestState, GithubPullRequestStatus,
     MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
     SetGithubPullRequestDraftRequest, SetGithubPullRequestDraftResponse,
+    SetGithubPullRequestStateRequest, SetGithubPullRequestStateResponse,
 };
 use gtm_invite::inbound::axum_router::dto::{
     CreateGtmInviteLinkRequest, GtmInviteLink, GtmInviteLinkList, GtmInviteLinkStatus,
     GtmInviteOffer, GtmInviteOfferStatus, PublicGtmInviteLink, RedeemGtmInviteLinkRequest,
 };
 use model::authentication::login::request::{AppleLoginRequest, PasswordRequest};
+use system_status::domain::models::{CurrentSystemStatus, StatusUpdate, SystemStatus};
+use system_status::inbound::axum_router::SystemStatusHistory;
 use teams::domain::model::{
     PatchTeamCrmSettingsRequest, PatchTeamCrmSettingsResponse, PatchTeamMemberPlanRequest,
     PatchTeamRequest, PatchTeamUserRole, Team, TeamInviteDetails, TeamInviteLinkTeam,
     TeamInviteLinkToken, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
 };
+use teams::inbound::axum_router::domain_notice::SendDomainNoticeResponse;
 use teams::inbound::axum_router::get_team_invites::TeamInvitesResponse as TeamTeamInvitesResponse;
 use teams::inbound::axum_router::get_user_invites::TeamInvitesResponse as UserTeamInvitesResponse;
 use teams::inbound::axum_router::invite_link::{
@@ -66,8 +70,8 @@ use model::authentication::{
 };
 use model::response::{EmptyResponse, ErrorResponse, UserTokensResponse};
 use model::user::{
-    ProfilePictureQueryParams, ProfilePictures, PutUserNameQueryParams, UserName, UserNames,
-    UserProfilePicture,
+    Language, ProfilePictureQueryParams, ProfilePictures, PutUserNameQueryParams, UserLanguage,
+    UserName, UserNames, UserProfilePicture,
 };
 
 #[derive(OpenApi)]
@@ -125,6 +129,7 @@ use model::user::{
                 github_pull_requests::handler,
                 github_pull_requests::merge_handler,
                 github_pull_requests::draft_handler,
+                github_pull_requests::state_handler,
                 github_pull_requests::mergeability_handler,
 
                 /// /oauth
@@ -142,6 +147,9 @@ use model::user::{
                 user::delete_user::handler,
                 user::post_profile_pictures::handler,
                 user::put_profile_picture::handler,
+                user::put_profile_picture_file::create_upload_handler,
+                user::put_profile_picture_file::handler,
+                user::agent_setup::handler,
                 user::put_name::handler,
                 user::get_name::handler,
                 user::patch_user_group::handler,
@@ -165,6 +173,7 @@ use model::user::{
                 ai_billing::inbound::axum_router::update_overage_handler::<crate::api::context::AiBillingServiceType, crate::api::context::AuthorizationService>,
                 ai_billing::inbound::axum_router::update_auto_reload_handler::<crate::api::context::AiBillingServiceType, crate::api::context::AuthorizationService>,
                 ai_billing::inbound::axum_router::create_credit_checkout_handler::<crate::api::context::AiBillingServiceType, crate::api::context::AuthorizationService>,
+                ai_billing::inbound::axum_router::purchase_credits_handler::<crate::api::context::AiBillingServiceType, crate::api::context::AuthorizationService>,
 
                 /// /session
                 session::session_login::handler,
@@ -186,6 +195,7 @@ use model::user::{
                 teams::inbound::axum_router::patch_team::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::patch_team_crm_settings::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::toggle_auto_join_domain::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::domain_notice::handler::<crate::api::context::DomainNoticeServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::toggle_non_admin_invites::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::reject_invitation::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::get_user_invites::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
@@ -199,6 +209,9 @@ use model::user::{
                 teams::inbound::axum_router::invite_link::get_team_handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::invite_link::join_handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
 
+                /// /user/language
+                user_language::inbound::axum_router::get_user_language_handler::<crate::api::context::UserLanguageServiceType, crate::api::context::AuthorizationService>,
+                user_language::inbound::axum_router::put_user_language_handler::<crate::api::context::UserLanguageServiceType, crate::api::context::AuthorizationService>,
                 /// /referral
                 referral::inbound::axum_router::get_referral_code_handler::<crate::api::context::ReferralServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
                 referral::inbound::axum_router::post_referral_invite_handler::<crate::api::context::ReferralServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
@@ -210,6 +223,11 @@ use model::user::{
                 gtm_invite::inbound::axum_router::resolve_link::handler::<crate::api::context::GtmInviteServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
                 gtm_invite::inbound::axum_router::redeem_link::handler::<crate::api::context::GtmInviteServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
                 gtm_invite::inbound::axum_router::get_offer::handler::<crate::api::context::GtmInviteServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
+
+                /// /system-status
+                system_status::inbound::axum_router::get_current::handler::<crate::api::context::SystemStatusServiceType, crate::api::context::AuthorizationService>,
+                system_status::inbound::axum_router::set_status::handler::<crate::api::context::SystemStatusServiceType, crate::api::context::AuthorizationService>,
+                system_status::inbound::axum_router::list_history::handler::<crate::api::context::SystemStatusServiceType, crate::api::context::AuthorizationService>,
 
                 /// /mobile-welcome-email
                 mobile_welcome_email::handler,
@@ -231,8 +249,14 @@ use model::user::{
                         UserProfilePicture,
                         AppleLoginRequest,
                         ProfilePictureQueryParams,
+                        crate::api::user::put_profile_picture_file::PutProfilePictureFileRequest,
+                        crate::api::user::put_profile_picture_file::CreateProfilePictureUploadRequest,
+                        crate::api::user::put_profile_picture_file::ProfilePictureUpload,
+                        crate::api::user::agent_setup::AgentSetupResponse,
                         PutUserNameQueryParams,
                         UserName,
+                        UserLanguage,
+                        Language,
                         UserNames,
                         GetNamesWithEmailRequestBody,
                         PostGetNamesRequestBody,
@@ -264,6 +288,12 @@ use model::user::{
                         GtmInviteOffer,
                         GtmInviteOfferStatus,
 
+                        // System status
+                        SystemStatus,
+                        CurrentSystemStatus,
+                        StatusUpdate,
+                        SystemStatusHistory,
+
                         // Plans and AI billing
                         PaidPlan,
                         ChangePlanRequest,
@@ -280,6 +310,10 @@ use model::user::{
                         ai_billing::AutoReloadSnapshot,
                         ai_billing::inbound::axum_router::CreditCheckoutRequestBody,
                         ai_billing::inbound::axum_router::CreditCheckoutResponse,
+                        ai_billing::inbound::axum_router::CreditPurchaseRequestBody,
+                        ai_billing::inbound::axum_router::CreditPurchaseResponse,
+                        ai_billing::CreditPurchaseStatus,
+                        ai_billing::CreditPurchaseSnapshot,
 
                         // GitHub pull requests
                         EnrichGithubPullRequestsProxyRequest,
@@ -294,6 +328,9 @@ use model::user::{
                         MergeGithubPullRequestResponse,
                         SetGithubPullRequestDraftRequest,
                         SetGithubPullRequestDraftResponse,
+                        GithubPullRequestState,
+                        SetGithubPullRequestStateRequest,
+                        SetGithubPullRequestStateResponse,
                         GithubPullRequestNumber,
                         GithubPullRequestMergeability,
                         GithubPullRequestMergeabilityEntry,
@@ -331,6 +368,7 @@ use model::user::{
                         PatchTeamCrmSettingsRequest,
                         PatchTeamCrmSettingsResponse,
                         ToggleAutoJoinDomainResponse,
+                        SendDomainNoticeResponse,
                         ToggleNonAdminInvitesResponse,
                         TeamInviteLinkResponse,
                         CreatedTeamInviteLinkResponse,
@@ -435,6 +473,26 @@ mod tests {
         assert_eq!(
             openapi["components"]["schemas"]["GithubPullRequestMergeability"]["enum"],
             serde_json::json!(["mergeable", "conflicting", "unknown"])
+        );
+    }
+
+    #[test]
+    fn github_pull_requests_openapi_includes_state_path() {
+        let openapi = serde_json::to_value(ApiDoc::openapi()).unwrap();
+        let operation = &openapi["paths"]["/github_pull_requests/state"]["post"];
+
+        assert_eq!(operation["operationId"], "set_github_pull_request_state");
+        assert_eq!(
+            operation["requestBody"]["content"]["application/json"]["schema"]["$ref"].as_str(),
+            Some("#/components/schemas/SetGithubPullRequestStateRequest")
+        );
+        assert_eq!(
+            operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].as_str(),
+            Some("#/components/schemas/SetGithubPullRequestStateResponse")
+        );
+        assert_eq!(
+            openapi["components"]["schemas"]["GithubPullRequestState"]["enum"],
+            serde_json::json!(["open", "closed"])
         );
     }
 

@@ -25,9 +25,11 @@ name = "scheduled_action_openapi"
 path = "src/scheduling_openapi.rs"
 
 [dependencies]
+universal_input = { path = "../../crates/universal_input" }
 models_ai_projection = { path = "../../crates/models_ai_projection" }
 activity = { path = "../../crates/activity", default-features = false }
 agent = { path = "../../crates/agent", features = ["debug-messages"] }
+agent-client-protocol = { workspace = true }
 agent_changes = { path = "../../crates/agent_changes" }
 agent_code_mode = { path = "../../crates/agent_code_mode" }
 agent_egress = { path = "../../crates/agent_egress" }
@@ -45,6 +47,7 @@ agent_api_keys = { path = "../../crates/agent_api_keys" }
 ai_projections = { path = "../../crates/ai_projections", features = ["agent"] }
 ai_tools = { path = "../../crates/ai_tools" }
 ai_toolset = { path = "../../crates/ai_toolset" }
+calendar_events = { path = "../../crates/calendar_events", features = ["postgres"] }
 ai_usage = { path = "../../crates/ai_usage" }
 analytics_client = { path = "../../crates/analytics_client" }
 anyhow = { workspace = true }
@@ -100,13 +103,14 @@ foreign_entity = { path = "../../crates/foreign_entity" }
 frecency = { path = "../../crates/frecency", features = ["outbound", "postgres"] }
 fusionauth = { path = "../../crates/fusionauth" }
 futures = { workspace = true }
-github = { path = "../../crates/github", default-features = false, features = ["outbound", "ports", "sync"] }
+github = { path = "../../crates/github", default-features = false, features = ["installation_claims", "outbound", "ports", "sync"] }
 github_pull_requests = { path = "../../crates/github_pull_requests", features = ["outbound", "s3", "service"] }
 granola_sync = { path = "../../crates/granola_sync" }
 harness_id = { path = "../../crates/harness_id" }
 harnesses = { path = "../../crates/harnesses", default-features = false, features = ["outbound", "ports"] }
 http = { workspace = true }
 http-body-util = { workspace = true }
+image_generation = { path = "../../crates/image_generation", features = ["axum"] }
 import = { path = "../../crates/import" }
 import_notion = { path = "../../crates/import_notion" }
 import_linear = { path = "../../crates/import_linear" }
@@ -203,7 +207,6 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
 agent = { path = "../../crates/agent" }
-agent-client-protocol = { workspace = true }
 agent_session = { path = "../../crates/agent_session", features = ["test-utils"] }
 ai_tools = { path = "../../crates/ai_tools", features = ["test-support"] }
 async-trait = { workspace = true }

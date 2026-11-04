@@ -144,6 +144,8 @@ export interface EmailDraftStorage {
     }
   ): Promise<LocalDraft>;
   retryDraft?(draftId: string): Promise<void>;
+  /** Drop the working copy of a draft whose server row no longer exists. */
+  forgetLocalDraft?(draftId: string): Promise<void>;
   /** Resolve durable local drafts before mounting an editor. */
   readDraft?(
     draftId: string,
@@ -233,6 +235,21 @@ export interface OutgoingEmail {
   >;
 }
 
+/**
+ * One queued send as this device's outbox last recorded it. `accepted` is
+ * cancellable until the server's `undoUntil`; `pending` covers waiting,
+ * delivering, and cancellation in progress. `untracked` means the send left
+ * the outbox and the server could not say whether it was delivered.
+ */
+export type EmailSendProgress =
+  | { state: 'pending' }
+  | { state: 'accepted'; undoUntil: string }
+  | { state: 'sent' }
+  | { state: 'failed' }
+  | { state: 'cancelled' }
+  | { state: 'unconfirmed' }
+  | { state: 'untracked' };
+
 export interface EmailDelivery {
   /** Whether sends can be persisted and replayed without connectivity. */
   queueActive?: (inboxId?: string) => boolean;
@@ -240,6 +257,11 @@ export interface EmailDelivery {
   sendLocked?: (draftId: string | undefined) => boolean;
   /** Durable sends on their way; cancelled, failed and scheduled sends are excluded. */
   outgoing?: () => OutgoingEmail[];
+  /** Reports each change until the send is sent, fails, is cancelled, or leaves this device. */
+  watchSend?(
+    sendAttemptId: string,
+    changed: (progress: EmailSendProgress) => void
+  ): () => void;
   sendMessage(input: SendEmailDraft): Promise<PersistedEmailIdentity>;
   unschedule(input: {
     draftGeneration?: number;
@@ -391,8 +413,16 @@ export interface EmailEditorFiles {
   }): void;
 }
 
+/** Opens a calendar event drafted from an email. */
+export interface EmailCalendarEvents {
+  enabled: Accessor<boolean>;
+  open(email: { subject: string; guests: string[]; text: string }): boolean;
+}
+
 /** Production composition groups capabilities for views to wire into their consumers. */
 export interface EmailComposeContext {
+  /** Absent where the composer has no calendar, such as isolated tests. */
+  calendarEvents?: EmailCalendarEvents;
   operations?: MessageOperationSourceFactory;
   drafts: EmailDraftStorage;
   attachmentStorage: EmailAttachmentStorage;
@@ -421,6 +451,10 @@ export interface EmailComposeHost {
   focusSibling?: (direction: 'next' | 'prev') => boolean | void;
   showThread?: (id: string) => void;
   showDraft?: (id: string) => void;
+  /** A From switch moved the draft to a new id and thread; the old ones are gone. */
+  showMovedDraft?: (moved: { draftId: string; threadId: string }) => void;
+  /** The draft a reload should reopen, or undefined when there is none. */
+  recordDraft?: (draftId: string | undefined) => void;
   goBack?: () => void;
   registerBack?: (handler: () => boolean) => void;
 }

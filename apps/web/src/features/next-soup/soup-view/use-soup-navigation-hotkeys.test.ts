@@ -370,6 +370,84 @@ describe('useSoupNavigationHotkeys', () => {
     }
   });
 
+  it('waits on the last loaded row of a group for its next page, or moves on after a failure', () => {
+    const load = vi.fn(async () => {});
+    let failed = false;
+    const { soup, dispose } = createRoot((dispose) => {
+      const soup = createSoupState();
+      useSoupNavigationHotkeys({
+        scopeId: 'test-scope',
+        soup,
+        splitHandle: createSplitHandleStub(),
+        virtualizerHandle: () => undefined,
+        groupPaging: {
+          load,
+          isLoading: () => false,
+          failed: () => failed,
+        },
+      });
+      return { soup, dispose };
+    });
+    const groupA = createTestGroup('a', 3);
+    const groupB = createTestGroup('b', 1);
+    const [a1, a2, a3, b1] = ['a1', 'a2', 'a3', 'b1'].map(createTestEntity);
+    const rows = (loaded: EntityData[]) => [
+      soup.buildRow({
+        id: 'header:a',
+        index: 0,
+        original: a1,
+        group: groupA,
+        isGrouped: true,
+      }),
+      ...loaded.map((entity, i) =>
+        soup.buildRow({
+          id: entity.id,
+          index: i + 1,
+          original: entity,
+          group: groupA,
+        })
+      ),
+      soup.buildRow({
+        id: 'loadmore:a',
+        index: loaded.length + 1,
+        original: loaded[loaded.length - 1],
+        group: groupA,
+        isLoadMore: true,
+      }),
+      soup.buildRow({
+        id: 'header:b',
+        index: loaded.length + 2,
+        original: b1,
+        group: groupB,
+        isGrouped: true,
+      }),
+      soup.buildRow({
+        id: 'b1',
+        index: loaded.length + 3,
+        original: b1,
+        group: groupB,
+      }),
+    ];
+    try {
+      soup.setRows(rows([a1, a2]));
+      soup.focus.set('a2');
+      handlerFor('j')();
+      expect(soup.focus.id()).toBe('a2');
+      expect(load).toHaveBeenCalledExactlyOnceWith('a');
+
+      soup.setRows(rows([a1, a2, a3]));
+      handlerFor('j')();
+      expect(soup.focus.id()).toBe('a3');
+
+      failed = true;
+      handlerFor('j')();
+      expect(soup.focus.id()).toBe('b1');
+      expect(load).toHaveBeenCalledOnce();
+    } finally {
+      dispose();
+    }
+  });
+
   it('arrow keys share the header-skipping navigation', () => {
     const { soup, dispose } = setupHotkeys();
     soup.focus.set('a2');

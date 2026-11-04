@@ -344,11 +344,17 @@ pub trait ChannelRepo: Send + Sync + 'static {
         req: PatchChannelRequest,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Delete a channel.
+    /// Whether the user is an admin or owner of this exact team.
+    fn user_is_team_admin<'a>(
+        &self,
+        user_id: &MacroUserIdStr<'a>,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Delete a channel after the domain service has authorized the caller.
     fn delete_channel(
         &self,
         channel_id: Uuid,
-        user_id: String,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Atomically add or reactivate a participant, returning whether membership changed.
@@ -962,6 +968,40 @@ pub trait ChannelReferenceSharePermissions: Send + Sync + 'static {
         channel_id: Uuid,
         items: Vec<ReferencedShareItem>,
     ) -> impl Future<Output = Result<Vec<ReferenceShareResult>, Self::Err>> + Send;
+}
+
+/// What a bot created for a person while answering them, so its channel
+/// reply shares only those items.
+pub trait AgentCreations: Clone + Send + Sync + 'static {
+    /// Error type for creation lookups.
+    type Err: Into<anyhow::Error> + Send;
+
+    /// When `person` last wrote in the thread rooted at `thread_root` before
+    /// `before`: the request a bot reply posted then is answering.
+    fn request_sent_at(
+        &self,
+        thread_root: Uuid,
+        person: &MacroUserIdStr<'static>,
+        before: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Option<DateTime<Utc>>, Self::Err>> + Send;
+
+    /// When `person` last wrote anywhere in `channel_id` before `before`: the
+    /// request a bot message that starts its own thread is answering.
+    fn channel_request_sent_at(
+        &self,
+        channel_id: Uuid,
+        person: &MacroUserIdStr<'static>,
+        before: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Option<DateTime<Utc>>, Self::Err>> + Send;
+
+    /// The `items` that `bot` recorded creating on `person`'s behalf at or after `since`.
+    fn created_since(
+        &self,
+        bot: BotId,
+        person: &MacroUserIdStr<'static>,
+        since: DateTime<Utc>,
+        items: Vec<ReferencedShareItem>,
+    ) -> impl Future<Output = Result<Vec<ReferencedShareItem>, Self::Err>> + Send;
 }
 
 /// Errors that can occur while mutating channels.

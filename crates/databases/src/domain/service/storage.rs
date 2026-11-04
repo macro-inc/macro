@@ -89,6 +89,35 @@ where
     A: AccessDirectory,
     B: MacroEventBroker,
 {
+    #[tracing::instrument(name = "database.storage.board_positions", skip_all, fields(database_id = %id, table_id = %table, view_id = %view), err)]
+    async fn storage_view_positions(
+        &self,
+        id: DatabaseId,
+        table: TableId,
+        view: ViewId,
+    ) -> Result<Vec<CardPosition>, DatabaseError> {
+        let tables = self
+            .repository
+            .tables_for_databases(&[id])
+            .await
+            .map_err(repository_error)?;
+        if !tables.iter().any(|entry| entry.id == table) {
+            return Err(DatabaseError::NotFound);
+        }
+        let views = self
+            .repository
+            .views_for_tables(&[table])
+            .await
+            .map_err(repository_error)?;
+        if !views.iter().any(|entry| entry.id == view) {
+            return Err(DatabaseError::NotFound);
+        }
+        self.repository
+            .view_positions(view)
+            .await
+            .map_err(repository_error)
+    }
+
     async fn storage_tables(&self, id: DatabaseId) -> Result<Vec<TableDetail>, DatabaseError> {
         Ok(self
             .storage_entries(id)
@@ -173,7 +202,10 @@ where
             .take(PAGE_SIZE as usize)
             .copied()
             .collect();
-        let next = (start + page.len() < ordered.len()).then(|| *page.last().unwrap());
+        let next = page
+            .last()
+            .copied()
+            .filter(|_| start + page.len() < ordered.len());
         let rows = page
             .into_iter()
             .map(|row_id| {

@@ -10,11 +10,14 @@ export type PollComposerDraft = {
   options: string[];
   multi: boolean;
   showResults: boolean;
+  shareResponses: boolean;
+  anonymous: boolean;
 };
 
 /**
  * The `/poll` composer: a question, two options to start with and Add
- * option, Multiple answers, and Show results to respondents (on by default).
+ * option, Multiple answers, Show results to respondents (on by default),
+ * Share responses with team, and Anonymous.
  */
 export function PollComposer(props: {
   pending: boolean;
@@ -26,6 +29,8 @@ export function PollComposer(props: {
   const [options, setOptions] = createSignal(['', '']);
   const [multi, setMulti] = createSignal(false);
   const [showResults, setShowResults] = createSignal(true);
+  const [shareResponses, setShareResponses] = createSignal(false);
+  const [anonymous, setAnonymous] = createSignal(false);
   const optionInputs: HTMLInputElement[] = [];
   const focusOption = (index: number) =>
     queueMicrotask(() => optionInputs[index]?.focus());
@@ -46,6 +51,8 @@ export function PollComposer(props: {
           options: options(),
           multi: multi(),
           showResults: showResults(),
+          shareResponses: shareResponses(),
+          anonymous: anonymous(),
         });
       }}
     >
@@ -91,10 +98,11 @@ export function PollComposer(props: {
                   />
                   <Show when={options().length > 2}>
                     <Button
+                      aria-label={`Remove option ${index + 1}`}
+                      tooltip={`Remove option ${index + 1}`}
                       type="button"
                       variant="ghost"
                       size="icon-sm"
-                      label={`Remove option ${index + 1}`}
                       onClick={() => {
                         setOptions((current) =>
                           current.filter((_, at) => at !== index)
@@ -102,7 +110,7 @@ export function PollComposer(props: {
                         focusOption(Math.min(index, options().length - 1));
                       }}
                     >
-                      <X />
+                      <X class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                     </Button>
                   </Show>
                 </li>
@@ -120,7 +128,7 @@ export function PollComposer(props: {
           </Show>
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             class="h-10 w-full justify-start border-dashed text-ink-muted"
             disabled={options().length >= 20}
             onClick={() => {
@@ -150,6 +158,30 @@ export function PollComposer(props: {
                 : 'Only you and other editors can see the counts.'}
             </p>
           </div>
+          <div class="flex flex-col gap-1.5">
+            <Checkbox checked={shareResponses()} onChange={setShareResponses}>
+              <Checkbox.Control />
+              <Checkbox.Label class="text-sm">
+                Share responses with team
+              </Checkbox.Label>
+            </Checkbox>
+            <p class="pl-6 text-xs leading-5 text-ink-muted">
+              {shareResponses()
+                ? 'Everyone who can vote can also see each response.'
+                : 'Only you and other editors can open the Responses table.'}
+            </p>
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <Checkbox checked={anonymous()} onChange={setAnonymous}>
+              <Checkbox.Control />
+              <Checkbox.Label class="text-sm">Anonymous</Checkbox.Label>
+            </Checkbox>
+            <p class="pl-6 text-xs leading-5 text-ink-muted">
+              {anonymous()
+                ? 'Nobody in Macro, you included, can see who voted for what. People can still only vote once, and can’t change their vote.'
+                : 'Each response names who voted.'}
+            </p>
+          </div>
         </div>
       </fieldset>
       <Show when={props.error}>
@@ -168,7 +200,7 @@ export function PollComposer(props: {
         </Button>
         <Button
           type="submit"
-          variant="cta"
+          variant="primary"
           size="sm"
           disabled={!ready() || props.pending}
           aria-busy={props.pending}

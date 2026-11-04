@@ -8,6 +8,8 @@ import { Webhook } from './webhook';
 
 /**
  * Webhook registrations for receiving signed entity-event deliveries.
+ *
+ * @routing Use when managing API webhook subscriptions; not database webhooks.
  */
 export class WebhooksNamespace {
   constructor(private readonly client: MacroClient) {}

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Client,
   CombinedError,
@@ -6,7 +7,12 @@ import {
   type OperationContext,
   type OperationResult,
 } from '@urql/core';
-import { createComputed, createRoot, createSignal } from 'solid-js';
+import {
+  createComputed,
+  createEffect,
+  createRoot,
+  createSignal,
+} from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeSubject } from 'wonka';
 import { createNoopCacheHost } from '../../../graphql-cache/host/noop-host';
@@ -21,6 +27,7 @@ import {
   parseCacheRevision,
 } from '../../../graphql-cache/protocol';
 import type {
+  GraphqlEntityFilterAst,
   GroupedSoupInput,
   GroupSoupQuery,
   GroupSoupQueryVariables,
@@ -35,26 +42,16 @@ vi.mock('../../../service-clients/service-storage/graphql-soup', () => ({
   getGraphqlSoupCacheHost: mocks.host,
   getGraphqlSoupClient: mocks.client,
 }));
-vi.mock('@macro-inc/observability', () => ({
-  Telemetry: {
-    span: () => ({
-      setAttr: vi.fn(),
-      error: vi.fn(),
-      end: vi.fn(),
-      run: (operation: () => unknown) => operation(),
-    }),
-    error: vi.fn(),
-  },
-}));
 
 const cleanups: Array<() => void> = [];
 afterEach(() => {
   cleanups.splice(0).forEach((dispose) => dispose());
 });
 
-function setup() {
+function setup(filters: GraphqlEntityFilterAst = {}) {
   type Execution = {
     variables: GroupSoupQueryVariables;
+    context: Partial<OperationContext>;
     publish(
       data: GroupSoupQuery,
       persistence?: Promise<string | undefined>,
@@ -81,6 +78,7 @@ function setup() {
       });
       const execution: Execution = {
         variables: request.variables,
+        context,
         publish: (data, persistence, source = 'live-network') =>
           subject.next({
             operation,
@@ -151,7 +149,7 @@ function setup() {
           propertyDefinitionId: 'status-definition',
         },
         limit: 2,
-        filters: {},
+        filters,
       },
     });
     const query = createGroupedSoupLiveQuery(
@@ -182,7 +180,16 @@ function page(
     user: {
       id: 'viewer',
       groupSoup: {
-        bins: [{ key: 'todo', items, totalCount: 20, nextCursor: cursor }],
+        bins: [
+          {
+            key: 'todo',
+            items,
+            displayOrder: null,
+            label: null,
+            totalCount: 20,
+            nextCursor: cursor,
+          },
+        ],
       },
     },
   };
@@ -218,22 +225,39 @@ const ids = (data: GroupSoupQuery | undefined) =>
   }));
 
 describe('grouped Soup live ownership', () => {
+  it('retains CRM membership dependencies on group continuations', async () => {
+    const state = setup({
+      crmCompanyFilter: {
+        literal: { id: '00000000-0000-0000-0000-000000000000' },
+      },
+      crmContactFilter: { literal: { hidden: false } },
+    });
+    const initial = await state.execution(0);
+    expect(initial.context.externalCacheWriteTypes).toEqual([
+      'GraphqlSoupCrmContact',
+    ]);
+    initial.publish(page([], 'next'));
+    const more = state.query.paging.fetchNextPage('todo');
+    const continuation = await state.execution(1);
+    expect(continuation.context.externalCacheWriteTypes).toEqual([
+      'GraphqlSoupCrmContact',
+    ]);
+    continuation.publish(page([], null));
+    await more;
+  });
+
   it('does not refetch a continuation started automatically during the initial result', async () => {
     const state = setup();
     createRoot((dispose) => {
       cleanups.push(dispose);
-      createAutomaticTaskPagination({
-        enabled: () => true,
-        scope: () => 'project',
-        sources: () => [
-          {
-            id: 'todo',
-            hasMore: state.query.paging.hasNextPage('todo'),
-            pending: state.query.paging.isFetchingNextPage('todo'),
-            load: () => state.query.paging.fetchNextPage('todo'),
-            error: () => state.query.paging.error('todo'),
-          },
-        ],
+      // A reader that requests the next page as soon as one is reported, as a
+      // group whose end is already on screen does.
+      createEffect(() => {
+        if (
+          state.query.paging.hasNextPage('todo') &&
+          !state.query.paging.isFetchingNextPage('todo')
+        )
+          fireAndForget(state.query.paging.fetchNextPage('todo'), 'test');
       });
     });
     state.executions[0].publish(page([groupedDocument('a')]));
@@ -566,7 +590,9 @@ describe('grouped Soup live ownership', () => {
     const cached = page([groupedDocument('a', ['done'])]);
     cached.user.groupSoup.bins.push({
       key: 'done',
+      label: null,
       items: [],
+      displayOrder: null,
       totalCount: 12,
       nextCursor: 'done-next',
     });
@@ -615,5 +641,3 @@ describe('grouped Soup live ownership', () => {
     expect(state.query.paging.hasNextPage('todo')).toBe(true);
   });
 });
-
-import { createAutomaticTaskPagination } from '@app/features/tasks-view/queries/automatic-task-pagination';

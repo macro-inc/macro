@@ -5,6 +5,7 @@ import {
 } from '../core/routine-draft';
 import {
   onceFromCron,
+  onceTrigger,
   parseRoutineTriggers,
   serializeTriggers,
 } from './routine-trigger-mapping';
@@ -13,9 +14,9 @@ export { onceFromCron } from './routine-trigger-mapping';
 
 import { getDefaultTimezone } from '@core/util/cron';
 import type {
-  CreateScheduledAction,
+  ActionConfiguration,
+  ActionConfigurationUpdate,
   ScheduledAction,
-  UpdateScheduledAction,
 } from '@service-scheduled-action/generated/schemas';
 import { z } from 'zod';
 import { DEFAULT_RUN_VISIBILITY, type ScheduleDraft } from '../core/draft';
@@ -32,6 +33,9 @@ const agentTaskSchema = z
   .looseObject({
     agent: z.looseObject({ bot_id: routineAgentIdSchema }).nullish(),
     model: routineModelSchema.nullish(),
+    mcp_servers: z
+      .array(z.object({ app_slug: z.string(), server_name: z.string() }))
+      .optional(),
     prompt: z.string(),
     user_prompt: z.string(),
   })
@@ -94,6 +98,7 @@ export function draftFromSchedule(
     dayOfMonth: parsed.dayOfMonth,
     target: targetFromTask(task),
     runVisibility: schedule.run_visibility,
+    apps: task.mcp_servers ?? [],
     timezone: trigger?.timezone,
     triggers,
     ...(trigger ? onceFromCron(trigger.schedule, trigger.timezone) : {}),
@@ -118,12 +123,16 @@ function applyTarget(task: RoutineTask, target: RoutineTarget): void {
 
 function buildAgentTask(draft: ScheduleDraft): RoutineTask {
   const target = routineTargetSchema.parse(draft.target);
-  const task: RoutineTask = { prompt: '', user_prompt: draft.prompt.trim() };
+  const task: RoutineTask = {
+    prompt: '',
+    user_prompt: draft.prompt.trim(),
+    mcp_servers: draft.apps,
+  };
   applyTarget(task, target);
   return task;
 }
 
-export function draftToCreateBody(draft: ScheduleDraft): CreateScheduledAction {
+export function draftToCreateBody(draft: ScheduleDraft): ActionConfiguration {
   return {
     name: draft.name.trim() || deriveScheduleName(draft.prompt),
     trigger: triggerFromDraft(draft),
@@ -137,7 +146,7 @@ export function draftToCreateBody(draft: ScheduleDraft): CreateScheduledAction {
 export function draftToUpdateBody(
   draft: ScheduleDraft,
   previous: ScheduledAction
-): UpdateScheduledAction | undefined {
+): ActionConfigurationUpdate | undefined {
   const trigger = getCronTrigger(previous);
   const previousTask = getAgentTask(previous);
   const target = routineTargetSchema.safeParse(draft.target);
@@ -149,11 +158,15 @@ export function draftToUpdateBody(
     targetFromTask(previousTask)
   );
   const promptChanged = draft.prompt !== previousTask.user_prompt;
+  const appsChanged =
+    draft.apps.map((app) => app.app_slug).join(',') !==
+    (previousTask.mcp_servers ?? []).map((app) => app.app_slug).join(',');
   let task = previous.task;
-  if (targetChanged || promptChanged) {
+  if (targetChanged || promptChanged || appsChanged) {
     const editedTask = { ...previousTask };
     if (targetChanged) applyTarget(editedTask, target.data);
     if (promptChanged) editedTask.user_prompt = draft.prompt.trim();
+    if (appsChanged) editedTask.mcp_servers = draft.apps;
     task = editedTask;
   }
   const runVisibility = draft.runVisibility ?? previous.run_visibility;
@@ -204,7 +217,7 @@ export function draftToUpdateBody(
 
 export function scheduleToDuplicateBody(
   schedule: ScheduledAction
-): CreateScheduledAction | undefined {
+): ActionConfiguration | undefined {
   const trigger = schedule.trigger ?? getCronTrigger(schedule);
   if (!trigger) return undefined;
   return {
@@ -222,16 +235,7 @@ function triggerFromDraft(
   timezone = getDefaultTimezone()
 ) {
   if (draft.triggers) return serializeTriggers(draft.triggers);
-  if (draft.frequency === 'once') {
-    const date = new Date(draft.onceAt ?? '');
-    if (Number.isNaN(date.getTime()))
-      throw new Error('Choose a valid date and time.');
-    return {
-      type: 'cron' as const,
-      timezone: 'UTC',
-      schedule: `${date.getUTCSeconds()} ${date.getUTCMinutes()} ${date.getUTCHours()} ${date.getUTCDate()} ${date.getUTCMonth() + 1} * ${date.getUTCFullYear()}`,
-    };
-  }
+  if (draft.frequency === 'once') return onceTrigger(draft.onceAt ?? '');
   return {
     type: 'cron' as const,
     timezone: draft.timezone ?? timezone,

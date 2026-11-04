@@ -29,7 +29,7 @@ impl ExecutionCredentials for RunCredentials {
         // clock margin; a normal user token expires rather than revoking on exit.
         let token = self
             .signer
-            .mint_for_agent(&actor, 60, Some(identity.agent_id.as_uuid()))
+            .mint_for_agent(&actor, 60, Some(identity.agent_id.as_uuid()), None)
             .await
             .map_err(|error| {
                 tracing::error!(?error, "could not mint execution credential");
@@ -45,8 +45,12 @@ impl ExecutionCredentials for RunCredentials {
     }
 }
 
-/// Credentials for public MCP runs: the signed-in user, with no session or agent.
-/// The MCP client asks the user before each tool call, so there is no owner gate.
+/// Credentials for public MCP runs: the signed-in user, with no session, and
+/// the agent the run's posts are attributed to: an agent caller (a self-hosted
+/// agent's call through egress) as itself, any other caller as the Macro bot,
+/// labelled with the MCP client's name - the same attribution the direct MCP
+/// tools give. The MCP client asks the user before each tool call, so there is
+/// no owner gate.
 pub struct UserRunCredentials {
     pub signer: MacroApiTokenSigner,
     pub hosts: BTreeMap<String, String>,
@@ -54,12 +58,31 @@ pub struct UserRunCredentials {
 
 #[async_trait]
 impl UserExecutionCredentials for UserRunCredentials {
-    async fn issue(&self, user: &MacroUserIdStr<'static>) -> Result<RunEnvironment, CodeModeError> {
+    async fn issue(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        caller: &ai_toolset::ToolCaller,
+    ) -> Result<RunEnvironment, CodeModeError> {
+        let agent = match caller {
+            ai_toolset::ToolCaller::Agent(agent) => *agent,
+            ai_toolset::ToolCaller::McpClient { .. } | ai_toolset::ToolCaller::ApiKey => {
+                bot_id::MACRO_AI_BOT_ID
+            }
+        };
         // Same lifetime as session runs: the 30-second deadline plus clock margin.
-        let token = self.signer.mint_for(user, 60).await.map_err(|error| {
-            tracing::error!(?error, "could not mint execution credential");
-            CodeModeError::Unavailable
-        })?;
+        let token = self
+            .signer
+            .mint_for_agent(
+                user,
+                60,
+                Some(agent.as_uuid()),
+                caller.via().map(str::to_owned),
+            )
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "could not mint execution credential");
+                CodeModeError::Unavailable
+            })?;
         Ok(RunEnvironment {
             token,
             trace_headers: trace_headers(),
@@ -96,6 +119,7 @@ pub fn sdk_hosts() -> anyhow::Result<BTreeMap<String, String>> {
             DocumentStorageServiceCloudfrontDistributionUrl::new()?.to_string(),
         ),
         ("static-content", StaticFilePublicUrl::new()?.to_string()),
+        ("editing-worker", AiEditingWorkerUrl::new()?.to_string()),
         ("storage", storage.clone()),
         ("search", storage.clone()),
         ("properties", storage),

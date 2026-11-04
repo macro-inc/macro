@@ -18,6 +18,8 @@
 }
 
 .homepage-embedded-wallpaper::before { content: ''; position: absolute; z-index: -1; inset: 0; pointer-events: none; opacity: .45; mix-blend-mode: soft-light; background: url('../../../assets/desktop/gradient-grain.svg') repeat; }
+/* The entrance's first frame, before animateDemoEntrance builds its keyframes. */
+.homepage-embedded-demo[data-entrance-waiting] :is(.homepage-embedded-wallpaper, .homepage-demo-carousel) { opacity: 0; }
 .homepage-demo-travel { position: absolute; z-index: 3; inset: 0; pointer-events: none; }
 .homepage-demo-travel .feature-flow-icon, .homepage-demo-travel .feature-flow-core { display: grid; place-items: center; }
 

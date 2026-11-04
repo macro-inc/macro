@@ -1,3 +1,4 @@
+import { $isListItemNode } from '@lexical/list';
 import {
   $getNodeById,
   $getPeerId,
@@ -54,25 +55,31 @@ function getComparableNodeValue(
       url: node.srcType === 'dss' ? undefined : node.url,
     };
   }
-  return {
-    ...node,
-    children: undefined,
-  };
+  const value: Record<string, any> = { ...node, children: undefined };
+  // A list item's indent is its nesting depth, which the tree already
+  // carries; applying it would re-nest the item (ListItemNode.setIndent).
+  if (node.type === 'listitem') value.indent = undefined;
+  return value;
 }
 
-// Map of a nodeId -> parent nodeId. If parent is undefined, it means the node is the root node
-type ParentMap = Map<string, string | undefined>;
+/** What one reconcile pass reads while it walks the new tree. */
+type Reconcile = {
+  editor: LexicalEditor;
+  mapping: NodeIdMappings;
+  /** The old serialized node for each id, wherever it sat in the old tree. */
+  oldNodes: Map<string, SerializedLexicalNode>;
+  peerId: () => string;
+};
 
-function buildParentMap(
+function indexNodesById(
   node: SerializedLexicalNode,
-  parentId: string | undefined,
-  out: ParentMap
+  out: Map<string, SerializedLexicalNode>
 ) {
   const id = getNodeId(node);
-  if (id) out.set(id, parentId);
+  if (id) out.set(id, node);
   if (hasChildren(node)) {
     for (const child of node.children) {
-      buildParentMap(child, id, out);
+      indexNodesById(child, out);
     }
   }
 }
@@ -91,8 +98,6 @@ export function $reconcileLexicalState(
   mapping: NodeIdMappings,
   peerId: () => string
 ): void {
-  const editor = $getEditor();
-
   // The local draft comment mark is never synced, so it is lifted out while
   // the tree is compared with the shared state. Drafts that arrive in the
   // shared state were left behind by sessions that ended mid-draft.
@@ -100,20 +105,15 @@ export function $reconcileLexicalState(
   const oldRoot = stripDraftCommentMarks(oldState).root;
   const newRoot = stripDraftCommentMarks(newState).root;
 
-  const newParentMap = new Map<string, string | undefined>();
-  const oldParentMap = new Map<string, string | undefined>();
-  buildParentMap(newRoot, undefined, newParentMap);
-  buildParentMap(oldRoot, undefined, oldParentMap);
-
-  $applyChildren(
-    editor,
+  const reconcile: Reconcile = {
+    editor: $getEditor(),
     mapping,
-    oldRoot,
-    newRoot,
-    oldParentMap,
-    newParentMap,
-    peerId
-  );
+    oldNodes: new Map(),
+    peerId,
+  };
+  indexNodesById(oldRoot, reconcile.oldNodes);
+
+  $applyChildren(reconcile, oldRoot, newRoot);
 
   $restoreDraftCommentMarks(drafts);
 }
@@ -128,13 +128,15 @@ function $applyLocalStatus(node: LexicalNode, peerId: () => string) {
 
 // Apply state changes to a specific node
 function $applyNodeState(
-  editor: LexicalEditor,
-  mapping: NodeIdMappings,
+  reconcile: Reconcile,
   nodeId: string,
-  state: Partial<SerializedLexicalNode>,
-  peerId: () => string
+  state: ReturnType<typeof getComparableNodeValue>
 ): void {
-  const node = $getNodeById(editor, mapping.idToNodeKeyMap, nodeId);
+  const node = $getNodeById(
+    reconcile.editor,
+    reconcile.mapping.idToNodeKeyMap,
+    nodeId
+  );
   if (!node) {
     console.error('Node not found for ID:', nodeId);
     return;
@@ -142,63 +144,125 @@ function $applyNodeState(
 
   try {
     // Update the node with new state and mark it as dirty to trigger re-render
-    const newNode = node.updateFromJSON(state);
-    $applyLocalStatus(newNode, peerId);
+    const newNode = node.updateFromJSON(
+      $isListItemNode(node) ? { ...state, indent: node.getIndent() } : state
+    );
+    $applyLocalStatus(newNode, reconcile.peerId);
     newNode.markDirty();
   } catch (error) {
     console.error(`Failed to update node ${nodeId}:`, error);
   }
 }
 
-function moveNodeIfNeeded(
-  parent: ElementNode,
-  node: LexicalNode,
-  targetIndex: number
+/** The live node holding this id, if it has the serialized node's type. */
+function $getExistingNode(
+  reconcile: Reconcile,
+  id: string | undefined,
+  type: string
+): LexicalNode | null {
+  if (!id) return null;
+  const node = $getNodeById(
+    reconcile.editor,
+    reconcile.mapping.idToNodeKeyMap,
+    id
+  );
+  return node?.getType() === type ? node : null;
+}
+
+/** Brings an existing node's own state and children up to its new serialized form. */
+function $updateExistingNode(
+  reconcile: Reconcile,
+  id: string,
+  newNode: SerializedLexicalNode
 ): void {
-  const currentIndex = parent.getChildren().indexOf(node);
-  if (currentIndex !== -1 && currentIndex !== targetIndex) {
-    parent.splice(currentIndex, 1, []);
-    parent.splice(targetIndex, 0, [node]);
+  const oldNode = reconcile.oldNodes.get(id);
+  if (!oldNode) return;
+  const newValue = getComparableNodeValue(newNode);
+  if (!deepEqual(getComparableNodeValue(oldNode), newValue)) {
+    $applyNodeState(reconcile, id, newValue);
+  }
+  if (hasChildren(oldNode) && hasChildren(newNode)) {
+    $applyChildren(reconcile, oldNode, newNode);
   }
 }
 
-function moveNodeBetweenParents(
-  editor: LexicalEditor,
-  mapping: NodeIdMappings,
-  parent: ElementNode,
-  node: LexicalNode,
-  oldParentId: string,
-  targetIndex: number
-) {
-  const oldParent = oldParentId
-    ? $getNodeById(editor, mapping.idToNodeKeyMap, oldParentId)
-    : null;
-  if (oldParent && $isElementNode(oldParent)) {
-    const oldIndex = oldParent.getChildren().indexOf(node);
-    if (oldIndex !== -1) {
-      oldParent.splice(oldIndex, 1, []);
+/**
+ * Creates a node that is new to the editor. Descendants that already exist
+ * elsewhere (a move into a new parent, such as list items a list-to-table
+ * undo puts back into a recreated list) are moved in rather than parsed again,
+ * so they keep their ids and stay mapped to the shared document.
+ */
+function $createNode(
+  reconcile: Reconcile,
+  serialized: SerializedLexicalNode
+): LexicalNode {
+  if (!hasChildren(serialized)) return $parseSerializedNode(serialized);
+  const shell: NodeWithChildren = { ...serialized, children: [] };
+  const node = $parseSerializedNode(shell);
+  if (!$isElementNode(node)) return $parseSerializedNode(serialized);
+  for (const child of serialized.children) {
+    const id = getNodeId(child);
+    const existing = $getExistingNode(reconcile, id, child.type);
+    if (!existing || !id) {
+      node.append($createNode(reconcile, child));
+      continue;
     }
+    node.append(existing);
+    $updateExistingNode(reconcile, id, child);
   }
+  return node;
+}
 
-  parent.splice(targetIndex, 0, [node]);
+/**
+ * Removes the children of `parent` that the new state no longer lists there.
+ * Nodes with ids are found by id: one may already have moved to a new parent.
+ * Nodes without ids are matched by position, walking the live children
+ * alongside the old ones.
+ */
+function $removeDroppedChildren(
+  reconcile: Reconcile,
+  parent: ElementNode,
+  oldChildren: SerializedLexicalNode[],
+  newChildren: SerializedLexicalNode[]
+): void {
+  const newIds = new Set<string>();
+  for (const child of newChildren) {
+    const id = getNodeId(child);
+    if (id) newIds.add(id);
+  }
+  const dropped: LexicalNode[] = [];
+  let child = parent.getFirstChild();
+  for (const oldChild of oldChildren) {
+    const live = child;
+    child = child?.getNextSibling() ?? null;
+    const id = getNodeId(oldChild);
+    if (id && newIds.has(id)) continue;
+    if (!id) {
+      if (live) dropped.push(live);
+      continue;
+    }
+    const node = $getNodeById(
+      reconcile.editor,
+      reconcile.mapping.idToNodeKeyMap,
+      id
+    );
+    if (node?.getParent()?.is(parent)) dropped.push(node);
+  }
+  for (const node of dropped) node.remove(true);
 }
 
 /** Diff and apply changes between two sets of nodes
  *
- * @param editor - Lexical editor instance
- * @param mapping - LoroNodeMapping instance
+ * @param reconcile - The pass's editor, mappings and indexes
  * @param oldNode - Old node to diff against
  * @param newNode - New node to diff against
  */
 function $applyChildren(
-  editor: LexicalEditor,
-  mapping: NodeIdMappings,
+  reconcile: Reconcile,
   oldNode: NodeWithChildren,
-  newNode: NodeWithChildren,
-  oldParentMap: ParentMap,
-  newParentMap: ParentMap,
-  peerId: () => string
+  newNode: NodeWithChildren
 ): void {
+  const { editor, mapping } = reconcile;
   const oldChildren = oldNode.children;
   const newChildren = newNode.children;
   const parentId = getNodeId(oldNode as any);
@@ -213,87 +277,46 @@ function $applyChildren(
     return;
   }
 
-  const oldIdToIndex = new Map<string, number>();
-  const newIdToIndex = new Map<string, number>();
+  $removeDroppedChildren(reconcile, parent, oldChildren, newChildren);
 
-  for (let i = 0; i < oldChildren.length; i++) {
-    const id = getNodeId(oldChildren[i]);
-    if (id) oldIdToIndex.set(id, i);
-  }
-  for (let i = 0; i < newChildren.length; i++) {
-    const id = getNodeId(newChildren[i]);
-    if (id) newIdToIndex.set(id, i);
-  }
+  // The first `index` children are in place and `previous` is the last of
+  // them. New nodes collect in `inserts` and go in with one splice per run,
+  // since each splice walks to its index.
+  let index = 0;
+  let previous: LexicalNode | null = null;
+  let inserts: LexicalNode[] = [];
+  const flushInserts = () => {
+    if (inserts.length === 0) return;
+    parent.splice(index, 0, inserts);
+    index += inserts.length;
+    previous = inserts[inserts.length - 1];
+    inserts = [];
+  };
 
-  // Remove nodes that arent present in the newChildren array first
-  for (let i = oldChildren.length - 1; i >= 0; i--) {
-    const id = getNodeId(oldChildren[i]);
-    if (!id || !newIdToIndex.has(id)) {
-      const oldSize = parent.getChildrenSize();
-      if (i < oldSize) parent.splice(i, 1, []);
-    }
-  }
-
-  for (let newIndex = 0; newIndex < newChildren.length; newIndex++) {
-    const newChild = newChildren[newIndex];
+  for (const newChild of newChildren) {
     const id = getNodeId(newChild);
+    const node = id ? $getNodeById(editor, mapping.idToNodeKeyMap, id) : null;
 
-    let node = id ? $getNodeById(editor, mapping.idToNodeKeyMap, id) : null;
-
-    // Node already exists, check for move / update
-    if (node && id) {
-      const oldParentId = oldParentMap.get(id);
-      const newParentId = newParentMap.get(id);
-
-      // Handle cross-parent move
-      if (oldParentId && newParentId && oldParentId !== newParentId) {
-        moveNodeBetweenParents(
-          editor,
-          mapping,
-          parent,
-          node,
-          oldParentId,
-          newIndex
-        );
-        continue;
-      }
-
-      let nodeIndex = parent.getChildren().indexOf(node);
-
-      if (nodeIndex !== -1 && nodeIndex !== newIndex) {
-        moveNodeIfNeeded(parent, node, newIndex);
-      }
-
-      // Node exists in old and new children
-      const oldIdx = oldIdToIndex.get(id!);
-      if (oldIdx !== undefined) {
-        const oldChildValue = getComparableNodeValue(oldChildren[oldIdx]);
-        const newChildValue = getComparableNodeValue(newChild);
-        // Node has a value change
-        if (!deepEqual(oldChildValue, newChildValue)) {
-          $applyNodeState(editor, mapping, id!, newChildValue, peerId);
-        }
-      }
-
-      // Recurse all children if they exist
-      if (hasChildren(newChild)) {
-        const oldIdx = oldIdToIndex.get(id!);
-        if (oldIdx !== undefined && hasChildren(oldChildren[oldIdx])) {
-          $applyChildren(
-            editor,
-            mapping,
-            oldChildren[oldIdx] as NodeWithChildren,
-            newChild as NodeWithChildren,
-            oldParentMap,
-            newParentMap,
-            peerId
-          );
-        }
-      }
-    } else {
-      // Insert new node
-      const newNodeInstance = $parseSerializedNode(newChild);
-      parent.splice(newIndex, 0, [newNodeInstance]);
+    if (!node || !id) {
+      inserts.push($createNode(reconcile, newChild));
+      continue;
     }
+
+    flushInserts();
+    // Read after any creates: one may have moved the old next sibling into
+    // a new parent.
+    const expected = previous
+      ? previous.getNextSibling()
+      : parent.getFirstChild();
+    if (!node.is(expected)) {
+      // Moved here from another parent or from later in this one: splice
+      // detaches it from where it was.
+      parent.splice(index, 0, [node]);
+    }
+    index++;
+    previous = node;
+
+    $updateExistingNode(reconcile, id, newChild);
   }
+  flushInserts();
 }

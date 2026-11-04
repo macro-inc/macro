@@ -385,7 +385,7 @@ async fn projection_ack_keeps_version_watermark_and_exposes_normalized_state(db:
     );
     assert!(message.is_present);
     repo.renew_projection(&event).await.unwrap();
-    repo.finish_projection(&event, true).await.unwrap();
+    repo.finish_projection(&event, None).await.unwrap();
     repo.ingest(
         &work,
         snapshot(link, work.provider_id.as_str(), state, "v1"),
@@ -429,7 +429,7 @@ async fn projection_crash_reclaims_work_and_old_worker_cannot_ack_successor(db: 
         repo.renew_projection(&old).await,
         Err(MailboxError::Stale)
     ));
-    repo.finish_projection(&old, true).await.unwrap();
+    repo.finish_projection(&old, None).await.unwrap();
     assert_eq!(
         sqlx::query_scalar!(
             "SELECT count(*) FROM email_projection_outbox WHERE id = $1",
@@ -440,7 +440,7 @@ async fn projection_crash_reclaims_work_and_old_worker_cannot_ack_successor(db: 
         .unwrap(),
         Some(1)
     );
-    repo.finish_projection(&successor, true).await.unwrap();
+    repo.finish_projection(&successor, None).await.unwrap();
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -740,4 +740,20 @@ async fn native_outlook_attachment_identity_survives_metadata_collisions_and_emp
             assert_ne!(Some(attachments[0].id), retained);
         }
     }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn message_claims_take_due_live_changes_before_imports_and_skip_backed_off_rows(db: PgPool) {
+    let (repo, link) = fixture(&db).await;
+    sqlx::query!(r#"
+        INSERT INTO email_message_reconciliation(link_id,generation,provider_id,is_import,available_at) VALUES
+            ($1,1,'live-later',false,now() + interval '1 hour'),
+            ($1,1,'import-due',true,now() - interval '2 minutes'),
+            ($1,1,'live-due',false,now() - interval '1 minute')
+    "#,link).execute(&db).await.unwrap();
+    let mut claimed = Vec::new();
+    while let Some(work) = repo.claim_message(Uuid::new_v4()).await.unwrap() {
+        claimed.push(work.provider_id.as_str().to_owned());
+    }
+    assert_eq!(claimed, ["live-due", "import-due"]);
 }

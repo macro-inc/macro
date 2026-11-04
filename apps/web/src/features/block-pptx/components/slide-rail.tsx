@@ -297,32 +297,36 @@ export function SlideRail(props: SlideRailProps) {
                 <Show when={!props.readonly && !props.grid}>
                   <div class="absolute top-1 right-1 hidden flex-col gap-0.5 rounded-md bg-surface/90 p-0.5 shadow group-hover:flex group-focus-within:flex">
                     <Button
+                      aria-label="Duplicate slide"
                       size="icon-xs"
                       variant="ghost"
-                      label="Duplicate slide"
                       tooltip="Duplicate slide"
                       onClick={() => props.onDuplicate(slide.id)}
                     >
-                      <CopyIcon />
+                      <CopyIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
                     </Button>
                     <Button
+                      aria-label={slide.hidden ? 'Show slide' : 'Hide slide'}
                       size="icon-xs"
                       variant="ghost"
-                      label={slide.hidden ? 'Show slide' : 'Hide slide'}
                       tooltip={slide.hidden ? 'Show slide' : 'Hide slide'}
                       onClick={() => props.onToggleHidden(slide)}
                     >
-                      {slide.hidden ? <EyeIcon /> : <EyeSlashIcon />}
+                      {slide.hidden ? (
+                        <EyeIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
+                      ) : (
+                        <EyeSlashIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
+                      )}
                     </Button>
                     <Show when={props.slides.length > 1}>
                       <Button
+                        aria-label="Delete slide"
                         size="icon-xs"
                         variant="ghost"
-                        label="Delete slide"
                         tooltip="Delete slide"
                         onClick={() => props.onDelete([slide.id])}
                       >
-                        <TrashIcon />
+                        <TrashIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
                       </Button>
                     </Show>
                   </div>
@@ -348,13 +352,14 @@ export function SlideRail(props: SlideRailProps) {
       <Show when={!props.readonly && !props.grid}>
         <div class="border-edge-muted border-t p-2">
           <Button
+            aria-label="New slide"
+            tooltip="New slide"
             size="sm"
-            variant="outline"
+            variant="secondary"
             class="w-full"
             onClick={props.onAdd}
-            label="New slide"
           >
-            <PlusIcon />
+            <PlusIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
             New slide
           </Button>
         </div>

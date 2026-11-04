@@ -19,7 +19,7 @@ import {
 } from '@queries/team/teams';
 import type { Team as TeamSummary } from '@service-auth/generated/schemas/team';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
-import { Button, cn, Dialog, Panel, Tooltip } from '@ui';
+import { Button, Checkbox, cn, Dialog, Panel, Tooltip } from '@ui';
 import {
   type Accessor,
   createMemo,
@@ -66,7 +66,7 @@ function InviteEntryRow(props: {
         <Show when={props.showRemove}>
           <Tooltip label="Remove">
             <Button
-              variant="outline"
+              variant="secondary"
               size="icon-sm"
               class="shrink-0 focus:border-accent"
               tabIndex={0}
@@ -184,7 +184,7 @@ function InviteEmailsInput(props: {
         </div>
       </Show>
       <Button
-        variant="outline"
+        variant="secondary"
         class="w-full justify-center focus:border-accent"
         tabIndex={0}
         disabled={!canAddRow()}
@@ -225,7 +225,7 @@ function UserInviteRow(props: {
       </div>
       <div class="flex items-center gap-2 shrink-0">
         <Button
-          variant="outline"
+          variant="secondary"
           class="px-2 py-1"
           disabled={props.isAccepting || props.isDeclining}
           onClick={props.onDecline}
@@ -235,7 +235,7 @@ function UserInviteRow(props: {
           </Show>
         </Button>
         <Button
-          variant="accent"
+          variant="primary"
           class="px-2 py-1"
           disabled={props.isAccepting || props.isDeclining}
           onClick={props.onAccept}
@@ -384,7 +384,7 @@ export function CreateTeamDialog(props: {
       <Panel depth={2} class="max-h-[75vh] text-ink rounded-xl">
         <Panel.Header class="px-2 gap-1">
           <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
-            <XIcon />
+            <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Dialog.CloseButton>
           <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
             Create Team
@@ -432,7 +432,7 @@ export function CreateTeamDialog(props: {
               Cancel
             </Button>
             <Button
-              variant="strong"
+              variant="secondary"
               disabled={
                 createTeamMutation.isPending ||
                 !!teamNameError() ||
@@ -461,6 +461,7 @@ export function InviteToTeamDialog(props: {
 }) {
   const inviteToTeamMutation = useInviteToTeamMutation();
   const [invites, setInvites] = createSignal<InviteEntry[]>([EMPTY_INVITE]);
+  const [inviteAsAgent, setInviteAsAgent] = createSignal(false);
   const [inviteErrors, setInviteErrors] = createSignal<(string | undefined)[]>(
     []
   );
@@ -480,6 +481,7 @@ export function InviteToTeamDialog(props: {
 
   const close = () => {
     setInvites([EMPTY_INVITE]);
+    setInviteAsAgent(false);
     setInviteErrors([]);
     props.onClose();
   };
@@ -493,7 +495,10 @@ export function InviteToTeamDialog(props: {
     if (inviteEntries.length === 0) return;
 
     inviteToTeamMutation.mutate(
-      { teamId: props.teamId, request: { invites: inviteEntries } },
+      {
+        teamId: props.teamId,
+        request: { invites: inviteEntries, is_agent: inviteAsAgent() },
+      },
       { onSuccess: close }
     );
   };
@@ -503,7 +508,7 @@ export function InviteToTeamDialog(props: {
       <Panel depth={2} class="max-h-[75vh] text-ink rounded-xl">
         <Panel.Header class="px-2 gap-1">
           <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
-            <XIcon />
+            <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Dialog.CloseButton>
           <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
             Invite to Team
@@ -523,6 +528,12 @@ export function InviteToTeamDialog(props: {
             errors={inviteErrors()}
             onErrorsChange={setInviteErrors}
           />
+          <Checkbox checked={inviteAsAgent()} onChange={setInviteAsAgent}>
+            <Checkbox.Control />
+            <Checkbox.Label class="text-sm text-ink">
+              Invite as agent
+            </Checkbox.Label>
+          </Checkbox>
           <div class="flex justify-end gap-1 pt-2">
             <Button
               variant="ghost"
@@ -532,7 +543,7 @@ export function InviteToTeamDialog(props: {
               Cancel
             </Button>
             <Button
-              variant="strong"
+              variant="secondary"
               disabled={!hasValidInvites() || inviteToTeamMutation.isPending}
               onClick={handleInvite}
             >
@@ -570,7 +581,7 @@ function EmptyTeamState() {
               Create a team to collaborate with others and manage access
               together.
             </p>
-            <Button variant="accent" onClick={() => setShowCreateModal(true)}>
+            <Button variant="primary" onClick={() => setShowCreateModal(true)}>
               <PlusIcon class="size-4" />
               Create Team
             </Button>

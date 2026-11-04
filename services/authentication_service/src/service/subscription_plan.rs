@@ -8,12 +8,17 @@ pub struct PersonalSubscription {
     pub id: String,
     /// Currently effective tier, excluding future phases.
     pub plan: SeatPlan,
+    /// The introductory Pro trial is still running. Max cannot inherit it.
+    pub trialing: bool,
 }
 /// Operation selected by the service, never by an untrusted client.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlanAction {
-    /// Apply and prorate the higher plan immediately.
-    Upgrade,
+    /// Apply the higher plan immediately. A Pro trial ends and bills now.
+    Upgrade {
+        /// End the trial and start the new billing cycle instead of carrying it over.
+        end_trial: bool,
+    },
     /// Apply the lower plan at the next renewal.
     ScheduleDowngrade,
     /// Cancel a pending downgrade without changing the current price.
@@ -68,8 +73,8 @@ impl<G: PlanGateway> PlanService<G> {
             return Err(PlanChangeError::PlanUnavailable);
         }
         let subscription = self.gateway.personal_subscription(user).await?;
-        let action = action(subscription.plan, target);
-        let active = if action == PlanAction::Upgrade {
+        let action = action(subscription.plan, target, subscription.trialing);
+        let active = if matches!(action, PlanAction::Upgrade { .. }) {
             target
         } else {
             subscription.plan
@@ -80,11 +85,13 @@ impl<G: PlanGateway> PlanService<G> {
         Ok(active)
     }
 }
-fn action(current: SeatPlan, target: SeatPlan) -> PlanAction {
+fn action(current: SeatPlan, target: SeatPlan, trialing: bool) -> PlanAction {
     if current == target {
         PlanAction::KeepCurrent
     } else if target == SeatPlan::Max {
-        PlanAction::Upgrade
+        PlanAction::Upgrade {
+            end_trial: trialing,
+        }
     } else {
         PlanAction::ScheduleDowngrade
     }
@@ -104,6 +111,7 @@ mod test {
             Ok(PersonalSubscription {
                 id: "sub_test".into(),
                 plan: SeatPlan::Max,
+                trialing: false,
             })
         }
         async fn apply(
@@ -139,8 +147,16 @@ mod test {
     #[test]
     fn pro_max_is_an_immediate_upgrade() {
         assert_eq!(
-            action(SeatPlan::Premium, SeatPlan::Max),
-            PlanAction::Upgrade
+            action(SeatPlan::Premium, SeatPlan::Max, false),
+            PlanAction::Upgrade { end_trial: false }
+        );
+    }
+
+    #[test]
+    fn pro_trial_to_max_ends_the_trial_instead_of_carrying_it() {
+        assert_eq!(
+            action(SeatPlan::Premium, SeatPlan::Max, true),
+            PlanAction::Upgrade { end_trial: true }
         );
     }
 }

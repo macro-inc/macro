@@ -1,11 +1,15 @@
-import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
 import {
   parseMacroAppLink,
   sanitizeCalendarDescription,
 } from '@app/features/calendar/utils/calendar-description';
+import {
+  calendarMacroCallUrl,
+  removeCalendarMacroCall,
+} from '@app/features/calendar/utils/macro-call-link';
 import { SharedEventActions } from '@app/features/calendar-view/components/SharedEventActions';
 import {
   type CalendarMentionTarget,
+  calendarEventDeepLink,
   copyCalendarEventMentionTarget,
 } from '@app/features/calendar-view/copy-event-mention';
 import { calendarMentionOpen } from '@app/features/calendar-view/mention-open-target';
@@ -39,9 +43,11 @@ import {
 import { getDisplayName, tryMacroId } from '@core/user';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { parseLocalDate } from '@core/util/local-date';
 import { matches } from '@core/util/match';
-import { openExternalUrl } from '@core/util/url';
+import { buildSimpleEntityUrl, openExternalUrl } from '@core/util/url';
 import MacroEmbed from '@icon/macro-embed.svg';
+import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import CollapseInlinePreview from '@icon/system/regular/arrows-in-line-horizontal.svg';
 import ExpandInlinePreview from '@icon/system/regular/arrows-out-line-horizontal.svg';
 import CalendarCheckIcon from '@icon/system/regular/calendar-check.svg';
@@ -58,8 +64,10 @@ import MapPinIcon from '@icon/system/regular/map-pin-simple.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import LoadingSpinner from '@icon/system/regular/spinner.svg';
 import TextAlignLeftIcon from '@icon/system/regular/text-align-left.svg';
+import TextTIcon from '@icon/system/regular/text-t.svg';
 import TrashSimple from '@icon/system/regular/trash-simple.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
+import VideoCameraIcon from '@icon/system/regular/video-camera.svg';
 import {
   isAccessiblePreviewItem,
   isCalendarEventPreviewItem,
@@ -329,7 +337,7 @@ const calendarTimeFormat = new Intl.DateTimeFormat(undefined, {
 
 /** One compact local-time schedule line for a calendar mention preview. */
 export function calendarPreviewSchedule(
-  event: Pick<PreviewCalendarEventAccess['event'], 'time'>
+  event: PreviewCalendarEventAccess['event']
 ): string | undefined {
   if (event.time.kind === 'allDay') {
     const start = parseLocalDate(event.time.startDate);
@@ -364,19 +372,26 @@ function heldOnCalendarLabel(
 }
 
 /** Meeting-level rows of the calendar mention hover card. */
-export function CalendarEventPreviewDetails(props: {
-  event: Omit<PreviewCalendarEventAccess['event'], 'updatedAt'>;
+function CalendarEventPreviewDetails(props: {
+  event: PreviewCalendarEventAccess['event'];
   /** The mentioned event, which a read-only share copies from. */
   mentionedEventId: string;
   /** Opens the viewer's own copy; absent where the card cannot open it. */
   onOpen?: (event: MouseEvent) => void;
-  /** Team-calendar projections have no channel-share mutation capabilities. */
-  sharedActions?: boolean;
+  /** Runs once Join has left the card; native apps join in-app, behind it. */
+  onJoin?: () => void;
 }) {
   const organizer = () =>
     props.event.organizerName ?? props.event.organizerEmail;
+  const macroMeetingUrl = () => calendarMacroCallUrl(props.event);
+  // A channel share exposes the meeting, not a way into its call.
+  const joinableMeetingUrl = () =>
+    props.event.viewerEventId ? macroMeetingUrl() : undefined;
+  const eventContent = createMemo(() =>
+    removeCalendarMacroCall(props.event, macroMeetingUrl())
+  );
   const descriptionHtml = () =>
-    sanitizeCalendarDescription(props.event.description ?? '');
+    sanitizeCalendarDescription(eventContent().description);
   // Opening a Macro link reads the split layout from context, so the handler
   // keeps this component's owner.
   const openDescriptionLink = createCallback((event: MouseEvent) => {
@@ -423,7 +438,25 @@ export function CalendarEventPreviewDetails(props: {
           </MetadataInfo>
         )}
       </Show>
-      <Show when={props.event.location}>
+      <Show when={joinableMeetingUrl()}>
+        {(url) => (
+          <MetadataInfo icon={VideoCameraIcon}>
+            <Button
+              variant="secondary"
+              size="xs"
+              onClick={(event) => {
+                event.stopPropagation();
+                openExternalUrl(url());
+                props.onJoin?.();
+              }}
+            >
+              Join Macro call
+              <ArrowSquareOutIcon class="size-3.5 shrink-0" />
+            </Button>
+          </MetadataInfo>
+        )}
+      </Show>
+      <Show when={eventContent().location.trim()}>
         {(location) => (
           <MetadataInfo icon={MapPinIcon}>
             <span class="truncate">{location()}</span>
@@ -435,7 +468,7 @@ export function CalendarEventPreviewDetails(props: {
           <div class="mt-2 flex items-start text-[0.8em] text-ink-muted">
             <TextAlignLeftIcon class="relative mx-1 mt-0.5 size-3 shrink-0" />
             <div
-              class="line-clamp-4 min-w-0 wrap-anywhere [&_a]:text-accent [&_a]:underline [&_ol]:list-decimal [&_ol]:pl-4 [&_p+p]:mt-1 [&_ul]:list-disc [&_ul]:pl-4"
+              class="line-clamp-4 min-w-0 wrap-anywhere [&_a]:text-link [&_a:hover]:text-link-hover [&_a:visited]:text-link-visited [&_a]:underline [&_ol]:list-decimal [&_ol]:pl-4 [&_p+p]:mt-1 [&_ul]:list-disc [&_ul]:pl-4"
               innerHTML={html()}
               onClick={openDescriptionLink}
             />
@@ -457,9 +490,7 @@ export function CalendarEventPreviewDetails(props: {
         </MetadataInfo>
       </Show>
       <Switch>
-        <Match
-          when={!props.event.viewerEventId && props.sharedActions !== false}
-        >
+        <Match when={!props.event.viewerEventId}>
           <SharedEventActions
             eventId={props.mentionedEventId}
             title={props.event.title}
@@ -473,8 +504,8 @@ export function CalendarEventPreviewDetails(props: {
               class="mt-1 flex flex-wrap items-center gap-1"
               onClick={(event) => event.stopPropagation()}
             >
-              <Button variant="outline" size="xs" onClick={open()}>
-                <CalendarCheckIcon />
+              <Button variant="secondary" size="xs" onClick={open()}>
+                <CalendarCheckIcon class="size-3.5" />
                 Open
               </Button>
             </div>
@@ -493,6 +524,7 @@ export function CalendarEventPreviewDetails(props: {
  */
 export type DocumentPreviewContentProps = {
   delete?: () => void;
+  convertToText?: (link: string) => void;
   collapseInfo?: {
     isCollapsable: boolean;
     isCollapsed: boolean;
@@ -721,31 +753,24 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
     };
   };
 
+  const documentLink = () => {
+    const mentionTarget = calendarMentionTarget();
+    if (mentionTarget) return calendarEventDeepLink(mentionTarget);
+    return buildSimpleEntityUrl(
+      { type: targetBlockType(), id: props.documentInfo.id },
+      props.documentInfo.params
+    );
+  };
+
   const handleCopy = async () => {
     try {
-      let hostname = window.location.hostname.replace('www.', '').toLowerCase();
-      if (hostname === 'localhost') {
-        hostname = 'dev.macro.com';
-      }
-
       const mentionTarget = calendarMentionTarget();
       if (mentionTarget) {
         await copyCalendarEventMentionTarget(mentionTarget);
         return;
       }
 
-      let link = `https://${hostname}/app/${targetBlockType()}/${props.documentInfo.id}`;
-
-      if (
-        props.documentInfo.params &&
-        Object.keys(props.documentInfo.params).length > 0
-      ) {
-        const queryParams = new URLSearchParams(
-          props.documentInfo.params
-        ).toString();
-        link += `?${queryParams}`;
-      }
-      await navigator.clipboard.writeText(link);
+      await navigator.clipboard.writeText(documentLink());
       toast.success('Copied document link to clipboard');
     } catch (e) {
       console.error(e);
@@ -851,7 +876,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
           variant="ghost"
           aria-label="Reference actions"
         >
-          <DotsThree />
+          <DotsThree class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Dropdown.Trigger>
         <Dropdown.Content blockingBackdrop class="z-nested-action-menu">
           <Dropdown.Group>
@@ -863,6 +888,14 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
                 {props.previewInfo?.isPreviewable
                   ? 'Convert to Embed'
                   : 'Convert to Card View'}
+              </Dropdown.Item>
+            </Show>
+            <Show when={props.convertToText}>
+              <Dropdown.Item
+                onSelect={() => props.convertToText?.(documentLink())}
+              >
+                <TextTIcon class="size-4" />
+                Convert to Plain Text
               </Dropdown.Item>
             </Show>
             <Show when={props.collapseInfo?.isCollapsable}>
@@ -1058,6 +1091,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
                               )
                           : undefined
                       }
+                      onJoin={props.onOpened}
                     />
                   )}
                 </Show>
@@ -1129,9 +1163,16 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
               props.documentInfo.name
             }
             fallback={
-              <div class="text-sm p-4">
+              <div class="relative text-sm p-4">
+                {/* An editor can still turn a reference the viewer can't
+                    open back into its link. */}
+                <Show when={props.convertToText}>
+                  <div class="absolute top-3 right-3">
+                    {renderActionButtons()}
+                  </div>
+                </Show>
                 {noAccessItem().access === 'no_access' ? (
-                  <Unauthorized noun={itemNoun()} />
+                  <Unauthorized compact noun={itemNoun()} />
                 ) : (
                   <NotFound message={deletedMessage()} />
                 )}
@@ -1185,6 +1226,7 @@ export function PopupPreview(
         <Suspense fallback={<DocumentPreviewSkeleton />}>
           <DocumentPreviewContent
             delete={props.delete}
+            convertToText={props.convertToText}
             collapseInfo={props.collapseInfo}
             documentInfo={props.documentInfo}
             previewInfo={props.previewInfo}

@@ -5,8 +5,8 @@ import {
 } from '@app/features/agents-view/core/agent-kind';
 import { AGENTS_TOUR } from '@app/features/agents-view/tour';
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
-import { isLargeModelCatalog } from '@core/component/AI/component/input/modelCatalog';
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
+import { modelLabel } from '@core/component/AI/constant/model-label';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_AGENT_DMS } from '@core/constant/featureFlags';
 import {
@@ -61,19 +61,26 @@ import { useSearchParams } from '@solidjs/router';
 import { ApiKeyInput, Avatar, Button, Dialog, Panel } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import {
+  createEffect,
   createMemo,
   createSignal,
   For,
   type JSX,
   Match,
+  on,
   Show,
   Switch,
 } from 'solid-js';
 import { botAssignableChannelOptions } from '../channel/Bots/botChannelOptions';
 import { canDeleteBot, canManageAgent } from '../channel/Bots/botPermissions';
 import { ChannelMultiSelect } from '../channel/Bots/ChannelMultiSelect';
+import {
+  agentSettingsRequest,
+  consumeAgentSettingsRequest,
+} from './agentSettingsState';
 import { CursorConnectPage } from './CursorConnectPage';
 import { AgentSetupStrips } from './components/agent-setup-strips';
+import { AutoArchiveSetting } from './components/auto-archive-setting';
 import { CodingPreferencesSetting } from './components/coding-preferences-setting';
 import { AgentInstructionsEditor } from './components/instructions-editor';
 import { SettingsSelect } from './components/settings-select';
@@ -200,10 +207,15 @@ export function Agents(props: {
         );
         return {
           id: target.harnessId ?? '',
-          name:
-            harness?.owner.type === 'team'
-              ? `${harness.name} · Team`
-              : (harness?.name ?? 'macrod'),
+          // Offline runtimes stay selectable: binding an agent to a machine
+          // that is merely asleep is normal, and the label says what to expect.
+          name: [
+            harness?.name ?? 'macrod',
+            harness?.owner.type === 'team' ? 'Team' : undefined,
+            harness && !harness.connected ? 'Offline' : undefined,
+          ]
+            .filter(Boolean)
+            .join(' · '),
           kind: 'macrod',
           allowPermissionBypass: harness?.allow_permission_bypass ?? false,
           target,
@@ -245,6 +257,22 @@ export function Agents(props: {
   ]);
   const privateAgents = createMemo(() =>
     agents().filter((agent) => agent.share === 'Private')
+  );
+
+  // Opened from an agent's user card: wait for the list, then show that
+  // agent's editor if it is one the viewer manages.
+  createEffect(
+    on([agentSettingsRequest, () => agentsQuery.isPending], ([request]) => {
+      if (!request || agentsQuery.isPending) return;
+      const agent = agents().find(
+        (candidate) => candidate.id === request.agentId
+      );
+      if (agent?.editable && agent.persistedAgent) {
+        setCreating(false);
+        setEditingAgent(agent.persistedAgent);
+      }
+      consumeAgentSettingsRequest(request.id);
+    })
   );
 
   const createAgent = async (agent: CreateAgentParams) => {
@@ -324,11 +352,11 @@ export function Agents(props: {
                   </p>
                 </div>
                 <Button
-                  variant="cta"
+                  variant="primary"
                   size="sm"
                   onClick={() => setCreating(true)}
                 >
-                  <PlusIcon />
+                  <PlusIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
                   Add agent
                 </Button>
               </div>
@@ -376,6 +404,7 @@ export function Agents(props: {
           </section>
 
           <CodingPreferencesSetting />
+          <AutoArchiveSetting />
         </SettingsPage>
       </Show>
 
@@ -501,7 +530,7 @@ function AgentRow(props: {
               aria-label={`Message ${props.agent.name}`}
               onClick={onMessage()}
             >
-              <ChatIcon />
+              <ChatIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
               Message
             </Button>
           )}
@@ -515,7 +544,7 @@ function AgentRow(props: {
               aria-label={`Edit ${props.agent.name}`}
               onClick={onEdit()}
             >
-              <PencilIcon />
+              <PencilIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           )}
         </Show>
@@ -529,7 +558,7 @@ function AgentRow(props: {
               aria-label={`Delete ${props.agent.name}`}
               onClick={onDelete()}
             >
-              <TrashIcon />
+              <TrashIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           )}
         </Show>
@@ -600,12 +629,12 @@ function AgentDeleteDialog(props: {
           </Button>
           <Button
             type="button"
-            variant="strong"
+            variant="secondary"
             size="sm"
             disabled={props.pending}
             onClick={props.onConfirm}
           >
-            <TrashIcon />
+            <TrashIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
             {props.pending ? 'Deleting…' : 'Delete agent'}
           </Button>
         </Panel.Footer>
@@ -713,12 +742,15 @@ function AgentEditorPage(props: {
   const selectedCatalogOptions = () =>
     selectedModelOptions().map((model) => ({
       id: model.id,
-      label: model.name,
+      // The built-in runtime reports slugs as names; other runtimes name
+      // their own models.
+      label:
+        harnessId() === IN_MEMORY_HARNESS.id
+          ? modelLabel(model.id, model.name)
+          : model.name,
       description: model.description ?? undefined,
       group: model.group ?? undefined,
     }));
-  const selectedHarnessUsesCatalog = () =>
-    isLargeModelCatalog(selectedCatalogOptions());
   const [channelMode, setChannelMode] = createSignal<ChannelMode>(
     props.agent?.channel_scope ?? 'all'
   );
@@ -818,12 +850,14 @@ function AgentEditorPage(props: {
           <Show
             when={!query.isPending}
             fallback={
-              <SettingsSelect
-                label="Default model"
+              <ModelCatalogPicker
+                value={null}
                 options={[]}
                 placeholder="Loading models…"
-                onChange={setDefaultModelId}
-                disabled
+                onSelect={setDefaultModelId}
+                ariaLabel="Default model"
+                triggerClass="w-full justify-between"
+                pending
               />
             }
           >
@@ -837,7 +871,7 @@ function AgentEditorPage(props: {
                   </p>
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     aria-label={`Retry models for ${selectedHarness()?.name ?? 'this runtime'}`}
                     onClick={() =>
@@ -865,26 +899,15 @@ function AgentEditorPage(props: {
                     </p>
                   }
                 >
-                  <Show
-                    when={selectedHarnessUsesCatalog()}
-                    fallback={
-                      <SettingsSelect
-                        label="Default model"
-                        options={selectedModelOptions()}
-                        value={selectedDefaultModelId()}
-                        onChange={setDefaultModelId}
-                      />
-                    }
-                  >
-                    <ModelCatalogPicker
-                      value={selectedDefaultModelId()}
-                      options={selectedCatalogOptions()}
-                      onSelect={setDefaultModelId}
-                      ariaLabel="Default model"
-                      triggerClass="w-full justify-between"
-                      contentClass="overflow-hidden"
-                    />
-                  </Show>
+                  <ModelCatalogPicker
+                    value={selectedDefaultModelId()}
+                    options={selectedCatalogOptions()}
+                    onSelect={setDefaultModelId}
+                    ariaLabel="Default model"
+                    triggerClass="w-full justify-between"
+                    contentClass="overflow-hidden"
+                    placement="bottom-start"
+                  />
                 </Show>
               </Show>
             </Show>
@@ -919,42 +942,100 @@ function AgentEditorPage(props: {
         : 'Agent API keys are part of the Premium and Max plans.';
     if (saved && saved.provider !== provider.id)
       return `The saved ${apiKeyProviderName(saved.provider)} key isn’t used with this model.`;
-    return 'Bill usage to your own API key.';
+    return `Bills this agent’s usage to your ${provider.name} account instead of Macro. Leave it empty to run on Macro.`;
   };
+  // Optional, so it stays a one-line offer until asked for or already set.
+  const [apiKeyOpen, setApiKeyOpen] = createSignal(false);
+  const apiKeyShown = () =>
+    apiKeyOpen() || savedApiKey() !== undefined || apiKeyDraft().length > 0;
   const apiKeyField = () => (
     <Show when={keyProvider()}>
       {(provider) => (
-        <div class="flex max-w-[420px] flex-col gap-1.5">
-          <span class="text-xs font-medium text-ink-muted">
-            {provider().name} API key
-          </span>
-          <div class="flex min-w-0 items-center gap-2">
-            <ApiKeyInput
-              aria-label={`${provider().name} API key`}
-              class="flex-1"
-              prefix={provider().prefix}
-              saved={savedApiKey()?.provider === provider().id}
-              disabled={busy() || apiKeyLocked()}
-              value={apiKeyDraft()}
-              onValueChange={setApiKeyDraft}
-            />
-            <Show when={savedApiKey()}>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={busy()}
-                onClick={() => {
-                  setApiKeyDraft('');
-                  setRemovingApiKey(true);
-                }}
+        <Show
+          when={apiKeyShown()}
+          fallback={
+            <div class="flex max-w-[420px] items-center justify-between gap-3">
+              <div class="min-w-0">
+                <div class="text-xs font-medium text-ink-muted">
+                  {provider().name} API key{' '}
+                  <span class="whitespace-nowrap font-normal text-ink-extra-muted">
+                    · Optional
+                  </span>
+                </div>
+                <p class="mt-0.5 text-xs text-ink-extra-muted">
+                  {apiKeyLocked()
+                    ? apiKeyHelp(provider())
+                    : 'Runs on Macro usage unless you add one.'}
+                </p>
+              </div>
+              <Show when={!apiKeyLocked()}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  class="shrink-0 text-ink"
+                  disabled={busy()}
+                  onClick={() => setApiKeyOpen(true)}
+                >
+                  Add key
+                </Button>
+              </Show>
+            </div>
+          }
+        >
+          <div class="flex max-w-[420px] flex-col gap-1.5">
+            <span class="text-xs font-medium text-ink-muted">
+              {provider().name} API key{' '}
+              <span class="whitespace-nowrap font-normal text-ink-extra-muted">
+                · Optional
+              </span>
+            </span>
+            <div class="flex min-w-0 items-center gap-2">
+              <ApiKeyInput
+                aria-label={`${provider().name} API key`}
+                class="flex-1"
+                prefix={provider().prefix}
+                saved={savedApiKey()?.provider === provider().id}
+                disabled={busy() || apiKeyLocked()}
+                value={apiKeyDraft()}
+                onValueChange={setApiKeyDraft}
+              />
+              <Show
+                when={savedApiKey()}
+                fallback={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Cancel API key"
+                    disabled={busy()}
+                    onClick={() => {
+                      setApiKeyDraft('');
+                      setApiKeyOpen(false);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                }
               >
-                Remove
-              </Button>
-            </Show>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy()}
+                  onClick={() => {
+                    setApiKeyDraft('');
+                    setApiKeyOpen(true);
+                    setRemovingApiKey(true);
+                  }}
+                >
+                  Remove
+                </Button>
+              </Show>
+            </div>
+            <p class="text-xs text-ink-extra-muted">{apiKeyHelp(provider())}</p>
           </div>
-          <p class="text-xs text-ink-extra-muted">{apiKeyHelp(provider())}</p>
-        </div>
+        </Show>
       )}
     </Show>
   );
@@ -1070,7 +1151,8 @@ function AgentEditorPage(props: {
           description="Name it, tell it what to do, and pick where it runs."
           actions={
             <Button variant="ghost" size="sm" onClick={close} disabled={busy()}>
-              <ArrowLeftIcon /> Back
+              <ArrowLeftIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />{' '}
+              Back
             </Button>
           }
         >
@@ -1134,12 +1216,12 @@ function AgentEditorPage(props: {
                   />
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     disabled={busy()}
                     onClick={() => avatarInputRef?.click()}
                   >
-                    <UploadIcon />
+                    <UploadIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
                     {uploadingAvatar() ? 'Uploading…' : 'Upload'}
                   </Button>
                 </div>
@@ -1348,6 +1430,7 @@ function AgentEditorPage(props: {
               <AgentFormSection
                 title="Advanced"
                 description={advancedSummary()}
+                expanded={advancedOpen()}
                 actions={
                   <Button
                     type="button"
@@ -1409,6 +1492,7 @@ function AgentEditorPage(props: {
                             name="agent-permission-policy"
                             value="bypass"
                             title="Always bypass"
+                            suggested
                             description="Approve tool calls without asking."
                             checked={autoAcceptPermissions()}
                             onChange={() => setAutoAcceptChoice(true)}
@@ -1512,7 +1596,8 @@ function AgentEditorPage(props: {
                     disabled={busy()}
                     onClick={onDelete()}
                   >
-                    <TrashIcon /> Delete agent
+                    <TrashIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />{' '}
+                    Delete agent
                   </Button>
                 )}
               </Show>
@@ -1529,7 +1614,7 @@ function AgentEditorPage(props: {
                 <Button
                   type="submit"
                   form="agent-form"
-                  variant="strong"
+                  variant="secondary"
                   size="sm"
                   disabled={!canCreate()}
                 >
@@ -1554,6 +1639,7 @@ function AgentFormSection(props: {
   title: string;
   description: string;
   actions?: JSX.Element;
+  expanded?: boolean;
   children: JSX.Element;
 }) {
   return (
@@ -1561,6 +1647,7 @@ function AgentFormSection(props: {
       title={props.title}
       description={props.description}
       actions={props.actions}
+      expanded={props.expanded}
     >
       <div class="pt-2">{props.children}</div>
     </SettingsSection>

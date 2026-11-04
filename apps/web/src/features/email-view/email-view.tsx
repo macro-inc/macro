@@ -4,15 +4,14 @@ import {
   ViewShell,
 } from '@app/components/view-shell';
 import { ViewTour } from '@app/features/tours/ViewTour';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { SplitRouter } from '@app/lib/split-router';
+import { TraceFlow } from '@app/observability/flow';
 import { usePreference } from '@app/preferences/use-preference';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { enableReminders } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
@@ -36,6 +35,7 @@ import { emailTour } from './tour';
 import type { EmailTab, EmailViewStateOptions } from './types';
 import { useEmailViewHotkeys } from './use-email-view-hotkeys';
 import { useReadingPaneHotkey } from './use-reading-pane-hotkey';
+import { useVisibleEmailTab } from './use-visible-email-tab';
 
 export type EmailViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */
@@ -124,7 +124,9 @@ function EmailDesktopLayout(props: {
   focusList: () => void;
   setListPane: (pane: EmailListPane | undefined) => void;
 }) {
-  const { readingPane } = useEmailView();
+  const { readingPane, composing } = useEmailView();
+  // A new email takes the list's place, so the reading pane folds away.
+  const readerBeside = () => readingPane() && !composing();
   const [storedListWidth, setListWidth] = usePreference(
     'macro:pref:email:reading-pane-list-width',
     { default: LIST_WIDTH.default }
@@ -139,7 +141,7 @@ function EmailDesktopLayout(props: {
       resizable
       aside={{ preserveDuringResize: false }}
       main={
-        readingPane()
+        readerBeside()
           ? {
               preferredWidth: 640,
               width: listWidth(),
@@ -155,7 +157,7 @@ function EmailDesktopLayout(props: {
         max: 4000,
         whenNarrow: 'hide',
       }}
-      detailOpen={readingPane()}
+      detailOpen={readerBeside()}
     >
       <ViewShell.Aside>
         <EmailSidebar />
@@ -170,13 +172,19 @@ function EmailDesktopLayout(props: {
   );
 }
 
-const MOBILE_EMAIL_TABS: PillTabItem<EmailTab>[] = EMAIL_TABS.map((tab) => ({
+// Focus leads, as it does in the desktop Inbox tabs.
+const MOBILE_EMAIL_TABS: PillTabItem<EmailTab>[] = [
+  ...EMAIL_TABS.filter((tab) => tab.id === 'focus'),
+  ...EMAIL_TABS.filter((tab) => tab.id !== 'focus'),
+].map((tab) => ({
   value: tab.id,
-  label: tab.label,
+  get label() {
+    return tab.label;
+  },
 }));
 
 function EmailMobileLayout(props: ParentProps) {
-  const reminders = useFeatureFlag(enableReminders);
+  const isVisible = useVisibleEmailTab();
   const { state, setTab } = useEmailView();
 
   return (
@@ -188,12 +196,7 @@ function EmailMobileLayout(props: ParentProps) {
             class="-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none"
             contentClass="px-(--mobile-chrome-gutter)"
             leading={<EmailFilterDrawer />}
-            items={MOBILE_EMAIL_TABS.filter(
-              (tab) =>
-                tab.value !== 'reminders' ||
-                reminders().enabled ||
-                (reminders().loading && state.tab === 'reminders')
-            )}
+            items={MOBILE_EMAIL_TABS.filter((tab) => isVisible(tab.value))}
             value={state.tab}
             onChange={setTab}
           />
@@ -218,6 +221,7 @@ function EmailViewRoot() {
     state,
     setTab,
     selectedThread,
+    composing,
     list: listController,
     readingPane,
     setReadingPane,
@@ -241,17 +245,20 @@ function EmailViewRoot() {
     tab: () => state.tab,
     setTab,
     // Beside the reading pane the list stays on screen with a thread open;
-    // without it an open thread replaces the list.
+    // without it a thread replaces the list, as a new email always does.
     listHasKeyboard: () => {
       const pane = listPane();
-      return pane ? !pane.readerHasKeyboard() : selectedThread() === undefined;
+      if (pane) return !pane.readerHasKeyboard();
+      return selectedThread() === undefined && !composing();
     },
     hasSelection: () => listController.selection.count() > 0,
   });
 
   const list = () => (
     <Suspense fallback={<EmailListFallback />}>
-      <EmailList ref={setListElement} pane={listPane()} />
+      <TraceFlow name="email.list" key={() => state.tab}>
+        <EmailList ref={setListElement} pane={listPane()} />
+      </TraceFlow>
     </Suspense>
   );
 

@@ -65,6 +65,7 @@ import {
 import { confirmLocalDraftSave } from '@queries/email/local-draft-confirmation';
 import {
   clearLocalAttachmentReceipt,
+  forgetLocalDraft,
   readLocalDraft,
   recordLocalAttachment,
   reviveLocalDraft,
@@ -104,6 +105,7 @@ import {
 } from './context/compose-capabilities';
 import { localDraftReadyForDelivery } from './core/local-draft';
 import { readDroppedEmailFiles, withVideoAttachments } from './editor-adapter';
+import { useCreateEmailEvent } from './email-event';
 import { makeAttachmentPublic } from './make-attachment-public';
 import {
   emailDraftLifecycleSource,
@@ -111,6 +113,7 @@ import {
 } from './queries/draft-lifecycle';
 import { createEmailInboxSource } from './queries/inbox-source';
 import { queuedDraftSaveArgs } from './queries/queued-draft';
+import { watchEmailSendProgress } from './queries/send-progress';
 import {
   restoreDraftBodyAfterUndo,
   runQueuedUndoSend,
@@ -150,7 +153,7 @@ export function createEmailComposeContext(
       options.threadTransport?.() ??
         (graphqlSoupFlag().enabled ? 'graphql' : 'rest')
     );
-  const sends = useQueuedEmailSends(() => true);
+  const sends = useQueuedEmailSends();
   // Attach handlers run as event handlers, which have no Solid owner of
   // their own; the dialog needs the surface's.
   const dialogOwner = getOwner();
@@ -168,6 +171,7 @@ export function createEmailComposeContext(
     getDisplayName(tryMacroId(`macro|${email}`))
   );
   const signatures = useFeatureFlag(enableEmailSignatures);
+  const calendarEvents = useCreateEmailEvent();
   const remove = useDeleteDraftMutation();
   const upload = useUploadDraftAttachmentsMutation();
   const forward = useAddForwardedAttachmentsMutation();
@@ -237,6 +241,7 @@ export function createEmailComposeContext(
   };
 
   return {
+    calendarEvents,
     draftLifecycle: emailDraftLifecycleSource,
     operations: createMessageOperationSource,
     recipientName: (id) => getDisplayName(tryMacroId(id)),
@@ -357,6 +362,7 @@ export function createEmailComposeContext(
       get retryDraft() {
         return queueActive() ? retryEmailDraftSynchronization : undefined;
       },
+      forgetLocalDraft: (draftId) => forgetLocalDraft(draftId),
       readDraft: readEmailDraft,
       watchDrafts: watchEmailDrafts,
       async saveDraft({
@@ -571,6 +577,7 @@ export function createEmailComposeContext(
                 emailSendMatchesDraft(intent, draftId) &&
                 emailSendLocked(intent)
             )),
+      watchSend: watchEmailSendProgress,
       async sendMessage({ inboxId, ...input }) {
         if (
           !inboxSource
@@ -597,7 +604,7 @@ export function createEmailComposeContext(
             !inbox.settings.signature_on_replies_forwards)
             ? ''
             : (inbox.settings.signature ?? '');
-        return await sendEmailQueued({
+        const queued = await sendEmailQueued({
           signatureHtml,
           expectedLocalVersion: input.expectedLocalVersion,
           draft: {
@@ -623,6 +630,10 @@ export function createEmailComposeContext(
           restoreBodyText: input.restoreBodyText,
           restoreBodyMacro: input.restoreBodyMacro,
         });
+        // The thread shown after Send renders from this snapshot on mount; it
+        // must already hold the send, or the thread shows the draft instead.
+        await sends.refresh();
+        return queued;
       },
       async unschedule({ draftId, threadId, inboxId, draftGeneration }) {
         const local = sends

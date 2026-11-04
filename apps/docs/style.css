@@ -7,16 +7,35 @@
 
 .card,
 .frame,
-html:not(.dark) .code-block-background {
+.code-block-background,
+html.dark .code-block .code-block-background,
+#pagination,
+#content-area [aria-label="Navigate to header"] > div {
   background-color: transparent !important;
+}
+
+.code-block-fade-overlay {
+  background-image: linear-gradient(to right, transparent, #f5f1e8 32px) !important;
+}
+
+html.dark .code-block-fade-overlay {
+  background-image: linear-gradient(to right, transparent, #000000 32px) !important;
 }
 
 .frame > [class*="bg-grid"] {
   display: none;
 }
 
-html:not(.dark) #pagination {
-  background-color: #ffffff !important;
+#pagination,
+#content-area [aria-label="Navigate to header"] > div {
+  border: 1px solid rgb(3 7 18 / 0.1);
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+html.dark #pagination,
+html.dark #content-area [aria-label="Navigate to header"] > div {
+  border-color: rgb(255 255 255 / 0.1);
 }
 
 #content-area h3,

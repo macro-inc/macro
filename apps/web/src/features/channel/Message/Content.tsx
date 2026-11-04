@@ -3,6 +3,7 @@ import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/S
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { isEmojiOnly } from '@core/util/string';
 import CaretRight from '@icon/system/regular/caret-right.svg';
+import { isBotSenderId } from '@queries/messages/message-sender';
 import { Button, cn } from '@ui';
 import {
   createMemo,
@@ -20,6 +21,7 @@ import {
 } from './context';
 import { createSearchHighlightOverlay } from './highlightOverlay';
 import { MentionedImages } from './MentionedImages';
+import { MentionedRoutineTemplates } from './MentionedRoutineTemplates';
 
 // Height (px) a long body is cut to while collapsed.
 const COLLAPSED_MAX_HEIGHT = 240;
@@ -41,6 +43,8 @@ export function Content(props: ContentProps) {
   // sender line renders (`Message.AgentSessionLink`), not part of the text.
   const content = createMemo(() => splitMessageContent(message()).body);
   const bigEmoji = createMemo(() => isEmojiOnly(content()));
+  // An agent's references stand out from its text, as in its session view.
+  const fromAgent = () => isBotSenderId(message().sender_id);
   const terms = createMemo(() => termsLookup?.(message().id));
 
   const [markdownRoot, setMarkdownRoot] = createSignal<HTMLDivElement>();
@@ -56,6 +60,7 @@ export function Content(props: ContentProps) {
         rootRef={setMarkdownRoot}
       />
       <MentionedImages content={content()} />
+      <MentionedRoutineTemplates content={content()} />
     </>
   );
 
@@ -66,6 +71,7 @@ export function Content(props: ContentProps) {
         class={cn(
           'whitespace-pre-wrap wrap-break-word max-w-full',
           bigEmoji() ? 'text-4xl' : 'text-base',
+          fromAgent() && '[&_[data-mention]]:text-accent',
           props.class
         )}
       >
@@ -94,13 +100,30 @@ function CollapsibleBody(props: { children: JSX.Element }) {
     onCleanup(() => observer.disconnect());
   });
 
+  let bodyRef!: HTMLDivElement;
+
   const collapsed = () => overflowing() && !expanded();
+
+  const toggleExpanded = () => {
+    // The preview starts at the top, wherever the expanded body was scrolled.
+    if (expanded()) bodyRef.scrollTop = 0;
+    setExpanded((prev) => !prev);
+  };
 
   return (
     <>
       <div
+        ref={bodyRef}
         data-collapsed={collapsed() ? '' : undefined}
-        class={cn(collapsed() && 'overflow-hidden')}
+        // Expanded, the body scrolls inside the card, which would otherwise
+        // grow past the document it sits beside.
+        class={cn(
+          collapsed() && 'overflow-hidden',
+          expanded() && 'max-h-[50vh] overflow-y-auto'
+        )}
+        // Safari never focuses a scroll box on its own, so without this a
+        // keyboard could not scroll a comment that has no links.
+        tabIndex={expanded() ? 0 : undefined}
         // Tabbing to a link under the cut (or in the fade) reveals it
         // instead of focusing something hidden.
         onFocusIn={(event) => {
@@ -128,11 +151,11 @@ function CollapsibleBody(props: { children: JSX.Element }) {
           size="xs"
           class="mt-1 -ml-1.5 text-ink-muted"
           aria-expanded={expanded()}
-          onClick={() => setExpanded((prev) => !prev)}
+          onClick={toggleExpanded}
         >
           <CaretRight
             aria-hidden="true"
-            class="transition-transform"
+            class="transition-transform size-3 touch:size-6 shrink-0 pointer-events-none"
             classList={{ 'rotate-90': expanded() }}
           />
           {expanded() ? 'Show less' : 'Show more'}

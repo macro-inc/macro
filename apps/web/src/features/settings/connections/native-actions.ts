@@ -1,11 +1,11 @@
 import { toast } from '@core/component/Toast/Toast';
+import { assignOauthUrl, reserveOauthPopup } from '@core/pipedream/oauth-popup';
 import {
   useDeleteMcpServerMutation,
   useStartMcpAuthMutation,
   useUpdateMcpServerMutation,
 } from '@queries/mcp-servers';
 import { writeMcpAuthAttempted } from '../mcp-auth-attempt';
-import { assignOauthUrl, reserveOauthPopup } from './mcp-oauth';
 
 export function useNativeMcpActions() {
   const authorize = useStartMcpAuthMutation();

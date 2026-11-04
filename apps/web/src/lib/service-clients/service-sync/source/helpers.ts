@@ -1,4 +1,4 @@
-import { resumeDocumentSpan } from '@block-md/observability';
+import { isFeatureEnabled, syncViaGateway } from '@core/constant/featureFlags';
 import { SYNC_SERVICE_HOSTS } from '@core/constant/servers';
 import type {
   InitialSync,
@@ -6,8 +6,10 @@ import type {
   SyncError,
   TimeoutError,
 } from '@macro-inc/collaboration/collab/source';
+import { SyncRouterTransport } from '@macro-inc/collaboration/sync-service/router';
 import {
   createSyncSocket,
+  type SyncSocket,
   type SyncWebsocket,
 } from '@macro-inc/collaboration/sync-service/socket';
 import {
@@ -16,8 +18,10 @@ import {
 } from '@macro-inc/collaboration/sync-service/source';
 import type { UrlResolver } from '@macro-inc/collaboration/websocket';
 import { createWebsocketStateSignal } from '@macro-inc/collaboration/websocket/solid/state-signal';
+import type { Span } from '@macro-inc/observability';
 import { storageServiceClient } from '@service-storage/client';
 import type { ResultAsync } from 'neverthrow';
+import { resolveSyncRouterWsUrl } from '../websocket-url';
 import type { DocumentSyncAuthorization } from './authorization';
 import { guardDocumentSyncSource } from './guarded-source';
 
@@ -82,7 +86,8 @@ export function createTokenRefreshingSocket(
 export function createSyncServiceSocket(
   documentId: string,
   initialToken: string | undefined,
-  authorization?: DocumentSyncAuthorization
+  authorization?: DocumentSyncAuthorization,
+  parentSpan?: Span
 ): SyncWebsocket {
   return createTokenRefreshingSocket(
     documentId,
@@ -99,19 +104,43 @@ export function createSyncServiceSocket(
         }
         return response.value.token;
       }),
-    () => resumeDocumentSpan(documentId)?.traceparent()
+    () => parentSpan?.traceparent()
   );
+}
+
+let routerTransport: SyncRouterTransport | undefined;
+function syncRouterTransport(): SyncRouterTransport {
+  routerTransport ??= new SyncRouterTransport(resolveSyncRouterWsUrl);
+  return routerTransport;
+}
+
+async function refreshPermissionToken(documentId: string): Promise<string> {
+  const response =
+    await storageServiceClient.permissionsTokens.createPermissionToken({
+      document_id: documentId,
+    });
+  if (response.isErr()) throw new Error('Unable to authorize sync connection');
+  return response.value.token;
 }
 
 export const createSyncServiceSource = (
   documentId: string,
   token: string | undefined,
-  authorization?: DocumentSyncAuthorization
+  authorization?: DocumentSyncAuthorization,
+  parentSpan?: Span
 ): {
   source: LiveSyncSource;
   doInitialSync: () => ResultAsync<InitialSync, SyncError>;
 } => {
-  const ws = createSyncServiceSocket(documentId, token, authorization);
+  // Pick a transport for this source's lifetime. Later flag changes apply to
+  // newly created sources without interrupting an editor's active sync session.
+  const ws: SyncSocket = isFeatureEnabled(syncViaGateway)
+    ? syncRouterTransport().attach(
+        documentId,
+        authorization ? undefined : token,
+        authorization?.getToken ?? (() => refreshPermissionToken(documentId))
+      )
+    : createSyncServiceSocket(documentId, token, authorization, parentSpan);
   const state = createWebsocketStateSignal(ws);
   const source = new SyncServiceSource(ws, documentId, {
     status: () => mapToSyncStatus(state()),

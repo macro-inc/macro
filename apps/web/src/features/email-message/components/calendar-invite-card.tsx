@@ -300,7 +300,7 @@ export function CalendarInviteCard(props: {
         <Show when={!cancelled() && invite().description}>
           <div class="flex flex-col items-start gap-1.5">
             <div
-              class="break-words text-ink-muted [overflow-wrap:anywhere] [&_a]:text-accent [&_a]:underline [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6"
+              class="break-words text-ink-muted [overflow-wrap:anywhere] [&_a]:text-link [&_a:hover]:text-link-hover [&_a:visited]:text-link-visited [&_a]:underline [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6"
               classList={{ 'line-clamp-2': !descriptionExpanded() }}
               innerHTML={descriptionHtml()}
               onClick={openDescriptionLink}
@@ -366,7 +366,7 @@ export function CalendarInviteCard(props: {
                   }
                 >
                   <Button
-                    variant="strong"
+                    variant="secondary"
                     onClick={() => props.actions?.connectCalendar?.()}
                   >
                     Connect calendar
@@ -374,7 +374,7 @@ export function CalendarInviteCard(props: {
                 </Show>
                 <Show when={conference() && props.actions?.openExternal}>
                   <Button
-                    variant="cta"
+                    variant="primary"
                     aria-label="Join meeting"
                     onClick={() => props.actions?.openExternal?.(conference()!)}
                   >
@@ -384,9 +384,10 @@ export function CalendarInviteCard(props: {
                 </Show>
                 <Show when={props.actions?.openCalendar}>
                   <Button
-                    variant="outline"
+                    aria-label="Open in calendar"
+                    tooltip="Open in calendar"
+                    variant="secondary"
                     size="icon-md"
-                    label="Open in calendar"
                     onClick={(event) =>
                       props.actions?.openCalendar?.({
                         openInNewSplit: event.shiftKey,

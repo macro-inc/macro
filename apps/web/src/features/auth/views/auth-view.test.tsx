@@ -90,6 +90,29 @@ const typeCode = async (value: string) =>
     target: { value },
   });
 
+describe('agent signup', () => {
+  it('asks for an agent account by email', async () => {
+    const { fake } = setup({ intent: 'agent-signup' });
+
+    click('Continue with email');
+    await typeEmail('agent@signup.test');
+    click('Continue');
+    await screen.findByText('agent@signup.test');
+
+    expect(fake.calls()).toContain('sendAgentCode:agent@signup.test');
+  });
+
+  it('asks for an agent account through Google', async () => {
+    const { fake } = setup({ intent: 'agent-signup' });
+
+    click('Continue with Google');
+
+    await waitFor(() =>
+      expect(fake.calls()).toContain('sso:google:agent-signup')
+    );
+  });
+});
+
 describe('email sign-in', () => {
   it('updates a signed-in viewer without remounting their workspace on session refresh', () => {
     const { fake } = setup({
@@ -98,6 +121,7 @@ describe('email sign-in', () => {
           id: 'macro|member@acme.com',
           email: 'member@acme.com',
           tutorialComplete: false,
+          isAgent: false,
         },
       },
     });
@@ -115,6 +139,7 @@ describe('email sign-in', () => {
         id: 'macro|another@acme.com',
         email: 'another@acme.com',
         tutorialComplete: false,
+        isAgent: false,
       };
     });
     expect(screen.getByTestId('signed-in')).not.toBe(workspace);

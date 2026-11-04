@@ -1,4 +1,4 @@
-import { errAsync, ok, okAsync } from 'neverthrow';
+import { errAsync, ok, okAsync, ResultAsync } from 'neverthrow';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Catalog, Outcome } from './generated/types';
 import { traceDatabaseSqlRun } from './trace';
@@ -52,6 +52,19 @@ afterEach(() => {
   recorded.roots.length = 0;
   recorded.warnings.mockClear();
   vi.restoreAllMocks();
+});
+
+it('ends a cancelled read without reporting a query failure', async () => {
+  await traceDatabaseSqlRun(
+    { kind: 'sql', sql: 'SELECT 1' },
+    { tables: [] },
+    () => errAsync({ kind: 'cancelled' }),
+    { reason: 'statement-change', requestPolicy: 'network-only' }
+  );
+  expect(recorded.roots[0].attributes['database_sql.cancelled']).toBe(true);
+  expect(recorded.roots[0].attributes.error).toBeUndefined();
+  expect(recorded.roots[0].ended).toBe(true);
+  expect(recorded.warnings).not.toHaveBeenCalled();
 });
 
 const catalog: Catalog = {
@@ -253,4 +266,55 @@ describe('database SQL run traces', () => {
       'confidential'
     );
   });
+});
+
+it('keeps engine and decoding phases under explicit parents across async work', async () => {
+  vi.spyOn(console, 'groupCollapsed').mockImplementation(() => {});
+  vi.spyOn(console, 'log').mockImplementation(() => {});
+  vi.spyOn(console, 'groupEnd').mockImplementation(() => {});
+  await traceDatabaseSqlRun(
+    { kind: 'sql', sql: 'SELECT 1' },
+    catalog,
+    (trace) =>
+      new ResultAsync(
+        (async () => {
+          await trace.open(async () => 1);
+          trace.start(() => 2);
+          await trace.fetch(
+            {
+              step: 'fetch',
+              id: 0,
+              query: {
+                type: 'soup',
+                table: 'guests',
+                propf: null,
+                keyHint: null,
+              },
+              needs: [],
+              cursor: null,
+              limit: 500,
+            },
+            (step) => okAsync(step.decode(2, () => [1, 2])),
+            (rows) => rows.length
+          );
+          return ok(outcome);
+        })()
+      )
+  );
+  expect(recorded.roots).toHaveLength(1);
+  const children = recorded.roots[0].children;
+  expect(children.map((span) => span.name)).toEqual([
+    'database_sql.engine.open',
+    'database_sql.engine.start',
+    'database_sql.fetch',
+  ]);
+  expect(children.every((span) => span.ended)).toBe(true);
+  expect(children[2].children).toEqual([
+    {
+      name: 'database_sql.rows.decode',
+      attributes: { 'database_sql.rows': 2 },
+      children: [],
+      ended: true,
+    },
+  ]);
 });

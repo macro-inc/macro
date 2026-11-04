@@ -39,7 +39,9 @@ trigger_context = { path = "../trigger_context" }
 harness_id = { path = "../harness_id" }
 channel_sender = { path = "../channel_sender" }
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
 lexical_client = { path = "../lexical_client" }
+calendar_events = { path = "../calendar_events" }
 dashmap = { workspace = true }
 futures = { workspace = true }
 # The installation records that say which repositories a user can reach, so a
@@ -49,6 +51,8 @@ github = { path = "../github", default-features = false, features = [
   "ports",
   "sync",
 ] }
+feature_flags = { path = "../feature_flags" }
+jev = { path = "../jev" }
 kafka_util = { path = "../kafka_util" }
 macro_env_var = { path = "../macro_env_var" }
 # The owner's custom MCP server rows, listed so a sandbox can be told they exist.
@@ -100,6 +104,7 @@ channels = { path = "../channels", default-features = false, features = ["outbou
 messages = { path = "../messages", features = ["test-utils"] }
 uuid = { workspace = true }
 agent_fold = { path = "../folds/agent_fold", features = ["test-utils"] }
+dynamic_ui = { path = "../dynamic_ui" }
 agent_session = { path = "../agent_session", features = ["test-utils"] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 harness_id = { path = "../harness_id", features = ["test-utils"] }

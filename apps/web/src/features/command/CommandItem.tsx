@@ -1,11 +1,12 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
 import { hasValidHotkey } from '@core/hotkey/utils';
 import { type CrmContactEntity, Entity, type EntityData } from '@entity';
+import ProjectIcon from '@icon/system/regular/cube.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import WideStar from '@icon/system/regular/sparkle.svg';
-import ProjectIcon from '@icon/system/regular/stack.svg';
 import Terminal from '@icon/system/regular/terminal.svg?component-solid';
 import {
   BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
@@ -87,7 +88,9 @@ function CommandItemHotkey(props: { item: CommandMenuItem }) {
                 <>
                   {StepHotkey(step)}
                   <Show when={index() < (sequence()?.length ?? 0) - 1}>
-                    <span class="text-ink-extra-muted">then</span>
+                    <span class="text-ink-extra-muted">
+                      {t('commandMenu.hotkeyThen')}
+                    </span>
                   </Show>
                 </>
               )}
@@ -166,7 +169,9 @@ function ContactDisplay(props: { contact: CrmContactEntity }) {
       <span class="truncate">
         <Show when={showEmail()} fallback={props.contact.email}>
           {props.contact.name}
-          <span class="ml-[0.5em] opacity-50">{props.contact.email}</span>
+          {/* An en space is the 0.5em gap; unlike a margin, Safari's truncated-text tooltip keeps it. */}
+          {' '}
+          <span class="opacity-50">{props.contact.email}</span>
         </Show>
       </span>
     </div>
@@ -186,7 +191,9 @@ function UserDisplay(props: { item: UserItem }) {
       <span class="truncate">
         <Show when={showEmail()} fallback={email()}>
           {name()}
-          <span class="ml-[0.5em] opacity-50">{email()}</span>
+          {/* An en space is the 0.5em gap; unlike a margin, Safari's truncated-text tooltip keeps it. */}
+          {' '}
+          <span class="opacity-50">{email()}</span>
         </Show>
       </span>
     </div>
@@ -200,7 +207,7 @@ function SearchDisplay(props: { item: SearchItem }) {
         <SearchIcon class="size-4" />
       </div>
       <span class="truncate text-ink">
-        Search for <span class="text-ink">“{props.item.query}”</span>
+        {t('commandMenu.searchFor', { query: props.item.query })}
       </span>
     </div>
   );
@@ -213,7 +220,7 @@ function AskAiDisplay(props: { item: AskAiItem }) {
         <WideStar class="size-4" />
       </div>
       <span class="truncate text-ink">
-        Ask AI about <span class="text-ink">“{props.item.query}”</span>
+        {t('commandMenu.askAiAbout', { query: props.item.query })}
       </span>
     </div>
   );
@@ -222,19 +229,27 @@ function AskAiDisplay(props: { item: AskAiItem }) {
 export function ItemDisplay(props: { item: CommandMenuItem }) {
   return (
     <Switch>
-      <Match when={props.item.kind === 'initiative' && props.item}>
-        {(item) => (
+      <Match
+        when={
+          isEntityItem(props.item) &&
+          props.item.data.type === 'initiative' &&
+          props.item.data
+        }
+      >
+        {(project) => (
           <div class="flex items-center gap-2 flex-1 min-w-0">
             <ProjectIcon class="size-4 mobile:scale-150 text-ink-muted shrink-0" />
-            <span class="truncate">{item().name}</span>
-            <span class="ml-auto text-xs text-ink-muted">Project</span>
+            <span class="truncate">{project().name}</span>
+            <span class="ml-auto text-xs text-ink-muted">
+              {t('commandMenu.projectBadge')}
+            </span>
           </div>
         )}
       </Match>
       <Match when={props.item.kind === 'new-project'}>
         <div class="flex items-center gap-2 flex-1 min-w-0">
           <PlusIcon class="size-4 mobile:scale-150 text-ink-muted" />
-          <span>New project</span>
+          <span>{t('commandMenu.newProject')}</span>
         </div>
       </Match>
       <Match when={isSearchItem(props.item) && props.item}>
@@ -269,6 +284,8 @@ export function CommandItem(props: CommandItemProps) {
   return (
     <CommandMenuListItem
       as="div"
+      role="option"
+      aria-selected={props.selected}
       selected={props.selected}
       onMouseMove={() => props.onMouseMove?.(props.index)}
       onClick={(e) => {

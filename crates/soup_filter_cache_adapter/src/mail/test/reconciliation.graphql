@@ -1,0 +1,29 @@
+query Soup($input: SoupInput!) {
+  user {
+    id
+    emailLinks { id }
+    soup(input: $input) {
+      items {
+        __typename
+        id
+        cacheProjection
+        isFavorited
+        ... on GraphqlSoupEmailThread {
+          linkId
+          ownerId
+          inboxVisible
+          isRead
+          isSignal
+          latestInboundMessageTs
+          reminderReturnedAt
+          mailAllPreview { id }
+          mailDraftPreview { id }
+          mailSentPreview { id }
+          updatedAt
+          properties { id }
+        }
+      }
+      nextCursor
+    }
+  }
+}

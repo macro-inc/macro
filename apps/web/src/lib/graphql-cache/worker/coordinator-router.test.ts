@@ -990,7 +990,7 @@ describe('CoordinatorRouter', () => {
     }
   };
 
-  it('asks another build for its database and fails closed if nobody answers', async () => {
+  it('asks another build for its database and keeps asking while nobody answers', async () => {
     vi.useFakeTimers();
     const { router, channel, observations, tabA, tabB, engine } =
       await askForAnotherBuildsDatabase();
@@ -1010,9 +1010,24 @@ describe('CoordinatorRouter', () => {
     expect(channel.posted).toHaveLength(1);
     expect(messagesOfKind(tabB, 'cache-unavailable')).toHaveLength(0);
 
-    // Builds from before handover never answer.
+    // The holder may be between owners and unable to answer yet: the same
+    // request goes out again while the engine keeps retrying the lock.
     await vi.advanceTimersByTimeAsync(1);
-    expectFailedClosed(tabA, tabB, 'another build keeps the database');
+    expect(channel.posted).toHaveLength(2);
+    expect(channel.posted[1]).toEqual(channel.posted[0]);
+    expect(messagesOfKind(tabA, 'terminate-engine')).toEqual([]);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(channel.posted).toHaveLength(5);
+
+    // Builds from before handover never answer; the engine's own lock budget
+    // ends the attempt.
+    engine.receive({
+      ...version,
+      kind: 'owner-lock-unavailable',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+    });
+    expectFailedClosed(tabA, tabB, 'the engine stopped retrying');
     expect(
       observations.filter(
         (observation) => observation.ownerEvent === 'owner-lock-unavailable'
@@ -1022,6 +1037,7 @@ describe('CoordinatorRouter', () => {
 
     // Nothing waits in line for the lock; a new tab starts a fresh attempt.
     await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(channel.posted).toHaveLength(5);
     const tabC = new FakePort();
     await register(router, tabC, 'tab-c', 2_000);
     expect(messagesOfKind(tabC, 'become-owner')).toEqual([
@@ -1345,6 +1361,55 @@ describe('CoordinatorRouter', () => {
     expect(messagesOfKind(tabC, 'cache-unavailable')).toHaveLength(1);
     ask(3_000);
     expect(channel.posted).toHaveLength(1);
+  });
+
+  it('answers a newer build while draining and hands over once drained', async () => {
+    const { router, channel, observations, tabA, tabB, engine, ask } =
+      await holdTheDatabase(1_000);
+    // Hiding the owner tab starts a drain, and the request lands during it.
+    await router.handleTabMessage(tabA as CoordinatorMessagePort, {
+      ...version,
+      kind: 'tab-visibility',
+      tabId: 'tab-a',
+      visible: false,
+    });
+    expect(router.snapshot()?.state.kind).toBe('draining');
+    expect(messagesOfKind(engine, 'drain-engine')).toHaveLength(1);
+
+    ask(2_000);
+    ask(2_000);
+
+    expect(channel.posted).toEqual([
+      {
+        takeover: 1,
+        kind: 'reply',
+        scope: 'scope',
+        requestId: 'request-1',
+        decision: 'yield',
+      },
+    ]);
+    // Tabs keep their cache until the engine has closed the files.
+    for (const tab of [tabA, tabB]) {
+      expect(messagesOfKind(tab, 'cache-superseded')).toEqual([]);
+    }
+
+    engine.receive({
+      ...version,
+      kind: 'engine-drained',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+    });
+    for (const tab of [tabA, tabB]) {
+      expect(messagesOfKind(tab, 'cache-superseded')).toHaveLength(1);
+    }
+    // Nothing is elected again, although a visible tab remains.
+    expect(messagesOfKind(tabB, 'become-owner')).toEqual([]);
+    expect(router.snapshot()?.state.kind).toBe('waiting-for-tab');
+    expect(
+      observations.filter(
+        (observation) => observation.ownerEvent === 'superseded'
+      )
+    ).toHaveLength(1);
   });
 
   it('sends the tabs of an idle older build to the newer one without answering', async () => {

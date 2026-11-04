@@ -392,11 +392,7 @@ describe('one-off routines', () => {
     const created = draftToCreateBody(draft);
     expect(
       created && 'trigger' in created ? created.trigger : undefined
-    ).toEqual({
-      type: 'cron',
-      schedule: '12 0 13 3 10 * 2030',
-      timezone: 'UTC',
-    });
+    ).toEqual({ type: 'once', at: '2030-10-03T13:00:12.000Z' });
   });
   it('rejects past one-off creation but permits editing a completed routine', () => {
     const once = {
@@ -449,6 +445,56 @@ describe('run visibility', () => {
     const { runVisibility: _, ...older } = loadedDraft(shown);
     expect(draftToUpdateBody(older, shown)).toMatchObject({
       run_visibility: 'listed',
+    });
+  });
+});
+
+describe('routine required apps', () => {
+  it('reads, creates, and updates the apps a routine requires', () => {
+    const withApps: ScheduledAction = {
+      ...cron,
+      task: {
+        model: 'claude-sonnet-4-6',
+        user_prompt: 'Summarize updates',
+        prompt: '',
+        mcp_servers: [{ app_slug: 'linear', server_name: 'Linear' }],
+      },
+    };
+    const restored = loadedDraft(withApps);
+    expect(restored.apps).toEqual([
+      { app_slug: 'linear', server_name: 'Linear' },
+    ]);
+    expect(draftToCreateBody(restored).task.mcp_servers).toEqual([
+      { app_slug: 'linear', server_name: 'Linear' },
+    ]);
+    expect(draftToCreateBody(loadedDraft(cron)).task.mcp_servers).toEqual([]);
+
+    // Untouched apps keep the stored task as it was.
+    expect(draftToUpdateBody(restored, withApps)?.task).toBe(withApps.task);
+
+    // Removing every app sends an explicit empty list.
+    expect(
+      draftToUpdateBody({ ...restored, apps: [] }, withApps)?.task
+    ).toEqual({
+      model: 'claude-sonnet-4-6',
+      user_prompt: 'Summarize updates',
+      prompt: '',
+      mcp_servers: [],
+    });
+
+    expect(
+      draftToUpdateBody(
+        {
+          ...loadedDraft(cron),
+          apps: [{ app_slug: 'slack', server_name: 'Slack' }],
+        },
+        cron
+      )?.task
+    ).toEqual({
+      model: 'claude-sonnet-4-6',
+      user_prompt: 'Summarize updates',
+      prompt: '',
+      mcp_servers: [{ app_slug: 'slack', server_name: 'Slack' }],
     });
   });
 });

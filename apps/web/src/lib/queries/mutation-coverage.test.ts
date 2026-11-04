@@ -14,9 +14,16 @@ import { soupOptimisticResolvers } from './optimistic-resolvers';
 // New documents must choose a strategy. Exceptions describe a real server-owned
 // outcome; adding an empty optimistic response does not satisfy this gate.
 const policies = {
+  CreateSavedView:
+    'authoritative: server owns sharing; revalidate the loaded cursor chain',
+  UpdateSavedView:
+    'authoritative: revision and sharing need server confirmation',
+  DeleteSavedView:
+    'authoritative: revision-checked deletion and collection revalidation',
   MarkEmailThreadSeen: 'resolver',
   MarkEmailThreadUnread: 'resolver',
   SetEmailThreadArchived: 'resolver',
+  SetEmailThreadsArchived: 'resolver',
   UpdateNotifications: 'resolver',
   RenameEntities: 'resolver',
   UpdateInitiative: 'resolver',
@@ -54,6 +61,12 @@ const policies = {
     'authoritative: exact affected notification IDs required for undo',
   UndoWorkFeedItemsDone:
     'authoritative: the server returns the restored feed entries',
+  MarkNotificationInboxRowsDone:
+    'custom: inbox rows stay hidden until the server removes them',
+  UndoNotificationInboxRowsDone:
+    'authoritative: the server returns the restored inbox entries',
+  MarkNotificationInboxRowsSeen:
+    'custom: inbox rows read as seen until the server returns their entries',
   MoveEntities:
     'authoritative: destination authorization and membership refresh',
   UpdateEntitySharePolicies:

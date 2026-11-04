@@ -36,11 +36,16 @@ use entity_mutation::{
     RestoreEntity, TrashEntity, UpdateEntitySharePolicy, UpdateEntitySharePolicyRequest,
     capability::MoveEntityRequest as CapabilityMoveEntityRequest,
 };
+use entity_registry::PurgeOwnedEntity;
 use futures::{StreamExt, stream};
 use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
-use projects_hex::domain::ports::ProjectService;
+use projects_hex::domain::{duplicate::ProjectDuplicator, ports::ProjectService};
+use tracing::Instrument;
 
+use project_contents::DssProjectContents;
+
+mod project_contents;
 #[cfg(test)]
 mod test;
 
@@ -230,10 +235,17 @@ where
         + UpdateEntitySharePolicy
         + TrashEntity
         + RestoreEntity
+        + DeleteEntityPermanently
+        + PurgeOwnedEntity,
+    Databases: DatabasesService
+        + RenameEntity
+        + MoveEntity
+        + DuplicateEntity
+        + TrashEntity
+        + RestoreEntity
         + DeleteEntityPermanently,
-    Databases:
-        DatabasesService + RenameEntity + TrashEntity + RestoreEntity + DeleteEntityPermanently,
     Forms: RenameEntity
+        + MoveEntity
         + TrashEntity
         + RestoreEntity
         + DeleteEntityPermanently
@@ -440,7 +452,8 @@ where
             | EntityType::AgentSession
             | EntityType::ScheduledAction
             | EntityType::DatabaseRow
-            | EntityType::Initiative => {
+            | EntityType::Initiative
+            | EntityType::ExternalChat => {
                 return unsupported(requested, "rename");
             }
         };
@@ -474,6 +487,14 @@ where
                 self.move_with(&*self.projects, actor, &requested, project_id)
                     .await
             }
+            EntityType::Database => {
+                self.move_with(&*self.databases, actor, &requested, project_id)
+                    .await
+            }
+            EntityType::Form => {
+                self.move_with(&*self.forms, actor, &requested, project_id)
+                    .await
+            }
             EntityType::User
             | EntityType::Team
             | EntityType::Channel
@@ -490,10 +511,7 @@ where
             | EntityType::AgentSession
             | EntityType::ScheduledAction
             | EntityType::Initiative
-            // A database is not filed into a project, so there is nowhere to
-            // move it to (`EntityType::is_valid_entity_access_entity`).
-            | EntityType::Database
-            | EntityType::Form
+            | EntityType::ExternalChat
             | EntityType::DatabaseRow => {
                 return unsupported(requested, "move");
             }
@@ -549,6 +567,7 @@ where
             // Databases are shared by granting access directly; they carry no
             // public/channel share policy.
             | EntityType::Database
+            | EntityType::ExternalChat
             | EntityType::Form
             | EntityType::DatabaseRow => {
                 return unsupported(requested, "share policy updates");
@@ -607,7 +626,8 @@ where
             | EntityType::AgentSession
             | EntityType::ScheduledAction
             | EntityType::DatabaseRow
-            | EntityType::Initiative => {
+            | EntityType::Initiative
+            | EntityType::ExternalChat => {
                 return unsupported(requested, "trash");
             }
         };
@@ -643,7 +663,8 @@ where
             | EntityType::AgentSession
             | EntityType::ScheduledAction
             | EntityType::DatabaseRow
-            | EntityType::Initiative => {
+            | EntityType::Initiative
+            | EntityType::ExternalChat => {
                 return unsupported(requested, "restore");
             }
         };
@@ -699,7 +720,8 @@ where
             | EntityType::AgentSession
             | EntityType::ScheduledAction
             | EntityType::DatabaseRow
-            | EntityType::Initiative => {
+            | EntityType::Initiative
+            | EntityType::ExternalChat => {
                 return unsupported(requested, "permanent deletion");
             }
         };
@@ -726,6 +748,40 @@ where
         )
     }
 
+    /// Duplicate a folder with its subfolders, documents, and chats. The copy
+    /// runs on its own task, so a dropped request cannot stop it between
+    /// creating the copy and discarding a failed one.
+    async fn duplicate_project(
+        &self,
+        actor: &EntityMutationActor,
+        requested: &Entity<'static>,
+        display_name: Option<String>,
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
+        let duplicator = ProjectDuplicator::new(
+            Arc::clone(&self.projects),
+            DssProjectContents {
+                documents: Arc::clone(&self.documents),
+                chats: Arc::clone(&self.chats),
+                access: Arc::clone(&self.access),
+                lifecycle: Arc::clone(&self.lifecycle),
+                actor: actor.clone(),
+            },
+        );
+        let receipt = self.receipt(actor, requested).await?;
+        let requested = requested.clone();
+        let user_id = actor.user_id.clone();
+        tokio::spawn(
+            async move {
+                duplicator
+                    .duplicate_entity(requested, receipt, user_id, display_name)
+                    .await
+            }
+            .in_current_span(),
+        )
+        .await
+        .map_err(|error| EntityMutationErrorCode::internal(rootcause::report!(error)))?
+    }
+
     #[tracing::instrument(skip_all, fields(entity_type = %request.entity.entity_type, entity_id = %request.entity.entity_id))]
     async fn duplicate_one(
         &self,
@@ -745,12 +801,19 @@ where
                 self.duplicate_with(&*self.chats, actor, &requested, display_name)
                     .await
             }
+            EntityType::Project => {
+                self.duplicate_project(actor, &requested, display_name)
+                    .await
+            }
+            EntityType::Database => {
+                self.duplicate_with(&*self.databases, actor, &requested, display_name)
+                    .await
+            }
             EntityType::User
             | EntityType::Team
             | EntityType::Channel
             | EntityType::ChannelMessage
             | EntityType::EmailThread
-            | EntityType::Project
             | EntityType::Call
             | EntityType::ForeignEntity
             | EntityType::StaticFile
@@ -763,8 +826,7 @@ where
             | EntityType::AgentSession
             | EntityType::ScheduledAction
             | EntityType::Initiative
-            // Duplicating a database is unsupported.
-            | EntityType::Database
+            | EntityType::ExternalChat
             | EntityType::Form
             | EntityType::DatabaseRow => {
                 return unsupported(requested, "duplication");
@@ -800,10 +862,17 @@ where
         + UpdateEntitySharePolicy
         + TrashEntity
         + RestoreEntity
+        + DeleteEntityPermanently
+        + PurgeOwnedEntity,
+    Databases: DatabasesService
+        + RenameEntity
+        + MoveEntity
+        + DuplicateEntity
+        + TrashEntity
+        + RestoreEntity
         + DeleteEntityPermanently,
-    Databases:
-        DatabasesService + RenameEntity + TrashEntity + RestoreEntity + DeleteEntityPermanently,
     Forms: RenameEntity
+        + MoveEntity
         + TrashEntity
         + RestoreEntity
         + DeleteEntityPermanently

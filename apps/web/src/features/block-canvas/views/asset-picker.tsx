@@ -171,7 +171,7 @@ export function CanvasAssetPicker(props: {
           </div>
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             onClick={() => fileInput?.click()}
           >
             Add files

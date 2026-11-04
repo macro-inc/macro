@@ -38,6 +38,11 @@ export function toViewColumn(column: FormColumn): DatabaseViewColumn {
       dataType: 'DATE',
       isMultiSelect: false,
     }))
+    .with({ type: 'date_range' }, () => ({
+      ...base,
+      dataType: 'DATE_RANGE',
+      isMultiSelect: false,
+    }))
     .with({ type: 'link' }, () => ({
       ...base,
       dataType: 'LINK',

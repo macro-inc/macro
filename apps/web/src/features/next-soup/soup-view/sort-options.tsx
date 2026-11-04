@@ -2,6 +2,7 @@ import type {
   SortConfig,
   SoupEntity,
 } from '@app/features/next-soup/create-soup-state';
+import { t } from '@app/lib/i18n';
 import { compareDateDesc } from '@core/util/date';
 import type { EntityData, TaskEntityWithProperties } from '@entity';
 import {
@@ -173,27 +174,37 @@ export const SORT_CONFIGS = {
 const SORT_OPTIONS = [
   {
     value: 'viewed_at',
-    label: 'Last viewed',
+    get label() {
+      return t('viewMenus.sortLastViewed');
+    },
     icon: () => <EyeIcon class="size-3.5" />,
   },
   {
     value: 'updated_at',
-    label: 'Last updated',
+    get label() {
+      return t('viewMenus.sortLastUpdated');
+    },
     icon: () => <EditIcon class="size-3.5" />,
   },
   {
     value: 'created_at',
-    label: 'Date created',
+    get label() {
+      return t('viewMenus.sortDateCreated');
+    },
     icon: () => <CalendarIcon class="size-3.5" />,
   },
   {
     value: 'priority',
-    label: 'Priority',
+    get label() {
+      return t('viewMenus.priority');
+    },
     icon: () => <FlagIcon class="size-3.5" />,
   },
   {
     value: 'status',
-    label: 'Status',
+    get label() {
+      return t('viewMenus.status');
+    },
     icon: () => <ListChecksIcon class="size-3.5" />,
   },
 ] as const satisfies SortOption[];

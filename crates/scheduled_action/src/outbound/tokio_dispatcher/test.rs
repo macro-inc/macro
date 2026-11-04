@@ -27,6 +27,7 @@ fn only_enabled_cron_actions_get_a_timer() {
         next_run_at: Some(now),
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
+        template_id: None,
     };
     assert!(action_sleep(id, &action, 0).is_some());
     action.trigger = serde_json::from_value(json!({"type":"multiple", "triggers":[

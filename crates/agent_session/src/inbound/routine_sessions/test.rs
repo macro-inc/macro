@@ -25,13 +25,20 @@ const OPERATIONS: [&str; 5] = ["validate", "prepare", "prompt", "status", "cance
 struct Credentials;
 
 impl JwtValidator for Credentials {
-    fn validate(&self, _: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
-        Ok(ValidatedIdentity {
-            agent_id: None,
-            user_id: OWNER.into(),
-            fusion_user_id: "fusion-owner".into(),
-            organization_id: None,
-            permissions: None,
+    fn validate_credential(
+        &self,
+        _: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        Ok(macro_authorization::ValidatedCredential {
+            origin: macro_authorization::CredentialOrigin::Session,
+            identity: ValidatedIdentity {
+                agent_id: None,
+                agent_via: None,
+                user_id: OWNER.into(),
+                fusion_user_id: "fusion-owner".into(),
+                organization_id: None,
+                permissions: None,
+            },
         })
     }
 }
@@ -66,7 +73,9 @@ impl HarnessAuthorizer for Credentials {
                 user_id: OWNER.into(),
             },
             acting_user: MacroUserAuthentication {
+                origin: macro_authorization::CredentialOrigin::Harness,
                 agent_id: None,
+                agent_via: None,
                 macro_user_id: MacroUserIdStr::try_from(OWNER).unwrap(),
                 user_context: model_user::UserContext {
                     user_id: OWNER.into(),

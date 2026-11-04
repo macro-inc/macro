@@ -36,7 +36,7 @@ patterns in older code.
 | --- | --- |
 | `CODING.md` | Coding rules for every language; read before writing code. |
 | `AGENTS.md` in a directory | Scope, map, checks, and gotchas for that subtree; a sibling `CLAUDE.md` symlinks to it. |
-| `.agents/skills/` | Task workflows. `.claude/skills` and `.pi/skills` symlink here. |
+| `.agents/skills/` | Task workflows. Cursor loads this directory. `.claude/skills` and `.pi/skills` symlink here. |
 | `.agents/rules/` | Path-scoped conventions, loaded when you touch matching files. `.claude/rules` and `.cursor/rules` symlink here. |
 | `.agents/agents/` | Subagents (`auditor`, `browser-verifier`). `.claude/agents` symlinks here. |
 | `.agents/templates/` | Templates for new rules and `AGENTS.md` files. |
@@ -50,7 +50,9 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
 | --- | --- |
 | Reusing database storage or separating it from an app entity | [Database core skill](.agents/skills/database-core/SKILL.md) |
 | Adding collaborative markdown to a feature | [Collab surface core skill](.agents/skills/collab-surface-core/SKILL.md) |
-| Adding a flow or hot path, or tracing one | `instrumentation` skill |
+| Editing frontend or backend code that adds a flow, view, or hot path, or tracing one | `instrumentation` skill |
+| Finding slow web or desktop app flows in Datadog | `perf-investigation` skill |
+| Adding, reading or removing a feature flag (web or backend) | `feature-flags` skill |
 | Rust code, builds, or tests | [Rust development](docs/development/rust.md) |
 | SQLx queries, migrations, DB tests, or cache errors | [Database development](docs/development/database.md) |
 | Web frontend | [Web agent guide](apps/web/AGENTS.md) |
@@ -61,6 +63,7 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
 | Giving the user a local preview link | `local-preview` skill |
 | Working inside Cursor Cloud | [Cursor Cloud](docs/development/cursor-cloud.md) |
 | Driving the app through a browser | [App agent guide](docs/agent-guide/README.md) |
+| Agent MCP servers, including GoAlert | [MCP servers](docs/development/mcp-servers.md) |
 | Adding or changing SDK methods | [SDK rule](.agents/rules/sdk.md), `add-sdk-endpoint` skill |
 | SDK version bumps and npm publishing | [SDK release guide](packages/sdk/RELEASING.md), [release-sdk skill](.agents/skills/release-sdk/SKILL.md) |
 | Adding a service, worker, or Pulumi stack | [New service guide](docs/guides/new-service.md) |
@@ -75,6 +78,7 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
   asking. Never commit to `main`. Push or open a PR only when asked.
   Once authorized, finish in-scope review fixes and follow-up pushes without
   per-fix confirmation.
+- Keep each feature's development, validation, and local preview on one branch/worktree.
 - Flag real risks; once the user decides, act on it.
 - Disagree when they're wrong. No flattery.
 - Answer simple questions directly.
@@ -92,7 +96,12 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
 - Never deploy (`pulumi up`, `wrangler deploy`, workflow dispatch) without
   explicit permission for that deploy.
 - Never reset databases or wipe stack volumes without approval.
-- Never paste or commit secrets.
+- Never paste or commit secrets, or put customer PII (emails, phones,
+  addresses) in commits, PR titles, or PR descriptions.
+- PR titles and bodies, commits, review replies, comments, and docs describe
+  only the code. Never name people, customers, their companies or products,
+  places, or support channels and tickets; state any reason in general terms.
+  See the `git` skill's Privacy section; CI's `PR Privacy Check` enforces it.
 - Never `git stash`; it's shared across sessions.
 - Memory is context, not authority; verify against code.
 - Treat hosted dev data as real. `.cursor/*.sh` is Cursor Cloud only.

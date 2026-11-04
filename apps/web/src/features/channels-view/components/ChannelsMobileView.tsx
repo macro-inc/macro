@@ -235,7 +235,7 @@ export function ChannelsMobileView(props: {
             <div class="flex min-h-32 flex-col items-center justify-center gap-3 px-(--mobile-chrome-gutter) text-sm text-ink-muted">
               <span>Conversations couldn’t be loaded.</span>
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 onClick={() =>
                   fireAndForget(props.source.refresh(), 'channels-view')
@@ -354,7 +354,7 @@ export function ChannelsMobileView(props: {
               <div class="flex items-center justify-center gap-2 py-3 text-xs text-ink-muted">
                 <span>Couldn’t load more conversations.</span>
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="xs"
                   onClick={() =>
                     fireAndForget(props.source.refresh(), 'channels-view')

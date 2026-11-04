@@ -17,6 +17,7 @@ import {
 } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { EmailAttachmentsBucket } from './attachments-bucket';
+import { EmailFocusWorker } from './focus_worker';
 import { EmailPubSubWorkers } from './pubsub_workers';
 import { EmailRefreshHandler } from './refresh_lambda';
 import {
@@ -36,7 +37,6 @@ export const coparse_api_vpc = get_coparse_api_vpc();
 
 const JWT_SECRET_KEY = config.require(`jwt_secret_key`);
 
-const APOLLO_API_KEY_SECRET_NAME = config.require(`apollo_api_key_secret_name`);
 const jwtSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: JWT_SECRET_KEY })
   .apply((secret) => secret.arn);
@@ -108,10 +108,6 @@ const MACRO_DB_URL = aws.secretsmanager
 
 const macroDbUrlArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: MACRO_DB_URL_SECRET_NAME })
-  .apply((secret) => secret.arn);
-
-const apolloApiKeySecretArn: pulumi.Output<string> = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: APOLLO_API_KEY_SECRET_NAME })
   .apply((secret) => secret.arn);
 
 const inbox_sync_queue = new Queue('email-service-gmail-webhook', {
@@ -282,7 +278,6 @@ const secretKeyArns = [
   macroDbUrlArn,
   MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
   cloudfrontSecretKey.arn,
-  apolloApiKeySecretArn,
 ];
 
 const queueArns = [
@@ -431,6 +426,18 @@ new EmailPubSubWorkers('email-pubsub-workers', {
   tags,
   ecsClusterArn: cloudStorageClusterArn,
   clusterName: cloudStorageClusterName,
+  role: emailServiceRole,
+  platform: { family: 'linux', architecture: 'amd64' },
+  containerEnvVars,
+  dopplerEcsEnvironment,
+});
+
+// Classifies signal threads for the Focus view. It reads mail only for
+// inboxes on FOCUS_ENABLED_EMAIL_DOMAINS (Doppler) and idles when that is empty.
+new EmailFocusWorker('email-focus-worker', {
+  vpc: coparse_api_vpc,
+  tags,
+  ecsClusterArn: cloudStorageClusterArn,
   role: emailServiceRole,
   platform: { family: 'linux', architecture: 'amd64' },
   containerEnvVars,

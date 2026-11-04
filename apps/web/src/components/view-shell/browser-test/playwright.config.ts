@@ -8,7 +8,13 @@ export default defineConfig({
   testMatch: '*.browser.e2e.ts',
   workers: 1,
   timeout: 60000,
-  use: { baseURL: `http://localhost:${port}`, headless: true },
+  use: {
+    baseURL: `http://localhost:${port}`,
+    headless: true,
+    launchOptions: {
+      executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
+    },
+  },
   webServer: {
     command: `MACRO_DEV_HTTPS=false bunx vite --port ${port} --strictPort`,
     cwd: webDirectory,

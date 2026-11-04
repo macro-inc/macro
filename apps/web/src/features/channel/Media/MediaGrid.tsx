@@ -1,4 +1,5 @@
 import { FileDownloadButton } from '@core/component/FileDownload';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createFileDownload } from '@core/util/createFileDownload';
 import ExpandIcon from '@icon/system/regular/arrows-out-simple.svg';
 import { constrainImageDimensions } from '@macro-inc/lexical-core/utils/media';
@@ -6,6 +7,7 @@ import { Button, cn } from '@ui';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { mediaDownloadSource } from '../queries/static-media-download';
 import { MediaImage } from './MediaImage';
+import { MediaImageActions } from './MediaImageActions';
 import { MediaVideo } from './MediaVideo';
 import type { MediaItem } from './media-items';
 
@@ -20,6 +22,7 @@ function MessageImageTile(props: {
   item: MediaItem;
   large: boolean;
   onOpen: () => void;
+  onError?: () => void;
 }) {
   const dimensions = () =>
     constrainImageDimensions(
@@ -30,35 +33,43 @@ function MessageImageTile(props: {
     );
 
   return (
-    <button
-      type="button"
-      class="relative flex rounded-2xl border border-edge"
-      style={{
-        width: dimensions() ? `${dimensions()!.width}px` : undefined,
-        'max-width': '100%',
-      }}
-      onClick={props.onOpen}
-      aria-label="Open image viewer"
-    >
-      <MediaImage.Image
-        src={props.item.src}
-        previewSrc={props.item.previewSrc}
-        class="max-h-[80vh] w-full select-none rounded-2xl object-contain"
-        width={dimensions()?.width ?? props.item.width ?? undefined}
-        height={dimensions()?.height ?? props.item.height ?? undefined}
-        fallback={<MediaImage.Fallback fill={!!dimensions()} />}
+    // The button keeps the tile's size and frame; this wrapper only positions
+    // the toolbar beside it, since a button can't contain buttons.
+    <div class="group/media relative flex max-w-full">
+      <button
+        type="button"
+        class="relative flex rounded-2xl border border-edge"
         style={{
-          ...(dimensions()
-            ? {
-                'aspect-ratio': `${dimensions()!.width} / ${dimensions()!.height}`,
-                'max-width': `${dimensions()!.width}px`,
-              }
-            : {
-                'max-width': `${props.large ? SINGLE_IMAGE_MAX_WIDTH : MESSAGE_GALLERY_IMAGE_MAX_WIDTH}px`,
-              }),
+          width: dimensions() ? `${dimensions()!.width}px` : undefined,
+          'max-width': '100%',
         }}
-      />
-    </button>
+        onClick={props.onOpen}
+        aria-label="Open image viewer"
+      >
+        <MediaImage.Image
+          src={props.item.src}
+          previewSrc={props.item.previewSrc}
+          class="max-h-[80vh] w-full select-none rounded-2xl object-contain"
+          width={dimensions()?.width ?? props.item.width ?? undefined}
+          height={dimensions()?.height ?? props.item.height ?? undefined}
+          fallback={<MediaImage.Fallback fill={!!dimensions()} />}
+          onError={props.onError}
+          style={{
+            ...(dimensions()
+              ? {
+                  'aspect-ratio': `${dimensions()!.width} / ${dimensions()!.height}`,
+                  'max-width': `${dimensions()!.width}px`,
+                }
+              : {
+                  'max-width': `${props.large ? SINGLE_IMAGE_MAX_WIDTH : MESSAGE_GALLERY_IMAGE_MAX_WIDTH}px`,
+                }),
+          }}
+        />
+      </button>
+      <Show when={!isTouchDevice()}>
+        <MediaImageActions item={props.item} />
+      </Show>
+    </div>
   );
 }
 
@@ -84,7 +95,11 @@ function AttachmentImageTile(props: { item: MediaItem; onOpen?: () => void }) {
   );
 }
 
-function MessageVideoTile(props: { item: MediaItem; onOpen: () => void }) {
+function MessageVideoTile(props: {
+  item: MediaItem;
+  onOpen: () => void;
+  onError?: () => void;
+}) {
   const download = createFileDownload(() => mediaDownloadSource(props.item));
   const [isInlinePlaying, setIsInlinePlaying] = createSignal(false);
   const src = () => props.item.src;
@@ -109,6 +124,7 @@ function MessageVideoTile(props: { item: MediaItem; onOpen: () => void }) {
                   class="block max-h-120 max-w-full"
                   width={videoWidth()}
                   height={videoHeight()}
+                  onError={props.onError}
                 />
                 <MediaVideo.PlayOverlay class="[&_svg]:size-6" />
               </button>
@@ -133,6 +149,7 @@ function MessageVideoTile(props: { item: MediaItem; onOpen: () => void }) {
             src={src()}
             width={videoWidth()}
             height={videoHeight()}
+            onError={() => props.onError?.()}
           />
         </Show>
         <div
@@ -145,13 +162,14 @@ function MessageVideoTile(props: { item: MediaItem; onOpen: () => void }) {
           <Button
             variant="ghost"
             size="icon-md"
+            aria-label="Open video viewer"
+            tooltip="Open video viewer"
             onClick={(event) => {
               event.stopPropagation();
               props.onOpen();
             }}
-            label="Open video viewer"
           >
-            <ExpandIcon />
+            <ExpandIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
         </div>
       </div>
@@ -176,6 +194,8 @@ export function MediaGrid(props: {
   items: MediaItem[];
   variant: 'message' | 'attachments';
   onOpen: (index: number) => void;
+  /** An item whose file failed to load (message tiles only). */
+  onError?: (id: string) => void;
   class?: string;
 }) {
   const hasSingleLargeImage = createMemo(
@@ -199,6 +219,7 @@ export function MediaGrid(props: {
                 item={item}
                 large={hasSingleLargeImage()}
                 onOpen={() => props.onOpen(index())}
+                onError={() => props.onError?.(item.id)}
               />
             </Match>
             <Match
@@ -213,6 +234,7 @@ export function MediaGrid(props: {
               <MessageVideoTile
                 item={item}
                 onOpen={() => props.onOpen(index())}
+                onError={() => props.onError?.(item.id)}
               />
             </Match>
             <Match when={true}>

@@ -20,12 +20,15 @@ export function RoutineEditor(props: {
   runActions?: JSX.Element;
   instructions: JSX.Element;
   executionPicker: JSX.Element;
+  apps?: JSX.Element;
   triggerContent?: JSX.Element;
   nextRun: string;
   history: JSX.Element;
   showHistory?: boolean;
   actions?: JSX.Element;
   feedback?: JSX.Element;
+  /** More properties beside the execution target and run visibility. */
+  properties?: JSX.Element;
 }) {
   return (
     <ViewBreadcrumbs.Root
@@ -147,6 +150,8 @@ export function RoutineEditor(props: {
                     props.onChange((draft) => ({ ...draft, runVisibility }))
                   }
                 />
+                {props.properties}
+                {props.apps}
               </EntityComposer.Properties>
             </fieldset>
             <Layer depth={1}>

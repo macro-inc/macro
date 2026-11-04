@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE external_chat g SET name = renamed.name\n        FROM UNNEST($1::uuid[], $2::text[]) AS renamed(id, name)\n        WHERE g.id = renamed.id AND g.user_id = $3 AND g.name <> renamed.name",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6c4bfd9113ceecdd9ee5ba2ab4f9ab659196b317c586606622d36edaad86af88"
+}

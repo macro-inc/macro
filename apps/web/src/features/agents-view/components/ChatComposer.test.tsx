@@ -52,6 +52,7 @@ const editor = vi.hoisted(() => ({
     | ((files: File[], directories: FileSystemDirectoryEntry[]) => void)
     | undefined,
   text: '',
+  readMarkdown: (): string => '',
 }));
 
 vi.mock(
@@ -90,7 +91,7 @@ vi.mock(
           clear: editor.clear,
           setMarkdown: editor.setMarkdown,
           focus: vi.fn(),
-          getMarkdown: () => editor.text,
+          getMarkdown: () => editor.readMarkdown(),
         },
         lexical: editor.lexical,
       };
@@ -156,7 +157,10 @@ beforeEach(() => {
   );
   vi.clearAllMocks();
   vi.mocked(isTouchDevice).mockReturnValue(false);
+  editor.clear.mockReset();
+  editor.setMarkdown.mockReset();
   editor.text = '';
+  editor.readMarkdown = () => editor.text;
   editor.enter = undefined;
   editor.change = undefined;
 });
@@ -195,6 +199,33 @@ describe('Chat session input', () => {
       }
     }
   );
+
+  it('does not write a sent prompt back into the editor', () => {
+    const [draft, setDraft] = createSignal('');
+    const [markdown, setMarkdown] = createSignal('');
+    editor.readMarkdown = markdown;
+    editor.clear.mockImplementation(() => setMarkdown(''));
+    editor.setMarkdown.mockImplementation((value: string) =>
+      setMarkdown(value)
+    );
+    const send = vi.fn();
+    render(() => (
+      <ChatComposer
+        draft={draft()}
+        onDraftChange={setDraft}
+        onSend={send}
+        selector={<span />}
+      />
+    ));
+    setDraft('Hello agent');
+    setMarkdown('Hello agent');
+    editor.setMarkdown.mockClear();
+    editor.enter?.(undefined, 'Hello agent');
+    expect(send).toHaveBeenCalledWith('Hello agent', []);
+    expect(draft()).toBe('');
+    expect(markdown()).toBe('');
+    expect(editor.setMarkdown).not.toHaveBeenCalledWith('Hello agent');
+  });
 
   it('preloads the fold only when focused without sending or changing the draft', () => {
     const send = vi.fn();
@@ -308,18 +339,16 @@ describe('Chat session input', () => {
     expect(send).toHaveBeenCalledWith('Next request', []);
   });
 
-  it('advances a queued prompt with Enter only when the draft is empty', () => {
+  it('never stops the turn from Enter on an empty draft', () => {
     const send = vi.fn();
     const stop = vi.fn();
-    render(() => (
-      <ChatSessionInput busy hasQueuedMessages onSend={send} onStop={stop} />
-    ));
+    render(() => <ChatSessionInput busy onSend={send} onStop={stop} />);
     editor.enter?.(undefined, '');
-    expect(stop).toHaveBeenCalledOnce();
+    expect(stop).not.toHaveBeenCalled();
     type('Another request');
     editor.enter?.(undefined, editor.text);
     expect(send).toHaveBeenCalledWith('Another request', []);
-    expect(stop).toHaveBeenCalledOnce();
+    expect(stop).not.toHaveBeenCalled();
   });
 
   describe('on a touch device', () => {
@@ -339,24 +368,6 @@ describe('Chat session input', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Send' }));
       expect(send).toHaveBeenCalledWith('first line', []);
       expect(hapticImpact).toHaveBeenCalledExactlyOnceWith('light');
-    });
-
-    it('does not advance the queue from Enter either', () => {
-      const stop = vi.fn();
-      render(() => (
-        <ChatSessionInput
-          busy
-          hasQueuedMessages
-          onSend={vi.fn()}
-          onStop={stop}
-        />
-      ));
-      expect(editor.enter?.(undefined, '')).toBe(false);
-      expect(stop).not.toHaveBeenCalled();
-      fireEvent.click(
-        screen.getByRole('button', { name: 'Flush queued messages' })
-      );
-      expect(stop).toHaveBeenCalledOnce();
     });
 
     it('applies to a new conversation as well', () => {
@@ -555,7 +566,6 @@ describe('attachments in the shared composer', () => {
     render(() => (
       <ChatSessionInput
         busy
-        hasQueuedMessages
         onSend={send}
         onStop={stop}
         attachments={attachments()}
@@ -813,9 +823,7 @@ it('blocks existing images on text-only models and preserves the draft until swi
     />
   ));
   type('Describe this');
-  expect(screen.getByRole('status').textContent).toContain(
-    'does not support images'
-  );
+  expect(screen.queryByText(/This model does not support images/)).toBeNull();
   expect(
     screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')
   ).toBe(true);

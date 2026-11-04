@@ -187,44 +187,19 @@ describe('on a touch device', () => {
     expect(onSend).toHaveBeenCalledWith('first line', []);
     expect(editor.clear).toHaveBeenCalledOnce();
   });
-
-  it('does not advance the queue from Enter either', () => {
-    const onStop = vi.fn();
-    render(() => (
-      <AgentInput busy hasQueuedMessages onSend={vi.fn()} onStop={onStop} />
-    ));
-
-    expect(editor.enter?.()).toBe(false);
-    expect(onStop).not.toHaveBeenCalled();
-
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Flush queued messages' })
-    );
-    expect(onStop).toHaveBeenCalledOnce();
-  });
 });
 
-describe('queued message advancement', () => {
-  it('keeps view-only drafts, stop, and queue advancement inert', () => {
+describe('while the agent is working', () => {
+  it('keeps view-only drafts and stop inert', () => {
     const onSend = vi.fn();
     const onStop = vi.fn();
-    const onSendNext = vi.fn();
-    render(() => (
-      <AgentInput
-        readOnly
-        busy
-        hasQueuedMessages
-        onSend={onSend}
-        onStop={onStop}
-        onSendNext={onSendNext}
-      />
-    ));
+    render(() => <AgentInput readOnly busy onSend={onSend} onStop={onStop} />);
 
     expect(
       screen.getByTestId('agent-input-editor').getAttribute('data-disabled')
     ).toBe('true');
     const stop = screen.getByRole('button', {
-      name: 'Flush queued messages',
+      name: 'Stop',
     }) as HTMLButtonElement;
     expect(stop.disabled).toBe(true);
     fireEvent.click(stop);
@@ -234,37 +209,16 @@ describe('queued message advancement', () => {
 
     expect(onSend).not.toHaveBeenCalled();
     expect(onStop).not.toHaveBeenCalled();
-    expect(onSendNext).not.toHaveBeenCalled();
   });
 
-  it('shows a ringed send action that flushes the next queued message', () => {
-    const onStop = vi.fn();
-
-    render(() => (
-      <AgentInput busy hasQueuedMessages onSend={vi.fn()} onStop={onStop} />
-    ));
-
-    const sendNext = screen.getByRole('button', {
-      name: 'Flush queued messages',
-    });
-    expect(sendNext.hasAttribute('disabled')).toBe(false);
-    expect(sendNext.getAttribute('data-intent')).toBe('flush');
-    expect(screen.getByTestId('send-icon')).toBeTruthy();
-
-    fireEvent.click(sendNext);
-    expect(onStop).toHaveBeenCalledTimes(1);
-
-    editor.enter?.();
-    expect(onStop).toHaveBeenCalledTimes(2);
-  });
-
-  it('sends typed text instead of advancing past it', () => {
+  it('never stops the turn from Enter on an empty draft', () => {
     const onSend = vi.fn();
     const onStop = vi.fn();
 
-    render(() => (
-      <AgentInput busy hasQueuedMessages onSend={onSend} onStop={onStop} />
-    ));
+    render(() => <AgentInput busy onSend={onSend} onStop={onStop} />);
+
+    editor.enter?.();
+    expect(onStop).not.toHaveBeenCalled();
 
     editor.change?.('  another request  ');
     editor.enter?.();
@@ -288,7 +242,6 @@ describe('queued message advancement', () => {
     render(() => (
       <AgentInput
         busy
-        hasQueuedMessages
         onSend={onSend}
         onStop={onStop}
         attachments={[uploaded]}
@@ -297,9 +250,6 @@ describe('queued message advancement', () => {
     ));
 
     // Attached files are a draft: both tapping Send and Enter send them.
-    expect(
-      screen.queryByRole('button', { name: 'Flush queued messages' })
-    ).toBeNull();
     expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
 
@@ -447,9 +397,7 @@ it('keeps an attached image and text unsent while the selected model is text-onl
       attachments={[{ id: 'image', name: 'test.png', kind: 'image' }]}
     />
   ));
-  expect(screen.getByRole('status').textContent).toContain(
-    'does not support images'
-  );
+  expect(screen.queryByText(/This model does not support images/)).toBeNull();
   editor.enter?.();
   expect(send).not.toHaveBeenCalled();
   expect(editor.clear).not.toHaveBeenCalled();

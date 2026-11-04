@@ -414,6 +414,8 @@ impl DocumentService for FakeDocumentService {
     async fn update_task_status(
         &self,
         _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
+        _credited_user: Option<MacroUserIdStr<'static>>,
+        _source: Option<models_properties::service::property_change_source::PropertyChangeSource>,
         _status: &str,
     ) -> Result<(), DocumentError> {
         panic!("unexpected update_task_status call")
@@ -492,6 +494,34 @@ impl DocumentService for FakeDocumentService {
         _share: bool,
     ) -> Result<DocumentTeamShareResponse, DocumentError> {
         panic!("unexpected set_team_share call")
+    }
+
+    async fn set_skill_description(
+        &self,
+        _entity_access_receipt: entity_access::domain::models::EntityAccessReceipt<
+            models_permissions::share_permission::access_level::EditAccessLevel,
+        >,
+        _description: crate::domain::skill_description::SkillDescription,
+    ) -> Result<(), DocumentError> {
+        panic!("unexpected set_skill_description call")
+    }
+
+    async fn describe_new_skill(
+        &self,
+        _document_id: &str,
+        _description: crate::domain::skill_description::SkillDescription,
+    ) -> Result<(), DocumentError> {
+        Ok(())
+    }
+
+    async fn skill_descriptions(
+        &self,
+        _document_ids: &[String],
+    ) -> Result<
+        std::collections::HashMap<String, crate::domain::skill_description::SkillDescription>,
+        DocumentError,
+    > {
+        Ok(std::collections::HashMap::new())
     }
 }
 
@@ -863,6 +893,15 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         Ok(user_context(JWT_USER_ID))
     }
 
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.authorize(jwt)
+            .await
+            .map(macro_authorization::ValidatedCredential::session)
+    }
+
     async fn authorize_internal(
         &self,
         provided_key: &str,
@@ -901,7 +940,9 @@ impl MacroAuthorizationService for FakeAuthorizationService {
             acting_user: acting_user
                 .and_then(|claims| claims.user_id)
                 .map(|user_id| MacroUserAuthentication {
+                    origin: macro_authorization::CredentialOrigin::Bot,
                     agent_id: None,
+                    agent_via: None,
                     macro_user_id: user(&user_id),
                     user_context: user_context(&user_id),
                 }),
@@ -1002,6 +1043,16 @@ fn test_router_with(
         task_dedup_service,
         lexical_client,
         creator,
+        #[cfg(feature = "ai_tools")]
+        ai_editing: Arc::new(crate::domain::ai_editing::AiEditingService::new(
+            Arc::new(
+                crate::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+                    "http://localhost/unused-editing-worker".to_string(),
+                ),
+            ),
+            Arc::new(ai_billing::domain::admission::DisabledAiAdmissionService),
+            Arc::new(ai_usage::NoOpUsageRecorder),
+        )),
         document_permission_jwt_secret: "unused-jwt-secret".to_string(),
         non_user_owners,
     };
@@ -1754,4 +1805,24 @@ async fn canvas_creation_requires_project_edit_access_before_metadata_creation()
         access.document_access_calls()[0].entity_type,
         EntityType::Project
     );
+}
+
+#[tokio::test]
+async fn a_skill_without_a_use_when_description_is_rejected_before_it_is_created() {
+    for description in ["", "Drafts release notes", "Use when one\nand two"] {
+        let (router, document_service, _access_service, _authorization_service) = test_router();
+        let request =
+            with_jwt(Request::post("/create_skill").header("content-type", "application/json"))
+                .body(Body::from(
+                    json!({ "skillName": "Release notes", "description": description }).to_string(),
+                ))
+                .expect("request should build");
+
+        assert_eq!(
+            send_status(&router, request).await,
+            StatusCode::BAD_REQUEST,
+            "{description:?}"
+        );
+        assert!(document_service.create_calls().is_empty());
+    }
 }

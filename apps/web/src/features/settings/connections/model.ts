@@ -1,5 +1,8 @@
 import { SLACK_PIPEDREAM_SLUGS } from '@core/pipedream/slugs';
-import type { PipedreamConnectionResponse } from '@service-cognition/client';
+import type {
+  PipedreamConnectionResponse,
+  PipedreamProvider,
+} from '@service-cognition/client';
 import type { ServerResponse } from '@service-cognition/generated/schemas';
 
 export type CapabilityStatus =
@@ -30,6 +33,8 @@ export type Capability = {
   mechanism: CapabilityMechanism;
   /** Stored Pipedream slug used to update or remove this connection. */
   appSlug?: string;
+  /** Backend holding this connection's grant, for `mechanism: 'pipedream'`. */
+  grantProvider?: PipedreamProvider;
   /** Native MCP URL, when this row is that server. */
   sourceUrl?: string;
 };
@@ -48,7 +53,6 @@ export type Leftover =
       kind: 'pipedream';
       id: string;
       title: string;
-      subtitle: string;
       appSlug: string;
       enabled: boolean;
     };
@@ -185,6 +189,7 @@ function curatedAiAndLeftovers(input: ConnectionsInput): {
         status: aiStatus(pd.enabled),
         mechanism: 'pipedream',
         appSlug: pd.app_slug,
+        grantProvider: pd.provider,
       });
       if (native) {
         usedNative.add(native.url);
@@ -223,7 +228,6 @@ function curatedAiAndLeftovers(input: ConnectionsInput): {
       kind: 'pipedream',
       id: `pipedream:${row.app_slug}`,
       title: row.server_name,
-      subtitle: row.app_slug,
       appSlug: row.app_slug,
       enabled: row.enabled,
     });

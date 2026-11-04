@@ -8,18 +8,21 @@ import {
 } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { okAsync } from 'neverthrow';
-import { createSignal } from 'solid-js';
+import { createMemo, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseViewColumn } from '../core/database-view';
 import type { DatabaseRow } from '../core/table';
+import { GridResizeObserver } from '../tests/grid-resize-observer';
 import { DatabaseTableView as DatabaseTable } from '../views/database-table-view';
 import type { DatabaseTableControls } from './database-table';
-import { GridCell } from './grid-cell';
+import { GridCell, GridCellPreview } from './grid-cell';
 
 // JSDOM has no intersection observer to drive the date selector's focus.
 vi.mock('@property/utils/focus', () => ({
   useSearchInputFocus: (input: () => HTMLElement | undefined) =>
     setTimeout(() => input()?.focus(), 100),
+  useAutoFocus: (element: () => HTMLElement | undefined) =>
+    setTimeout(() => element()?.focus(), 100),
 }));
 vi.mock('../../../lib/core/user/index', () => ({
   tryMacroId: (id: string) => (id.startsWith('macro|') ? id : undefined),
@@ -51,13 +54,17 @@ const rows: DatabaseRow[] = [
   { rowId: 'one', cells: { name: 'First', notes: 'First note' } },
   { rowId: 'two', cells: { name: 'Second', notes: 'Second note' } },
 ];
-function setup(canEdit = true) {
+function setup(
+  canEdit = true,
+  ready?: (controls: DatabaseTableControls) => void
+) {
   const onAddColumnMount = vi.fn();
   function AddColumn() {
     onAddColumnMount();
     return <button>Add column</button>;
   }
   const onOpen = vi.fn();
+  const onLoadMore = vi.fn();
   const onClearCells = vi.fn(async () => true);
   const onCellFocus = vi.fn();
   const onDuplicate = vi.fn(async () => true);
@@ -73,12 +80,15 @@ function setup(canEdit = true) {
   const [columns, setColumns] = createSignal([name, readonly, notes]);
   const [records, setRecords] = createSignal(rows);
   const [unsavedRow, setUnsavedRow] = createSignal<string>();
+  const [hasMoreRows, setHasMoreRows] = createSignal(false);
   let controls!: DatabaseTableControls;
   render(() => (
     <DatabaseTable
       name="Tasks"
       rows={records()}
       isUnsavedRow={(rowId) => rowId === unsavedRow()}
+      hasMoreRows={hasMoreRows()}
+      onLoadMore={onLoadMore}
       columns={columns()}
       titleColumnId="name"
       sort={[]}
@@ -88,6 +98,7 @@ function setup(canEdit = true) {
       addColumn={<AddColumn />}
       controlsRef={(tableControls) => {
         controls = tableControls;
+        ready?.(tableControls);
       }}
       getRowTitle={(row) => String(row.cells.name)}
       onOpen={onOpen}
@@ -108,11 +119,19 @@ function setup(canEdit = true) {
           {...options}
         />
       )}
+      renderCellPreview={(row, column) => (
+        <GridCellPreview
+          column={column()}
+          value={row().cells[column().id] ?? null}
+          canEdit={canEdit}
+        />
+      )}
     />
   ));
   return {
     onAddColumnMount,
     onOpen,
+    onLoadMore,
     onClearCells,
     onCellFocus,
     onDuplicate,
@@ -124,6 +143,7 @@ function setup(canEdit = true) {
     controls,
     setRecords,
     setUnsavedRow,
+    setHasMoreRows,
   };
 }
 async function selectMenu(name: string) {
@@ -134,6 +154,12 @@ async function selectMenu(name: string) {
 
 let menuStyles: HTMLStyleElement;
 beforeEach(() => {
+  vi.stubGlobal('ResizeObserver', GridResizeObserver);
+  vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(
+    function (this: HTMLElement) {
+      return this.parentElement;
+    }
+  );
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
   Element.prototype.scrollIntoView = vi.fn();
   // JSDOM reports an empty animation name; presence expects CSS's default none.
@@ -146,9 +172,155 @@ afterEach(() => {
   cleanup();
   menuStyles.remove();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe('spreadsheet interactions', () => {
+  it('scopes summary totals to loaded records until the final page', () => {
+    const { setHasMoreRows } = setup();
+    setHasMoreRows(true);
+    expect(
+      screen.getByRole('row', { name: 'Loaded records summary' }).textContent
+    ).toContain('2records loaded');
+    setHasMoreRows(false);
+    expect(
+      screen.getByRole('row', { name: 'Table summary' }).textContent
+    ).toContain('2records in view');
+  });
+
+  it('shows placeholder rows past the loaded records while pages remain', () => {
+    const { setHasMoreRows } = setup();
+    expect(document.querySelectorAll('[data-grid-pending-row]').length).toBe(0);
+    setHasMoreRows(true);
+    expect(
+      document.querySelectorAll('[data-grid-pending-row]').length
+    ).toBeGreaterThan(0);
+    expect(document.querySelectorAll('[data-grid-row-id]').length).toBe(2);
+    setHasMoreRows(false);
+    expect(document.querySelectorAll('[data-grid-pending-row]').length).toBe(0);
+  });
+
+  it('requests the next page half a page before the last loaded record', async () => {
+    const { setRecords, setHasMoreRows, onLoadMore } = setup();
+    setRecords(
+      Array.from({ length: 1000 }, (_, index) => ({
+        rowId: `record-${index}`,
+        cells: { name: `Record ${index}` },
+      }))
+    );
+    setHasMoreRows(true);
+    const grid = screen.getByRole('grid').parentElement!;
+    grid.scrollTop = 700 * 43;
+    fireEvent.scroll(grid);
+    await new Promise(requestAnimationFrame);
+    expect(onLoadMore).not.toHaveBeenCalled();
+    // 760 of 1000: 240 records before the end.
+    grid.scrollTop = 760 * 43;
+    fireEvent.scroll(grid);
+    await waitFor(() => expect(onLoadMore).toHaveBeenCalled());
+  });
+
+  it('shows previews for rows mounted mid-scroll until scrolling settles', async () => {
+    const { setRecords } = setup();
+    setRecords(
+      Array.from({ length: 1000 }, (_, index) => ({
+        rowId: `record-${index}`,
+        cells: { name: `Record ${index}` },
+      }))
+    );
+    const grid = screen.getByRole('grid').parentElement!;
+    grid.scrollTop = 500 * 43;
+    fireEvent.scroll(grid);
+    await new Promise(requestAnimationFrame);
+    const row = document.querySelector('[data-grid-row-id="record-502"]')!;
+    expect(row.textContent).toContain('Record 502');
+    expect(
+      screen.queryByRole('button', { name: 'Name: Record 502. Click to edit' })
+    ).toBeNull();
+    await waitFor(
+      () =>
+        expect(
+          screen.getByRole('button', {
+            name: 'Name: Record 502. Click to edit',
+          })
+        ).toBeTruthy(),
+      { timeout: 3000 }
+    );
+  });
+
+  it('opens an edit requested synchronously when the table becomes ready', async () => {
+    setup(true, (controls) => controls.editCell('one', 'name'));
+    await waitFor(() => expect(screen.getByDisplayValue('First')).toBeTruthy());
+  });
+
+  it('mounts a bounded window and opens an editor outside that window', async () => {
+    const { setRecords, controls } = setup();
+    setRecords(
+      Array.from({ length: 1000 }, (_, index) => ({
+        rowId: `record-${index}`,
+        cells: { name: `Record ${index}` },
+      }))
+    );
+    expect(screen.getByRole('grid').getAttribute('aria-rowcount')).toBe('1002');
+    expect(document.querySelectorAll('[data-grid-row-id]').length).toBeLessThan(
+      80
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Name: Record 999. Click to edit' })
+    ).toBeNull();
+    controls.editCell('record-999', 'name');
+    await waitFor(() =>
+      expect(screen.getByDisplayValue('Record 999')).toBeTruthy()
+    );
+    expect(document.querySelectorAll('[data-grid-row-id]').length).toBeLessThan(
+      80
+    );
+  });
+
+  it('only reads changed rows while keeping column changes reactive', () => {
+    const [records, setRecords] = createSignal(rows);
+    const [columns, setColumns] = createSignal([name, notes]);
+    const reads: string[] = [];
+    render(() => (
+      <DatabaseTable
+        name="Tasks"
+        rows={records()}
+        columns={columns()}
+        sort={[]}
+        widths={{}}
+        canEdit={false}
+        pending={false}
+        addColumn={null}
+        getRowTitle={(row) => String(row.cells.name)}
+        onOpen={() => {}}
+        onSort={() => {}}
+        renderCell={(row, column) => {
+          const value = createMemo(() => {
+            const text = `${row().rowId}:${column().name}:${row().cells[column().id]}`;
+            reads.push(text);
+            return text;
+          });
+          return <span>{value()}</span>;
+        }}
+      />
+    ));
+    reads.length = 0;
+    setRecords([
+      { rowId: 'one', cells: { name: 'Changed', notes: 'First note' } },
+      rows[1],
+    ]);
+    expect(reads).toEqual(['one:Name:Changed', 'one:Notes:First note']);
+    expect(screen.getByText('two:Name:Second')).toBeTruthy();
+
+    reads.length = 0;
+    setColumns([name, { ...notes, name: 'Details' }]);
+    expect(reads.toSorted()).toEqual([
+      'one:Details:First note',
+      'two:Details:Second note',
+    ]);
+    expect(screen.getByText('one:Details:First note')).toBeTruthy();
+  });
+
   it('creates the add-column control once across grid layout and row updates', () => {
     const fixture = setup();
     expect(fixture.onAddColumnMount).toHaveBeenCalledOnce();
@@ -711,6 +883,24 @@ describe('spreadsheet interactions', () => {
 });
 
 describe('presence and reveal', () => {
+  // JSDOM has no layout: every label's cell edge reads as in view.
+  beforeEach(() => {
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(
+          private readonly callback: (
+            entries: { isIntersecting: boolean }[]
+          ) => void
+        ) {}
+        observe() {
+          this.callback([{ isIntersecting: true }]);
+        }
+        disconnect() {}
+      }
+    );
+  });
+  afterEach(() => vi.unstubAllGlobals());
   it('marks the cell a remote viewer is on and shares the focused cell', () => {
     const onCellFocus = vi.fn();
     const [remoteUsers, setRemoteUsers] = createSignal([
@@ -727,6 +917,13 @@ describe('presence and reveal', () => {
         editing: true,
       },
       { userId: 'macro|pat@example.com', editing: false },
+      {
+        userId: 'macro|lee@example.com',
+        rowId: 'two',
+        columnId: 'name',
+        editing: false,
+        canEdit: false,
+      },
     ]);
     const [highlightRowId, setHighlightRowId] = createSignal<string>();
     render(() => (
@@ -765,18 +962,29 @@ describe('presence and reveal', () => {
     expect(alexCell.dataset.gridRow).toBe('1');
     expect(alexCell.dataset.gridColumn).toBe('2');
     expect(alexCell.dataset.remoteUsers).toBe('macro|alex@example.com');
-    expect(alexCell.style.borderTop).toContain('2px solid');
-    expect(alexCell.style.backgroundColor).toContain('color-mix');
+    // The outline is an overlay, so the cell itself gains no border.
+    expect(alexCell.style.borderTop).toBe('');
+    const alexOutline = alexCell.querySelector<HTMLElement>(
+      '[data-remote-outline]'
+    )!;
+    expect(alexOutline.style.borderTop).toContain('2px solid');
+    expect(alexOutline.style.backgroundColor).toContain('color-mix');
     // Sam has no cached profile: the email name is shown, dashed while editing.
     const samTag = screen.getByRole('note', { name: 'Sam is editing' });
-    const samCell = samTag.closest<HTMLElement>('[data-grid-cell]')!;
-    expect(samCell.style.borderTop).toContain('dashed');
-    expect(samCell.style.borderTop).not.toBe(alexCell.style.borderTop);
+    const samOutline = samTag
+      .closest<HTMLElement>('[data-grid-cell]')!
+      .querySelector<HTMLElement>('[data-remote-outline]')!;
+    expect(samOutline.style.borderTop).toContain('dashed');
+    expect(samOutline.style.borderTop).not.toBe(alexOutline.style.borderTop);
+    // Lee can only view: marked as viewing.
+    expect(
+      screen.getByRole('note', { name: 'Lee is viewing' }).textContent
+    ).toBe('Lee');
     // Pat is on the table with no cell: nothing to draw.
-    expect(document.querySelectorAll('[data-remote-users]')).toHaveLength(2);
+    expect(document.querySelectorAll('[data-remote-users]')).toHaveLength(3);
     setRemoteUsers([]);
     expect(screen.queryByRole('note')).toBeNull();
-    expect(alexCell.style.borderTop).toBe('');
+    expect(document.querySelector('[data-remote-outline]')).toBeNull();
 
     const secondNotes = screen
       .getAllByRole('row')[2]
@@ -923,3 +1131,130 @@ it.each(['Delete', 'Backspace'])(
     );
   }
 );
+
+describe('keyboard ranges', () => {
+  const cell = (rowId: string, column: number) =>
+    document.querySelector<HTMLElement>(
+      `[data-grid-row-id="${rowId}"] [data-grid-column="${column}"]`
+    )!;
+  const press = (key: string, init: KeyboardEventInit = {}) =>
+    fireEvent.keyDown(document.activeElement!, { key, ...init });
+  const selected = () =>
+    [...document.querySelectorAll<HTMLElement>('[aria-selected="true"]')].map(
+      (element) =>
+        `${element.closest<HTMLElement>('[data-grid-row-id]')!.dataset.gridRowId}:${element.dataset.gridColumn}`
+    );
+
+  it('grows and shrinks with Shift+Arrow, sharing the range as it changes, and clears it with Delete', async () => {
+    const { onClearCells, onCellFocus, onWrite } = setup();
+    cell('one', 1).focus();
+
+    press('ArrowRight', { shiftKey: true });
+    expect(selected()).toEqual(['one:1', 'one:2']);
+    expect(onCellFocus).toHaveBeenLastCalledWith({
+      rowId: 'one',
+      columnId: 'name',
+      endRowId: 'one',
+      endColumnId: 'computed',
+      editing: false,
+    });
+    expect(cell('one', 2).contains(document.activeElement)).toBe(true);
+
+    press('ArrowDown', { shiftKey: true });
+    expect(selected()).toEqual(['one:1', 'one:2', 'two:1', 'two:2']);
+    expect(onCellFocus).toHaveBeenLastCalledWith({
+      rowId: 'one',
+      columnId: 'name',
+      endRowId: 'two',
+      endColumnId: 'computed',
+      editing: false,
+    });
+
+    press('ArrowLeft', { shiftKey: true });
+    expect(selected()).toEqual(['one:1', 'two:1']);
+
+    press('Delete');
+    await waitFor(() =>
+      expect(onClearCells).toHaveBeenCalledExactlyOnceWith(
+        ['one', 'two'],
+        ['name']
+      )
+    );
+    expect(onWrite).not.toHaveBeenCalled();
+  });
+
+  it('collapses to one cell on a plain arrow', () => {
+    const { onCellFocus } = setup();
+    cell('one', 1).focus();
+    press('ArrowDown', { shiftKey: true });
+    expect(selected()).toEqual(['one:1', 'two:1']);
+
+    press('ArrowRight');
+
+    expect(selected()).toEqual([]);
+    expect(onCellFocus).toHaveBeenLastCalledWith({
+      rowId: 'two',
+      columnId: 'computed',
+      editing: false,
+    });
+  });
+
+  it('jumps to the data edge with Shift+Cmd/Ctrl+Arrow and the row ends with Shift+Home/End, never into the blank new-record row', () => {
+    const { setRecords, setUnsavedRow } = setup();
+    setRecords([...rows, { rowId: 'draft', cells: {} }]);
+    setUnsavedRow('draft');
+    cell('one', 2).focus();
+
+    press('ArrowDown', { shiftKey: true, ctrlKey: true });
+    expect(selected()).toEqual(['one:2', 'two:2']);
+    press('ArrowDown', { shiftKey: true });
+    expect(selected()).toEqual(['one:2', 'two:2']);
+
+    press('End', { shiftKey: true });
+    expect(selected()).toEqual(['one:2', 'one:3', 'two:2', 'two:3']);
+    press('Home', { shiftKey: true });
+    expect(selected()).toEqual(['one:1', 'one:2', 'two:1', 'two:2']);
+    press('ArrowUp', { shiftKey: true, metaKey: true });
+    expect(selected()).toEqual(['one:1', 'one:2']);
+  });
+
+  it('selects every loaded cell with Cmd/Ctrl+A', () => {
+    const { onCellFocus } = setup();
+    cell('two', 2).focus();
+
+    press('a', { metaKey: true });
+
+    expect(selected()).toEqual([
+      'one:1',
+      'one:2',
+      'one:3',
+      'two:1',
+      'two:2',
+      'two:3',
+    ]);
+    expect(onCellFocus).toHaveBeenLastCalledWith({
+      rowId: 'one',
+      columnId: 'name',
+      endRowId: 'two',
+      endColumnId: 'notes',
+      editing: false,
+    });
+  });
+
+  it('leaves Shift+Arrow to an open cell editor', async () => {
+    setup();
+    fireEvent.click(
+      within(cell('one', 1)).getByRole('button', { name: /Name: First/ })
+    );
+    const editor = await screen.findByRole('textbox', { name: 'Edit Name' });
+
+    const handled = !fireEvent.keyDown(editor, {
+      key: 'ArrowRight',
+      shiftKey: true,
+    });
+
+    expect(handled).toBe(false);
+    expect(selected()).toEqual([]);
+    expect(document.activeElement).toBe(editor);
+  });
+});

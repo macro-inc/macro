@@ -12,10 +12,12 @@ use agent_session::domain::{
 };
 use anyhow::{Context, Result};
 use bot_id::BotId;
+use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 use macro_user_id::user_id::MacroUserIdStr;
 use trigger_context::{
-    ContextPerson, RoutineContext, RoutineFiring, RoutineTrigger as ContextTrigger, TriggerContext,
+    ContextPerson, GithubWatch, RoutineContext, RoutineFiring, RoutineTrigger as ContextTrigger,
+    TriggerContext,
 };
 
 use super::{
@@ -61,6 +63,7 @@ impl<Sessions: RoutineSessions, Events: RoutineEventReader> ScheduledAgentRunner
                     owner: identity.owner.clone(),
                     bot_id,
                     model: model.map(|model| model.as_str().to_owned()),
+                    mcp_servers: task.mcp_servers.clone(),
                 },
                 session_id: identity.session_id,
                 source: SessionSource::Routine,
@@ -252,13 +255,16 @@ fn retain_resource(handle: &mut ExecutionHandle) {
 fn schedule(trigger: &ActionTrigger) -> String {
     let cron =
         |schedule: &Schedule, timezone: &Tz| format!("cron `{}` in {timezone}", schedule.as_str());
+    let once = |at: &DateTime<Utc>| format!("once at {}", at.to_rfc3339());
     match trigger {
         ActionTrigger::Cron { schedule, timezone } => cron(schedule, timezone),
+        ActionTrigger::Once { at } => once(at),
         ActionTrigger::Multiple { triggers } => triggers
             .as_slice()
             .iter()
             .filter_map(|trigger| match trigger {
                 RoutineTrigger::Cron { schedule, timezone } => Some(cron(schedule, timezone)),
+                RoutineTrigger::Once { at } => Some(once(at)),
                 RoutineTrigger::Events { .. } => None,
             })
             .collect::<Vec<_>>()
@@ -267,8 +273,8 @@ fn schedule(trigger: &ActionTrigger) -> String {
     }
 }
 
-/// The routine's triggers as the agent reads them: one entry per schedule and
-/// per event filter.
+/// The routine's triggers as the agent reads them: one entry per schedule,
+/// once time and event filter.
 fn triggers(trigger: &ActionTrigger) -> Vec<ContextTrigger> {
     let schedule = |schedule: &Schedule, timezone: &Tz| ContextTrigger::Schedule {
         cron: schedule.as_str().to_owned(),
@@ -279,6 +285,7 @@ fn triggers(trigger: &ActionTrigger) -> Vec<ContextTrigger> {
             schedule: cron,
             timezone,
         } => vec![schedule(cron, timezone)],
+        ActionTrigger::Once { at } => vec![ContextTrigger::Once { at: *at }],
         ActionTrigger::Multiple { triggers } => triggers
             .as_slice()
             .iter()
@@ -287,6 +294,7 @@ fn triggers(trigger: &ActionTrigger) -> Vec<ContextTrigger> {
                     schedule: cron,
                     timezone,
                 } => Some(schedule(cron, timezone)),
+                RoutineTrigger::Once { at } => Some(ContextTrigger::Once { at: *at }),
                 RoutineTrigger::Events { .. } => None,
             })
             .collect(),
@@ -304,6 +312,16 @@ fn triggers(trigger: &ActionTrigger) -> Vec<ContextTrigger> {
                     .map(|event| event.as_str().to_owned())
                     .collect(),
                 entity_ids: filter.ids().map(<[_]>::to_vec).unwrap_or_default(),
+                github: filter.github().map(|selector| GithubWatch {
+                    events: selector.events().to_vec(),
+                    actions: selector.actions().to_vec(),
+                    repositories: selector.repositories().to_vec(),
+                    include_bots: selector.include_bots(),
+                }),
+                payload_match: filter
+                    .payload()
+                    .map(|conditions| conditions.as_slice().iter().map(|c| c.describe()).collect())
+                    .unwrap_or_default(),
                 condition: filter
                     .condition()
                     .map(|condition| condition.as_str().to_owned()),

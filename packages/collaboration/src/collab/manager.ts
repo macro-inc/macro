@@ -4,6 +4,7 @@ import {
   SyncDirection,
   type UpdateMetadata,
 } from '@loro-mirror/core';
+import type { Span } from '@macro-inc/observability';
 import {
   type Container,
   type ContainerID,
@@ -54,6 +55,10 @@ export type SnapshotIngest =
 
 export type LoroManagerOptions = {
   documentId: string;
+  /** Temporary peers share the live document's telemetry without owning it. */
+  ownsTelemetry?: boolean;
+  /** Caller-owned initial document flow, never ended by the manager. */
+  parentSpan?: Span;
   /**
    * Keep a JSON mirror of the schema's state and report it through
    * `onStateChange` (the default). Editors that read the LoroDoc directly
@@ -145,7 +150,9 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     this.options = options;
     // Stamp this doc's telemetry with the peer identity as soon as it
     // exists, so every span and log record carries who we are.
-    setTelemetryAttr(options.documentId, 'loro.peer_id', this._doc.peerIdStr);
+    if (options.ownsTelemetry !== false) {
+      setTelemetryAttr(options.documentId, 'loro.peer_id', this._doc.peerIdStr);
+    }
   }
 
   /** The inner LoroDoc. Only touch this if you know what you're doing. */
@@ -187,6 +194,9 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
   /** Whether the manager has been initialized from a snapshot. */
   get initialized(): boolean {
     return this._initialized;
+  }
+  get documentId(): string {
+    return this.options.documentId;
   }
   get peerId(): bigint {
     return this._doc.peerId;
@@ -572,40 +582,45 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     // The winner of the snapshot race seeds the doc; its kind, size, and
     // resulting version are the anchor every later sync question ("since
     // what?") is asked against.
-    return telemetrySpan(this.options.documentId, 'doc.seed', async (span) => {
-      span.setAttr('seed.kind', input.kind);
-      span.setAttr('snapshot.bytes', input.snapshot.length);
-      const initResult = await this.initializeFromSnapshot(input.snapshot);
-      if (initResult.isErr()) {
-        logSyncService({
-          documentId: this.options.documentId,
-          level: 'error',
-          context: {},
-          message: `ingest(${input.kind}): seed failed`,
-        });
-        span.error(`seed from ${input.kind} snapshot failed`);
-        return false;
-      }
-
-      // WAL entries are causally anchored to the local snapshot, so they're only
-      // safe to replay on top of the local seed we just applied.
-      if (input.kind === 'local' && input.walUpdates?.length) {
-        span.setAttr('wal.replayed', input.walUpdates.length);
-        const replayResult = this.importBatchUpdates(input.walUpdates);
-        if (replayResult.isErr()) {
+    return telemetrySpan(
+      this.options.documentId,
+      'doc.seed',
+      async (span) => {
+        span.setAttr('seed.kind', input.kind);
+        span.setAttr('snapshot.bytes', input.snapshot.length);
+        const initResult = await this.initializeFromSnapshot(input.snapshot);
+        if (initResult.isErr()) {
           logSyncService({
             documentId: this.options.documentId,
             level: 'error',
             context: {},
-            message: `ingest(${input.kind}): WAL replay failed`,
+            message: `ingest(${input.kind}): seed failed`,
           });
-          span.error('WAL replay onto local seed failed');
+          span.error(`seed from ${input.kind} snapshot failed`);
+          return false;
         }
-      }
 
-      span.setAttr('version.after', frontiersAttr(this._doc));
-      return true;
-    });
+        // WAL entries are causally anchored to the local snapshot, so they're only
+        // safe to replay on top of the local seed we just applied.
+        if (input.kind === 'local' && input.walUpdates?.length) {
+          span.setAttr('wal.replayed', input.walUpdates.length);
+          const replayResult = this.importBatchUpdates(input.walUpdates);
+          if (replayResult.isErr()) {
+            logSyncService({
+              documentId: this.options.documentId,
+              level: 'error',
+              context: {},
+              message: `ingest(${input.kind}): WAL replay failed`,
+            });
+            span.error('WAL replay onto local seed failed');
+          }
+        }
+
+        span.setAttr('version.after', frontiersAttr(this._doc));
+        return true;
+      },
+      this.options.parentSpan
+    );
   }
 
   /** Tear down subscriptions and free the underlying doc. */
@@ -616,7 +631,9 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     this.initListeners.clear();
     this._mirror?.dispose();
     this._doc.free();
-    disposeTelemetryFor(this.options.documentId);
+    if (this.options.ownsTelemetry !== false) {
+      disposeTelemetryFor(this.options.documentId);
+    }
   }
 }
 

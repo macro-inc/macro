@@ -5,7 +5,8 @@ const EXCLUDED =
   '[data-icon-motion="none"], [disabled], [aria-disabled="true"], [aria-busy="true"], [inert], .animate-spin, .animate-pulse';
 const STATE_ICON =
   /^(caret|caret-double|arrow|arrows|spinner|circle|dot|check|minus|warning|x)(-|$)/;
-const HOVER_ICON = /^(magnifying-glass|gear|gear-six|plus|sparkle)$/;
+const STILL_ICON = /^(sparkle)(-|$)/;
+const HOVER_ICON = /^(magnifying-glass|gear|gear-six|plus)$/;
 
 function controlAt(target: EventTarget | null) {
   return target instanceof Element
@@ -20,7 +21,7 @@ function actionIcon(control: HTMLElement) {
   )) {
     if (svg.closest(CONTROL) !== control || svg.closest(EXCLUDED)) continue;
     const name = svg.dataset.macroIcon?.replace(/-(fill|bold)$/, '') ?? '';
-    if (STATE_ICON.test(name)) continue;
+    if (STATE_ICON.test(name) || STILL_ICON.test(name)) continue;
     const target = svg.closest<HTMLElement>('[data-icon-motion-target]') ?? svg;
     const { width, height } = target.getBoundingClientRect();
     // Illustrations and hidden glyphs are not interaction feedback.
@@ -35,7 +36,7 @@ function frames(name: string, hover: boolean): Keyframe[] {
   if (/^gear/.test(name)) rotate = hover ? '12deg' : '24deg';
   else if (/^(bell|phone)/.test(name)) rotate = '-10deg';
   else if (/^(envelope|folder|paperclip)/.test(name)) rotate = '-6deg';
-  else if (/^(sparkle|plus)/.test(name)) rotate = hover ? '8deg' : '15deg';
+  else if (/^plus/.test(name)) rotate = hover ? '8deg' : '15deg';
   else if (/^(share|upload|paper-plane)/.test(name)) translate = '0 -2px';
   else if (/^magnifying-glass/.test(name)) translate = '1px -1px';
   return [

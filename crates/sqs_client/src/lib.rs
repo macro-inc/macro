@@ -81,6 +81,8 @@ pub struct SQS {
     #[cfg(feature = "gmail")]
     gmail_ops_retry_queue: Option<String>,
     #[cfg(feature = "email")]
+    gmail_label_write_batches: bool,
+    #[cfg(feature = "email")]
     link_manager_queue: Option<String>,
     #[cfg(feature = "email")]
     email_scheduled_queue: Option<String>,
@@ -122,6 +124,8 @@ impl SQS {
             gmail_ops_queue: None,
             #[cfg(feature = "gmail")]
             gmail_ops_retry_queue: None,
+            #[cfg(feature = "email")]
+            gmail_label_write_batches: false,
             #[cfg(feature = "email")]
             link_manager_queue: None,
             #[cfg(feature = "email")]

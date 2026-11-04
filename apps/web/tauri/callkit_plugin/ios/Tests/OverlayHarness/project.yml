@@ -20,6 +20,7 @@ targets:
       - ../../Sources/CallVideoOverlayController.swift
       - ../../Sources/ParticipantStripScrollView.swift
       - ../../Sources/CallAudioRouteController.swift
+      - ../../Sources/CallKitLog.swift
     dependencies:
       - package: LiveKit
     settings:

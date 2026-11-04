@@ -17,14 +17,15 @@ pub use metadata::{
     ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType, ColleagueJoinedMacro,
     CommentedOnDocumentMetadata, CommonChannelMetadata, CrmDiscussionMetadata, CrmDiscussionReason,
     DocumentMentionMetadata, EntityAccessGrantedMetadata, EntityAccessRequestedMetadata,
-    GithubPrCheckRun, GithubPrCheckRunState, GithubPrComment, GithubPrCommentKind,
-    GithubPrEventAction, GithubPrEventStatus, GithubPrMention, GithubPrMentionLocation,
-    GithubPrNotificationCommon, GithubPrReview, GithubPrReviewState, GithubPrStatusChanged,
-    GithubReviewRequested, InboxReauthRequiredMetadata, InitiativeDiscussionMetadata,
-    InitiativeDiscussionReason, InviteToTeamMetadata, InviteePlan, ItemSharedMetadata,
-    MentionedInDocumentCommentMetadata, NewEmailMetadata, NotificationDocumentSubType,
-    NotificationTitle, ReminderMetadata, RepliedToDocumentCommentThreadMetadata,
-    RequestedAccessLevel, TaskAssignedMetadata,
+    ExternalChatMessageMetadata, GithubPrCheckRun, GithubPrCheckRunState, GithubPrComment,
+    GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus, GithubPrMention,
+    GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview, GithubPrReviewState,
+    GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
+    InitiativeDiscussionMetadata, InitiativeDiscussionReason, InviteToTeamMetadata, InviteePlan,
+    ItemSharedMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata,
+    NotificationDocumentSubType, NotificationTitle, ReminderMetadata,
+    RepliedToDocumentCommentThreadMetadata, RequestedAccessLevel, RoutineRunFinishedMetadata,
+    RoutineRunOutcome, TaskAssignedMetadata,
 };
 pub use unsubscribe::UserUnsubscribe;
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -232,6 +233,9 @@ define_notif_event!(
         /// A reminder the user set for themselves came due.
         Reminder(ReminderMetadata),
 
+        /// A live message in a shared external chat.
+        ExternalChatMessage(ExternalChatMessageMetadata),
+
         /// A calendar event alarm came due.
         CalendarEventReminder(CalendarEventReminderMetadata),
 
@@ -275,6 +279,9 @@ define_notif_event!(
         /// A channel member asked to be added as a guest of an event the
         /// user shared with the channel.
         CalendarEventJoinRequest(CalendarEventJoinRequestMetadata),
+
+        /// One of the user's routines finished a run, successfully or not.
+        RoutineRunFinished(RoutineRunFinishedMetadata),
     }
 );
 
@@ -318,6 +325,7 @@ impl NotificationTitle for NotifEvent {
                 task_assigned_metadata.format_title(sender_id)
             }
             NotifEvent::Reminder(reminder_metadata) => reminder_metadata.format_title(sender_id),
+            NotifEvent::ExternalChatMessage(metadata) => metadata.format_title(sender_id),
             NotifEvent::CalendarEventReminder(calendar_event_reminder_metadata) => {
                 calendar_event_reminder_metadata.format_title(sender_id)
             }
@@ -343,6 +351,7 @@ impl NotificationTitle for NotifEvent {
                 github_pr_review.format_title(sender_id)
             }
             NotifEvent::AgentSessionSettled(m) => m.format_title(sender_id),
+            NotifEvent::RoutineRunFinished(m) => m.format_title(sender_id),
             NotifEvent::AgentSessionWaitingForInput(m) => m.format_title(sender_id),
             NotifEvent::AgentSessionMentioned(m) => m.format_title(sender_id),
         }
@@ -387,6 +396,7 @@ impl NotificationTitle for NotifEvent {
                 task_assigned_metadata.format_body(sender_id)
             }
             NotifEvent::Reminder(reminder_metadata) => reminder_metadata.format_body(sender_id),
+            NotifEvent::ExternalChatMessage(metadata) => metadata.format_body(sender_id),
             NotifEvent::CalendarEventReminder(calendar_event_reminder_metadata) => {
                 calendar_event_reminder_metadata.format_body(sender_id)
             }
@@ -410,6 +420,7 @@ impl NotificationTitle for NotifEvent {
             }
             NotifEvent::GithubPrReview(github_pr_review) => github_pr_review.format_body(sender_id),
             NotifEvent::AgentSessionSettled(m) => m.format_body(sender_id),
+            NotifEvent::RoutineRunFinished(m) => m.format_body(sender_id),
             NotifEvent::AgentSessionWaitingForInput(m) => m.format_body(sender_id),
             NotifEvent::AgentSessionMentioned(m) => m.format_body(sender_id),
         }

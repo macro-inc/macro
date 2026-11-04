@@ -1,11 +1,10 @@
 import { SpeedToggle } from '@core/component/AI/component/input/SpeedToggle';
+import { modelLabel } from '@core/component/AI/constant/model-label';
 import {
   acceleratedSpeed,
   speedForModel,
 } from '@core/component/AI/constant/speed';
 import { fastModeEnabled } from '@core/component/AI/signal/speed';
-import ArrowUp from '@icon/system/regular/arrow-up.svg';
-import { Button } from '@ui';
 /**
  * The block's composer container: reads the session from context and drives
  * the dumb `AgentInput` with derived props. Every in-flight state it shows
@@ -78,8 +77,8 @@ export function AgentComposer(props: {
     metadata,
     pending,
     queue,
-    sendNext,
     steer,
+    steerFailed,
     turn,
     registerQuoteInsert,
     initialInput,
@@ -134,7 +133,9 @@ export function AgentComposer(props: {
   const busy = () => {
     const state = turn();
     return (
-      (state !== 'idle' && state !== 'disconnected' && state !== 'stopping') ||
+      state === 'starting' ||
+      state === 'running' ||
+      state === 'blocked' ||
       resuming()
     );
   };
@@ -236,6 +237,7 @@ export function AgentComposer(props: {
         prompt: entry.prompt ?? undefined,
         attachments: entry.attachments,
         queuedBy: actor && actor !== userId() ? displayName(actor) : undefined,
+        sendFailed: steerFailed().has(entry.actionId),
       };
     });
 
@@ -243,29 +245,8 @@ export function AgentComposer(props: {
     <>
       <Show when={queuedItems().length > 0}>
         <div class="pb-1.5">
-          <div class="mb-1 flex items-center justify-between gap-2 px-1">
-            <span class="text-xs text-ink-muted">
-              {queuedItems().length} queued
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              class="touch:min-h-11"
-              aria-label="Send next queued message now"
-              disabled={
-                readOnly() ||
-                loadFailed() ||
-                pending() ||
-                turn() === 'stopping' ||
-                turn() === 'starting'
-              }
-              onClick={() => {
-                if (!readOnly()) sendNext();
-              }}
-            >
-              <ArrowUp class="size-4" />
-              Send next
-            </Button>
+          <div class="mb-1 px-1 text-xs text-ink-muted">
+            {queuedItems().length} queued
           </div>
           <div class="max-h-[25dvh] overflow-y-auto overscroll-contain">
             <QueuedPrompts
@@ -280,10 +261,7 @@ export function AgentComposer(props: {
                   fireAndForget(queue.remove(actionId), 'agent-composer');
               }}
               onSteer={
-                busy() &&
-                !readOnly() &&
-                turn() !== 'stopping' &&
-                turn() !== 'starting'
+                (busy() || turn() === 'stopping') && !readOnly()
                   ? (actionId) => steer(actionId)
                   : undefined
               }
@@ -333,17 +311,6 @@ export function AgentComposer(props: {
         readOnly={readOnly()}
         autofocus={props.autofocus}
         busy={busy()}
-        hasQueuedMessages={queuedItems().length > 0}
-        // Read off the fold's turn discriminant, never `pending`, which
-        // clears as soon as the log confirms a cancel - well before the
-        // runtime winds the turn down, and every Enter in that gap posted
-        // another cancel. `stopping` is a stop already working on this turn.
-        // `starting` is the prompt the last advance showed as sent, still
-        // unconfirmed: the server has not dispatched it, so a stop now would
-        // end the turn already ending and the server would dispatch *that*
-        // head - the next one would sit as a sent-looking bubble while it
-        // waits. Enter is admitted again once the log confirms the head.
-        sendNextHeld={turn() === 'stopping' || turn() === 'starting'}
         // Prompts go straight to the service, so sending needs a session to
         // post to — a block whose create is still on the wire can be typed
         // into, but not sent from, until the id lands.
@@ -358,9 +325,12 @@ export function AgentComposer(props: {
             'agent-composer'
           )
         }
-        onSendNext={() => {
-          if (!readOnly()) sendNext();
-        }}
+        modelName={modelLabel(
+          metadata()?.model ?? undefined,
+          metadata()?.supportedModels.find(
+            (model) => model.id === metadata()?.model
+          )?.name
+        )}
         supportsImages={
           metadata()?.supportedModels.find(
             (model) => model.id === metadata()?.model

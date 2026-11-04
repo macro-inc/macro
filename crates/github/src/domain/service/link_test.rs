@@ -1,4 +1,5 @@
 mod lookup;
+mod pull_request_state;
 mod recovery;
 use std::sync::{Arc, Mutex};
 
@@ -27,11 +28,14 @@ use crate::domain::{
         GithubLink, GithubMergeMethod, GithubMergeOutcome, GithubMergeRejection,
         GithubPullRequestDetails, GithubPullRequestMerge, GithubPullRequestMergeability,
         GithubPullRequestMergeabilityEntry, GithubPullRequestNumber, GithubPullRequestRef,
-        GithubPullRequestUpdateRejection, GithubRepositoryMergeSettings, GithubUserInfo,
-        MergeGithubPullRequestRequest, SetGithubPullRequestDraftRequest,
+        GithubPullRequestState, GithubPullRequestUpdateRejection, GithubRepositoryMergeSettings,
+        GithubStateOutcome, GithubUserInfo, MergeGithubPullRequestRequest,
+        SetGithubPullRequestDraftRequest,
     },
     ports::{Auth, GithubLinkService, GithubOauth, GithubRepo},
 };
+
+use upstream_error::{UpstreamError, UpstreamFailure};
 
 use super::{GithubLinkConfig, GithubLinkServiceImpl};
 
@@ -204,6 +208,7 @@ struct StubGithubOauth {
 #[derive(Default)]
 struct StubGithubOauthState {
     token_is_expired: bool,
+    token_check_failure: Option<UpstreamFailure>,
     validated_tokens: Vec<String>,
     pull_request_detail_calls: Vec<PullRequestDetailCall>,
     pull_request_details: Option<GithubPullRequestDetails>,
@@ -215,6 +220,8 @@ struct StubGithubOauthState {
     merge_calls: Vec<MergeCall>,
     draft_outcome: Option<GithubDraftOutcome>,
     draft_calls: Vec<(String, u64, bool)>,
+    state_outcome: Option<GithubStateOutcome>,
+    state_calls: Vec<(String, u64, GithubPullRequestState)>,
     mergeability_calls: Vec<Vec<GithubPullRequestNumber>>,
 }
 
@@ -243,6 +250,11 @@ impl StubGithubOauth {
                 ..StubGithubOauthState::default()
             })),
         }
+    }
+
+    fn fail_token_check(self, failure: UpstreamFailure) -> Self {
+        self.state.lock().unwrap().token_check_failure = Some(failure);
+        self
     }
 
     fn validated_tokens(&self) -> Vec<String> {
@@ -294,6 +306,15 @@ impl StubGithubOauth {
         self.state.lock().unwrap().draft_calls.clone()
     }
 
+    fn with_state_outcome(self, outcome: GithubStateOutcome) -> Self {
+        self.state.lock().unwrap().state_outcome = Some(outcome);
+        self
+    }
+
+    fn state_calls(&self) -> Vec<(String, u64, GithubPullRequestState)> {
+        self.state.lock().unwrap().state_calls.clone()
+    }
+
     fn mergeability_calls(&self) -> Vec<Vec<GithubPullRequestNumber>> {
         self.state.lock().unwrap().mergeability_calls.clone()
     }
@@ -341,7 +362,7 @@ fn default_pull_request_details() -> GithubPullRequestDetails {
 }
 
 impl GithubOauth for StubGithubOauth {
-    type Err = anyhow::Error;
+    type Err = GithubError;
 
     fn construct_oauth_url(
         &self,
@@ -381,6 +402,9 @@ impl GithubOauth for StubGithubOauth {
     async fn is_access_token_expired(&self, access_token: &str) -> Result<bool, Self::Err> {
         let mut state = self.state.lock().unwrap();
         state.validated_tokens.push(access_token.to_string());
+        if let Some(failure) = state.token_check_failure {
+            return Err(github_upstream("GitHub", failure));
+        }
         Ok(state.token_is_expired)
     }
 
@@ -400,7 +424,7 @@ impl GithubOauth for StubGithubOauth {
         });
 
         if let Some(error) = &state.pull_request_detail_error {
-            return Err(anyhow::anyhow!(error.clone()));
+            return Err(GithubError::Internal(anyhow::anyhow!(error.clone())));
         }
 
         Ok(state
@@ -418,7 +442,7 @@ impl GithubOauth for StubGithubOauth {
         let mut state = self.state.lock().unwrap();
         state.merge_settings_calls += 1;
         if let Some(error) = &state.merge_settings_error {
-            return Err(anyhow::anyhow!(error.clone()));
+            return Err(GithubError::Internal(anyhow::anyhow!(error.clone())));
         }
         Ok(state
             .merge_settings
@@ -448,7 +472,7 @@ impl GithubOauth for StubGithubOauth {
         state
             .merge_outcome
             .clone()
-            .ok_or_else(|| anyhow::anyhow!("GitHub unreachable"))
+            .ok_or_else(|| GithubError::Internal(anyhow::anyhow!("GitHub unreachable")))
     }
 
     async fn set_pull_request_draft(
@@ -466,7 +490,25 @@ impl GithubOauth for StubGithubOauth {
         state
             .draft_outcome
             .clone()
-            .ok_or_else(|| anyhow::anyhow!("GitHub unreachable"))
+            .ok_or_else(|| GithubError::Internal(anyhow::anyhow!("GitHub unreachable")))
+    }
+
+    async fn set_pull_request_state(
+        &self,
+        _access_token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        pull_request_state: GithubPullRequestState,
+    ) -> Result<GithubStateOutcome, Self::Err> {
+        let mut state = self.state.lock().unwrap();
+        state
+            .state_calls
+            .push((format!("{owner}/{repo}"), number, pull_request_state));
+        state
+            .state_outcome
+            .clone()
+            .ok_or_else(|| GithubError::Internal(anyhow::anyhow!("GitHub unreachable")))
     }
 
     async fn get_pull_request_mergeability(
@@ -499,11 +541,16 @@ struct StubAuthState {
     link_user_calls: u32,
     delete_user_link_calls: u32,
     access_token_error: Option<String>,
+    access_token_failure: Option<UpstreamFailure>,
     missing_access_token: bool,
     missing_identity: Option<uuid::Uuid>,
     link_error: Option<String>,
     linked_identities: Vec<uuid::Uuid>,
     link_barrier: Option<(Arc<tokio::sync::Notify>, Arc<tokio::sync::Notify>)>,
+}
+
+fn github_upstream(service: &'static str, failure: UpstreamFailure) -> GithubError {
+    GithubError::Upstream(UpstreamError { service, failure })
 }
 
 impl StubAuth {
@@ -519,6 +566,11 @@ impl StubAuth {
         self
     }
 
+    fn fail_access_token_upstream(self, failure: UpstreamFailure) -> Self {
+        self.state.lock().unwrap().access_token_failure = Some(failure);
+        self
+    }
+
     fn link_user_calls(&self) -> u32 {
         self.state.lock().unwrap().link_user_calls
     }
@@ -529,7 +581,7 @@ impl StubAuth {
 }
 
 impl Auth for StubAuth {
-    type Err = anyhow::Error;
+    type Err = GithubError;
 
     async fn link_user(
         &self,
@@ -551,7 +603,7 @@ impl Auth for StubAuth {
             return Ok(GithubGrantLinkOutcome::IdentityMissing);
         }
         if let Some(error) = &state.link_error {
-            return Err(anyhow::anyhow!(error.clone()));
+            return Err(GithubError::Internal(anyhow::anyhow!(error.clone())));
         }
         Ok(GithubGrantLinkOutcome::Linked)
     }
@@ -572,7 +624,10 @@ impl Auth for StubAuth {
         _github_user_id: &str,
     ) -> Result<Option<GithubAccessToken>, Self::Err> {
         if let Some(error) = &self.state.lock().unwrap().access_token_error {
-            return Err(anyhow::anyhow!(error.clone()));
+            return Err(GithubError::Internal(anyhow::anyhow!(error.clone())));
+        }
+        if let Some(failure) = self.state.lock().unwrap().access_token_failure {
+            return Err(github_upstream("The sign-in service", failure));
         }
         if self.state.lock().unwrap().missing_access_token {
             return Ok(None);

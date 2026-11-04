@@ -9,11 +9,19 @@ import {
   waitFor,
 } from '@solidjs/testing-library';
 import { CombinedError } from '@urql/core';
-import { batch, createSignal, For, type JSX, Show } from 'solid-js';
+import {
+  batch,
+  createSignal,
+  For,
+  type JSX,
+  type ParentProps,
+  Show,
+} from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChannelsDataSource } from './queries';
+import type { ChannelsTab } from './types';
 
 type FullChannel = ChannelEntity & { notifications: Notification[] };
 const mocks = vi.hoisted(() => ({
@@ -21,6 +29,9 @@ const mocks = vi.hoisted(() => ({
   selectedId: (): string | undefined => undefined,
   rows: (): ChannelEntity[] => [],
   mobileLayout: (): boolean => false,
+  sectionsEnabled: (): boolean => true,
+  sectionsLoading: (): boolean => false,
+  tab: (): ChannelsTab => 'browse',
   active: (): boolean => true,
   searchOpen: (): boolean => false,
   searchText: (): string => '',
@@ -79,6 +90,7 @@ vi.mock('@app/components/view-shell', () => ({
     Main: mocks.pass,
     TopBar: mocks.pass,
   },
+  ViewSidebar: { Title: (props: ParentProps) => <h1>{props.children}</h1> },
 }));
 vi.mock('@app/features/next-soup/utils', () => ({
   getChannelEntityTarget: mocks.resolveTarget,
@@ -173,7 +185,12 @@ vi.mock('./channels-view-context', () => ({
       tab: 'browse',
       sortBy: { channels: 'updated_at', direct_messages: 'updated_at' },
     },
-    tab: () => 'browse',
+    tab: () => (mocks.sectionsEnabled() ? 'browse' : mocks.tab()),
+    sectionsEnabled: () => mocks.sectionsEnabled(),
+    sectionsLoading: () => mocks.sectionsLoading(),
+    threadsChannelId: () => undefined,
+    setTab: vi.fn(),
+    setSelectedChannel: vi.fn(),
     mobileLayout: () => mocks.mobileLayout(),
     selectedChannel: () =>
       mocks.selectedId()
@@ -202,10 +219,12 @@ vi.mock('./queries', () => ({
   useChannelsSources: (enabled: (scope: string) => boolean) => {
     mocks.sourceEnabled = enabled;
     return {
+      team_channels: { items: () => mocks.rows() },
       channels: { items: () => mocks.rows() },
       direct_messages: { items: () => mocks.rows() },
       recents: { items: () => mocks.rows() },
       search: { items: () => [] },
+      threads: { items: () => mocks.rows() },
     };
   },
 }));
@@ -255,6 +274,9 @@ let setRows: ReturnType<typeof createSignal<ChannelEntity[]>>[1];
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.mobileLayout = () => false;
+  mocks.sectionsEnabled = () => true;
+  mocks.sectionsLoading = () => false;
+  mocks.tab = () => 'browse';
   mocks.favoriteIds = () => [];
   mocks.active = () => true;
   mocks.searchOpen = () => false;
@@ -294,6 +316,63 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+describe('Chat rollout source activation', () => {
+  it('waits for the desktop flag before loading sources or mounting either experience', () => {
+    const [loading, setLoading] = createSignal(true);
+    mocks.sectionsLoading = loading;
+    mocks.sectionsEnabled = () => false;
+    mocks.tab = () => 'recents';
+    render(() => <ChannelsView />);
+    for (const scope of [
+      'team_channels',
+      'channels',
+      'direct_messages',
+      'recents',
+      'threads',
+      'search',
+    ]) {
+      expect(mocks.sourceEnabled(scope)).toBe(false);
+    }
+    expect(screen.queryByTestId('channel-detail')).toBeNull();
+    setLoading(false);
+    expect(mocks.sourceEnabled('recents')).toBe(true);
+    expect(mocks.sourceEnabled('channels')).toBe(false);
+  });
+
+  it('restores a saved legacy tab without activating it while sections are enabled', () => {
+    const [enabled, setEnabled] = createSignal(true);
+    mocks.sectionsEnabled = enabled;
+    mocks.tab = () => 'recents';
+    render(() => <ChannelsView />);
+    expect(mocks.sourceEnabled('channels')).toBe(true);
+    expect(mocks.sourceEnabled('recents')).toBe(false);
+    setEnabled(false);
+    expect(mocks.sourceEnabled('channels')).toBe(false);
+    expect(mocks.sourceEnabled('recents')).toBe(true);
+  });
+
+  it('restores the Threads surface only in the legacy layout', () => {
+    const [enabled, setEnabled] = createSignal(false);
+    mocks.sectionsEnabled = enabled;
+    mocks.tab = () => 'threads';
+    render(() => <ChannelsView />);
+    expect(screen.getByTestId('channel-threads')).toBeTruthy();
+    expect(mocks.sourceEnabled('threads')).toBe(true);
+    setEnabled(true);
+    expect(screen.queryByTestId('channel-threads')).toBeNull();
+    expect(mocks.sourceEnabled('threads')).toBe(false);
+    expect(mocks.sourceEnabled('channels')).toBe(true);
+  });
+
+  it('keeps the mobile recent feed active while the desktop rollout is unresolved', () => {
+    mocks.mobileLayout = () => true;
+    mocks.sectionsLoading = () => true;
+    render(() => <ChannelsView />);
+    expect(screen.getByTestId('mobile-channels')).toBeTruthy();
+    expect(mocks.sourceEnabled('recents')).toBe(true);
+    expect(mocks.sourceEnabled('channels')).toBe(false);
+  });
+});
 describe('mobile dock search wiring', () => {
   it('shows only recent conversations independently of the dock search session', () => {
     mocks.mobileLayout = () => true;
@@ -584,7 +663,8 @@ describe('channel selection loading and recovery', () => {
     expect(mocks.markRead).not.toHaveBeenCalled();
 
     setQuery('isFetching', true);
-    expect(screen.getByTestId('channel-detail').textContent).toBe('one');
+    expect(screen.queryByTestId('channel-detail')).toBeNull();
+    expect(screen.getByText('Conversation unavailable')).toBeTruthy();
     batch(() => {
       setQuery('data', { entities: [full('one', ['new'])] });
       setQuery('isFetching', false);

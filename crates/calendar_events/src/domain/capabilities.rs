@@ -10,7 +10,7 @@ use super::models::{CalendarAttendee, CalendarEvent, CalendarProvider, EventStat
 /// do. Google omits a switch from the payload while it holds its default.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema, specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct GuestPolicy {
     /// Whether guests may change the event, including its guest list.
@@ -103,9 +103,11 @@ impl ViewerCapabilities {
     /// it would never reach the meeting. The organizer may do
     /// everything, and so may anyone on a writable event without attendees,
     /// which is treated as the actor's own, except that only a Google copy
-    /// has a guest policy to set. A guest of a Google copy follows
-    /// the event's [`GuestPolicy`]: modify allows everything except changing
-    /// the policy, invite allows adding guests, and every guest may answer.
+    /// has a guest policy to set, and only a Google organizer may answer:
+    /// Outlook fixes the organizer's response and refuses their answer. A
+    /// guest of a Google copy follows the event's [`GuestPolicy`]: modify
+    /// allows everything except changing the policy, invite allows adding
+    /// guests, and every guest may answer.
     /// A guest may change the guest list only while it is visible: Google
     /// takes guest additions as a whole new list, and a guest's copy of a
     /// hidden list holds only themselves and the organizer. Outlook gives
@@ -124,10 +126,8 @@ impl ViewerCapabilities {
     /// needs the inbox's own attendee row, since that is the row the answer
     /// is written to.
     pub fn for_event(event: &CalendarEvent, inbox: Option<&OwnedInbox>) -> Self {
-        if event.status == EventStatus::Cancelled {
-            return Self::NONE;
-        }
-        Self::for_access(
+        Self::for_copy(
+            event.status,
             EventAccess {
                 is_read_only: event.is_read_only,
                 organizer_email: event.organizer_email.as_deref(),
@@ -137,6 +137,19 @@ impl ViewerCapabilities {
             },
             inbox,
         )
+    }
+
+    /// Resolve what the owner of `inbox` may do with a copy of an event in
+    /// `status`; see [`Self::for_event`].
+    pub fn for_copy(
+        status: EventStatus,
+        access: EventAccess<'_>,
+        inbox: Option<&OwnedInbox>,
+    ) -> Self {
+        if status == EventStatus::Cancelled {
+            return Self::NONE;
+        }
+        Self::for_access(access, inbox)
     }
 
     /// Resolve what the owner of `inbox` may do with a live copy of an
@@ -161,13 +174,13 @@ impl ViewerCapabilities {
                     .any(|attendee| attendee.is_organizer && inbox.matches(&attendee.email))
         });
         if is_organizer || access.attendees.is_empty() {
+            let is_google = inbox.is_some_and(|inbox| inbox.provider == CalendarProvider::Google);
             return Self {
                 edit_details: true,
                 invite_guests: true,
                 remove_guests: true,
-                set_guest_policy: inbox
-                    .is_some_and(|inbox| inbox.provider == CalendarProvider::Google),
-                rsvp: is_guest,
+                set_guest_policy: is_google,
+                rsvp: is_guest && is_google,
                 organize: true,
             };
         }

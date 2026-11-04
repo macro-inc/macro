@@ -5,9 +5,11 @@ import EmptyStateEmailGraphic from '@design/empty-state-email.svg';
 import EmptyStateInboxTrayGraphic from '@design/empty-state-inbox-tray.svg';
 import EmptyStateNoFilterMatchGraphic from '@design/empty-state-no-filter-match.svg';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
+import { FOCUS_WINDOW_DAYS } from '@queries/email/focus';
 import { EmptyStatePanel, FilteredHiddenBanner } from '@ui';
 import { Match, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
+import { canSearchEmailTab } from '../constants';
 import { useEmailView } from '../email-view-context';
 import type { EmailTab } from '../types';
 
@@ -57,6 +59,20 @@ function tabCopy(tab: EmailTab): { title: string; description: string } {
       title: 'No archived email',
       description: 'Email you archive will appear here.',
     }))
+    .with('focus', () => ({
+      title: "You're caught up",
+      description: `Email worth your attention from the last ${FOCUS_WINDOW_DAYS} days appears here.`,
+    }))
+    .with('spam', () => ({
+      title: 'No spam',
+      description:
+        'Email marked as spam or junk in your connected inboxes appears here.',
+    }))
+    .with('trash', () => ({
+      title: 'Trash is empty',
+      description:
+        'Deleted email from your connected inboxes appears here until it is permanently removed.',
+    }))
     .with('all', () => ({
       title: 'No email yet',
       description: 'Everything in your inbox will appear here as it arrives.',
@@ -65,14 +81,12 @@ function tabCopy(tab: EmailTab): { title: string; description: string } {
 }
 
 export function EmailEmptyState() {
-  const { state, setFacets, setInboxIds } = useEmailView();
+  const { state, setFacets, setInboxIds, setTab } = useEmailView();
   const emailActive = useEmailLinksStatus();
   const startAddInbox = useAddInboxFlow();
   // Scheduled has no search or filters; text typed on another tab stays behind.
   const searchText = () =>
-    state.tab === 'scheduled' || state.tab === 'reminders'
-      ? ''
-      : state.search.trim();
+    canSearchEmailTab(state.tab) ? state.search.trim() : '';
   const noInboxesSelected = () => state.inboxIds?.length === 0;
   const hasActiveFilters = () =>
     Object.values(state.facets).some((optionIds) => optionIds.length > 0);
@@ -111,7 +125,11 @@ export function EmailEmptyState() {
             centered
             graphic={EmptyStateNoSearchMatchGraphic}
             title={`No results for "${search()}"`}
-            description="Search across subjects, senders, and message content. Try a different query."
+            description={
+              state.tab === 'focus'
+                ? 'Focus search covers subjects, senders, and previews. Try a different query.'
+                : 'Search across subjects, senders, and message content. Try a different query.'
+            }
             documentationUrl={`${DOCS_BASE}/product/search`}
           />
         )}
@@ -137,6 +155,14 @@ export function EmailEmptyState() {
             graphic={EmptyStateInboxTrayGraphic}
             title={copy().title}
             description={copy().description}
+            primaryAction={
+              state.tab === 'focus'
+                ? {
+                    label: 'See the rest of your inbox',
+                    onClick: () => setTab('important'),
+                  }
+                : undefined
+            }
             documentationUrl={EMAIL_DOCS_URL}
           />
         )}

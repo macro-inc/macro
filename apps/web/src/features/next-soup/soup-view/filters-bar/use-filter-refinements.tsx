@@ -21,6 +21,7 @@ import {
   VIEW_TAB_PRESETS,
 } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
+import { t } from '@app/lib/i18n';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { UserIcon } from '@core/component/UserIcon';
 import { useUserContext, useUserId } from '@core/context/user';
@@ -33,6 +34,7 @@ import type {
   ConsolidatedFilter,
   FilterValue,
 } from './consolidated-filter-chip';
+import type { FilterCategory } from './filter-categories';
 import type { SearchableOption } from './searchable-multi-select';
 import { useTagFilter } from './tag-filter';
 import {
@@ -156,7 +158,7 @@ export function useFilterRefinements() {
         { label: string; icon?: () => JSX.Element }
       >();
       map.set(NO_ASSIGNEE, {
-        label: 'Unassigned',
+        label: t('viewMenus.unassigned'),
         icon: () => <CircleDashedIcon class="size-3 text-ink-muted" />,
       });
       for (const contact of contacts()) {
@@ -183,7 +185,7 @@ export function useFilterRefinements() {
     const uid = currentUserId();
     const noAssigneeOption: SearchableOption = {
       id: NO_ASSIGNEE,
-      label: 'Unassigned',
+      label: t('viewMenus.unassigned'),
       icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,
     };
     let meOption: SearchableOption | undefined;
@@ -379,8 +381,7 @@ export function useFilterRefinements() {
     const categoryGroups = new Map<
       string,
       {
-        label: string;
-        labelPlural?: string;
+        category: FilterCategory;
         allOptions: FilterValue[];
         multiple: boolean;
         showTabDefaults: boolean;
@@ -396,9 +397,13 @@ export function useFilterRefinements() {
       const presetOrOptionIds: FilterID[] = [];
 
       for (const option of category.options) {
+        // Read the label through a getter so cached chips follow the
+        // interface language.
         const value = {
           id: option.id,
-          label: option.label,
+          get label() {
+            return option.label;
+          },
           icon: option.icon,
         };
         allOptions.push(value);
@@ -426,8 +431,7 @@ export function useFilterRefinements() {
           ))
       ) {
         categoryGroups.set(category.id, {
-          label: category.label,
-          labelPlural: category.labelPlural,
+          category,
           allOptions,
           multiple: category.multiple ?? true,
           showTabDefaults: isMyTasksDefaultStatus,
@@ -469,8 +473,12 @@ export function useFilterRefinements() {
       filters.push(
         getOrCreateConsolidatedChip(key, () => ({
           key,
-          categoryLabel: group.label,
-          categoryLabelPlural: group.labelPlural,
+          get categoryLabel() {
+            return group.category.label;
+          },
+          get categoryLabelPlural() {
+            return group.category.labelPlural;
+          },
           values: getActiveValues, // Accessor - computed fresh each render
           availableOptions: group.allOptions,
           multiple: group.multiple,
@@ -633,12 +641,16 @@ export function useFilterRefinements() {
           };
           return {
             key,
-            categoryLabel: 'Assignee',
+            get categoryLabel() {
+              return t('viewMenus.assignee');
+            },
             values: getValues,
             searchableOptions: assigneeSearchableOptions,
             activeSearchableIds: assigneeFilter,
             onSearchableChange: handleAssigneeChange,
-            searchPlaceholder: 'Search assignees...',
+            get searchPlaceholder() {
+              return t('viewMenus.searchAssignees');
+            },
             isPopupOpen,
             setPopupOpen,
             onRemoveAll: () => handleAssigneeChange([]),
@@ -677,12 +689,16 @@ export function useFilterRefinements() {
           };
           return {
             key,
-            categoryLabel: 'Created by',
+            get categoryLabel() {
+              return t('viewMenus.createdBy');
+            },
             values: getValues,
             searchableOptions: createdBySearchableOptions,
             activeSearchableIds: createdByIds,
             onSearchableChange: handleCreatedByChange,
-            searchPlaceholder: 'Search creators...',
+            get searchPlaceholder() {
+              return t('viewMenus.searchCreators');
+            },
             isPopupOpen,
             setPopupOpen,
             onRemoveAll: () => handleCreatedByChange([]),
@@ -722,12 +738,16 @@ export function useFilterRefinements() {
           };
           return {
             key,
-            categoryLabel: 'Tags',
+            get categoryLabel() {
+              return t('viewMenus.tags');
+            },
             values: getValues,
             searchableOptions: tagFilter.options,
             activeSearchableIds: tagFilter.activeIds,
             onSearchableChange: tagFilter.onChange,
-            searchPlaceholder: 'Filter by tag...',
+            get searchPlaceholder() {
+              return t('viewMenus.filterByTag');
+            },
             isPopupOpen,
             setPopupOpen,
             onRemoveAll: () => tagFilter.onChange([]),

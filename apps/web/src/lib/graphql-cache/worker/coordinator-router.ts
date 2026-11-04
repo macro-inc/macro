@@ -925,6 +925,14 @@ export class CoordinatorRouter {
           this.postCacheResponse(action.tabId, action.response);
           break;
         case 'broadcast-push':
+          if (action.coalescedCount !== undefined) {
+            this.telemetry.record({
+              name: 'graphql_cache.change_batch',
+              operationCategory: 'invalidation',
+              outcome: 'success',
+              count: action.coalescedCount,
+            });
+          }
           this.broadcast(
             envelope<CoordinatorToTabEnvelope>({
               kind: 'cache-message',
@@ -1780,15 +1788,16 @@ export class CoordinatorRouter {
   }
 
   /**
-   * Asks the build that holds the database to hand it over. The engine keeps
-   * retrying the lock meanwhile. Unless the holder agrees promptly, or the
-   * unknown tabs turn out to be this build's, this activation fails closed.
+   * Asks the build that holds the database to hand it over, and keeps asking
+   * while the engine retries the lock: the holder may be between owners
+   * (draining, parked) and unable to answer the first time. The activation
+   * fails closed when the holder keeps the database, or when the engine's own
+   * lock budget runs out without an answer.
    */
   private requestTakeover(route: EngineRoute): void {
-    const core = this.coreValue;
-    if (!core || this.takeover?.ownerEpoch === route.ownerEpoch) return;
-    const channel = this.takeoverChannel;
-    if (!channel) {
+    if (!this.coreValue || this.takeover?.ownerEpoch === route.ownerEpoch)
+      return;
+    if (!this.takeoverChannel) {
       this.closeUnavailable(
         route.tabId,
         route.ownerEpoch,
@@ -1796,24 +1805,29 @@ export class CoordinatorRouter {
       );
       return;
     }
-    const requestId = `${route.ownerEpoch}:${crypto.randomUUID()}`;
     const takeover: PendingTakeover = {
       tabId: route.tabId,
       ownerEpoch: route.ownerEpoch,
-      requestId,
+      requestId: `${route.ownerEpoch}:${crypto.randomUUID()}`,
       granted: false,
       timer: undefined,
     };
+    this.takeover = takeover;
+    this.postTakeoverRequest(takeover);
+  }
+
+  private postTakeoverRequest(takeover: PendingTakeover): void {
+    const core = this.coreValue;
+    if (!core) return;
     takeover.timer = this.setTimeoutFn(() => {
       takeover.timer = undefined;
       this.expireTakeover(takeover).catch(reportCoordinatorTaskFailure);
     }, this.takeoverReplyTimeoutMs);
-    this.takeover = takeover;
-    channel.post({
+    this.takeoverChannel?.post({
       takeover: CACHE_TAKEOVER_VERSION,
       kind: 'request',
       scope: core.scope,
-      requestId,
+      requestId: takeover.requestId,
       buildTime: this.buildTime,
     });
   }
@@ -1822,6 +1836,7 @@ export class CoordinatorRouter {
    * Nobody answered. The unknown liveness lock that prompted the request may
    * belong to a tab of this build that had not registered yet, so look again:
    * once every live tab is known, keep waiting for the engine's own retries.
+   * Otherwise ask again; the holder may have been unable to answer.
    */
   private async expireTakeover(takeover: PendingTakeover): Promise<void> {
     if (this.takeover !== takeover || takeover.granted) return;
@@ -1831,11 +1846,7 @@ export class CoordinatorRouter {
       this.clearTakeover();
       return;
     }
-    this.closeUnavailable(
-      takeover.tabId,
-      takeover.ownerEpoch,
-      'another build keeps the database'
-    );
+    this.postTakeoverRequest(takeover);
   }
 
   private handleTakeoverMessage(message: CacheTakeoverMessage): void {
@@ -1873,14 +1884,20 @@ export class CoordinatorRouter {
   /**
    * Only the coordinator whose engine holds the database answers, and it
    * yields only to a strictly newer build, so builds never trade the database
-   * back and forth and a reload never lands on an older build. An idle
+   * back and forth and a reload never lands on an older build. A holder whose
+   * engine is still opening or already draining the database answers at once
+   * and completes the handover when that engine has settled. An idle
    * coordinator's tabs already run on the network; they move on silently.
    */
   private answerTakeover(request: CacheTakeoverRequest): void {
     const core = this.coreValue;
-    if (!core || core.superseded) return;
+    if (!core || core.handingOver) return;
     const newer = request.buildTime > this.buildTime;
-    const holdsDatabase = core.state.kind === 'active';
+    const state = core.state;
+    const holdsDatabase =
+      state.kind === 'active' ||
+      state.kind === 'draining' ||
+      (state.kind === 'activating' && startupPhaseMayTouchStorage(state.phase));
     if (holdsDatabase) {
       this.takeoverChannel?.post({
         takeover: CACHE_TAKEOVER_VERSION,
@@ -1892,7 +1909,6 @@ export class CoordinatorRouter {
     }
     if (!newer) return;
     const actions = core.supersede();
-    if (actions.length === 0) return;
     if (holdsDatabase) {
       this.telemetry.record({
         name: 'graphql_cache.owner',

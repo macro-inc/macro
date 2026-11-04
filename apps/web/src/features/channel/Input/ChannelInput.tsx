@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
@@ -22,6 +23,7 @@ import { isMacroAgentId } from '@core/constant/macroAgent';
 import { isMacroNewId } from '@core/constant/macroNew';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { createMessageComposer } from '@core/messages/create-message-composer';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { IUser } from '@core/user/types';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -35,6 +37,7 @@ import type { EntityData } from '@entity';
 import AtIcon from '@icon/system/regular/at.svg';
 import PaperclipIcon from '@icon/system/regular/paperclip.svg';
 import PhoneIcon from '@icon/system/regular/phone.svg';
+import FormatIcon from '@icon/system/regular/text-aa.svg';
 import ChartBarIcon from '@phosphor/chart-bar-horizontal.svg';
 import GifIcon from '@phosphor/gif.svg';
 import type { MessageParent } from '@service-storage/messages';
@@ -66,6 +69,7 @@ import { useAgentMentionUsers } from '../use-agent-mention-users';
 import { useMessageBotMentionUsers } from '../use-channel-bot-mention-users';
 import { useMessageParticipants } from '../use-message-participants';
 import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
+import { CollapsedAttachmentPreview } from './CollapsedAttachmentPreview';
 import {
   ComposerAddDrawer,
   ComposerAddMenu,
@@ -92,9 +96,50 @@ import { isReplyInput } from './types';
 import { uploadInputAttachments } from './upload-attachments';
 import { clearComposer as clearComposerPreservingFocus } from './utils/clear-composer';
 import { entityToDocumentMentionInfo } from './utils/entity-mention';
+import type { UploadResult } from './utils/file-helpers';
 import { applyInlineFormat, applyNodeFormat } from './utils/formatting';
 import { $selectTrailingParagraph } from './utils/select-trailing-paragraph';
 import { hasSendableInputContent } from './utils/sendable-content';
+
+/**
+ * What the composer offers beyond text, formatting and file attachments.
+ * Hosts that carry only those, such as a WhatsApp group, switch the rest off.
+ */
+type ChannelInputFeatures = {
+  /**
+   * `@` mentions of people, agents and Macro items, including Ask Macro.
+   * `'participants'` offers only the `participants` prop: no agents, items,
+   * `@here` or mention tracking (a WhatsApp group's own members).
+   */
+  mentions: boolean | 'participants';
+  /** Creating Macro items from the composer: tasks, documents, polls, forms. */
+  createItems: boolean;
+  gifs: boolean;
+  /** Blocks plain-text hosts can't carry: headings, checklists, tables, math, embeds. */
+  richBlocks: boolean;
+};
+
+const ALL_FEATURES: ChannelInputFeatures = {
+  mentions: true,
+  createItems: true,
+  gifs: true,
+  richBlocks: true,
+};
+
+/** Slash actions behind each switchable feature. */
+const CREATE_ITEM_ACTION_IDS = [
+  'task',
+  'document',
+  'database',
+  'database-query',
+];
+const RICH_BLOCK_ACTION_IDS = [
+  'heading1',
+  'heading2',
+  'heading3',
+  'list-check',
+  'table',
+];
 
 export type ChannelInputProps = InputCallbacks & {
   input: InputData;
@@ -119,7 +164,8 @@ export type ChannelInputProps = InputCallbacks & {
   onStartCall?: () => void;
   /** A call is live in the channel, so the add menu offers to join it. */
   callInProgress?: boolean;
-  children?: JSX.Element;
+  /** Custom action rows can place the composer's shared add menu. */
+  children?: JSX.Element | ((addMenu: JSX.Element) => JSX.Element);
   /** Whether to auto-focus the input on mount. Defaults to `!isTouchDevice()`. */
   autofocus?: boolean;
   /**
@@ -127,6 +173,12 @@ export type ChannelInputProps = InputCallbacks & {
    * Defaults to `false`.
    */
   collapsible?: boolean;
+  /** Defaults to every feature; calls are offered through `onStartCall`. */
+  features?: Partial<ChannelInputFeatures>;
+  /** Uploads one picked or dropped file. Defaults to Macro's chat upload. */
+  uploadAttachment?: (file: File) => Promise<UploadResult>;
+  /** File picker filter. Defaults to the media and documents channels accept. */
+  fileAccept?: string;
   /**
    * Drop the composer's own card chrome (rounding, background, shadow) and sit
    * flat on whatever surface hosts it. For composers that already live inside a
@@ -157,11 +209,8 @@ function WebDefaultActions(props: {
   );
 }
 
-function IosDefaultActions(props: {
-  input: InputData;
-  dictation: DictationController;
-  addMenu: JSX.Element;
-}) {
+// The iOS keyboard dictates on its own, so there is no microphone to place.
+function IosDefaultActions(props: { input: InputData; addMenu: JSX.Element }) {
   return (
     <>
       <Input.Layout.ActionsLeft>
@@ -171,7 +220,6 @@ function IosDefaultActions(props: {
         </Show>
       </Input.Layout.ActionsLeft>
       <Input.Layout.ActionsRight>
-        <DictationButton dictation={props.dictation} />
         <Input.SendAction />
       </Input.Layout.ActionsRight>
     </>
@@ -194,22 +242,25 @@ function DefaultActions(props: {
         />
       }
     >
-      <IosDefaultActions
-        input={props.input}
-        dictation={props.dictation}
-        addMenu={props.addMenu}
-      />
+      <IosDefaultActions input={props.input} addMenu={props.addMenu} />
     </Show>
   );
 }
 
 export function ChannelInput(props: ChannelInputProps) {
+  const features = (): ChannelInputFeatures => ({
+    ...ALL_FEATURES,
+    ...props.features,
+  });
   const [layout, setLayout] = createSignal<HTMLDivElement>();
   const [scrollContainer, setScrollContainer] = createSignal<HTMLElement>();
   let clearComposer = () => {};
   // Suppresses focus-out handling during clearComposer's iOS blur/refocus
   // cycle, which is not a user-intended blur.
   let isInternalRefocus = false;
+  // Assigned once applySnapshot exists. Send clears before the request, so a
+  // failure has to put the same draft back into the editor.
+  let restoreFailedSend = (_snapshot: InputSnapshot) => {};
 
   const {
     inputState,
@@ -224,12 +275,14 @@ export function ChannelInput(props: ChannelInputProps) {
     callbacks: props,
     onSendError: props.onSendError,
     clearEditor: () => clearComposer(),
+    restoreEditor: (snapshot) => restoreFailedSend(snapshot),
     trackTyping: () => acceptTyping,
     attachFiles: async (files) => {
       await uploadInputAttachments({
         files,
         tracker: attachmentTracker,
         uploadFile: (file) =>
+          props.uploadAttachment?.(file) ??
           uploadFile(file, chatRuleset, { hideProgressIndicator: true }),
       });
     },
@@ -251,7 +304,7 @@ export function ChannelInput(props: ChannelInputProps) {
         options?: RestoreSnapshotOptions;
       }
     | undefined;
-  let pendingFocus = false;
+  let pendingFocus: (() => boolean) | undefined;
   // Caret placement requested by a `cursor: 'trailing-paragraph'` restore.
   // Applied on the next programmatic focus rather than at restore time.
   let pendingCursor: RestoreSnapshotOptions['cursor'];
@@ -270,6 +323,9 @@ export function ChannelInput(props: ChannelInputProps) {
       acceptTyping = true;
     });
   };
+  restoreFailedSend = (snapshot) => {
+    applySnapshot(snapshot, { focus: false });
+  };
 
   const flushPendingRestore = () => {
     const restore = pendingRestore;
@@ -286,18 +342,22 @@ export function ChannelInput(props: ChannelInputProps) {
     markdownEditor.controls.focus();
   };
 
-  const focusEditor = () => {
+  const focusEditor = (when: () => boolean = () => true) => {
+    if (!when()) return;
     if (!isEditorConnected) {
-      pendingFocus = true;
+      pendingFocus = when;
       return;
     }
     focusEditorNow();
   };
 
   const flushPendingFocus = () => {
-    if (!pendingFocus) return;
-    pendingFocus = false;
-    queueMicrotask(() => focusEditorNow());
+    const when = pendingFocus;
+    pendingFocus = undefined;
+    if (!when) return;
+    queueMicrotask(() => {
+      if (when()) focusEditorNow();
+    });
   };
 
   const parentBots =
@@ -310,17 +370,31 @@ export function ChannelInput(props: ChannelInputProps) {
       : () => [];
   // Connection-prompt behavior for the built-in agents lives in
   // useAgentMentionUsers; participants and parent agents feed it here.
-  const mentionUsers = useAgentMentionUsers(() => [
-    ...(props.participants?.() ?? parentParticipants()),
-    ...(props.bots?.() ?? parentBots()),
-  ]);
+  // The editor is configured once, at mount.
+  const initialFeatures = features();
+  const participantsOnly = initialFeatures.mentions === 'participants';
+  const mentionUsers = participantsOnly
+    ? () => props.participants?.() ?? []
+    : useAgentMentionUsers(() => [
+        ...(props.participants?.() ?? parentParticipants()),
+        ...(props.bots?.() ?? parentBots()),
+      ]);
 
-  const groupMentions = !props.parent || props.parent.type === 'channel';
+  const groupMentions =
+    !participantsOnly && (!props.parent || props.parent.type === 'channel');
   const markdownEditor = createConfiguredChannelMarkdownEditor({
     groupMentions,
     namespace: props.markdownNamespace ?? 'channel-input-markdown',
     resolveAppLink: useMacroMentionLinkResolver(),
-    enableMentions: true,
+    enableMentions: initialFeatures.mentions !== false,
+    mentionSources: participantsOnly ? ['users'] : undefined,
+    disableMentionTracking: participantsOnly || undefined,
+    composerActions: initialFeatures.createItems,
+    ignoreActionIds: [
+      ...(initialFeatures.createItems ? [] : CREATE_ITEM_ACTION_IDS),
+      ...(initialFeatures.richBlocks ? [] : RICH_BLOCK_ACTION_IDS),
+      ...(initialFeatures.gifs ? [] : ['gif']),
+    ],
     users: mentionUsers,
     scrollContainer,
     onMentionCreate: (mention) => {
@@ -426,12 +500,12 @@ export function ChannelInput(props: ChannelInputProps) {
     // The picker opens at the caret, so the editor takes focus first.
     const gif = (): ComposerAddMenuGroup['items'] => {
       const action = slashAction('gif');
-      if (!action) return [];
+      if (!action || !features().gifs) return [];
       return [
         {
           id: 'gif',
-          label: 'GIF',
-          icon: <GifIcon class="size-3.5" />,
+          label: t('channelComposer.gif'),
+          icon: <GifIcon class="size-5" />,
           onSelect: () =>
             runInEditor((editor) => action.action(editor, actionContext), {
               focus: true,
@@ -440,53 +514,75 @@ export function ChannelInput(props: ChannelInputProps) {
         },
       ];
     };
-    const macro = macroUser();
+    const macro = features().mentions === true ? macroUser() : undefined;
     const startCall = props.onStartCall;
     const callInProgress = !!props.callInProgress;
     return [
       {
         items: [
-          {
-            id: 'mention',
-            label: 'Mention',
-            icon: <AtIcon class="size-3.5" />,
-            hint: '@',
-            onSelect: () => runInEditor(openMentionTypeahead, { focus: true }),
-            focusesEditor: true,
-          },
+          ...(features().mentions
+            ? [
+                {
+                  id: 'mention',
+                  label: t('channelComposer.mention'),
+                  icon: <AtIcon class="size-5" />,
+                  hint: '@',
+                  onSelect: () =>
+                    runInEditor(openMentionTypeahead, { focus: true }),
+                  focusesEditor: true,
+                },
+              ]
+            : []),
+          ...(isMobile()
+            ? [
+                {
+                  id: 'format-text',
+                  label: t('channelComposer.formatText'),
+                  icon: <FormatIcon class="size-5" />,
+                  onSelect: () => {
+                    collapsedInput.expand();
+                    focusEditor();
+                    commands.toggleFormatRibbon();
+                  },
+                  focusesEditor: true,
+                },
+              ]
+            : []),
           {
             id: 'attach',
-            label: 'Attach files',
-            icon: <PaperclipIcon class="size-3.5" />,
+            label: t('channelComposer.attachFiles'),
+            icon: <PaperclipIcon class="size-5" />,
             onSelect: () => collapsedInput.attach(),
           },
           ...gif(),
         ],
       },
       {
-        label: 'Create',
-        items: [
-          ...create(
-            'task',
-            'New task',
-            <EntityIcon targetType="task" size="xs" />
-          ),
-          ...create(
-            'poll',
-            'New poll',
-            <ChartBarIcon class="size-3.5 text-violet" />
-          ),
-          ...create(
-            'form',
-            'New form',
-            <EntityIcon targetType="form" size="xs" />
-          ),
-          ...create(
-            'document',
-            'New document',
-            <EntityIcon targetType="md" size="xs" />
-          ),
-        ],
+        label: t('channelComposer.create'),
+        items: !features().createItems
+          ? []
+          : [
+              ...create(
+                'task',
+                t('channelComposer.newTask'),
+                <EntityIcon targetType="task" size="xs" />
+              ),
+              ...create(
+                'poll',
+                t('channelComposer.newPoll'),
+                <ChartBarIcon class="size-3.5 text-violet" />
+              ),
+              ...create(
+                'form',
+                t('channelComposer.newForm'),
+                <EntityIcon targetType="form" size="xs" />
+              ),
+              ...create(
+                'document',
+                t('channelComposer.newDocument'),
+                <EntityIcon targetType="md" size="xs" />
+              ),
+            ],
       },
       {
         items: [
@@ -494,7 +590,7 @@ export function ChannelInput(props: ChannelInputProps) {
             ? [
                 {
                   id: 'ask-macro',
-                  label: 'Ask Macro',
+                  label: t('channelComposer.askMacro'),
                   icon: <EntityIcon targetType="agent" size="xs" />,
                   hint: '@macro',
                   onSelect: () =>
@@ -524,7 +620,9 @@ export function ChannelInput(props: ChannelInputProps) {
             ? [
                 {
                   id: 'call',
-                  label: callInProgress ? 'Join call' : 'Start a call',
+                  label: callInProgress
+                    ? t('channelComposer.joinCall')
+                    : t('channelComposer.startCall'),
                   icon: (
                     <PhoneIcon
                       class={cn('size-3.5', callInProgress && 'text-success')}
@@ -631,11 +729,12 @@ export function ChannelInput(props: ChannelInputProps) {
   props.onReady?.({
     snapshot: inputState.snapshot,
     clear: () => markdownEditor.controls.clear(),
-    focus: () => {
+    focus: (options) => {
+      if (options?.when?.() === false) return;
       // A collapsed pill hides the editor; programmatic focus implies intent
       // to type, so expand first.
       collapsedInput.expand();
-      focusEditor();
+      focusEditor(options?.when);
     },
     send: commands.send,
     attachFiles: (files) => inputState.commands.attachFiles(files),
@@ -685,7 +784,12 @@ export function ChannelInput(props: ChannelInputProps) {
         >
           <Input.DropOverlay />
           <Input.Layout.Body>
-            <Input.FormatRibbon>
+            <Input.FormatRibbon
+              class="overflow-x-auto"
+              data-keep-keyboard
+              onPointerDown={(event) => event.preventDefault()}
+              onMouseDown={(event) => event.preventDefault()}
+            >
               <FormatButtons
                 selectionState={() => markdownEditor.selection}
                 onInlineFormat={(format) =>
@@ -733,7 +837,11 @@ export function ChannelInput(props: ChannelInputProps) {
             <Input.Attachments kind="document" />
           </Input.Layout.Body>
           <Switch>
-            <Match when={props.children}>{props.children}</Match>
+            <Match when={props.children}>
+              {typeof props.children === 'function'
+                ? props.children(addMenu())
+                : props.children}
+            </Match>
             <Match when>
               <DefaultActions
                 input={inputState.view()}
@@ -769,7 +877,7 @@ export function ChannelInput(props: ChannelInputProps) {
         type="file"
         class="hidden"
         multiple
-        accept={CHANNEL_FILE_PICKER_ACCEPT}
+        accept={props.fileAccept ?? CHANNEL_FILE_PICKER_ACCEPT}
         onChange={collapsedInput.onFilePickerChange}
         data-collapsed-input-file-picker
       />
@@ -788,12 +896,16 @@ export function ChannelInput(props: ChannelInputProps) {
           // mount, but the placeholder can update (e.g. channel name loads).
           placeholder={props.input.placeholder}
           attachmentCount={inputState.view().attachments?.length ?? 0}
+          attachmentPreview={
+            <CollapsedAttachmentPreview
+              attachments={inputState.view().attachments}
+            />
+          }
           pending={inputState.view().hasPendingAttachments}
           disabled={!hasSendableInputContent(inputState.view())}
           getFocusTarget={() => lexicalEditor().getRootElement()}
           leadingAction={addMenu(true)}
           onOpen={collapsedInput.expand}
-          trailingAction={<DictationButton dictation={dictation} />}
           onSend={() => fireAndForget(commands.send(), 'channel-input')}
         />
       </Show>

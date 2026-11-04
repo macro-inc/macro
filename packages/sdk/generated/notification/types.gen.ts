@@ -175,6 +175,23 @@ export type BulkGetByEventItemIdsRequest = {
     eventItemIds: Array<string>;
 };
 
+export type BulkItem = {
+    item_id: string;
+    item_type: EntityType;
+};
+
+export type BulkRemoveItemsRequest = {
+    items: Array<BulkItem>;
+};
+
+export type BulkSetItemsRequest = {
+    items: Array<BulkItem>;
+    /**
+     * A future resume time. Omit to mute indefinitely.
+     */
+    snoozed_until?: string | null;
+};
+
 /**
  * A channel member who sees a calendar event only through a channel share
  * asked the person who shared it to add them as a guest. Sent to the sharer,
@@ -613,7 +630,7 @@ export type EntityAccessRequestedMetadata = {
 /**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 
 /**
  * A plain old json error response for use with axum.
@@ -625,6 +642,29 @@ export type ErrorResponse = {
      */
     message: string;
 };
+
+/**
+ * A live message in an independently shared external chat.
+ */
+export type ExternalChatMessageMetadata = {
+    /**
+     * The chat's name.
+     */
+    chatName: string;
+    /**
+     * Stable message id; retries use it as their notification id.
+     */
+    messageId: string;
+    /**
+     * The messaging service the chat lives in.
+     */
+    provider: ExternalChatProvider;
+};
+
+/**
+ * The messaging service an external chat lives in.
+ */
+export type ExternalChatProvider = 'whatsapp';
 
 /**
  * The strongly typed response for listing user notifications.
@@ -943,6 +983,10 @@ export type InviteToTeamMetadata = {
      */
     inviteePlan?: InviteePlan;
     /**
+     * Whether the invite creates an agent account.
+     */
+    isAgent?: boolean;
+    /**
      * Whether this email reminds the invitee of an invite they have not answered.
      */
     reminder?: boolean;
@@ -1171,6 +1215,12 @@ export type NotifEvent = {
     tag: 'reminder';
 } | {
     /**
+     * A live message in a shared external chat.
+     */
+    content: ExternalChatMessageMetadata;
+    tag: 'external_chat_message';
+} | {
+    /**
      * A calendar event alarm came due.
      */
     content: CalendarEventReminderMetadata;
@@ -1251,6 +1301,12 @@ export type NotifEvent = {
      */
     content: CalendarEventJoinRequestMetadata;
     tag: 'calendar_event_join_request';
+} | {
+    /**
+     * One of the user's routines finished a run, successfully or not.
+     */
+    content: RoutineRunFinishedMetadata;
+    tag: 'routine_run_finished';
 };
 
 /**
@@ -1453,6 +1509,30 @@ export type RepliedToDocumentCommentThreadMetadata = {
 export type RequestedAccessLevel = 'view' | 'comment' | 'edit';
 
 /**
+ * One of the recipient's routines finished a run. Every run notifies,
+ * whether it succeeded or failed.
+ */
+export type RoutineRunFinishedMetadata = {
+    /**
+     * How the run ended.
+     */
+    outcome: RoutineRunOutcome;
+    /**
+     * The routine that ran.
+     */
+    routineId: string;
+    /**
+     * The routine's name when it ran.
+     */
+    routineName: string;
+};
+
+/**
+ * How a routine run ended, as its notification reports it.
+ */
+export type RoutineRunOutcome = 'succeeded' | 'failed';
+
+/**
  * Metadata for when a user is assigned to a task
  */
 export type TaskAssignedMetadata = {
@@ -1599,6 +1679,48 @@ export type UnsubscribeItemResponses = {
 };
 
 export type UnsubscribeItemResponse = UnsubscribeItemResponses[keyof UnsubscribeItemResponses];
+
+export type RemoveUnsubscribeItemsData = {
+    body: BulkRemoveItemsRequest;
+    path?: never;
+    query?: never;
+    url: '/unsubscribe/items';
+};
+
+export type RemoveUnsubscribeItemsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RemoveUnsubscribeItemsError = RemoveUnsubscribeItemsErrors[keyof RemoveUnsubscribeItemsErrors];
+
+export type RemoveUnsubscribeItemsResponses = {
+    200: EmptyResponse;
+};
+
+export type RemoveUnsubscribeItemsResponse = RemoveUnsubscribeItemsResponses[keyof RemoveUnsubscribeItemsResponses];
+
+export type UnsubscribeItemsData = {
+    body: BulkSetItemsRequest;
+    path?: never;
+    query?: never;
+    url: '/unsubscribe/items';
+};
+
+export type UnsubscribeItemsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UnsubscribeItemsError = UnsubscribeItemsErrors[keyof UnsubscribeItemsErrors];
+
+export type UnsubscribeItemsResponses = {
+    200: EmptyResponse;
+};
+
+export type UnsubscribeItemsResponse = UnsubscribeItemsResponses[keyof UnsubscribeItemsResponses];
 
 export type RemoveUnsubscribeAllData = {
     body?: never;

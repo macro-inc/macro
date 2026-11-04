@@ -1,0 +1,1 @@
+Names of channels explicitly requested as the scope of a message or call search. Keep each channel name intact, including commas and and. A year or a preposition inside the topic is not a channel filter. For other content categories return an empty list and retain unsupported filter wording in query.

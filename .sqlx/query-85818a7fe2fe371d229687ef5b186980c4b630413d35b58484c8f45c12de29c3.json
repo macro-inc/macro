@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO external_chat_read_state (user_id,chat_id,message_id,read_at)\n            SELECT $2,$1,id,source_at FROM external_chat_message WHERE id = $3 AND chat_id = $1 AND message_id IS NOT NULL\n            ON CONFLICT (user_id,chat_id) DO UPDATE SET message_id = excluded.message_id,read_at = excluded.read_at\n            WHERE (external_chat_read_state.read_at,external_chat_read_state.message_id) < (excluded.read_at,excluded.message_id)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "85818a7fe2fe371d229687ef5b186980c4b630413d35b58484c8f45c12de29c3"
+}

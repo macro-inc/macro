@@ -4,6 +4,7 @@ import { isLiveTurn, liveTurnMessage } from './live-turn';
 
 const agent = (turn: number, stop: FoldedMessage['stop']): FoldedMessage => ({
   agentSessionId: 'session',
+  key: `${turn}:agent`,
   pending: false,
   segments: [],
   phase: null,
@@ -16,6 +17,7 @@ const agent = (turn: number, stop: FoldedMessage['stop']): FoldedMessage => ({
 });
 const user = (turn: number): FoldedMessage => ({
   agentSessionId: 'session',
+  key: `${turn}:user`,
   pending: false,
   segments: [],
   phase: null,
@@ -28,6 +30,7 @@ const user = (turn: number): FoldedMessage => ({
 });
 const control = (turn: number): FoldedMessage => ({
   agentSessionId: 'session',
+  key: `${turn}:user`,
   pending: false,
   segments: [],
   phase: null,
@@ -64,9 +67,17 @@ describe('liveTurnMessage', () => {
     ).toBeUndefined();
   });
 
-  it('looks past a trailing control to the turn behind it', () => {
-    const tail = agent(0, null);
-    expect(liveTurnMessage([user(0), tail, control(1)], true)).toBe(tail);
+  it('does not keep a turn live across a trailing model change', () => {
+    expect(
+      liveTurnMessage([user(0), agent(0, null), control(1)], true)
+    ).toBeUndefined();
+  });
+
+  it('names the agent message that follows a model change', () => {
+    const next = agent(2, null);
+    expect(
+      liveTurnMessage([user(0), agent(0, null), control(1), next], true)
+    ).toBe(next);
   });
 
   it('is empty for an empty transcript', () => {

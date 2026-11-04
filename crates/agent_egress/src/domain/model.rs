@@ -237,6 +237,9 @@ pub struct SessionGrant {
     pub session: AgentSessionId,
     /// Whose connected servers it may reach.
     pub owner: MacroUserIdStr<'static>,
+    /// The agent the session is bound to. Macro's own tools write as it,
+    /// never as a bot the sandbox names.
+    pub agent: bot_id::BotId,
     /// The repository git egress is pinned to, if this session chose one.
     pub repo: Option<RepoSlug>,
     /// The apps the agent listed for this session, for naming only.

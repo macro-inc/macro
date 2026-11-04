@@ -24,7 +24,7 @@ import {
 import { Suspense } from 'solid-js';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Harness } from './Harness';
-import { chooseSelectOption } from './tests/select-helpers';
+import { chooseModelOption } from './tests/select-helpers';
 
 vi.mock('@ui', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@ui')>()),
@@ -342,7 +342,7 @@ describe('Harness', () => {
     expect(screen.queryByLabelText('API key')).toBeNull();
     expect(screen.getByText(/does not revoke it in Cursor/)).toBeTruthy();
 
-    chooseSelectOption(screen.getByLabelText('Default model'), 'Another Model');
+    chooseModelOption(screen.getByLabelText('Default model'), 'Another Model');
     await waitFor(() => {
       expect(mocks.setDefaultModel).toHaveBeenCalledWith('another-model');
       expect(mocks.toastSuccess).toHaveBeenCalledWith('Default model updated');
@@ -370,7 +370,7 @@ describe('Harness', () => {
 
     expect(screen.queryByText('No paired runtimes yet')).toBeNull();
     expect(
-      screen.queryByRole('heading', { name: 'Paired runtimes' })
+      screen.queryByRole('heading', { name: 'Connected runtimes' })
     ).toBeNull();
     expect(
       screen.queryByRole('button', { name: 'Enter pairing code' })
@@ -400,6 +400,9 @@ describe('Harness', () => {
 
     render(() => <Harness />);
 
+    expect(
+      screen.getByRole('heading', { name: 'Connected runtimes' })
+    ).toBeTruthy();
     expect(screen.getByText('Dev box')).toBeTruthy();
     expect(screen.getByText('Team')).toBeTruthy();
     expect(screen.getByRole('img', { name: 'Connected' })).toBeTruthy();
@@ -407,11 +410,32 @@ describe('Harness', () => {
     expect(screen.queryByText('Never connected')).toBeNull();
   });
 
-  it('shows a disconnected private harness that never connected', () => {
+  it('lists an offline runtime below the connected ones', () => {
+    const offline = {
+      ...REGISTERED_HARNESS,
+      id: 'harness-offline',
+      name: 'Old laptop',
+      owner: { type: 'user' as const, user_id: 'macro|user@example.com' },
+      connected: false,
+      last_connected_at: null,
+    };
+    harnessMocks.query.data = [offline, REGISTERED_HARNESS];
+
+    render(() => <Harness />);
+
+    expect(screen.getByText('Private')).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Offline' })).toBeTruthy();
+    expect(screen.getByText('Never connected')).toBeTruthy();
+    const names = screen
+      .getAllByText(/Dev box|Old laptop/)
+      .map((node) => node.textContent);
+    expect(names).toEqual(['Dev box', 'Old laptop']);
+  });
+
+  it('hides the section when every runtime is offline', () => {
     harnessMocks.query.data = [
       {
         ...REGISTERED_HARNESS,
-        owner: { type: 'user', user_id: 'macro|user@example.com' },
         connected: false,
         last_connected_at: null,
       },
@@ -419,9 +443,10 @@ describe('Harness', () => {
 
     render(() => <Harness />);
 
-    expect(screen.getByText('Private')).toBeTruthy();
-    expect(screen.getByRole('img', { name: 'Disconnected' })).toBeTruthy();
-    expect(screen.getByText('Never connected')).toBeTruthy();
+    expect(
+      screen.queryByRole('heading', { name: 'Connected runtimes' })
+    ).toBeNull();
+    expect(screen.queryByText('Dev box')).toBeNull();
   });
 
   it('confirms before removing a harness', async () => {

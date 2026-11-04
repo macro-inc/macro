@@ -2,6 +2,7 @@ import {
   Company,
   type CompanySection,
   CompanyTabs,
+  CompanyVisibilityButton,
 } from '@app/features/crm/crm-company';
 import { CrmCopyLinkButton } from '@app/features/crm/crm-link';
 import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
@@ -37,13 +38,13 @@ export function CompanyBlockAdapter() {
         <CollapsibleHeaderItem
           id="company-tabs"
           priority={1}
-          containerClass="ph-no-capture min-w-0 h-full mx-2"
+          containerClass="ph-no-capture min-w-0 h-full mx-2 touch:mx-0"
         >
           {(isCollapsed) => (
             <div
               class={
                 isCollapsed()
-                  ? 'min-w-0 overflow-x-auto scrollbar-hidden'
+                  ? 'min-w-0 not-touch:overflow-x-auto not-touch:scrollbar-hidden'
                   : 'shrink-0'
               }
             >
@@ -57,8 +58,9 @@ export function CompanyBlockAdapter() {
         </CollapsibleHeaderItem>
       </SplitHeaderLeft>
       <SplitHeaderRight>
-        <HeaderIsland>
+        <HeaderIsland class="p-0">
           <CrmCopyLinkButton type="company" id={companyId} />
+          <CompanyVisibilityButton companyId={companyId} />
         </HeaderIsland>
       </SplitHeaderRight>
       <ParamsProvider state={params}>

@@ -71,6 +71,16 @@ export function publicationMessage(
           () => 'Review your gate rules; one no longer matches its question.'
         )
         .with(
+          { kind: 'conditionNamesLaterColumn' },
+          ({ column }) =>
+            `${columnName(column)} must come before the section shown depending on it.`
+        )
+        .with(
+          { kind: 'conditionRule' },
+          () =>
+            'Review your section conditions; one no longer matches its question.'
+        )
+        .with(
           { kind: 'textTooLong' },
           ({ max }) => `Shorten the text to ${max} characters or fewer.`
         )

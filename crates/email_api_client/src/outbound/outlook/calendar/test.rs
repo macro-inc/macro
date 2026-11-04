@@ -5,6 +5,9 @@ use wiremock::{
     matchers::{body_partial_json, header, method, path, query_param},
 };
 
+mod mutations;
+mod sync;
+
 pub(super) fn target() -> ProviderCalendarTarget {
     let link_id = Uuid::now_v7();
     ProviderCalendarTarget {
@@ -507,12 +510,12 @@ async fn moved_event_is_absent_from_its_old_calendar_even_if_mailbox_id_survives
         .expect(1)
         .mount(&server)
         .await;
-    assert!(
+    assert!(matches!(
         api.refresh_calendar_event("token", &target(), "moved")
             .await
-            .unwrap()
-            .is_none()
-    );
+            .unwrap(),
+        OutlookEventRefresh::Gone
+    ));
 }
 
 #[test]
@@ -657,6 +660,95 @@ fn ordinary_outlook_recurrence_round_trips_in_the_shared_editor_shape() {
         assert_eq!(lines, vec![expected.to_owned()]);
         let body = recurrence::to_graph(&lines, &normalize::event_time(&current).unwrap()).unwrap();
         assert_eq!(body["pattern"], current["recurrence"]["pattern"]);
+    }
+}
+
+/// A weekly meeting another calendar system organized, as Exchange imported it
+/// from the invitation, after the organizer ended the series ("this and
+/// following"): Graph names the range's zone with its own alias for UTC.
+pub(super) fn ended_imported_series(id: &str) -> Value {
+    json!({
+        "id":id,"@odata.etag":"W/\"4\"","iCalUId":format!("040000008200E00074C5B7101A82E008{id}"),
+        "type":"seriesMaster","subject":"Team sync","isCancelled":false,"isAllDay":false,
+        "createdDateTime":"2026-11-02T18:08:30Z","lastModifiedDateTime":"2026-11-02T19:10:12Z",
+        "originalStartTimeZone":"tzone://Microsoft/Custom","originalEndTimeZone":"tzone://Microsoft/Custom",
+        "start":{"dateTime":"2026-10-21T11:00:00.0000000","timeZone":"UTC"},
+        "end":{"dateTime":"2026-10-21T11:30:00.0000000","timeZone":"UTC"},
+        "organizer":{"emailAddress":{"address":"organizer@example.com","name":"Organizer"}},
+        "attendees":[],
+        "recurrence":{
+            "pattern":{"type":"weekly","interval":1,"month":0,"dayOfMonth":0,"daysOfWeek":["wednesday"],"firstDayOfWeek":"monday","index":"first"},
+            "range":{"type":"endDate","startDate":"2026-10-21","endDate":"2026-11-03","recurrenceTimeZone":"tzone://Microsoft/Utc","numberOfOccurrences":0}
+        }
+    })
+}
+
+#[test]
+fn an_imported_series_ended_by_its_organizer_reads_graphs_utc_alias() {
+    let series = ended_imported_series("series");
+    assert_eq!(
+        recurrence::from_graph(&series).unwrap(),
+        vec!["RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=WE;WKST=MO;UNTIL=20261103T235959Z".to_owned()]
+    );
+    let instances = ["2026-10-21", "2026-10-28"].map(|day| {
+        let mut instance = series.clone();
+        instance["id"] = json!(format!("series-{day}"));
+        instance["type"] = json!("occurrence");
+        instance["seriesMasterId"] = json!("series");
+        instance["originalStart"] = json!(format!("{day}T11:00:00Z"));
+        instance["start"]["dateTime"] = json!(format!("{day}T11:00:00.0000000"));
+        instance["end"]["dateTime"] = json!(format!("{day}T11:30:00.0000000"));
+        instance
+    });
+    let upsert = normalize::projection(&target(), series, instances.to_vec()).unwrap();
+    assert_eq!(upsert.occurrences.len(), 2);
+}
+
+#[test]
+fn an_end_date_in_a_zone_macro_cannot_resolve_is_read_in_the_events_own_zone() {
+    let mut series = ended_imported_series("series");
+    series["originalStartTimeZone"] = json!("Pacific Standard Time");
+    series["recurrence"]["range"]["recurrenceTimeZone"] = json!("tzone://Microsoft/Custom");
+    let lines = recurrence::from_graph(&series).unwrap();
+    assert_eq!(
+        lines,
+        vec!["RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=WE;WKST=MO;UNTIL=20261104T075959Z".to_owned()],
+        "the end of November 3 in Los Angeles"
+    );
+    let body = recurrence::to_graph(&lines, &normalize::event_time(&series).unwrap()).unwrap();
+    assert_eq!(body["range"]["endDate"], "2026-11-03");
+}
+
+#[tokio::test]
+async fn an_event_macro_cannot_read_names_the_rejected_field() {
+    let (server, api) = setup().await;
+    let mut hourly = event("hourly");
+    hourly["type"] = json!("seriesMaster");
+    hourly["recurrence"] = json!({"pattern":{"type":"hourly","interval":1},"range":{"type":"noEnd","startDate":"2026-11-02"}});
+    let mut series = event("series");
+    series["type"] = json!("seriesMaster");
+    series["recurrence"] = json!({"pattern":{"type":"daily","interval":1},"range":{"type":"noEnd","startDate":"2026-11-02"}});
+    let mut occurrence = event("occurrence");
+    occurrence["start"]["dateTime"] = json!("next Monday");
+    for (master, instances, field) in [
+        (hourly, vec![], "recurrence.pattern.type"),
+        (series, vec![occurrence], "instances.start.dateTime"),
+    ] {
+        let id = master["id"].as_str().unwrap().to_owned();
+        Mock::given(method("GET"))
+            .and(path(format!("/v1.0/me/calendars/calendar/events/{id}")))
+            .respond_with(ResponseTemplate::new(200).set_body_json(master))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path(format!("/v1.0/me/events/{id}/instances")))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"value":instances})))
+            .mount(&server)
+            .await;
+        match api.refresh_calendar_event("token", &target(), &id).await {
+            Ok(OutlookEventRefresh::Unreadable { field: rejected }) => assert_eq!(rejected, field),
+            _ => panic!("{id} should be unreadable at {field}"),
+        }
     }
 }
 

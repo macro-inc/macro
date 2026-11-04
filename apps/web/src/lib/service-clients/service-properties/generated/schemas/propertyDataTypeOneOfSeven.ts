@@ -7,7 +7,7 @@
 import type { PropertyDataTypeOneOfSevenType } from './propertyDataTypeOneOfSevenType';
 
 /**
- * String/text values.
+ * Numeric values.
  */
 export type PropertyDataTypeOneOfSeven = {
   type: PropertyDataTypeOneOfSevenType;

@@ -35,6 +35,24 @@ fn invalid() -> CalendarProviderError {
         "Microsoft returned an invalid calendar response",
     )
 }
+/// A Graph event property Macro cannot represent, named by its path in the
+/// event, such as `recurrence.range.endDate`. Paths are built only from
+/// literals, so a log of one never carries event content.
+#[derive(Debug, PartialEq, Eq)]
+struct Rejected(String);
+impl Rejected {
+    fn at(field: &'static str) -> Self {
+        Self(field.to_owned())
+    }
+    fn under(self, parent: &'static str) -> Self {
+        Self(format!("{parent}.{}", self.0))
+    }
+}
+impl From<Rejected> for CalendarProviderError {
+    fn from(_: Rejected) -> Self {
+        invalid()
+    }
+}
 fn unsupported(message: &str) -> CalendarProviderError {
     CalendarProviderError::new(CalendarProviderErrorKind::Permanent, message)
 }
@@ -56,11 +74,14 @@ fn error(error: EmailApiError) -> CalendarProviderError {
         },
     )
 }
-fn string<'a>(value: &'a Value, key: &str) -> Result<&'a str, CalendarProviderError> {
+fn string<'a>(value: &'a Value, key: &'static str) -> Result<&'a str, CalendarProviderError> {
+    Ok(field(value, key)?)
+}
+fn field<'a>(value: &'a Value, key: &'static str) -> Result<&'a str, Rejected> {
     value[key]
         .as_str()
         .filter(|s| !s.is_empty())
-        .ok_or_else(invalid)
+        .ok_or_else(|| Rejected::at(key))
 }
 fn access(binding: CalendarGrantBinding) -> MailboxAccess {
     MailboxAccess {
@@ -217,19 +238,27 @@ impl OutlookApiClientRepository {
             );
         Ok(self.calendar_pages(token, url).await?.0)
     }
+    async fn calendar_occurrences(
+        &self,
+        token: &AccessToken,
+        target: &ProviderCalendarTarget,
+        master: &Value,
+    ) -> Result<Vec<Value>, CalendarProviderError> {
+        if master["type"].as_str() == Some("seriesMaster") {
+            self.calendar_instances(token, target, string(master, "id")?)
+                .await
+        } else {
+            Ok(vec![master.clone()])
+        }
+    }
     async fn calendar_echo(
         &self,
         token: &AccessToken,
         target: &ProviderCalendarTarget,
         master: Value,
     ) -> Result<CalendarEventUpsert, CalendarProviderError> {
-        let instances = if master["type"].as_str() == Some("seriesMaster") {
-            self.calendar_instances(token, target, string(&master, "id")?)
-                .await?
-        } else {
-            vec![master.clone()]
-        };
-        normalize::projection(target, master, instances)
+        let instances = self.calendar_occurrences(token, target, &master).await?;
+        Ok(normalize::projection(target, master, instances)?)
     }
     async fn calendar_refresh(
         &self,
@@ -426,10 +455,17 @@ impl OutlookCalendarReader for OutlookApiClientRepository {
         token: &str,
         target: &ProviderCalendarTarget,
         id: &str,
-    ) -> Result<Option<CalendarEventUpsert>, CalendarProviderError> {
-        self.calendar_scope(target)?
-            .calendar_refresh(&AccessToken::new(token.to_owned()), target, id)
-            .await
+    ) -> Result<OutlookEventRefresh, CalendarProviderError> {
+        let api = self.calendar_scope(target)?;
+        let token = AccessToken::new(token.to_owned());
+        let Some(master) = api.calendar_event(&token, target, id).await? else {
+            return Ok(OutlookEventRefresh::Gone);
+        };
+        let instances = api.calendar_occurrences(&token, target, &master).await?;
+        Ok(match normalize::projection(target, master, instances) {
+            Ok(upsert) => OutlookEventRefresh::Refreshed(Box::new(upsert)),
+            Err(Rejected(field)) => OutlookEventRefresh::Unreadable { field },
+        })
     }
 }
 

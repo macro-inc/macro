@@ -18,7 +18,7 @@ import type { FormLayout } from '@service-storage/generated/schemas/formLayout';
 import type { Submission } from '@service-storage/generated/schemas/submission';
 import type { SubmissionOutcome } from '@service-storage/generated/schemas/submissionOutcome';
 import type { UpdateForm } from '@service-storage/generated/schemas/updateForm';
-import { useQueries, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQueries, useQuery } from '@tanstack/solid-query';
 import { ResultAsync } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { channelParticipantsQueryOptions } from '../channel/channel-participants';
@@ -28,16 +28,20 @@ import { databasesKeys, formsKeys, myResponseKeyOf } from './keys';
 const FORM_STALE_TIME = 30 * 1000;
 const RESPONDENT_REFRESH_INTERVAL = 30 * 1000;
 
-/** Every form the viewer can open, for Drive and Quick Access. */
-export function useFormsQuery() {
-  const flag = useFeatureFlag(enableForms);
-  return useQuery(() => ({
+function formsQueryOptions(enabled: boolean) {
+  return queryOptions({
     queryKey: formsKeys.list.queryKey,
     queryFn: () =>
       throwOnErr(async () => storageServiceClient.forms.listAccessible()),
     staleTime: FORM_STALE_TIME,
-    enabled: flag().enabled,
-  }));
+    enabled,
+  });
+}
+
+/** Every form the viewer can open, for Drive and Quick Access. */
+export function useFormsQuery() {
+  const flag = useFeatureFlag(enableForms);
+  return useQuery(() => formsQueryOptions(flag().enabled));
 }
 
 /**
@@ -48,17 +52,18 @@ export function useFormsQuery() {
 export function useFormsForDatabaseQuery(
   databaseId: Accessor<string | undefined>
 ) {
-  return useQuery(() => {
-    const id = databaseId();
-    return {
-      queryKey: formsKeys.forDatabase(id ?? '').queryKey,
-      queryFn: (): Promise<Form[]> =>
-        throwOnErr(async () =>
-          storageServiceClient.forms.listForDatabase({ databaseId: id ?? '' })
-        ),
-      staleTime: FORM_STALE_TIME,
-      enabled: !!id,
-    };
+  return useQuery(() => formsForDatabaseQueryOptions(databaseId()));
+}
+
+function formsForDatabaseQueryOptions(id: string | undefined) {
+  return queryOptions({
+    queryKey: formsKeys.forDatabase(id ?? '').queryKey,
+    queryFn: (): Promise<Form[]> =>
+      throwOnErr(async () =>
+        storageServiceClient.forms.listForDatabase({ databaseId: id ?? '' })
+      ),
+    staleTime: FORM_STALE_TIME,
+    enabled: !!id,
   });
 }
 
@@ -71,25 +76,30 @@ export function formDetailQueryOptions(formId: string) {
   };
 }
 
+function watchedFormDetailQueryOptions(
+  id: string | undefined,
+  respondentView: boolean
+) {
+  return queryOptions({
+    ...formDetailQueryOptions(id ?? ''),
+    enabled: !!id,
+    // Respondents stay fresh without joining the gateway's presence roster.
+    refetchInterval: (query) =>
+      respondentView || query.state.data?.access === 'view'
+        ? RESPONDENT_REFRESH_INTERVAL
+        : false,
+    // A form you cannot open stays unopened; retrying a 404 changes nothing.
+    retry: false,
+  });
+}
+
 export function useFormDetailQuery(
   formId: Accessor<string | undefined>,
   refreshWithoutPresence: Accessor<boolean> = () => false
 ) {
-  return useQuery(() => {
-    const id = formId();
-    const respondentView = refreshWithoutPresence();
-    return {
-      ...formDetailQueryOptions(id ?? ''),
-      enabled: !!id,
-      // Respondents stay fresh without joining the gateway's presence roster.
-      refetchInterval: (query) =>
-        respondentView || query.state.data?.access === 'view'
-          ? RESPONDENT_REFRESH_INTERVAL
-          : false,
-      // A form you cannot open stays unopened; retrying a 404 changes nothing.
-      retry: false,
-    };
-  });
+  return useQuery(() =>
+    watchedFormDetailQueryOptions(formId(), refreshWithoutPresence())
+  );
 }
 
 /**
@@ -241,28 +251,40 @@ export function editMyResponse(
     });
 }
 
+function myResponseQueryOptions(
+  id: string | undefined,
+  user: string | undefined
+) {
+  return queryOptions({
+    queryKey: formsKeys.mine(id ?? '', user ?? '').queryKey,
+    queryFn: async () => {
+      const result = await storageServiceClient.forms.getMyResponse({
+        id: id ?? '',
+      });
+      if (result.isOk()) return result.value;
+      if (result.error.some((error) => error.refusal?.code === 'noResponse'))
+        return null;
+      throw new ThrownResultError(result.error);
+    },
+    enabled: !!id && !!user,
+    retry: false,
+  });
+}
+
 /** The signed-in viewer's own response; `null` until they respond. */
 export function useMyResponseQuery(
   formId: Accessor<string | undefined>,
   userId: Accessor<string | undefined>
 ) {
-  return useQuery(() => {
-    const id = formId();
-    const user = userId();
-    return {
-      queryKey: formsKeys.mine(id ?? '', user ?? '').queryKey,
-      queryFn: async () => {
-        const result = await storageServiceClient.forms.getMyResponse({
-          id: id ?? '',
-        });
-        if (result.isOk()) return result.value;
-        if (result.error.some((error) => error.refusal?.code === 'noResponse'))
-          return null;
-        throw new ThrownResultError(result.error);
-      },
-      enabled: !!id && !!user,
-      retry: false,
-    };
+  return useQuery(() => myResponseQueryOptions(formId(), userId()));
+}
+
+function responseSummaryQueryOptions(id: string, enabled: boolean) {
+  return queryOptions({
+    queryKey: formsKeys.summary(id).queryKey,
+    queryFn: () =>
+      throwOnErr(async () => storageServiceClient.forms.getSummary({ id })),
+    enabled,
   });
 }
 
@@ -271,14 +293,20 @@ export function useResponseSummaryQuery(
   formId: Accessor<string>,
   enabled: Accessor<boolean>
 ) {
-  return useQuery(() => {
-    const id = formId();
-    return {
-      queryKey: formsKeys.summary(id).queryKey,
-      queryFn: () =>
-        throwOnErr(async () => storageServiceClient.forms.getSummary({ id })),
-      enabled: enabled(),
-    };
+  return useQuery(() => responseSummaryQueryOptions(formId(), enabled()));
+}
+
+function tallyQueryOptions(id: string | undefined, enabled: boolean) {
+  return queryOptions({
+    queryKey: formsKeys.tally(id ?? '').queryKey,
+    queryFn: () =>
+      throwOnErr(async () =>
+        storageServiceClient.forms.getTally({ id: id ?? '' })
+      ),
+    enabled: !!id && enabled,
+    // Poll cards and respondents do not join the editor presence roster.
+    refetchInterval: RESPONDENT_REFRESH_INTERVAL,
+    retry: false,
   });
 }
 
@@ -286,19 +314,21 @@ export function useTallyQuery(
   formId: Accessor<string | undefined>,
   enabled: Accessor<boolean>
 ) {
-  return useQuery(() => {
-    const id = formId();
-    return {
-      queryKey: formsKeys.tally(id ?? '').queryKey,
-      queryFn: () =>
-        throwOnErr(async () =>
-          storageServiceClient.forms.getTally({ id: id ?? '' })
-        ),
-      enabled: !!id && enabled(),
-      // Poll cards and respondents do not join the editor presence roster.
-      refetchInterval: RESPONDENT_REFRESH_INTERVAL,
-      retry: false,
-    };
+  return useQuery(() => tallyQueryOptions(formId(), enabled()));
+}
+
+function formSharePermissionsQueryOptions(
+  id: string | undefined,
+  enabled: boolean
+) {
+  return queryOptions({
+    queryKey: formsKeys.permissions(id ?? '').queryKey,
+    queryFn: () =>
+      throwOnErr(async () =>
+        storageServiceClient.forms.getPermissions({ id: id ?? '' })
+      ),
+    enabled: !!id && enabled,
+    retry: false,
   });
 }
 
@@ -307,18 +337,7 @@ export function useFormSharePermissionsQuery(
   formId: Accessor<string | undefined>,
   enabled: Accessor<boolean>
 ) {
-  return useQuery(() => {
-    const id = formId();
-    return {
-      queryKey: formsKeys.permissions(id ?? '').queryKey,
-      queryFn: () =>
-        throwOnErr(async () =>
-          storageServiceClient.forms.getPermissions({ id: id ?? '' })
-        ),
-      enabled: !!id && enabled(),
-      retry: false,
-    };
-  });
+  return useQuery(() => formSharePermissionsQueryOptions(formId(), enabled()));
 }
 
 /**

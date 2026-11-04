@@ -741,7 +741,7 @@ export async function runDocxAgentRequest(
   }
   if (!isDocxSeeded(doc))
     throw new DocxAgentError(
-      "This Word document hasn't been opened in Macro's editor yet, so it has no live copy to read or edit. Ask the user to open it once in Macro, then try again."
+      'This Word document has no live copy to read or edit yet. Try again in a few seconds.'
     );
   const state = readDocxState(doc);
   if (request.action === 'read')

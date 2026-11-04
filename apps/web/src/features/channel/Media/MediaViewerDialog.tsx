@@ -91,15 +91,27 @@ function VideoViewerContent(props: {
           }
         }}
       >
+        <div class="flex size-full items-center justify-center">
+          <video
+            class="max-h-[80vh] max-w-[90vw] rounded-2xl bg-[black]"
+            tabIndex={0}
+            controls
+            autoplay
+            playsinline
+            src={props.item().fullSrc}
+          />
+        </div>
+
         <LightboxToolbar isVisible={true}>
           <FileDownloadButton download={props.download} iconOnly />
           <Dialog.CloseButton
+            aria-label="Close"
+            tooltip="Close"
             as={Button}
             variant="ghost"
             size="icon-md"
-            label="Close"
           >
-            <XIcon />
+            <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </Dialog.CloseButton>
         </LightboxToolbar>
 
@@ -135,16 +147,6 @@ function VideoViewerContent(props: {
             <ChevronRightIcon class="size-5 text-ink" />
           </button>
         </Show>
-
-        <div class="flex size-full items-center justify-center">
-          <video
-            class="max-h-[80vh] max-w-[90vw] rounded-2xl bg-[black]"
-            controls
-            autoplay
-            playsinline
-            src={props.item().fullSrc}
-          />
-        </div>
       </Dialog.Content>
     </div>
   );

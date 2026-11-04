@@ -58,7 +58,8 @@ use crate::{
     },
 };
 use channel_labels::domain::models::{
-    ChannelLabel, ChannelLabelRule, ChannelLabelsList, SmartTagChannelMatch, SmartTagPreview,
+    ChannelLabel, ChannelLabelRule, ChannelLabelScopeSelection, ChannelLabelsList,
+    SmartTagChannelMatch, SmartTagPreview,
 };
 use channel_labels::inbound::axum_router::{
     CreateChannelLabelRequest, RenameChannelLabelRequest, SetChannelLabelRequest,
@@ -99,7 +100,8 @@ use databases::inbound::axum_router::ops::{
 };
 use databases::inbound::axum_router::views::ViewPositionsResponse as DatabaseViewPositionsResponse;
 use databases::inbound::axum_router::{
-    CreateDatabaseRequest, saved_queries::SaveQueryRequest as DatabaseSaveQueryRequest,
+    CreateDatabaseRequest, duplicate::DuplicateDatabaseRequest,
+    saved_queries::SaveQueryRequest as DatabaseSaveQueryRequest,
 };
 use databases::outbound::gateway_event_publisher::{
     AwarenessRelay as DatabaseAwarenessRelay, TableChanged as DatabaseTableChanged,
@@ -199,8 +201,8 @@ use soup::domain::models::{SoupItemWithProperties, SoupPropertiesField};
 use soup::inbound::axum_router::{
     ApiGroupByField, ApiGroupMeta, GroupedSoupGroupPage, GroupedSoupInitialPage, GroupedSoupPage,
     PostGroupedSoupAstGroupPageRequest, PostGroupedSoupAstInitialRequest,
-    PostGroupedSoupAstRequest, PostSoupAstRequest, PostSoupRequest, SoupApiItem, SoupApiSort,
-    SoupPage,
+    PostGroupedSoupAstRequest, PostSoupAstRequest, PostSoupRequest, PropertyBucketing,
+    PropertyDateRange, PropertyDateRanges, SoupApiItem, SoupApiSort, SoupPage,
 };
 use user_api_key::domain::models::{CreatedUserApiKey, UserApiKeyInfo};
 use user_api_key::inbound::axum_router::{CreateUserApiKeyRequest, UserApiKeysList};
@@ -250,6 +252,7 @@ use utoipa::OpenApi;
         documents::location::get_location_handler,
         documents_hex::inbound::axum_router::get_location::get_location_v3_handler,
         documents_hex::inbound::axum_router::get_text::get_text_handler,
+        documents_hex::inbound::axum_router::ai_edit::ai_edit_handler,
         documents_hex::inbound::axum_router::get_branch_name::get_branch_name_handler,
         documents_hex::inbound::axum_router::get_github_pull_requests::get_github_pull_requests_handler,
         documents_hex::inbound::axum_router::get_github_pull_request_tasks::get_github_pull_request_tasks_handler,
@@ -262,11 +265,14 @@ use utoipa::OpenApi;
         documents::revert_delete_document::handler,
         documents::export_document::handler,
         documents_hex::inbound::axum_router::create_task::create_task_handler,
+        documents_hex::inbound::axum_router::task_duplicates::task_similarity_search_handler,
         documents_hex::inbound::axum_router::create_snippet::create_snippet_handler,
         documents_hex::inbound::axum_router::create_skill::create_skill_handler,
         documents_hex::inbound::axum_router::system_skills::get_system_skills_handler,
         documents_hex::inbound::axum_router::team_share::get_team_share_handler,
         documents_hex::inbound::axum_router::team_share::set_team_share_handler,
+        documents_hex::inbound::axum_router::skill_description::get_skill_description_handler,
+        documents_hex::inbound::axum_router::skill_description::set_skill_description_handler,
 
         // instructions
         instructions::create_instructions::create_instructions_handler,
@@ -449,6 +455,34 @@ use utoipa::OpenApi;
         slack_integration::inbound::axum_router::jobs::finalize,
         slack_integration::inbound::axum_router::jobs::cancel,
 
+        // External chats (any provider)
+        external_chat::inbound::router::list,
+        external_chat::inbound::router::add,
+        external_chat::inbound::router::chat,
+        external_chat::inbound::router::remove,
+        external_chat::inbound::router::messages,
+        external_chat::inbound::router::message,
+        external_chat::inbound::router::message_attachments,
+        external_chat::inbound::router::mark_read,
+        external_chat::inbound::router::permissions,
+        external_chat::inbound::router::update_permissions,
+        external_chat::inbound::router::open_sends,
+        external_chat::inbound::router::send,
+        external_chat::inbound::router::upload,
+        external_chat::inbound::router::delivery,
+
+        // Personal WhatsApp linked as a device
+        whatsapp_linked::inbound::router::account,
+        whatsapp_linked::inbound::router::connect,
+        whatsapp_linked::inbound::router::pairing,
+        whatsapp_linked::inbound::router::cancel,
+        whatsapp_linked::inbound::router::passkey,
+        whatsapp_linked::inbound::router::disconnect,
+        whatsapp_linked::inbound::router::chats,
+        whatsapp_linked::inbound::router::start_lookup,
+        whatsapp_linked::inbound::router::lookup,
+        whatsapp_linked::inbound::router::import_history,
+
         access_requests::inbound::axum_router::state_handler,
         access_requests::inbound::axum_router::submit_handler,
         access_requests::inbound::axum_router::cancel_handler,
@@ -479,6 +513,7 @@ use utoipa::OpenApi;
         databases::inbound::axum_router::history::undo_change_handler,
         databases::inbound::axum_router::history::table_changes_handler,
         databases::inbound::axum_router::transfer::import_table_handler,
+        databases::inbound::axum_router::duplicate::duplicate_database_handler,
         databases::inbound::axum_router::sharing::get_permissions_handler,
         databases::inbound::axum_router::sharing::update_permissions_handler,
         databases::inbound::axum_router::saved_queries::save_query_handler,
@@ -524,9 +559,12 @@ use utoipa::OpenApi;
         crm::inbound::pipelines::list,
         crm::inbound::pipelines::read,
         crm::inbound::pipelines::table,
+        crm::inbound::pipelines::view_positions,
         crm::inbound::pipelines::rows,
         crm::inbound::pipelines::query_rows,
         crm::inbound::pipelines::apply_ops,
+        crm::inbound::pipelines::stage_requirements,
+        crm::inbound::pipelines::set_stage_requirement,
         crm::inbound::pipelines::rename,
         crm::inbound::pipelines::share,
         crm::inbound::pipelines::permissions,
@@ -544,6 +582,10 @@ use utoipa::OpenApi;
         crm::inbound::axum_router::get_company::handler,
         crm::inbound::axum_router::create_company::handler,
         crm::inbound::axum_router::create_contact::handler,
+        crm::inbound::axum_router::create_team_contact::handler,
+        crm::inbound::axum_router::blocked_domains::list_handler,
+        crm::inbound::axum_router::blocked_domains::block_handler,
+        crm::inbound::axum_router::blocked_domains::unblock_handler,
         crm::inbound::axum_router::team_settings::get_handler,
         crm::inbound::axum_router::team_settings::update_handler,
         crm::inbound::axum_router::stages::replace_handler,
@@ -577,12 +619,17 @@ use utoipa::OpenApi;
             documents_hex::domain::models::CreateMarkdownDocumentResponse,
             documents_hex::domain::models::CreateTaskRequest,
             documents_hex::domain::models::CreateTaskResponse,
+            documents_hex::inbound::axum_router::task_duplicates::TaskSimilaritySearchRequest,
+            documents_hex::inbound::axum_router::task_duplicates::TaskSimilaritySearchResponse,
+            task_dedup::TaskSimilarityResult,
             documents_hex::domain::models::CreateSnippetRequest,
             documents_hex::domain::models::CreateSnippetResponse,
             documents_hex::domain::models::CreateSkillRequest,
             documents_hex::domain::models::CreateSkillResponse,
             documents_hex::domain::models::DocumentTeamShareResponse,
             documents_hex::domain::models::SetDocumentTeamShareRequest,
+            documents_hex::domain::models::SetSkillDescriptionRequest,
+            documents_hex::domain::models::SkillDescriptionBody,
             documents_hex::domain::models::PropertyInput,
             models_properties::api::requests::SetPropertyValue,
             models_properties::shared::EntityReference,
@@ -683,6 +730,7 @@ use utoipa::OpenApi;
             ChannelLabel,
             ChannelLabelsList,
             ChannelLabelRule,
+            ChannelLabelScopeSelection,
             SmartTagChannelMatch,
             SmartTagPreview,
             CreateChannelLabelRequest,
@@ -699,6 +747,7 @@ use utoipa::OpenApi;
             DatabaseTableDetail,
             DatabaseColumnDetail,
             CreateDatabaseRequest,
+            DuplicateDatabaseRequest,
             DatabaseAwareness,
             DatabaseAwarenessRelay,
             DatabaseTableChanged,
@@ -791,6 +840,9 @@ use utoipa::OpenApi;
             PostGroupedSoupAstInitialRequest,
             PostGroupedSoupAstGroupPageRequest,
             PostGroupedSoupAstRequest,
+            PropertyBucketing,
+            PropertyDateRange,
+            PropertyDateRanges,
             ApiGroupByField,
             ApiGroupMeta,
             GroupedSoupInitialPage,
@@ -1022,6 +1074,8 @@ use utoipa::OpenApi;
             crm::inbound::axum_router::stages::CrmStagesResponse,
             crm::inbound::axum_router::stages::CrmStageResponse,
             crm::inbound::axum_router::team_settings::CrmTeamSettingsResponse,
+            crm::inbound::axum_router::create_team_contact::CreateCrmTeamContactRequest,
+            crm::inbound::axum_router::blocked_domains::CrmBlockedDomainResponse,
             crm::inbound::axum_router::team_settings::UpdateCrmTeamSettingsRequest,
             crm::domain::model::CrmPermissionRole,
         ),

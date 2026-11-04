@@ -37,7 +37,9 @@ use agent_client_protocol::schema::v1::{
     McpServer, RequestId, Response, SessionId, SetSessionConfigOptionResponse,
 };
 use agent_fold::domain::lifecycle::LifecycleFold;
-use agent_fold::domain::model::{Author, FoldedMessage, MessagePart, TurnState};
+use agent_fold::domain::model::{
+    Author, FoldedMessage, MessagePart, StopReason as TurnStopReason, TurnSignal, TurnState,
+};
 use agent_fold::domain::model_selection::model_selection;
 use agent_fold::domain::ports::FoldedMessageRepo;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, AgentSetModelAction};
@@ -74,8 +76,9 @@ use super::ports::{
     Appended, NoInheritedSessionAccess, NoOpAgentSessionNameGenerator, NoOpToolCatalog,
     SessionOwnership, SessionToolCatalog, SessionTurnObserver, SessionViewAccess,
 };
+use super::retitle::ConversationDigest;
 use super::session::actors::{ActorInput, SessionActor, SessionCommand, SessionMessage, Stepped};
-use super::session::{CloseReason, Input};
+use super::session::{CloseReason, Input, StopReason as SessionStopReason};
 use crate::domain::events::{AgentSessionLifecycleEvent, SessionRenamedMetadata};
 
 /// Buffered not-yet-accepted commands per session actor.
@@ -216,6 +219,14 @@ pub trait AgentSessionService: Send + Sync + 'static {
         prompter: &TurnPrompter,
     ) -> impl Future<Output = Result<()>> + Send;
 
+    /// Record that `user` prompted the session `id` directly, from the
+    /// session itself, so a hidden session lists for them.
+    fn add_follower(
+        &self,
+        id: AgentSessionId,
+        user: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// Read the persisted identity of the current turn during recovery.
     fn turn_prompter(
         &self,
@@ -244,7 +255,7 @@ pub trait AgentSessionService: Send + Sync + 'static {
     fn set_archived(
         &self,
         access: &EntityAccessReceipt<OwnerAccessLevel>,
-        is_archived: bool,
+        archived: bool,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// A bounded batch of sessions owned by this user, including inactive sessions.
@@ -590,7 +601,9 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
     ) -> Result<()>
     where
         R: AgentSessionRepo + AgentSessionLogRepo + SessionOwnership + Clone,
+        Folds: FoldedMessageRepo + Clone + Send + Sync + 'static,
         Rt: AgentSessionRealtime + Clone + Send + Sync + 'static,
+        Namer: AgentSessionNameGenerator + Clone,
         Connector: AgentConnector,
     {
         let _lifecycle = self.lifecycle.lock().await;
@@ -636,7 +649,15 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
             logs,
             command_rx,
             attachment.handshake,
-            Arc::clone(&self.turn_observer),
+            Arc::new(RetitleAfterTurns {
+                observer: Arc::clone(&self.turn_observer),
+                repo: self.repo.clone(),
+                folds: self.folds.clone(),
+                realtime: self.realtime.clone(),
+                lifecycle_publisher: self.lifecycle_publisher.clone(),
+                name_generator: self.name_generator.clone(),
+                tasks: self.tasks.clone(),
+            }),
             Arc::clone(&self.tool_catalog),
         )
         .with_initial_model(initial_model);
@@ -814,7 +835,7 @@ where
         if !session.owner_id.is_user(&actor) {
             return Err(AgentSessionError::Forbidden);
         }
-        if session.is_archived {
+        if session.is_archived() {
             return Err(AgentSessionError::Archived(id));
         }
         let entries = AgentSessionLogRepo::list_by_session(&self.repo, id).await?;
@@ -837,7 +858,7 @@ where
     ) -> Result<()> {
         let name = validate_agent_session_name(name)?;
         let id = owner_access_session_id(access, "rename")?;
-        if self.repo.get(id).await?.is_archived {
+        if self.repo.get(id).await?.is_archived() {
             return Err(AgentSessionError::Archived(id));
         }
         self.repo.set_name(id, name).await?;
@@ -858,16 +879,16 @@ where
     async fn set_archived(
         &self,
         access: &EntityAccessReceipt<OwnerAccessLevel>,
-        is_archived: bool,
+        archived: bool,
     ) -> Result<()> {
         let id = owner_access_session_id(access, "archive")?;
         // Every message in a conversation's channel goes to its current
         // session, and an archived session takes none. Starting fresh is how
         // a conversation retires one; the sessions it left behind archive.
-        if is_archived && self.repo.is_current_conversation_session(id).await? {
+        if archived && self.repo.is_current_conversation_session(id).await? {
             return Err(AgentSessionError::AnswersConversation(id));
         }
-        self.repo.set_archived(id, is_archived).await?;
+        self.repo.set_archived(id, archived).await?;
         self.realtime
             .publish_updated(id)
             .await
@@ -892,6 +913,10 @@ where
 
     async fn set_turn_prompter(&self, id: AgentSessionId, prompter: &TurnPrompter) -> Result<()> {
         self.repo.set_turn_prompter(id, prompter).await
+    }
+
+    async fn add_follower(&self, id: AgentSessionId, user: &MacroUserIdStr<'static>) -> Result<()> {
+        self.repo.add_follower(id, user).await
     }
 
     async fn turn_prompter(&self, id: AgentSessionId) -> Result<Option<TurnPrompter>> {
@@ -1120,7 +1145,7 @@ where
         action: AgentAction,
         action_id: AgentActionId,
     ) -> Result<()> {
-        if self.repo.get(id).await?.is_archived {
+        if self.repo.get(id).await?.is_archived() {
             return Err(AgentSessionError::Archived(id));
         }
         let initial_prompt = initial_prompt_for_rename(&self.folds, id, &action).await;
@@ -1371,6 +1396,141 @@ fn spawn_initial_agent_session_rename<R, Rt, Namer>(
                 Err(error) => {
                     span.record("agent.rename.outcome", "failed");
                     tracing::warn!(error = ?error, %id, "failed to auto-rename initial agent session");
+                }
+            }
+        }
+        .instrument(span),
+    );
+}
+
+/// A session actor's turn observer: tells the service's observer every fact,
+/// and after each turn that ended with a reply, asks the namer whether the
+/// session's generated name still fits.
+struct RetitleAfterTurns<R, Folds, Rt, Namer> {
+    observer: Arc<dyn SessionTurnObserver>,
+    repo: R,
+    folds: Folds,
+    realtime: Rt,
+    lifecycle_publisher: Arc<dyn AgentSessionLifecyclePublisher>,
+    name_generator: Namer,
+    tasks: TaskTracker,
+}
+
+impl<R, Folds, Rt, Namer> SessionTurnObserver for RetitleAfterTurns<R, Folds, Rt, Namer>
+where
+    R: AgentSessionRepo + AgentSessionLogRepo + Clone,
+    Folds: FoldedMessageRepo + Clone + Send + Sync + 'static,
+    Rt: AgentSessionRealtime + Clone + Send + Sync + 'static,
+    Namer: AgentSessionNameGenerator + Clone,
+{
+    fn signal(&self, id: AgentSessionId, signal: TurnSignal) {
+        // Only a reply the agent finished says anything new about the
+        // conversation; system-only notification turns and stopped or
+        // failed turns do not.
+        let replied = matches!(
+            signal,
+            TurnSignal::TurnEnded {
+                notification_noop: false,
+                stop: TurnStopReason::EndTurn,
+                ..
+            }
+        );
+        self.observer.signal(id, signal);
+        if replied {
+            spawn_agent_session_retitle(
+                &self.tasks,
+                self.repo.clone(),
+                self.folds.clone(),
+                self.realtime.clone(),
+                self.lifecycle_publisher.clone(),
+                self.name_generator.clone(),
+                id,
+            );
+        }
+    }
+
+    fn session_stopped(&self, id: AgentSessionId, reason: SessionStopReason) {
+        self.observer.session_stopped(id, reason);
+    }
+
+    fn runtime_closed(&self, id: AgentSessionId) {
+        self.observer.runtime_closed(id);
+    }
+}
+
+fn spawn_agent_session_retitle<R, Folds, Rt, Namer>(
+    tasks: &TaskTracker,
+    repo: R,
+    folds: Folds,
+    realtime: Rt,
+    lifecycle_publisher: Arc<dyn AgentSessionLifecyclePublisher>,
+    name_generator: Namer,
+    id: AgentSessionId,
+) where
+    R: AgentSessionRepo + AgentSessionLogRepo + Clone,
+    Folds: FoldedMessageRepo + Send + Sync + 'static,
+    Rt: AgentSessionRealtime + Send + Sync + 'static,
+    Namer: AgentSessionNameGenerator,
+{
+    // Detached from the turn, like the initial rename, so it gets its own
+    // span; the outcome is recorded because a failure is swallowed here.
+    let span = tracing::info_span!(
+        "agent.session.retitle",
+        agent.session.id = %id,
+        agent.retitle.outcome = tracing::field::Empty,
+    );
+    tasks.spawn(
+        async move {
+            let span = tracing::Span::current();
+            let result: std::result::Result<&'static str, rootcause::Report> = async {
+                // A name a person chose, the default, or an archived session
+                // is never retitled, so most turns stop at this one read.
+                let Some(current) = repo
+                    .generated_name(id)
+                    .await
+                    .map_err(|error| rootcause::report!(error))?
+                else {
+                    return Ok("skipped_not_generated");
+                };
+                let conversation = ConversationDigest::from_messages(&folds.messages(id).await?);
+                if !conversation.has_reply() {
+                    return Ok("skipped_no_reply");
+                }
+                let session = repo
+                    .get(id)
+                    .await
+                    .map_err(|error| rootcause::report!(error))?;
+                let Some(name) = name_generator
+                    .retitle(&session, &current, &conversation)
+                    .await?
+                else {
+                    return Ok("kept");
+                };
+                let renamed = repo
+                    .replace_generated_name(id, &current, &name)
+                    .await
+                    .map_err(|error| rootcause::report!(error))?;
+                if !renamed {
+                    return Ok("skipped_name_changed");
+                }
+                realtime
+                    .publish_renamed(AgentSessionRenamed {
+                        agent_session_id: id,
+                        name,
+                    })
+                    .await?;
+                publish_renamed_lifecycle(&repo, &lifecycle_publisher, id).await;
+                Ok("renamed")
+            }
+            .await;
+
+            match result {
+                Ok(outcome) => {
+                    span.record("agent.retitle.outcome", outcome);
+                }
+                Err(error) => {
+                    span.record("agent.retitle.outcome", "failed");
+                    tracing::warn!(error = ?error, %id, "failed to retitle agent session");
                 }
             }
         }
@@ -1903,6 +2063,10 @@ where
         self.repo.set_turn_prompter(id, prompter).await
     }
 
+    async fn add_follower(&self, id: AgentSessionId, user: &MacroUserIdStr<'static>) -> Result<()> {
+        self.repo.add_follower(id, user).await
+    }
+
     async fn turn_prompter(&self, id: AgentSessionId) -> Result<Option<TurnPrompter>> {
         self.repo.turn_prompter(id).await
     }
@@ -1970,8 +2134,8 @@ where
         self.repo.set_name(id, name).await
     }
 
-    async fn set_archived(&self, id: AgentSessionId, is_archived: bool) -> Result<()> {
-        self.repo.set_archived(id, is_archived).await
+    async fn set_archived(&self, id: AgentSessionId, archived: bool) -> Result<()> {
+        self.repo.set_archived(id, archived).await
     }
 
     async fn is_current_conversation_session(&self, id: AgentSessionId) -> Result<bool> {
@@ -1980,6 +2144,19 @@ where
 
     async fn set_name_if_default(&self, id: AgentSessionId, name: &str) -> Result<bool> {
         self.repo.set_name_if_default(id, name).await
+    }
+
+    async fn generated_name(&self, id: AgentSessionId) -> Result<Option<String>> {
+        self.repo.generated_name(id).await
+    }
+
+    async fn replace_generated_name(
+        &self,
+        id: AgentSessionId,
+        current: &str,
+        name: &str,
+    ) -> Result<bool> {
+        self.repo.replace_generated_name(id, current, name).await
     }
 
     async fn set_sandbox_size(&self, id: AgentSessionId, size: SandboxSize) -> Result<()> {

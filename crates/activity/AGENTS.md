@@ -39,7 +39,7 @@ distribution.
   `EntityAccessService::get_users_by_entity`; change both together.
 - Used by: most domain crates with activity surfaces (`documents`, `forms`,
   `databases`, `initiative`, `messages`, `channels`, `soup`, `call`, `chat`,
-  `work_feed`, `projects`, `github`, `email`, `properties`) and `ai_tools`.
+  `attention_feed`, `projects`, `github`, `email`, `properties`) and `ai_tools`.
 
 ## Recipes
 
@@ -53,6 +53,8 @@ distribution.
 ## Checks
 
 - `cargo test -p activity` (`SQLX_OFFLINE` unset).
+
+- External chats have their own unread state and are excluded from activity ranking/Soup until that integration is added.
 
 ## Related
 

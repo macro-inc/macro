@@ -1,0 +1,2 @@
+Explicit message sender names or supplied addresses. Keep each person together, including quoted names with commas or and. Use [] when absent. Do not infer senders from names inside the topic, or turn negated filters into positive filters. Never return IDs.
+Channels is the message search type. In search channels from Person A, Person A is the sender, even without a keyword topic. Never move that person into query.

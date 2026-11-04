@@ -1,3 +1,5 @@
+import { usePending } from '@app/observability/flow';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import '@entity/composed/ListEntity.css';
 import {
   createListController,
@@ -60,7 +62,6 @@ import {
 } from '../../next-soup/soup-view/soup-navigation-touch-highlight';
 import { InboxListEntity } from '../../next-soup/soup-view/views/inbox/InboxListEntity';
 import {
-  markCalendarNotificationSeenOnOpen,
   markChannelNotificationsSeenOnOpen,
   openEntityInSplitFromUnifiedList,
 } from '../../next-soup/utils';
@@ -113,6 +114,8 @@ export function HomeList(props: HomeListProps) {
     useHomeDataSource(state)
   );
 
+  usePending('home.items', source.isLoading);
+
   const list = withSplitPanelOwner(listOwnedSlotName('controller'), () =>
     createListController<HomeDataSourceItem, HomeListActivationMetadata>({
       items: source.items,
@@ -134,6 +137,7 @@ export function HomeList(props: HomeListProps) {
       controller: list,
       handle: panel.handle,
       openEntityInSplit: (entity, options) => {
+        markRowNotificationsSeenOnOpen(entity, notificationSource);
         fireAndForget(
           openEntityInSplitFromUnifiedList(entity, {
             splitHandle: panel.handle,
@@ -170,7 +174,12 @@ export function HomeList(props: HomeListProps) {
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
 
     if (!isTouchDevice() && !newSplit) {
-      markEntitySeen(sourceRow.entity);
+      if (!isNonMemberChannelEntity(sourceRow.entity)) {
+        markChannelNotificationsSeenOnOpen(
+          sourceRow.entity,
+          notificationSource
+        );
+      }
       showPreview(sourceRow.entity, { activate: true });
       props.onPreviewActivate?.();
       // Home keeps the keyboard only when the item opened in Home itself.
@@ -188,20 +197,18 @@ export function HomeList(props: HomeListProps) {
   }
 
   function markEntitySeen(entity: WithNotification<EntityData>) {
-    markCalendarNotificationSeenOnOpen(entity, notificationSource);
+    markRowNotificationsSeenOnOpen(entity, notificationSource);
     if (!isNonMemberChannelEntity(entity)) {
       markChannelNotificationsSeenOnOpen(entity, notificationSource);
     }
   }
 
   function showPreview(
-    entity: WithNotification<EntityData>,
+    entity: WithNotification<EntityData> | undefined,
     options?: { activate?: boolean }
   ) {
-    props.onPreviewEntityChange(
-      entity?.type === 'initiative' ? undefined : entity,
-      options
-    );
+    if (entity) markRowNotificationsSeenOnOpen(entity, notificationSource);
+    props.onPreviewEntityChange(entity, options);
   }
 
   const previewAfterNavigation = debounce(showPreview, 150);
@@ -301,9 +308,7 @@ export function HomeList(props: HomeListProps) {
 
     return ({ entity }) => {
       previewAfterNavigation.clear();
-      props.onPreviewEntityChange(
-        entity?.type === 'initiative' ? undefined : entity
-      );
+      showPreview(entity);
     };
   };
 
@@ -587,7 +592,7 @@ export function HomeList(props: HomeListProps) {
                 >
                   <span>Home couldn’t be loaded.</span>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     onClick={() => fireAndForget(source.refresh(), 'home')}
                   >
@@ -653,6 +658,9 @@ export function HomeList(props: HomeListProps) {
                               selectedEntities={selectedEntities}
                               viewContext={entityActionViewContext()}
                               markDoneDelegate={source.markDoneDelegate}
+                              createActionNavigationHandler={
+                                createActionNavigationHandler
+                              }
                               onOpenChange={(open) => {
                                 if (!open) return;
                                 focusActionRow({

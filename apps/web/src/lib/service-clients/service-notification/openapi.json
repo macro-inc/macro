@@ -242,6 +242,122 @@
         }
       }
     },
+    "/unsubscribe/items": {
+      "post": {
+        "tags": ["unsubscribe::items"],
+        "summary": "Atomically mute or snooze items for the authenticated user.",
+        "operationId": "unsubscribe_items",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkSetItemsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["unsubscribe::items"],
+        "summary": "Atomically resume delivery for the authenticated user's items.",
+        "operationId": "remove_unsubscribe_items",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkRemoveItemsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/unsubscribe/mute": {
       "post": {
         "tags": ["unsubscribe::unsubscribe_all"],
@@ -1294,6 +1410,47 @@
           }
         }
       },
+      "BulkItem": {
+        "type": "object",
+        "required": ["item_type", "item_id"],
+        "properties": {
+          "item_id": {
+            "type": "string"
+          },
+          "item_type": {
+            "$ref": "#/components/schemas/EntityType"
+          }
+        }
+      },
+      "BulkRemoveItemsRequest": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BulkItem"
+            }
+          }
+        }
+      },
+      "BulkSetItemsRequest": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BulkItem"
+            }
+          },
+          "snoozed_until": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "A future resume time. Omit to mute indefinitely."
+          }
+        }
+      },
       "CalendarEventJoinRequestMetadata": {
         "type": "object",
         "description": "A channel member who sees a calendar event only through a channel share\nasked the person who shared it to add them as a guest. Sent to the sharer,\nwith the requester as sender.",
@@ -1853,7 +2010,8 @@
           "initiative",
           "database",
           "database_row",
-          "form"
+          "form",
+          "external_chat"
         ]
       },
       "ErrorResponse": {
@@ -1866,6 +2024,31 @@
             "description": "Message to explain failure"
           }
         }
+      },
+      "ExternalChatMessageMetadata": {
+        "type": "object",
+        "description": "A live message in an independently shared external chat.",
+        "required": ["provider", "chatName", "messageId"],
+        "properties": {
+          "chatName": {
+            "type": "string",
+            "description": "The chat's name."
+          },
+          "messageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable message id; retries use it as their notification id."
+          },
+          "provider": {
+            "$ref": "#/components/schemas/ExternalChatProvider",
+            "description": "The messaging service the chat lives in."
+          }
+        }
+      },
+      "ExternalChatProvider": {
+        "type": "string",
+        "description": "The messaging service an external chat lives in.",
+        "enum": ["whatsapp"]
       },
       "GetAllUserNotificationsResponse": {
         "type": "object",
@@ -2291,6 +2474,10 @@
             "$ref": "#/components/schemas/InviteePlan",
             "description": "What the invitee gets by joining, as the team stood when the invite was sent."
           },
+          "isAgent": {
+            "type": "boolean",
+            "description": "Whether the invite creates an agent account."
+          },
           "reminder": {
             "type": "boolean",
             "description": "Whether this email reminds the invitee of an invite they have not answered."
@@ -2715,6 +2902,21 @@
           },
           {
             "type": "object",
+            "description": "A live message in a shared external chat.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/ExternalChatMessageMetadata",
+                "description": "A live message in a shared external chat."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["external_chat_message"]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "A calendar event alarm came due.",
             "required": ["content", "tag"],
             "properties": {
@@ -2905,6 +3107,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["calendar_event_join_request"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "One of the user's routines finished a run, successfully or not.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/RoutineRunFinishedMetadata",
+                "description": "One of the user's routines finished a run, successfully or not."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["routine_run_finished"]
               }
             }
           }
@@ -3202,6 +3419,31 @@
         "type": "string",
         "description": "Permission level used by an access request, excluding ownership.",
         "enum": ["view", "comment", "edit"]
+      },
+      "RoutineRunFinishedMetadata": {
+        "type": "object",
+        "description": "One of the recipient's routines finished a run. Every run notifies,\nwhether it succeeded or failed.",
+        "required": ["routineId", "routineName", "outcome"],
+        "properties": {
+          "outcome": {
+            "$ref": "#/components/schemas/RoutineRunOutcome",
+            "description": "How the run ended."
+          },
+          "routineId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The routine that ran."
+          },
+          "routineName": {
+            "type": "string",
+            "description": "The routine's name when it ran."
+          }
+        }
+      },
+      "RoutineRunOutcome": {
+        "type": "string",
+        "description": "How a routine run ended, as its notification reports it.",
+        "enum": ["succeeded", "failed"]
       },
       "TaskAssignedMetadata": {
         "type": "object",

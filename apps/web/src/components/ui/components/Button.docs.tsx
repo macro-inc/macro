@@ -1,47 +1,43 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
+import { HeaderActionButton } from '@components/app/HeaderActionButton';
 import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
-import TrashIcon from '@icon/system/regular/trash.svg';
-import { For, Show } from 'solid-js';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import { macroDarkTheme } from '@theme/themes/macro-dark';
+import { macroLightTheme } from '@theme/themes/macro-light';
+import { themeCssVars } from '@theme/utils/themeCssVars';
+import { createSignal, For } from 'solid-js';
 import { Button, type ButtonVariant } from './Button';
 import { ButtonGroup } from './ButtonGroup';
 
 const VARIANTS: ButtonVariant[] = [
-  'ghost',
-  'outline',
+  'primary',
   'accent',
-  'success',
+  'secondary',
+  'outline',
+  'ghost',
   'danger',
-  'strong',
-  'cta',
+  'danger-ghost',
+  'success',
+  'link',
 ];
 
 // #region demo:variants
 function VariantsDemo() {
   return (
-    <div class="flex w-full flex-col gap-3">
+    <div class="flex flex-col gap-4">
       <For each={VARIANTS}>
         {(variant) => (
-          <div class="flex items-center gap-3">
-            <span class="w-20 shrink-0 font-mono text-xs text-ink-subtle">
-              {variant}
-            </span>
+          <div class="flex flex-wrap items-center gap-4">
+            <span class="w-24 font-mono text-xs text-ink-muted">{variant}</span>
             <Button variant={variant}>Button</Button>
             <Button variant={variant}>
-              <PlusIcon />
-              With icon
+              <PlusIcon class="size-4" aria-hidden="true" />
+              Create item
             </Button>
-            <Button variant={variant} size="icon-md" label={`${variant} icon`}>
-              <PlusIcon />
-            </Button>
-            <Button variant={variant} glass>
-              Glass
-            </Button>
-            <Button variant={variant} glass={false}>
-              No glass
-            </Button>
-            <Button variant={variant} disabled>
-              Disabled
+            <Button variant={variant}>
+              Continue
+              <ArrowRightIcon class="size-4" aria-hidden="true" />
             </Button>
           </div>
         )}
@@ -54,87 +50,77 @@ function VariantsDemo() {
 // #region demo:sizes
 function SizesDemo() {
   return (
-    <div class="flex flex-wrap items-end gap-3">
-      <For each={['xs', 'sm', 'md', 'lg', 'xl'] as const}>
-        {(size) => (
-          <div class="flex flex-col items-start gap-1.5">
-            <span class="font-mono text-xs text-ink-subtle">{size}</span>
-            <Button variant="outline" size={size}>
-              Button
-            </Button>
-          </div>
-        )}
-      </For>
-    </div>
-  );
-}
-// #endregion
-
-// #region demo:icon-only
-function IconOnlyDemo() {
-  return (
-    <div class="flex flex-wrap items-end gap-3">
-      <For
-        each={
-          ['icon-xs', 'icon-sm', 'icon-md', 'icon-lg', 'icon-composer'] as const
-        }
-      >
-        {(size) => (
-          <div class="flex flex-col items-start gap-1.5">
-            <span class="font-mono text-xs text-ink-subtle">{size}</span>
-            <Button variant="outline" size={size} label="Add item">
-              <PlusIcon />
-            </Button>
-          </div>
-        )}
-      </For>
-    </div>
-  );
-}
-// #endregion
-
-// #region demo:size-compositions
-function SizeCompositionsDemo() {
-  const sizes = [
-    { size: 'xs', iconSize: 'icon-xs' },
-    { size: 'sm', iconSize: 'icon-sm' },
-    { size: 'md', iconSize: 'icon-md' },
-    { size: 'lg', iconSize: 'icon-lg' },
-    { size: 'xl', iconSize: undefined },
-  ] as const;
-
-  return (
-    <div class="flex w-full flex-col gap-3">
-      <For each={sizes}>
-        {({ size, iconSize }) => (
-          <div class="flex items-center gap-3">
-            <span class="w-8 shrink-0 font-mono text-xs text-ink-subtle">
+    <div class="flex flex-col gap-4">
+      <div class="flex flex-wrap items-center gap-4">
+        <For each={['xs', 'sm', 'md', 'lg', 'xl'] as const}>
+          {(size) => (
+            <Button variant="secondary" size={size}>
               {size}
-            </span>
-            <Button variant="outline" size={size} square label="Add item">
-              <PlusIcon />
             </Button>
-            <Button variant="outline" size={size}>
-              Button
+          )}
+        </For>
+      </div>
+      <div class="flex flex-wrap items-center gap-4">
+        <For
+          each={
+            ['icon-xs', 'icon-sm', 'icon-md', 'icon-lg', 'icon-xl'] as const
+          }
+        >
+          {(size) => (
+            <Button
+              variant="secondary"
+              size={size}
+              aria-label={`Add item (${size})`}
+              tooltip={size}
+            >
+              <PlusIcon class="size-4" />
             </Button>
-            <Button variant="outline" size={size}>
-              <PlusIcon />
-              With icon
-            </Button>
-            <Show when={iconSize}>
-              {(resolvedIconSize) => (
-                <Button
-                  variant="outline"
-                  size={resolvedIconSize()}
-                  label={resolvedIconSize()}
-                >
-                  <PlusIcon />
-                </Button>
-              )}
-            </Show>
-          </div>
-        )}
-      </For>
+          )}
+        </For>
+      </div>
+    </div>
+  );
+}
+// #endregion
+
+// #region demo:states
+function StatesDemo() {
+  const [pressed, setPressed] = createSignal(false);
+  const [loading, setLoading] = createSignal(false);
+  return (
+    <div class="flex flex-wrap items-center gap-4">
+      <Button
+        variant="ghost"
+        aria-pressed={pressed()}
+        onClick={() => setPressed(!pressed())}
+      >
+        Toggle {pressed() ? 'on' : 'off'}
+      </Button>
+      <Button variant="secondary" disabled>
+        Disabled
+      </Button>
+      <Button
+        variant="primary"
+        loading={loading()}
+        onClick={() => setLoading(true)}
+      >
+        Save example
+      </Button>
+      <Button
+        variant="ghost"
+        disabled={!loading()}
+        onClick={() => setLoading(false)}
+      >
+        Reset loading
+      </Button>
+      <Button
+        size="icon-md"
+        variant="secondary"
+        aria-label="Add item"
+        tooltip={{ content: 'Add item', shortcut: 'meta+enter' }}
+      >
+        <PlusIcon class="size-4" />
+      </Button>
     </div>
   );
 }
@@ -143,22 +129,91 @@ function SizeCompositionsDemo() {
 // #region demo:group
 function GroupDemo() {
   return (
-    <div class="flex flex-col gap-4 items-center">
-      <For each={['sm', 'md', 'lg'] as const}>
-        {(size) => (
-          <ButtonGroup variant="outline" size={size}>
-            <Button>
-              <TrashIcon />
-              Delete
-            </Button>
-            <ButtonGroup.Divider />
-            <Button>Duplicate</Button>
-            <ButtonGroup.Divider />
-            <Button>
-              Next
-              <ArrowRightIcon />
-            </Button>
-          </ButtonGroup>
+    <ButtonGroup
+      finish="raised"
+      variant="secondary"
+      size="md"
+      aria-label="Document actions"
+    >
+      <ButtonGroup.Button>Add</ButtonGroup.Button>
+      <ButtonGroup.Divider />
+      <ButtonGroup.Button>Duplicate</ButtonGroup.Button>
+      <ButtonGroup.Divider />
+      <ButtonGroup.Button>Archive</ButtonGroup.Button>
+    </ButtonGroup>
+  );
+}
+// #endregion
+
+// #region demo:header
+function HeaderDemo() {
+  const [actions, setActions] = createSignal(0);
+  return (
+    <div class="@container/split-header flex w-full items-center justify-between gap-4">
+      <span class="text-sm text-ink-muted" aria-live="polite">
+        Local actions: {actions()}
+      </span>
+      <HeaderActionButton
+        label="Add item"
+        icon={
+          <PlusIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+        }
+        tooltip="Add a local example item"
+        onClick={() => setActions(actions() + 1)}
+      />
+    </div>
+  );
+}
+// #endregion
+
+// #region demo:trigger
+function TriggerDemo() {
+  const [choice, setChoice] = createSignal('No action selected');
+  return (
+    <div class="flex items-center gap-4">
+      <DropdownMenu>
+        <DropdownMenu.Trigger as={Button} variant="secondary">
+          Actions
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content class="menu-surface z-50 min-w-40 p-1">
+            <DropdownMenu.Item
+              class="rounded-md px-3 py-2 outline-none data-highlighted:bg-hover"
+              onSelect={() => setChoice('Duplicate selected')}
+            >
+              Duplicate
+            </DropdownMenu.Item>
+            <DropdownMenu.Item
+              class="rounded-md px-3 py-2 outline-none data-highlighted:bg-hover"
+              onSelect={() => setChoice('Archive selected')}
+            >
+              Archive
+            </DropdownMenu.Item>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu>
+      <span class="text-sm text-ink-muted" aria-live="polite">
+        {choice()}
+      </span>
+    </div>
+  );
+}
+// #endregion
+
+// #region demo:themes
+function ThemesDemo() {
+  return (
+    <div class="flex flex-col gap-4">
+      <For each={[macroLightTheme, macroDarkTheme]}>
+        {(theme) => (
+          <div
+            data-theme-light={String(theme.mode === 'light')}
+            style={themeCssVars(theme)}
+            class="rounded-xl bg-panel p-4 text-ink"
+          >
+            <p class="mb-4 text-sm">{theme.name}</p>
+            <VariantsDemo />
+          </div>
         )}
       </For>
     </div>
@@ -166,16 +221,20 @@ function GroupDemo() {
 }
 // #endregion
 
-// #region demo:tooltip
-function TooltipDemo() {
+// #region demo:finishes
+function FinishesDemo() {
   return (
-    <div class="flex flex-wrap items-center gap-3">
-      <Button variant="outline" label="Create document" shortcut="⌘N">
-        <PlusIcon />
+    <div class="flex flex-wrap items-center gap-4">
+      <Button variant="secondary">Automatic</Button>
+      <Button variant="secondary" finish="flat">
+        Flat
       </Button>
-      <Button variant="ghost" tooltip="Permanently deletes the selection">
-        <TrashIcon />
-        Delete
+      <Button variant="ghost" finish="raised">
+        Framed ghost
+      </Button>
+      <Button variant="ghost">Ghost</Button>
+      <Button variant="secondary" aria-pressed="true">
+        Pressed
       </Button>
     </div>
   );
@@ -186,54 +245,22 @@ export default defineDoc({
   name: 'Button',
   category: 'Actions',
   description:
-    'The standard way to trigger an action. Variant carries emphasis, size carries density, and both are shared with Badge so button-like elements line up.',
-  status: 'stable',
+    'Shared action control with solid neutral primary, explicit accent emphasis, automatic desktop elevation and touch glass, explicit icon sizes, and configurable tooltips.',
+  status: 'beta',
   exports: ['Button', 'ButtonGroup'],
   import: "import { Button, ButtonGroup } from '@ui';",
   demos: [
+    { id: 'variants', title: 'Variants', render: VariantsDemo },
+    { id: 'sizes', title: 'Text and icon sizes', render: SizesDemo },
+    { id: 'states', title: 'State and tooltip behavior', render: StatesDemo },
+    { id: 'group', title: 'Grouped actions', render: GroupDemo },
+    { id: 'header', title: 'Header action', render: HeaderDemo, fill: true },
+    { id: 'trigger', title: 'Headless menu trigger', render: TriggerDemo },
+    { id: 'themes', title: 'Light and dark', render: ThemesDemo, fill: true },
     {
-      id: 'variants',
-      title: 'Variants',
-      description:
-        '`ghost` for low-emphasis actions in dense chrome, `outline` for standard actions, `strong` for the same frame with bolder text, `accent` for the primary action in a group, `cta` for the single most important action on a screen. `danger` is reserved for destructive work. Framed variants use the shared elevated surface on desktop and glass on touch. `glass={false}` keeps a flat frame. Success and danger use colored ink with an unfilled outline frame; icon sizes preserve the same emphasis as text buttons.',
-      render: VariantsDemo,
-      fill: true,
-    },
-    {
-      id: 'sizes',
-      title: 'Sizes',
-      description:
-        '`md` is the default. `sm` suits toolbars and inline chrome; `lg` and `xl` are for marketing and empty-state surfaces.',
-      render: SizesDemo,
-    },
-    {
-      id: 'icon-only',
-      title: 'Icon-only',
-      description:
-        'Use an `icon-*` size for square buttons. `label` is required — it names the button for screen readers and becomes its tooltip.',
-      render: IconOnlyDemo,
-    },
-    {
-      id: 'size-compositions',
-      title: 'Compositions by size',
-      description:
-        'Square regular-size, text-only, text-with-icon, and matching dedicated `icon-*` buttons shown together for direct comparison.',
-      render: SizeCompositionsDemo,
-      fill: true,
-    },
-    {
-      id: 'group',
-      title: 'Button group',
-      description:
-        '`ButtonGroup` joins related actions into a single segmented control. Add `ButtonGroup.Divider` between segments; the group owns the shared border and corner radius.',
-      render: GroupDemo,
-    },
-    {
-      id: 'tooltip',
-      title: 'Tooltips and shortcuts',
-      description:
-        '`label` doubles as the tooltip; `tooltip` overrides it when the accessible name and the hint should differ. `hotkey` renders a registered shortcut, `shortcut` a raw string. Tooltips are disabled on touch devices, including when an action receives focus.',
-      render: TooltipDemo,
+      id: 'finishes',
+      title: 'Automatic and flat finishes',
+      render: FinishesDemo,
     },
   ],
 });
