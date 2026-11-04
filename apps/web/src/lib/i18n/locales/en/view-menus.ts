@@ -58,6 +58,14 @@ export default {
   priorities: 'Priorities',
   assignee: 'Assignee',
 
+  // People display options
+  peopleDisplayOptions: 'People display options',
+  showRemovedPeople: 'Show removed people',
+  removedPeople: 'Removed people',
+  removedPeopleDescription:
+    'Removed people in this team. Open a person and use Restore. People in hidden companies stay removed until their company is restored.',
+  showActivePeople: 'Show active people',
+
   // List controls
   layout: 'Layout',
   layoutList: 'List',

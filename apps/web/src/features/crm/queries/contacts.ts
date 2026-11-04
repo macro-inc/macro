@@ -1,5 +1,6 @@
 import { throwOnErr } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
+import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { soupKeys } from '@queries/soup/keys';
 import { invalidateCachedCrmContacts } from '@service-storage/crm-contacts';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
@@ -7,6 +8,7 @@ import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import type { CrmRecordDependencies } from './dependencies';
 import { crmKeys } from './keys';
+import { listCanIncludeCrmContacts } from './list-refresh';
 
 const CONTACT_STALE_TIME = 60 * 1000;
 
@@ -176,6 +178,10 @@ export function useSetContactHiddenMutation(deps: CrmRecordDependencies) {
                 try {
                   await invalidateCachedCrmContacts(contactId);
                   await Promise.all([
+                    refreshActiveGraphqlSoupQueries({
+                      where: listCanIncludeCrmContacts,
+                      throwOnError: true,
+                    }),
                     deps.client.invalidateQueries({ queryKey: soupKeys._def }),
                     deps.client.invalidateQueries({
                       queryKey: crmKeys.contact(contactId).queryKey,

@@ -64,7 +64,24 @@ Company Team lists filter hidden contacts for every role without changing the
 underlying response or admin detail access. Contact visibility mutations invalidate
 the company query family because those responses embed contacts: mounted lists
 refetch before completion, and inactive lists reload when revisited. No company ID
-is required, so unfiled contacts use the same mutation safely.
+is required, so unfiled contacts use the same mutation safely. Contact visibility
+also awaits explicit refresh of mounted GraphQL contact lists; normalized-record
+eviction and TanStack invalidation alone cannot refresh their membership.
+
+People display options offer **Show removed people** only for current-team
+admins/owners. `people-visibility` owns a local explicit choice, resets it on
+account/team/role/list changes, and sanitizes shared or persisted filters.
+Retained team data preserves the choice through a background refetch error;
+current-user membership and admin/owner checks still apply.
+Removed mode queries `crmf` with hidden=true and the administered team ID, using
+the existing server search, deduplication and cursor pagination. The client
+predicate also checks that team scope so retained rows cannot cross the display
+boundary. Normal People remains viewer-wide and hidden=false. Removed mode
+includes effective hidden state from a hidden parent company; restoring a
+contact does not restore its company. No-company contacts remain supported.
+`browser-test/people` uses the production filter compiler, predicates, GraphQL
+live page source, display controls and eye confirmation with a synthetic API;
+cache-host persistence and full app routing remain outside that fixture.
 `browser-test/team` exercises the real Team component, visibility action and query
 adapters with a synthetic storage client on desktop and phone; entity row metadata
 and app navigation are isolated. Run its `playwright.config.ts` from `apps/web`.
@@ -72,6 +89,8 @@ Both hidden mutations emit `crm.visibility_change` through request and cache
 refresh completion, with the opaque record ID, record type, requested hidden
 state, and outcome. `crm.visibility_change.refresh` times cache invalidation and
 the dependent query refreshes before the mutation stops being pending.
+`crm.people_visibility` measures the display choice through the next paint;
+Soup retains its existing query/loading instrumentation.
 
 `task-composer.ts` owns the CRM task preset: Companies/Contacts are visible,
 Status remains a task default but is not initially shown. CRM registers live
