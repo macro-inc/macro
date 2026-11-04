@@ -91,6 +91,14 @@ impl ai_billing::domain::BillingService for UnavailableBilling {
         panic!("admission must not change settings")
     }
 
+    async fn purchase_credits(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        _: i64,
+    ) -> ai_billing::domain::Result<ai_billing::domain::CreditPurchase> {
+        panic!("admission must not purchase credits")
+    }
+
     async fn create_credit_checkout(
         &self,
         _: &MacroUserIdStr<'_>,
@@ -124,7 +132,12 @@ impl ai_billing::domain::BillingService for UnavailableBilling {
         panic!("admission must not handle invoices")
     }
 
-    async fn mark_credit_reload_invoice(&self, _: &str, _: bool) -> ai_billing::domain::Result<()> {
+    async fn mark_credit_reload_invoice(
+        &self,
+        _: &str,
+        _: Option<macro_uuid::Uuid>,
+        _: bool,
+    ) -> ai_billing::domain::Result<()> {
         panic!("admission must not handle invoices")
     }
 }
@@ -161,6 +174,8 @@ pub(crate) struct RecordedTurn {
     pub(crate) instructions: Option<String>,
     /// Who the agent is, as handed to the engine.
     pub(crate) identity: Option<AgentIdentity>,
+    /// The agent whose own key the turn ran on, if any.
+    pub(crate) agent_key: Option<macro_uuid::Uuid>,
 }
 
 impl ScriptedEngine {
@@ -211,6 +226,7 @@ impl TurnEngine for ScriptedEngine {
                     .collect(),
                 instructions: request.instructions.clone(),
                 identity: request.identity.clone(),
+                agent_key: request.agent_key.as_ref().map(|key| key.bot_id),
             });
         let (parts, receiver) = mpsc::channel(64);
         let script = self.script.clone();

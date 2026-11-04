@@ -1,3 +1,7 @@
+vi.mock('@notifications/mark-row-seen', () => ({
+  markRowNotificationsSeenOnOpen: vi.fn(),
+}));
+
 import { createRoot } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -18,7 +22,7 @@ vi.mock('@app/features/next-soup/sidebar/soup-filter-presets', () => ({
 }));
 vi.mock('@app/features/next-soup/utils', () => ({
   markChannelNotificationsSeenOnOpen: vi.fn(),
-  markCalendarNotificationSeenOnOpen: vi.fn(),
+  markRowNotificationsSeenOnOpen: vi.fn(),
   openEntityInSplitFromUnifiedList: mocks.open,
 }));
 vi.mock('@app/lib/analytics/analytics-context', () => ({

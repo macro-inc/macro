@@ -5,14 +5,14 @@
  * OpenAPI spec version: 0.1.0
  */
 
-import type { OptionId } from './optionId';
+import type { DateRange } from './dateRange';
 import type { SqlCellOneOfNineType } from './sqlCellOneOfNineType';
 
 /**
- * The selected option ids; one for single-select columns.
+ * A span from one date-time to another.
  */
 export type SqlCellOneOfNine = {
   type: SqlCellOneOfNineType;
-  /** The selected option ids; one for single-select columns. */
-  value: OptionId[];
+  /** A span from one date-time to another. */
+  value: DateRange;
 };

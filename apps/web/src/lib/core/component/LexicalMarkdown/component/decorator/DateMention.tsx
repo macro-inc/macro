@@ -1,8 +1,8 @@
 import { DatePicker } from '@core/component/DatePicker';
 import { formatRelativeDay, formatTooltipDate } from '@core/util/dateParser';
+import ClockIcon from '@icon/system/regular/clock.svg';
 import type { DateMentionDecoratorProps } from '@macro-inc/lexical-core';
 import { $isDateMentionNode } from '@macro-inc/lexical-core';
-import ClockIcon from '@phosphor/clock.svg';
 import {
   $getNodeByKey,
   COMMAND_PRIORITY_NORMAL,

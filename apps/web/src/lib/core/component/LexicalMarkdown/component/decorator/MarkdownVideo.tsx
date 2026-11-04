@@ -1,14 +1,14 @@
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
+import VideoIcon from '@icon/system/regular/file-video.svg';
+import LoadingSpinner from '@icon/system/regular/spinner.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { mergeRegister } from '@lexical/utils';
 import {
   $isVideoNode,
   type VideoDecoratorProps,
 } from '@macro-inc/lexical-core';
-import VideoIcon from '@phosphor/file-video.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
-import XIcon from '@phosphor/x.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn } from '@ui';
 import {
@@ -391,7 +391,7 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
             <div class="absolute bg-surface top-2 right-2 flex flex-row z-10">
               <Dialog.CloseButton>
                 <Button variant="ghost" size="icon-md">
-                  <XIcon />
+                  <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
               </Dialog.CloseButton>
             </div>

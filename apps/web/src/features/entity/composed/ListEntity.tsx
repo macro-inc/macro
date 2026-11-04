@@ -33,6 +33,7 @@ import {
 } from 'solid-js';
 import { Entity } from '../entity';
 import type { EntityRowConfig } from '../extractors-notification';
+import { EntityReferenceProperties } from '../extractors-property/entity-reference-properties';
 import {
   isHitSnippetComplete,
   isHitSnippetEntity,
@@ -72,6 +73,8 @@ interface ListEntityProps extends BaseListEntityProps {
   showUnrollNotifications?: boolean;
   /** Collection-owned schedule metadata for the original entity row. */
   scheduleStatus?: JSX.Element;
+  /** Stored reference properties to show beside the row's other properties. */
+  referencePropertyIds?: readonly string[];
 }
 
 export function MaybeEntityRow(props: {
@@ -99,11 +102,13 @@ export function ListEntity(props: ListEntityProps) {
   // Legacy Soup callers do not pass row behavior explicitly yet.
   const soupView = useMaybeSoupView();
   const rowActions = children(() => props.actions);
+  const touchActions = children(() => props.touchActions);
   const leadingAction = children(() => props.leadingAction);
   const titleLeading = children(() => props.titleLeading);
   const icon = children(() => props.icon);
   const titleTrailing = children(() => props.titleTrailing);
   const meta = children(() => props.meta);
+  const metaEnd = children(() => props.metaEnd);
   const scheduleStatus = children(() => props.scheduleStatus);
 
   const unread = () => unreadFilterFn(props.entity);
@@ -161,12 +166,14 @@ export function ListEntity(props: ListEntityProps) {
   const layoutProps = (): LayoutProps => ({
     entity: props.entity,
     actions: !isTouchDevice() ? rowActions() : undefined,
-    leadingAction: !isTouchDevice() ? leadingAction() : undefined,
+    leadingAction: isTouchDevice() ? touchActions() : leadingAction(),
     titleLeading: titleLeading(),
     icon: icon(),
     titleTrailing: titleTrailing(),
     meta: meta(),
+    metaEnd: metaEnd(),
     scheduleStatus: scheduleStatus(),
+    referenceProperties: referenceProperties(),
     authorDisplayName: props.authorDisplayName,
     checked: props.checked,
     hideCheckbox: props.hideCheckbox,
@@ -193,6 +200,17 @@ export function ListEntity(props: ListEntityProps) {
 
   const listLayout = useListLayout();
   const isWide = listLayout?.isWide ?? (() => true);
+  const referenceProperties = children(() => (
+    <Show when={props.referencePropertyIds}>
+      {(ids) => (
+        <EntityReferenceProperties
+          entity={props.entity}
+          propertyIds={ids()}
+          compact={!isWide()}
+        />
+      )}
+    </Show>
+  ));
   const isCondensedVariant = () => listLayout?.narrowLayout() === 'condensed';
   const usesCondensedNarrowLayout = () => !isWide() && isCondensedVariant();
   const isSingleLineVariant = () =>

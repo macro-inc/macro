@@ -9,7 +9,7 @@ function DisclosureDemo() {
   return (
     <div class="flex w-72 flex-col gap-2">
       <Button
-        variant="outline"
+        variant="secondary"
         size="sm"
         class="self-start"
         aria-expanded={open()}

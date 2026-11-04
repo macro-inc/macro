@@ -8,25 +8,26 @@ import {
 import { setSidebarSectionCollapsed } from '@app/components/view-shell';
 import { normalizeFacetSelection } from '@app/features/soup';
 import { registerListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { makePersistedState } from '@app/lib/persistence';
 import {
   createSearchParams,
   useNavigate,
   useRouteParams,
 } from '@app/lib/split-router';
+import { beginInteraction } from '@app/observability/flow';
 import { usePreference } from '@app/preferences/use-preference';
 import { emailSplitRoute, emailThreadRoute } from '@app/routes/routes';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
-import { enableReminders } from '@core/constant/featureFlags';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { listTagOptions } from '@property/tags/list-tag-options';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
 import { useEmailLinksQuery } from '@queries/email/link';
@@ -45,7 +46,7 @@ import {
   type SetStoreFunction,
   type Store,
 } from 'solid-js/store';
-import { DEFAULT_EMAIL_TAB } from './constants';
+import { DEFAULT_EMAIL_FOCUS_SORT, DEFAULT_EMAIL_TAB } from './constants';
 import {
   emailDetailSearch,
   emailTabSearch,
@@ -59,7 +60,9 @@ import {
   type EmailDataSourceItem,
   useEmailDataSource,
 } from './queries/use-email-query';
+import { useEmailTabAvailability } from './tab-availability';
 import type {
+  EmailFocusSort,
   EmailTab,
   EmailThreadTarget,
   EmailViewState,
@@ -87,6 +90,7 @@ export type EmailViewContext = {
   setInboxIds: (ids: string[] | undefined) => void;
   setAliasFilter: (alias: NonNullable<EmailViewState['aliasFilter']>) => void;
   setFacets: (facets: EmailViewState['facets']) => void;
+  setFocusSort: (sort: EmailFocusSort) => void;
   /**
    * Shows the given tags across the whole mailbox: a non-empty selection
    * lands on the All tab. Clearing keeps the current tab.
@@ -139,11 +143,11 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   const tagSets = useTagSets();
   const tagSetsReady = useTagSetsReady();
   const initial = props.initialState ?? {};
-  const reminders = useFeatureFlag(enableReminders);
+  const tabAvailability = useEmailTabAvailability();
+  // A flag-gated tab stays put while its flags load, then falls back if off.
+  const isTabOff = (tab: EmailTab) => tabAvailability(tab) === 'off';
   const availableTab = (tab: EmailTab) =>
-    tab === 'reminders' && !reminders().enabled && !reminders().loading
-      ? DEFAULT_EMAIL_TAB
-      : tab;
+    isTabOff(tab) ? DEFAULT_EMAIL_TAB : tab;
 
   const [persistedState, setState] = makePersistedState(
     createStore<EmailViewState>({
@@ -154,6 +158,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
         : normalizeInboxSelection(initial.inboxIds),
       ...(initial.aliasFilter ? { aliasFilter: initial.aliasFilter } : {}),
       facets: normalizeFacetSelection(initial.facets),
+      focusSort: initial.focusSort ?? DEFAULT_EMAIL_FOCUS_SORT,
       collapsedSidebarSectionIds: [
         ...(initial.collapsedSidebarSectionIds ?? []),
       ],
@@ -186,11 +191,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   );
 
   createEffect(() => {
-    if (
-      state.tab === 'reminders' &&
-      !reminders().enabled &&
-      !reminders().loading
-    ) {
+    if (isTabOff(state.tab)) {
       setState({ tab: DEFAULT_EMAIL_TAB, search: '', facets: {} });
     }
   });
@@ -269,6 +270,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       'email-view'
     );
   };
+  const notificationSource = useGlobalNotificationSource();
   const openThread = (
     thread: EmailThreadTarget,
     options?: EntityDetailNavigationOptions & { replace?: boolean }
@@ -278,6 +280,11 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     // The router may refuse a claimed destination. Check compatibility without
     // claiming it until the accepted route changes.
     if (!selectPreview.canSelect(selection)) return true;
+    const row = source
+      .items()
+      .find((row) => row.kind === 'entity' && row.entity.id === thread.id);
+    if (row?.kind === 'entity')
+      markRowNotificationsSeenOnOpen(row.entity, notificationSource);
     fireAndForget(
       navigate(
         { route: emailThreadRoute, params: { threadId: thread.id } },
@@ -356,14 +363,24 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       closeThread();
       return;
     }
-    setState(
-      produce((draft) => {
-        if (draft.tab === 'reminders' || tab === 'reminders') draft.search = '';
-        draft.tab = tab;
-        draft.facets = {};
-      })
-    );
-    closeThread();
+    // The list's email.list flow restarts for the tab and joins this.
+    const interaction = beginInteraction('email.tab', {
+      attributes: { 'email.tab': tab },
+      closeOnJoin: true,
+    });
+    try {
+      setState(
+        produce((draft) => {
+          if (draft.tab === 'reminders' || tab === 'reminders')
+            draft.search = '';
+          draft.tab = tab;
+          draft.facets = {};
+        })
+      );
+      closeThread();
+    } finally {
+      interaction.end();
+    }
   };
 
   const setInboxIds = (ids: string[] | undefined) => {
@@ -398,6 +415,8 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     closeThread();
     setState('facets', reconcile(normalizeFacetSelection(facets)));
   };
+
+  const setFocusSort = (sort: EmailFocusSort) => setState('focusSort', sort);
 
   // A tag reaches across every mailbox slice, so choosing one from a narrower
   // tab moves to All; as with `setTab`, that move drops the tab's other filters.
@@ -454,6 +473,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     setInboxIds,
     setAliasFilter,
     setFacets,
+    setFocusSort,
     showTags,
     filterByTag,
     tagViewTitle,

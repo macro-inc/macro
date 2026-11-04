@@ -2,6 +2,15 @@ import { ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getScrollParentElement } from '@core/util/scrollParent';
+import ColumnsIcon from '@icon/system/regular/columns.svg';
+import ColumnsPlusLeftIcon from '@icon/system/regular/columns-plus-left.svg';
+import ColumnsPlusRightIcon from '@icon/system/regular/columns-plus-right.svg';
+import CornersOutIcon from '@icon/system/regular/corners-out.svg';
+import DotsIcon from '@icon/system/regular/dots-six-vertical.svg';
+import RowsIcon from '@icon/system/regular/rows.svg';
+import RowsPlusBottomIcon from '@icon/system/regular/rows-plus-bottom.svg';
+import RowsPlusTopIcon from '@icon/system/regular/rows-plus-top.svg';
+import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import {
   $computeTableMap,
   $createTableSelection,
@@ -17,15 +26,6 @@ import {
   getDOMCellFromTarget,
   type TableCellNode,
 } from '@lexical/table';
-import ColumnsIcon from '@phosphor/columns.svg';
-import ColumnsPlusLeftIcon from '@phosphor/columns-plus-left.svg';
-import ColumnsPlusRightIcon from '@phosphor/columns-plus-right.svg';
-import CornersOutIcon from '@phosphor/corners-out.svg';
-import DotsIcon from '@phosphor/dots-six-vertical.svg';
-import RowsIcon from '@phosphor/rows.svg';
-import RowsPlusBottomIcon from '@phosphor/rows-plus-bottom.svg';
-import RowsPlusTopIcon from '@phosphor/rows-plus-top.svg';
-import TrashIcon from '@phosphor/trash-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Layer } from '@ui';
 import {

@@ -184,7 +184,10 @@ function renderKeys(routes: SplitRoutesManifest, entry: Entry): string[] {
     const context = { entryId: entry.id };
     const remountKey = node.definition.remountKey?.(params, context);
 
-    return JSON.stringify([node.definition.id, remountKey ?? null]);
+    return JSON.stringify([
+      node.definition.mountKey ?? node.definition.id,
+      remountKey ?? null,
+    ]);
   });
 }
 
@@ -210,6 +213,8 @@ export type OutletMatch = {
   /** The route's own loading view, shown while `component` suspends. */
   loading?: unknown;
   key: string;
+  /** The route definition's id, a static name safe for telemetry. */
+  route: string;
   /** Depth the next nested outlet starts from. */
   depth: number;
 };
@@ -226,9 +231,15 @@ export function outletAt(
   const branch = resolveBranch(routes, entry.location.route);
 
   for (let depth = start; depth < branch.length; depth += 1) {
-    const { component, loading } = branch[depth]!.definition;
+    const { component, loading, id } = branch[depth]!.definition;
     if (typeof component !== 'function') continue;
 
-    return { component, loading, key: keys[depth]!, depth: depth + 1 };
+    return {
+      component,
+      loading,
+      key: keys[depth]!,
+      route: id,
+      depth: depth + 1,
+    };
   }
 }

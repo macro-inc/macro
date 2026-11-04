@@ -1,6 +1,6 @@
 import type { ImportEntity } from '@queries/import';
 import { describe, expect, it } from 'vitest';
-import { decodeImportDraft, decodePlanEntries } from './import-plan';
+import { decodePlanEntries } from './import-plan';
 
 const row: ImportEntity = {
   id: 'roadmap',
@@ -128,27 +128,21 @@ describe('decodePlanEntries while planning', () => {
   });
 });
 
-describe('decodeImportDraft', () => {
-  it('reads the excluded and re-shared rows and rejects other drafts', () => {
-    expect(decodeImportDraft({ source: 'notion' })).toEqual({
-      source: 'notion',
-      excluded: [],
-      shared: [],
-      personal: [],
-    });
-    expect(
-      decodeImportDraft({
-        source: 'notion',
-        excluded: ['roadmap'],
-        shared: ['wiki'],
-        personal: ['q3'],
-      })
-    ).toEqual({
-      source: 'notion',
-      excluded: ['roadmap'],
-      shared: ['wiki'],
-      personal: ['q3'],
-    });
-    expect(decodeImportDraft({ subject: 'Hi' })).toBeUndefined();
-  });
+it('decodes tracker tasks and projects while isolating review ids', () => {
+  const decoded = decodePlanEntries(
+    [
+      { ...row, id: 'l', source: 'linear', kind: 'issue' },
+      { ...row, id: 'j', source: 'jira', kind: 'jira_issue' },
+      { ...row, id: 'p', source: 'jira', kind: 'jira_project' },
+      { ...row, id: 'e', source: 'jira', kind: 'jira_epic' },
+      { ...row, source: 'jira', review_id: 'other' },
+    ],
+    'review'
+  );
+  expect(decoded.map(({ id, kind }) => ({ id, kind }))).toEqual([
+    { id: 'l', kind: 'task' },
+    { id: 'j', kind: 'task' },
+    { id: 'p', kind: 'project' },
+    { id: 'e', kind: 'project' },
+  ]);
 });

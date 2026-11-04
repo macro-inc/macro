@@ -4,17 +4,11 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
 import type { ColumnKindOneOfOnesevenType } from './columnKindOneOfOnesevenType';
-import type { EntityKind } from './entityKind';
 
 /**
- * References to Macro entities.
+ * Colored labels; always several per cell.
  */
 export type ColumnKindOneOfOneseven = {
-  /** Whether a cell holds several references. */
-  multi: boolean;
-  /** What the references point at. */
-  target: EntityKind;
   type: ColumnKindOneOfOnesevenType;
 };

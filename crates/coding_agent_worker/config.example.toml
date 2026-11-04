@@ -46,3 +46,8 @@ repo_url = "https://github.com/macro-inc/macro"
 # arguments = []              # Native CLI arguments, one word per element.
 # storage_path = "/path/to/agents" # Omit for ~/.macrod/herdr/<harness-id>.
 # focus = true               # false opens new sessions in the background.
+
+# Optional: a released macrod checks for a newer release every hour and
+# installs it. Set auto = false (or MACROD_NO_UPDATE=1) to turn that off.
+# [update]
+# auto = true

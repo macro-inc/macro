@@ -1,5 +1,5 @@
 use crate::pubsub::backfill::{
-    backfill_attachment, backfill_message, backfill_thread, depopulate_crm_contact,
+    backfill_attachment, backfill_message, backfill_thread, deferral, depopulate_crm_contact,
     depopulate_crm_for_user, error_handlers, increment_counters, init, list_threads,
     populate_crm_contact, populate_crm_for_user, seed_sent_contact, update_metadata,
 };
@@ -11,6 +11,7 @@ use models_email::email::service::backfill::{
 use models_email::email::service::link;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use sqs_worker::cleanup_message;
+use std::time::Duration;
 use uuid::Uuid;
 
 // Process a single message from the backfill queue
@@ -30,7 +31,8 @@ pub async fn process_message(
         }
     };
 
-    let processing_result = inner_process_message(&ctx, &data).await;
+    let processing_result =
+        keep_invisible(message, &ctx.sqs_worker, inner_process_message(&ctx, &data)).await;
 
     match processing_result {
         // Processing success. Clean up the message
@@ -45,8 +47,54 @@ pub async fn process_message(
         }
 
         // A temporary failure occurred. We log it and don't clean up the message, so it gets retried
-        Err(ProcessingError::Retryable(e)) => {
-            error_handlers::handle_retryable_error(&data, &e).await
+        Err(ProcessingError::Retryable(e)) => match deferral::rate_limit(&e) {
+            Some(retry_after) => {
+                error_handlers::defer_rate_limited_operation(&ctx, message, &data, &e, retry_after)
+                    .await
+            }
+            None => error_handlers::handle_retryable_error(&data, &e).await,
+        },
+    }
+}
+
+/// How often a running operation pushes its message's visibility out again.
+const VISIBILITY_HEARTBEAT: Duration = Duration::from_secs(20);
+/// The backfill queue's visibility timeout, restored by every heartbeat.
+const VISIBILITY_TIMEOUT_SECONDS: i32 = 60;
+
+/// Runs `work` while keeping its message hidden from other workers.
+///
+/// A whole thread, or any operation slowed by a struggling database, can
+/// outlast the queue's visibility timeout. Delivered again while the first
+/// copy still runs, the second copy would find the thread written and count
+/// it, and the first would count it again through its metadata step,
+/// completing the job early. A failed heartbeat only logs: the message then
+/// reappears as it would have without one. Durable thread receipts deduplicate
+/// completion even when this heartbeat cannot prevent concurrent delivery.
+async fn keep_invisible<F: Future>(
+    message: &aws_sdk_sqs::types::Message,
+    sqs_worker: &sqs_worker::SQSWorker,
+    work: F,
+) -> F::Output {
+    let Some(receipt_handle) = message.receipt_handle() else {
+        return work.await;
+    };
+    let mut work = std::pin::pin!(work);
+    let mut heartbeats = tokio::time::interval_at(
+        tokio::time::Instant::now() + VISIBILITY_HEARTBEAT,
+        VISIBILITY_HEARTBEAT,
+    );
+    loop {
+        tokio::select! {
+            output = &mut work => return output,
+            _ = heartbeats.tick() => {
+                if let Err(error) = sqs_worker
+                    .change_message_visibility(receipt_handle, VISIBILITY_TIMEOUT_SECONDS)
+                    .await
+                {
+                    tracing::warn!(error = ?error, "failed to keep a running backfill operation hidden");
+                }
+            }
         }
     }
 }
@@ -85,10 +133,8 @@ async fn inner_process_message(
             let Some(JobContextNoToken { link, .. }) =
                 fetch_job_context_no_token(ctx, scope, false).await?
             else {
-                // BackfillMessage owns per-thread progress in addition to
-                // the job-level progress that fetch_job_context already
-                // cleared on cancellation. Drop it so a re-run of the
-                // cancelled job doesn't see stale thread counters.
+                // Retire obsolete Redis state for this terminal legacy job.
+                // Durable receipts are retained until their parent is deleted.
                 let _ = ctx
                     .redis_client
                     .delete_backfill_thread_progress(
@@ -195,7 +241,16 @@ async fn fetch_job_context_no_token<P>(
         return Ok(None);
     }
 
+    if backfill_job.link_id != Some(scope.link_id) {
+        return Err(ProcessingError::NonRetryable(DetailedError {
+            reason: FailureReason::LinkNotFound,
+            source: anyhow::anyhow!("backfill operation does not match its job's link"),
+        }));
+    }
     let link = fetch_link(ctx, scope.link_id).await?;
+    if backfill_job.status == BackfillJobStatus::InProgress {
+        crate::backfill_progress::require_durable(&ctx.db, scope.job_id).await?;
+    }
 
     Ok(Some(JobContextNoToken { link, backfill_job }))
 }

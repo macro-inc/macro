@@ -43,6 +43,7 @@ For non-system or custom properties, call GetEntityProperties first to discover 
 | `property_definition_id` | string | Yes | The property definition ID. Get this from GetEntityProperties results. |
 | `boolean_value` | boolean | No | For boolean properties. |
 | `date_value` | string | No | For date properties (ISO 8601 date-time). |
+| `date_range_value` | ToolDateRange | No | For date_range properties: the start and end (ISO 8601 date-times); the end may not come before the start. |
 | `number_value` | number | No | For number properties. |
 | `string_value` | string | No | For string properties. |
 | `option_id` | string | No | For single-select properties. The option UUID from available options. |

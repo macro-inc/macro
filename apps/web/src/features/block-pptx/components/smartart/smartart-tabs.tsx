@@ -10,17 +10,17 @@ import type {
   SmartArtPosition,
 } from '@core/pptx-engine/types';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
-import ArrowDown from '@phosphor/arrow-down.svg';
-import ArrowUp from '@phosphor/arrow-up.svg';
-import Palette from '@phosphor/palette.svg';
-import PlusSquare from '@phosphor/plus-square.svg';
-import Shapes from '@phosphor/shapes.svg';
-import SidebarSimple from '@phosphor/sidebar-simple.svg';
-import Swap from '@phosphor/swap.svg';
-import TextIndent from '@phosphor/text-indent.svg';
-import TextOutdent from '@phosphor/text-outdent.svg';
-import TreeStructure from '@phosphor/tree-structure.svg';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
+import ArrowDown from '@icon/system/regular/arrow-down.svg';
+import ArrowUp from '@icon/system/regular/arrow-up.svg';
+import Palette from '@icon/system/regular/palette.svg';
+import PlusSquare from '@icon/system/regular/plus-square.svg';
+import Shapes from '@icon/system/regular/shapes.svg';
+import SidebarSimple from '@icon/system/regular/sidebar-simple.svg';
+import Swap from '@icon/system/regular/swap.svg';
+import TextIndent from '@icon/system/regular/text-indent.svg';
+import TextOutdent from '@icon/system/regular/text-outdent.svg';
+import TreeStructure from '@icon/system/regular/tree-structure.svg';
 import { For, type JSX, Show } from 'solid-js';
 import {
   canDemote,
@@ -158,7 +158,7 @@ export function SmartArtDesignTab(props: { smartArt: SmartArtState }) {
           )}
         </RibbonPopover>
         <RibbonTextButton
-          label="Text Pane"
+          aria-label="Text Pane"
           tooltip="Show or hide the Text Pane"
           aria-pressed={s().pane.open()}
           class={s().pane.open() ? 'bg-accent-bg text-accent' : undefined}
@@ -169,7 +169,7 @@ export function SmartArtDesignTab(props: { smartArt: SmartArtState }) {
           Text Pane
         </RibbonTextButton>
         <RibbonButton
-          label="Promote"
+          aria-label="Promote"
           tooltip="Promote"
           data-testid="pptx-smartart-promote"
           disabled={!supported() || !canPromote(lines(), index())}
@@ -178,7 +178,7 @@ export function SmartArtDesignTab(props: { smartArt: SmartArtState }) {
           <TextOutdent />
         </RibbonButton>
         <RibbonButton
-          label="Demote"
+          aria-label="Demote"
           tooltip="Demote"
           data-testid="pptx-smartart-demote"
           disabled={!supported() || !canDemote(lines(), index())}
@@ -187,7 +187,7 @@ export function SmartArtDesignTab(props: { smartArt: SmartArtState }) {
           <TextIndent />
         </RibbonButton>
         <RibbonButton
-          label="Move Up"
+          aria-label="Move Up"
           tooltip="Move Up"
           data-testid="pptx-smartart-move-up"
           disabled={!supported() || index() < 0}
@@ -196,7 +196,7 @@ export function SmartArtDesignTab(props: { smartArt: SmartArtState }) {
           <ArrowUp />
         </RibbonButton>
         <RibbonButton
-          label="Move Down"
+          aria-label="Move Down"
           tooltip="Move Down"
           data-testid="pptx-smartart-move-down"
           disabled={!supported() || index() < 0}
@@ -311,7 +311,7 @@ export function SmartArtDesignTab(props: { smartArt: SmartArtState }) {
       </RibbonGroup>
       <RibbonGroup label="Reset">
         <RibbonTextButton
-          label="Reset Graphic"
+          aria-label="Reset Graphic"
           tooltip="Discard formatting changes to the graphic"
           data-testid="pptx-smartart-reset"
           disabled={!supported()}

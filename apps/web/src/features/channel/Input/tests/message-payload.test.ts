@@ -23,6 +23,23 @@ vi.mock('@service-connection/websocket', () => ({
 }));
 
 describe('authored group references', () => {
+  it('sends a mentioned WhatsApp group so posting shares it with the channel', () => {
+    const result = buildPostMessageRequest({
+      snapshot: snap([
+        {
+          itemType: 'external_chat',
+          itemId: '01a16445-9fdc-7bb1-80b4-8935a1243c98',
+        },
+      ]),
+    });
+    expect(result.mentions).toEqual([
+      {
+        entity_type: 'external_chat',
+        entity_id: '01a16445-9fdc-7bb1-80b4-8935a1243c98',
+      },
+    ]);
+  });
+
   it('sends routine references with the same wire type as headless extraction, including saved mentions', () => {
     const blockNames = ['routine', 'automation'];
     const snapshot = snap(

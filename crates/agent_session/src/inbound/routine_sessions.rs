@@ -109,6 +109,9 @@ impl IntoResponse for ApiError {
                 ai_billing::inbound::admission::admission_status(error)
             }
             RoutineSessionError::InvalidCommand => StatusCode::BAD_REQUEST,
+            RoutineSessionError::AppNotConnected | RoutineSessionError::AppsUnsupported => {
+                StatusCode::UNPROCESSABLE_ENTITY
+            }
             RoutineSessionError::Forbidden => StatusCode::FORBIDDEN,
             RoutineSessionError::PersonaUnavailable => StatusCode::NOT_FOUND,
             RoutineSessionError::RuntimeUnavailable => StatusCode::SERVICE_UNAVAILABLE,

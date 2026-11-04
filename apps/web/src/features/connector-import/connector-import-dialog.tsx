@@ -1,9 +1,6 @@
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
 import { nativeToolSlug } from '@app/features/onboarding/queries/connected-tools';
-import {
-  assignOauthUrl,
-  reserveOauthPopup,
-} from '@app/features/settings/connections/mcp-oauth';
+import { assignOauthUrl, reserveOauthPopup } from '@core/pipedream/oauth-popup';
 import { Telemetry } from '@macro-inc/observability';
 import {
   useMcpServersQuery,
@@ -13,7 +10,7 @@ import {
   connectPipedreamApp,
   usePipedreamConnectedSlugs,
 } from '@queries/pipedream-connectors';
-import { createMemo, type JSX } from 'solid-js';
+import { type Accessor, createMemo, type JSX } from 'solid-js';
 import { ConnectorImportProvider } from './context/connector-import-context';
 import type {
   ConnectOutcome,
@@ -25,7 +22,9 @@ import {
   type ImportAlternative,
 } from './views/import-dialog';
 
-function useProductionContext(): ConnectorImportContext {
+function useProductionContext(
+  config: Accessor<ImportCategoryConfig>
+): ConnectorImportContext {
   const startMcpAuth = useStartMcpAuthMutation();
 
   // Opens the OAuth tab synchronously, inside the click, so it isn't blocked.
@@ -44,6 +43,7 @@ function useProductionContext(): ConnectorImportContext {
           const { authorization_url } = await startMcpAuth.mutateAsync({
             server_url: app.mcpUrl,
             server_name: app.name,
+            parentSpan: span,
           });
           assignOauthUrl(popup, authorization_url);
           span.setAttr('connector.outcome', 'started');
@@ -69,7 +69,12 @@ function useProductionContext(): ConnectorImportContext {
                 server.authenticated && server.enabled
                   ? nativeToolSlug(server)
                   : undefined;
-              return slug ? [slug] : [];
+              return slug &&
+                config().providers.some(
+                  (provider) => provider.appSlug === slug && provider.mcpUrl
+                )
+                ? [slug]
+                : [];
             })
           : []
       );
@@ -107,7 +112,7 @@ export function ConnectorImportDialogHost(props: {
   alternatives?: readonly ImportAlternative[];
 }): JSX.Element {
   return (
-    <ConnectorImportProvider context={useProductionContext()}>
+    <ConnectorImportProvider context={useProductionContext(() => props.config)}>
       <ConnectorImportDialog
         config={props.config}
         open={props.open}

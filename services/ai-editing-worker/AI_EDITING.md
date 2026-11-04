@@ -138,18 +138,22 @@ ephemeral awareness channel, so the website renders a remote cursor walking
 through the text. The cursor's label is the editor `POST /edit` names
 (`editor: { name }`): the agent or persona that asked for the edit, so a
 `Macro` or `Grunk` session's edits read `Macro (AI)` / `Grunk (AI)` on every
-cursor they draw (`PeerPool.forEditor`). A request that names nobody falls back
-to the pool of distinct names (`Sam (AI)`, `Alex (AI)`). Every label ends in
+cursor they draw (`PeerPool.forEditor`). A request that names nobody labels its
+cursors `Macro (AI)` (`DEFAULT_EDITOR_NAME`), never a person's name. Every label ends in
 `(AI)`; the website keys off that suffix to keep AI name tags pinned. Each
 writer also gets one of a few accent colors; the cursor lingers ~700ms after the
 writer finishes, then clears. We have some ugly code that manages resolving a
 block id to the `LoroText` that actually owns the characters for this :/
 
-**The peer id** Human peers get random ids from the whole 64b range, and we have
-it so that AI commits use a small reserved range in
-(`999999999999999000`–`999999999999999999`). This makes Markdown AI authorship easy to
-detect (`isAiPeer`) which history can use for grouping. Canvas instead uses
-full-width random session IDs and signed actor attribution, as described below.
+**The peer id** Human peers get random ids from the whole 64b range; AI commits
+draw a random id from a reserved 2^40 block under the `0xA1A1A1` prefix
+(`nextAiPeerId`), so Markdown AI authorship is easy to detect (`isAiPeer`). Never
+reuse an AI peer id: the sync service records the user and signed agent actor
+each peer registers with (`peer_user_map`), and history and blame label edits
+from that record, so a reused id would re-attribute every earlier edit made
+under it. The old `999999999999999000`–`999999999999999999` block is still
+recognized for existing history. Canvas instead uses full-width random session
+IDs and signed actor attribution, as described below.
 
 ## Comment marks
 

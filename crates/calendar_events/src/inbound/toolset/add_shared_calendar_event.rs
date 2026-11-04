@@ -38,7 +38,9 @@ itself, the user asks the person who shared it from the event's card.\n\
 \n\
 Only Google calendars take a copy. When the user has one writable Google calendar the copy goes \
 there; when they have several, ask which one and pass its `calendarId` from ListCalendars. The \
-result is the user's copy, whose `eventId` UpdateCalendarEvent and DeleteCalendarEvent accept."
+result is the user's copy, whose `eventId` UpdateCalendarEvent and DeleteCalendarEvent accept. \
+A meeting already on any of the user's calendars is refused on every calendar, so never offer \
+to add it to another one."
 )]
 pub struct AddSharedCalendarEvent {
     /// Shared event to copy.

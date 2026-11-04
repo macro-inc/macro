@@ -3,8 +3,8 @@ import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-hea
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { UserIcon } from '@core/component/UserIcon';
 import { getDisplayName, type MacroId, tryMacroId } from '@core/user';
-import ChevronRightIcon from '@phosphor/caret-right.svg';
-import CircleDashed from '@phosphor/circle-dashed.svg';
+import ChevronRightIcon from '@icon/system/regular/caret-right.svg';
+import CircleDashed from '@icon/system/regular/circle-dashed.svg';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { cn, Layer } from '@ui';
@@ -33,15 +33,15 @@ const AssigneeGroupContent = (props: {
 
 const STATUS_GROUP_HEADER_TINTS: Record<string, string> = {
   [PROPERTY_OPTION_IDS.STATUS.NOT_STARTED]:
-    'bg-task/5 border-task/10 data-highlighted:bg-task/10 hover:bg-task/10',
+    'bg-task-status-not-started/5 border-task-status-not-started/10 data-highlighted:bg-task-status-not-started/10 hover:bg-task-status-not-started/10',
   [PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS]:
-    'bg-alert/5 border-alert/10 data-highlighted:bg-alert/10 hover:bg-alert/10',
+    'bg-task-status-in-progress/5 border-task-status-in-progress/10 data-highlighted:bg-task-status-in-progress/10 hover:bg-task-status-in-progress/10',
   [PROPERTY_OPTION_IDS.STATUS.IN_REVIEW]:
-    'bg-note/5 border-note/10 data-highlighted:bg-note/10 hover:bg-note/10',
+    'bg-task-status-in-review/5 border-task-status-in-review/10 data-highlighted:bg-task-status-in-review/10 hover:bg-task-status-in-review/10',
   [PROPERTY_OPTION_IDS.STATUS.COMPLETED]:
-    'bg-accent/5 border-accent/10 data-highlighted:bg-accent/10 hover:bg-accent/10',
+    'bg-task-status-completed/5 border-task-status-completed/10 data-highlighted:bg-task-status-completed/10 hover:bg-task-status-completed/10',
   [PROPERTY_OPTION_IDS.STATUS.CANCELED]:
-    'bg-ink/5 border-ink/10 data-highlighted:bg-ink/10 hover:bg-ink/10',
+    'bg-task-status-canceled/5 border-task-status-canceled/10 data-highlighted:bg-task-status-canceled/10 hover:bg-task-status-canceled/10',
 };
 
 export const TaskGroupHeader = (
@@ -83,9 +83,9 @@ export const TaskGroupHeader = (
       class={statusTint()}
     >
       <Layer depth={3}>
-        <div class="flex items-center justify-center size-4.5 rounded-xs group-hover/header:bg-ink/5">
+        <div class="flex items-center justify-center size-4.5 shrink-0 rounded-xs group-hover/header:bg-ink/5">
           <ChevronRightIcon
-            class={cn('size-2.5', {
+            class={cn('size-4', {
               'rotate-90': props.group.isExpanded(),
             })}
           />
@@ -112,7 +112,10 @@ export const TaskGroupHeader = (
         >
           {(value) => (
             <>
-              <PropertyValueIcon optionId={value()} class="size-3.5" />
+              <PropertyValueIcon
+                optionId={value()}
+                class="min-h-4 min-w-4 shrink-0"
+              />
               <span class="truncate">{props.group.label}</span>
             </>
           )}

@@ -16,6 +16,9 @@ const state = vi.hoisted(() => ({
   patch: vi.fn(),
   replace: vi.fn(),
   reset: vi.fn(),
+  updateConfig: vi.fn(),
+  setBlocked: vi.fn(),
+  blocked: [] as string[],
 }));
 
 vi.mock('../components/stage-icon', () => ({ CrmStageIcon: () => null }));
@@ -45,8 +48,20 @@ vi.mock('./use-crm', () => {
       }),
     }),
     useTeamCrmConfig: () => ({
+      config: () => ({ excludePersonalEmails: true }),
       isLoading: () => false,
       isError: () => false,
+      update: { mutate: state.updateConfig, isPending: false },
+    }),
+    useBlockedDomains: () => ({
+      domains: () => state.blocked,
+      isPending: () => false,
+      isError: () => false,
+      setBlocked: { mutate: state.setBlocked, isPending: false },
+    }),
+    useQuickAccessCrmCompaniesQuery: () => ({
+      companies: () => [],
+      query: { isLoading: false },
     }),
     useDealStages: () => ({
       stages: () => DEFAULT_STAGES,
@@ -73,6 +88,9 @@ beforeEach(() => {
   state.patch.mockReset();
   state.replace.mockReset();
   state.reset.mockReset();
+  state.updateConfig.mockReset();
+  state.setBlocked.mockReset();
+  state.blocked = [];
 });
 
 afterEach(cleanup);
@@ -166,4 +184,43 @@ it('renames and deletes customized stages', async () => {
     ],
     expect.anything()
   );
+});
+
+it('lets an admin let personal emails in and block a domain', () => {
+  state.blocked = ['spam.com'];
+  render(() => <Crm />);
+
+  fireEvent.click(
+    screen.getByRole('switch', { name: 'Keep personal emails out' })
+  );
+  expect(state.updateConfig).toHaveBeenCalledWith({
+    excludePersonalEmails: false,
+  });
+
+  const input = screen.getByRole('textbox', { name: 'Domain to block' });
+  fireEvent.input(input, { target: { value: ' Acme.com ' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Block' }));
+  expect(state.setBlocked).toHaveBeenCalledWith(
+    { domain: 'acme.com', blocked: true },
+    expect.anything()
+  );
+
+  fireEvent.click(screen.getByRole('button', { name: 'Unblock spam.com' }));
+  expect(state.setBlocked).toHaveBeenCalledWith(
+    { domain: 'spam.com', blocked: false },
+    expect.anything()
+  );
+});
+
+it('shows members the email sync settings without letting them change them', () => {
+  state.role = 'member';
+  state.blocked = ['spam.com'];
+  render(() => <Crm />);
+
+  expect(
+    screen.getByRole('switch', { name: 'Keep personal emails out' })
+  ).toHaveProperty('disabled', true);
+  screen.getByText('spam.com');
+  expect(screen.queryByRole('textbox', { name: 'Domain to block' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Unblock spam.com' })).toBeNull();
 });

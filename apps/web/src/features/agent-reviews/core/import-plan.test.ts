@@ -278,6 +278,7 @@ describe('importVolume', () => {
     };
     const all = [...entries, database];
     expect(importVolume(all, [])).toEqual({
+      projects: 0,
       documents: 2,
       databases: 1,
       rows: 405,
@@ -311,22 +312,33 @@ describe('importReviewPhase', () => {
       importReviewPhase({ presentedAt: null }, undefined, undefined)
     ).toEqual({ kind: 'preparing' });
     expect(
-      importReviewPhase({ presentedAt: 1 }, { status: 'pending' }, progress)
+      importReviewPhase(
+        { presentedAt: 1 },
+        { status: 'pending', error: null },
+        progress
+      )
     ).toEqual({ kind: 'plan' });
     expect(
       importReviewPhase(
         { presentedAt: 1 },
-        { status: 'pending' },
+        { status: 'pending', error: null },
         { ...progress, status: 'running' }
       )
     ).toEqual({ kind: 'planning' });
     expect(
-      importReviewPhase({ presentedAt: 1 }, { status: 'dismissed' }, undefined)
+      importReviewPhase(
+        { presentedAt: 1 },
+        { status: 'dismissed', error: null },
+        undefined
+      )
     ).toEqual({ kind: 'dismissed' });
   });
 
   it('follows the run once the plan is approved', () => {
-    const completed = { status: 'completed' as const };
+    const completed: { status: 'completed'; error: null } = {
+      status: 'completed',
+      error: null,
+    };
     expect(importReviewPhase({ presentedAt: 1 }, completed, progress)).toEqual({
       kind: 'importing',
     });
@@ -385,6 +397,7 @@ describe('planning', () => {
     );
     expect(planCounts(staged).deciding).toBe(3);
     expect(importVolume(staged, [])).toEqual({
+      projects: 0,
       documents: 1,
       databases: 0,
       rows: 0,
@@ -432,4 +445,24 @@ describe('planTotals', () => {
       { label: 'Already in Macro', value: '1' },
     ]);
   });
+});
+
+it('counts tracker issues as tasks independently of their projects', () => {
+  const tracker: ImportPlanEntry[] = [
+    { ...entries[0], id: 'project', kind: 'project' },
+    { ...entries[0], id: 'task', kind: 'task', parentId: 'project' },
+  ];
+  expect(importVolume(tracker, [])).toEqual({
+    projects: 1,
+    documents: 0,
+    databases: 0,
+    rows: 0,
+    taskLists: 0,
+    tasks: 1,
+  });
+  expect(importVolume(tracker, ['task']).tasks).toBe(0);
+  expect(planTotals(tracker, [])).toEqual([
+    { label: 'Projects', value: '1' },
+    { label: 'Tasks', value: '1' },
+  ]);
 });

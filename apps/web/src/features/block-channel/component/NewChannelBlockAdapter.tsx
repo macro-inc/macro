@@ -9,6 +9,7 @@ import {
   useBlockEntityCommands,
 } from '@app/features/next-soup/actions';
 import { createSearchParams } from '@app/lib/split-router';
+import { TraceFlow } from '@app/observability/flow';
 import { URL_PARAMS } from '@block-channel/constants';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
 import { useChannelBotManagement } from '@channel/Bots/use-channel-bot-management';
@@ -79,9 +80,9 @@ import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { buildEntityData, canEditChannelIdentity } from '@entity';
-import PictureIcon from '@phosphor/image.svg';
-import RenameIcon from '@phosphor/pencil-line.svg';
-import TrashIcon from '@phosphor/trash.svg';
+import PictureIcon from '@icon/system/regular/image.svg';
+import RenameIcon from '@icon/system/regular/pencil-line.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { useActiveCallQuery } from '@queries/call/call';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import { useSearchParams } from '@solidjs/router';
@@ -564,31 +565,41 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
             <Switch>
               <Match when={activeTab() === 'messages'}>
                 <Suspense fallback={<ChannelLoading />}>
-                  <ChannelMessages
-                    autofocus={canAutofocusSplitContent && !navigatedFromJK()}
-                  />
+                  <TraceFlow name="channel.messages.view">
+                    <ChannelMessages
+                      autofocus={canAutofocusSplitContent && !navigatedFromJK()}
+                    />
+                  </TraceFlow>
                 </Suspense>
               </Match>
               <Match when={activeTab() === 'attachments'}>
-                <ChannelAttachmentsTab channelId={channelId} />
+                <TraceFlow name="channel.attachments.view">
+                  <ChannelAttachmentsTab channelId={channelId} />
+                </TraceFlow>
               </Match>
               <Match when={activeTab() === 'calls' && ENABLE_CALLS}>
-                <ChannelCallsTab channelId={channelId} />
+                <TraceFlow name="channel.calls.view">
+                  <ChannelCallsTab channelId={channelId} />
+                </TraceFlow>
               </Match>
               <Match when={activeTab() === 'participants'}>
-                <ChannelParticipantsTab
-                  channelId={channelId}
-                  botManagementEnabled={botManagement.enabled()}
-                  onCreateBot={botManagement.openCreateBot}
-                  inviteBotFocusRequest={botManagement.inviteFocusRequest()}
-                  onOpenBot={botManagement.openBot}
-                />
+                <TraceFlow name="channel.participants.view">
+                  <ChannelParticipantsTab
+                    channelId={channelId}
+                    botManagementEnabled={botManagement.enabled()}
+                    onCreateBot={botManagement.openCreateBot}
+                    inviteBotFocusRequest={botManagement.inviteFocusRequest()}
+                    onOpenBot={botManagement.openBot}
+                  />
+                </TraceFlow>
               </Match>
               <Match when={activeTab() === 'call' && canUseInlineCallTab()}>
-                <ChannelCallTab
-                  channelId={channelId}
-                  pendingJoin={pendingJoinCall}
-                />
+                <TraceFlow name="channel.call.view">
+                  <ChannelCallTab
+                    channelId={channelId}
+                    pendingJoin={pendingJoinCall}
+                  />
+                </TraceFlow>
               </Match>
             </Switch>
           </div>

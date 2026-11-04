@@ -71,6 +71,7 @@ export function VideoDetail(props: {
   return (
     <FileDetailLoadGate
       documentId={props.documentId}
+      entityType="video"
       label="video"
       load={loadVideoDocument}
     >

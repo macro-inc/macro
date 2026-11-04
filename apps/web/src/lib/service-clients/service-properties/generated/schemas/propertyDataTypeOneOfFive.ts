@@ -7,7 +7,7 @@
 import type { PropertyDataTypeOneOfFiveType } from './propertyDataTypeOneOfFiveType';
 
 /**
- * Numeric values.
+ * A span from a start date-time to an end one.
  */
 export type PropertyDataTypeOneOfFive = {
   type: PropertyDataTypeOneOfFiveType;

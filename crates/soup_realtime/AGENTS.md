@@ -56,7 +56,9 @@ tasks itself.
   don't identify every affected entity.
 - Channel threads use their containing channel as the access source.
 - Only `call.record_imported` patches calls; native call lifecycle events on
-  `macro.calls` are ignored.
+  `macro.calls` are ignored. The web cache has no local call projection, so a
+  call patch makes mounted lists that can contain calls refetch
+  (`apps/web/src/lib/queries/soup/graphql/call-list-revalidation.ts`).
 
 ## Related
 

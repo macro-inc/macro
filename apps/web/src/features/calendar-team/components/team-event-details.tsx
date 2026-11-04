@@ -1,9 +1,7 @@
+import { parseLocalDate } from '@core/util/local-date';
 import { createMemo, For, Show } from 'solid-js';
 import type { CalendarEvent, CalendarTimeFormat } from '../../calendar/types';
-import {
-  isTimedPointEvent,
-  parseLocalDate,
-} from '../../calendar/utils/calendar-date';
+import { isTimedPointEvent } from '../../calendar/utils/calendar-date';
 import { sanitizeCalendarDescription } from '../../calendar/utils/calendar-description';
 import { safeConferenceUrl } from '../../calendar/utils/conference-link';
 
@@ -82,7 +80,7 @@ export function TeamEventDetails(props: {
       <Show when={description()}>
         {(html) => (
           <div
-            class="select-text text-ink-muted [&_a]:text-accent [&_a]:underline"
+            class="select-text text-ink-muted [&_a]:underline"
             innerHTML={html()}
             onClick={(event) => {
               const anchor = (event.target as Element | null)?.closest(

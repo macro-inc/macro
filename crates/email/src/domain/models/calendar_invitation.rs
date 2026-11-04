@@ -101,6 +101,10 @@ pub struct CalendarInvitation {
     pub start: Option<InvitationDateTime>,
     /// Exclusive typed end, derived from DURATION when DTEND is absent.
     pub end: Option<InvitationDateTime>,
+    /// Raw `RRULE`, `RDATE` and `EXDATE` lines, empty for a single event.
+    /// `None` on snapshots saved before recurrence was recorded, where a
+    /// series cannot be told apart from a single event.
+    pub recurrence: Option<Vec<String>>,
     /// Validated HTTP(S) conferencing URL; never fetched during rendering.
     pub conference_url: Option<String>,
 }

@@ -25,6 +25,7 @@ use super::{
         CsvTable, RecordRow, company_pipeline_rows, encode_csv, parse_csv, record_rows,
         unique_companies,
     },
+    model::CrmError,
     pipeline_workflows::{
         EntryAddition, EntryQuery, FieldInput, FieldKind, FieldValue, MAX_SCANNED_ROWS,
         NewPipeline, PipelineEdit, PipelineField, PipelineOverview, PipelineWorkflowService,
@@ -132,6 +133,7 @@ fn importable(field: &PipelineField) -> bool {
                 | FieldKind::Number
                 | FieldKind::Checkbox
                 | FieldKind::Date
+                | FieldKind::DateRange
                 | FieldKind::Link
                 | FieldKind::Select
                 | FieldKind::Tags
@@ -149,6 +151,7 @@ fn exported_value(value: &FieldValue) -> String {
         FieldValue::Number(number) => number.to_string(),
         FieldValue::Checkbox(checked) => checked.to_string(),
         FieldValue::Date(date) => date.to_rfc3339(),
+        FieldValue::DateRange(range) => range.iso(),
         FieldValue::Labels(values) | FieldValue::Links(values) => values.join(", "),
         // People leave as emails, which another team can match.
         FieldValue::References(ids) => ids
@@ -330,17 +333,24 @@ where
         rows: &[&RecordRow],
         domains: &SharedDomains,
     ) -> Result<Vec<(String, Found)>, TransferError> {
-        let lookups = bounded(
+        let results = bounded(
             rows.iter()
-                .map(|row| async move {
-                    let id = self.records.contact(viewer, &row.key).await?;
-                    Ok::<_, TransferError>((*row, id))
-                })
+                .map(|row| async move { (*row, self.records.contact(viewer, &row.key).await) })
                 .collect(),
         )
-        .await
-        .into_iter()
-        .collect::<Result<Vec<(&RecordRow, Option<Uuid>)>, _>>()?;
+        .await;
+        let mut lookups = Vec::new();
+        let mut found = Vec::new();
+        for (row, result) in results {
+            match result {
+                Ok(id) => lookups.push((row, id)),
+                Err(TransferError::Crm(CrmError::InvalidRequest(reason))) => {
+                    // A refused lookup must never fall through to record creation.
+                    found.push((row.key.clone(), Err(reason)));
+                }
+                Err(error) => return Err(error),
+            }
+        }
 
         let mut new_domains: Vec<String> = lookups
             .iter()
@@ -369,7 +379,7 @@ where
         }
 
         let refused = &refused;
-        let found = bounded(
+        let resolved = bounded(
             lookups
                 .iter()
                 .map(|&(row, existing)| async move {
@@ -402,7 +412,10 @@ where
                 .collect(),
         )
         .await;
-        found.into_iter().collect()
+        for result in resolved {
+            found.push(result?);
+        }
+        Ok(found)
     }
 
     /// Add `rows` to `overview`'s pipeline: the shared half of both imports.

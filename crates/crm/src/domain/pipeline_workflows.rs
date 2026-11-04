@@ -533,7 +533,11 @@ where
                             ))
                         })?;
                     match record_type {
-                        PipelineRecordType::Company => contact.company_id,
+                        PipelineRecordType::Company => contact.company_id.ok_or_else(|| {
+                            WorkflowError::Invalid(format!(
+                                "The contact with the email {email} has no company."
+                            ))
+                        })?,
                         PipelineRecordType::Contact => contact.id,
                     }
                 }

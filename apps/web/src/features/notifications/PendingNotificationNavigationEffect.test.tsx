@@ -30,6 +30,7 @@ type OpenAttempt = {
   canOpen: () => boolean;
   onApplied: VoidFunction;
   succeed: VoidFunction;
+  fail: (error: { tag: 'NavigationFailedError'; cause: unknown }) => void;
 };
 
 function managerHarness(initiallyReady = false) {
@@ -77,8 +78,8 @@ describe('usePendingNotificationNavigationEffect', () => {
         _source: NotificationSource,
         options: Pick<OpenAttempt, 'canOpen' | 'onApplied'>
       ) => ({
-        match: (onSuccess: VoidFunction) => {
-          attempts.push({ ...options, succeed: onSuccess });
+        match: (onSuccess: VoidFunction, onError: OpenAttempt['fail']) => {
+          attempts.push({ ...options, succeed: onSuccess, fail: onError });
         },
       })
     );
@@ -259,6 +260,42 @@ describe('usePendingNotificationNavigationEffect', () => {
     expect(attempts).toHaveLength(2);
     attempts[1]?.succeed();
     attempts[1]?.onApplied();
+    expect(pendingNotificationNavigationId()).toBeUndefined();
+  });
+
+  it('does not acknowledge a newer tap when an older lookup fails', async () => {
+    const host = managerHarness(true);
+    mount();
+    setGlobalSplitManager(host.manager);
+    const acknowledge = vi.fn(async () => {});
+    receiveNotificationTap(
+      {
+        type: 'BACKGROUND_TAP',
+        deliveryId: 'older-delivery',
+        payload: { notificationId: 'older-notification' },
+      },
+      acknowledge
+    );
+    receiveNotificationTap(
+      {
+        type: 'BACKGROUND_TAP',
+        deliveryId: 'newer-delivery',
+        payload: { notificationId: 'newer-notification' },
+      },
+      acknowledge
+    );
+    expect(attempts).toHaveLength(2);
+
+    attempts[0]?.fail({
+      tag: 'NavigationFailedError',
+      cause: new Error('lookup unavailable'),
+    });
+    expect(acknowledge).not.toHaveBeenCalled();
+    expect(pendingNotificationNavigationId()).toBe('newer-notification');
+
+    attempts[1]?.onApplied();
+    await Promise.resolve();
+    expect(acknowledge).toHaveBeenCalledExactlyOnceWith('newer-delivery');
     expect(pendingNotificationNavigationId()).toBeUndefined();
   });
 });

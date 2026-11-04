@@ -1,6 +1,6 @@
-import CheckIcon from '@phosphor/check.svg';
-import EyeIcon from '@phosphor/eye.svg';
-import EyeSlashIcon from '@phosphor/eye-slash.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import EyeIcon from '@icon/system/regular/eye.svg';
+import EyeSlashIcon from '@icon/system/regular/eye-slash.svg';
 import { Dropdown } from '@ui';
 import { For, Show } from 'solid-js';
 import type { RunVisibility } from '../core/draft';

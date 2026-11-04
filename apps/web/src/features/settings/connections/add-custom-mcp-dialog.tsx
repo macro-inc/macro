@@ -89,13 +89,12 @@ export function AddCustomMcpDialog(props: {
           </div>
 
           <div class="flex justify-end gap-2 pt-1">
-            <Button variant="ghost" size="sm" depth={3} onClick={close}>
+            <Button variant="ghost" size="sm" onClick={close}>
               Cancel
             </Button>
             <Button
-              variant="strong"
+              variant="primary"
               size="sm"
-              depth={3}
               disabled={
                 !name().trim() || !url().trim() || addMutation.isPending
               }

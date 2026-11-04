@@ -12,6 +12,7 @@ mod types;
 mod tests;
 
 pub use session::SessionMachine;
+pub(crate) use session::initialize_request;
 pub use types::{
     CloseReason, Effect, HandshakeStatus, InitializationContext, Input, PermissionPolicy,
     RuntimeStatus, SessionRestoreSupport, StopReason,

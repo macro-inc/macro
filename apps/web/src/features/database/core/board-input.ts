@@ -21,6 +21,7 @@ function kind(column: DatabaseViewColumn): ColumnKind {
     .with('NUMBER', () => ({ kind: 'number' }))
     .with('BOOLEAN', () => ({ kind: 'boolean' }))
     .with('DATE', () => ({ kind: 'date' }))
+    .with('DATE_RANGE', () => ({ kind: 'dateRange' }))
     .with('LINK', () => ({ kind: 'link' }))
     .with('SELECT_STRING', 'SELECT_NUMBER', 'TAG', () => ({
       kind: 'select',
@@ -51,6 +52,7 @@ function cell(column: DatabaseViewColumn, row: DatabaseRow): Cell | null {
       { type: 'date' },
       (cell) => cell
     )
+    .with({ type: 'date_range' }, ({ value }) => ({ type: 'dateRange', value }))
     .with({ type: 'boolean' }, ({ value }) => ({ type: 'bool', value }))
     .with({ type: 'link' }, ({ value }) => ({
       type: 'text',

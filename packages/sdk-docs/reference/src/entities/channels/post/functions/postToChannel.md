@@ -1,6 +1,6 @@
 # Function: postToChannel()
 
-> **postToChannel**(`client`, `target`, `body`): `Promise`\<`string`\>
+> **postToChannel**(`client`, `target`, `body`, `images?`): `Promise`\<`string`\>
 
 Post a message using the endpoint supported by the caller's credentials.
 
@@ -9,8 +9,10 @@ an acting user instead use `POST /channels/{id}/webhook`, which authorizes
 through channel membership. The bot owner is read from `GET /bots/me` and
 cached by the client.
 
-The webhook endpoint supports content only. Mentions in `<m-*>` tags still
-work, but threads and attachments are not supported.
+The webhook endpoint takes content only: the `mentions` list, threads and
+images are dropped. `<m-*>` mention tags in the content still render and
+notify, because the server extracts a bot's mentions from its content. A
+user-owned bot gets the full API by acting as its owner with `requestedAs`.
 
 Posting to a `Thread` puts the message in that thread; to a `Channel`, at the
 channel root. One target rather than a channel plus a thread id, so the two
@@ -18,11 +20,12 @@ can't disagree.
 
 ## Parameters
 
-| Parameter | Type |
-| ------ | ------ |
-| `client` | `MacroClient` |
-| `target` | [`Channel`](../../channel/classes/Channel.md) \| [`Thread`](../../thread/classes/Thread.md) |
-| `body` | [`RichMessage`](../../../../mentions/interfaces/RichMessage.md) |
+| Parameter | Type | Default value |
+| ------ | ------ | ------ |
+| `client` | `MacroClient` | `undefined` |
+| `target` | [`Channel`](../../channel/classes/Channel.md) \| [`Thread`](../../thread/classes/Thread.md) | `undefined` |
+| `body` | [`RichMessage`](../../../../mentions/interfaces/RichMessage.md) | `undefined` |
+| `images?` | [`StaticImage`](../../../images/image/classes/StaticImage.md)[] | `[]` |
 
 ## Returns
 

@@ -4,14 +4,15 @@
  * properties_service
  * OpenAPI spec version: 0.1.0
  */
-import type { PropertyDataTypeOneOfOnethreeSpecificType } from './propertyDataTypeOneOfOnethreeSpecificType';
+
 import type { PropertyDataTypeOneOfOnethreeType } from './propertyDataTypeOneOfOnethreeType';
+import type { SelectStringOption } from './selectStringOption';
 
 /**
- * Entity reference property.
+ * Select property with string options.
  */
 export type PropertyDataTypeOneOfOnethree = {
   multi: boolean;
-  specific_type?: PropertyDataTypeOneOfOnethreeSpecificType;
+  options: SelectStringOption[];
   type: PropertyDataTypeOneOfOnethreeType;
 };

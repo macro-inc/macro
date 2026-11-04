@@ -11,22 +11,22 @@ import {
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { plural } from '@core/util/string';
 import { openExternalUrl } from '@core/util/url';
+import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
+import BellSimpleIcon from '@icon/system/regular/bell-simple.svg';
+import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import GlobeIcon from '@icon/system/regular/globe.svg';
+import MapPinIcon from '@icon/system/regular/map-pin.svg';
+import PhoneIcon from '@icon/system/regular/phone.svg';
+import QuestionMarkIcon from '@icon/system/regular/question-mark.svg';
+import TextAlignLeftIcon from '@icon/system/regular/text-align-left.svg';
+import PersonIcon from '@icon/system/regular/user.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
+import VideoCameraIcon from '@icon/system/regular/video-camera.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Collapsible } from '@kobalte/core/collapsible';
-import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
-import BellSimpleIcon from '@phosphor/bell-simple.svg';
-import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import GlobeIcon from '@phosphor/globe.svg';
-import MapPinIcon from '@phosphor/map-pin.svg';
-import PhoneIcon from '@phosphor/phone.svg';
-import QuestionMarkIcon from '@phosphor/question-mark.svg';
-import TextAlignLeftIcon from '@phosphor/text-align-left.svg';
-import PersonIcon from '@phosphor/user.svg';
-import UsersIcon from '@phosphor/users.svg';
-import VideoCameraIcon from '@phosphor/video-camera.svg';
-import XIcon from '@phosphor/x.svg';
 import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/attendeeResponseStatus';
 import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
 import type { EventReminderOverride } from '@service-storage/generated/schemas/eventReminderOverride';
@@ -125,6 +125,7 @@ function resolveCalendarAttendee(
 
 function CalendarUserItem(props: {
   displayName: Accessor<string>;
+  email?: string;
   iconProps?: UserIconProps;
   isSelf: boolean;
   secondaryLabel?: JSX.Element;
@@ -134,6 +135,8 @@ function CalendarUserItem(props: {
   nameClass?: string;
 }) {
   const secondaryLabelPosition = () => props.secondaryLabelPosition ?? 'below';
+  const nameIsEmail = () => props.displayName() === props.email;
+  const email = () => (props.email && !nameIsEmail() ? props.email : undefined);
 
   return (
     <div class="flex min-w-0 items-center gap-4 sm:gap-3">
@@ -168,13 +171,21 @@ function CalendarUserItem(props: {
         </Show>
         <span
           class={cn(
-            'block select-text truncate text-ink-muted',
+            'block select-text text-ink-muted',
+            nameIsEmail() ? 'wrap-anywhere' : 'truncate',
             props.nameClass
           )}
         >
           {props.displayName()}
           <Show when={props.isSelf}> (you)</Show>
         </span>
+        <Show when={email()}>
+          {(address) => (
+            <span class="block select-text text-xs text-ink-extra-muted wrap-anywhere sm:text-xxs">
+              {address()}
+            </span>
+          )}
+        </Show>
         <Show
           when={secondaryLabelPosition() === 'below' && props.secondaryLabel}
         >
@@ -228,6 +239,7 @@ function CalendarAttendeeItem(props: {
   return (
     <CalendarUserItem
       displayName={props.item.displayName}
+      email={attendee.email}
       iconProps={props.item.iconProps}
       isSelf={attendee.isSelf}
       secondaryLabel={secondaryLabel}
@@ -320,7 +332,7 @@ function EventLocationItem(props: { location: string }) {
           {(segment) =>
             segment.kind === 'phone' ? (
               <a
-                class="text-link hover:text-link-hover hover:underline"
+                class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2 hover:decoration-current"
                 href={segment.telUrl}
               >
                 {segment.text}
@@ -429,6 +441,7 @@ function CalendarOrganizerItem(props: { organizer: CalendarPerson }) {
       <div class="min-w-0">
         <CalendarUserItem
           displayName={displayName}
+          email={props.organizer.email}
           iconProps={iconProps}
           isSelf={props.organizer.isSelf}
           secondaryLabel="Organizer"
@@ -557,7 +570,7 @@ export function EventDetails(props: {
               <Button
                 variant="ghost"
                 size="sm"
-                class="h-8 min-w-0 bg-hover text-ink not-touch:not-disabled:hover:bg-active [&_svg]:size-3.5!"
+                class="h-8 min-w-0 bg-hover text-ink not-touch:not-disabled:hover:bg-active"
                 onClick={() =>
                   openExternalUrl(
                     conferenceJoinUrl(url(), props.event.calendar.emailAddress)
@@ -565,13 +578,14 @@ export function EventDetails(props: {
                 }
               >
                 {conferenceLabel()}
-                <ArrowSquareOutIcon />
+                <ArrowSquareOutIcon class="size-3.5 shrink-0" />
               </Button>
               <Button
+                aria-label="Copy call link"
+                tooltip="Copy call link"
                 variant="ghost"
                 size="icon-sm"
                 class="shrink-0"
-                label="Copy call link"
                 onClick={async () => {
                   if (await writeClipboardData({ 'text/plain': url() })) {
                     toast.success('Call link copied');
@@ -604,7 +618,7 @@ export function EventDetails(props: {
           <div class="contents">
             <TextAlignLeftIcon class="mt-0.5 size-5 text-ink-extra-muted sm:size-4" />
             <div
-              class="select-text leading-relaxed text-ink-muted [&_a]:text-accent [&_a]:underline [&_ol]:list-decimal [&_ol]:pl-4 [&_p+p]:mt-1 [&_ul]:list-disc [&_ul]:pl-4"
+              class="select-text leading-relaxed text-ink-muted [&_a]:underline [&_ol]:list-decimal [&_ol]:pl-4 [&_p+p]:mt-1 [&_ul]:list-disc [&_ul]:pl-4"
               innerHTML={html()}
               onClick={openDescriptionLink}
             />

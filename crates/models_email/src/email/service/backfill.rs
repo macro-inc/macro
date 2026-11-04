@@ -12,8 +12,8 @@ use uuid::Uuid;
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct BackfillThreadPayload {
     pub thread_provider_id: String,
-    /// When true (stale-cursor recovery jobs), an already-known thread is
-    /// refreshed — missing messages are backfilled — instead of skipped.
+    /// Legacy wire hint retained for queued payload compatibility. Durable
+    /// jobs always import missing messages once and resume recorded effects.
     #[serde(default)]
     pub refresh_existing: bool,
 }
@@ -67,18 +67,13 @@ pub enum BackfillOperation {
     // and sends a BackfillThread message for each thread_id in the batch. If there
     // are still threads left to fetch, it will send another ListThreads message.
     ListThreads(JobScopedPayload<ListThreadsPayload>),
-    // Creates the thread object in the database, fetches the message ids for the thread
-    // from the gmail api, and sends a BackfillMessage message for each message_id.
+    // Imports one whole provider conversation and resumes its durable effects.
     BackfillThread(JobScopedPayload<BackfillThreadPayload>),
-    // Creates a message object in the database. If the message is the last message in
-    // the thread to be processed, it sends an UpdateThreadMetadata message for the thread.
+    // Legacy per-message work; deferred until its parent is explicitly recovered.
     BackfillMessage(JobScopedPayload<BackfillMessagePayload>),
-    // Updates the thread metadata in the database. If it's the last thread to be processed,
-    // it sets the backfill job status to complete. Sends BackfillAttachment messages for each
-    // attachment requiring backfill, except for the criteria of attachments in any threads
-    // with a participant the user has previously emailed. This criteria we can only know after
-    // backfill completes. Once backfill is completed it sends a BackfillAttachment message
-    // for each of those attachments.
+    // Updates metadata after thread attachment scheduling and records one durable
+    // completion receipt. The job completes when listing and all threads finish;
+    // its completion outbox schedules attachments needing mailbox-wide criteria.
     UpdateThreadMetadata(JobScopedPayload<UpdateMetadataPayload>),
     // Uploads the message attachment as a Macro document.
     BackfillAttachment(JobScopedPayload<BackfillAttachmentPayload>),

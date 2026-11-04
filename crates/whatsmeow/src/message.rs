@@ -25,6 +25,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use prost::Message as _;
 use sha2::{Digest, Sha256};
+use tracing::Instrument;
 
 use crate::binary::{Node, NodeContent};
 use crate::client::Client;
@@ -373,14 +374,29 @@ impl Client {
     #[tracing::instrument(
         name = "whatsmeow.receive_message",
         skip_all,
-        fields(message_id = %info.id, is_group = info.is_group, enc_count)
+        fields(
+            message_id = %info.id,
+            is_group = info.is_group,
+            enc_count,
+            decrypted,
+            decrypt_failed,
+            retry_receipt,
+            ack_ms,
+            outcome,
+            otel.status_code,
+        )
     )]
     async fn decrypt_messages(self: &Arc<Self>, info: &mut MessageInfo, node: &Node) {
+        // Macro addition: counts and ack latency on this span.
+        let received = tokio::time::Instant::now();
+        let receive_span = tracing::Span::current();
+        let mut decrypted_count = 0_usize;
         if let Some(unavailable) = node.get_optional_child_by_tag(&["unavailable"])
             && node.get_children_by_tag("enc").next().is_none()
         {
             let unavailable_type = UnavailableType::from(unavailable.attr_getter().string("type"));
             tracing::warn!(unavailable_type = %unavailable_type, "unavailable message");
+            receive_span.record("outcome", "unavailable");
             let client = Arc::clone(self);
             let ack_info = info.clone();
             let ack_node = node.clone();
@@ -431,6 +447,12 @@ impl Client {
             let Some(enc_type) = attrs.get_string("type", false) else {
                 continue;
             };
+            let decrypt_span = tracing::debug_span!(
+                "whatsmeow.decrypt",
+                enc_type = %enc_type,
+                outcome = tracing::field::Empty,
+                otel.status_code = tracing::field::Empty,
+            );
             let result = if enc_type == "pkmsg" || enc_type == "msg" {
                 contains_direct_msg = true;
                 self.decrypt_dm(
@@ -439,14 +461,17 @@ impl Client {
                     enc_type == "pkmsg",
                     info.timestamp,
                 )
+                .instrument(decrypt_span.clone())
                 .await
             } else if info.is_group && enc_type == "skmsg" {
                 self.decrypt_group_msg(child, &sender_encryption_jid, &info.chat, info.timestamp)
+                    .instrument(decrypt_span.clone())
                     .await
             } else {
                 tracing::warn!(enc_type = %enc_type, "unhandled encrypted message type");
                 continue;
             };
+            record_decrypt_outcome(&decrypt_span, &receive_span, &result, &mut decrypted_count);
             let (decrypted, ciphertext_hash) = match result {
                 Err(DecryptError::AlreadyProcessed(_)) => {
                     tracing::debug!("ignoring already processed message");
@@ -461,18 +486,22 @@ impl Client {
                     let is_unavailable = enc_type == "skmsg"
                         && !contains_direct_msg
                         && matches!(error.signal(), Some(SignalError::NoSenderKeyForUser));
+                    receive_span.record("retry_receipt", true);
                     if self.config.synchronous_ack {
                         self.send_retry_receipt(node, info, is_unavailable).await;
                         self.send_ack(node, 0).await;
+                        record_ack_latency(&receive_span, received);
                     } else {
                         let client = Arc::clone(self);
                         let retry_node = node.clone();
                         let retry_info = info.clone();
+                        let ack_span = receive_span.clone();
                         self.spawn(async move {
                             client
                                 .send_retry_receipt(&retry_node, &retry_info, is_unavailable)
                                 .await;
                             client.send_ack(&retry_node, 0).await;
+                            record_ack_latency(&ack_span, received);
                         });
                     }
                     self.dispatch_event(Event::UndecryptableMessage(UndecryptableMessage {
@@ -528,9 +557,20 @@ impl Client {
                 self.maybe_delete_old_buffered_hashes(event_buffer).await;
             }
         }
+        receive_span.record(
+            "outcome",
+            if !recognized_stanza {
+                "unrecognized"
+            } else if protobuf_failed {
+                "invalid_protobuf"
+            } else {
+                "ok"
+            },
+        );
         let client = Arc::clone(self);
         let receipt_info = info.clone();
         let receipt_node = node.clone();
+        let ack_span = receive_span.clone();
         self.background_if_async_ack(async move {
             if !recognized_stanza {
                 client
@@ -543,6 +583,7 @@ impl Client {
                     .send_message_receipt(&receipt_info, &receipt_node)
                     .await;
             }
+            record_ack_latency(&ack_span, received);
         })
         .await;
     }
@@ -834,9 +875,25 @@ impl Client {
             let Some(notification) = notification else {
                 break;
             };
+            // Macro addition: one span per history sync notification.
+            let span = tracing::info_span!(
+                "whatsmeow.history_sync.process",
+                sync_type = notification.sync_type,
+                chunk_order = notification.chunk_order,
+                conversations = tracing::field::Empty,
+                outcome = tracing::field::Empty,
+                otel.status_code = tracing::field::Empty,
+            );
+            async {
             match self.download_history_sync(&notification, false).await {
-                Err(error) => tracing::error!(error = %error, "failed to download history sync"),
+                Err(error) => {
+                    tracing::error!(error = %error, "failed to download history sync");
+                    tracing::Span::current().record("outcome", "error");
+                    crate::telemetry::mark_error(&tracing::Span::current());
+                }
                 Ok(blob) => {
+                    tracing::Span::current().record("conversations", blob.conversations.len());
+                    tracing::Span::current().record("outcome", "ok");
                     self.dispatch_event(Event::HistorySync(Box::new(HistorySync {
                         data: blob,
                         notification: notification.clone(),
@@ -855,6 +912,9 @@ impl Client {
                     }
                 }
             }
+            }
+            .instrument(span)
+            .await;
         }
         self.history_sync_handler_started
             .store(false, Ordering::SeqCst);
@@ -874,7 +934,11 @@ impl Client {
                 "new history sync notifications appeared after loop stopped, restarting loop"
             );
             let client = Arc::clone(&self);
-            self.spawn(client.handle_history_sync_notification_loop());
+            self.spawn(
+                client
+                    .handle_history_sync_notification_loop()
+                    .instrument(self.connection_parent()),
+            );
         }
     }
 
@@ -981,13 +1045,14 @@ impl Client {
                     continue;
                 }
             };
-            match self.parse_web_message(&Jid::default(), web_message).await {
+            match Box::pin(self.parse_web_message(&Jid::default(), web_message)).await {
                 Err(error) => {
                     tracing::warn!(error = %error, item = index + 1, "failed to parse web message info in placeholder resend item");
                 }
                 Ok(mut event) => {
                     event.unavailable_request_id = request_id.clone();
-                    ok = !self.dispatch_event(Event::Message(Box::new(event))).await && ok;
+                    ok =
+                        !Box::pin(self.dispatch_event(Event::Message(Box::new(event)))).await && ok;
                 }
             }
         }
@@ -1016,7 +1081,11 @@ impl Client {
                     .is_ok()
                 {
                     let client = Arc::clone(self);
-                    self.spawn(client.handle_history_sync_notification_loop());
+                    self.spawn(
+                        client
+                            .handle_history_sync_notification_loop()
+                            .instrument(self.connection_parent()),
+                    );
                 }
             }
             if !(self.config.manual_history_sync_download
@@ -1050,7 +1119,10 @@ impl Client {
         {
             let request_type = response.peer_data_operation_request_type;
             if request_type == Some(PeerDataOperationRequestType::PlaceholderMessageResend as i32) {
-                ok = self.handle_placeholder_resend_response(response).await && ok;
+                // Boxed (Macro addition): parsing and dispatching the resent
+                // message nests deep in decryption; inline it overflows a
+                // 2 MiB stack in debug builds.
+                ok = Box::pin(self.handle_placeholder_resend_response(response)).await && ok;
             } else if request_type
                 == Some(PeerDataOperationRequestType::CompanionSyncdSnapshotFatalRecovery as i32)
             {
@@ -1491,6 +1563,44 @@ pub fn pad_message(mut plaintext: Vec<u8>) -> Vec<u8> {
     }
     plaintext.extend(std::iter::repeat_n(pad, usize::from(pad)));
     plaintext
+}
+
+/// Macro addition: records a decrypt's outcome on its debug span and counts
+/// it on the message's receive span.
+fn record_decrypt_outcome<Value>(
+    decrypt_span: &tracing::Span,
+    receive_span: &tracing::Span,
+    result: &Result<Value, DecryptError>,
+    decrypted_count: &mut usize,
+) {
+    let outcome = match result {
+        Ok(_) => {
+            *decrypted_count += 1;
+            receive_span.record("decrypted", *decrypted_count);
+            "ok"
+        }
+        Err(DecryptError::AlreadyProcessed(_)) => "already_processed",
+        Err(error) if matches!(error.signal(), Some(SignalError::OldCounter)) => "old_counter",
+        Err(error) if matches!(error.signal(), Some(SignalError::NoSenderKeyForUser)) => {
+            "no_sender_key"
+        }
+        Err(_) => "error",
+    };
+    decrypt_span.record("outcome", outcome);
+    if matches!(outcome, "error" | "no_sender_key") {
+        crate::telemetry::mark_error(decrypt_span);
+        receive_span.record("decrypt_failed", true);
+        receive_span.record("outcome", "decrypt_failed");
+        crate::telemetry::mark_error(receive_span);
+    }
+}
+
+/// Macro addition: the time from handling a message to acking it.
+fn record_ack_latency(span: &tracing::Span, received: tokio::time::Instant) {
+    span.record(
+        "ack_ms",
+        u64::try_from(received.elapsed().as_millis()).unwrap_or(u64::MAX),
+    );
 }
 
 #[cfg(test)]

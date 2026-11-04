@@ -5,7 +5,7 @@
 //! publishes one coherent delta, including rollback, at the engine revision.
 
 use super::*;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{collections::VecDeque, sync::Arc};
 
 const VIEW_CAPACITY: usize = 32;
@@ -24,10 +24,19 @@ pub struct LiveQuerySpec {
     pub selection: Arc<RecordSelection>,
 }
 
+/// Identity of one retained live-view specification, not a persistent cache key.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(transparent)]
+pub struct LiveQueryRegistration(Uuid);
+
 /// Changes since the subscriber's last accepted view revision.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LiveQueryUpdate {
+    /// Identifies this retained specification; invalid after replacement or eviction.
+    pub registration_id: LiveQueryRegistration,
+    /// Immutable proof identity for this exact evaluated window.
+    pub observation_id: String,
     /// Exact engine revision observed by this atomic read.
     pub revision: String,
     /// The subscriber must discard previous rows (first read, eviction or gap).
@@ -131,6 +140,7 @@ pub(super) struct Changes {
 }
 
 struct View {
+    registration_id: LiveQueryRegistration,
     spec: LiveQuerySpec,
     revision: CacheRevision,
     membership: PredicateReconciliation,
@@ -255,6 +265,40 @@ impl<S: PredicateIndexStorage> Engine<S> {
             return Err(RecordSelectionError::InvalidKey.into());
         }
         self.hydrate_optimistic().await?;
+        self.read_registered_live_query(id, spec, since).await
+    }
+
+    /// Reads a retained specification without retransmitting it. A missing or
+    /// replaced registration returns None so the caller can register it again.
+    /// Lookup follows durable optimistic-state hydration and shares the read's
+    /// engine lease. A replaced or cleared specification cannot reuse this token.
+    pub async fn resume_live_query(
+        &mut self,
+        id: &str,
+        registration_id: LiveQueryRegistration,
+        since: Option<CacheRevision>,
+    ) -> Result<Option<LiveQueryUpdate>, EngineError<S::Error>> {
+        self.hydrate_optimistic().await?;
+        let Some(view) = self
+            .live_queries
+            .views
+            .peek(id)
+            .filter(|view| view.registration_id == registration_id)
+        else {
+            return Ok(None);
+        };
+        let spec = view.spec.clone();
+        self.read_registered_live_query(id, spec, since)
+            .await
+            .map(Some)
+    }
+
+    async fn read_registered_live_query(
+        &mut self,
+        id: &str,
+        spec: LiveQuerySpec,
+        since: Option<CacheRevision>,
+    ) -> Result<LiveQueryUpdate, EngineError<S::Error>> {
         let old = self
             .live_queries
             .views
@@ -279,6 +323,7 @@ impl<S: PredicateIndexStorage> Engine<S> {
                 .as_ref()
                 .is_none_or(|view| view.membership.keys != membership.keys);
         let mut view = old.unwrap_or_else(|| View {
+            registration_id: LiveQueryRegistration(Uuid::now_v7()),
             spec: spec.clone(),
             revision: self.revision,
             membership: membership.clone(),
@@ -366,7 +411,12 @@ impl<S: PredicateIndexStorage> Engine<S> {
             removed.clear();
             patches.clear();
         }
+        let observation_id = self
+            .observe_live_query_window(&spec, &membership, &view.dependencies)
+            .await?;
         let result = LiveQueryUpdate {
+            registration_id: view.registration_id,
+            observation_id,
             revision: self.revision.to_string(),
             reset,
             keys: order_changed.then(|| membership.keys.clone()),

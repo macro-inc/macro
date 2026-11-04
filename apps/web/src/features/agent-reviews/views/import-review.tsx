@@ -5,9 +5,9 @@ import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { queryReadyGate } from '@queries/gate';
 import {
-  useCancelNotionImportMutation,
+  useCancelWorkspaceImportMutation,
   useImportQuery,
-  useNotionImportReportQuery,
+  useWorkspaceImportReportQuery,
 } from '@queries/import';
 import { ResultAsync } from 'neverthrow';
 import { ImportPlanCard } from '../components/import-plan-card';
@@ -27,13 +27,14 @@ function copyBlock(copy: ImportedCopy) {
 
 /** An import review shows its plan, then the run it started. */
 export function ImportReview(props: {
-  review: Review;
+  review: Extract<Review, { kind: 'import' }>;
   canAct: boolean;
   actions: ReviewActions;
 }) {
   const state = useImportQuery();
-  const report = useNotionImportReportQuery();
-  const cancel = useCancelNotionImportMutation();
+  const source = () => props.review.items[0].draft.source;
+  const report = useWorkspaceImportReportQuery(source);
+  const cancel = useCancelWorkspaceImportMutation(source);
   const layout = useSplitLayout();
   const review = createImportReview({
     review: () => props.review,
@@ -43,7 +44,9 @@ export function ImportReview(props: {
         ? decodePlanEntries(state.data.entities, props.review.id)
         : [],
     report: () =>
-      queryReadyGate(report) ? decodeImportProgress(report.data) : undefined,
+      queryReadyGate(report)
+        ? decodeImportProgress(report.data, source())
+        : undefined,
     canAct: () => props.canAct,
     stop: async () =>
       (
@@ -64,6 +67,7 @@ export function ImportReview(props: {
   return (
     <section aria-label={review.title()} class="min-w-0">
       <ImportPlanCard
+        source={source()}
         title={review.title()}
         summary={review.summary()}
         sharingSummary={review.sharingSummary()}

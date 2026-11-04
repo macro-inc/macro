@@ -1,5 +1,5 @@
 import type { PaywallMessageMetadata } from '@core/constant/PaywallState';
-import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
+import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import { Button } from '@ui';
 import { For, Match, Show, Switch } from 'solid-js';
 import { BillingPlanCard } from '../../settings/components/billing-plan-card';
@@ -52,7 +52,7 @@ export function PaywallView(props: {
             <p role="alert" class="text-sm text-ink-muted">
               Couldn't load your available plans. Please try again.
             </p>
-            <Button size="sm" variant="outline" onClick={props.onRetry}>
+            <Button size="sm" variant="secondary" onClick={props.onRetry}>
               Try again
             </Button>
           </div>
@@ -93,7 +93,7 @@ export function PaywallView(props: {
         >
           Dismiss
         </Button>
-        <Button size="sm" variant="cta" onClick={props.onManagePlan}>
+        <Button size="sm" variant="primary" onClick={props.onManagePlan}>
           Manage plan
         </Button>
       </footer>

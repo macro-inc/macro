@@ -1,181 +1,120 @@
-use crate::pubsub::backfill::db_error::map_db_error;
+use crate::backfill_completion_service::{
+    completion_effect_retry, enqueue_thread_metadata_update, handle_thread_attachment_upload,
+};
+use crate::pubsub::backfill::backfill_message::{enqueue_crm_contacts, save_invitations};
+use crate::pubsub::backfill::db_error::{is_unstorable, map_db_error};
 use crate::pubsub::backfill::email_api_error::map_email_api_error;
 use crate::pubsub::backfill::increment_counters::incr_completed_threads;
+use crate::pubsub::backfill::write_slot;
 use crate::pubsub::context::PubSubContext;
-use models_email::email::service::backfill::{
-    BackfillMessagePayload, BackfillOperation, BackfillPubsubMessage, BackfillThreadPayload,
-    JobScopedPayload,
-};
-use models_email::email::service::link;
-use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use std::collections::HashSet;
+use crate::util::process_pre_insert::process_message_pre_insert;
+use email_db_client::backfill::progress::import;
+use models_email::service::backfill::{BackfillThreadPayload, JobScopedPayload};
+use models_email::service::link::Link;
+use models_email::service::pubsub::ProcessingError;
 
-/// This step is invoked by ListThreads for each thread being backfilled.
-/// Creates the thread object in the database, fetches the message ids for the thread
-/// from the gmail api, and sends a BackfillMessage message for each message_id.
-#[tracing::instrument(skip(ctx))]
+/// Import one provider snapshot, then resume required effects until metadata
+/// records completion. The import receipt commits with the messages, so neither
+/// a retry nor a concurrent delivery can write a later snapshot after completion.
+#[tracing::instrument(skip(ctx, scope, link), fields(job_id = %scope.job_id, thread_provider_id = %scope.payload.thread_provider_id, message_count), err)]
 pub async fn backfill_thread(
     ctx: &PubSubContext,
     scope: &JobScopedPayload<BackfillThreadPayload>,
-    link: &link::Link,
+    link: &Link,
 ) -> Result<(), ProcessingError> {
-    let p = &scope.payload;
-    let thread_provider_id = p.thread_provider_id.clone();
-
-    let existing_threads = email_db_client::threads::get::get_threads_by_link_id_and_provider_ids(
-        &ctx.db,
-        link.id,
-        &HashSet::from_iter(vec![thread_provider_id.clone()]),
-    )
-    .await
-    .map_err(|e| {
-        map_db_error(
-            e,
-            format!("DB check for existing thread {} failed", thread_provider_id),
-        )
-    })?;
-
-    // If the thread already exists: recovery jobs refresh it (backfilling any
-    // messages that arrived in the sync gap), other jobs skip it and count it
-    // as complete.
-    if let Some(existing_thread_db_id) = existing_threads.get(&thread_provider_id) {
-        if p.refresh_existing {
-            return refresh_existing_thread(ctx, scope, link, *existing_thread_db_id).await;
-        }
-        incr_completed_threads(ctx, link, scope.job_id).await?;
-        return Ok(());
+    let provider_id = &scope.payload.thread_provider_id;
+    let receipt = import::receipt(&ctx.db, scope.job_id, provider_id)
+        .await
+        .map_err(|e| map_db_error(e, "Failed to read backfill import receipt"))?;
+    if receipt.completed || receipt.provider_missing {
+        return incr_completed_threads(ctx, link, scope.job_id, provider_id).await;
     }
-
-    // fetch all message_ids of the thread
-    let message_ids = ctx
-        .email_api
-        .get_message_ids_for_thread(link.id, &thread_provider_id)
-        .await
-        .map_err(|error| map_email_api_error(error, "Failed to get provider thread message IDs"))?;
-
-    // insert thread object
-    let thread_db_id = email_db_client::threads::insert::insert_blank_thread(
-        &ctx.db,
-        &thread_provider_id,
-        link.id,
-    )
-    .await
-    .map_err(|e| {
-        map_db_error(
-            e,
-            format!("Failed to insert thread shell for {}", thread_provider_id),
-        )
-    })?;
-
-    // create backfill pubsub message for each email message
-    enqueue_backfill_messages(ctx, scope, link, thread_db_id, message_ids).await
-}
-
-/// Recovery-job path for a thread that is already in the database: fetch the
-/// provider's message ids and backfill only the messages we are missing, so
-/// replies that arrived during a sync gap are recovered.
-///
-/// Job accounting matches the fresh-thread path: with nothing missing the
-/// thread completes immediately (like the skip path); otherwise its message
-/// count is started at the missing count and the enqueued messages complete it.
-async fn refresh_existing_thread(
-    ctx: &PubSubContext,
-    scope: &JobScopedPayload<BackfillThreadPayload>,
-    link: &link::Link,
-    thread_db_id: uuid::Uuid,
-) -> Result<(), ProcessingError> {
-    let p = &scope.payload;
-
-    let message_ids = ctx
-        .email_api
-        .get_message_ids_for_thread(link.id, &p.thread_provider_id)
-        .await
-        .map_err(|error| map_email_api_error(error, "Failed to get provider thread message IDs"))?;
-
-    let existing_message_ids =
-        email_db_client::messages::get::filter_existing_provider_message_ids(
-            &ctx.db,
-            link.id,
-            &message_ids,
-        )
-        .await
-        .map_err(|e| {
-            map_db_error(
-                e,
-                format!(
-                    "DB check for existing messages of thread {} failed",
-                    p.thread_provider_id
-                ),
-            )
-        })?;
-
-    let missing_message_ids: Vec<String> = message_ids
-        .into_iter()
-        .filter(|message_id| !existing_message_ids.contains(message_id))
-        .collect();
-
-    if missing_message_ids.is_empty() {
-        return incr_completed_threads(ctx, link, scope.job_id).await;
-    }
-
-    enqueue_backfill_messages(ctx, scope, link, thread_db_id, missing_message_ids).await
-}
-
-/// Starts counting the thread's messages and enqueues one
-/// BackfillMessage per message id.
-async fn enqueue_backfill_messages(
-    ctx: &PubSubContext,
-    scope: &JobScopedPayload<BackfillThreadPayload>,
-    link: &link::Link,
-    thread_db_id: uuid::Uuid,
-    message_ids: Vec<String>,
-) -> Result<(), ProcessingError> {
-    let p = &scope.payload;
-
-    crate::backfill_progress::init_thread_progress(
-        &ctx.db,
-        &ctx.redis_client,
-        scope.job_id,
-        thread_db_id,
-        &p.thread_provider_id,
-        message_ids.len() as i32,
-    )
-    .await
-    .map_err(|e| {
-        ProcessingError::Retryable(DetailedError {
-            reason: FailureReason::DatabaseQueryFailed,
-            source: e.context(format!(
-                "Failed to start counting messages for thread {}",
-                &p.thread_provider_id
-            )),
-        })
-    })?;
-
-    for message_id in message_ids {
-        let new_payload = BackfillMessagePayload {
-            thread_provider_id: p.thread_provider_id.clone(),
-            thread_db_id,
-            message_provider_id: message_id.clone(),
-        };
-
-        let ps_message = BackfillPubsubMessage {
-            backfill_operation: BackfillOperation::BackfillMessage(JobScopedPayload {
-                link_id: link.id,
-                job_id: scope.job_id,
-                payload: new_payload,
-            }),
-        };
-
-        ctx.sqs_client
-            .enqueue_email_backfill_message(ps_message)
-            .await
-            .map_err(|e| {
-                ProcessingError::NonRetryable(DetailedError {
-                    reason: FailureReason::SqsEnqueueFailed,
-                    source: e.context(format!("Failed to enqueue message {}", message_id)),
+    let thread_id = match receipt.thread_id {
+        Some(id) => id,
+        None => {
+            let fetched = match ctx.email_api.get_thread(link.id, provider_id).await {
+                Ok(fetched) => fetched,
+                Err(email_api_client::domain::models::EmailApiError::NotFound) => {
+                    let receipt = import::mark_provider_missing(&ctx.db, scope.job_id, provider_id)
+                        .await
+                        .map_err(|e| map_db_error(e, "Failed to record provider-deleted thread"))?;
+                    if let Some(thread_id) = receipt.thread_id {
+                        return finish_import(ctx, scope, link, thread_id).await;
+                    }
+                    return incr_completed_threads(ctx, link, scope.job_id, provider_id).await;
+                }
+                Err(error) => {
+                    return Err(map_email_api_error(error, "Failed to get provider thread"));
+                }
+            };
+            tracing::Span::current().record("message_count", fetched.len() as i64);
+            let mut messages = Vec::with_capacity(fetched.len());
+            let mut calendar_parts = Vec::with_capacity(fetched.len());
+            for item in fetched {
+                let mut message = item.message;
+                process_message_pre_insert(&mut message).await;
+                messages.push(message);
+                calendar_parts.push(item.calendar_parts);
+            }
+            let slot = write_slot::acquire(ctx).await?;
+            let imported = slot
+                .hold(async {
+                    // Publish for ALL provider messages, including already-stored
+                    // ones from a legacy job whose earlier follow-up was interrupted.
+                    for message in &messages {
+                        enqueue_crm_contacts(ctx, link, message).await?;
+                    }
+                    import::write_thread(
+                        &ctx.db,
+                        scope.job_id,
+                        provider_id,
+                        link.id,
+                        &mut messages,
+                        is_unstorable,
+                    )
+                    .await
+                    .map_err(|e| map_db_error(e, "Failed to commit backfill import receipt"))
                 })
-            })?;
-    }
+                .await?;
+            let import::ImportOutcome::Stored(imported) = imported else {
+                return incr_completed_threads(ctx, link, scope.job_id, provider_id).await;
+            };
+            if imported.written {
+                for skipped in &imported.skipped {
+                    tracing::warn!(error = ?skipped.error, index = skipped.index as i64, "Skipped an unstorable backfill message");
+                }
+                for (index, (message, parts)) in messages.iter().zip(&calendar_parts).enumerate() {
+                    if !imported
+                        .skipped
+                        .iter()
+                        .any(|skipped| skipped.index == index)
+                    {
+                        // Invitation extraction retains its existing best-effort policy.
+                        save_invitations(ctx, link, message, parts).await;
+                    }
+                }
+            }
+            imported.thread_id
+        }
+    };
+    finish_import(ctx, scope, link, thread_id).await
+}
 
-    Ok(())
+async fn finish_import(
+    ctx: &PubSubContext,
+    scope: &JobScopedPayload<BackfillThreadPayload>,
+    link: &Link,
+    thread_id: uuid::Uuid,
+) -> Result<(), ProcessingError> {
+    handle_thread_attachment_upload(ctx, link, scope.job_id, thread_id)
+        .await
+        .map_err(completion_effect_retry)?;
+    enqueue_thread_metadata_update(
+        ctx,
+        link,
+        scope.job_id,
+        &scope.payload.thread_provider_id,
+        thread_id,
+    )
+    .await
 }

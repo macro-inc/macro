@@ -14,7 +14,7 @@ use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAcces
 use entity_access::domain::ports::EntityAccessService as _;
 use import::domain::ports::{
     ImportedDocumentProperties, ImportedTaskProperties, NewDatabase, NotionLinks, SharedEntity,
-    TeamMember,
+    SourceDates, TeamMember,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model::project::request::{CreateProjectRequest, PatchProjectRequestV2};
@@ -76,7 +76,7 @@ pub(crate) fn notion_markdown(markdown: &str, links: &NotionLinks) -> NotionMark
 /// A document or task the import names by id that exists already was made
 /// by an interrupted earlier attempt: it stands, as the starter documents'
 /// retries treat it.
-fn already_created(created: anyhow::Result<String>, id: Uuid) -> anyhow::Result<String> {
+pub(crate) fn already_created(created: anyhow::Result<String>, id: Uuid) -> anyhow::Result<String> {
     match created {
         Err(error)
             if matches!(
@@ -109,6 +109,38 @@ fn new_database(detail: &DatabaseDetail) -> anyhow::Result<NewDatabase> {
 }
 
 impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
+    async fn create_tracker_project(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+        name: &str,
+        markdown: &str,
+        shared: bool,
+    ) -> anyhow::Result<Uuid> {
+        self.create_tracker_project_impl(user, id, name, markdown, shared)
+            .await
+    }
+    async fn create_tracker_task(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+        name: &str,
+        markdown: &str,
+        properties: &ImportedTaskProperties,
+        shared: bool,
+    ) -> anyhow::Result<String> {
+        self.create_tracker_task_impl(user, id, name, markdown, properties, shared)
+            .await
+    }
+    async fn link_tracker_task(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+        relations: &import::domain::ports::TrackerTaskRelations,
+    ) -> anyhow::Result<()> {
+        self.link_tracker_task_impl(user, id, relations).await
+    }
+
     #[tracing::instrument(skip(self, user, name), err)]
     async fn create_folder(
         &self,
@@ -123,7 +155,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
         }
         let project = self
             .project_service
-            .create_project(
+            .create_project_dated_by_contents(
                 &Self::creation_principal(user),
                 CreateProjectRequest {
                     name: name.to_string(),
@@ -145,6 +177,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
         links: &NotionLinks,
         properties: &ImportedDocumentProperties,
         folder: Option<Uuid>,
+        dates: Option<SourceDates>,
     ) -> anyhow::Result<String> {
         let created = self
             .create_imported_document(
@@ -154,6 +187,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
                 self::notion_markdown(notion_markdown, links),
                 properties,
                 folder,
+                dates,
             )
             .await;
         already_created(created, id)
@@ -169,6 +203,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
         links: &NotionLinks,
         properties: &ImportedTaskProperties,
         folder: Option<Uuid>,
+        dates: Option<SourceDates>,
     ) -> anyhow::Result<String> {
         let created = self
             .create_imported_task(
@@ -178,6 +213,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
                 ImportedContent::Notion(self::notion_markdown(notion_markdown, links)),
                 properties,
                 folder,
+                dates,
                 // A shared task list shares its folder, which reaches its tasks.
                 false,
             )

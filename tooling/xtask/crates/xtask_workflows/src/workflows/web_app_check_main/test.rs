@@ -38,6 +38,18 @@ fn android_native_check_is_an_unconditional_required_merge_check() {
         version_step.contains("if: steps.labels.outputs.skip != 'true'"),
         "the version check runs only without the skip label: {android}"
     );
+    // A skipped PR never releases, so it may not raise the Android floor.
+    let floor = android
+        .find("--skip-release")
+        .expect("skip-label floor check step");
+    let floor_step = android[..floor]
+        .rsplit("\n    - ")
+        .next()
+        .expect("floor check step body");
+    assert!(
+        floor_step.contains("if: steps.labels.outputs.skip == 'true'"),
+        "the floor check runs only with the skip label: {android}"
+    );
     assert!(
         !android.contains("!steps.labels"),
         "never negate a comparison with a leading `!`: {android}"
@@ -193,6 +205,8 @@ fn generated_code_checks_every_rust_generated_artifact_in_one_job() {
         "git status --porcelain -- apps/docs",
         "just gen-agent-fold-types",
         "just gen-database-sql-types",
+        "just gen-dynamic-ui-types",
+        "just gen-agent-review-types",
     ];
     let positions: Vec<usize> = order
         .iter()
@@ -370,6 +384,43 @@ fn test_job_runs_signup_browser_tests_after_vitest() {
     );
 }
 
+/// The event details fixture replaces the calendar query modules with preview
+/// adapters, so a change to those modules runs the suite that would show a
+/// blank page when an adapter export goes missing.
+#[test]
+fn calendar_details_browser_tests_run_when_the_replaced_queries_change() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    let filters = yaml
+        .split("filters: |")
+        .nth(1)
+        .and_then(|rest| rest.split("id: filter").next())
+        .expect("path-check filters");
+    let calendar = filters
+        .split("calendar_details_changed:")
+        .nth(1)
+        .expect("calendar_details_changed filter");
+    for path in [
+        "apps/web/src/features/calendar-view/**",
+        "apps/web/src/lib/queries/calendar/**",
+    ] {
+        assert!(calendar.contains(path), "{path} runs the suite: {calendar}");
+    }
+    let start = yaml.find("name: Test\n").expect("Test job");
+    let end = yaml[start..]
+        .find("name: Cycles Import Check")
+        .map_or(yaml.len(), |offset| start + offset);
+    let step = yaml[start..end]
+        .split("- name: Calendar Event Details Browser Tests")
+        .nth(1)
+        .and_then(|rest| rest.split("- name:").next())
+        .expect("calendar details browser step");
+    assert!(
+        step.contains("needs.path-check.outputs.calendar_details_changed == 'true'")
+            && step.contains("just test-calendar-details-browser"),
+        "the step runs the suite when calendar details change: {step}"
+    );
+}
+
 #[test]
 fn test_job_keeps_vitest_module_cache_on_the_cache_volume() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
@@ -392,24 +443,115 @@ fn test_job_keeps_vitest_module_cache_on_the_cache_volume() {
     );
 }
 
-/// Exercise Git's actual HTTP header handling with and without checkout's
-/// persisted credentials. The local endpoint records the request, then rejects
-/// it: fetching repository objects is irrelevant to this authentication test.
+/// The iOS native tree exempts desktop-only paths by name, but `desktop_update`
+/// is not cfg(desktop): its commands and Status type compile into mobile, so a
+/// `desktop_` prefix must stay counted while `desktop`, `desktop.*` and
+/// `desktop-*` are exempt.
 #[test]
-fn native_tree_fetch_sends_one_authorization_header() {
+fn native_tree_exclude_counts_mobile_compiled_desktop_update() {
+    use std::process::Command;
+
+    let script = include_str!("../scripts/ios_native_tree.sh");
+    let output = Command::new("bash")
+        .arg("-c")
+        .arg(format!(
+            r#"set -euo pipefail
+{script}
+printf '%s\n' "$@" | awk '$0 ~ ENVIRON["NATIVE_TREE_EXCLUDE"]'
+"#
+        ))
+        .args([
+            "bash",
+            "src-tauri/src/desktop.rs",
+            "src-tauri/src/desktop/macrod.rs",
+            "src-tauri/src/desktop_update/desktop.rs",
+            "src-tauri/src/desktop_update/desktop/test.rs",
+            "src-tauri/capabilities/desktop.json",
+            "desktop-cef/src/main.rs",
+            "desktop-release.json",
+            "src-tauri/src/desktop_update.rs",
+            "src-tauri/src/desktop_update/state.rs",
+            "src-tauri/src/lib.rs",
+        ])
+        .env_remove("BASH_ENV")
+        .output()
+        .expect("run native tree exclusion");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .collect::<Vec<_>>(),
+        [
+            "src-tauri/src/desktop.rs",
+            "src-tauri/src/desktop/macrod.rs",
+            "src-tauri/src/desktop_update/desktop.rs",
+            "src-tauri/src/desktop_update/desktop/test.rs",
+            "src-tauri/capabilities/desktop.json",
+            "desktop-cef/src/main.rs",
+            "desktop-release.json",
+        ],
+    );
+}
+
+/// Exercise Git's actual HTTP header handling with and without checkout's
+/// persisted credentials and Android's inherited Nix build environment. The
+/// local endpoint records the request, then rejects it: repository objects are
+/// irrelevant to this transport test.
+#[test]
+fn native_fetches_send_one_authorization_header() {
     use std::io::{BufRead, BufReader, Write};
     use std::net::TcpListener;
     use std::process::Command;
 
-    for persisted in [false, true] {
+    for (source, fetch, persisted, build_environment) in [
+        (
+            include_str!("../scripts/ios_native_tree.sh"),
+            "native_tree_fetch",
+            false,
+            false,
+        ),
+        (
+            include_str!("../scripts/ios_native_tree.sh"),
+            "native_tree_fetch",
+            true,
+            false,
+        ),
+        (
+            include_str!("../scripts/android_git_fetch.sh"),
+            "gh_fetch",
+            false,
+            false,
+        ),
+        (
+            include_str!("../scripts/android_git_fetch.sh"),
+            "gh_fetch",
+            true,
+            false,
+        ),
+        (
+            include_str!("../scripts/android_git_fetch.sh"),
+            "gh_fetch",
+            false,
+            true,
+        ),
+        (
+            include_str!("../scripts/android_git_fetch.sh"),
+            "gh_fetch",
+            true,
+            true,
+        ),
+    ] {
         let repo = tempfile::tempdir().expect("temporary checkout");
         let listener = TcpListener::bind("127.0.0.1:0").expect("local HTTP endpoint");
         let url = format!(
             "http://{}/",
             listener.local_addr().expect("endpoint address")
         );
-        let script =
-            include_str!("../scripts/ios_native_tree.sh").replace("https://github.com/", &url);
+        let script = source.replace("https://github.com/", &url);
         let (sender, receiver) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
             let (mut socket, _) = listener.accept().expect("Git HTTP request");
@@ -437,20 +579,25 @@ fn native_tree_fetch_sends_one_authorization_header() {
             .arg("-c")
             .arg(format!(
                 r#"set -euo pipefail
+build_library_path=${{LD_LIBRARY_PATH-}}
+unset LD_LIBRARY_PATH
 git init -q
 git remote add origin "$TEST_URL"
 if [[ "$TEST_PERSISTED" == true ]]; then
   git config "http.${{TEST_URL}}.extraheader" "AUTHORIZATION: basic checkout-token"
 fi
 {script}
-native_tree_fetch HEAD
+if [[ "$TEST_BUILD_ENVIRONMENT" == true ]]; then
+  export LD_LIBRARY_PATH="$build_library_path"
+fi
+{fetch} HEAD
 "#
             ))
             .current_dir(repo.path())
-            // CI's BASH_ENV reloads the Nix dev shell; its library path can
-            // make the runner's host git-remote-http fail before connecting.
+            // Keep fixture setup outside the build environment; restore its
+            // library path at the fetch boundary, as the release head guard sees it.
             .env_remove("BASH_ENV")
-            .env_remove("LD_LIBRARY_PATH")
+            .env("TEST_BUILD_ENVIRONMENT", build_environment.to_string())
             .env("TEST_URL", &url)
             .env("TEST_PERSISTED", persisted.to_string())
             .env("GH_TOKEN", "test-token")
@@ -468,7 +615,7 @@ native_tree_fetch HEAD
                     String::from_utf8_lossy(&output.stderr)
                 )),
             ["AUTHORIZATION: basic eC1hY2Nlc3MtdG9rZW46dGVzdC10b2tlbg=="],
-            "persisted credentials: {persisted}"
+            "fetch helper: {fetch}; persisted credentials: {persisted}; build environment: {build_environment}"
         );
     }
 }

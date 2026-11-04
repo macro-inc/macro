@@ -134,6 +134,7 @@ struct AgentHarnessInner<
 > {
     sessions: Sessions,
     admission: Arc<dyn ai_billing::AiAdmissionService>,
+    agent_keys: Arc<dyn agent_api_keys::domain::AgentKeys>,
     containers: Containers,
     announcer: Announcer,
     runtimes: Runtimes,
@@ -366,6 +367,7 @@ where
             inner: Arc::new(AgentHarnessInner {
                 sessions,
                 admission: Arc::new(ai_billing::DisabledAiAdmissionService),
+                agent_keys: Arc::new(agent_api_keys::domain::NoAgentKeys),
                 containers,
                 announcer,
                 runtimes,
@@ -630,6 +632,19 @@ where
         self
     }
 
+    /// Let in-memory sessions of agents with their own usable API key past
+    /// the allowance gate: their turns never run on Macro usage. Configure
+    /// before sharing the harness.
+    pub fn with_agent_keys(
+        mut self,
+        agent_keys: Arc<dyn agent_api_keys::domain::AgentKeys>,
+    ) -> Self {
+        Arc::get_mut(&mut self.inner)
+            .expect("configure agent keys before sharing the harness")
+            .agent_keys = agent_keys;
+        self
+    }
+
     /// Enable explicit repository choices, authorized against the owner's reachable repositories.
     pub fn with_repositories(
         mut self,
@@ -667,6 +682,58 @@ where
         command: HarnessCommand,
     ) -> impl Future<Output = Result<CommandOutcome>> + Send + 'static {
         self.enqueue(session_id, command, false)
+    }
+
+    /// Load the sessions a runtime that dialed in again still serves.
+    ///
+    /// Only sessions whose bot is bound to `harness` are touched, each on its
+    /// own command worker, so a reattach waits behind whatever that session
+    /// is already doing. One session failing never stops the others.
+    #[tracing::instrument(
+        name = "agent.runtime.reattach",
+        skip_all,
+        fields(
+            %harness,
+            agent.runtime.live_sessions = acp_sessions.len(),
+            agent.runtime.reattach_sessions = tracing::field::Empty,
+            agent.runtime.reattach_failures = tracing::field::Empty,
+        )
+    )]
+    pub async fn reattach_live_sessions(
+        &self,
+        harness: harness_id::HarnessId,
+        acp_sessions: Vec<agent_client_protocol::schema::v1::SessionId>,
+        cause: tracing::Span,
+    ) {
+        tracing::Span::current().follows_from(&cause);
+        let sessions = match self
+            .inner
+            .runtimes
+            .sessions_on_harness(harness, &acp_sessions)
+            .await
+        {
+            Ok(sessions) => sessions,
+            Err(error) => {
+                tracing::error!(error = ?error, "could not resolve a runtime's live sessions");
+                return;
+            }
+        };
+        let span = tracing::Span::current();
+        span.record("agent.runtime.reattach_sessions", sessions.len());
+        let results = futures::future::join_all(
+            sessions
+                .iter()
+                .map(|session_id| self.execute(*session_id, HarnessCommand::Reattach)),
+        )
+        .await;
+        let mut failures = 0;
+        for (session_id, result) in sessions.iter().zip(results) {
+            if let Err(error) = result {
+                failures += 1;
+                tracing::warn!(error = ?error, %session_id, "could not reattach a live session");
+            }
+        }
+        span.record("agent.runtime.reattach_failures", failures);
     }
 
     /// Post the announcement for a prompt an external runtime delivers.

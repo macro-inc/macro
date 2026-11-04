@@ -8,7 +8,7 @@ use super::models::{
 };
 use agent_session::domain::model::AgentSessionId;
 use agent_session::domain::notifications::PendingNotification;
-use import_notion::domain::model::NotionId;
+use import_notion::domain::model::{NotionId, NotionPage};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -18,6 +18,9 @@ use uuid::Uuid;
 /// Errors surfaced by the import service and repository.
 #[derive(Debug, Error)]
 pub enum ImportError {
+    /// Connected issue tracker read failed.
+    #[error(transparent)]
+    Tracker(#[from] import_tracker::domain::model::TrackerError),
     /// AI work was refused or usage validation is temporarily unavailable.
     #[error(transparent)]
     Admission(#[from] ai_billing::AiAdmissionError),
@@ -383,6 +386,25 @@ pub struct ImportedTaskProperties {
     pub assignee_email: Option<String>,
 }
 
+/// When a source page was created and last edited, so its copy sorts by
+/// when it was written there rather than by when it was copied in.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SourceDates {
+    /// When the page was created.
+    pub created: chrono::DateTime<chrono::Utc>,
+    /// When the page was last edited.
+    pub last_edited: chrono::DateTime<chrono::Utc>,
+}
+
+impl From<&NotionPage> for SourceDates {
+    fn from(page: &NotionPage) -> Self {
+        Self {
+            created: page.created,
+            last_edited: page.last_edited,
+        }
+    }
+}
+
 /// Properties recovered from a Notion page and attached to the imported
 /// Macro document. The creator applies these best-effort after the document
 /// exists, so unsupported or invalid values never prevent the body import.
@@ -556,7 +578,40 @@ pub struct TeamMember {
 /// uses, so permissions, search and sync behave as for anything the user
 /// made by hand.
 pub trait WorkspaceWriter: Send + Sync + 'static {
-    /// Create a folder, inside `parent` when given. Returns the folder id.
+    /// Idempotently create a Macro project (initiative) with the ledger's
+    /// stable id and the approved visibility, using attributed creation.
+    fn create_tracker_project(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+        name: &str,
+        markdown: &str,
+        shared: bool,
+    ) -> impl Future<Output = anyhow::Result<Uuid>> + Send;
+
+    /// Idempotently create a task from ordinary markdown, applying normalized
+    /// task properties and approved visibility. Never uses Notion conversion.
+    fn create_tracker_task(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+        name: &str,
+        markdown: &str,
+        properties: &ImportedTaskProperties,
+        shared: bool,
+    ) -> impl Future<Output = anyhow::Result<String>> + Send;
+
+    /// Apply project, parent/subtask relationships and labels after all tasks
+    /// exist. Safe to repeat; never points at a failed or excluded row.
+    fn link_tracker_task(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+        relations: &TrackerTaskRelations,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Create a folder, inside `parent` when given, dated by what is written
+    /// into it rather than by when it was made. Returns the folder id.
     fn create_folder(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -573,9 +628,10 @@ pub trait WorkspaceWriter: Send + Sync + 'static {
 
     /// Create document `id` from a Notion page (Notion's enhanced markdown,
     /// references resolved through `links`) inside `folder` when given,
-    /// applying `properties` best-effort. Returns the document id. Safe to
-    /// repeat: when document `id` exists already (an interrupted earlier
-    /// attempt), it is left as it is and its id returned.
+    /// applying `properties` best-effort and keeping the page's `dates` when
+    /// known. Returns the document id. Safe to repeat: when document `id`
+    /// exists already (an interrupted earlier attempt), it is left as it is
+    /// and its id returned.
     #[allow(clippy::too_many_arguments)]
     fn create_document(
         &self,
@@ -586,14 +642,16 @@ pub trait WorkspaceWriter: Send + Sync + 'static {
         links: &NotionLinks,
         properties: &ImportedDocumentProperties,
         folder: Option<Uuid>,
+        dates: Option<SourceDates>,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
 
     /// Create task `id` from a Notion page (as for [`Self::create_document`],
     /// and as safe to repeat) inside `folder` when given, applying
-    /// `properties` best-effort. Returns the task id.
+    /// `properties` best-effort and keeping the page's `dates`. Returns the
+    /// task id.
     #[expect(
         clippy::too_many_arguments,
-        reason = "a task carries its id, content, links, properties and folder"
+        reason = "a task carries its id, content, links, properties, folder and dates"
     )]
     fn create_task(
         &self,
@@ -604,6 +662,7 @@ pub trait WorkspaceWriter: Send + Sync + 'static {
         links: &NotionLinks,
         properties: &ImportedTaskProperties,
         folder: Option<Uuid>,
+        dates: Option<SourceDates>,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
 
     /// Create an empty database named `name`.
@@ -637,6 +696,17 @@ pub trait WorkspaceWriter: Send + Sync + 'static {
         &self,
         user: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = anyhow::Result<Vec<TeamMember>>> + Send;
+}
+
+/// Stable task/project relationships resolved from a reviewed tracker plan.
+#[derive(Debug, Clone, Default)]
+pub struct TrackerTaskRelations {
+    /// Macro project (initiative) containing this task.
+    pub project: Option<Uuid>,
+    /// Macro parent task, if it was imported successfully.
+    pub parent: Option<Uuid>,
+    /// Source labels, mapped to personal tags.
+    pub labels: Vec<String>,
 }
 
 /// One object of a workspace import plan, ready to stage.
@@ -770,6 +840,11 @@ pub trait NotionPlanRepo: Send + Sync + 'static {
 /// while it works. Once a lease lapses (a crash or a deploy) any process may
 /// adopt the run and resume the job recorded on it.
 pub trait NotionRunRepo: Send + Sync + 'static {
+    /// Scope leases, team claims and root folders to one workspace source.
+    fn for_source(&self, source: ImportSource) -> Self
+    where
+        Self: Sized;
+
     /// Take the user's Notion run for `owner` until `lease` from now and
     /// record `job` on it. Only a run that just started (`running` or
     /// `importing`, held by nobody) can be taken. Returns whether it was.

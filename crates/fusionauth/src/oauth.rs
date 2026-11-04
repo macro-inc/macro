@@ -81,11 +81,7 @@ async fn complete(
         .body(body)
         .send()
         .await
-        .map_err(|e| {
-            FusionAuthClientError::Generic(GenericErrorResponse {
-                message: e.to_string(),
-            })
-        })?;
+        .map_err(FusionAuthClientError::transport)?;
 
     tracing::trace!("request sent");
 
@@ -95,12 +91,7 @@ async fn complete(
             let body = res
                 .json::<AuthorizationCodeGrantCompleteResponse>()
                 .await
-                .map_err(|e| {
-                    tracing::error!(error=?e, "unable to decode successful oauth2 token response");
-                    FusionAuthClientError::Generic(GenericErrorResponse {
-                        message: e.to_string(),
-                    })
-                })?;
+                .map_err(FusionAuthClientError::transport)?;
 
             Ok(OAuth2Grant {
                 access_token: body.access_token.into(),
@@ -108,19 +99,7 @@ async fn complete(
                 expires_in: body.expires_in,
             })
         }
-        _ => {
-            let body = res.text().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
-
-            tracing::error!(body=%body, "unexpected response from fusionauth");
-
-            Err(FusionAuthClientError::Generic(GenericErrorResponse {
-                message: body,
-            }))
-        }
+        _ => Err(FusionAuthClientError::unexpected_response(res).await),
     }
 }
 

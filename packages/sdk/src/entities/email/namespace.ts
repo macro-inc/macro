@@ -174,7 +174,12 @@ export class EmailNamespace {
     return EmailMessage.send(this.client, opts);
   }
 
-  /** Search email threads by subject and content. */
+  /**
+   * Search email threads by subject and content. To find a person's emails,
+   * search for their quoted email address, not their name: a name only
+   * matches where that display name appears. Resolve the address first, for
+   * example with `macro.users.search(name)`.
+   */
   search(query: string, opts?: SearchOpts): AsyncGenerator<EmailThread> {
     return EmailThread.search(this.client, query, opts);
   }
@@ -212,6 +217,14 @@ export class EmailNamespace {
   /** Create a user label. Returns the created label. */
   createLabel(name: string): Promise<Label> {
     return Label.create(this.client, name);
+  }
+
+  /**
+   * Archive many threads (or unarchive with `false`). Resolves to the threads
+   * whose state could not change.
+   */
+  archive(threads: EmailThread[], archived = true): Promise<EmailThread[]> {
+    return EmailThread.archiveMany(this.client, threads, archived);
   }
 
   /** Delete a label. */

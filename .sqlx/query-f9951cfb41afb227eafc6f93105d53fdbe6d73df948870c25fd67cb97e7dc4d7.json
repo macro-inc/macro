@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_message_read_receipts r\n            SET open_count = r.open_count + 1,\n                first_opened_at = COALESCE(r.first_opened_at, $2),\n                last_opened_at = $2\n            FROM email_messages m\n            WHERE r.token = $1\n              AND m.id = r.message_id\n              AND m.is_sent\n              AND (r.last_opened_at IS NULL OR r.last_opened_at <= $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f9951cfb41afb227eafc6f93105d53fdbe6d73df948870c25fd67cb97e7dc4d7"
+}

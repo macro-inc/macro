@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT thread_provider_ids, next_page_token FROM email_backfill_listing_pages WHERE backfill_job_id = $1 AND priority_pass = $2 AND page_token = $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_provider_ids",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 1,
+        "name": "next_page_token",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "4ec201fa493c23f0bb191274d76c3015aa0f630f190f835d65aa6266d806df2e"
+}

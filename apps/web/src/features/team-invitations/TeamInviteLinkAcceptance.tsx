@@ -1,8 +1,8 @@
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { toast } from '@core/component/Toast/Toast';
 import { thrownResultErrorHasCode } from '@core/util/result';
-import SpinnerIcon from '@phosphor/spinner.svg';
-import UsersThreeIcon from '@phosphor/users-three.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import UsersThreeIcon from '@icon/system/regular/users-three.svg';
 import {
   useJoinTeamByInviteLinkMutation,
   useTeamByInviteLinkQuery,
@@ -79,7 +79,7 @@ export function TeamInviteLinkAcceptance(props: { token: string }) {
             </p>
           </div>
           <Button
-            variant="outline"
+            variant="secondary"
             size="md"
             class="w-full"
             disabled={joinMutation.isPending}
@@ -107,7 +107,7 @@ function Outcome(props: { title: string; body: string }) {
       <h2 class="text-lg font-medium text-ink">{props.title}</h2>
       <p class="text-sm text-ink-muted">{props.body}</p>
       <Button
-        variant="outline"
+        variant="secondary"
         size="md"
         class="w-full"
         onClick={() => navigate('/')}

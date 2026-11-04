@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_backfill_jobs SET listing_complete = true,\n            total_threads = listed_threads, updated_at = now()\n        WHERE id = $1 AND completed_threads IS NOT NULL AND status = 'InProgress'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "421508307d19651d164a4b4db032d7d5533084c3bb6774abf95a2daceddec108"
+}

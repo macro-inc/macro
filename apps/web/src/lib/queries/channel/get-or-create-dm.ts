@@ -1,5 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
+import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import {
   type GetOrCreateChannelResponse,
@@ -11,6 +12,7 @@ import { invalidateListChannels } from './channels';
 type GetOrCreateDmResponse = GetOrCreateChannelResponse;
 
 type GetOrCreateDirectMessageParams = {
+  parentSpan?: TraceContext;
   recipient_id: string;
 };
 
@@ -29,9 +31,11 @@ export function useGetOrCreateDirectMessageMutation(
     gcTime: 0,
     mutationFn: async (vars: GetOrCreateDirectMessageParams) => {
       return await throwOnErr(async () =>
-        storageServiceClient.getOrCreateDirectMessage({
-          recipient_id: vars.recipient_id,
-        })
+        (vars.parentSpan ?? Telemetry.captureContext()).run(() =>
+          storageServiceClient.getOrCreateDirectMessage({
+            recipient_id: vars.recipient_id,
+          })
+        )
       );
     },
     ...withCallbacks<
@@ -47,9 +51,23 @@ export function useGetOrCreateDirectMessageMutation(
         onSettled: () =>
           fireAndForget(invalidateListChannels(), 'channel-list'),
       },
-      callbacks
+      callbacks,
+      (variables) => variables.parentSpan
     ),
   }));
+}
+
+/**
+ * Resolves the 1:1 DM with a recipient when a control is pressed. Avatars in
+ * a message list render by the dozen, and a mutation observer per avatar
+ * costs setup for a press that rarely comes.
+ */
+export async function getOrCreateDirectMessage(recipientId: string) {
+  const result = await storageServiceClient.getOrCreateDirectMessage({
+    recipient_id: recipientId,
+  });
+  fireAndForget(invalidateListChannels(), 'channel-list');
+  return result;
 }
 
 type GetOrCreatePrivateChannelParams = {

@@ -645,3 +645,34 @@ async fn ensure_description_surface_rejects_other_receipts() {
         Err(InitiativeError::BadRequest(_))
     ));
 }
+
+#[tokio::test]
+async fn replayed_import_reuses_only_the_same_owners_project() {
+    let mut repo = MockInitiativeRepo::new();
+    repo.expect_get_detail()
+        .times(2)
+        .returning(|_| Box::pin(async { Ok(Some(detail(Vec::new()))) }));
+    let service = service(repo);
+    let request = || CreateInitiativeRequest {
+        name: "Launch".into(),
+        description: None,
+        member_ids: None,
+        share_with_team: Some(false),
+        property_values: Vec::new(),
+    };
+    let attribution = || activity::Attribution::direct(activity::Actor::new_from_user(user(OWNER)));
+    let reused = service
+        .create_imported(&user(OWNER), request(), attribution(), initiative_id())
+        .await
+        .unwrap();
+    assert_eq!(reused.id, initiative_id());
+    let other = service
+        .create_imported(
+            &user(OTHER),
+            request(),
+            activity::Attribution::direct(activity::Actor::new_from_user(user(OTHER))),
+            initiative_id(),
+        )
+        .await;
+    assert!(matches!(other, Err(InitiativeError::Unauthorized)));
+}

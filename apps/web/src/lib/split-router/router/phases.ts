@@ -24,6 +24,7 @@ import {
 import { runMiddleware, type SplitRouterMiddleware } from './middleware';
 import { preloadLocation, withinBudget } from './preload';
 import type { Event as RunEvent, Running, State as RunState } from './run';
+import type { RegisterCommitCallback } from './runner';
 import type { Navigation, PaneTarget } from './types';
 
 type Report = (event: RunEvent) => void;
@@ -114,10 +115,19 @@ export function createPhaseScopes(
     /** What a pane shows now, which its guards are asked to leave. */
     current(pane: PaneId): Entry | undefined;
     preloadBudgetMs: number;
+    /** Speculative cache admission belongs to the router, not its navigation phase. */
+    preloadSignal: AbortSignal;
   },
-  waiting: (state: Running) => void
+  waiting: (state: Running) => void,
+  registerCommit: RegisterCommitCallback
 ): PhaseScopes {
   const { routes, guards } = options;
+
+  const onCommit =
+    ({ navigation, signal }: RunContext) =>
+    (callback: () => void) => {
+      if (!signal.aborted) registerCommit(navigation, callback);
+    };
 
   const targetChecks = ({ navigation, signal }: RunContext): Check[] =>
     navigation.targets.flatMap(({ pane, from, to }) => {
@@ -125,7 +135,14 @@ export function createPhaseScopes(
 
       const depth = firstChangedDepth(routes, from, to);
 
-      const context = { pane, from, to, cause: navigation.cause, signal };
+      const context = {
+        pane,
+        from,
+        to,
+        cause: navigation.cause,
+        signal,
+        onCommit: onCommit({ navigation, signal }),
+      };
 
       return checksFor(guards.select(pane, depth, context), context);
     });
@@ -137,7 +154,13 @@ export function createPhaseScopes(
       const from = options.current(pane);
       if (!from) return [];
 
-      const context = { pane, from, cause: navigation.cause, signal };
+      const context = {
+        pane,
+        from,
+        cause: navigation.cause,
+        signal,
+        onCommit: onCommit({ navigation, signal }),
+      };
 
       return checksFor(guards.select(pane, PANE_LEVEL), context);
     });
@@ -179,12 +202,16 @@ export function createPhaseScopes(
   };
 
   const preloadEntries = (
-    { navigation, signal }: RunContext,
+    { navigation }: RunContext,
     entries: readonly Entry[]
   ): MaybePromise<void> => {
     const intent = intentOf(navigation);
     const work = entries.flatMap((entry) => {
-      const context = { location: entry.location, intent, signal };
+      const context = {
+        location: entry.location,
+        intent,
+        signal: options.preloadSignal,
+      };
 
       return preloadLocation(routes, context) ?? [];
     });

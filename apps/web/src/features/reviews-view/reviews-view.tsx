@@ -4,6 +4,7 @@ import {
   useViewShell,
   ViewBreadcrumbs,
   ViewShell,
+  ViewSwitchTrigger,
 } from '@app/components/view-shell';
 import {
   ListHeader,
@@ -16,6 +17,7 @@ import {
   useNavigate,
   useParams,
 } from '@app/lib/split-router';
+import { usePending } from '@app/observability/flow';
 import { reviewsPrRoute, reviewsSplitRoute } from '@app/routes/routes';
 import { PR_ORIGIN_TOOLS } from '@block-pr/data/pr-origin';
 import {
@@ -176,6 +178,7 @@ function ReviewsRoot() {
     }),
     listEnabled
   );
+  usePending('reviews.items', source.isLoading);
   const facets = useReviewsFacetsQuery();
   const changeFilter = (
     group: ReviewsFilterId,
@@ -462,7 +465,7 @@ function ReviewsRoot() {
               >
                 <span>Reviews couldn’t be loaded.</span>
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
                   onClick={() =>
                     fireAndForget(listSource.retry(), 'reviews-view')
@@ -509,15 +512,25 @@ function ReviewsRoot() {
         order={0}
         metadata={{ type: 'reviews' }}
       >
-        {(item) => (
-          <ViewBreadcrumbs.ReturnButton
-            isActive={item.isActive()}
-            onClick={item.onSelect}
-            tooltip={scopeTitle()}
-          >
-            {scopeTitle()}
-          </ViewBreadcrumbs.ReturnButton>
-        )}
+        {(item) => {
+          const button = () => (
+            <ViewBreadcrumbs.ReturnButton
+              isActive={item.isActive()}
+              onClick={item.onSelect}
+              tooltip={scopeTitle()}
+            >
+              {scopeTitle()}
+            </ViewBreadcrumbs.ReturnButton>
+          );
+          // At the list itself the name switches views; deeper, it returns here.
+          return (
+            <Show when={item.isActive()} fallback={button()}>
+              <ViewSwitchTrigger fallback={button()}>
+                {scopeTitle()}
+              </ViewSwitchTrigger>
+            </Show>
+          );
+        }}
       </ViewBreadcrumbs.Item>
       <SplitPanel.Root>
         <SplitPanel.Body>

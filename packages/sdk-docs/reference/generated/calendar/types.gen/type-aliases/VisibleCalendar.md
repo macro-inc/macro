@@ -1,6 +1,6 @@
 # Type Alias: VisibleCalendar
 
-> **VisibleCalendar** = \{ `capabilities`: [`CalendarCapabilities`](CalendarCapabilities.md); `color?`: `string` \| `null`; `defaultReminders`: [`EventReminderOverride`](EventReminderOverride.md)[]; `emailAddress`: `string`; `emailLinkId`: `string`; `id`: `string`; `isPrimary`: `boolean`; `isSubscription`: `boolean`; `isWritable`: `boolean`; `name`: `string`; `provider`: [`CalendarProvider`](CalendarProvider.md); `syncError?`: `string` \| `null`; \}
+> **VisibleCalendar** = \{ `capabilities`: [`CalendarCapabilities`](CalendarCapabilities.md); `color?`: `string` \| `null`; `contributesToAvailability?`: `boolean`; `defaultReminders`: [`EventReminderOverride`](EventReminderOverride.md)[]; `emailAddress`: `string`; `emailLinkId`: `string`; `id`: `string`; `isPrimary`: `boolean`; `isSubscription`: `boolean`; `isWritable`: `boolean`; `name`: `string`; `provider`: [`CalendarProvider`](CalendarProvider.md); `syncError?`: `string` \| `null`; \}
 
 A calendar visible to a requester, listed for pickers and filters.
 
@@ -10,6 +10,7 @@ A calendar visible to a requester, listed for pickers and filters.
 | ------ | ------ | ------ |
 | <a id="property-capabilities"></a> `capabilities` | [`CalendarCapabilities`](CalendarCapabilities.md) | Provider features available on this actual calendar. |
 | <a id="property-color"></a> `color?` | `string` \| `null` | Provider color. |
+| <a id="property-contributestoavailability"></a> `contributesToAvailability?` | `boolean` | Whether this calendar counts toward the requester's busy time: their setting, by default only the primary calendars of inboxes they own. The nearest thing to "this is the requester's own": a provider's access role only says what they may do, on a colleague's calendar too. |
 | <a id="property-defaultreminders"></a> `defaultReminders` | [`EventReminderOverride`](EventReminderOverride.md)[] | Default reminders applied to events that keep `useDefault`. |
 | <a id="property-emailaddress"></a> `emailAddress` | `string` | Connected inbox address, for grouping in multi-inbox pickers. |
 | <a id="property-emaillinkid"></a> `emailLinkId` | `string` | Connected inbox that syncs this calendar. |

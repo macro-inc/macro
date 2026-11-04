@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE external_chat_file_deletion SET retry_at = now() + interval '5 minutes'\n            WHERE file_id IN (\n                SELECT file_id FROM external_chat_file_deletion WHERE retry_at <= now()\n                ORDER BY retry_at LIMIT $1 FOR UPDATE SKIP LOCKED)\n            RETURNING file_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "file_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c97c76d380e19549568973ba8d7d2ea03d6e7f03f5e4be9ec3978ea6d1fe0d04"
+}

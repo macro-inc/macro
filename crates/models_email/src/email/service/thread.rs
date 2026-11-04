@@ -186,9 +186,8 @@ pub struct ListThreadsPayload {
     /// off to the normal most-recent-to-least sweep.
     #[serde(default)]
     pub priority_pass: bool,
-    /// When true (stale-cursor recovery jobs), threads that already exist in
-    /// the database are refreshed — their message ids are fetched and missing
-    /// messages backfilled — instead of being skipped.
+    /// Legacy wire hint forwarded for payload compatibility. Durable jobs
+    /// always import missing messages once, including in already-stored threads.
     #[serde(default)]
     pub refresh_existing: bool,
 }
@@ -218,6 +217,8 @@ pub enum PreviewViewStandardLabel {
     Drafts,
     Starred,
     All,
+    Spam,
+    Trash,
     Important,
     Other,
 }

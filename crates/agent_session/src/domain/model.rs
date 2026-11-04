@@ -22,6 +22,11 @@ pub use agent_fold::domain::model::{
 /// whose string value is the [`AgentSessionId`] the ACP session serves.
 pub const MACRO_AGENT_SESSION_META_KEY: &str = "macro.com/agentSessionId";
 
+/// The `_meta` key on `session/new`, `session/load` and `session/resume`
+/// whose string value is how the session answers permission requests
+/// (`autoAccept` or `prompt`), so a runtime can tell its agent.
+pub const MACRO_PERMISSION_POLICY_META_KEY: &str = "macro.com/permissionPolicy";
+
 /// Identity of one harness participant, minted fresh at construction.
 ///
 /// A restarted process is a new replica: whatever the old identity claimed is
@@ -178,7 +183,8 @@ pub enum SessionStatus {
 }
 
 /// Which Pipedream MCP servers a session is handed: the agent's own choice,
-/// snapshotted onto the session at creation like `instructions`. The servers
+/// plus any apps a routine requires, snapshotted onto the session at creation
+/// like `instructions`. The servers
 /// it resolves to are re-listed before each prompt, so an app the owner
 /// connects mid-session reaches a live agent that can `session/resume`;
 /// editing the agent's selection applies to its next session.
@@ -355,6 +361,40 @@ pub struct CreateAgentSessionParams {
     pub egress_token_hash: Option<String>,
 }
 
+/// Who or what archived a session.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    strum::AsRefStr,
+    strum::EnumString,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum ArchiveCause {
+    /// A person archived it.
+    User,
+    /// Every pull request linked to it closed, with at least one merged.
+    PullRequestMerged,
+    /// The runtime session backing it was deliberately closed.
+    RuntimeClosed,
+}
+
+/// A session's archive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SessionArchive {
+    /// Who or what archived it.
+    pub by: ArchiveCause,
+    /// When it was archived.
+    pub at: DateTime<Utc>,
+}
+
 /// A running or historical agent coding session.
 #[derive(Debug, Clone)]
 pub struct AgentSession {
@@ -362,8 +402,9 @@ pub struct AgentSession {
     pub id: AgentSessionId,
     /// User-facing session name.
     pub name: String,
-    /// Whether the session is archived and therefore read-only.
-    pub is_archived: bool,
+    /// Who archived the session and when, or `None` while it is active. An archived session
+    /// is read-only.
+    pub archived: Option<SessionArchive>,
     /// Who created and owns the session. Immutable for its life.
     pub owner_id: Owner,
     /// The root message where the bot was originally invoked, if any.
@@ -416,6 +457,11 @@ pub struct AgentSession {
 }
 
 impl AgentSession {
+    /// Whether the session is archived and therefore read-only.
+    pub fn is_archived(&self) -> bool {
+        self.archived.is_some()
+    }
+
     /// The user this session runs as; see [`session_owner_user`].
     pub fn owner_user(&self) -> Result<&MacroUserIdStr<'static>, AgentSessionError> {
         self.owner_id

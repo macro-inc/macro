@@ -83,6 +83,26 @@ fn fuzzy_matching_rewards_prefix_and_freshness() {
 }
 
 #[test]
+fn commas_separate_query_tokens_in_any_order() {
+    let group = SearchDocument {
+        profile: SearchProfile::QuickAccessV1,
+        record_key: EntityKey::entity("GraphqlSoupChannel", &["1"]),
+        bucket: "channel".into(),
+        search_text: "avery morgan, blair chen".into(),
+        timestamp_ms: 990,
+        source_hash: "a".into(),
+    };
+    for query in ["avery, blair", "blair, avery", "blair,avery", "blair, ave"] {
+        assert!(
+            fuzzy_freshness_score(&group, query, 1_000).is_some(),
+            "{query} must match"
+        );
+    }
+    assert!(fuzzy_freshness_score(&group, "blair, casey", 1_000).is_none());
+    assert!(fuzzy_freshness_score(&group, " , ", 1_000).is_none());
+}
+
+#[test]
 fn soup_entity_recency_prefers_viewed_at_over_newer_activity() {
     for typename in [
         "GraphqlSoupDocument",
@@ -116,6 +136,46 @@ fn soup_entity_recency_prefers_viewed_at_over_newer_activity() {
             parse_rfc3339_millis("2024-12-01T00:00:00Z").unwrap()
         );
     }
+}
+
+#[test]
+fn initiative_projection_indexes_display_name_and_reads_metadata_recency() {
+    let mut record = string_record(&[
+        ("__typename", "GraphqlSoupInitiative"),
+        ("displayName", "  Launch   Plan "),
+    ]);
+    let metadata = |fields: &[(&str, &str)]| {
+        CacheValue::Object(
+            fields
+                .iter()
+                .map(|(key, value)| ((*key).into(), CacheValue::String((*value).into())))
+                .collect(),
+        )
+    };
+    record.fields.insert(
+        "metadata".into(),
+        metadata(&[
+            ("viewedAt", "2025-01-01T00:00:00Z"),
+            ("updatedAt", "2025-01-03T00:00:00Z"),
+        ]),
+    );
+    let key = EntityKey::entity("GraphqlSoupInitiative", &["initiative"]);
+    let document = project_search_documents(&key, &record).pop().unwrap();
+    assert_eq!(document.bucket, "initiative");
+    assert_eq!(document.search_text, "launch plan");
+    assert_eq!(
+        document.timestamp_ms,
+        parse_rfc3339_millis("2025-01-01T00:00:00Z").unwrap()
+    );
+
+    record.fields.insert(
+        "metadata".into(),
+        metadata(&[("updatedAt", "2025-01-03T00:00:00Z")]),
+    );
+    assert_eq!(
+        project_search_documents(&key, &record)[0].timestamp_ms,
+        parse_rfc3339_millis("2025-01-03T00:00:00Z").unwrap()
+    );
 }
 
 #[test]

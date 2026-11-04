@@ -1,6 +1,6 @@
+import { staticFileIdEndpoint } from '@core/constant/servers';
 import { $createImageNode, ImageNode } from '@macro-inc/lexical-core';
 import {
-  $getSelection,
   COMMAND_PRIORITY_NORMAL,
   createCommand,
   type LexicalCommand,
@@ -26,10 +26,9 @@ function registerGifPickerPlugin(
   return editor.registerCommand(
     TRY_INSERT_GIF_COMMAND,
     () => {
-      const selection = $getSelection();
-      if (!selection) {
-        return false;
-      }
+      // iOS can clear the Lexical selection on the tap that chose /gif
+      // before this command runs. The picker still opens; insert restores
+      // the caret or falls back to the end of the document.
       props.onOpenPicker();
       return true;
     },
@@ -41,11 +40,12 @@ export function gifPickerPlugin(props: GifPickerPluginProps) {
   return (editor: LexicalEditor) => registerGifPickerPlugin(editor, props);
 }
 
-export function $insertGifNode(gif: Gif) {
+export function $insertGifNode(gif: Gif, staticFileId: string) {
   const width = Math.min(gif.width, MAX_GIF_WIDTH);
   const imageNode = $createImageNode({
-    srcType: 'url',
-    url: gif.url,
+    srcType: 'sfs',
+    id: staticFileId,
+    url: staticFileIdEndpoint(staticFileId),
     alt: gif.title,
     width: gif.width,
     height: gif.height,

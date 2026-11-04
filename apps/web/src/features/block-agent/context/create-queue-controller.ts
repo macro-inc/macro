@@ -39,6 +39,8 @@ export type QueueController = {
    * so the queue must not.
    */
   entries: Accessor<QueuedActionDto[]>;
+  /** Whether the server queue still holds this action, shown or not. */
+  waiting: (actionId: string) => boolean;
   /** Replace a queued prompt's text. A 404 means it already dispatched —
    *  the gateway's snapshot reconciles it, not an error. */
   edit: (actionId: string, prompt: string) => Promise<void>;
@@ -47,7 +49,7 @@ export type QueueController = {
   /**
    * Run this queued action next: the server moves it to the front and
    * cancels the turn in flight. `false` when it was not waiting anymore or
-   * the request failed.
+   * the request failed; the caller reports the failure.
    */
   steer: (actionId: string) => Promise<boolean>;
 };
@@ -113,8 +115,8 @@ export function createQueueController(options: {
     })
   );
 
-  // A pending message retires a row too. `sendNext` speculates the queue
-  // head under the id this list knows it by, and the whole point is that it
+  // A pending message retires a row too. A force-send speculates the entry
+  // under the id this list knows it by, and the whole point is that it
   // reads as sent; a prompt the server queued after the client speculated
   // it is retracted by the response, so its row comes back on its own.
   const dispatchedIds = createMemo(() => {
@@ -161,18 +163,14 @@ export function createQueueController(options: {
     const result = await agentHarnessServiceClient
       .steerQueued(sessionId, actionId)
       .catch(() => undefined);
-    if (result === undefined || result.isErr()) {
-      if (result === undefined || !isDispatched(result)) {
-        toast.failure('The queued message could not be steered');
-      }
-      return false;
-    }
-    return true;
+    return result !== undefined && result.isOk();
   };
 
   return {
     entries: () =>
       queued().filter((entry) => !dispatchedIds().has(entry.actionId)),
+    waiting: (actionId) =>
+      queued().some((entry) => entry.actionId === actionId),
     edit,
     remove,
     steer,

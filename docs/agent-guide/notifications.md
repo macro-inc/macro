@@ -1,6 +1,54 @@
 # Notifications
 
+## Reading items
+
+Opening or previewing an item clears the unread dot immediately, before its
+read request completes. Home, Mail, Drive and Tasks share this behavior for
+Markdown/tasks, legacy AI chats, email, calendar events, agent sessions, CRM
+records and pull requests. Loaded call/project notifications use the same policy.
+Email clears both the mailbox unread state and reminder notifications, using the
+thread's owning inbox. A failed notification write restores its dot; failed REST
+mailbox writes refresh the affected thread. Direct document/chat/PR/email links
+mark read when their content mounts, without an extra timer.
+
+Check click/tap, Enter, keyboard preview following, next-item navigation and
+mark-done advance. With writes held pending, the dot should already be gone;
+fail the write and verify that the dot returns and reopening retries. Include
+email from a secondary inbox and a received thread with a draft reply. Mark an
+open email unread explicitly and leave it open: the mount marker must not keep
+marking it read. Local-only drafts must not issue a mailbox read.
+
+Channel/thread rows retain their scoped reads, and message readers still require
+actual visibility; opening another entity must not mark hidden replies seen.
+
+With GraphQL Soup enabled, modern project **Mark read** and **Mark done** actions
+target all of the project's notifications, including notifications absent from
+the loaded feed. The target is `INITIATIVE`; legacy Drive folders retain the
+separate `PROJECT` target.
+Check both actions with a partially loaded notification feed. This mapping does
+not add read-on-open behavior to project routes or folder navigation.
+
 ## Notifications
+
+Browser notifications must arrive while Macro is in a background tab, not just
+when it is visible. With browser permission and in-app delivery enabled, switch
+to an unrelated tab and trigger a notification from another session. Check that
+the alert arrives before returning to Macro and does not repeat on return. Try
+with one Macro tab and with several all hidden; only the elected notification
+leader should show the alert. This does not promise delivery after every Macro
+tab is closed or the browser suspends the page.
+
+GraphQL notification callbacks run on network receipt, independently of the local
+cache, which parks while all Macro tabs are hidden. Cache updates and channel
+reconciliation catch up afterward. The backend-free `parking.browser.e2e.ts`
+regression exercises that boundary with real storage and simulated visibility;
+OS banner presentation still needs the manual check above.
+
+For delayed cache catch-up, find `notification.receive` by `notification.id`.
+Its linked `graphql.subscription.cache_queue` and
+`graphql.subscription.cache_apply` phases distinguish waiting behind an earlier
+event from applying the event to storage. Receipt completes without waiting for
+these phases; listener errors mark receipt, while cache errors mark application.
 
 In the desktop app, **Settings → Notifications → Delivery → Desktop notifications**
 controls system notification delivery for this installation. The Notifications
@@ -30,7 +78,8 @@ response delegate or repair destinations in previously delivered alerts.
 In a signed macOS release, an alert from a person shows their avatar in place of
 the app icon, their name as the title, and the channel or document name beneath
 for group conversations; direct messages show only the sender. Alerts from one
-conversation stack together in Notification Center and play the default sound.
+conversation stack together in Notification Center and play the default sound,
+unless Macro plays its own notification sound for that alert (see below).
 Verify a channel message, a direct message, a document comment, and a reminder
 (no sender: app icon and the combined title). Local and ad-hoc builds lack the
 communication entitlement and show the app icon with the sender and subtitle.
@@ -48,13 +97,42 @@ Linux WebKit/D-Bus regression is `bun run native:e2e:notifications`; compositor
 focus behavior still needs a real Wayland/X11 desktop check.
 
 On iOS builds with durable push navigation, a tapped channel push chooses the
-first route after verifying its recipient account. A failed or stalled native
-bridge must release startup within 1.5 seconds; the app can show its auth or
-retry UI while retaining the tap. If the bridge recovers later, the tap uses
+first route after verifying its recipient account. Cold launches open the
+channel in front of Home, retaining the header Back chevron and swipe-back
+destination. Verify both return to Home without reopening the channel first.
+A failed or stalled native bridge must release startup within 1.5 seconds;
+the app can show its auth or retry UI while retaining the tap. If the bridge
+recovers later, the tap uses
 normal navigation without resetting the current page to the app root. Check
 both listener attachment and pending-intent reads, including a tap delivered
 before the pending read stalls. Receiving a push without tapping it must not
 navigate.
+
+For an iOS warm resume, leave the app running past its startup timeout before
+backgrounding it. Tap an uncached notification without a direct channel target
+and fail its notification lookup: the app must reveal the existing page and
+show **Failed to open notification.** A later tap must still open normally.
+Also stall navigation or its native acknowledgment: after eight seconds the
+frontend releases the cover without discarding the pending destination. Duplicate
+delivery must not restart that deadline; a newer tap must get its own deadline.
+`notification.cover_timeout` is recorded on the notification-open trace. This
+frontend recovery requires responsive JavaScript and native IPC; verify actual
+iOS presentation separately from browser bridge simulations.
+
+On iOS, Macro requests provisional authorization at launch, so
+**Settings → Apps → Macro → Notifications** exists before any prompt, and a
+signed-in device registers for pushes that arrive quietly in Notification
+Center. A quiet push counts as delivered, so those users get no email digest
+for it. The in-app **Mobile notifications** switch and enable prompt stay off
+while delivery is provisional; turning either on shows the system prompt.
+A quiet notification's **Keep → Deliver Immediately** authorizes Macro but
+leaves banners and the Lock Screen off: the switch shows on, iOS never prompts
+again, and only iOS Settings turns banners on.
+Verify on a fresh install: the Settings row appears without a prompt, the in-app
+prompt still appears, and upgrading from Settings or from a quiet notification's
+**Keep → Deliver Immediately** turns the switch on when Macro returns from the
+background. Notification Center pulled down over Macro does not background it,
+so the switch updates only after the next return.
 
 On native Android, enable notifications in Settings while signed in. Android 13+
 also asks for system permission; the system's **Activity** notification channel
@@ -128,3 +206,46 @@ default root size. Supporting `text-sm` text is 14px and `text-xs` is 12px.
 Desktop and mobile share this scale, with accessibility text scaling preserved.
 
 Desktop channel and AI composers use an `Attach files` paperclip that opens the file picker directly, without a plus menu. Comment composers open the image picker directly. Channels and DMs always open in message mode; create tasks through the task creation dialog. Shift+Enter, including an empty new line, expands channel and AI inputs so text starts above the toolbar at the left inset. Sent AI message bubbles use the ink fill with a contrasting foreground in each theme.
+
+## Notification sounds
+
+**Settings → Notifications → Sounds** turns on an in-app sound for incoming
+notifications. It is off by default and saved per person on each device
+(user-scoped localStorage), so a laptop and a phone choose separately. With
+sounds on, it shows a volume slider and one row per type (Messages, Mentions,
+Thread replies, Email, Meetings & reminders, Tasks, AI & agents, Everything
+else), each with its own on/off switch, sound picker, and play button. Picking
+a sound previews it. Email, AI & agents, and Everything else start off.
+
+Sounds are synthesized with Web Audio (`features/notification-sounds`); there
+are no audio files. Event types map to rows in `core/categories.ts`; a new
+backend event type stays quiet until it is mapped there. Incoming calls keep
+their own ring and never use these sounds. Only unseen notifications play,
+notifications within 1.5 s of a sound share it, and only the Macro tab the
+person last focused or touched plays, so several tabs ding once. Closing that
+tab hands sound back to the others until one is focused. Browsers keep
+audio suspended until the page has had a gesture; a notification before that
+stays silent rather than playing late.
+
+When Macro plays a sound for a notification, its browser or macOS alert is
+sent silent so the person hears one sound. macOS builds older than the
+`silent` argument on `send_macos_notification` ignore it and still play the
+system sound.
+
+**Settings → Notifications → Quiet hours** silences those sounds and skips
+desktop and browser alerts on a weekly schedule. It is off until turned on,
+then covers every day from 10:00 PM to 8:00 AM in the device's time zone. The
+person picks the days, the start and end, and the time zone. A later start
+runs through midnight, and the window is the clock time on each selected day,
+so Tuesday morning is quiet only when Tuesday is selected. An equal start and
+end covers no time. Incoming calls still ring and still show an alert. Inbox
+items still arrive. The schedule is saved on this device with the sound
+settings, so a phone and a computer can differ. A sound preview still plays.
+Mobile push sent while the app is not open is unchanged.
+
+The backend-free desktop/phone regression drives the real settings section,
+persistence, previews, and delivery through a stand-in notification feed:
+`bunx playwright test --config src/features/notification-sounds/browser-test/playwright.config.ts`
+(from `apps/web`). To check real delivery, turn sounds on, click anywhere in
+Macro, and trigger a mention from another session; then turn Mentions off and
+check that the next mention is quiet.

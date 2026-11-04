@@ -107,6 +107,12 @@ impl SearchText {
                     self.push(&entry.content);
                 }
             }
+            MessagePart::TaskNotification { summary, event, .. } => {
+                self.push(summary);
+                if let Some(event) = event {
+                    self.push(event);
+                }
+            }
             MessagePart::Elicitation {
                 message,
                 request,
@@ -200,6 +206,17 @@ impl SearchText {
                     self.push(error);
                 } else if let Some(output) = output {
                     self.json(output);
+                }
+            }
+            ToolDetail::View { view, error } => {
+                if let Some(value) = view
+                    .as_ref()
+                    .and_then(|view| serde_json::to_value(view).ok())
+                {
+                    self.json(&value);
+                }
+                if let Some(error) = error {
+                    self.push(error);
                 }
             }
             ToolDetail::UserTool { input, outcome } => {

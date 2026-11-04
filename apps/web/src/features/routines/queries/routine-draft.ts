@@ -13,9 +13,9 @@ export { onceFromCron } from './routine-trigger-mapping';
 
 import { getDefaultTimezone } from '@core/util/cron';
 import type {
-  CreateScheduledAction,
+  ActionConfiguration,
+  ActionConfigurationUpdate,
   ScheduledAction,
-  UpdateScheduledAction,
 } from '@service-scheduled-action/generated/schemas';
 import { z } from 'zod';
 import { DEFAULT_RUN_VISIBILITY, type ScheduleDraft } from '../core/draft';
@@ -32,6 +32,9 @@ const agentTaskSchema = z
   .looseObject({
     agent: z.looseObject({ bot_id: routineAgentIdSchema }).nullish(),
     model: routineModelSchema.nullish(),
+    mcp_servers: z
+      .array(z.object({ app_slug: z.string(), server_name: z.string() }))
+      .optional(),
     prompt: z.string(),
     user_prompt: z.string(),
   })
@@ -43,6 +46,15 @@ function getAgentTask(schedule: ScheduledAction): RoutineTask | undefined {
   if (schedule.kind !== 'Agent') return undefined;
   const result = agentTaskSchema.safeParse(schedule.task);
   return result.success ? result.data : undefined;
+}
+
+/** Whether a routine runs an agent or a bare model; undefined when its task is unreadable. */
+export function routineTargetKind(
+  schedule: ScheduledAction
+): RoutineTarget['kind'] | undefined {
+  const task = getAgentTask(schedule);
+  if (!task) return undefined;
+  return task.agent ? 'agent' : 'model';
 }
 
 function targetFromTask(task: RoutineTask): RoutineTarget {
@@ -85,6 +97,7 @@ export function draftFromSchedule(
     dayOfMonth: parsed.dayOfMonth,
     target: targetFromTask(task),
     runVisibility: schedule.run_visibility,
+    apps: task.mcp_servers ?? [],
     timezone: trigger?.timezone,
     triggers,
     ...(trigger ? onceFromCron(trigger.schedule, trigger.timezone) : {}),
@@ -109,12 +122,16 @@ function applyTarget(task: RoutineTask, target: RoutineTarget): void {
 
 function buildAgentTask(draft: ScheduleDraft): RoutineTask {
   const target = routineTargetSchema.parse(draft.target);
-  const task: RoutineTask = { prompt: '', user_prompt: draft.prompt.trim() };
+  const task: RoutineTask = {
+    prompt: '',
+    user_prompt: draft.prompt.trim(),
+    mcp_servers: draft.apps,
+  };
   applyTarget(task, target);
   return task;
 }
 
-export function draftToCreateBody(draft: ScheduleDraft): CreateScheduledAction {
+export function draftToCreateBody(draft: ScheduleDraft): ActionConfiguration {
   return {
     name: draft.name.trim() || deriveScheduleName(draft.prompt),
     trigger: triggerFromDraft(draft),
@@ -128,7 +145,7 @@ export function draftToCreateBody(draft: ScheduleDraft): CreateScheduledAction {
 export function draftToUpdateBody(
   draft: ScheduleDraft,
   previous: ScheduledAction
-): UpdateScheduledAction | undefined {
+): ActionConfigurationUpdate | undefined {
   const trigger = getCronTrigger(previous);
   const previousTask = getAgentTask(previous);
   const target = routineTargetSchema.safeParse(draft.target);
@@ -140,11 +157,15 @@ export function draftToUpdateBody(
     targetFromTask(previousTask)
   );
   const promptChanged = draft.prompt !== previousTask.user_prompt;
+  const appsChanged =
+    draft.apps.map((app) => app.app_slug).join(',') !==
+    (previousTask.mcp_servers ?? []).map((app) => app.app_slug).join(',');
   let task = previous.task;
-  if (targetChanged || promptChanged) {
+  if (targetChanged || promptChanged || appsChanged) {
     const editedTask = { ...previousTask };
     if (targetChanged) applyTarget(editedTask, target.data);
     if (promptChanged) editedTask.user_prompt = draft.prompt.trim();
+    if (appsChanged) editedTask.mcp_servers = draft.apps;
     task = editedTask;
   }
   const runVisibility = draft.runVisibility ?? previous.run_visibility;
@@ -195,7 +216,7 @@ export function draftToUpdateBody(
 
 export function scheduleToDuplicateBody(
   schedule: ScheduledAction
-): CreateScheduledAction | undefined {
+): ActionConfiguration | undefined {
   const trigger = schedule.trigger ?? getCronTrigger(schedule);
   if (!trigger) return undefined;
   return {

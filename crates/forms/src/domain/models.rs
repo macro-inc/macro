@@ -7,8 +7,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 pub use models_databases::{CellValue, ColumnId, DatabaseId, OptionId, RowId, TableId};
 pub use models_forms::{
-    Answer, Audience, CreateForm, Form, FormAccess, FormDetail, FormId, FormLayout,
-    FormQuestionDetail, FormQuestionId, FormResponse, FormResponseId, FormSection,
+    AccentColor, Answer, Audience, CreateForm, Form, FormAccess, FormBranding, FormDetail, FormId,
+    FormLayout, FormQuestionDetail, FormQuestionId, FormResponse, FormResponseId, FormSection,
     FormSectionDetail, FormSectionId, FormSource, FormStatus, FormTally, LayoutProblem, ListedForm,
     MyResponse, QuestionLayout, QuestionOption, QuestionTally, ResponseStatus, ResponseSummary,
     SectionCount, Submission, SubmissionOutcome, TallyBucket, TallyValue, UpdateForm, Widget,
@@ -24,6 +24,15 @@ pub struct StoredForm {
     pub trashed_at: Option<DateTime<Utc>>,
     /// Whether the form created its own database and goes by its name.
     pub name_follows_database: bool,
+}
+
+/// A file a form's branding may show, as static-file storage records it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredImageFile {
+    /// Who uploaded it.
+    pub owner_id: String,
+    /// Its media type.
+    pub content_type: String,
 }
 
 /// Who is responding.
@@ -94,6 +103,9 @@ pub enum FormUpdate {
     /// The change forbade a widget one of the form's questions uses when it
     /// committed; nothing was written.
     WidgetInUse,
+    /// The change would make the form anonymous, or stop it being, after
+    /// someone responded; nothing was written.
+    AnonymityLocked,
 }
 
 /// A form's ledger counts.
@@ -124,6 +136,11 @@ pub enum SharingRefusal {
     /// or names no level.
     #[error("a channel grant is invalid")]
     InvalidChannelGrant,
+    /// Someone has responded, so whether the form is anonymous is fixed:
+    /// earlier responses name their respondents, or were given on the
+    /// promise that nobody would see who gave them.
+    #[error("whether a form is anonymous can't change once anyone has responded")]
+    AnonymityLocked,
 }
 
 /// Errors of the forms domain.
@@ -156,6 +173,10 @@ pub enum FormError {
     /// The respondent has no saved response.
     #[error("you have no response to this form")]
     NoResponse,
+    /// Nothing links a response to an anonymous form to its respondent, so
+    /// it can't be found to change.
+    #[error("a response to an anonymous form can't be changed")]
+    AnonymousResponseFinal,
     /// An answer names a question the form does not ask.
     #[error("the form has no question {question}")]
     UnknownQuestion {
@@ -200,6 +221,9 @@ pub enum FormError {
     /// A sharing change was refused.
     #[error("invalid sharing change: {0}")]
     InvalidSharing(SharingRefusal),
+    /// A logo or cover image is not an image the caller uploaded.
+    #[error("{0}")]
+    InvalidBranding(&'static str),
     /// The owner keeps the form's tallies from respondents.
     #[error("this form's results are hidden")]
     TallyHidden,

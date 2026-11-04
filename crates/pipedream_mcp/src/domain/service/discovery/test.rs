@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::models::{CatalogEntry, CatalogPage, PipedreamConnection};
+use crate::domain::models::{CatalogEntry, CatalogPage, ConnectorOverlay, PipedreamConnection};
 use std::sync::Mutex;
 
 struct Directory {
@@ -21,6 +21,7 @@ fn entry() -> CatalogEntry {
 impl ConnectorDirectory for Directory {
     async fn search(
         &self,
+        _user_id: &MacroUserIdStr<'static>,
         search: Option<&str>,
         _cursor: Option<&str>,
         limit: u32,
@@ -32,7 +33,11 @@ impl ConnectorDirectory for Directory {
             next_cursor: Some("next".into()),
         })
     }
-    async fn retrieve(&self, slug: &str) -> anyhow::Result<Option<CatalogEntry>> {
+    async fn retrieve(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        slug: &str,
+    ) -> anyhow::Result<Option<CatalogEntry>> {
         Ok((slug == "linear").then(entry))
     }
 }
@@ -59,7 +64,38 @@ impl ConnectorCapabilities for Directory {
 
 struct Store {
     enabled: Option<bool>,
+    overlaid: bool,
     seen: Mutex<Vec<String>>,
+}
+
+fn linear_overlay() -> ConnectorOverlay {
+    ConnectorOverlay {
+        app_slug: "linear".into(),
+        server_url: "https://mcp.linear.app/mcp".into(),
+    }
+}
+
+impl ConnectorOverlays for Store {
+    async fn overlays(&self) -> anyhow::Result<Vec<ConnectorOverlay>> {
+        panic!("inspect only the requested app")
+    }
+    async fn overlay(&self, slug: &str) -> anyhow::Result<Option<ConnectorOverlay>> {
+        Ok((self.overlaid && slug == "linear").then(linear_overlay))
+    }
+}
+
+/// The caller's native connection to an overlaid app, by display name.
+struct Native(Option<String>);
+
+impl OverlayConnections for Native {
+    async fn connected_name(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        overlay: &ConnectorOverlay,
+    ) -> anyhow::Result<Option<String>> {
+        assert_eq!(*overlay, linear_overlay());
+        Ok(self.0.clone())
+    }
 }
 impl ConnectionStore for Store {
     type Err = String;
@@ -84,6 +120,7 @@ impl ConnectionStore for Store {
             server_name: "Linear".into(),
             account_id: "account".into(),
             enabled,
+            provider: crate::domain::models::ConnectionProvider::Pipedream,
         }))
     }
 }
@@ -92,7 +129,7 @@ fn service(
     enabled: Option<bool>,
     fail_tools: bool,
     tool_count: usize,
-) -> ConnectorDiscovery<Directory, Store> {
+) -> ConnectorDiscovery<Directory, Store, Native> {
     ConnectorDiscovery::new(
         Some(Arc::new(Directory {
             fail_tools,
@@ -101,8 +138,10 @@ fn service(
         })),
         Arc::new(Store {
             enabled,
+            overlaid: false,
             seen: Mutex::default(),
         }),
+        Arc::new(Native(Some("Linear".into()))),
     )
 }
 fn user() -> MacroUserIdStr<'static> {
@@ -219,4 +258,30 @@ async fn unconfigured_deployments_and_empty_searches_fail_explicitly() {
     );
     svc.directory = None;
     assert!(svc.discover(&user(), &inspect("linear")).await.is_err());
+}
+
+#[tokio::test]
+async fn overlaid_apps_report_their_native_connection_not_pipedream() {
+    for native in [None, Some("Linear".to_owned())] {
+        let svc = ConnectorDiscovery::new(
+            Some(Arc::new(Directory {
+                fail_tools: false,
+                tool_count: 1,
+                seen: Mutex::default(),
+            })),
+            Arc::new(Store {
+                enabled: Some(true),
+                overlaid: true,
+                seen: Mutex::default(),
+            }),
+            Arc::new(Native(native.clone())),
+        );
+        let DiscoveryResult::Inspect { connected, .. } =
+            svc.discover(&user(), &inspect("linear")).await.unwrap()
+        else {
+            panic!("inspection expected")
+        };
+        assert_eq!(connected, native.is_some());
+        assert!(svc.connections.seen.lock().unwrap().is_empty());
+    }
 }

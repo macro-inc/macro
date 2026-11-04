@@ -1,7 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
-import ArrowLeftIcon from '@phosphor/arrow-left.svg';
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import {
   useApproveHarnessPairingMutation,
   useHarnessPairingQuery,
@@ -142,7 +142,7 @@ export function RuntimePairingPage(props: {
           disabled={approveMutation.isPending}
           onClick={props.onClose}
         >
-          <ArrowLeftIcon />
+          <ArrowLeftIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
           Back
         </Button>
       }
@@ -163,7 +163,7 @@ export function RuntimePairingPage(props: {
                   <div>
                     <Button
                       type="button"
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
                       onClick={tryAnotherCode}
                     >
@@ -326,7 +326,7 @@ export function RuntimePairingPage(props: {
               <Match when={approved()}>
                 <Button
                   type="button"
-                  variant="cta"
+                  variant="primary"
                   size="sm"
                   onClick={props.onClose}
                 >
@@ -355,7 +355,7 @@ export function RuntimePairingPage(props: {
                 </Button>
                 <Button
                   type="button"
-                  variant="cta"
+                  variant="primary"
                   size="sm"
                   disabled={!canApprove()}
                   onClick={() => fireAndForget(approve(), 'runtime-pairing')}
@@ -384,7 +384,7 @@ export function RuntimePairingPage(props: {
                 </Button>
                 <Button
                   type="button"
-                  variant="cta"
+                  variant="primary"
                   size="sm"
                   disabled={codeInput().trim().length === 0}
                   onClick={lookUp}

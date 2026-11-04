@@ -31,6 +31,11 @@ bridges old-producer writes during rollout; keep that bridge until legacy
 review producers have retired. Encode empty legacy item lists as JSON arrays so
 the typed notification reader can decode them.
 
+The `agent_session.turn_state` constraint includes `failed` for terminal turn
+errors; extend it additively before services begin writing new turn states.
+Install widened checks as `NOT VALID` and validate in a separate migration so
+the scan does not retain the replacement migration's exclusive table lock.
+
 ## Boundaries
 
 - Depends on: `entity_access_db_utils`, `entity_registry_db_utils`,
@@ -49,6 +54,8 @@ the typed notification reader can decode them.
 - Add a new owned area: `src/<area>.rs` → `pub mod <area>;` in `src/lib.rs` →
   gate it behind a Cargo feature in `Cargo.toml` only if it's optional (see
   `account_merge_request`, `team`).
+
+- Composed-memory tables and refresh leases are owned by `crates/memory`; migrations leave legacy memory rows intact.
 
 ## Checks
 
@@ -70,10 +77,6 @@ unreferenced replicas. These additive tables do not change agent-session claims.
 
 ## Gotchas
 
-- `calendar_event_notes` and `calendar_note_event_visible` are shared by calendar
-  note reads and document authorization; keep both consumers on the same policy.
-  The additive migration must precede their service rollout. See
-  [meeting-note access](../../docs/architecture/calendar-meeting-notes.md).
 - Migrations deploy before service code: never drop a column/table in the
   same PR that removes its last usage (see `docs/development/database.md`).
 - Never hand-edit `.sqlx/query-*.json` or invent a migration timestamp.
@@ -83,6 +86,13 @@ unreferenced replicas. These additive tables do not change agent-session claims.
   `docs/design/outlook-email-support.md` for failure recovery and deployment order.
 - Quote and alias camelCase columns to Rust field names
   (`SELECT "userId" AS user_id`); don't guess spelling — check `migrations/`.
+- Saved-view sharing uses current team membership and chronological owner/team indexes.
+  Deploy additive revision and team-share columns before service changes. Keep permanent
+  `saved_view_tombstone` IDs and the deletion trigger to prevent delayed creates
+  from resurrecting deleted definitions. Use a fresh disposable database when
+  checking replacement branch migrations.
+
+- External chats (`external_chat*` tables: chats, people, messages, attachments, reactions, poll votes, read state) are provider-neutral; WhatsApp keeps its account, pairing, roster, chat list, membership, alias, observation, receipt and send tables (`whatsapp_*`). Domain queries live in `external_chat` (generic tables) and `whatsapp_linked` (`whatsapp_*` tables and ingest).
 
 ## Related
 
@@ -97,3 +107,19 @@ enabling the independent email outbox; old writers do not enforce these fences.
 content. Bypass retention for inboxes marked `deleting_at` and direct inbox
 cascades; other parent cascades must not destroy unresolved delivery state. Deferred markers retain provider identity and
 draft generation so Undo/resend cannot inherit an old deletion.
+
+The import ledger accepts Jira Cloud sources with `jira_issue`, `jira_project`
+and `jira_epic` kinds. Jira has its own concurrent partial team-claim index; source
+and kind constraints expand without rewriting existing rows and validate separately.
+
+`mcp_oauth_*` tables hold the public MCP OAuth broker's state (registrations,
+refresh token bindings, pending authorizations, issued codes); their queries and
+expiry sweep belong to `mcp_auth_proxy`. Rows carry `expires_at` and have no
+foreign keys; the broker deletes expired rows.
+
+- Spam/Trash candidate indexes cover `email_messages(link_id, id)` only for the corresponding positive `mailbox_state` JSON containment predicate; keep query literals aligned with the partial-index predicates.
+- If either concurrent folder-index migration is interrupted, inspect `pg_index.indisvalid` and drop only its invalid index before retrying; `CREATE INDEX IF NOT EXISTS` would silently preserve an unusable index.
+
+- Backfill progress migrations are additive, but consumer cutover must quiesce
+  old workers: Redis counting cannot coexist with durable unique thread receipts.
+  See `docs/runbooks/email-backfill-progress.md` before migration or legacy recovery.

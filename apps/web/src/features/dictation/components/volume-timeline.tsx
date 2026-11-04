@@ -39,7 +39,7 @@ export function VolumeTimeline(props: { levels: readonly number[] }) {
     <div
       ref={setContainer}
       aria-hidden="true"
-      class="relative h-8 min-w-0 flex-1 overflow-hidden touch:h-6"
+      class="relative h-8 min-w-0 flex-1 overflow-hidden"
     >
       <div
         ref={strip}
@@ -49,8 +49,7 @@ export function VolumeTimeline(props: { levels: readonly number[] }) {
           {(level) => (
             <span
               class="w-[3px] shrink-0 rounded-full bg-current"
-              // Heights are relative so the strip scales with the container,
-              // which is shorter on touch than it is on the desktop composer.
+              // Heights are relative so the strip scales with the container.
               style={{
                 height: `${(3 + level() * 29) / 0.32}%`,
                 opacity: level() > 0 ? '0.65' : '0.3',

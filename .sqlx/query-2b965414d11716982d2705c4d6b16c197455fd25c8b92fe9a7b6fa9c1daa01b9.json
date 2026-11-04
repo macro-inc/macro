@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO whatsapp_identity_alias (chat_id, jid, person_id, evidence_account_id, verified_at)\n            VALUES ($1, $2, $3, $4, $5) ON CONFLICT (chat_id, jid) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2b965414d11716982d2705c4d6b16c197455fd25c8b92fe9a7b6fa9c1daa01b9"
+}

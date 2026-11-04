@@ -8,16 +8,29 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Review, ReviewDecision, ReviewItem } from '../core/review';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type Mock,
+  vi,
+} from 'vitest';
+import type { Review, ReviewDecision } from '../core/review';
 import { ImportReview } from './import-review';
 
-const imports = vi.hoisted(() => ({
-  entities: [] as ImportEntity[],
-  report: undefined as NotionImportReport | undefined,
-  cancel: vi.fn(),
-  open: vi.fn(),
-}));
+type ImportReviewRecord = Review & { kind: 'import' };
+
+const imports = vi.hoisted(() => {
+  const state: {
+    entities: ImportEntity[];
+    report: NotionImportReport | undefined;
+    cancel: Mock;
+    open: Mock;
+  } = { entities: [], report: undefined, cancel: vi.fn(), open: vi.fn() };
+  return state;
+});
 vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit: imports.open }),
 }));
@@ -34,7 +47,7 @@ vi.mock('@queries/import', () => ({
     isPlaceholderData: false,
     data: { runs: [], entities: imports.entities },
   }),
-  useNotionImportReportQuery: () => ({
+  useWorkspaceImportReportQuery: () => ({
     get isPending() {
       return imports.report === undefined;
     },
@@ -42,7 +55,7 @@ vi.mock('@queries/import', () => ({
       return imports.report;
     },
   }),
-  useCancelNotionImportMutation: () => ({ mutateAsync: imports.cancel }),
+  useCancelWorkspaceImportMutation: () => ({ mutateAsync: imports.cancel }),
 }));
 
 function entity(
@@ -129,42 +142,50 @@ afterEach(() => {
 
 function setup(
   options: {
-    item?: Partial<ReviewItem>;
+    item?: Partial<ImportReviewRecord['items'][0]>;
     canAct?: boolean;
-    review?: Partial<Review>;
+    review?: Partial<Omit<ImportReviewRecord, 'kind' | 'items'>>;
   } = {}
 ) {
-  let record: Review = {
+  let record: ImportReviewRecord = {
     id: 'review',
     sessionId: 'session',
+    actingUser: 'macro|owner@macro.local',
+    executionId: null,
     kind: 'import',
     title: 'Import from Notion',
     revision: 0,
     updatedAt: 0,
     presentedAt: 1,
+    decision: null,
     items: [
       {
         id: 'plan',
         status: 'pending',
+        error: null,
         draft: { source: 'notion' },
+        result: null,
         ...options.item,
       },
     ],
     ...options.review,
   };
-  const decide = vi.fn(async (decision: ReviewDecision) => {
+  const decide = vi.fn(async (decision: ReviewDecision): Promise<Review> => {
     if (decision.revision !== record.revision) throw new Error('conflict');
+    const [item] = record.items;
     record = {
       ...record,
       revision: record.revision + 1,
-      items: record.items.map((item) =>
+      items: [
         decision.action === 'edit'
-          ? { ...item, draft: decision.draft }
+          ? decision.draft.kind === 'import'
+            ? { ...item, draft: decision.draft.draft }
+            : item
           : {
               ...item,
               status: decision.action === 'submit' ? 'submitting' : 'dismissed',
-            }
-      ),
+            },
+      ],
     };
     return record;
   });
@@ -201,10 +222,13 @@ describe('import review', () => {
         revision: 0,
         item: 'plan',
         draft: {
-          source: 'notion',
-          excluded: ['roadmap'],
-          shared: [],
-          personal: [],
+          kind: 'import',
+          draft: {
+            source: 'notion',
+            excluded: ['roadmap'],
+            shared: [],
+            personal: [],
+          },
         },
       })
     );
@@ -291,7 +315,9 @@ describe('import review', () => {
   it("says when the agent started the import at the owner's request", () => {
     setup({
       item: { status: 'submitting' },
-      review: { decision: { via: 'chat' } },
+      review: {
+        decision: { by: 'owner', via: 'chat', revision: 0, items: [] },
+      },
     });
     expect(
       screen.getByText('Started by the agent at your request')
@@ -376,10 +402,13 @@ describe('import review', () => {
         revision: 0,
         item: 'plan',
         draft: {
-          source: 'notion',
-          excluded: [],
-          shared: [],
-          personal: ['wiki', 'guide'],
+          kind: 'import',
+          draft: {
+            source: 'notion',
+            excluded: [],
+            shared: [],
+            personal: ['wiki', 'guide'],
+          },
         },
       })
     );
@@ -399,10 +428,13 @@ describe('import review', () => {
         revision: 1,
         item: 'plan',
         draft: {
-          source: 'notion',
-          excluded: [],
-          shared: [],
-          personal: ['wiki'],
+          kind: 'import',
+          draft: {
+            source: 'notion',
+            excluded: [],
+            shared: [],
+            personal: ['wiki'],
+          },
         },
       })
     );
@@ -415,7 +447,10 @@ describe('import review', () => {
         action: 'edit',
         revision: 2,
         item: 'plan',
-        draft: { source: 'notion', excluded: [], shared: [], personal: [] },
+        draft: {
+          kind: 'import',
+          draft: { source: 'notion', excluded: [], shared: [], personal: [] },
+        },
       })
     );
 

@@ -26,6 +26,7 @@ macro_user_id = { path = "../macro_user_id" }
 mcp_select = { path = "../mcp_select" }
 model-entity = { path = "../model-entity" }
 import_notion = { path = "../import_notion" }
+import_tracker = { path = "../import_tracker" }
 models_databases = { path = "../models_databases" }
 models_properties = { path = "../models_properties" }
 properties = { path = "../properties", default-features = false, features = [
@@ -33,6 +34,7 @@ properties = { path = "../properties", default-features = false, features = [
 ] }
 regex = { workspace = true }
 schemars = { workspace = true }
+specta = { workspace = true, features = ["uuid"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }

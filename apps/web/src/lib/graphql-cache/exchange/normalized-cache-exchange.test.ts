@@ -1034,6 +1034,19 @@ describe('normalizedCacheExchange', () => {
     }
   });
 
+  it('publishes a network result it was asked not to persist without writing it', async () => {
+    const { ops, results } = harness(host, () => ({
+      data: { user: { emailThread: null } },
+    }));
+    const op = makeOp(902, 'network-only');
+    ops.next(
+      makeOperation('query', op, { ...op.context, persistResult: false })
+    );
+    await tick();
+    expect(host.cacheActions).toEqual([]);
+    expect(results.at(-1)?.data).toEqual({ user: { emailThread: null } });
+  });
+
   it('evicts inferred missing records after writing the network response', async () => {
     const deletedRecordKeys = vi.fn(() => ['GraphqlSoupEmailThread:gone']);
     const { ops, results } = harness(
@@ -1740,26 +1753,22 @@ describe('normalizedCacheExchange', () => {
     }
   );
 
-  it.each(['teardown', 'generation change'] as const)(
-    'does not report a cache read cancelled by %s',
-    async (cancel) => {
-      const read = deferred<ReadResult>();
-      host.readQuery = vi.fn(() => read.promise);
-      const onCacheError = vi.fn();
-      const { ops, results } = harness(host, undefined, { onCacheError });
-      const op = makeOp(1);
-      ops.next(op);
-      await tick();
+  it('does not report a cache read cancelled by teardown', async () => {
+    const read = deferred<ReadResult>();
+    host.readQuery = vi.fn(() => read.promise);
+    const onCacheError = vi.fn();
+    const { ops, results } = harness(host, undefined, { onCacheError });
+    const op = makeOp(1);
+    ops.next(op);
+    await tick();
 
-      if (cancel === 'teardown') ops.next(teardownOf(op));
-      else host.pushGeneration({ storage: 'preserved' });
-      read.resolve({ kind: 'hit', data: { from: 'cache' } });
-      await tick();
+    ops.next(teardownOf(op));
+    read.resolve({ kind: 'hit', data: { from: 'cache' } });
+    await tick();
 
-      expect(onCacheError).not.toHaveBeenCalled();
-      expect(results.filter((r) => r.operation.kind === 'query')).toEqual([]);
-    }
-  );
+    expect(onCacheError).not.toHaveBeenCalled();
+    expect(results.filter((r) => r.operation.kind === 'query')).toEqual([]);
+  });
 
   it('does not report a watched reread cancelled by teardown', async () => {
     const reread = deferred<QueryUpdate>();
@@ -4761,12 +4770,10 @@ describe('normalizedCacheExchange', () => {
 
     it('bounds queued network attempts to one minute', async () => {
       const timeoutSignal = new AbortController().signal;
-      const existingSignal = new AbortController().signal;
-      const combinedSignal = new AbortController().signal;
+      const existing = new AbortController();
       const timeout = vi
         .spyOn(AbortSignal, 'timeout')
         .mockReturnValue(timeoutSignal);
-      const any = vi.spyOn(AbortSignal, 'any').mockReturnValue(combinedSignal);
       const operationFetch = vi.fn().mockResolvedValue(new Response());
       try {
         const mutation = makeMutationOp(1, optimistic);
@@ -4778,7 +4785,7 @@ describe('normalizedCacheExchange', () => {
         const { ops } = harness(host, (op) => {
           if (op.kind === 'mutation') {
             fetched = op.context.fetch?.('http://test', {
-              signal: existingSignal,
+              signal: existing.signal,
             });
           }
           return {};
@@ -4787,15 +4794,14 @@ describe('normalizedCacheExchange', () => {
         await tick();
 
         expect(timeout).toHaveBeenCalledWith(60_000);
-        expect(any).toHaveBeenCalledWith([existingSignal, timeoutSignal]);
-        expect(operationFetch).toHaveBeenCalledWith(
-          'http://test',
-          expect.objectContaining({ signal: combinedSignal })
-        );
+        const signal: AbortSignal = operationFetch.mock.calls[0]?.[1].signal;
+        expect(signal.aborted).toBe(false);
+        existing.abort('cancelled');
+        expect(signal.aborted).toBe(true);
+        expect(signal.reason).toBe('cancelled');
         await fetched;
       } finally {
         timeout.mockRestore();
-        any.mockRestore();
       }
     });
 

@@ -92,13 +92,41 @@ describe('internal transformer fallbacks', () => {
         ? paragraph.getFirstChild()
         : null;
       expect($isUserMentionNode(node)).toBe(true);
-      expect(node?.getTextContent()).toBe('a');
+      expect(node?.getTextContent()).toBe('@a');
+    });
+  });
+
+  it.each([
+    ['{"userId":"macro|user@example.com"}', '@user'],
+    ['{"userId":"macro|user@example.com","displayName":"Example"}', '@Example'],
+  ])('imports ID-only user mentions: %s', async (payload, text) => {
+    const editor = await importMarkdown(
+      `<m-user-mention>${payload}</m-user-mention>`
+    );
+
+    editor.getEditorState().read(() => {
+      const paragraph = $getRoot().getFirstChild();
+      const node = $isParagraphNode(paragraph)
+        ? paragraph.getFirstChild()
+        : null;
+      expect($isUserMentionNode(node)).toBe(true);
+      if (!$isUserMentionNode(node)) throw new Error('Missing user mention');
+      expect(node.getUserId()).toBe('macro|user@example.com');
+      expect(node.getEmail()).toBe('user@example.com');
+      expect(node.getTextContent()).toBe(text);
     });
   });
 
   it.each([
     ['<m-user-mention>{bad}</m-user-mention>', 'Unknown User'],
     ['<m-user-mention>{"email":"a@b.com"}</m-user-mention>', 'Unknown User'],
+    ['<m-user-mention>{"userId":null}</m-user-mention>', 'Unknown User'],
+    ['<m-user-mention>{"userId":42}</m-user-mention>', 'Unknown User'],
+    ['<m-user-mention>{"userId":""}</m-user-mention>', 'Unknown User'],
+    [
+      '<m-user-mention>{"userId":"bot|unknown"}</m-user-mention>',
+      'Unknown User',
+    ],
     ['<m-katex-equation>{bad}</m-katex-equation>', 'Unknown Equation'],
     [
       '<m-katex-equation>{"equation":"x"}</m-katex-equation>',

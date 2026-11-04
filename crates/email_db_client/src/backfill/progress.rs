@@ -1,143 +1,186 @@
-//! Gmail backfill progress counters. A job counts here once
-//! `finalize_initialization` sets its `completed_threads`; jobs initialized
-//! before that count in Redis, and these functions report them as untracked.
+//! Durable, identity-based backfill progress. Every mutation locks the job
+//! before its pages/threads, so listing and completion share one ordering.
 
-use sqlx::PgPool;
+pub mod import;
+
 use sqlx::types::Uuid;
+use sqlx::{PgPool, Postgres, Transaction};
 
-/// A job's thread progress after counting one more completed thread.
+/// A saved provider page, replayed verbatim after an interrupted publication.
+#[derive(Debug, PartialEq, Eq)]
+pub struct ListingPage {
+    pub thread_provider_ids: Vec<String>,
+    pub next_page_token: Option<String>,
+}
+
+/// Current durable progress; a provider estimate is never completion evidence.
 #[derive(Debug, PartialEq, Eq)]
 pub struct JobThreadProgress {
     pub completed_threads: i32,
-    /// `total_threads` plus the threads the priority pass added.
     pub total_threads: i32,
+    pub listing_complete: bool,
+    pub active: bool,
 }
 
-/// Counts one completed thread. Returns `None` when the job doesn't count in
-/// Postgres.
+/// Whether this job was initialized with durable progress.
 #[tracing::instrument(skip(pool), err)]
-pub async fn incr_completed_threads(
-    pool: &PgPool,
-    job_id: Uuid,
-) -> anyhow::Result<Option<JobThreadProgress>> {
-    let progress = sqlx::query_as!(
-        JobThreadProgress,
-        r#"
-        UPDATE email_backfill_jobs
-        SET completed_threads = completed_threads + 1, updated_at = now()
-        WHERE id = $1
-          AND completed_threads IS NOT NULL
-        RETURNING
-            completed_threads AS "completed_threads!",
-            total_threads + priority_threads AS "total_threads!"
-        "#,
-        job_id,
+pub async fn is_tracked(pool: &PgPool, job_id: Uuid) -> anyhow::Result<bool> {
+    Ok(sqlx::query_scalar!(
+        "SELECT completed_threads IS NOT NULL FROM email_backfill_jobs WHERE id = $1",
+        job_id
     )
     .fetch_optional(pool)
-    .await?;
-    Ok(progress)
+    .await?
+    .flatten()
+    .unwrap_or(false))
 }
 
-/// Adds the priority pass's extra BackfillThread messages to the job's total.
-/// Returns `false` when the job doesn't count in Postgres.
-#[tracing::instrument(skip(pool), err)]
-pub async fn add_priority_threads(pool: &PgPool, job_id: Uuid, count: i32) -> anyhow::Result<bool> {
-    let updated = sqlx::query!(
-        r#"
-        UPDATE email_backfill_jobs
-        SET priority_threads = priority_threads + $2, updated_at = now()
-        WHERE id = $1
-          AND completed_threads IS NOT NULL
-        "#,
-        job_id,
-        count,
+async fn lock_job(tx: &mut Transaction<'_, Postgres>, job_id: Uuid) -> anyhow::Result<()> {
+    let tracked = sqlx::query_scalar!(
+        "SELECT completed_threads IS NOT NULL FROM email_backfill_jobs WHERE id = $1 FOR UPDATE",
+        job_id
     )
-    .execute(pool)
-    .await?;
-    Ok(updated.rows_affected() == 1)
+    .fetch_optional(&mut **tx)
+    .await?
+    .flatten()
+    .unwrap_or(false);
+    anyhow::ensure!(
+        tracked,
+        "backfill progress requires explicit legacy recovery"
+    );
+    Ok(())
 }
 
-/// Starts counting a thread's messages, restarting the count if the thread was
-/// already started. Returns `false` when the job doesn't count in Postgres.
-#[tracing::instrument(skip(pool), err)]
-pub async fn init_thread_progress(
+/// Read a saved page before requesting Gmail again.
+#[tracing::instrument(skip(pool, page_token), err)]
+pub async fn get_page(
     pool: &PgPool,
     job_id: Uuid,
-    thread_id: Uuid,
-    total_messages: i32,
-) -> anyhow::Result<bool> {
-    let inserted = sqlx::query!(
-        r#"
-        INSERT INTO email_backfill_thread_progress (backfill_job_id, thread_id, total_messages)
-        SELECT id, $2, $3
-        FROM email_backfill_jobs
-        WHERE id = $1
-          AND completed_threads IS NOT NULL
-        ON CONFLICT (backfill_job_id, thread_id)
-        DO UPDATE SET total_messages = EXCLUDED.total_messages, completed_messages = 0
-        "#,
-        job_id,
-        thread_id,
-        total_messages,
-    )
-    .execute(pool)
-    .await?;
-    Ok(inserted.rows_affected() == 1)
+    priority: bool,
+    page_token: &str,
+) -> anyhow::Result<Option<ListingPage>> {
+    Ok(sqlx::query_as!(ListingPage,
+        "SELECT thread_provider_ids, next_page_token FROM email_backfill_listing_pages WHERE backfill_job_id = $1 AND priority_pass = $2 AND page_token = $3",
+        job_id, priority, page_token
+    ).fetch_optional(pool).await?)
 }
 
-/// Counts one processed message of a thread and returns whether it was the
-/// thread's last, deleting the thread's row when it was. Returns `None` when
-/// no row tracks the thread.
-#[tracing::instrument(skip(pool), err)]
-pub async fn incr_completed_messages(
+/// Save the first answer for a page and register its unique thread identities
+/// atomically. Concurrent/repeated listings return the winning saved answer.
+#[tracing::instrument(skip(pool, page_token, page), err)]
+pub async fn register_page(
     pool: &PgPool,
     job_id: Uuid,
-    thread_id: Uuid,
-) -> anyhow::Result<Option<bool>> {
+    priority: bool,
+    page_token: &str,
+    page: ListingPage,
+) -> anyhow::Result<ListingPage> {
     let mut tx = pool.begin().await?;
-    let thread_complete = sqlx::query_scalar!(
-        r#"
-        UPDATE email_backfill_thread_progress
-        SET completed_messages = completed_messages + 1
-        WHERE backfill_job_id = $1
-          AND thread_id = $2
-        RETURNING completed_messages >= total_messages AS "thread_complete!"
-        "#,
+    lock_job(&mut tx, job_id).await?;
+    let inserted = sqlx::query!(
+        r#"INSERT INTO email_backfill_listing_pages
+            (backfill_job_id, priority_pass, page_token, thread_provider_ids, next_page_token)
+        SELECT id, $2, $3, $4, $5 FROM email_backfill_jobs
+        WHERE id = $1 AND status = 'InProgress' AND NOT listing_complete
+        ON CONFLICT DO NOTHING"#,
         job_id,
-        thread_id,
+        priority,
+        page_token,
+        &page.thread_provider_ids,
+        page.next_page_token
     )
-    .fetch_optional(&mut *tx)
-    .await?;
-    if thread_complete == Some(true) {
-        sqlx::query!(
-            r#"
-            DELETE FROM email_backfill_thread_progress
-            WHERE backfill_job_id = $1
-              AND thread_id = $2
-            "#,
+    .execute(&mut *tx)
+    .await?
+    .rows_affected()
+        == 1;
+    if inserted {
+        let added = sqlx::query!(
+            r#"INSERT INTO email_backfill_thread_progress (backfill_job_id, thread_provider_id)
+            SELECT $1, unnest($2::text[]) ON CONFLICT DO NOTHING"#,
             job_id,
-            thread_id,
+            &page.thread_provider_ids
         )
         .execute(&mut *tx)
-        .await?;
+        .await?
+        .rows_affected();
+        let added = i32::try_from(added)?;
+        let retrieved = if priority {
+            0
+        } else {
+            i32::try_from(page.thread_provider_ids.len())?
+        };
+        sqlx::query!(
+            "UPDATE email_backfill_jobs SET listed_threads = listed_threads + $2, threads_retrieved_count = threads_retrieved_count + $3, updated_at = now() WHERE id = $1",
+            job_id, added, retrieved
+        ).execute(&mut *tx).await?;
     }
+    let saved = sqlx::query_as!(ListingPage,
+        "SELECT thread_provider_ids, next_page_token FROM email_backfill_listing_pages WHERE backfill_job_id = $1 AND priority_pass = $2 AND page_token = $3",
+        job_id, priority, page_token
+    ).fetch_one(&mut *tx).await?;
     tx.commit().await?;
-    Ok(thread_complete)
+    Ok(saved)
 }
 
-/// Deletes the message counts of a job's unfinished threads.
+/// Mark the normal listing exhausted, after publishing its final page.
 #[tracing::instrument(skip(pool), err)]
-pub async fn delete_thread_progress(pool: &PgPool, job_id: Uuid) -> anyhow::Result<()> {
+pub async fn finish_listing(pool: &PgPool, job_id: Uuid) -> anyhow::Result<()> {
     sqlx::query!(
-        r#"
-        DELETE FROM email_backfill_thread_progress
-        WHERE backfill_job_id = $1
-        "#,
-        job_id,
+        r#"UPDATE email_backfill_jobs SET listing_complete = true,
+            total_threads = listed_threads, updated_at = now()
+        WHERE id = $1 AND completed_threads IS NOT NULL AND status = 'InProgress'"#,
+        job_id
     )
     .execute(pool)
     .await?;
     Ok(())
+}
+
+/// Check a thread's retained completion evidence. An unknown identity is an
+/// error, never a successful skip or an implicit registration.
+#[tracing::instrument(skip(pool), err)]
+pub async fn thread_completed(pool: &PgPool, job_id: Uuid, thread: &str) -> anyhow::Result<bool> {
+    Ok(sqlx::query_scalar!(
+        "SELECT completed_at IS NOT NULL FROM email_backfill_thread_progress WHERE backfill_job_id = $1 AND thread_provider_id = $2",
+        job_id, thread
+    ).fetch_one(pool).await?.unwrap_or(false))
+}
+
+/// Record completion once, after all required thread effects succeeded.
+/// Repeated completion still returns current progress so interrupted job
+/// completion/outbox creation can be retried.
+#[tracing::instrument(skip(pool), err)]
+pub async fn complete_thread(
+    pool: &PgPool,
+    job_id: Uuid,
+    thread: &str,
+) -> anyhow::Result<JobThreadProgress> {
+    let mut tx = pool.begin().await?;
+    lock_job(&mut tx, job_id).await?;
+    let added = sqlx::query!(
+        r#"UPDATE email_backfill_thread_progress SET completed_at = now()
+        WHERE backfill_job_id = $1 AND thread_provider_id = $2 AND completed_at IS NULL AND (thread_id IS NOT NULL OR provider_missing)
+          AND EXISTS (SELECT 1 FROM email_backfill_jobs WHERE id = $1 AND status = 'InProgress')"#,
+        job_id,
+        thread
+    )
+    .execute(&mut *tx)
+    .await?
+    .rows_affected();
+    // Require the identity even on replay; don't silently acknowledge unknown work.
+    sqlx::query_scalar!(
+        "SELECT thread_provider_id FROM email_backfill_thread_progress WHERE backfill_job_id = $1 AND thread_provider_id = $2 AND (thread_id IS NOT NULL OR provider_missing)",
+        job_id, thread
+    ).fetch_one(&mut *tx).await?;
+    let added = i32::try_from(added)?;
+    let progress = sqlx::query_as!(JobThreadProgress,
+        r#"UPDATE email_backfill_jobs SET completed_threads = completed_threads + $2, updated_at = now()
+        WHERE id = $1 RETURNING completed_threads AS "completed_threads!",
+            listed_threads AS total_threads, listing_complete, status = 'InProgress' AS "active!""#,
+        job_id, added
+    ).fetch_one(&mut *tx).await?;
+    tx.commit().await?;
+    Ok(progress)
 }
 
 #[cfg(test)]

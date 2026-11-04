@@ -1,4 +1,3 @@
-use crate::backfill_completion_service;
 use crate::pubsub::backfill::email_api_error::map_email_api_error;
 use crate::pubsub::context::PubSubContext;
 use crate::util::process_pre_insert::sync_labels::sync_labels;
@@ -133,26 +132,6 @@ async fn initialize_backfill(
             source: e.context("Failed to update total_threads"),
         })
     })?;
-
-    // With no threads to list, no per-thread message is ever enqueued, so the
-    // per-thread completion path that finalizes the job never runs. Complete
-    // the job directly instead. Completion atomically clears this init lease;
-    // if it fails, the outer error path releases the lease so a retry can
-    // finish both the email and associated calendar jobs.
-    if total_threads == 0 {
-        backfill_completion_service::handle_job_completed(ctx, scope.job_id, Some(lease_token))
-            .await?;
-        return Ok(());
-    }
-
-    crate::backfill_progress::fence_redis_counting(&ctx.redis_client, scope.job_id)
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::RedisQueryFailed,
-                source: e.context("Failed to fence Redis backfill progress"),
-            })
-        })?;
 
     if !email_db_client::backfill::job::update::finalize_initialization(
         &ctx.db,

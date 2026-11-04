@@ -22,7 +22,13 @@ stacks. Process isolation belongs to
   receipts include observed SDK activity for inline conversation snapshots.
 - `src/domain/user.rs`: `UserCodeMode`, runs as an authenticated user with no
   session, journal or reviews; shares outcome validation with the session path.
-- `src/domain/reviews.rs`: review validation, revisions, claims and outcomes.
+- `src/domain/reviews.rs`: review revisions, claims and outcomes.
+  `src/domain/reviews/drafts.rs` holds the typed drafts and results: items
+  keyed by kind, reusing `SendEmail`, `CreateCalendarEvent` and their
+  responses, and the import plan selection. Decoding is the only validation
+  (`decode`, location-only errors); value constraints are nutype newtypes.
+  Submit refuses incomplete drafts (no recipients, no title, ends before it
+  starts) before claiming the batch.
   `decide_for_session` (the `DecideReview` tool, `inbound/reviews.rs`) is the
   agent deciding on the account holder's word in chat: a turn they prompted,
   never a System turn (per `ReviewSession::prompter`), and a Submit only once
@@ -30,9 +36,16 @@ stacks. Process isolation belongs to
   An import review only starts its write: its `review.decided` is quiet, and
   its `review.settled` comes from the import when the write ends; only an
   import that could not start settles here.
-- `src/domain/documentation.rs`: Jev selection of generated SDK docs, rendered
-  into the per-turn prompt (top four, 48 KiB) or returned for a
-  `DescribeCodeTools` `task` (every relevant entity, 32 KiB).
+- `src/domain/reviews/views.rs`: a view is a review with nothing saved.
+  `POST /agent-sessions/{id}/views` (`execution.views.present`) shares the
+  review's authorization, decodes the view with `dynamic_ui::decode_view`,
+  and streams it as a completed `PresentView` call (`view_<id>`) through
+  `ReviewActions::present_view`. There is no `PresentView` tool: ExecuteCode's
+  description carries the view schema and when to present one.
+- `src/domain/documentation.rs`: the generated SDK catalog (an index per
+  entity, a reference per symbol). Jev selects entity indexes for the per-turn
+  prompt (top four, 48 KiB) or a `DescribeCodeTools` `task` (every relevant
+  entity, 32 KiB); `ReadCodeDocs` reads symbol references (32 KiB).
 - `src/inbound/toolset.rs`: `toolset()` for sessions, `user_toolset()` for the
   public MCP. Tool texts are composed: host-specific parts in `toolset/session/`
   and `toolset/user/`, guidance both share in `toolset/shared/`. Edit shared
@@ -51,7 +64,7 @@ session presentation. Never replay an uncertain submitted action.
 Reviews write `review.decided` and `review.settled` through the injected
 transaction-aware notification writer in the same revision-checked transaction.
 Reviews persist the immutable acting account. Only that account may edit or
-submit; historical reviews without an acting account use the session owner.
+submit.
 ACP presentation uses the session owner's transcript capability, independently
 of the account that later sends the email or creates the event. Cards require
 direct user authentication; `DecideReview` requires a real turn prompted by the
@@ -68,3 +81,11 @@ longer delivery state.
 - Keep generated discovery topics within the classifier's 32-question limit.
 - Regenerate SDK documentation through `packages/code-mode-sdk`; never edit
   `src/domain/documentation.json` by hand.
+
+Import reviews contain exactly one draft, with source `notion`, `linear`, or
+`jira`. Source selection stays on that draft through presentation and approval.
+
+The web and SDK review types are generated from these Rust types with specta
+(`src/bin/export_review_types.rs`, `just gen-agent-review-types` in `apps/web`).
+Regenerate after changing a review type or a type a draft or result reuses; CI
+fails on stale output.

@@ -342,6 +342,7 @@ function useSoupHomeDataSource(
   });
 
   const search = createSearchState({
+    surface: () => 'home',
     text: () => state.search,
     localPool,
     buildRequest: (request) => buildHomeSearchRequest(viewContext(), request),

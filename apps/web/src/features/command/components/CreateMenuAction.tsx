@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { Button, Hotkey } from '@ui';
 import type { CreatableBlock } from '../types';
 
@@ -10,12 +11,17 @@ export function CreateMenuAction(props: {
   return (
     <Button
       size="md"
-      variant="cta"
-      class="h-8 rounded-full px-4 font-medium [--color-accent:#fff] [--color-accent-contrast:#000] light-mode:[--color-accent:#000] light-mode:[--color-accent-contrast:#fff]"
-      aria-label={`Create ${props.item.label}${props.shiftHeld ? ' in new split' : ''}`}
+      variant="primary"
+      class="h-8 rounded-full px-4 font-medium"
+      aria-label={t(
+        props.shiftHeld ? 'create.createItemInNewSplit' : 'create.createItem',
+        { label: props.item.label }
+      )}
       onClick={() => props.onChoose(props.item)}
     >
-      {props.shiftHeld ? 'Create in new split' : `Create ${props.item.label}`}
+      {props.shiftHeld
+        ? t('create.createInNewSplit')
+        : t('create.createItem', { label: props.item.label })}
       <Hotkey
         shortcut={props.shiftHeld ? 'shift+enter' : 'enter'}
         class="text-xs opacity-55"

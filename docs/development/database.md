@@ -85,6 +85,7 @@ compatible with the service code currently deployed, not just the code in its PR
   obsolete schema in a later PR after deployment.
 - New columns and constraints must also support currently deployed code (for
   example, allow omitted values via nullability or defaults until writers migrate).
+- Consolidate unpublished branch migrations into the minimum deployment-safe final set; never rewrite migrations already deployed to a shared environment.
 
 ## Change queries or schema
 

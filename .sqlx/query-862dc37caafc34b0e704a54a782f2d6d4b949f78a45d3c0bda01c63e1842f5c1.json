@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO email_thread_focus (\n                thread_id, link_id, classified_message_id, classified_message_ts, is_focus,\n                category, importance, needs_reply, needs_follow_up, scores, model, classified_at\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)\n            ON CONFLICT (thread_id) DO UPDATE SET\n                link_id = EXCLUDED.link_id,\n                classified_message_id = EXCLUDED.classified_message_id,\n                classified_message_ts = EXCLUDED.classified_message_ts,\n                is_focus = EXCLUDED.is_focus,\n                category = EXCLUDED.category,\n                importance = EXCLUDED.importance,\n                needs_reply = EXCLUDED.needs_reply,\n                needs_follow_up = EXCLUDED.needs_follow_up,\n                scores = EXCLUDED.scores,\n                model = EXCLUDED.model,\n                classified_at = EXCLUDED.classified_at\n            WHERE email_thread_focus.classified_message_ts <= EXCLUDED.classified_message_ts\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Timestamptz",
+        "Bool",
+        "Text",
+        "Int2",
+        "Bool",
+        "Bool",
+        "Jsonb",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "862dc37caafc34b0e704a54a782f2d6d4b949f78a45d3c0bda01c63e1842f5c1"
+}

@@ -15,7 +15,7 @@ import {
 } from '@app/features/calendar-view/types';
 import { callsHostedContent } from '@app/features/calls-view/calls-hosted-content';
 import { driveHostedContent } from '@app/features/drive-view/drive-hosted-content';
-import { projectRouteId } from '@app/features/projects/core/route';
+import { projectHostedContent } from '@app/features/projects/open-project';
 import { reviewsHostedContent } from '@app/features/reviews-view/reviews-hosted-content';
 import { withListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
 import {
@@ -24,6 +24,7 @@ import {
   scopeChannelNotificationsForEntity,
 } from '@app/features/soup/entity-notifications';
 import { replacePaneSearchParams } from '@app/lib/split-router';
+import { beginInteraction } from '@app/observability/flow';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import {
@@ -98,6 +99,7 @@ import { queryClient } from '@queries/client';
 import { updateEmailThreadState } from '@queries/email/cache-cleanup';
 import {
   archiveEmailThread,
+  archiveEmailThreads,
   type EmailArchiveDisposition,
 } from '@queries/email/integration';
 import { emailKeys } from '@queries/email/keys';
@@ -260,9 +262,7 @@ export const openEntityInNewTab = ({
   location ??= getRowClickFallbackLocation(entity);
   // Build URL for the entity
   let entityPath: string;
-  if (entity.type === 'initiative') {
-    entityPath = `/app/component/${projectRouteId({ id: entity.id, section: 'overview' })}`;
-  } else if (entity.type === 'calendar_event') {
+  if (entity.type === 'calendar_event') {
     entityPath = `/app${calendarPath(getPreferredCalendarPeriodView())}`;
   } else if (entity.type === 'document') {
     const { fileType, subType } = entity;
@@ -628,6 +628,22 @@ export const openEntityInSplitFromUnifiedList = async (
   entity: EntityData,
   options: OpenEntityOptions
 ): Promise<void> => {
+  // From the row action to the opened view's paint: the navigation it commits
+  // and the view it mounts join this interaction.
+  const interaction = beginInteraction('list.open', {
+    attributes: { 'entity.type': entity.type },
+  });
+  try {
+    await openEntity(entity, options);
+  } finally {
+    interaction.end();
+  }
+};
+
+const openEntity = async (
+  entity: EntityData,
+  options: OpenEntityOptions
+): Promise<void> => {
   const { allowDuplicate, openInNewSplit, splitHandle, mergeHistory } = options;
   let { location } = options;
 
@@ -764,29 +780,36 @@ export const openEntityInSplitFromUnifiedList = async (
     splitContent = withListNavigationSource(splitContent, splitHandle);
   }
 
-  const hydrateNotificationsAndMarkSeen = async (
+  const hydrateNotificationsAndMarkSeen = (
     channel: ChannelEntity,
     notificationSource: NotificationSource
-  ) => {
-    try {
-      const hydrated = await hydrateChannelNotificationSelection(
-        channel,
-        notificationSource.withLocalOverrides
-      );
-      const view = splitManager.findOpenView(content);
-      // A late response must not mark a closed conversation or a mobile pane
-      // that the user has already left. Hydration never reopens or retargets it.
-      if (!view || (isTouchDevice() && !view.topLevelSplit?.isActive())) return;
-      markChannelNotificationsSeenOnOpen(hydrated, notificationSource, {
-        channelReadScope: options.channelReadScope,
-      });
-    } catch (error) {
-      console.error('Failed to load conversation notifications after opening', {
-        channelId: channel.id,
-        error,
-      });
-    }
-  };
+  ) =>
+    Telemetry.span('channel.open.notifications', async (span) => {
+      span.setAttr('channel.id', channel.id);
+      try {
+        const hydrated = await hydrateChannelNotificationSelection(
+          channel,
+          notificationSource.withLocalOverrides
+        );
+        const view = splitManager.findOpenView(content);
+        // A late response must not mark a closed conversation or a mobile pane
+        // that the user has already left. Hydration never reopens or retargets it.
+        if (!view || (isTouchDevice() && !view.topLevelSplit?.isActive())) {
+          span.setAttr('channel.open.outcome', 'left');
+          return;
+        }
+        markChannelNotificationsSeenOnOpen(hydrated, notificationSource, {
+          channelReadScope: options.channelReadScope,
+        });
+        span.setAttr('channel.open.outcome', 'loaded');
+      } catch (error) {
+        span.setAttr('channel.open.outcome', 'failed');
+        console.error(
+          'Failed to load conversation notifications after opening',
+          { channelId: channel.id, error }
+        );
+      }
+    });
 
   let markedNotifications = false;
   const markNotificationsSeen = () => {
@@ -887,8 +910,6 @@ export function markChannelNotificationsSeenOnOpen(
   });
 }
 
-export { markCalendarNotificationSeenOnOpen } from '../calendar/mark-event-notifications-seen';
-
 /**
  * The event and instance a calendar row points at, resolved exactly as the
  * open path resolves it so a copied link lands where a click would.
@@ -953,10 +974,12 @@ export function calendarViewTargetForEntity(
 function getEntitySplitContent(entity: EntityData) {
   return (
     match(entity)
-      .with({ type: 'initiative' }, (entity) => ({
-        type: 'component' as const,
-        id: projectRouteId({ id: entity.id, section: 'overview' }),
-      }))
+      // The Tasks-hosted route carries the project's own identity, so an open
+      // project split is reused; the legacy component would mount a redirect
+      // shim beside it.
+      .with({ type: 'initiative' }, (entity) =>
+        projectHostedContent(entity.id, 'overview')
+      )
       .with({ type: 'document' }, (entity) => {
         const { id, fileType, subType } = entity;
         const blockName = fileTypeToBlockName(subType?.type ?? fileType);
@@ -1517,9 +1540,7 @@ export async function executeMarkEntitiesDone(args: {
   };
   const [emailResults, [notificationResult], [entityResult]] =
     await Promise.all([
-      Promise.allSettled(
-        emailIds.map((id) => archiveEmailThread({ value: true, id }))
-      ),
+      archiveEmailThreads(emailIds, true),
       Promise.allSettled([writeNotificationIds()]),
       Promise.allSettled([writeNotificationEntities()]),
     ]);
@@ -1616,9 +1637,7 @@ export async function executeMarkEntitiesUndone(args: {
     return notificationIds;
   };
   const [emailResults, [notificationResult]] = await Promise.all([
-    Promise.allSettled(
-      emailIds.map((id) => archiveEmailThread({ value: false, id }))
-    ),
+    archiveEmailThreads(emailIds, false),
     Promise.allSettled([writeNotificationIds()]),
   ]);
   for (const [index, result] of emailResults.entries()) {

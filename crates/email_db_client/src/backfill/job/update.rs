@@ -32,6 +32,8 @@ pub enum InitLeaseRenewal {
 /// Result of attempting to atomically complete an email backfill.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BackfillCompletion {
+    /// Listing or registered thread work is still unfinished.
+    NotReady,
     /// This caller completed the active job and published its completion effects.
     Completed,
     /// The job had already reached a terminal state.
@@ -216,7 +218,8 @@ pub async fn finalize_initialization(
             init_lease_token = NULL,
             init_lease_expires_at = NULL,
             completed_threads = 0,
-            priority_threads = 0,
+            listed_threads = 0,
+            listing_complete = false,
             updated_at = now()
         WHERE id = $1
           AND status = 'Init'
@@ -290,6 +293,9 @@ pub async fn complete_backfill_job(
               OR (
                   status = 'InProgress'
                   AND $2::uuid IS NULL
+                  AND completed_threads IS NOT NULL
+                  AND listing_complete
+                  AND completed_threads = listed_threads
               )
           )
         "#,
@@ -313,6 +319,7 @@ pub async fn complete_backfill_job(
         tx.commit().await?;
         return Ok(match status.as_deref() {
             Some("Complete" | "Failed" | "Cancelled") => BackfillCompletion::AlreadyTerminal,
+            Some("InProgress") if init_lease_token.is_none() => BackfillCompletion::NotReady,
             Some(_) => BackfillCompletion::LeaseLost,
             None => BackfillCompletion::NotFound,
         });

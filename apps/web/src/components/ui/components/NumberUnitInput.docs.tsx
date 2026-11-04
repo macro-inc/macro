@@ -15,14 +15,20 @@ function AmountsDemo() {
         format={false}
       >
         <NumberUnitInput.Controls align="inline-start">
-          <NumberUnitInput.DecrementTrigger label="Decrease duration" />
+          <NumberUnitInput.DecrementTrigger
+            aria-label="Decrease duration"
+            tooltip="Decrease duration"
+          />
         </NumberUnitInput.Controls>
         <NumberUnitInput.Frame>
           <NumberUnitInput.Input aria-label="Duration" />
           <NumberUnitInput.Unit>min</NumberUnitInput.Unit>
         </NumberUnitInput.Frame>
         <NumberUnitInput.Controls align="inline-end">
-          <NumberUnitInput.IncrementTrigger label="Increase duration" />
+          <NumberUnitInput.IncrementTrigger
+            aria-label="Increase duration"
+            tooltip="Increase duration"
+          />
         </NumberUnitInput.Controls>
       </NumberUnitInput>
       <NumberUnitInput defaultValue={1} step={0.01}>

@@ -6,8 +6,8 @@
 
 import type { MergeMode, ShapeOutline } from '@core/pptx-engine/types';
 import { fireAndForget } from '@core/util/fireAndForget';
-import PencilSimple from '@phosphor/pencil-simple.svg';
-import ShapesIcon from '@phosphor/shapes.svg';
+import PencilSimple from '@icon/system/regular/pencil-simple.svg';
+import ShapesIcon from '@icon/system/regular/shapes.svg';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { PopoverItem, PopoverLabel, RibbonPopover } from './controls';
 import { useRibbon } from './ribbon';

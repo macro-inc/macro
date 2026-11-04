@@ -1,5 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { match } from 'ts-pattern';
+import type { NewPanePlacement } from '../panes/panes';
 import type { OpenTarget, Placement } from '../panes/types';
 import { canonicalRoute, type SplitRoutesManifest } from '../routes/manifest';
 import type {
@@ -123,10 +124,10 @@ export function createPaneList(options: {
    */
   function openNew(
     location: SplitLocation,
-    placement: { insertAt: number; besides?: PaneId; source?: PaneId },
+    placement: NewPanePlacement & { besides?: PaneId; source?: PaneId },
     navigateOptions: SplitNavigateOptions
   ): MaybePromise<NavigationResult> {
-    const { insertAt, besides, source } = placement;
+    const { besides, source } = placement;
     const pane = panes.createPaneId();
     const entry = createEntry(routes, location, undefined, navigateOptions);
     const decided = panes.ids();
@@ -139,7 +140,7 @@ export function createPaneList(options: {
 
     const apply = ([landed]: readonly Entry[]) =>
       claims.applyUnlessHeld(check, landed!, () => {
-        panes.insert(pane, landed!, insertAt, decided);
+        panes.insert(pane, landed!, placement, decided);
         url.write('push');
 
         return committed(pane);
@@ -235,12 +236,19 @@ export function createPaneList(options: {
           return openIn(placement.pane, location, navigateOptions);
         }
 
-        const { insertAt } = placement;
+        // A split whose pane has closed by the time it lands opens at the end.
+        const newPane: NewPanePlacement =
+          'split' in placement
+            ? {
+                insertAt: panes.ids().length,
+                split: { pane: placement.split, side: placement.side },
+              }
+            : { insertAt: placement.insertAt };
 
         return openNew(
           location,
           {
-            insertAt,
+            ...newPane,
             besides: holder,
             source: 'pane' in target ? undefined : target.source,
           },

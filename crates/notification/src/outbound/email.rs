@@ -1,11 +1,15 @@
 //! Email notification adapter.
 
 use aws_sdk_sesv2::types::{Body, Content, Destination, EmailContent as SesEmailContent, Message};
+use hmac::Hmac;
 use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
+use sha2::Sha256;
+use url::Url;
 
 use crate::domain::models::queue_message::EmailContent;
+use crate::domain::models::signing::sign_unsubscribe_placeholders;
 use crate::domain::ports::EmailSender;
 
 /// Email notification adapter.
@@ -95,5 +99,49 @@ impl<E: EmailServiceOps + Send + Sync + 'static> EmailSender for EmailAdapter<E>
         self.email_service
             .send_email(&self.from_email, to_email, &content.subject, &content.body)
             .await
+    }
+}
+
+/// Signs the unsubscribe placeholders an email body carries before handing it to `inner`.
+///
+/// Producers render email bodies without the URL signing key, so a template marks its
+/// unsubscribe link with [`crate::domain::models::signing::unsubscribe_placeholder`]. This
+/// sender knows the recipient and holds the key.
+pub struct SignedUnsubscribeLinks<S> {
+    inner: S,
+    notification_service_url: Url,
+    signing_key: Hmac<Sha256>,
+}
+
+impl<S> SignedUnsubscribeLinks<S> {
+    /// Wraps `inner`, signing links against the notification service's public URL.
+    pub fn new(inner: S, notification_service_url: Url, signing_key: Hmac<Sha256>) -> Self {
+        Self {
+            inner,
+            notification_service_url,
+            signing_key,
+        }
+    }
+}
+
+impl<S: EmailSender> EmailSender for SignedUnsubscribeLinks<S> {
+    async fn send_email(
+        &self,
+        recipient: MacroUserIdStr<'_>,
+        content: &EmailContent,
+    ) -> Result<(), Report> {
+        let Some(body) = sign_unsubscribe_placeholders(
+            &content.body,
+            &self.notification_service_url,
+            recipient.as_ref(),
+            &self.signing_key,
+        ) else {
+            return self.inner.send_email(recipient, content).await;
+        };
+        let signed = EmailContent {
+            subject: content.subject.clone(),
+            body,
+        };
+        self.inner.send_email(recipient, &signed).await
     }
 }

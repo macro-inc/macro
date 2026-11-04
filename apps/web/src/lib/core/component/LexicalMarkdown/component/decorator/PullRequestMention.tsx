@@ -11,6 +11,10 @@ import {
   useNativeSplitNavigationHandler,
   useSplitNavigationHandler,
 } from '@core/util/useSplitNavigationHandler';
+import OpenIcon from '@icon/system/regular/arrows-out.svg';
+import ChatCircle from '@icon/system/regular/chat-circle.svg';
+import GitMerge from '@icon/system/regular/git-merge.svg';
+import GitPullRequest from '@icon/system/regular/git-pull-request.svg';
 import {
   $isPullRequestMentionNode,
   HISTORIC_TAG,
@@ -19,10 +23,6 @@ import {
   SKIP_DOM_SELECTION_TAG,
   SKIP_SCROLL_INTO_VIEW_TAG,
 } from '@macro-inc/lexical-core';
-import OpenIcon from '@phosphor/arrows-out.svg';
-import ChatCircle from '@phosphor/chat-circle.svg';
-import GitMerge from '@phosphor/git-merge.svg';
-import GitPullRequest from '@phosphor/git-pull-request.svg';
 import { useGithubLinkStatusQuery } from '@queries/auth/github-link';
 import { queryReadyGate } from '@queries/gate';
 import {
@@ -326,7 +326,7 @@ function PullRequestPreviewBody(props: { id: string; fallbackLabel?: string }) {
                   href={url()}
                   target="_blank"
                   rel="noreferrer"
-                  class="shrink-0 text-link hover:text-link-hover visited:text-link-visited"
+                  class="shrink-0 text-ink-muted hover:text-ink"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <OpenIcon class="size-4" />
@@ -463,7 +463,7 @@ function UnsyncedPullRequestPreviewCard(props: {
                 href={url()}
                 target="_blank"
                 rel="noreferrer"
-                class="shrink-0 text-link hover:text-link-hover visited:text-link-visited"
+                class="shrink-0 text-ink-muted hover:text-ink"
                 onClick={(e) => e.stopPropagation()}
               >
                 <OpenIcon class="size-4" />
@@ -544,7 +544,7 @@ function PullRequestMentionContent(props: PullRequestMentionDecoratorProps) {
       <span class="relative top-[0.125em] size-[1em] shrink-0 inline-flex mx-1">
         <PullRequestStatusIcon status={status()} />
       </span>
-      <span class="flex min-w-0 items-baseline underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
+      <span class="flex min-w-0 items-baseline text-ink underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
         <span class="min-w-0 truncate">{parts().name}</span>
         <Show when={parts().number}>
           {(number) => (
@@ -642,7 +642,7 @@ export function PullRequestMention(props: PullRequestMentionDecoratorProps) {
           href={props.url}
           target="_blank"
           rel="noreferrer"
-          class="text-link hover:text-link-hover visited:text-link-visited underline"
+          class="text-ink underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2 hover:decoration-current"
         >
           {fallbackLabel(mentionFallbackLabel(props))}
         </a>

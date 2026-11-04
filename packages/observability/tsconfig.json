@@ -13,6 +13,6 @@
 		"target": "ESNext",
 		"types": ["@types/bun", "@types/node"]
 	},
-	"include": ["src/**/*"],
+	"include": ["src/**/*", "browser-test/**/*"],
 	"exclude": ["node_modules"]
 }

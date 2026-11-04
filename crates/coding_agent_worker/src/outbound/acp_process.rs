@@ -45,15 +45,18 @@ use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt 
 
 #[cfg(windows)]
 mod job;
+mod running;
 #[cfg(test)]
 mod test;
+
+pub(crate) use running::{AgentEvent, AttachedAgent, RunningAgent};
 
 type DebugCallback = Arc<dyn Fn(&str, LineDirection) + Send + Sync + 'static>;
 
 const STDERR_CAPTURE_LIMIT: usize = 64 * 1024;
 const STDERR_READ_BUFFER_SIZE: usize = 8 * 1024;
 const STDERR_LINE_TRUNCATION_MARKER: &str = "… [stderr line truncated]";
-const SHUTDOWN_GRACE_PERIOD: Duration = Duration::from_secs(1);
+pub(crate) const SHUTDOWN_GRACE_PERIOD: Duration = Duration::from_secs(1);
 
 /// An ACP agent launched as a child of this daemon, in a chosen directory.
 ///
@@ -96,7 +99,9 @@ impl AcpProcess {
     }
 
     /// Observe every line crossing the child's stdin and stdout, plus its
-    /// stderr. Exceptionally long stderr lines are truncated.
+    /// stderr. Exceptionally long stderr lines are truncated. The bridge taps
+    /// lines in its own relay ([`RunningAgent::attach`]).
+    #[cfg(test)]
     #[must_use]
     pub(crate) fn with_debug<Callback>(mut self, callback: Callback) -> Self
     where
@@ -119,6 +124,8 @@ impl AcpProcess {
         {
             use std::os::unix::process::CommandExt as _;
 
+            // A handoff descriptor number means nothing in the agent.
+            command.env_remove(crate::handoff::HANDOFF_ENV);
             // The child leads its own process group so `ChildGuard` can kill
             // the whole tree. Agents commonly sit behind wrapper launchers
             // (`npx …`, `uvx …`): killing only the immediate child orphans the
@@ -163,15 +170,26 @@ struct SpawnedChild {
 }
 
 /// Kills the child - and its whole process group (Unix) or job (Windows) -
-/// when dropped.
+/// when dropped, unless it is handed on ([`ChildGuard::release`]).
 struct ChildGuard {
-    child: Child,
+    child: GuardedChild,
     /// Captured at spawn: tokio forgets the pid once the child is reaped, and
     /// the group kill must still reach descendants a wrapper left behind.
     #[cfg(unix)]
     process_group: Option<rustix::process::Pid>,
     #[cfg(windows)]
     job: job::Job,
+}
+
+enum GuardedChild {
+    Spawned(Child),
+    /// A child an earlier macrod process image spawned and handed over. It is
+    /// still this process's child, so a blocking `waitpid` reaps it.
+    /// `None` once its exit has been reported.
+    #[cfg(unix)]
+    Adopted(Option<tokio::sync::oneshot::Receiver<std::io::Result<std::process::ExitStatus>>>),
+    /// Handed on to the next process image; nothing left to supervise.
+    Released,
 }
 
 impl ChildGuard {
@@ -186,7 +204,7 @@ impl ChildGuard {
             .ok_or_else(|| std::io::Error::other("the child exited before it could be supervised"))
             .and_then(job::Job::containing)?;
         Ok(Self {
-            child,
+            child: GuardedChild::Spawned(child),
             #[cfg(unix)]
             process_group,
             #[cfg(windows)]
@@ -194,8 +212,64 @@ impl ChildGuard {
         })
     }
 
+    /// Supervise a child this process inherited across `execve`. It leads
+    /// its own process group, like every child [`AcpProcess`] spawns.
+    #[cfg(unix)]
+    fn adopt(pid: rustix::process::Pid) -> Self {
+        let (exit_tx, exit) = tokio::sync::oneshot::channel();
+        std::thread::spawn(move || {
+            use std::os::unix::process::ExitStatusExt as _;
+
+            let status = rustix::process::waitpid(Some(pid), rustix::process::WaitOptions::empty())
+                .map_err(std::io::Error::from)
+                .and_then(|status| {
+                    status.ok_or_else(|| std::io::Error::other("waitpid returned no status"))
+                })
+                .map(|(_, status)| std::process::ExitStatus::from_raw(status.as_raw()));
+            let _ = exit_tx.send(status);
+        });
+        Self {
+            child: GuardedChild::Adopted(Some(exit)),
+            process_group: Some(pid),
+        }
+    }
+
     async fn wait(&mut self) -> std::io::Result<std::process::ExitStatus> {
-        self.child.wait().await
+        match &mut self.child {
+            GuardedChild::Spawned(child) => child.wait().await,
+            #[cfg(unix)]
+            GuardedChild::Adopted(pending_exit) => {
+                let Some(exit) = pending_exit.as_mut() else {
+                    return std::future::pending().await;
+                };
+                let status = exit
+                    .await
+                    .unwrap_or_else(|_| Err(std::io::Error::other("the child waiter stopped")));
+                *pending_exit = None;
+                status
+            }
+            GuardedChild::Released => std::future::pending().await,
+        }
+    }
+
+    /// The child's pid, for handing it to the next process image.
+    #[cfg(unix)]
+    fn pid(&self) -> Option<rustix::process::Pid> {
+        self.process_group
+    }
+
+    /// Stop supervising without killing: the child outlives this guard.
+    #[cfg(unix)]
+    fn release(&mut self) {
+        // Forgotten, not dropped: tokio's `Child` kills on drop
+        // (`kill_on_drop`) and would otherwise reap the process this image
+        // no longer owns.
+        if let GuardedChild::Spawned(child) =
+            std::mem::replace(&mut self.child, GuardedChild::Released)
+        {
+            std::mem::forget(child);
+        }
+        self.process_group = None;
     }
 
     fn terminate(&mut self) {
@@ -211,7 +285,9 @@ impl ChildGuard {
         #[cfg(windows)]
         self.job.terminate();
         // A no-op double tap: the group or job already held the child.
-        drop(self.child.start_kill());
+        if let GuardedChild::Spawned(child) = &mut self.child {
+            drop(child.start_kill());
+        }
     }
 }
 
@@ -328,20 +404,27 @@ struct StderrDrainResult {
     read_error: Option<std::io::Error>,
 }
 
-/// Read stderr to EOF. Never leaving the pipe unread matters: a full pipe
-/// buffer blocks the child.
+/// Read stderr to EOF, or until `stop` resolves. Never leaving the pipe
+/// unread matters: a full pipe buffer blocks the child.
 async fn drain_stderr(
-    mut stderr: impl futures::AsyncRead + Unpin,
+    stderr: &mut (impl futures::AsyncRead + Unpin),
     debug_callback: Option<DebugCallback>,
+    stop: impl Future<Output = ()>,
 ) -> StderrDrainResult {
     use futures::AsyncReadExt as _;
 
     let mut tail = StderrTail::default();
     let mut debug_lines = debug_callback.as_ref().map(|_| StderrDebugLines::default());
     let mut buffer = [0; STDERR_READ_BUFFER_SIZE];
+    let mut stop = pin!(stop);
 
     let read_error = loop {
-        match stderr.read(&mut buffer).await {
+        let read = tokio::select! {
+            biased;
+            () = &mut stop => break None,
+            read = stderr.read(&mut buffer) => read,
+        };
+        match read {
             Ok(0) => break None,
             Ok(read) => {
                 let bytes = &buffer[..read];
@@ -541,7 +624,7 @@ impl ConnectTo<Client> for AcpProcess {
             let StderrDrainResult {
                 captured,
                 read_error,
-            } = drain_stderr(stderr.compat(), debug_callback).await;
+            } = drain_stderr(&mut stderr.compat(), debug_callback, std::future::pending()).await;
             drop(stderr_tx.send(captured));
 
             if let Some(error) = read_error {

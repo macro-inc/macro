@@ -1,8 +1,8 @@
 import { BotAvatar } from '@channel/Bots/BotAvatar';
 import { LoadingSpinner } from '@core/component/LoadingSpinner';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import BotIcon from '@phosphor/robot.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import BotIcon from '@icon/system/regular/robot.svg';
 import { useBotChannelsQuery } from '@queries/bots/bots';
 import type { Bot } from '@service-storage/generated/schemas/bot';
 import { Button } from '@ui';
@@ -68,8 +68,8 @@ export function BotSettingsList(props: {
       title="Bots"
       description="A bot is an account your program uses to read and send channel messages. Create a bot, add it to channels, then use its token with the Macro SDK to control it."
       actions={
-        <Button variant="cta" size="sm" onClick={props.onCreate}>
-          <PlusIcon />
+        <Button variant="primary" size="sm" onClick={props.onCreate}>
+          <PlusIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
           Create bot
         </Button>
       }
@@ -103,11 +103,11 @@ export function BotSettingsList(props: {
                   </div>
                   <Button
                     class="mt-4"
-                    variant="cta"
+                    variant="primary"
                     size="sm"
                     onClick={props.onCreate}
                   >
-                    <PlusIcon />
+                    <PlusIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
                     Create bot
                   </Button>
                 </div>

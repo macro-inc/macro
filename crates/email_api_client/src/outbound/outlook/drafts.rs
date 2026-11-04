@@ -237,15 +237,38 @@ impl MailboxDraftClient for OutlookApiClientRepository {
         token: &AccessToken,
         request: &DraftRequest,
     ) -> Result<ProviderDraft, EmailApiError> {
-        let (url, body) = if let Some(parent) = &request.reply_to {
-            (
-                self.endpoint(&["me", "messages", parent.as_str(), "createReply"])?,
-                json!({"message":draft_body(request)?}),
-            )
-        } else {
-            (self.endpoint(&["me", "messages"])?, draft_body(request)?)
+        let body = draft_body(request)?;
+        let standalone = self.endpoint(&["me", "messages"])?;
+        let response = match &request.reply_to {
+            Some(parent) => {
+                let url = self.endpoint(&["me", "messages", parent.as_str(), "createReply"])?;
+                let reply = json!({"message": &body});
+                match self
+                    .graph_request(token, Method::POST, url, Some(&reply), None)
+                    .await
+                {
+                    Ok(response) => response,
+                    // Graph refuses native replies to some parent items. The standalone
+                    // draft still carries the RFC reply headers that thread it.
+                    Err(failure)
+                        if failure.status == Some(StatusCode::BAD_REQUEST)
+                            && failure.code.as_deref() == Some("ErrorInvalidOperation") =>
+                    {
+                        tracing::warn!(
+                            graph_request_id = failure.request_id.as_deref(),
+                            "Microsoft Graph refused a native reply, creating a standalone draft"
+                        );
+                        self.request(token, Method::POST, standalone, Some(&body))
+                            .await?
+                    }
+                    Err(failure) => return Err(failure.error),
+                }
+            }
+            None => {
+                self.request(token, Method::POST, standalone, Some(&body))
+                    .await?
+            }
         };
-        let response = self.request(token, Method::POST, url, Some(&body)).await?;
         written_json::<Draft>(response)
             .await?
             .try_into()

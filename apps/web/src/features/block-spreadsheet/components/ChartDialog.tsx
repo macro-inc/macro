@@ -158,7 +158,7 @@ function ChartForm(props: {
         <Button variant="ghost" size="sm" type="button" onClick={props.onClose}>
           Cancel
         </Button>
-        <Button size="sm" variant="strong" type="submit">
+        <Button size="sm" variant="primary" type="submit">
           Apply
         </Button>
       </div>

@@ -14,6 +14,7 @@ export type DataType = (typeof DataType)[keyof typeof DataType];
 export const DataType = {
   BOOLEAN: 'BOOLEAN',
   DATE: 'DATE',
+  DATE_RANGE: 'DATE_RANGE',
   NUMBER: 'NUMBER',
   STRING: 'STRING',
   SELECT_NUMBER: 'SELECT_NUMBER',

@@ -5,8 +5,8 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode } from '@core/util/result';
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretRight from '@phosphor/caret-right.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
 import { useMessageLink } from '@queries/messages/document-messages';
 import {
   newMessageId,
@@ -61,6 +61,8 @@ export function EntityConversation(props: {
   /** Delete comments the caller did not write. Document owners set this. */
   canModerate?: boolean;
   targetId?: string | null;
+  /** Re-aim the same linked comment without remounting the conversation. */
+  targetRequestKey?: string | number;
   /** The linked view stays around `targetId`, but its message is no longer highlighted. */
   targetCleared?: boolean;
   onClearTarget?: () => void;
@@ -152,6 +154,7 @@ export function EntityConversation(props: {
                   data={messagesById().get(id)!}
                   canWrite={props.canWrite}
                   canModerate={props.canModerate}
+                  targetRequestKey={props.targetRequestKey}
                   targetId={
                     target.rootId() === id && !props.targetCleared
                       ? target.messageId()

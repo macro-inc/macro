@@ -7,7 +7,7 @@ use models_email::email::service::backfill::{JobScopedPayload, UpdateMetadataPay
 use models_email::email::service::link;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 
-/// This step is invoked by BackfillMessage once all messages in a thread have been backfilled.
+/// BackfillThread publishes this step after its canonical import and attachment scheduling.
 /// Updates the thread metadata in the database, the replying_to_id values of its messages, and
 /// notifies dependencies of a new thread being backfilled. If it's the last thread to be processed,
 /// it sets the backfill job status to complete.
@@ -18,6 +18,23 @@ pub async fn update_thread_metadata(
     link: &link::Link,
 ) -> Result<(), ProcessingError> {
     let p = &scope.payload;
+    let receipt = email_db_client::backfill::progress::import::receipt(
+        &ctx.db,
+        scope.job_id,
+        &p.thread_provider_id,
+    )
+    .await
+    .map_err(|e| map_db_error(e, "Failed to read metadata import receipt"))?;
+    if receipt.thread_id != Some(p.thread_db_id) {
+        return Err(ProcessingError::Retryable(DetailedError {
+            reason: FailureReason::DatabaseQueryFailed,
+            source: anyhow::anyhow!("metadata requires the canonical committed import receipt"),
+        }));
+    }
+    if receipt.completed {
+        return incr_completed_threads(ctx, link, scope.job_id, &p.thread_provider_id).await;
+    }
+
     let mut tx = ctx.db.begin().await.map_err(|e| {
         ProcessingError::Retryable(DetailedError {
             reason: FailureReason::DatabaseQueryFailed,
@@ -69,7 +86,7 @@ pub async fn update_thread_metadata(
         })
     })?;
 
-    incr_completed_threads(ctx, link, scope.job_id).await?;
+    incr_completed_threads(ctx, link, scope.job_id, &p.thread_provider_id).await?;
 
     // Best-effort by design: publication failures are logged and dropped so a committed
     // backfill is not retried after its completed-thread counters have advanced.

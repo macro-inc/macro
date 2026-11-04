@@ -12,8 +12,14 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { InlinePropertyValue } from './InlinePropertyValue';
 
 vi.mock('@property/component/PropertyValuePill', () => ({
-  PropertyValuePill: (props: { hoverActions?: JSX.Element }) => (
-    <div>{props.hoverActions}</div>
+  PropertyValuePill: (props: {
+    hoverActions?: JSX.Element;
+    hoverTrailingAction?: JSX.Element;
+  }) => (
+    <div>
+      {props.hoverTrailingAction}
+      {props.hoverActions}
+    </div>
   ),
 }));
 vi.mock('@property/editor/state/propertyEditor', () => ({

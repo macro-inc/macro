@@ -8,18 +8,18 @@
 
 import type { PictureRecolor, ShapeOutline } from '@core/pptx-engine/types';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
+import ArrowDown from '@icon/system/regular/arrow-down.svg';
+import ArrowUp from '@icon/system/regular/arrow-up.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import Checkerboard from '@icon/system/regular/checkerboard.svg';
+import CropIcon from '@icon/system/regular/crop.svg';
+import ImagesIcon from '@icon/system/regular/images.svg';
+import Palette from '@icon/system/regular/palette.svg';
+import PenNib from '@icon/system/regular/pen-nib.svg';
+import Stack from '@icon/system/regular/stack.svg';
+import Sun from '@icon/system/regular/sun.svg';
 import { Popover } from '@kobalte/core/popover';
-import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
-import ArrowDown from '@phosphor/arrow-down.svg';
-import ArrowUp from '@phosphor/arrow-up.svg';
-import CaretDown from '@phosphor/caret-down.svg';
-import Checkerboard from '@phosphor/checkerboard.svg';
-import CropIcon from '@phosphor/crop.svg';
-import ImagesIcon from '@phosphor/images.svg';
-import Palette from '@phosphor/palette.svg';
-import PenNib from '@phosphor/pen-nib.svg';
-import Stack from '@phosphor/stack.svg';
-import Sun from '@phosphor/sun.svg';
 import { cn } from '@ui';
 import { Button } from '@ui/components/Button';
 import { createSignal, For, type JSX, onMount, Show } from 'solid-js';
@@ -366,14 +366,13 @@ function CropButton(props: { crop: CropMode }) {
       data-pptx-crop-toggle
     >
       <Button
+        aria-label="Crop"
         variant="ghost"
-        size="sm"
-        square
+        size="icon-sm"
         class={cn(
           'h-7 gap-1 rounded-r-none rounded-l-md px-1.5 text-xs',
           props.crop.active() && 'text-accent'
         )}
-        label="Crop"
         tooltip="Crop: drag the black handles; Enter or Esc finishes"
         aria-pressed={props.crop.active()}
         disabled={disabled()}
@@ -390,12 +389,11 @@ function CropButton(props: { crop: CropMode }) {
         gutter={4}
       >
         <Popover.Trigger
+          aria-label="Crop options"
           as={Button}
           variant="ghost"
-          size="sm"
-          square
+          size="icon-sm"
           class="h-7 rounded-r-md rounded-l-none px-0.5"
-          label="Crop options"
           tooltip="Crop to shape, aspect ratio, fill, or fit"
           disabled={disabled()}
           data-testid="pptx-picture-crop-menu"
@@ -546,7 +544,7 @@ export function PictureFormatTab(props: {
           )}
         </PictureGalleryMenu>
         <RibbonButton
-          label="Change picture"
+          aria-label="Change picture"
           tooltip="Change picture: keep the size and format, use another image"
           disabled={ro() || one()?.kind !== 'picture'}
           data-testid="pptx-picture-change"
@@ -600,7 +598,7 @@ export function PictureFormatTab(props: {
       </RibbonGroup>
       <RibbonGroup label="Accessibility">
         <RibbonTextButton
-          label="Alt text"
+          aria-label="Alt text"
           disabled={ro()}
           onClick={() => env.openFormatPane('size')}
         >
@@ -609,7 +607,7 @@ export function PictureFormatTab(props: {
       </RibbonGroup>
       <RibbonGroup label="Arrange">
         <RibbonButton
-          label="Bring forward"
+          aria-label="Bring forward"
           tooltip="Bring forward (⌘])"
           disabled={ro()}
           onClick={() => c.arrange('forward')}
@@ -617,7 +615,7 @@ export function PictureFormatTab(props: {
           <ArrowUp />
         </RibbonButton>
         <RibbonButton
-          label="Send backward"
+          aria-label="Send backward"
           tooltip="Send backward (⌘[)"
           disabled={ro()}
           onClick={() => c.arrange('backward')}

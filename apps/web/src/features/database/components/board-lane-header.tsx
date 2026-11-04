@@ -1,8 +1,8 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import DotsIcon from '@icon/system/regular/dots-three.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { Popover } from '@kobalte/core/popover';
-import DotsIcon from '@phosphor/dots-three.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import TrashIcon from '@phosphor/trash.svg';
 import { ColorSwatches } from '@property/tags/components/color-swatches';
 import { Button } from '@ui/components/Button';
 import { DeleteDialog } from '@ui/components/DeleteDialog';
@@ -68,9 +68,13 @@ export function BoardLaneHeader(props: {
         </Show>
         <Show when={props.onAdd}>
           <Button
+            variant="ghost"
+            aria-label={`Add record to ${props.label}`}
+            tooltip={{
+              content: `Add record to ${props.label}`,
+              disabled: true,
+            }}
             size="icon-xs"
-            label={`Add record to ${props.label}`}
-            tooltipDisabled
             title={`Add record to ${props.label}`}
             onClick={props.onAdd}
           >
@@ -189,10 +193,14 @@ function LaneColor(props: { option: EditableOption; children: JSX.Element }) {
       onOpenChange={() => setError('')}
     >
       <Popover.Trigger
+        variant="ghost"
+        aria-label={`Change ${props.option.option.label} color`}
+        tooltip={{
+          content: `Change ${props.option.option.label} color`,
+          disabled: true,
+        }}
         as={Button}
         size="icon-xs"
-        label={`Change ${props.option.option.label} color`}
-        tooltipDisabled
         data-kanban-no-drag
       >
         {props.children}

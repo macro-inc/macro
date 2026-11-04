@@ -2,7 +2,6 @@ import { createQueryKeys } from '@lukemorales/query-key-factory';
 
 export const crmKeys = createQueryKeys('crm', {
   lists: null,
-  activityScope: (userId: string | undefined) => [userId],
   pipelines: (teamId: string | undefined) => [teamId],
   pipelineTable: (id: string) => [id],
   pipelineRows: (id: string) => [id],
@@ -10,4 +9,5 @@ export const crmKeys = createQueryKeys('crm', {
   contact: (contactId: string) => [contactId],
   contactByEmail: (teamId: string, email: string) => [teamId, email],
   quickAccessContacts: null,
+  blockedDomains: null,
 });

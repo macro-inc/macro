@@ -1,4 +1,4 @@
-import { UnknownContent } from '@block-unknown/component/UnknownContent';
+import { UnknownFilePreview } from '@block-unknown/component/UnknownFilePreview';
 import { getPermissions } from '@core/component/SharePermissions';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { createFileDownload } from '@core/util/createFileDownload';
@@ -65,7 +65,8 @@ export function UnknownDetailDocument(props: {
         operations,
         download,
       })}
-      <UnknownContent
+      <UnknownFilePreview
+        file={props.data.documentMetadata}
         fileName={props.data.documentMetadata.documentName}
         onShare={openShare}
         onDownload={() =>
@@ -83,6 +84,7 @@ export function UnknownDetail(props: {
   return (
     <FileDetailLoadGate
       documentId={props.documentId}
+      entityType="unknown"
       label="file"
       load={loadUnknownDocument}
     >

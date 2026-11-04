@@ -88,6 +88,7 @@ where
     async fn resolve(
         &self,
         owner: &MacroUserIdStr<'static>,
+        _agent: bot_id::BotId,
         destination: &McpDestination,
     ) -> Result<McpResolution, EgressError> {
         // Macro's own server is the composition root's to layer on with
@@ -113,6 +114,7 @@ where
                     server_name: slug.as_str().to_owned(),
                     account_id: String::new(),
                     enabled: false,
+                    provider: pipedream_mcp::domain::models::ConnectionProvider::Pipedream,
                 },
                 false,
             ),

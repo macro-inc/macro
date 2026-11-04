@@ -94,8 +94,7 @@ describe('connector import dialog', () => {
     await waitFor(() => expect(open()).toBe(false));
     expect(context.startAgentImport).toHaveBeenCalledWith(
       expect.objectContaining({
-        input:
-          'Import my most recent issues and tasks from Jira into Macro tasks.',
+        input: 'Import my Jira workspace into Macro.',
       })
     );
   });
@@ -126,16 +125,12 @@ describe('connector import dialog', () => {
     );
   });
 
-  it('connects GitHub through its native MCP server, not Pipedream', async () => {
+  it('connects GitHub as an overlaid app, without its own MCP authorization', async () => {
     const fake = setup('tasks');
     fake.setConnectOutcome('started');
     fireEvent.click(screen.getByRole('button', { name: 'Connect GitHub' }));
     expect(fake.context.connect).toHaveBeenCalledWith(
-      {
-        appSlug: 'github',
-        name: 'GitHub',
-        mcpUrl: 'https://api.githubcopilot.com/mcp',
-      },
+      { appSlug: 'github', name: 'GitHub', mcpUrl: undefined },
       expect.anything()
     );
     // Authorization finishes in another tab; the row waits for the result.

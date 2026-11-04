@@ -30,7 +30,7 @@ track the pointer. Mobile header actions retain 44px touch targets. The homepage
 16px arrow inside a 44px button, inset 20px from the bottom while respecting safe areas.
 
 The homepage keeps the original colored constellation and grainy demo backdrop,
-with “with Macro” in the unification heading. The original sample workspace is
+with “with one system” in the unification heading. The original sample workspace is
 embedded at `/demo?embedded=true`; shared UI fixes and corrected sample names
 remain in place. Compact arrows and dots sit above the original, fuller captions
 at the bottom of the frame. Slide selection is manual: arrows, dots, caption
@@ -996,13 +996,15 @@ and closing sources at desktop and phone widths, without remounting the original
 conversation or document. Display names use first names. All product pages use
 `HomepageClosing` for the bottom Open app CTA and the shared feature heading styles.
 
-Chat sidebar parity: `workspace/ChatSidebar.tsx` adapts the app's
-`channels-view/components/rail/ExpandedChannelsRail.tsx` with local fixtures.
-It uses the shared Tabs and ViewSidebar controls, 32px section headers and a 4px
-header-to-list gap. Channels and DMs scroll independently. Verify search,
-section collapse, Threads navigation, and opening a mentioned source after
-switching channels. Message text uses the app's 15px/24px reading size; dark
-surface and edge tokens are frozen from `apps/web/src/index.css`.
+Chat sidebar demo: `workspace/ChatSidebar.tsx` retains the earlier
+All/Recent/Threads layout with local fixtures, shared Tabs and ViewSidebar
+controls, 32px section headers, and a 4px header-to-list gap. It is not the current
+app's sidebar parity target: `channels-view/components/rail/ExpandedChannelsRail.tsx`
+uses Favorites, Team channels, and custom sections in one scrolling list, with a
+sticky collapsible DM panel and no view tabs. Verify the demo's search, section
+collapse, thread navigation, and opening a mentioned source after switching
+channels. Message text uses the app's 15px/24px reading size; dark surface and edge
+tokens are frozen from `apps/web/src/index.css`.
 
 Keep Merge/Merged and Open session actions in the shared agent chip at the same
 24px height and pill radius, with touch resizing disabled for both.
@@ -1075,7 +1077,8 @@ dimensions. The production product checks hold scripts and verify styled heroes
 and correctly sized logos before releasing them.
 
 The homepage uses a silent dark unification MP4 and its clean opening frame as
-Open Graph media. Keep the image free of navigation and CTA buttons. The video
+Open Graph media. Keep the image free of navigation and CTA buttons, and keep
+the headline above the bottom quarter, where X overlays its title label. The video
 ends in a unified Macro mark; it is not a seamless loop. Use versioned asset URLs
 and retain earlier files for cached previews. Keep video homepage-only, with
 `og:type=website`, the matching `og:image`, and an

@@ -1,9 +1,10 @@
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
-import CheckIcon from '@phosphor/check.svg';
-import FunnelIcon from '@phosphor/funnel-simple.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import SortAscendingIcon from '@phosphor/sort-ascending.svg';
-import StackIcon from '@phosphor/stack.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import FunnelIcon from '@icon/system/regular/funnel-simple.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import SortAscendingIcon from '@icon/system/regular/sort-ascending.svg';
+import StackIcon from '@icon/system/regular/stack.svg';
+import { ButtonGroup } from '@ui';
 import { Button } from '@ui/components/Button';
 import { Dropdown } from '@ui/components/Dropdown';
 import { For, type JSX, Show } from 'solid-js';
@@ -50,7 +51,8 @@ export function DatabaseEditorToolbar(props: {
                 {(current) => (
                   <Dropdown placement="bottom-start">
                     <Dropdown.Trigger
-                      label="Group board by"
+                      as={ButtonGroup.Button}
+                      aria-label="Group board by"
                       tooltip="Group by"
                       size="icon-md"
                       variant="ghost"
@@ -95,6 +97,7 @@ export function DatabaseEditorToolbar(props: {
               <ToolbarPopover
                 label="Filter"
                 compact
+                grouped
                 count={filterConditionCount(props.view.query.filter)}
                 icon={<FunnelIcon class="size-4 touch:size-3.5" />}
               >
@@ -111,6 +114,7 @@ export function DatabaseEditorToolbar(props: {
               <ToolbarPopover
                 label="Sort"
                 compact
+                grouped
                 count={sort().length}
                 icon={<SortAscendingIcon class="size-4 touch:size-3.5" />}
               >
@@ -127,7 +131,7 @@ export function DatabaseEditorToolbar(props: {
             <Show when={props.onCreateRecord}>
               <Button
                 size="md"
-                variant="outline"
+                variant="secondary"
                 aria-label={
                   props.creating
                     ? 'Saving record'

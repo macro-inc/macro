@@ -16,10 +16,10 @@ import { PR_ORIGIN_LABELS, PR_ORIGIN_TOOLS } from '@block-pr/data/pr-origin';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import BoardIcon from '@icon/system/regular/kanban.svg';
+import ListIcon from '@icon/system/regular/list-bullets.svg';
 import { Accordion } from '@kobalte/core/accordion';
-import BoardIcon from '@phosphor/kanban.svg';
-import ListIcon from '@phosphor/list-bullets.svg';
-import { Button } from '@ui';
+import { ButtonGroup } from '@ui';
 import { createSignal, For } from 'solid-js';
 import { UNKNOWN_ORIGIN } from '../reviews-filter';
 import type {
@@ -191,6 +191,7 @@ export function ReviewsControls(
     <>
       <HeaderActionGroup label="Review filters">
         <ListFilterDropdown
+          grouped
           label="Filter pull requests"
           activeCount={activeCount()}
           groups={filterGroups(props)}
@@ -198,32 +199,36 @@ export function ReviewsControls(
           onOpenChange={handleMenuOpenChange('filters')}
           triggerRef={(element) => (filterTrigger = element)}
           isSelected={(group, id) => isSelected(props, group, id)}
+          selectedIds={(group) => props.selected[group]}
           onSelectionChange={props.onFilterChange}
           onClear={props.onClearFilters}
         />
       </HeaderActionGroup>
       <HeaderActionGroup label="Review layout">
-        <Button
+        <ButtonGroup.Button
+          aria-label="List"
+          tooltip="List"
           variant="ghost"
-          size="icon-md"
-          label="List"
+          size="icon-sm"
           aria-pressed={props.layout === 'list'}
           onClick={() => props.onLayoutChange('list')}
         >
           <ListIcon class="size-4" />
-        </Button>
-        <Button
+        </ButtonGroup.Button>
+        <ButtonGroup.Button
+          aria-label="Board"
+          tooltip="Board"
           variant="ghost"
-          size="icon-md"
-          label="Board"
+          size="icon-sm"
           aria-pressed={props.layout === 'board'}
           onClick={() => props.onLayoutChange('board')}
         >
           <BoardIcon class="size-4" />
-        </Button>
+        </ButtonGroup.Button>
       </HeaderActionGroup>
       <HeaderActionGroup label="Review view options">
         <ListSortDropdown
+          grouped
           label="Sort pull requests"
           value={props.sort}
           options={SORT_OPTIONS}

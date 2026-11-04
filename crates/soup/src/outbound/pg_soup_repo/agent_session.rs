@@ -38,7 +38,8 @@ pub(super) fn visibility_sql(visibility: AgentSessionVisibility) -> String {
 struct AgentSessionRow {
     id: Uuid,
     name: String,
-    is_archived: bool,
+    archived_by: Option<String>,
+    archived_at: Option<DateTime<Utc>>,
     owner_id: String,
     bot_id: Uuid,
     harness: String,
@@ -96,11 +97,14 @@ pub(super) fn opted_in(expr: &Expr<AgentSessionLiteral>) -> bool {
     out.include || out.named
 }
 
+#[tracing::instrument(err, skip_all, fields(limit = req.limit))]
 pub(super) async fn cursor_soup(
     db: &PgPool,
     req: SimpleSortRequest<'_>,
 ) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
-    let parts = cursor_parts(req.cursor);
+    let Some(parts) = cursor_parts(req.cursor) else {
+        return Ok(Vec::new());
+    };
     let Some(filter) = parts.filter.as_ref().filter(|filter| opted_in(filter)) else {
         return Ok(Vec::new());
     };
@@ -119,15 +123,26 @@ pub(super) async fn cursor_soup(
     // `$1` is the requesting user for every clause in this query: the source
     // id CTE, the history join, and any `Owner` literal that binds it again.
     query.push_bind(req.user_id.as_ref().to_string());
+    let named_ids = explicitly_named_ids(filter);
     query.push(ACCESS_SQL);
-    query.push(" AND (");
+    // A session the query names is also readable through its thread's parent,
+    // like the session's own REST read; GraphQL `agentSession` loads this way.
+    // Broad lists stay limited to session grants so every document thread's
+    // sessions do not flood Home and Recent.
+    query.push("(");
+    query.push(SESSION_GRANT_SQL);
+    query.push(" OR (s.id = ANY(");
+    query.push_bind(named_ids.clone());
+    query.push(") AND ");
+    query.push(PARENT_THREAD_GRANT_SQL);
+    query.push(")) AND (");
     push_filter(&mut query, filter);
     query.push(")");
     // Hidden inline mentions and DM contexts are absent from broad lists. A
     // query that names the session still returns it, so favorites and direct
     // id lookups keep working.
     query.push(" AND (s.visibility <> 'hidden' OR s.id = ANY(");
-    query.push_bind(explicitly_named_ids(filter));
+    query.push_bind(named_ids);
     query.push("))");
     if let (Some(timestamp), Some(id)) = (parts.timestamp, parts.id) {
         query.push(format!(" AND ({sort}, s.id) < ("));
@@ -148,6 +163,7 @@ pub(super) async fn cursor_soup(
         .collect()
 }
 
+#[tracing::instrument(err, skip_all, fields(entity_count = req.entities.len()))]
 pub(super) async fn by_ids(
     db: &PgPool,
     req: AdvancedSortParams<'_>,
@@ -165,7 +181,12 @@ pub(super) async fn by_ids(
     let mut query = QueryBuilder::<Postgres>::new(SELECT_SQL);
     query.push_bind(req.user_id.as_ref().to_string());
     query.push(ACCESS_SQL);
-    query.push(" AND s.id = ANY(");
+    // Every session here is named, so its thread's parent grants apply too.
+    query.push("(");
+    query.push(SESSION_GRANT_SQL);
+    query.push(" OR ");
+    query.push(PARENT_THREAD_GRANT_SQL);
+    query.push(") AND s.id = ANY(");
     query.push_bind(ids);
     query.push(") ORDER BY s.modified_at DESC, s.id DESC");
     query
@@ -177,8 +198,9 @@ pub(super) async fn by_ids(
         .collect()
 }
 
-fn cursor_parts(cursor: SimpleSortQuery) -> CursorParts {
-    match cursor {
+fn cursor_parts(cursor: SimpleSortQuery) -> Option<CursorParts> {
+    Some(match cursor {
+        SimpleSortQuery::Property(_) => return None,
         // No AST means the query never mentioned agent sessions: opt-out.
         SimpleSortQuery::NoFilter(query) => parts_from_query(&query, None, None),
         SimpleSortQuery::FilterFrecency(query) => parts_from_query(&query, None, None),
@@ -198,7 +220,7 @@ fn cursor_parts(cursor: SimpleSortQuery) -> CursorParts {
                 ast.properties_filter.as_deref().cloned(),
             )
         }
-    }
+    })
 }
 
 fn parts_from_query<F>(
@@ -225,8 +247,9 @@ const SELECT_SQL: &str = r#"
         WHERE cp.user_id = "#;
 
 /// Continues [`SELECT_SQL`] after the user id bind: the remaining source-id
-/// arms, the row projection, the history join, and the access predicate.
-/// Every `$1` here refers back to that same bind.
+/// arms, the row projection, and the history join, ending at `WHERE` so the
+/// caller appends its access predicate. Every `$1` here refers back to that
+/// same bind.
 const ACCESS_SQL: &str = r#" AND cp.left_at IS NULL
         UNION ALL
         SELECT t.team_id::text FROM team_user t WHERE t.user_id = $1
@@ -236,7 +259,8 @@ const ACCESS_SQL: &str = r#" AND cp.left_at IS NULL
     SELECT
         s.id,
         s.name,
-        s.is_archived,
+        s.archived_by::TEXT AS archived_by,
+        s.archived_at,
         s.owner_id,
         s.bot_id,
         s.harness,
@@ -258,10 +282,27 @@ const ACCESS_SQL: &str = r#" AND cp.left_at IS NULL
         ON uh."itemId" = s.id::text
         AND uh."itemType" = 'agent_session'
         AND uh."userId" = $1
-    WHERE EXISTS (
+    WHERE "#;
+
+/// Continues [`ACCESS_SQL`]: the viewer holds a grant on the session itself.
+const SESSION_GRANT_SQL: &str = r#"EXISTS (
         SELECT 1 FROM entity_access ea
         WHERE ea.entity_id = s.id
             AND ea.entity_type = 'agent_session'
+            AND ea.source_id IN (SELECT source_id FROM user_source_ids)
+    )"#;
+
+/// The viewer holds a grant on the document or call whose live thread the
+/// session runs in. Mirrors the parent inheritance `entity_access` applies to
+/// agent sessions, over the same stored grants Soup reads for documents.
+const PARENT_THREAD_GRANT_SQL: &str = r#"EXISTS (
+        SELECT 1 FROM comms_messages m
+        JOIN comms_message_threads t ON t.root_id = m.id AND t.deleted_at IS NULL
+        JOIN entity_access ea
+            ON ea.entity_id::text = m.parent_entity_id
+            AND ea.entity_type = m.parent_entity_type
+        WHERE m.id = s.thread_id
+            AND m.parent_entity_type IN ('document', 'call')
             AND ea.source_id IN (SELECT source_id FROM user_source_ids)
     )"#;
 
@@ -350,7 +391,13 @@ fn row_to_item(row: AgentSessionRow) -> Result<SoupItem<()>, sqlx::Error> {
     Ok(SoupItem::AgentSession(SoupAgentSession {
         id: row.id,
         name: row.name,
-        is_archived: row.is_archived,
+        archived_by: row
+            .archived_by
+            .as_deref()
+            .map(str::parse)
+            .transpose()
+            .map_err(super::type_err)?,
+        archived_at: row.archived_at,
         owner_id,
         bot_id: row.bot_id,
         harness: row.harness,

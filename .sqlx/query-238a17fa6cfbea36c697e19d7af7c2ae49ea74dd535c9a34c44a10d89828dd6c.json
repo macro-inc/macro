@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM external_chat g\n            JOIN whatsapp_chat_membership m ON m.chat_id=g.id\n            WHERE g.provider='whatsapp' AND g.remote_id=$1 AND g.state='active' AND m.account_id=$2 AND m.generation=$3\n              AND m.consent_ended_at IS NULL AND m.remote_member AND m.reconciled\n              AND external_chat_can_view(g.id,$4)) AS \"observed!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "observed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "238a17fa6cfbea36c697e19d7af7c2ae49ea74dd535c9a34c44a10d89828dd6c"
+}

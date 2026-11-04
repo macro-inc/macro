@@ -1,8 +1,8 @@
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Combobox } from '@kobalte/core/combobox';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
 import { Layer, selectTriggerClasses } from '@ui';
 import { type Accessor, createMemo, createSignal, Show } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';

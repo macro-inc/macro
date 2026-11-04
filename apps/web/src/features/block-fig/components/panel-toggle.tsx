@@ -1,4 +1,4 @@
-import SidebarSimple from '@phosphor/sidebar-simple.svg';
+import SidebarSimple from '@icon/system/regular/sidebar-simple.svg';
 
 export function PanelToggle(props: {
   side: 'left' | 'right';

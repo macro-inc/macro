@@ -1,3 +1,4 @@
+import type { ImportDraft as SavedImportDraft } from '@service-agent-reviews/generated/types';
 import { match } from 'ts-pattern';
 import type { Review, ReviewItem } from './review';
 
@@ -16,7 +17,7 @@ export type ImportTaskFields = {
 export type ImportPlanEntry = {
   id: string;
   parentId: string | null;
-  kind: 'page' | 'database';
+  kind: 'page' | 'database' | 'task' | 'project';
   title: string;
   /** `null` while planning has not decided it yet. */
   decision: ImportPlanDecision | null;
@@ -68,6 +69,7 @@ export type ImportReportItem = { id: string; title: string; reason: string };
 
 /** Where the import run stands, as the server reports it. */
 export type ImportProgress = {
+  warnings?: string[];
   reviewId: string | null;
   status:
     | 'running'
@@ -105,12 +107,17 @@ export type ImportReviewPhase =
  * The saved draft of an import review. `shared` and `personal` hold the rows
  * the owner switched to or from team sharing, against the plan's choice.
  */
-export type ImportDraft = {
-  source: 'notion';
-  excluded: string[];
-  shared: string[];
-  personal: string[];
-};
+export type ImportDraft = Required<SavedImportDraft>;
+
+/** A saved import draft with its omitted row lists filled in. */
+export function withRowLists(draft: SavedImportDraft): ImportDraft {
+  return {
+    source: draft.source,
+    excluded: draft.excluded ?? [],
+    shared: draft.shared ?? [],
+    personal: draft.personal ?? [],
+  };
+}
 
 export const EMPTY_IMPORT_DRAFT: ImportDraft = {
   source: 'notion',
@@ -353,6 +360,7 @@ export function importCount(
 
 /** What approving the plan writes, in real numbers: every row is counted. */
 export type ImportVolume = {
+  projects: number;
   documents: number;
   databases: number;
   rows: number;
@@ -366,6 +374,7 @@ export function importVolume(
   excluded: readonly string[]
 ): ImportVolume {
   const volume: ImportVolume = {
+    projects: 0,
     documents: 0,
     databases: 0,
     rows: 0,
@@ -379,6 +388,10 @@ export function importVolume(
         if (entry.kind === 'database') {
           volume.databases += 1;
           volume.rows += entry.rows ?? 0;
+        } else if (entry.kind === 'task') {
+          volume.tasks += 1;
+        } else if (entry.kind === 'project') {
+          volume.projects += 1;
         } else {
           volume.documents += 1;
         }
@@ -407,6 +420,12 @@ export function planTotals(
   ).length;
   const already = alreadyInMacro(entries).length;
   return [
+    volume.projects > 0
+      ? { label: 'Projects', value: `${volume.projects}` }
+      : null,
+    volume.tasks > 0 && volume.taskLists === 0
+      ? { label: 'Tasks', value: `${volume.tasks}` }
+      : null,
     volume.documents > 0
       ? { label: 'Documents', value: `${volume.documents}` }
       : null,
@@ -433,13 +452,14 @@ export function planTotals(
  */
 export function planningStatus(
   progress: ImportProgress | undefined,
-  entries: ImportPlanEntry[]
+  entries: ImportPlanEntry[],
+  source: ImportDraft['source'] = 'notion'
 ): string {
   if (entries.length === 0) {
     const scanned = progress?.scanned;
     return scanned
-      ? `Reading Notion: ${plural(scanned.pages, 'page', 'pages')}, ${plural(scanned.databases, 'database', 'databases')}`
-      : 'Reading Notion…';
+      ? `Reading ${sourceLabel(source)}: ${plural(scanned.pages, source === 'notion' ? 'page' : 'issue', source === 'notion' ? 'pages' : 'issues')}, ${plural(scanned.databases, source === 'notion' ? 'database' : 'project', source === 'notion' ? 'databases' : 'projects')}`
+      : `Reading ${sourceLabel(source)}…`;
   }
   const decided = entries.filter((entry) => entry.decision !== null).length;
   return `Deciding what to import: ${decided} of ${entries.length} decided`;
@@ -452,7 +472,8 @@ export function volumeLabel(volume: ImportVolume): string {
     volume.databases > 0
       ? `${plural(volume.databases, 'database', 'databases')} (${plural(volume.rows, 'row', 'rows')})`
       : '',
-    volume.taskLists > 0 ? plural(volume.tasks, 'task', 'tasks') : '',
+    volume.tasks > 0 ? plural(volume.tasks, 'task', 'tasks') : '',
+    volume.projects > 0 ? plural(volume.projects, 'project', 'projects') : '',
   ].filter(Boolean);
   return parts.length > 0 ? parts.join(', ') : 'nothing';
 }
@@ -468,7 +489,8 @@ export function planCounts(entries: ImportPlanEntry[]): ImportPlanCounts {
     deciding: 0,
   };
   for (const entry of entries) {
-    if (entry.kind === 'database') counts.databases += 1;
+    if (entry.kind === 'database' || entry.kind === 'project')
+      counts.databases += 1;
     else counts.pages += 1;
     counts[entry.decision ?? 'deciding'] += 1;
   }
@@ -485,12 +507,23 @@ function plural(count: number, one: string, many: string): string {
  */
 export function planSummary(
   counts: ImportPlanCounts,
-  volume: ImportVolume
+  volume: ImportVolume,
+  source: ImportDraft['source'] = 'notion'
 ): string {
   const shared = [
-    counts.pages > 0 ? plural(counts.pages, 'page', 'pages') : '',
+    counts.pages > 0
+      ? plural(
+          counts.pages,
+          source === 'notion' ? 'page' : 'issue',
+          source === 'notion' ? 'pages' : 'issues'
+        )
+      : '',
     counts.databases > 0
-      ? plural(counts.databases, 'database', 'databases')
+      ? plural(
+          counts.databases,
+          source === 'notion' ? 'database' : 'project',
+          source === 'notion' ? 'databases' : 'projects'
+        )
       : '',
   ]
     .filter(Boolean)
@@ -504,7 +537,7 @@ export function planSummary(
     .filter(Boolean)
     .join(', ');
   return [
-    shared ? `Notion shared ${shared}` : '',
+    shared ? `${sourceLabel(source)} shared ${shared}` : '',
     `importing ${volumeLabel(volume)}`,
   ]
     .filter(Boolean)
@@ -575,5 +608,14 @@ export function importReviewPhase(
         )
         .exhaustive()
     )
+    .exhaustive();
+}
+
+/** Human label for the source in a saved review draft. */
+export function sourceLabel(source: ImportDraft['source']): string {
+  return match(source)
+    .with('notion', () => 'Notion')
+    .with('linear', () => 'Linear')
+    .with('jira', () => 'Jira')
     .exhaustive();
 }

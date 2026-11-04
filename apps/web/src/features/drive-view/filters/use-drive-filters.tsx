@@ -181,6 +181,10 @@ export function useDriveFilters() {
   return {
     groups,
     isSelected,
+    selectedIds: (group: DriveFilterGroupId) =>
+      group === 'scope'
+        ? [state.value().scope]
+        : (state.value().facets[group] ?? []),
     setSelected,
     activeCount,
     clear: state.clearFilters,

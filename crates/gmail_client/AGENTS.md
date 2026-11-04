@@ -42,6 +42,12 @@ contacts, watch) behind a single public facade; most modules are
 
 - Any new error path should go through `sanitize_error_body` (or an
   equivalent) before logging — Gmail error bodies can contain email addresses.
+- Requests time out after 60 s (`REQUEST_TIMEOUT`). The email service's
+  Gmail request gate holds a permit for each call and sizes its lease above
+  this (`PERMIT_MS` in `gmail_gate.rs`); keep the two in step.
+- History and contacts are fetched one page per call (`get_history_page`,
+  `get_contacts_page`, `get_other_contacts_page`) so each page takes its own
+  gate permit. Don't add methods that loop over pages here.
 
 ## Related
 

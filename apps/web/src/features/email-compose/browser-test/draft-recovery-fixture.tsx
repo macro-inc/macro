@@ -1,6 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
-import ExclamationIcon from '@phosphor-icons/core/regular/exclamation-mark.svg?component-solid';
+import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg?component-solid';
 import { createSignal, Show } from 'solid-js';
 import type {
   EmailDraftStorage,
@@ -142,6 +142,9 @@ function RecoveryEditor() {
         Show transient notice
       </button>
       <output data-testid="save-count">{saved().length}</output>
+      <output data-testid="has-draft">
+        {String(state.context.hasDraft())}
+      </output>
       <output data-testid="saved-draft-ids">
         {JSON.stringify(saved().map((input) => input.clientHandles?.draftId))}
       </output>

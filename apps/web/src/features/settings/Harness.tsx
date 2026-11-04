@@ -3,9 +3,9 @@ import { toast } from '@core/component/Toast/Toast';
 import { MACRO_HARNESS_NAME } from '@core/constant/macroAgent';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
+import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
-import HardDrivesIcon from '@phosphor/hard-drives.svg';
-import PlusIcon from '@phosphor/plus.svg';
 import {
   useCursorApiKeyStatusQuery,
   useDisconnectCursorApiKey,
@@ -17,28 +17,23 @@ import {
 } from '@queries/harnesses/harnesses';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { useSearchParams } from '@solidjs/router';
-import { Button, confirmDialog, Dialog, Panel } from '@ui';
-import { createSignal, For, onMount, Show } from 'solid-js';
+import { ApiKeyInput, Button, confirmDialog, Dialog, Panel } from '@ui';
+import { createSignal, onMount, Show } from 'solid-js';
 import { CodexHarness } from './codex/views/CodexHarness';
+import { ConnectedRuntimesSection } from './components/connected-runtimes-section';
 import { CursorDefaultModel } from './components/cursor-default-model';
 import { LocalRuntimeCard } from './components/local-runtime-card';
 import {
   CURSOR_KEY_FORMAT_ERROR,
-  CURSOR_KEY_PLACEHOLDER,
+  CURSOR_KEY_PREFIX,
   isCursorApiKey,
 } from './core/cursor-api-key';
-import { ConnectAction, HarnessIcon, StatusDot } from './integration-ui';
+import { HarnessIcon } from './integration-ui';
 import { SettingsCard, SettingsPage } from './primitives';
 import { RuntimePairingPage } from './RuntimePairingPage';
 
 function failureMessage(error: unknown, fallback: string): string {
   return (error instanceof ThrownResultError && error.message) || fallback;
-}
-
-function lastConnectedText(harness: RegisteredHarness): string {
-  return harness.last_connected_at
-    ? `Last connected ${new Date(harness.last_connected_at).toLocaleString()}`
-    : 'Never connected';
 }
 
 /** Settings UI for choosing and configuring the available agent harnesses. */
@@ -134,15 +129,20 @@ export function Harness(
           backLabel={props.backLabel ?? 'Agents'}
           actions={
             <Button
-              variant="cta"
+              variant="primary"
               size="sm"
               onClick={() => setPairingDialog({})}
             >
-              <PlusIcon />
+              <PlusIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
               New runtime
             </Button>
           }
         >
+          <ConnectedRuntimesSection
+            harnesses={harnessesQuery.isSuccess ? harnessesQuery.data : []}
+            error={harnessesQuery.isError}
+            onRemove={setRemovingHarness}
+          />
           <LocalRuntimeCard />
           <div>
             <h2 class="mb-3 px-6 text-sm font-semibold text-ink">
@@ -212,31 +212,24 @@ export function Harness(
                             API key
                           </label>
                           <div class="flex items-center gap-2 mobile:flex-col mobile:items-stretch">
-                            <input
+                            <ApiKeyInput
                               id="cursor-harness-api-key"
-                              type="password"
-                              autocomplete="off"
-                              spellcheck={false}
-                              class="settings-input ph-no-capture min-w-0 flex-1"
-                              placeholder={CURSOR_KEY_PLACEHOLDER}
+                              class="flex-1"
+                              size="sm"
+                              prefix={CURSOR_KEY_PREFIX}
                               value={cursorApiKey()}
-                              onInput={(event) =>
-                                setCursorApiKey(event.currentTarget.value)
+                              onValueChange={setCursorApiKey}
+                              onSubmit={() =>
+                                fireAndForget(
+                                  handleSaveCursorApiKey(),
+                                  'cursor-connect'
+                                )
                               }
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter') {
-                                  fireAndForget(
-                                    handleSaveCursorApiKey(),
-                                    'cursor-connect'
-                                  );
-                                }
-                              }}
                             />
                             <Button
                               type="button"
-                              variant="outline"
+                              variant="secondary"
                               size="sm"
-                              depth={3}
                               disabled={
                                 cursorApiKey().trim().length === 0 ||
                                 saveCursorApiKey.isPending
@@ -276,7 +269,6 @@ export function Harness(
                           type="button"
                           variant="danger"
                           size="sm"
-                          depth={3}
                           class="shrink-0"
                           disabled={disconnectCursor.isPending}
                           onClick={handleDisconnectCursor}
@@ -294,68 +286,6 @@ export function Harness(
               </Show>
             </SettingsCard>
           </div>
-
-          <Show
-            when={!harnessesQuery.isSuccess || harnessesQuery.data.length > 0}
-          >
-            <div>
-              <h2 class="mb-3 px-6 text-sm font-semibold text-ink">
-                Paired runtimes
-              </h2>
-              <SettingsCard>
-                <For
-                  each={harnessesQuery.isSuccess ? harnessesQuery.data : []}
-                  fallback={
-                    <div class="flex flex-col items-center py-6 text-center">
-                      <p class="text-sm text-ink">
-                        {harnessesQuery.isError
-                          ? 'Could not load runtimes.'
-                          : 'Loading runtimes…'}
-                      </p>
-                    </div>
-                  }
-                >
-                  {(harness) => (
-                    <div class="flex items-center justify-between gap-4 px-4 py-3">
-                      <div class="min-w-0 flex-1">
-                        <div class="flex min-w-0 items-center gap-2">
-                          <p class="min-w-0 flex-1 truncate text-sm text-ink">
-                            {harness.name}
-                          </p>
-                          <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-md border border-edge-muted px-2 text-xxs/none font-medium uppercase text-ink-extra-muted">
-                            {harness.owner.type === 'team' ? 'Team' : 'Private'}
-                          </span>
-                          <StatusDot
-                            state={
-                              harness.connected ? 'connected' : 'disconnected'
-                            }
-                            label={
-                              harness.connected ? 'Connected' : 'Disconnected'
-                            }
-                          />
-                        </div>
-                        <p class="mt-0.5 truncate text-xs text-ink-extra-muted">
-                          {lastConnectedText(harness)}
-                        </p>
-                      </div>
-                      <div class="shrink-0">
-                        <ConnectAction
-                          label="Remove"
-                          variant="danger"
-                          onClick={() => setRemovingHarness(harness)}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </For>
-                <Show when={harnessesQuery.isError}>
-                  <p class="px-4 py-3 text-xs text-negative">
-                    Could not load your runtimes. Try refreshing this page.
-                  </p>
-                </Show>
-              </SettingsCard>
-            </div>
-          </Show>
         </SettingsPage>
       </Show>
 
@@ -419,7 +349,7 @@ function HarnessRemoveDialog(props: {
           </Button>
           <Button
             type="button"
-            variant="strong"
+            variant="secondary"
             size="sm"
             disabled={props.pending}
             onClick={props.onConfirm}

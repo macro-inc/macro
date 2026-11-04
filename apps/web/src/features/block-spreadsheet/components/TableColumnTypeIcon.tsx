@@ -1,15 +1,15 @@
+import CalendarBlank from '@icon/system/regular/calendar-blank.svg';
+import CalendarDots from '@icon/system/regular/calendar-dots.svg';
+import CaretCircleDown from '@icon/system/regular/caret-circle-down.svg';
+import CheckSquare from '@icon/system/regular/check-square.svg';
+import CircleDashed from '@icon/system/regular/circle-dashed.svg';
+import Clock from '@icon/system/regular/clock.svg';
+import CurrencyDollar from '@icon/system/regular/currency-dollar.svg';
+import Hash from '@icon/system/regular/hash.svg';
+import Percent from '@icon/system/regular/percent.svg';
+import TextT from '@icon/system/regular/text-t.svg';
+import User from '@icon/system/regular/user.svg';
 import type { TableColumnType } from '@macro-inc/spreadsheet/sheet-tables';
-import CalendarBlank from '@phosphor/calendar-blank.svg';
-import CalendarDots from '@phosphor/calendar-dots.svg';
-import CaretCircleDown from '@phosphor/caret-circle-down.svg';
-import CheckSquare from '@phosphor/check-square.svg';
-import CircleDashed from '@phosphor/circle-dashed.svg';
-import Clock from '@phosphor/clock.svg';
-import CurrencyDollar from '@phosphor/currency-dollar.svg';
-import Hash from '@phosphor/hash.svg';
-import Percent from '@phosphor/percent.svg';
-import TextT from '@phosphor/text-t.svg';
-import User from '@phosphor/user.svg';
 import { Dynamic } from 'solid-js/web';
 
 const ICONS = {

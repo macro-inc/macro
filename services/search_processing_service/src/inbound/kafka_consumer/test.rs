@@ -801,6 +801,7 @@ fn message_event_cases() -> Vec<(MessageTopicEvent, MessageEventDescription)> {
         ),
         (
             MessageTopicEvent::Patched(MessagePatchedMetadata {
+                completed_reply: None,
                 parent: channel.clone(),
                 message_id: MESSAGE_ID,
                 thread_id: None,
@@ -1262,6 +1263,7 @@ fn property_event_cases() -> Vec<(PropertyTopicEvent, PropertyEventDescription<'
                 actor_user_id: actor_user_id.clone(),
                 actor: None,
                 on_behalf_of: None,
+                source: None,
                 value: None,
                 previous_value: None,
                 updated_at: Utc::now(),

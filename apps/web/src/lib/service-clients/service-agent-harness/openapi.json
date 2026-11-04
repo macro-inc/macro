@@ -10,6 +10,92 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/agent-auto-archive-preferences": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "Read which triggers archive the caller's sessions by default.",
+        "operationId": "get_agent_auto_archive_preferences",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutoArchivePreferencesBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["agent-sessions"],
+        "summary": "Replace which triggers archive the caller's sessions by default.",
+        "operationId": "put_agent_auto_archive_preferences",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutoArchivePreferencesBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutoArchivePreferencesBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-capabilities/discover": {
       "post": {
         "tags": ["agent-capabilities"],
@@ -301,6 +387,55 @@
           },
           "503": {
             "description": "Temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/agent-mode-choice": {
+      "post": {
+        "tags": ["agent-mode-choice"],
+        "summary": "Choose whether a composer prompt goes to a chat or a coding agent.",
+        "operationId": "choose_agent_mode",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentModeChoiceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The kind of agent the prompt goes to",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentModeChoiceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The prompt is blank"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "402": {
+            "description": "The caller cannot start new AI work"
+          },
+          "403": {
+            "description": "Auto mode is not enabled for the caller"
+          },
+          "503": {
+            "description": "The classifier is unconfigured, failed, or timed out"
           }
         },
         "security": [
@@ -1094,6 +1229,136 @@
           },
           "409": {
             "description": "The session answers an agent conversation",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent-sessions/{session_id}/auto-archive": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "Read a session's auto-archive settings and whether a trigger archived it.",
+        "operationId": "get_agent_session_auto_archive",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionAutoArchiveResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["agent-sessions"],
+        "summary": "Replace a session's own auto-archive choices. Owner only.",
+        "operationId": "put_agent_session_auto_archive",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutoArchiveOverridesBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutoArchiveOverridesBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
             "content": {
               "text/plain": {
                 "schema": {
@@ -2681,6 +2946,127 @@
           }
         }
       }
+    },
+    "/agent-sessions/{session_id}/views": {
+      "post": {
+        "tags": ["agent-sessions"],
+        "summary": "Present a view in the session: a review with nothing saved.",
+        "operationId": "present_session_view",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresentView"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/universal_input/classify": {
+      "post": {
+        "tags": ["universal_input::inbound::axum_router"],
+        "summary": "Classify a draft for the authenticated user.",
+        "operationId": "classify",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClassifyInputRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassifyInputResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "402": {
+            "description": "AI allowance exhausted"
+          },
+          "503": {
+            "description": "Detection unavailable"
+          }
+        }
+      }
+    },
+    "/universal_input/extract": {
+      "post": {
+        "tags": ["universal_input::inbound::axum_router"],
+        "summary": "Extract editable fields for the authenticated user.",
+        "operationId": "extract",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExtractInputRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtractInputResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "402": {
+            "description": "AI allowance exhausted"
+          },
+          "503": {
+            "description": "Extraction unavailable"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3047,6 +3433,33 @@
               "$ref": "#/components/schemas/AgentConversationDto"
             },
             "description": "Empty for ordinary channels and other people's conversations."
+          }
+        }
+      },
+      "AgentMode": {
+        "type": "string",
+        "description": "Which kind of agent a prompt is sent to.",
+        "enum": ["chat", "code"]
+      },
+      "AgentModeChoiceRequest": {
+        "type": "object",
+        "description": "Request body for `POST /agent-mode-choice`.",
+        "required": ["prompt"],
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "The prompt the composer is about to send."
+          }
+        }
+      },
+      "AgentModeChoiceResponse": {
+        "type": "object",
+        "description": "Response body for `POST /agent-mode-choice`.",
+        "required": ["mode"],
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/AgentMode",
+            "description": "Which kind of agent should receive the prompt."
           }
         }
       },
@@ -3425,7 +3838,6 @@
         "required": [
           "id",
           "name",
-          "isArchived",
           "ownerId",
           "canEdit",
           "botId",
@@ -3441,6 +3853,22 @@
           "acpSessionId": {
             "type": ["string", "null"],
             "description": "The ACP session id, if one exists."
+          },
+          "archivedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the session was archived, or `None` while it is active."
+          },
+          "archivedBy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ArchiveCause",
+                "description": "Who or what archived the session, or `None` while it is active. An archived session is\nread-only."
+              }
+            ]
           },
           "botId": {
             "type": "string",
@@ -3479,10 +3907,6 @@
           "instructions": {
             "type": ["string", "null"],
             "description": "Instructions the session's runtime works under, when any were stated\nat creation. Absent otherwise, so existing payloads are unchanged."
-          },
-          "isArchived": {
-            "type": "boolean",
-            "description": "Whether the session is archived and read-only."
           },
           "model": {
             "type": "string",
@@ -3594,6 +4018,11 @@
           }
         }
       },
+      "AiSuggestions": {
+        "type": "object",
+        "description": "Editable fields for ai inference, before submission and identity resolution.",
+        "additionalProperties": false
+      },
       "AnswerToolApprovalRequest": {
         "type": "object",
         "description": "Request body for answering a held tool call.",
@@ -3638,8 +4067,121 @@
           }
         }
       },
+      "ArchiveCause": {
+        "type": "string",
+        "description": "Who or what archived a session.",
+        "enum": ["user", "pull_request_merged", "runtime_closed"]
+      },
+      "AutoArchiveOverridesBody": {
+        "type": "object",
+        "description": "One session's choices over its owner's defaults. `null` follows the owner.",
+        "properties": {
+          "onPullRequestMerged": {
+            "type": ["boolean", "null"],
+            "description": "Archive once the session's pull requests merge, or `null` to follow the owner."
+          },
+          "onRuntimeClosed": {
+            "type": ["boolean", "null"],
+            "description": "Archive once the session's runtime session is deliberately closed, or `null` to follow\nthe owner."
+          }
+        }
+      },
+      "AutoArchivePreferencesBody": {
+        "type": "object",
+        "description": "Which triggers archive the caller's sessions when a session has no choice of its own.",
+        "required": ["onPullRequestMerged", "onRuntimeClosed"],
+        "properties": {
+          "onPullRequestMerged": {
+            "type": "boolean",
+            "description": "Archive a session once every pull request linked to it is closed and at least one merged."
+          },
+          "onRuntimeClosed": {
+            "type": "boolean",
+            "description": "Archive a session once the runtime session backing it is deliberately closed."
+          }
+        }
+      },
       "BotId": {
         "type": "string"
+      },
+      "CalendarSuggestions": {
+        "type": "object",
+        "description": "Editable fields for calendar inference, before submission and identity resolution.",
+        "properties": {
+          "body": {
+            "type": ["string", "null"],
+            "description": "Suggested Markdown content or outgoing message body."
+          },
+          "end": {
+            "type": ["string", "null"],
+            "description": "Event end as a local wall-clock value in the request's timezone."
+          },
+          "guests": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Only populated when an invitation was explicitly requested."
+          },
+          "location": {
+            "type": ["string", "null"],
+            "description": "Human-readable event venue or meeting URL."
+          },
+          "recurrence": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RecurrenceSuggestion",
+                "description": "Validated repetition values for the shared calendar composer."
+              }
+            ]
+          },
+          "start": {
+            "type": ["string", "null"],
+            "description": "Local wall-clock values, interpreted in the request's IANA timezone."
+          },
+          "start_assumption": {
+            "type": ["string", "null"],
+            "description": "Verbatim clock phrase whose missing AM/PM required an editable assumption."
+          },
+          "title": {
+            "type": ["string", "null"],
+            "description": "Suggested note, task, or event title."
+          }
+        },
+        "additionalProperties": false
+      },
+      "CallSearchSuggestions": {
+        "type": "object",
+        "description": "Call search supports speakers, channels and attendance status.",
+        "required": ["from", "in"],
+        "properties": {
+          "from": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Speaker names or supplied addresses."
+          },
+          "in": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Channel names."
+          },
+          "query": {
+            "type": ["string", "null"],
+            "description": "Remaining keyword phrase."
+          },
+          "status": {
+            "type": ["string", "null"],
+            "description": "Attendance display value, resolved against supported options by the client."
+          }
+        },
+        "additionalProperties": false
       },
       "CapabilityHarnessDto": {
         "type": "string",
@@ -3807,6 +4349,32 @@
         "description": "The source of a changeset's diff, on the wire.",
         "enum": ["github_pull_request"]
       },
+      "ChannelSearchSuggestions": {
+        "type": "object",
+        "description": "Message filters remain display names until resolved against the user's directory.",
+        "required": ["from", "in"],
+        "properties": {
+          "from": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Explicit message sender names or addresses."
+          },
+          "in": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Explicit channel names."
+          },
+          "query": {
+            "type": ["string", "null"],
+            "description": "Remaining keyword phrase."
+          }
+        },
+        "additionalProperties": false
+      },
       "ChannelSharePermission": {
         "type": "object",
         "description": "The channel share permission",
@@ -3819,6 +4387,43 @@
           "channel_id": {
             "type": "string",
             "description": "The channel id"
+          }
+        }
+      },
+      "ClassifyInputRequest": {
+        "type": "object",
+        "description": "A draft snapshot. Revisions are opaque to the server and echoed to the client.",
+        "required": ["text", "revision"],
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Opaque client revision used to discard stale predictions.",
+            "minimum": 0
+          },
+          "text": {
+            "type": "string",
+            "description": "Current draft text to classify without executing it."
+          }
+        }
+      },
+      "ClassifyInputResponse": {
+        "type": "object",
+        "description": "Ranked-type evidence for a particular client draft revision.",
+        "required": ["revision", "scores"],
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Revision echoed from the classification request.",
+            "minimum": 0
+          },
+          "scores": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IntentScore"
+            },
+            "description": "Independent scores in the fixed intent-question order."
           }
         }
       },
@@ -3900,12 +4505,12 @@
       },
       "CreateAgentSessionRequest": {
         "type": "object",
-        "description": "Request body for `POST /agent-sessions`.\n\nCarries two shapes, told apart by `workspace`. Naming one asks for an\nexternal session: the runtime is the bot operator's, so the caller has to\nsay which bot and which directory, and must own that bot. Omitting it asks\nfor a managed session, whose runtime this deployment provisions. A managed\nrequest may select an authorized persisted persona with `botId`; omitting\nit uses the deployment's default coding persona. Fields describing someone\nelse's runtime must still be omitted rather than quietly ignored. Mixing\nthe two shapes is refused rather than guessed at.\n\nClients serialize this, so both derives are used.",
+        "description": "Request body for `POST /agent-sessions`.\n\nCarries two shapes, told apart by `workspace`. Naming one asks for an\nexternal session: the runtime is the bot operator's, so the caller has to\nsay which bot and which directory, and must own that bot. Omitting it asks\nfor a managed session, whose runtime this deployment provisions. A managed\nrequest may select an authorized persisted persona with `botId`; omitting\nit uses the deployment's default coding persona, or Cursor when `repoUrl`\nis set. Fields describing someone else's runtime must still be omitted\nrather than quietly ignored. Mixing the two shapes is refused rather\nthan guessed at.\n\nClients serialize this, so both derives are used.",
         "properties": {
           "botId": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "Bot the session runs for. On a managed request this optionally selects\na persisted persona the user owns, may use through team membership, or\ncan `@` mention in a shared channel; omitting it uses the deployment's\ndefault coding persona. On an external request, bot callers may omit it\n(their own identity is used) and must not name another bot; user callers\nmust supply a bot they own."
+            "description": "Bot the session runs for. On a managed request this optionally selects\na persisted persona the user owns, may use through team membership, or\ncan `@` mention in a shared channel; omitting it uses the deployment's\ndefault coding persona, or Cursor when `repoUrl` is set. On an\nexternal request, bot callers may omit it (their own identity is used)\nand must not name another bot; user callers must supply a bot they own."
           },
           "id": {
             "type": ["string", "null"],
@@ -3928,13 +4533,31 @@
             "type": ["string", "null"],
             "description": "First prompt to deliver once the session is running. Managed sessions\nonly - an external runtime sends its own first prompt through the\ncontrol endpoint. Omitted, the session opens idle."
           },
+          "promptActionId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentActionId",
+                "description": "Id to deliver `prompt` under, minted by the caller so the prompt it\nalready shows is the row the log confirms. Requires `prompt`; omitted,\nthe service mints one."
+              }
+            ]
+          },
+          "promptAttachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PromptAttachment"
+            },
+            "description": "Files `prompt` refers to, in the order the user attached them.\nRequires `prompt`."
+          },
           "repoBranch": {
             "type": ["string", "null"],
             "description": "Starting branch for a managed coding session's selected repository.\nOmitted, the session starts on the repository's default branch."
           },
           "repoUrl": {
             "type": ["string", "null"],
-            "description": "Explicit GitHub repository for a managed Cursor session, as one of the\nurls `GET /agent-repositories` lists for the caller. Access is checked\nfor the session owner. For external sessions this is informational:\ncloning it is the runtime operator's job."
+            "description": "Explicit GitHub repository for a managed Cursor session, as one of the\nurls `GET /agent-repositories` lists for the caller. Access is checked\nfor the session owner. On a managed request that names no `botId`,\nthis starts the session as Cursor — the only managed persona that\nhonors a repository. For external sessions this is informational:\ncloning it is the runtime operator's job."
           },
           "thread": {
             "oneOf": [
@@ -3965,36 +4588,34 @@
         }
       },
       "CreateReview": {
-        "type": "object",
-        "description": "Review creation. Drafts are validated by the action's owning adapter.",
-        "required": ["kind", "title", "drafts"],
-        "properties": {
-          "drafts": {
-            "type": "array",
-            "items": {},
-            "description": "One to one hundred independent drafts. Email: {subject, body: Markdown,\nto: [{email, name?}], cc?: [{email, name?}], bcc?: [{email, name?}],\nreplyingToId?, attachments?: [{documentId}]}. Calendar: {title,\ntime: {kind: \"timed\", startsAt: ISO datetime, endsAt: ISO datetime,\ntimeZone?: IANA zone} or {kind: \"allDay\", startDate: ISO date,\nendDate: exclusive ISO date}, description?, location?, attendees?:\n[{email, isOptional?}]}. Import: exactly one draft {source: \"notion\"},\npresenting the plan ImportFromNotion staged.\nCreating any review only presents these drafts; the user acts separately."
+        "allOf": [
+          {
+            "type": "object",
+            "description": "The review's kind (email, calendar, import) and its drafts: 1–100\nSendEmail or CreateCalendarEvent arguments, or exactly one import\nplan selection."
           },
-          "executionId": {
-            "oneOf": [
-              {
-                "type": "null"
+          {
+            "type": "object",
+            "required": ["title"],
+            "properties": {
+              "executionId": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ExecutionId",
+                    "description": "Optional code execution that prepared these drafts."
+                  }
+                ]
               },
-              {
-                "$ref": "#/components/schemas/ExecutionId",
-                "description": "Optional code execution that prepared these drafts."
+              "title": {
+                "type": "string",
+                "description": "Stack label."
               }
-            ]
-          },
-          "kind": {
-            "$ref": "#/components/schemas/ReviewKind",
-            "description": "Existing UI and action to use."
-          },
-          "title": {
-            "type": "string",
-            "description": "Stack label."
+            }
           }
-        },
-        "additionalProperties": false
+        ],
+        "description": "Review creation. Decoding it validates every draft; creating a review only\npresents the drafts, and the account holder acts separately."
       },
       "CreateSessionThread": {
         "type": "object",
@@ -4184,6 +4805,65 @@
         ],
         "description": "The JSON-RPC id of an agent's `elicitation/create` request, carried whole\nso the answer echoes exactly what the agent sent.\n\nAgents pick these, not us: Claude Code counts from `0`, others use\nstrings. `null` is not a legal id for a request that expects a response,\nso it is not representable here."
       },
+      "EmailSearchSuggestions": {
+        "type": "object",
+        "description": "Email search exposes importance and connected inbox addresses, not sender filters.",
+        "required": ["inboxes"],
+        "properties": {
+          "importance": {
+            "type": ["string", "null"],
+            "description": "Explicit importance wording, resolved by the client."
+          },
+          "inboxes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Explicit connected inbox addresses, resolved by the client."
+          },
+          "query": {
+            "type": ["string", "null"],
+            "description": "Remaining keyword phrase."
+          }
+        },
+        "additionalProperties": false
+      },
+      "EmailSuggestions": {
+        "type": "object",
+        "description": "Editable fields for email inference, before submission and identity resolution.",
+        "properties": {
+          "bcc": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Explicit blind-carbon-copy recipient names or supplied email addresses."
+          },
+          "body": {
+            "type": ["string", "null"],
+            "description": "Suggested Markdown content or outgoing message body."
+          },
+          "cc": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Explicit carbon-copy recipient names or supplied email addresses."
+          },
+          "recipients": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Person or channel names for the client to resolve."
+          },
+          "subject": {
+            "type": ["string", "null"],
+            "description": "Suggested outgoing email subject."
+          }
+        },
+        "additionalProperties": false
+      },
       "ExecutionActivity": {
         "type": "object",
         "description": "A bounded SDK operation observed during execution; not an authorization or write receipt.",
@@ -4294,6 +4974,81 @@
           }
         }
       },
+      "ExtractInputRequest": {
+        "type": "object",
+        "description": "Draft snapshot and local context used to suggest editable destination fields.",
+        "required": [
+          "text",
+          "intent",
+          "revision",
+          "reference_time",
+          "time_zone"
+        ],
+        "properties": {
+          "intent": {
+            "$ref": "#/components/schemas/InputIntent",
+            "description": "Destination whose fields should be extracted."
+          },
+          "property_definitions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InputPropertyDefinition"
+            },
+            "description": "Available task fields and display values, never authorized entity IDs."
+          },
+          "reference_time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Reference instant for interpreting relative dates."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Opaque client revision used to discard stale suggestions.",
+            "minimum": 0
+          },
+          "search_type": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SearchType",
+                "description": "Explicitly selected search type; absent means infer it before extracting filters."
+              }
+            ]
+          },
+          "text": {
+            "type": "string",
+            "description": "Original draft text; inference must not execute its instructions."
+          },
+          "time_zone": {
+            "type": "string",
+            "description": "IANA timezone for interpreting local dates and clock times."
+          }
+        }
+      },
+      "ExtractInputResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/InputSuggestions",
+            "description": "Destination and applicable editable fields, encoded together."
+          },
+          {
+            "type": "object",
+            "required": ["revision"],
+            "properties": {
+              "revision": {
+                "type": "integer",
+                "format": "int32",
+                "description": "Revision echoed from the extraction request.",
+                "minimum": 0
+              }
+            }
+          }
+        ],
+        "description": "Validated suggestions for a particular client draft revision."
+      },
       "FileChangeKindDto": {
         "type": "string",
         "description": "What happened to a file, on the wire.",
@@ -4310,6 +5065,174 @@
           "sha": {
             "type": ["string", "null"],
             "description": "The commit, when known."
+          }
+        }
+      },
+      "InputIntent": {
+        "type": "string",
+        "description": "A destination the composer can prepare, but never execute through inference.",
+        "enum": ["ai", "search", "email", "note", "task", "calendar", "message"]
+      },
+      "InputPropertyDefinition": {
+        "type": "object",
+        "description": "A task property and the display values available for extraction.",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Property display name from the client's catalog."
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Allowed display values; an empty list permits free-text suggestions."
+          }
+        }
+      },
+      "InputPropertySuggestion": {
+        "type": "object",
+        "description": "Suggested display values to resolve against a real task-property catalog.",
+        "required": ["name", "values"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Property display name, never an authorized identifier."
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Suggested display values, never authorized entity identifiers."
+          }
+        },
+        "additionalProperties": false
+      },
+      "InputSuggestions": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Editable ai fields.",
+            "required": ["suggestions", "intent"],
+            "properties": {
+              "intent": {
+                "type": "string",
+                "enum": ["ai"]
+              },
+              "suggestions": {
+                "$ref": "#/components/schemas/AiSuggestions",
+                "description": "Editable ai fields."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Editable search fields.",
+            "required": ["suggestions", "intent"],
+            "properties": {
+              "intent": {
+                "type": "string",
+                "enum": ["search"]
+              },
+              "suggestions": {
+                "$ref": "#/components/schemas/SearchSuggestions",
+                "description": "Editable search fields."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Editable email fields.",
+            "required": ["suggestions", "intent"],
+            "properties": {
+              "intent": {
+                "type": "string",
+                "enum": ["email"]
+              },
+              "suggestions": {
+                "$ref": "#/components/schemas/EmailSuggestions",
+                "description": "Editable email fields."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Editable note fields.",
+            "required": ["suggestions", "intent"],
+            "properties": {
+              "intent": {
+                "type": "string",
+                "enum": ["note"]
+              },
+              "suggestions": {
+                "$ref": "#/components/schemas/NoteSuggestions",
+                "description": "Editable note fields."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Editable task fields.",
+            "required": ["suggestions", "intent"],
+            "properties": {
+              "intent": {
+                "type": "string",
+                "enum": ["task"]
+              },
+              "suggestions": {
+                "$ref": "#/components/schemas/TaskSuggestions",
+                "description": "Editable task fields."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Editable calendar fields.",
+            "required": ["suggestions", "intent"],
+            "properties": {
+              "intent": {
+                "type": "string",
+                "enum": ["calendar"]
+              },
+              "suggestions": {
+                "$ref": "#/components/schemas/CalendarSuggestions",
+                "description": "Editable calendar fields."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Editable message fields.",
+            "required": ["suggestions", "intent"],
+            "properties": {
+              "intent": {
+                "type": "string",
+                "enum": ["message"]
+              },
+              "suggestions": {
+                "$ref": "#/components/schemas/MessageSuggestions",
+                "description": "Editable message fields."
+              }
+            }
+          }
+        ],
+        "description": "A single inferred destination together with only its applicable fields."
+      },
+      "IntentScore": {
+        "type": "object",
+        "description": "Independent yes/no probabilities; these do not sum to one.",
+        "required": ["intent", "score"],
+        "properties": {
+          "intent": {
+            "$ref": "#/components/schemas/InputIntent",
+            "description": "Destination evaluated by the classifier."
+          },
+          "score": {
+            "type": "number",
+            "format": "float",
+            "description": "Independent probability between zero and one."
           }
         }
       },
@@ -4476,10 +5399,60 @@
         ],
         "description": "The entity whose permissions and lifecycle govern a message."
       },
+      "MessageSuggestions": {
+        "type": "object",
+        "description": "Editable fields for message inference, before submission and identity resolution.",
+        "properties": {
+          "body": {
+            "type": ["string", "null"],
+            "description": "Suggested Markdown content or outgoing message body."
+          },
+          "recipients": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Person or channel names for the client to resolve."
+          }
+        },
+        "additionalProperties": false
+      },
       "ModelHarnessDto": {
         "type": "string",
         "description": "Harness names accepted by the model discovery endpoint.",
         "enum": ["in-memory", "cursor", "macrod"]
+      },
+      "MonthlyWeekday": {
+        "type": "object",
+        "description": "Monthly ordinal weekday, such as the first Friday.",
+        "required": ["ordinal", "weekday"],
+        "properties": {
+          "ordinal": {
+            "type": "integer",
+            "format": "int32",
+            "description": "One through five, or minus one for last."
+          },
+          "weekday": {
+            "$ref": "#/components/schemas/WeekdayCode",
+            "description": "Weekday selected by the ordinal."
+          }
+        },
+        "additionalProperties": false
+      },
+      "NoteSuggestions": {
+        "type": "object",
+        "description": "Editable fields for note inference, before submission and identity resolution.",
+        "properties": {
+          "body": {
+            "type": ["string", "null"],
+            "description": "Suggested Markdown content or outgoing message body."
+          },
+          "title": {
+            "type": ["string", "null"],
+            "description": "Suggested note, task, or event title."
+          }
+        },
+        "additionalProperties": false
       },
       "PermissionAnswer": {
         "oneOf": [
@@ -4511,6 +5484,29 @@
           }
         ],
         "description": "The decision carried by an [`AgentPermissionAction`]."
+      },
+      "PresentView": {
+        "type": "object",
+        "description": "A view to present.",
+        "required": ["view"],
+        "properties": {
+          "executionId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExecutionId",
+                "description": "The code execution presenting it, when one does."
+              }
+            ]
+          },
+          "view": {
+            "type": "object",
+            "description": "A dynamic-UI view, in the format of the PresentView schema in\nExecuteCode's description."
+          }
+        },
+        "additionalProperties": false
       },
       "PreviewAgentSessionsRequest": {
         "type": "object",
@@ -4678,6 +5674,17 @@
           }
         }
       },
+      "QuerySearchSuggestions": {
+        "type": "object",
+        "description": "A topic for search types without additional supported facets.",
+        "properties": {
+          "query": {
+            "type": ["string", "null"],
+            "description": "Remaining keyword phrase after supported filters and instructions."
+          }
+        },
+        "additionalProperties": false
+      },
       "QueuedActionDto": {
         "type": "object",
         "description": "One action waiting in a session's queue.\n\nClients deserialize this, so both derives are used.",
@@ -4751,6 +5758,98 @@
           }
         }
       },
+      "RecurrenceEnd": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "No ending condition.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["never"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Explicit occurrence limit.",
+            "required": ["count", "kind"],
+            "properties": {
+              "count": {
+                "type": "integer",
+                "format": "int32",
+                "description": "Positive occurrence count.",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["after"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Inclusive local ISO date.",
+            "required": ["date", "kind"],
+            "properties": {
+              "date": {
+                "type": "string",
+                "description": "Date resolved against the request's clock and timezone."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["on"]
+              }
+            }
+          }
+        ],
+        "description": "Resolved recurrence ending condition accepted by the shared calendar editor."
+      },
+      "RecurrenceFrequency": {
+        "type": "string",
+        "description": "Repetition units supported by the shared calendar editor.",
+        "enum": ["DAILY", "WEEKLY", "MONTHLY", "YEARLY"]
+      },
+      "RecurrenceSuggestion": {
+        "type": "object",
+        "description": "Resolved, editable repetition values; the existing calendar serializer builds RRULEs.",
+        "required": ["frequency", "interval", "by_day", "ends"],
+        "properties": {
+          "by_day": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WeekdayCode"
+            },
+            "description": "Weekly weekday selectors."
+          },
+          "ends": {
+            "$ref": "#/components/schemas/RecurrenceEnd",
+            "description": "Resolved ending condition."
+          },
+          "frequency": {
+            "$ref": "#/components/schemas/RecurrenceFrequency",
+            "description": "Repetition unit."
+          },
+          "interval": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Positive interval.",
+            "minimum": 0
+          },
+          "monthly_by_day": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MonthlyWeekday",
+                "description": "Monthly ordinal weekday, if explicitly supplied."
+              }
+            ]
+          }
+        }
+      },
       "RenameAgentSessionRequest": {
         "type": "object",
         "description": "Request body for renaming an agent session.",
@@ -4786,7 +5885,8 @@
                 "enum": ["edit"]
               },
               "draft": {
-                "description": "Replacement action arguments."
+                "type": "object",
+                "description": "Replacement action arguments, keyed by the review's kind."
               },
               "item": {
                 "type": "string",
@@ -4884,125 +5984,81 @@
         "format": "uuid",
         "description": "Persisted review identity."
       },
-      "ReviewItem": {
-        "type": "object",
-        "description": "One editable item and its durable outcome.",
-        "required": ["id", "draft", "status"],
-        "properties": {
-          "draft": {
-            "description": "Validated arguments for the existing composer/action."
-          },
-          "edited": {
-            "type": "boolean",
-            "description": "Whether the account holder edited this draft before deciding."
-          },
-          "error": {
-            "type": ["string", "null"],
-            "description": "Failure or uncertainty description."
-          },
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Stable item identity across stack navigation and edits."
-          },
-          "result": {
-            "description": "Actual backend response, never a model assertion."
-          },
-          "status": {
-            "$ref": "#/components/schemas/ReviewItemStatus",
-            "description": "Current outcome."
-          }
-        }
-      },
-      "ReviewItemStatus": {
-        "type": "string",
-        "description": "Review item state, shared with notification consumers.",
-        "enum": ["pending", "submitting", "completed", "dismissed", "unknown"]
-      },
-      "ReviewKind": {
-        "type": "string",
-        "description": "The component and action used to finish a review.",
-        "enum": ["email", "calendar", "import"]
-      },
       "ReviewRecord": {
-        "type": "object",
-        "description": "Full UI record, fetched outside the model context.",
-        "required": [
-          "id",
-          "sessionId",
-          "kind",
-          "title",
-          "revision",
-          "updatedAt",
-          "items"
-        ],
-        "properties": {
-          "actingUser": {
-            "type": ["string", "null"],
-            "description": "Account whose email/calendar the drafts use; historical records use the session owner."
+        "allOf": [
+          {
+            "type": "object",
+            "description": "Component kind, drafts and per-item outcomes."
           },
-          "decision": {
-            "oneOf": [
-              {
-                "type": "null"
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "sessionId",
+              "actingUser",
+              "title",
+              "revision",
+              "updatedAt"
+            ],
+            "properties": {
+              "actingUser": {
+                "type": "string",
+                "description": "Account whose email/calendar the drafts use."
               },
-              {
-                "$ref": "#/components/schemas/ReviewDecisionContext",
-                "description": "Current batch's authenticated decision, preserved for interrupted work."
-              }
-            ]
-          },
-          "executionId": {
-            "oneOf": [
-              {
-                "type": "null"
+              "decision": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ReviewDecisionContext",
+                    "description": "Current batch's authenticated decision, preserved for interrupted work."
+                  }
+                ]
               },
-              {
-                "$ref": "#/components/schemas/ExecutionId",
-                "description": "Originating code execution, absent for directly presented reviews."
+              "executionId": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ExecutionId",
+                    "description": "Originating code execution, absent for directly presented reviews."
+                  }
+                ]
+              },
+              "id": {
+                "$ref": "#/components/schemas/ReviewId",
+                "description": "Review identity."
+              },
+              "presentedAt": {
+                "type": ["integer", "null"],
+                "format": "int64",
+                "description": "Durable presentation acknowledgment, separate from user decisions."
+              },
+              "revision": {
+                "type": "integer",
+                "format": "int64",
+                "description": "Compare-and-swap revision for edits and submissions."
+              },
+              "sessionId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Owning session."
+              },
+              "title": {
+                "type": "string",
+                "description": "Stack label."
+              },
+              "updatedAt": {
+                "type": "integer",
+                "format": "int64",
+                "description": "Milliseconds since epoch of the last state change."
               }
-            ]
-          },
-          "id": {
-            "$ref": "#/components/schemas/ReviewId",
-            "description": "Review identity."
-          },
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ReviewItem"
-            },
-            "description": "Drafts and per-item outcomes."
-          },
-          "kind": {
-            "$ref": "#/components/schemas/ReviewKind",
-            "description": "Component kind."
-          },
-          "presentedAt": {
-            "type": ["integer", "null"],
-            "format": "int64",
-            "description": "Durable presentation acknowledgment, separate from user decisions."
-          },
-          "revision": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Compare-and-swap revision for edits and submissions."
-          },
-          "sessionId": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Owning session."
-          },
-          "title": {
-            "type": "string",
-            "description": "Stack label."
-          },
-          "updatedAt": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Milliseconds since epoch of the last state change."
+            }
           }
-        }
+        ],
+        "description": "Full UI record, fetched outside the model context."
       },
       "SandboxSize": {
         "type": "string",
@@ -5017,6 +6073,217 @@
           "size": {
             "$ref": "#/components/schemas/SandboxSize",
             "description": "Named compute tier."
+          }
+        }
+      },
+      "SearchSuggestions": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QuerySearchSuggestions",
+                "description": "Query across content types."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["all"]
+                  }
+                }
+              }
+            ],
+            "description": "Query across content types."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ChannelSearchSuggestions",
+                "description": "Message topic, senders and channels."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["channels"]
+                  }
+                }
+              }
+            ],
+            "description": "Message topic, senders and channels."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QuerySearchSuggestions",
+                "description": "Document or file topic."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["document-or-file"]
+                  }
+                }
+              }
+            ],
+            "description": "Document or file topic."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TaskSearchSuggestions",
+                "description": "Task topic and supported task facets."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["task"]
+                  }
+                }
+              }
+            ],
+            "description": "Task topic and supported task facets."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/EmailSearchSuggestions",
+                "description": "Email topic, importance and inbox addresses."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["email"]
+                  }
+                }
+              }
+            ],
+            "description": "Email topic, importance and inbox addresses."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CallSearchSuggestions",
+                "description": "Call topic, speakers, channels and attendance."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["calls"]
+                  }
+                }
+              }
+            ],
+            "description": "Call topic, speakers, channels and attendance."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QuerySearchSuggestions",
+                "description": "Folder topic."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["folders"]
+                  }
+                }
+              }
+            ],
+            "description": "Folder topic."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QuerySearchSuggestions",
+                "description": "AI conversation topic."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["agent"]
+                  }
+                }
+              }
+            ],
+            "description": "AI conversation topic."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QuerySearchSuggestions",
+                "description": "Calendar event topic."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["calendar"]
+                  }
+                }
+              }
+            ],
+            "description": "Calendar event topic."
+          }
+        ],
+        "description": "Only the selected type's fields can appear in a search suggestion."
+      },
+      "SearchType": {
+        "type": "string",
+        "description": "Search indexes supported by the shared search editor.",
+        "enum": [
+          "all",
+          "channels",
+          "document-or-file",
+          "task",
+          "email",
+          "calls",
+          "folders",
+          "agent",
+          "calendar"
+        ]
+      },
+      "SessionAutoArchiveResponse": {
+        "type": "object",
+        "description": "A session's auto-archive settings and history.",
+        "required": ["overrides", "defaults"],
+        "properties": {
+          "autoArchivedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When a trigger first archived the session. Kept when a person restores it: a session\narchives itself at most once."
+          },
+          "defaults": {
+            "$ref": "#/components/schemas/AutoArchivePreferencesBody",
+            "description": "The owner's defaults, which apply where the session has no choice of its own."
+          },
+          "overrides": {
+            "$ref": "#/components/schemas/AutoArchiveOverridesBody",
+            "description": "The session's own choices."
           }
         }
       },
@@ -5130,11 +6397,11 @@
       "SetAgentSessionArchivedRequest": {
         "type": "object",
         "description": "Request body for archiving or unarchiving an agent session.",
-        "required": ["isArchived"],
+        "required": ["archived"],
         "properties": {
-          "isArchived": {
+          "archived": {
             "type": "boolean",
-            "description": "The requested archive state."
+            "description": "Archive the session, or restore it."
           }
         }
       },
@@ -5203,6 +6470,72 @@
             "description": "Current session id shown in the conversation metadata."
           }
         }
+      },
+      "TaskSearchSuggestions": {
+        "type": "object",
+        "description": "Task facets match the shared search editor; assignee and creator are distinct.",
+        "required": ["status", "priority", "assignees", "created_by"],
+        "properties": {
+          "assignees": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Assigned people's names or supplied addresses."
+          },
+          "created_by": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Task creators' names or supplied addresses."
+          },
+          "priority": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Priority display values for client-side option resolution."
+          },
+          "query": {
+            "type": ["string", "null"],
+            "description": "Remaining keyword phrase."
+          },
+          "status": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Status display values for client-side option resolution."
+          }
+        },
+        "additionalProperties": false
+      },
+      "TaskSuggestions": {
+        "type": "object",
+        "description": "Editable fields for task inference, before submission and identity resolution.",
+        "properties": {
+          "body": {
+            "type": ["string", "null"],
+            "description": "Suggested Markdown content or outgoing message body."
+          },
+          "due_date": {
+            "type": ["string", "null"],
+            "description": "Task deadline as a local ISO date."
+          },
+          "properties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InputPropertySuggestion"
+            },
+            "description": "Display names/values that the client resolves against available task fields."
+          },
+          "title": {
+            "type": ["string", "null"],
+            "description": "Suggested note, task, or event title."
+          }
+        },
+        "additionalProperties": false
       },
       "ToolActor": {
         "type": "string",
@@ -5322,6 +6655,11 @@
           }
         }
       },
+      "WeekdayCode": {
+        "type": "string",
+        "description": "RFC weekday values used by the existing recurrence UI.",
+        "enum": ["MO", "TU", "WE", "TH", "FR", "SA", "SU"]
+      },
       "WithAgentSessionId": {
         "type": "object",
         "description": "Just a session id, for the preview variants that carry nothing else.\n\nClients deserialize this, so both derives are used.",
@@ -5354,6 +6692,10 @@
     {
       "name": "agent-repositories",
       "description": "Repositories a coding session can work on"
+    },
+    {
+      "name": "agent-mode-choice",
+      "description": "Whether a composer prompt goes to a chat or a coding agent"
     }
   ]
 }
