@@ -544,7 +544,8 @@ export function createBlockOrchestrator(): BlockOrchestrator {
     if (unwrap(blocks)[entry]) return;
     const handle = registerBlock(type, id, scope);
     onCleanup(() => {
-      if (unwrap(blocks)[entry]?.handle === handle) setBlocks(entry, undefined!);
+      if (unwrap(blocks)[entry]?.handle === handle)
+        setBlocks(entry, undefined!);
     });
     return handle;
   }

@@ -11,7 +11,7 @@ import {
   createSignal,
   type ParentProps,
 } from 'solid-js';
-import { beforeEach, expect, it, onTestFinished, vi } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 import { createPreviewSelectionGuard } from './createPreviewSelectionGuard';
 import type { PreviewPanelSelection } from './previewTarget';
 import { createContentInstanceRegistry } from './split-layout/contentInstanceRegistry';
