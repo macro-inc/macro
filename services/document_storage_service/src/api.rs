@@ -20,6 +20,7 @@ use utoipa_swagger_ui::SwaggerUi;
 pub(crate) mod context;
 mod saved_views;
 mod sync;
+mod task_templates;
 pub(crate) mod util;
 
 // Middleware
@@ -413,6 +414,7 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest("/recents", recents::router())
         .nest("/saved_views", saved_views::router())
+        .nest("/task_templates", task_templates::router())
         .with_state(state);
     let dss_router = Router::new()
         .nest("/{version}", internal_router.clone())

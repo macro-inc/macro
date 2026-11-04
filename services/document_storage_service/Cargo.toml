@@ -280,6 +280,7 @@ sync_service_hex = { path = "../../crates/sync_service", package = "sync_service
 ] }
 system_properties = { path = "../../crates/system_properties" }
 task_dedup = { path = "../../crates/task_dedup" }
+task_templates = { path = "../../crates/task_templates" }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["signal"] }
 tokio-util = { workspace = true, features = ["rt"] }
