@@ -60,7 +60,6 @@ import {
   emailTabSearchCodec,
 } from './email-route';
 import {
-  emailSavedViewScopeReady,
   type MaterializedEmailSavedView,
   resolveEmailSavedViewScope,
 } from './filters/email-saved-view';
@@ -168,8 +167,6 @@ export type EmailViewContext = {
   savedViewScope: Accessor<EmailSavedViewScopeKey | undefined>;
   selectSavedView: (id: string) => void;
   leaveSavedView: () => void;
-  /** The viewer's inbox addresses, which a view's `Me` stands for. */
-  viewerAddresses: Accessor<readonly string[] | undefined>;
   /** Linked inboxes a view can be scoped to. */
   inboxOptions: Accessor<readonly { id: string; label: string }[]>;
 };
@@ -342,30 +339,16 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
 
   // This belongs to the view lifecycle, even while every inbox picker is unmounted.
   const linksQuery = useEmailLinksQuery();
-  const viewerAddresses = () =>
-    linksQuery.isSuccess
-      ? linksQuery.data.links.map((link) => link.email_address.toLowerCase())
-      : undefined;
   const savedViewQuery = createMemo((): EmailSavedViewScope | undefined => {
     const conditions = state.conditions;
     if (!savedViewActive() || !conditions) return undefined;
-    return resolveEmailSavedViewScope(
-      conditions,
-      viewerAddresses() ?? [],
-      new Date()
-    );
+    return resolveEmailSavedViewScope(conditions, new Date());
   });
-  // A view never lists mail before its definition, or the viewer it names,
-  // has loaded: that would show all mail under the view's name.
-  const savedViewQueryReady = () => {
-    if (!savedViewActive()) return true;
-    const conditions = state.conditions;
-    return (
-      savedViews?.view().kind === 'saved' &&
-      !!conditions &&
-      emailSavedViewScopeReady(conditions, viewerAddresses())
-    );
-  };
+  // A view never lists mail before its definition has loaded: that would
+  // show all mail under the view's name.
+  const savedViewQueryReady = () =>
+    !savedViewActive() ||
+    (savedViews?.view().kind === 'saved' && !!state.conditions);
 
   const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
     useEmailDataSource(state, {
@@ -711,7 +694,6 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     savedViewScope: () => (disposed ? undefined : savedViewScope()),
     selectSavedView,
     leaveSavedView,
-    viewerAddresses,
     inboxOptions: () =>
       linksQuery.isSuccess
         ? linksQuery.data.links.map((link) => ({

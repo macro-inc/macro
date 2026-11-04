@@ -3,7 +3,6 @@ import { queryReadyGate } from '@queries/gate';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { type Accessor, createMemo } from 'solid-js';
 import {
-  emailSavedViewScopeReady,
   materializeEmailSavedView,
   readEmailSavedView,
   resolveEmailSavedViewScope,
@@ -19,7 +18,6 @@ const UNREAD_PROBE_LIMIT = 20;
  */
 export function useEmailSavedViewUnread(options: {
   config: Accessor<unknown>;
-  viewerAddresses: Accessor<readonly string[] | undefined>;
   tagContext: Accessor<TagFacetContext>;
   tagSetsReady: Accessor<boolean>;
 }): Accessor<boolean> {
@@ -29,9 +27,7 @@ export function useEmailSavedViewUnread(options: {
   const showsOnlyRead = () => view().facets.read?.includes('read') ?? false;
   const facets = () => ({ ...view().facets, read: ['unread'] });
   const enabled = () =>
-    !showsOnlyRead() &&
-    emailSavedViewScopeReady(view().conditions, options.viewerAddresses()) &&
-    tagFacetReady(facets(), options.tagSetsReady());
+    !showsOnlyRead() && tagFacetReady(facets(), options.tagSetsReady());
   const query = useSoupAstItemsQuery(
     () => {
       const args = buildEmailQuery({
@@ -44,11 +40,7 @@ export function useEmailSavedViewUnread(options: {
             ...view().tagBindings,
           ]),
         },
-        savedView: resolveEmailSavedViewScope(
-          view().conditions,
-          options.viewerAddresses() ?? [],
-          new Date()
-        ),
+        savedView: resolveEmailSavedViewScope(view().conditions, new Date()),
       });
       return { ...args, params: { ...args.params, limit: UNREAD_PROBE_LIMIT } };
     },

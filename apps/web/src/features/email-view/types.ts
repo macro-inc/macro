@@ -27,9 +27,8 @@ export type EmailFilterOptionId =
 /** Where a participant condition looks for its people. */
 export type EmailParticipantField = 'from' | 'to' | 'cc' | 'bcc';
 
-/** A person a view matches: whoever opens it, one address, or a whole domain. */
+/** A person a view matches: one address, or a whole domain. */
 export type EmailParticipant =
-  | { type: 'viewer' }
   | { type: 'address'; email: string }
   | { type: 'domain'; domain: string };
 

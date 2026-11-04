@@ -47,7 +47,6 @@ const identifierSchema = z
   .guid()
   .transform((id) => id.toLowerCase());
 const participantSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('viewer') }).strict(),
   z
     .object({
       type: z.literal('address'),
@@ -82,8 +81,7 @@ const filtersSchema = z
     /** Empty means every inbox. */
     inboxIds: z.array(identifierSchema).max(100),
     importance: z.enum(['signal', 'noise']).optional(),
-    // A view can add the viewer to 100 explicitly chosen people.
-    participants: z.array(participantSchema).max(101),
+    participants: z.array(participantSchema).max(100),
     participantFields: z.array(z.enum(EMAIL_PARTICIPANT_FIELDS)).min(1).max(4),
     subject: z.array(keywordSchema).max(20),
     receivedWithinDays: z.literal([...EMAIL_RECEIVED_WITHIN_DAYS]).optional(),
@@ -445,43 +443,9 @@ export function emailSavedViewsEqual(
   return comparable(left) === comparable(right);
 }
 
-export const EMAIL_SAVED_VIEW_TEMPLATE_IDS = [
-  'principals',
-  'fyi',
-  'action-required',
-] as const;
-export type EmailSavedViewTemplateId =
-  (typeof EMAIL_SAVED_VIEW_TEMPLATE_IDS)[number];
-
-/** Starter definitions; the Principals template leaves its people to choose. */
-export function emailSavedViewTemplate(
-  id: EmailSavedViewTemplateId
-): EmailSavedViewFilters {
-  return match(id)
-    .with('principals', () => ({
-      ...EMPTY_EMAIL_SAVED_VIEW_FILTERS,
-      done: 'not-done' as const,
-    }))
-    .with('fyi', () => ({
-      ...EMPTY_EMAIL_SAVED_VIEW_FILTERS,
-      subject: ['FYI'],
-      done: 'not-done' as const,
-    }))
-    .with('action-required', () => ({
-      ...EMPTY_EMAIL_SAVED_VIEW_FILTERS,
-      importance: 'signal' as const,
-      read: 'unread' as const,
-      done: 'not-done' as const,
-      participants: [{ type: 'viewer' as const }],
-      participantFields: ['to' as const],
-    }))
-    .exhaustive();
-}
-
-/** Resolves a view's relative conditions (Me, last N days) for one query. */
+/** Resolves a view's relative conditions (last N days) for one query. */
 export function resolveEmailSavedViewScope(
   conditions: EmailViewConditions,
-  viewerAddresses: readonly string[],
   today: Date
 ): EmailSavedViewScope {
   const days = conditions.receivedWithinDays;
@@ -494,21 +458,9 @@ export function resolveEmailSavedViewScope(
       receivedWithinDays: days,
       starred: conditions.starred,
     },
-    viewerAddresses: viewerAddresses.map((address) => address.toLowerCase()),
     // Day boundaries keep the query stable while the view stays open.
     receivedSince: days
       ? subDays(startOfDay(today), days).toISOString()
       : undefined,
   };
-}
-
-/** Whether a view's query can run: `Me` needs the viewer's inboxes first. */
-export function emailSavedViewScopeReady(
-  conditions: EmailViewConditions,
-  viewerAddresses: readonly string[] | undefined
-): boolean {
-  return (
-    viewerAddresses !== undefined ||
-    !conditions.participants.some((person) => person.type === 'viewer')
-  );
 }

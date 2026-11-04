@@ -67,8 +67,6 @@ import {
   EMAIL_SAVED_VIEW_KIND,
   EMPTY_EMAIL_SAVED_VIEW_FILTERS,
   type EmailSavedViewFilters,
-  type EmailSavedViewTemplateId,
-  emailSavedViewTemplate,
   readEmailSavedView,
 } from '../filters/email-saved-view';
 import { useEmailSavedViewUnread } from '../queries/use-email-saved-view-unread';
@@ -132,7 +130,6 @@ type BuilderProps = ManagedDialogProps & {
         name: string;
         title?: string;
         submitLabel?: string;
-        templates: boolean;
         source: 'builder' | 'save_filters' | 'duplicate';
       }
     | { mode: 'edit'; record: SavedView }
@@ -143,27 +140,14 @@ function EmailSavedViewDialog(props: BuilderProps) {
   const { users } = useCombinedRecipients();
   const analytics = useAnalytics();
   const [filters, setFilters] = createSignal(props.initial);
-  const [template, setTemplate] = createSignal<EmailSavedViewTemplateId>();
-  // Templates remount the fields so their typed lists show the new values.
-  const [revision, setRevision] = createSignal(0);
   const config = () => configOf(filters());
-  const applyTemplate = (id: EmailSavedViewTemplateId) => {
-    setFilters(emailSavedViewTemplate(id));
-    setTemplate(id);
-    setRevision((value) => value + 1);
-  };
   const fields = (
-    <Show when={revision() + 1} keyed>
-      <EmailSavedViewFields
-        filters={filters()}
-        onChange={setFilters}
-        inboxes={props.inboxes}
-        recipientOptions={users}
-        onTemplate={
-          props.mode === 'create' && props.templates ? applyTemplate : undefined
-        }
-      />
-    </Show>
+    <EmailSavedViewFields
+      filters={filters()}
+      onChange={setFilters}
+      inboxes={props.inboxes}
+      recipientOptions={users}
+    />
   );
   const shared = {
     get open() {
@@ -202,7 +186,6 @@ function EmailSavedViewDialog(props: BuilderProps) {
         analytics.track('email_saved_view_created', {
           savedViewId: created.id,
           source: props.source,
-          template: template(),
         });
         props.onSaved(created);
       }}
@@ -214,7 +197,8 @@ type BuilderOpening =
   | {
       mode: 'create';
       filters: EmailSavedViewFilters;
-      templates: boolean;
+      /** Started from the filters the list shows, rather than from nothing. */
+      fromFilters?: boolean;
       copyOf?: SavedView;
     }
   | { mode: 'edit'; record: SavedView; filters: EmailSavedViewFilters };
@@ -249,23 +233,24 @@ function useOpenEmailSavedViewBuilder(owner: Owner | null = getOwner()) {
         { owner }
       );
     const copyOf = opening.copyOf;
+    // The props accessor runs on every read; mint the id once.
+    const id = uuid();
     return openDialog(
       EmailSavedViewDialog,
       () => ({
         ...common,
         mode: 'create' as const,
-        id: uuid(),
+        id,
         name: copyOf
           ? `${copyOf.name.slice(0, 113)} (copy)`
           : t('viewMenus.newView'),
         title: copyOf ? t('emailViews.duplicateTitle') : undefined,
         submitLabel: copyOf ? t('emailViews.duplicate') : undefined,
-        templates: opening.templates,
         source: copyOf
           ? ('duplicate' as const)
-          : opening.templates
-            ? ('builder' as const)
-            : ('save_filters' as const),
+          : opening.fromFilters
+            ? ('save_filters' as const)
+            : ('builder' as const),
         onSaved: (created: SavedView) => {
           if (request.isCurrent()) selectSavedView(created.id);
         },
@@ -282,11 +267,7 @@ export function useCreateEmailSavedView(owner: Owner | null = getOwner()) {
   return (options: { fromCurrent: boolean }) => {
     if (!savedViews) return;
     if (!options.fromCurrent)
-      return open({
-        mode: 'create',
-        filters: EMPTY_EMAIL_SAVED_VIEW_FILTERS,
-        templates: true,
-      });
+      return open({ mode: 'create', filters: EMPTY_EMAIL_SAVED_VIEW_FILTERS });
     const captured = savedViews.capture();
     if (captured.isErr()) {
       toast.failure(captured.error);
@@ -295,7 +276,7 @@ export function useCreateEmailSavedView(owner: Owner | null = getOwner()) {
     return open({
       mode: 'create',
       filters: captured.value.filters,
-      templates: false,
+      fromFilters: true,
     });
   };
 }
@@ -373,7 +354,6 @@ function EmailSavedViewMenuItems(props: {
           open({
             mode: 'create',
             filters: filtersFor(record),
-            templates: false,
             copyOf: record,
           })
         );
@@ -400,8 +380,7 @@ function EmailSavedViewRow(props: {
   onMoveUp?: () => void;
   onMoveDown?: () => void;
 }) {
-  const { savedViews, savedViewsList, selectSavedView, viewerAddresses } =
-    useEmailView();
+  const { savedViews, savedViewsList, selectSavedView } = useEmailView();
   const viewerId = useUserId();
   const analytics = useAnalytics();
   const open = () => {
@@ -415,7 +394,6 @@ function EmailSavedViewRow(props: {
   const tagSetsReady = useTagSetsReady();
   const unread = useEmailSavedViewUnread({
     config: () => props.record.config,
-    viewerAddresses,
     tagContext: () => createTagFacetContext(tagSets()),
     tagSetsReady,
   });
@@ -939,7 +917,6 @@ export function EmailSavedViewActions() {
                 create({
                   mode: 'create',
                   filters: current.value.filters,
-                  templates: false,
                   copyOf: view.record,
                 });
               }}

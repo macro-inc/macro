@@ -301,7 +301,6 @@ describe('buildEmailQuery', () => {
         starred: false,
         ...overrides,
       },
-      viewerAddresses: ['Me@Example.com', 'alias@example.com'],
     });
 
     it('matches any chosen person in any chosen field over GraphQL', () => {
@@ -309,7 +308,7 @@ describe('buildEmailQuery', () => {
         contextFor({
           savedView: scope({
             participants: [
-              { type: 'viewer' },
+              { type: 'address', email: 'Me@Example.com' },
               { type: 'domain', domain: 'example.org' },
             ],
             participantFields: ['to', 'cc'],
@@ -336,14 +335,10 @@ describe('buildEmailQuery', () => {
       expect(tree).toContain(serialize({ literal: { shared: 'EXCLUDE' } }));
     });
 
-    it('matches nothing for a viewer with no inbox instead of every thread', () => {
+    it('matches nothing for people of a kind it does not know, not every thread', () => {
+      const unknown = JSON.parse('{"type":"team","id":"later"}');
       const args = buildEmailQuery(
-        contextFor({
-          savedView: {
-            ...scope({ participants: [{ type: 'viewer' }] }),
-            viewerAddresses: [],
-          },
-        })
+        contextFor({ savedView: scope({ participants: [unknown] }) })
       );
 
       expect(serialize(args.body.ef)).toContain(

@@ -14,7 +14,7 @@ the Soup-backed thread list, and saved email views (flag
 - `queries/use-email-query.ts`: list, search, read admission, local drafts.
 - `filters/email-saved-view.ts`: the `kind: "email"` definition codec: strict
   capture, permissive read with skipped-setting issues, materialization,
-  canonical comparison, templates, and scope resolution.
+  canonical comparison, and scope resolution.
 - `primitives/create-email-saved-view-draft.ts`: confirmed baseline, dirty
   state, and revision-aware reconciliation.
 - `views/email-saved-views.tsx`: sidebar section, mobile picker, menus, the
@@ -26,8 +26,8 @@ the Soup-backed thread list, and saved email views (flag
   inbox filters live in the normal state so the Filters menu, inbox picker,
   and read admission keep working; its other conditions live in
   `state.conditions`, edited only in the builder.
-- Never query while a selected view is loading, unavailable, or names `Me`
-  before the inbox links load: that lists all mail under the view's name.
+- Never query while a selected view is loading or unavailable: that lists all
+  mail under the view's name.
 - Keep inbox reconciliation off while a view is open; an inbox no longer
   linked matches nothing instead of widening to every inbox.
 - `beforeSavedView` restores the prior tab and inboxes on leaving, and is what

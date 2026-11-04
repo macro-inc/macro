@@ -24,8 +24,6 @@ import type {
 /** A saved view's conditions with its relative parts resolved for one query. */
 export type EmailSavedViewScope = {
   conditions: EmailViewConditions;
-  /** The viewer's inbox addresses, standing in for a `viewer` participant. */
-  viewerAddresses: readonly string[];
   /** Start of the received window, when the view has one. */
   receivedSince?: string;
 };
@@ -101,17 +99,13 @@ const DOMAIN_FIELDS = {
   bcc: 'emailBccDomain',
 } as const satisfies Record<EmailParticipantField, string>;
 
-/** Any chosen person in any chosen field; a viewer with no inbox matches nothing. */
+/** Any chosen person in any chosen field. */
 function participantsClause(scope: EmailSavedViewScope): TargetExpr {
   const { participants, participantFields } = scope.conditions;
   const addresses = new Set<string>();
   const domains = new Set<string>();
   for (const person of participants) {
     match(person)
-      .with({ type: 'viewer' }, () => {
-        for (const address of scope.viewerAddresses)
-          addresses.add(address.toLowerCase());
-      })
       .with({ type: 'address' }, ({ email }) =>
         addresses.add(email.toLowerCase())
       )

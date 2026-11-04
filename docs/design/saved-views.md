@@ -480,7 +480,7 @@ Email is the second consumer (`kind: "email"`, `version: 1`), behind the
   "filters": {
     "inboxIds": ["<inbox-uuid>"],
     "importance": "signal",
-    "participants": [{ "type": "viewer" }, { "type": "address", "email": "person@example.com" }, { "type": "domain", "domain": "example.com" }],
+    "participants": [{ "type": "address", "email": "person@example.com" }, { "type": "domain", "domain": "example.com" }],
     "participantFields": ["from", "to", "cc"],
     "subject": ["FYI"],
     "receivedWithinDays": 7,
@@ -495,15 +495,15 @@ Email is the second consumer (`kind: "email"`, `version: 1`), behind the
 ```
 
 - Empty `inboxIds` means every inbox; an inbox no longer linked matches nothing
-  rather than widening. `viewer` resolves at query time to the viewer's inbox
-  addresses; a view naming it waits for them. `receivedWithinDays` resolves to
-  a day boundary so the query stays stable while open.
+  rather than widening. People are fixed addresses or domains; email views have
+  no viewer-relative “Me”, so someone who wants their own mail adds their own
+  address. `receivedWithinDays` resolves to a day boundary so the query stays
+  stable while open.
 - Values within one condition are alternatives; conditions all apply, as in
   Tasks. Shared threads are excluded, like Signal and Noise.
 - Opening a view selects All and restores Status, Done, attachments, calendar,
   tags and inboxes into the normal Filters controls; the other conditions have
-  no menu control and are edited in the builder dialog, which also offers
-  Principals, FYI and Action required templates. Dirty state, Save changes,
+  no menu control and are edited in the builder dialog. Dirty state, Save changes,
   Reset, skipped-setting diagnostics and the unavailable state follow the Task
   rules above. Leaving returns to the tab and inboxes the view was opened from.
 - The definition compiles into the existing Soup `ef` filter at execution time

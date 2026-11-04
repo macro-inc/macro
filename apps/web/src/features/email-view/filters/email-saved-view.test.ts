@@ -120,7 +120,7 @@ describe('captureEmailSavedView', () => {
       capture({
         aliasFilter: { inboxId: INBOX, emailAddress: 'alias@example.com' },
         conditions: {
-          participants: [{ type: 'viewer' }],
+          participants: [{ type: 'address', email: 'principal@example.com' }],
           participantFields: ['to'],
           subject: [],
           starred: false,

@@ -1382,10 +1382,8 @@ Behind `enable-email-saved-views` (on in dev). A saved view is a named
 live mail with the viewer's access. See `docs/design/saved-views.md`.
 
 - **Create.** The sidebar **Saved views** `+` (or the empty state's Create view)
-  opens the builder: name, then **Start from** templates (**Principals**, which
-  leaves the people to choose; **FYI**, subject contains FYI; **Action
-  required**, Signal + Unread + Me in To), People (contacts or typed
-  addresses), Domains, Me, Look in (From/To/Cc/Bcc), Subject contains,
+  opens the builder: name, People (contacts, typed addresses, or your own),
+  Domains, Look in (From/To/Cc/Bcc toggle buttons, at least one on), Subject contains,
   Importance, Status, Done, Latest activity, Inboxes (with two or more linked),
   and Starred, calendar invite and attachment requirements. Values within one
   condition are alternatives; conditions all apply. On a filtered Signal, Noise,
@@ -1407,7 +1405,7 @@ live mail with the viewer's access. See `docs/design/saved-views.md`.
   views. The filter drawer shows "Save these filters as a view" above its footer
   and Save changes/Reset in the footer while a view is edited.
 
-Check: create a Principals view for a contact and a domain, open it, mark a
+Check: create a view for a contact and a domain, open it, mark a
 thread read and watch the dot, reorder two views and reload, then search inside
 the view and confirm results stay within it.
 

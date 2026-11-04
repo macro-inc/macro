@@ -5,12 +5,16 @@ import type {
   WithCustomUserInput,
 } from '@core/user/combinedRecipient';
 import { Button, Checkbox, Input, Tabs } from '@ui';
-import { type Accessor, createSignal, For, type JSX, Show } from 'solid-js';
 import {
-  EMAIL_SAVED_VIEW_TEMPLATE_IDS,
-  type EmailSavedViewFilters,
-  type EmailSavedViewTemplateId,
-} from '../filters/email-saved-view';
+  type Accessor,
+  createMemo,
+  createSignal,
+  createUniqueId,
+  For,
+  type JSX,
+  Show,
+} from 'solid-js';
+import type { EmailSavedViewFilters } from '../filters/email-saved-view';
 import {
   EMAIL_RECEIVED_WITHIN_DAYS,
   type EmailParticipant,
@@ -26,6 +30,10 @@ const DOMAIN_PATTERN = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i;
 const keepEnterInField = (event: KeyboardEvent) => {
   if (event.key === 'Enter') event.preventDefault();
 };
+
+const sameList = (left: readonly string[], right: readonly string[]) =>
+  left.length === right.length &&
+  left.every((value, index) => value === right[index]);
 
 const splitList = (text: string) =>
   text
@@ -79,12 +87,20 @@ function Choice<T extends string>(props: {
   );
 }
 
-const templateLabel = (id: EmailSavedViewTemplateId) =>
+const participantFieldLabel = (field: EmailParticipantField) =>
   ({
-    principals: t('emailViews.templatePrincipals'),
-    fyi: t('emailViews.templateFyi'),
-    'action-required': t('emailViews.templateActionRequired'),
-  })[id];
+    from: t('emailViews.fieldFrom'),
+    to: t('emailViews.fieldTo'),
+    cc: t('emailViews.fieldCc'),
+    bcc: t('emailViews.fieldBcc'),
+  })[field];
+
+const PARTICIPANT_FIELDS: readonly EmailParticipantField[] = [
+  'from',
+  'to',
+  'cc',
+  'bcc',
+];
 
 /**
  * Edits every condition of an email view; the dialog around it owns saving.
@@ -95,9 +111,8 @@ export function EmailSavedViewFields(props: {
   onChange: (filters: EmailSavedViewFilters) => void;
   inboxes: readonly { id: string; label: string }[];
   recipientOptions: Accessor<CombinedRecipientItem<RecipientKind>[]>;
-  /** Offered when creating; picking one replaces every condition. */
-  onTemplate?: (id: EmailSavedViewTemplateId) => void;
 }) {
+  const lookInId = createUniqueId();
   const set = <K extends keyof EmailSavedViewFilters>(
     key: K,
     value: EmailSavedViewFilters[K]
@@ -113,22 +128,22 @@ export function EmailSavedViewFields(props: {
   const rejectedDomains = () =>
     splitList(domainsText()).filter((entry) => !DOMAIN_PATTERN.test(entry));
 
-  const includesViewer = () =>
-    props.filters.participants.some((person) => person.type === 'viewer');
   const domains = () =>
     props.filters.participants.filter((person) => person.type === 'domain');
-  const addresses = () =>
-    props.filters.participants.flatMap((person) =>
-      person.type === 'address' ? [person.email] : []
-    );
+  // Other edits rebuild `filters`; keep the chips unless the people change.
+  const addresses = createMemo(
+    () =>
+      props.filters.participants.flatMap((person) =>
+        person.type === 'address' ? [person.email] : []
+      ),
+    undefined,
+    { equals: sameList }
+  );
   const setParticipants = (next: {
-    viewer?: boolean;
     addresses?: string[];
     domains?: string[];
   }) => {
-    const viewer = next.viewer ?? includesViewer();
     const people: EmailParticipant[] = [
-      ...(viewer ? [{ type: 'viewer' as const }] : []),
       ...(next.addresses ?? addresses()).map((email) => ({
         type: 'address' as const,
         email,
@@ -141,24 +156,26 @@ export function EmailSavedViewFields(props: {
   };
 
   // Addresses the picker doesn't know stay as typed entries.
-  const selectedRecipients = (): WithCustomUserInput<RecipientKind>[] =>
-    addresses().map((email) => {
-      const known = props
-        .recipientOptions()
-        .find((option) => option.data.email.toLowerCase() === email);
-      return (
-        known ?? {
-          kind: 'custom' as const,
-          id: email,
-          data: { id: email, email, invalid: false },
-        }
-      );
-    });
+  const selectedRecipients = createMemo(
+    (): WithCustomUserInput<RecipientKind>[] =>
+      addresses().map((email) => {
+        const known = props
+          .recipientOptions()
+          .find((option) => option.data.email.toLowerCase() === email);
+        return (
+          known ?? {
+            kind: 'custom' as const,
+            id: email,
+            data: { id: email, email, invalid: false },
+          }
+        );
+      })
+  );
 
-  const toggleField = (field: EmailParticipantField, checked: boolean) => {
-    const fields = checked
-      ? [...props.filters.participantFields, field]
-      : props.filters.participantFields.filter((value) => value !== field);
+  const toggleField = (field: EmailParticipantField) => {
+    const fields = props.filters.participantFields.includes(field)
+      ? props.filters.participantFields.filter((value) => value !== field)
+      : [...props.filters.participantFields, field];
     // Looking nowhere matches nothing; keep at least one field.
     if (fields.length > 0) set('participantFields', fields);
   };
@@ -175,26 +192,6 @@ export function EmailSavedViewFields(props: {
 
   return (
     <div class="-mx-1 flex max-h-[min(56vh,32rem)] flex-col gap-5 overflow-y-auto px-1 mobile:max-h-none mobile:overflow-visible">
-      <Show when={props.onTemplate}>
-        {(onTemplate) => (
-          <Section label={t('emailViews.startFrom')}>
-            <div class="flex flex-wrap gap-2">
-              <For each={EMAIL_SAVED_VIEW_TEMPLATE_IDS}>
-                {(id) => (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => onTemplate()(id)}
-                  >
-                    {templateLabel(id)}
-                  </Button>
-                )}
-              </For>
-            </div>
-          </Section>
-        )}
-      </Show>
-
       <Section label={t('emailViews.people')}>
         <RecipientSelector<RecipientKind>
           options={props.recipientOptions}
@@ -213,6 +210,7 @@ export function EmailSavedViewFields(props: {
             })
           }
           placeholder={t('emailViews.peoplePlaceholder')}
+          includeSelf
           allowCustomRecipients
           showChipAddresses
           portalScope="local"
@@ -239,31 +237,29 @@ export function EmailSavedViewFields(props: {
             })}
           </p>
         </Show>
-        <Toggle
-          label={t('emailViews.includeMe')}
-          checked={includesViewer()}
-          onChange={(viewer) => setParticipants({ viewer })}
-        />
-        <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <span class="text-xs text-ink-muted">{t('emailViews.lookIn')}</span>
-          <For
-            each={
-              [
-                ['from', t('emailViews.fieldFrom')],
-                ['to', t('emailViews.fieldTo')],
-                ['cc', t('emailViews.fieldCc')],
-                ['bcc', t('emailViews.fieldBcc')],
-              ] as const
-            }
+        <div class="flex flex-wrap items-center gap-1.5">
+          <span id={lookInId} class="mr-1 text-xs text-ink-muted">
+            {t('emailViews.lookIn')}
+          </span>
+          <div
+            role="group"
+            aria-labelledby={lookInId}
+            class="flex flex-wrap gap-1.5"
           >
-            {([field, label]) => (
-              <Toggle
-                label={label}
-                checked={props.filters.participantFields.includes(field)}
-                onChange={(checked) => toggleField(field, checked)}
-              />
-            )}
-          </For>
+            <For each={PARTICIPANT_FIELDS}>
+              {(field) => (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  aria-pressed={props.filters.participantFields.includes(field)}
+                  onClick={() => toggleField(field)}
+                >
+                  {participantFieldLabel(field)}
+                </Button>
+              )}
+            </For>
+          </div>
         </div>
       </Section>
 
