@@ -6,6 +6,7 @@ import { invalidateCachedCrmContacts } from '@service-storage/crm-contacts';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
+import type { CrmContactPhone } from '../core/contact';
 import type { CrmRecordDependencies } from './dependencies';
 import { crmKeys } from './keys';
 import { listCanIncludeCrmContacts } from './list-refresh';
@@ -206,6 +207,64 @@ export function useSetContactHiddenMutation(deps: CrmRecordDependencies) {
             throw error;
           }
         }),
+    }),
+    () => deps.client
+  );
+}
+
+function contactPhonesQueryOptions(
+  deps: CrmRecordDependencies,
+  contactId: string
+) {
+  return queryOptions({
+    queryKey: crmKeys.contactPhones(contactId).queryKey,
+    queryFn: async ({ signal }): Promise<CrmContactPhone[]> => {
+      const { phones } = await throwOnErr(() =>
+        deps.storage.getContactPhones({ contactId, signal })
+      );
+      return phones;
+    },
+    staleTime: CONTACT_STALE_TIME,
+    enabled: !!contactId,
+  });
+}
+
+/** A contact's phone numbers via `GET /crm/contacts/{id}/phones`. */
+export function useContactPhonesQuery(
+  deps: CrmRecordDependencies,
+  contactId: Accessor<string>
+) {
+  return useQuery(
+    () => contactPhonesQueryOptions(deps, contactId()),
+    () => deps.client
+  );
+}
+
+/**
+ * Replaces a contact's phone numbers via `PUT /crm/contacts/{id}/phones`.
+ * The server normalizes them; the saved list replaces the cached one.
+ */
+export function useSetContactPhonesMutation(deps: CrmRecordDependencies) {
+  return useMutation(
+    () => ({
+      mutationFn: async ({
+        contactId,
+        phones,
+      }: {
+        contactId: string;
+        phones: string[];
+      }): Promise<CrmContactPhone[]> => {
+        const saved = await throwOnErr(() =>
+          deps.storage.setContactPhones({ contactId, phones })
+        );
+        return saved.phones;
+      },
+      onSuccess: (phones, { contactId }) => {
+        deps.client.setQueryData(
+          crmKeys.contactPhones(contactId).queryKey,
+          phones
+        );
+      },
     }),
     () => deps.client
   );

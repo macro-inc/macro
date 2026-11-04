@@ -1,15 +1,24 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
+import { isMobile } from '@core/mobile/isMobile';
+import { readablePhone } from '@core/util/phone';
 import { formatDateAndTime, formatRelativeTimestamp } from '@entity';
 import ContactIcon from '@icon/system/regular/address-book.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import PhoneIcon from '@icon/system/regular/phone.svg';
 import { Avatar, Badge, badgeTriggerClasses, Tooltip } from '@ui';
-import { Show } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
+import { ContactPhonesDialog } from '../components/contact-phones-dialog';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmContact as CrmContactResponse } from '../core/contact';
-import { useCompanyQuery, useSetContactNameMutation } from './use-crm';
+import {
+  useCompanyQuery,
+  useContactPhonesQuery,
+  useSetContactNameMutation,
+  useSetContactPhonesMutation,
+} from './use-crm';
 
 // Renames overwrite `crm_contacts.name`, which is already team-scoped —
 // no global directory involved (unlike company renames).
@@ -57,6 +66,79 @@ function CompanyPill(props: {
       <EntityIcon targetType="crm_company" size="xs" />
       {company()?.name ?? 'Open company'}
     </button>
+  );
+}
+
+/**
+ * A number calls through the device's own dialer. On a phone the whole pill
+ * dials; on a larger screen the number sits beside a Call link.
+ */
+function PhonePill(props: { phone: string }) {
+  const href = () => `tel:${props.phone}`;
+  const number = () => readablePhone(props.phone);
+  return (
+    <Show
+      when={!isMobile()}
+      fallback={
+        <a
+          href={href()}
+          aria-label={`Call ${number()}`}
+          class={badgeTriggerClasses({ variant: 'outline', size: 'sm' })}
+        >
+          <PhoneIcon class="size-3" />
+          {number()}
+        </a>
+      }
+    >
+      <span class="inline-flex items-center gap-1">
+        <Badge variant="outline" size="sm">
+          <PhoneIcon class="size-3" />
+          {number()}
+        </Badge>
+        <a
+          href={href()}
+          aria-label={`Call ${number()}`}
+          class={badgeTriggerClasses({ variant: 'outline', size: 'sm' })}
+        >
+          Call
+        </a>
+      </span>
+    </Show>
+  );
+}
+
+/** The contact's numbers, and the button that edits them. */
+function ContactPhones(props: { contactId: string }) {
+  const phones = useContactPhonesQuery(() => props.contactId);
+  const setPhones = useSetContactPhonesMutation();
+  const [editing, setEditing] = createSignal(false);
+  const numbers = () => (phones.data ?? []).map((phone) => phone.phone);
+  return (
+    <>
+      <For each={numbers()}>{(phone) => <PhonePill phone={phone} />}</For>
+      <Show when={phones.isSuccess}>
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          class={badgeTriggerClasses({ variant: 'outline', size: 'sm' })}
+        >
+          <PhoneIcon class="size-3" />
+          {numbers().length ? 'Edit phones' : 'Add phone'}
+        </button>
+      </Show>
+      <Show when={editing()}>
+        <ContactPhonesDialog
+          initial={numbers()}
+          onSave={async (next) => {
+            await setPhones.mutateAsync({
+              contactId: props.contactId,
+              phones: next,
+            });
+          }}
+          onClose={() => setEditing(false)}
+        />
+      </Show>
+    </>
   );
 }
 
@@ -118,6 +200,7 @@ export function ContactHeader(props: {
                 </Badge>
               )}
             </Show>
+            <ContactPhones contactId={contact().id} />
             <Show when={contact().companyId}>
               {(companyId) => (
                 <CompanyPill

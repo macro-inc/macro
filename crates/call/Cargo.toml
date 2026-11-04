@@ -13,11 +13,13 @@ inbound = [
   "dep:macro_authorization",
   "dep:model-error-response",
   "dep:rate_limit",
-  "dep:utoipa",
   "entity_access/inbound",
   "item_filters/schema",
   "ports",
+  "schema",
 ]
+# OpenAPI schemas for call types other crates embed (Soup's call items).
+schema = ["dep:utoipa"]
 outbound = [
   "dep:agent",
   "dep:ai_usage",
@@ -30,6 +32,7 @@ outbound = [
   "dep:livekit-protocol",
   "dep:macro_aws_config",
   "dep:pgvector",
+  "dep:phone_number",
   "dep:share_permission_db_utils",
   "dep:sqlx",
   "dep:urlencoding",
@@ -83,6 +86,7 @@ models_permissions = { path = "../models_permissions" }
 notification = { path = "../notification" }
 rootcause = { workspace = true }
 pgvector = { workspace = true, optional = true }
+phone_number = { path = "../phone_number", optional = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }

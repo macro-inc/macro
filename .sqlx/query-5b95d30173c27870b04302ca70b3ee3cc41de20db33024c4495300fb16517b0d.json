@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM crm_contact_phones WHERE contact_id = $1 AND NOT (phone = ANY($2))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5b95d30173c27870b04302ca70b3ee3cc41de20db33024c4495300fb16517b0d"
+}

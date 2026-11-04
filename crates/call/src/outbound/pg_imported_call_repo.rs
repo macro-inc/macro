@@ -83,42 +83,57 @@ impl ImportedCallRepository for PgImportedCallRepository {
                 id, call.title, call.started_at, call.ended_at, duration, source.user_id.as_ref(), old_title
             ).execute(tx.as_mut()).await?;
         }
-        // Keep call-local participant IDs stable across edits. These email values
-        // are provider identity hints only; they never create Macro-user grants.
+        // Keep call-local participant IDs stable across edits. These email and
+        // phone values are provider identity hints only; they never create
+        // Macro-user grants. Phone-only callers are matched by number.
         let old_ids: Vec<Uuid> = existing
             .as_ref()
             .and_then(|e| e.metadata.get("participantIds"))
             .map(|v| serde_json::from_value(v.clone()))
             .transpose()?
             .unwrap_or_default();
-        let previous = sqlx::query!(
-            "SELECT id, email FROM call_entity_participants WHERE call_id = $1 AND id = ANY($2)",
+        let mut previous = sqlx::query!(
+            "SELECT id, email, phone FROM call_entity_participants WHERE call_id = $1 AND id = ANY($2)",
             id,
             &old_ids
         )
         .fetch_all(tx.as_mut())
         .await?;
-        for participant in &mut call.participants {
-            if let Some(previous) = previous.iter().find(|p| {
-                p.email
-                    .as_deref()
-                    .zip(participant.email.as_deref())
-                    .is_some_and(|(a, b)| a.eq_ignore_ascii_case(b))
-            }) {
-                participant.id = previous.id;
-            }
+        // Reserve stronger matches before a shared phone or email can take
+        // another person's ID. Each old ID belongs to only one participant.
+        let mut unmatched: Vec<_> = call.participants.iter_mut().collect();
+        for (match_email, match_phone) in [(true, true), (true, false), (false, true)] {
+            unmatched.retain_mut(|participant| {
+                let matched = previous.iter().position(|p| {
+                    let same_email = p
+                        .email
+                        .as_deref()
+                        .zip(participant.email.as_deref())
+                        .is_some_and(|(a, b)| a.eq_ignore_ascii_case(b));
+                    let same_phone = p.phone.is_some() && p.phone == participant.phone;
+                    (!match_email || same_email) && (!match_phone || same_phone)
+                });
+                if let Some(at) = matched {
+                    participant.id = previous.swap_remove(at).id;
+                }
+                matched.is_none()
+            });
         }
         let participant_ids: Vec<Uuid> = call.participants.iter().map(|p| p.id).collect();
         sqlx::query!("DELETE FROM call_entity_participants WHERE call_id = $1 AND id = ANY($2) AND NOT (id = ANY($3))", id, &old_ids, &participant_ids)
             .execute(tx.as_mut()).await?;
         let participants = serde_json::to_value(&call.participants)?;
         sqlx::query!(
-            r#"INSERT INTO call_entity_participants (call_id, id, display_name, email)
-            SELECT $1, id, "displayName", email FROM jsonb_to_recordset($2::jsonb)
-                AS p(id uuid, "displayName" text, email text)
-            ON CONFLICT (call_id, id) DO UPDATE SET display_name = EXCLUDED.display_name, email = EXCLUDED.email"#,
-            id, participants
-        ).execute(tx.as_mut()).await?;
+            r#"INSERT INTO call_entity_participants (call_id, id, user_id, display_name, email, phone)
+            SELECT $1, id, "userId", "displayName", email, phone FROM jsonb_to_recordset($2::jsonb)
+                AS p(id uuid, "userId" text, "displayName" text, email text, phone text)
+            ON CONFLICT (call_id, id) DO UPDATE SET user_id = EXCLUDED.user_id,
+                display_name = EXCLUDED.display_name, email = EXCLUDED.email, phone = EXCLUDED.phone"#,
+            id,
+            participants
+        )
+        .execute(tx.as_mut())
+        .await?;
         call.source
             .metadata
             .insert("participantIds".into(), json!(participant_ids));

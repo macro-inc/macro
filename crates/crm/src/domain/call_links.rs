@@ -1,4 +1,4 @@
-//! Links archived calls to the CRM records of the people on them.
+//! Links archived and imported calls to the CRM records of the people on them.
 
 use std::future::Future;
 
@@ -18,8 +18,8 @@ pub trait CallRecordLinkStore: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
-/// Links archived call records to the CRM companies and contacts of the
-/// people on them.
+/// Links archived and imported call records to the CRM companies and
+/// contacts of the people on them.
 pub struct CallRecordLinker<Q, L> {
     calls: Q,
     links: L,
@@ -32,8 +32,9 @@ impl<Q: CallRecordQueryService, L: CallRecordLinkStore> CallRecordLinker<Q, L> {
         Self { calls, links }
     }
 
-    /// Link one archived call record. Safe to repeat for the same record.
-    pub async fn link_archived_call(&self, call_record_id: Uuid) -> Result<(), Report> {
+    /// Link one archived or imported call record. Safe to repeat for the
+    /// same record.
+    pub async fn link_call(&self, call_record_id: Uuid) -> Result<(), Report> {
         let people = self
             .calls
             .get_call_record_people(call_record_id)

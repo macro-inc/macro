@@ -69,6 +69,9 @@ pub struct SoupCallRecord<T = ()> {
     pub participants: Vec<SoupCallRecordParticipant>,
     /// Non-account guests in the call.
     pub guests: Vec<SoupCallRecordGuest>,
+    /// The provider an imported call came from; `None` for a Macro call.
+    #[serde(default)]
+    pub provider: Option<call::domain::records::CallProvider>,
     /// Extra fields passed from above
     #[serde(flatten)]
     pub extra: T,
@@ -123,6 +126,7 @@ impl SoupCallRecord<()> {
                     left_at: g.left_at,
                 })
                 .collect(),
+            provider: record.source.map(|source| source.provider),
             extra: (),
         }
     }

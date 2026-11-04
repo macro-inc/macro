@@ -7,6 +7,7 @@ import channelSections from './en/channel-sections';
 import commandMenu from './en/command-menu';
 import commands from './en/commands';
 import common from './en/common';
+import contactPhones from './en/contact-phones';
 import create from './en/create';
 import entityActions from './en/entity-actions';
 import localRuntime from './en/local-runtime';
@@ -33,6 +34,7 @@ export default {
   commandMenu,
   commands,
   common,
+  contactPhones,
   create,
   entityActions,
   localRuntime,

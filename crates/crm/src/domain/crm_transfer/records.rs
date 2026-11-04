@@ -131,6 +131,15 @@ impl<Crm: CrmService, Access: EntityAccessService> TransferRecords
             .map(|contact| contact.id))
     }
 
+    async fn add_contact_phones(
+        &self,
+        viewer: &Viewer,
+        phones: Vec<(Uuid, phone_number::PhoneNumber)>,
+    ) -> Result<u64, TransferError> {
+        let team = self.team(viewer).await?;
+        Ok(self.crm.import_contact_phones(&team, &phones).await?)
+    }
+
     async fn create_contact(
         &self,
         viewer: &Viewer,

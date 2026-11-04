@@ -3684,6 +3684,30 @@ export type ConferenceProvider = 'microsoft_teams' | 'google_meet' | 'other';
 export type Conjunction = 'and' | 'or';
 
 /**
+ * One of a contact's numbers.
+ */
+export type ContactPhone = {
+    /**
+     * E.164: `+`, the country code and the number.
+     */
+    phone: string;
+    /**
+     * Where the number came from.
+     */
+    source: PhoneSource;
+};
+
+/**
+ * A contact's phone numbers, oldest first.
+ */
+export type ContactPhonesResponse = {
+    /**
+     * The numbers, oldest first.
+     */
+    phones: Array<ContactPhone>;
+};
+
+/**
  * Source Slack conversation ID (C, G or D prefix); unique only within a source.
  */
 export type ConversationId = string;
@@ -11508,6 +11532,11 @@ export type PendingClaimResponse = {
     status: string;
 };
 
+/**
+ * Where a contact's number came from.
+ */
+export type PhoneSource = 'manual' | 'csv' | 'call';
+
 export type PinRequest = {
     /**
      * The type of the pin
@@ -12924,6 +12953,19 @@ export type SetContactNameRequest = {
 };
 
 /**
+ * Request body for `PUT /contacts/{contact_id}/phones`.
+ */
+export type SetContactPhonesRequest = {
+    /**
+     * Every number the contact should have, as typed, each with its country
+     * code. Formatting is ignored; numbers are stored in E.164. Numbers the
+     * contact keeps keep their source. Empty removes them all (400 when one
+     * is not a number, or there are more than ten).
+     */
+    phones: Array<string>;
+};
+
+/**
  * Direct-grant change. A null level removes only that direct grant.
  */
 export type SetDirectAccess = {
@@ -13572,6 +13614,7 @@ export type SoupCallRecordSoupPropertiesField = {
      * Macro-account participants in the call.
      */
     participants: Array<SoupCallRecordParticipant>;
+    provider?: null | CallProvider;
     /**
      * When the call started.
      */
@@ -19866,6 +19909,59 @@ export type SetCrmContactNameResponses = {
 };
 
 export type SetCrmContactNameResponse = SetCrmContactNameResponses[keyof SetCrmContactNameResponses];
+
+export type GetCrmContactPhonesData = {
+    body?: never;
+    path: {
+        /**
+         * The CRM contact
+         */
+        contact_id: string;
+    };
+    query?: never;
+    url: '/crm/contacts/{contact_id}/phones';
+};
+
+export type GetCrmContactPhonesErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetCrmContactPhonesError = GetCrmContactPhonesErrors[keyof GetCrmContactPhonesErrors];
+
+export type GetCrmContactPhonesResponses = {
+    200: ContactPhonesResponse;
+};
+
+export type GetCrmContactPhonesResponse = GetCrmContactPhonesResponses[keyof GetCrmContactPhonesResponses];
+
+export type SetCrmContactPhonesData = {
+    body: SetContactPhonesRequest;
+    path: {
+        /**
+         * The CRM contact
+         */
+        contact_id: string;
+    };
+    query?: never;
+    url: '/crm/contacts/{contact_id}/phones';
+};
+
+export type SetCrmContactPhonesErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetCrmContactPhonesError = SetCrmContactPhonesErrors[keyof SetCrmContactPhonesErrors];
+
+export type SetCrmContactPhonesResponses = {
+    200: ContactPhonesResponse;
+};
+
+export type SetCrmContactPhonesResponse = SetCrmContactPhonesResponses[keyof SetCrmContactPhonesResponses];
 
 export type ListCrmPipelinesData = {
     body?: never;

@@ -3988,6 +3988,7 @@ dependencies = [
  "models_permissions",
  "notification",
  "pgvector",
+ "phone_number",
  "rate_limit",
  "rootcause",
  "schemars 1.2.1",
@@ -5424,6 +5425,7 @@ dependencies = [
  "models_pagination",
  "models_permissions",
  "models_properties",
+ "phone_number",
  "properties",
  "rdkafka",
  "rootcause",
@@ -15300,6 +15302,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "phone_number"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "workspace-hack",
+]
+
+[[package]]
 name = "pin-project"
 version = "1.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -18924,6 +18934,7 @@ dependencies = [
  "models_soup",
  "non_empty",
  "ordered-float",
+ "phone_number",
  "properties",
  "readonly_pool",
  "recursion",

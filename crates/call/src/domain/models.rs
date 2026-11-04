@@ -53,15 +53,28 @@ pub struct ArchivedCall {
     pub participants: Vec<String>,
 }
 
-/// The people known to have been on, or invited to, an archived call.
+/// The people known to have been on, or invited to, a call: an archived
+/// native call or an imported one.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CallPeople {
-    /// Macro accounts that joined the call, plus the owner of its meeting link.
+    /// Macro accounts that joined the call, plus the owner of its meeting
+    /// link or of the import.
     pub user_ids: Vec<MacroUserIdStr<'static>>,
-    /// Email addresses invited to the calendar event carrying the call's
-    /// meeting link. External guests join without an account, so this is the
-    /// only record of who they are.
-    pub invitee_emails: Vec<String>,
+    /// People who may have no Macro account: the invitees of the calendar
+    /// event carrying a native call's meeting link (email only), or an
+    /// imported call's participants (email, phone, or both).
+    pub guests: Vec<CallGuest>,
+}
+
+/// One person on a call who may have no Macro account.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CallGuest {
+    /// Lowercased email address, when known.
+    pub email: Option<String>,
+    /// E.164 number the person was on the call from, when the source knows
+    /// it. Matched against CRM contacts, and remembered on a contact matched
+    /// by email, so importers set it only for the person's own line.
+    pub phone: Option<String>,
 }
 
 /// A participant in an active call.

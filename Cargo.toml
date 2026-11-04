@@ -116,6 +116,7 @@ members = [
   "crates/notification_state",
   "crates/pipedream_mcp",
   "crates/granola_sync",
+  "crates/phone_number",
   "crates/onboarding",
   "crates/ai_engine",
   "crates/docx_engine",

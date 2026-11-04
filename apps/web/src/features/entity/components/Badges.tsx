@@ -2,13 +2,14 @@ import { formatTimeZoneAbbreviation } from '@core/util/date';
 import ClockIcon from '@icon/system/regular/clock.svg';
 import HashIcon from '@icon/system/regular/hash.svg';
 import UserPlus from '@icon/system/regular/user-plus.svg';
+import type { CallProvider } from '@service-storage/generated/schemas';
 import { cn, HoverCard } from '@ui';
 import { differenceInCalendarDays } from 'date-fns/differenceInCalendarDays';
 import { format } from 'date-fns/format';
 import { isThisYear } from 'date-fns/isThisYear';
 import { isToday } from 'date-fns/isToday';
 import { isTomorrow } from 'date-fns/isTomorrow';
-import type { ParentProps } from 'solid-js';
+import { type ParentProps, Show } from 'solid-js';
 import { OwnerLabel } from '../owner/owner-display';
 import type { CallStatus } from '../types/entity';
 
@@ -168,6 +169,29 @@ export function CallChannelNameBadge(props: { channelName: string }) {
       <HashIcon class="size-3 shrink-0" />
       <span class="truncate">{props.channelName}</span>
     </Badge>
+  );
+}
+
+const IMPORTED_CALL_PROVIDERS: Partial<Record<CallProvider, string>> = {
+  granola: 'Granola',
+};
+
+/** The name of the app an imported call came from; none for a Macro call. */
+export function importedCallProviderName(provider?: CallProvider) {
+  return provider ? IMPORTED_CALL_PROVIDERS[provider] : undefined;
+}
+
+/** Where an imported call came from; nothing for a Macro call. */
+export function CallProviderBadge(props: { provider?: CallProvider }) {
+  const name = () => importedCallProviderName(props.provider);
+  return (
+    <Show when={name()}>
+      {(name) => (
+        <Badge class="normal-case font-sans text-ink-extra-muted border-transparent bg-ink/5 px-2 shrink-0">
+          {name()}
+        </Badge>
+      )}
+    </Show>
   );
 }
 

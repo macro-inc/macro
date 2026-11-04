@@ -18,6 +18,7 @@ export type ActivityFilters = {
   clear(): void;
 };
 
+import type { CrmContactPhone } from '../core/contact';
 import type {
   CrmDisplayOptions,
   CrmListColumnId,
@@ -34,6 +35,7 @@ import type {
   CrmEmailScope,
   CrmEmailSignal,
   CrmMutation,
+  CrmQuery,
   CrmStageInput,
   CrmStagesResult,
   DealStages,
@@ -172,6 +174,7 @@ export type CrmContext = {
   isTeamAdmin: () => Accessor<boolean>;
   createCompanySource(id: Accessor<string>): CompanySource;
   createContactSource(id: Accessor<string>): ContactSource;
+  createContactPhones(id: Accessor<string>): CrmQuery<CrmContactPhone[]>;
   createTeamSource(): TeamSource;
   createTeamConfigSource(): TeamConfigSource;
   createBlockedDomains(): BlockedDomainsSource;
@@ -197,6 +200,10 @@ export type CrmContext = {
   }>;
   hideCompany(): CrmMutation<{ companyId: string; hidden: boolean }>;
   hideContact(): CrmMutation<{ contactId: string; hidden: boolean }>;
+  setContactPhones(): CrmMutation<
+    { contactId: string; phones: string[] },
+    CrmContactPhone[]
+  >;
   setEmailSync(): CrmMutation<{ companyId: string; emailSync: boolean }>;
 };
 const Context = createContext<CrmContext>();

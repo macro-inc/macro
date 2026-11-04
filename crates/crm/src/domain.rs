@@ -23,7 +23,7 @@ pub mod stages;
 #[cfg(feature = "ports")]
 pub mod auth;
 
-/// Links archived calls to the CRM records of the people on them
+/// Links archived and imported calls to the CRM records of the people on them
 #[cfg(feature = "call_link")]
 pub mod call_links;
 
@@ -40,6 +40,9 @@ pub mod association;
 /// Contact listing models shared by Soup and the CRM service.
 #[cfg(feature = "ports")]
 pub mod contact_listing;
+/// A contact's phone numbers.
+#[cfg(feature = "ports")]
+pub mod contact_phones;
 /// CRM CSV files: parsing companies and pipeline entries, and writing exports.
 #[cfg(feature = "ports")]
 pub mod crm_csv;

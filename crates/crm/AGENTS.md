@@ -18,6 +18,11 @@ tools/HTTP/GraphQL surfaces over them.
 - `src/inbound/axum_router.rs` (+ `axum_router/*.rs`): HTTP handlers.
 - `src/inbound/toolset.rs` (+ `toolset/*.rs`): AI tool definitions.
 - `src/outbound/companies_repo.rs`: the Postgres adapter for companies/contacts.
+- `src/domain/contact_phones.rs` + `src/outbound/contact_phones.rs`: a
+  contact's E.164 numbers (`crm_contact_phones`) and where each came from.
+- `src/outbound/call_link.rs`: links archived and imported calls to the CRM
+  records of the people on them (`src/inbound/call_events.rs` consumes the
+  call topic).
 - `SALES_BACKFILL.md`: how the legacy-CRM-to-Sales migration behaves.
 
 ## Scope
@@ -61,6 +66,13 @@ tools/HTTP/GraphQL surfaces over them.
 
 ## Gotchas
 
+- Call linking matches each guest by email first (company by domain, contact
+  by address) and by phone only when no contact matched. A number nobody has
+  creates nothing. A guest matched by email teaches the contact the guest's
+  number, so importers set a guest's phone only for that person's own line.
+  Match contact emails within their team, independently of company domains;
+  phone storage and lookup must not require a company. Links are
+  insert-if-absent: the first set written for a call stays.
 - Pipeline board-position reads require a pipeline View receipt, hold its live
   lifecycle guard, and scope the view to its backing table/database through
   `DatabaseStorage::storage_view_positions`.

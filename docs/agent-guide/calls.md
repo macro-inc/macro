@@ -60,6 +60,10 @@ normal call detail with title, summary, attendees
 apply to imported calls yet. Webhooks require a public HTTPS cognition callback origin (`CognitionPublicUrl`);
 on a laptop stack, expose the webhook path with a tunnel such as Tailscale Funnel.
 
+Imported calls show their source: a **Granola** badge on Calls list rows, and a
+badge beside the call title that opens the call in the provider when it has a
+link.
+
 A channel's `Calls` tab lists that channel's recordings with the same rows, filtered
 by the channel id. Its search field matches call names and transcripts in that
 channel.

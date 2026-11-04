@@ -1,9 +1,12 @@
-/// Postgres store linking archived call records to CRM records
+/// Postgres store linking archived and imported call records to CRM records
 #[cfg(feature = "call_link")]
 pub mod call_link;
 /// Postgres implementation of the companies repository
 #[cfg(feature = "outbound")]
 pub mod companies_repo;
+/// Postgres implementation of contact phone storage
+#[cfg(feature = "outbound")]
+pub mod contact_phones;
 /// Postgres implementation of the message store's CRM parent reader
 #[cfg(feature = "lookup")]
 pub mod lookup;
