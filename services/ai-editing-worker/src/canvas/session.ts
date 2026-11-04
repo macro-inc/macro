@@ -19,6 +19,7 @@ import {
   worldMatrix,
 } from '@macro-inc/graphics';
 import {
+  type ArtifactLibrary,
   createLoroGraphicsBackendFromDoc,
   type PeerPresence,
 } from '@macro-inc/graphics/loro';
@@ -28,6 +29,7 @@ import {
 } from '@macro-inc/lexical-core/canvas-text';
 import { Telemetry } from '@macro-inc/observability';
 import type { ResultAsync } from 'neverthrow';
+import ARTIFACT_GUIDE from './artifact-prompt.md';
 import { createRoot } from 'solid-js';
 import {
   type CanvasPresentation,
@@ -36,10 +38,10 @@ import {
 } from './animation';
 import { CanvasScheduler, dependencies, dependencyState } from './dependencies';
 import { canvasUserMentions } from './mentions';
-import { prepareCanvasEdit } from './operations';
+import { artifactLibraryEdits, prepareCanvasEdit } from './operations';
 import { canvasOverview } from './overview';
 import type { CanvasMeasurer, CanvasSnapshot } from './render';
-import type { CanvasOp } from './schema';
+import { type CanvasOp, isArtifactOp } from './schema';
 import { applyTextMeasurements, textFitRequests } from './text-layout';
 
 export type CanvasSource = LiveSyncSource & {
@@ -76,7 +78,8 @@ export async function withCanvasSession<T>(
   source: CanvasSource,
   signal: AbortSignal,
   run: (session: CanvasSession) => Promise<T>,
-  editorName = 'Macro'
+  editorName = 'Macro',
+  artifacts = false
 ): Promise<T> {
   const manager = new LoroManager(schema({}), {
     documentId: source.documentId,
@@ -195,7 +198,11 @@ export async function withCanvasSession<T>(
       check();
       return format === 'overview'
         ? JSON.stringify(canvasOverview(backend.getDocument(), itemIds))
-        : describeCanvas(backend.getDocument(), itemIds);
+        : describeCanvas(
+            backend.getDocument(),
+            itemIds,
+            artifacts ? backend.artifactLibrary.read() : undefined
+          );
     };
     const present = (value: CanvasPresentation | undefined) => {
       if (!value) {
@@ -232,10 +239,16 @@ export async function withCanvasSession<T>(
           documentId: source.documentId,
           document: structuredClone(backend.getDocument()),
           clock: { ...backend.getClock() },
+          artifacts,
+          artifactLibrary: artifacts ? backend.artifactLibrary.read() : undefined,
         };
       },
       async apply(ops, options = {}) {
         check();
+        if (!artifacts && ops.some(isArtifactOp))
+          throw new Error(
+            'Artifact operations are not available for this user. Nothing was committed.'
+          );
         const baseline = options.baseline ?? backend.getDocument();
         let planned = await Telemetry.span(
           'canvas.ai.validate',
@@ -313,7 +326,10 @@ export async function withCanvasSession<T>(
               check();
               const selectedIds = [
                 ...new Set(
-                  ops.flatMap((op) => ('ids' in op ? op.ids : [op.id]))
+                  ops.flatMap((op) => {
+                    if ('ids' in op) return op.ids;
+                    return 'id' in op ? [op.id] : [];
+                  })
                 ),
               ]
                 .filter((id) => next.items[id])
@@ -331,7 +347,11 @@ export async function withCanvasSession<T>(
                   'edit.user_mentions',
                   ops.filter((op) => op.kind === 'mentionUser').length
                 );
-                backend.commit(next);
+                span.setAttr(
+                  'edit.artifact_ops',
+                  ops.filter(isArtifactOp).length
+                );
+                backend.commit(next, artifactLibraryEdits(ops));
                 try {
                   await lastAppend;
                   await wal.flush();
@@ -385,7 +405,9 @@ export async function withCanvasSession<T>(
 /** Bounded scene inspection includes stable IDs, local/world geometry and order. */
 export function describeCanvas(
   document: GraphicsDocument,
-  itemIds?: string[]
+  itemIds?: string[],
+  /** Present only when the user has artifacts. */
+  artifactLibrary?: ArtifactLibrary
 ): string {
   const all = Object.values(document.items).filter(
     (item) => item.type !== 'surface'
@@ -418,8 +440,11 @@ export function describeCanvas(
         item.type === 'pencil' && item.geometry.points.length > 64,
       world: worldMatrix(document, item.id),
       bounds: worldBounds(document, item.id),
+      htmlLength: item.type === 'artifact' ? item.geometry.html.length : undefined,
     };
   });
+  // Source is large, so it comes only from a read of specific items.
+  const withSource = !!artifactLibrary && !!itemIds;
   const text = JSON.stringify(
     {
       rootId: document.rootId,
@@ -434,9 +459,20 @@ export function describeCanvas(
             item.userMentionsTruncated
         ),
       items,
+      ...(artifactLibrary
+        ? {
+            artifactGuide: ARTIFACT_GUIDE,
+            artifactLibrary: withSource
+              ? artifactLibrary
+              : {
+                  styles: Object.keys(artifactLibrary.styles),
+                  components: Object.keys(artifactLibrary.components),
+                },
+          }
+        : {}),
     },
     (key, value: unknown) =>
-      key === 'content'
+      key === 'content' || (key === 'html' && !withSource)
         ? undefined
         : key === 'points' && Array.isArray(value)
           ? value.slice(0, 64)
