@@ -351,10 +351,11 @@ Failed dispatches do not show a successful session card. If no coding agents are
 available, configure one in Agents before retrying.
 
 Code-mode sessions do not get these two tools. They do the coding work themselves
-first and, when asked to hand a task off, run `ExecuteCode`: pick one of your own
-agents from `macro.agents.list()` and start it with
-`macro.agentSessions.createManaged({ agent, prompt, repoUrl })`, omitting `agent`
-for the default persona. Built-in personas cannot be chosen by id there yet.
+first and, when asked to hand a task off, run `ExecuteCode`: pick a coding
+persona from `macro.agents.coding()` (the same list `ListCodingAgents` returns,
+Cursor included once connected) or one of your agents from `macro.agents.list()`,
+and start it with `macro.agentSessions.createManaged({ agent, prompt, repoUrl })`,
+omitting `agent` for the default persona.
 
 Ask a chat agent what your coding agents need from you and it calls
 `ListAgentUpdates`: your non-archived coding sessions waiting on a permission,
