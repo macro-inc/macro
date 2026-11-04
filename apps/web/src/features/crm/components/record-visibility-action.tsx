@@ -2,7 +2,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import EyeIcon from '@icon/system/regular/eye.svg';
 import EyeSlashIcon from '@icon/system/regular/eye-slash.svg';
 import { Button, ButtonGroup, ConfirmDialog } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, createUniqueId, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
 type RecordVisibilityActionProps = {
@@ -28,8 +28,15 @@ export function RecordVisibilityAction(props: RecordVisibilityActionProps) {
 
 function VisibilityControl(props: RecordVisibilityActionProps) {
   const [confirming, setConfirming] = createSignal(false);
+  const permissionHintId = createUniqueId();
+  const permissionHint =
+    'Ask a team admin or owner to remove or restore this record.';
   let button: HTMLButtonElement | undefined;
   const label = () => (props.hidden ? 'Restore to CRM' : 'Remove from CRM');
+  const tooltip = () => {
+    if (!props.iconOnly) return;
+    return props.canManage ? label() : permissionHint;
+  };
   const size = () => {
     if (!props.iconOnly) return;
     if (isTouchDevice()) return 'icon-lg';
@@ -46,7 +53,8 @@ function VisibilityControl(props: RecordVisibilityActionProps) {
         variant={props.iconOnly ? 'ghost' : 'secondary'}
         size={size()}
         aria-label={label()}
-        tooltip={props.iconOnly ? label() : undefined}
+        aria-describedby={!props.canManage ? permissionHintId : undefined}
+        tooltip={tooltip()}
         disabled={!props.canManage || props.pending}
         onClick={() => setConfirming(true)}
       >
@@ -68,9 +76,12 @@ function VisibilityControl(props: RecordVisibilityActionProps) {
           your team's CRM lists.
         </p>
       </Show>
-      <Show when={!props.canManage && !props.iconOnly}>
-        <p class="text-xs text-ink-muted">
-          Ask a team admin or owner to remove or restore this record.
+      <Show when={!props.canManage}>
+        <p
+          id={permissionHintId}
+          class={props.iconOnly ? 'sr-only' : 'text-xs text-ink-muted'}
+        >
+          {permissionHint}
         </p>
       </Show>
       <ConfirmDialog

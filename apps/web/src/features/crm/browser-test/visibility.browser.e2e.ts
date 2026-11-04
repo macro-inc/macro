@@ -25,12 +25,16 @@ for (const device of [
       await page.route('**/__macro_dev/**', (route) => route.abort());
     });
 
-    for (const kind of ['company', 'contact']) {
-      test(`${kind} removal can cancel, retry and restore`, async ({
+    for (const { kind, grouped } of [
+      { kind: 'company', grouped: false },
+      { kind: 'contact', grouped: false },
+      { kind: 'contact', grouped: true },
+    ]) {
+      test(`${kind}${grouped ? ' grouped' : ''} removal can cancel, retry and restore`, async ({
         page,
       }, testInfo) => {
         await page.goto(
-          `/src/features/crm/browser-test/visibility.html?kind=${kind}`
+          `/src/features/crm/browser-test/visibility.html?kind=${kind}&grouped=${grouped}`
         );
         const remove = page.getByRole('button', {
           name: 'Remove from CRM',
@@ -80,6 +84,9 @@ for (const device of [
         await expect(page.getByLabel('Visibility writes')).toHaveText('3');
         await page.getByRole('button', { name: 'Toggle admin role' }).click();
         await expect(remove).toBeDisabled();
+        await expect(remove).toHaveAccessibleDescription(
+          'Ask a team admin or owner to remove or restore this record.'
+        );
       });
     }
 
