@@ -1,4 +1,5 @@
 ## Development Commands
+
 - Use `bun` as the package manager and script runner (`bun run build`, `bunx tsc`).
 - `bun run test`: run tests 
 - `bun run check`: check typescript changes 
@@ -737,6 +738,12 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Memory tool results use expandable rows on desktop and mobile; explicit preferences and activity reports remain inspectable after each tool call.
 
 ## Rules
+
+- Channel Delete actions use the channel owner or admin/owner of the channel's
+  exact team (`channelType === 'team'`); pass the channel's `teamId` to the team
+  admin predicate. Keep rail/title menus, mobile long-press, and hotkeys on the
+  shared delete action and bulk mutation. Preserve confirmed deletions when
+  another item in the bulk deletion fails.
 
 - Pass persistent touch row controls through `ListEntity.touchActions`; hover actions are hidden on touch, and the narrow inbox layout must retain the touch controls.
 

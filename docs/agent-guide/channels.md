@@ -1,5 +1,18 @@
 # Channels and Messaging
 
+## Deleting a channel
+
+The channel owner can permanently delete their channel. A team owner or admin
+can also delete a team channel belonging to their own team. Being a participant,
+administering another team, or sharing a team with the channel creator does not
+grant permission to delete it.
+
+Use Delete from the channel row or title menu, or the mobile long-press menu.
+Confirm the deletion in the existing delete dialog; it removes the channel for
+everyone. The same permission rule applies to the delete hotkey and bulk action.
+If a bulk deletion partly succeeds, confirmed deletions stay removed and only
+failed items remain in the dialog for retry.
+
 User mentions sent by integrations may contain only `userId`. For human user
 IDs, messages and editors resolve the current name and fall back to the email
 local part when lookup fails. Verify that these mentions remain intact when
