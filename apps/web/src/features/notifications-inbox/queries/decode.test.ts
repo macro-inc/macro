@@ -98,6 +98,39 @@ describe('toInboxGroup', () => {
     });
   });
 
+  it('aims a row’s entity at one of its notifications', () => {
+    const entry = threadRowEntry();
+    const [row] = entry.rows;
+    const older = {
+      ...row.notifications[0],
+      id: 'n-0',
+      metadata: {
+        ...row.notifications[0].metadata,
+        channelReplyMessageId: 'older-reply',
+      },
+    };
+    const group = toInboxGroup({
+      ...entry,
+      rows: [
+        { ...row, count: 2, notifications: [row.notifications[0], older] },
+      ],
+    } as unknown as NotificationInboxEntryFieldsFragment);
+    const decoded = group?.rows[0];
+    if (!decoded) throw new Error('row missing');
+    expect(decoded.content.entity).toMatchObject({
+      target: { messageId: 'reply', threadId: 'root' },
+    });
+
+    const aimed = decoded.content.entityAt(decoded.content.notifications[1]);
+
+    expect(aimed).toMatchObject({
+      target: { messageId: 'older-reply', threadId: 'root' },
+    });
+    expect(isWithNotification(aimed) && aimed.notifications?.()).toEqual([
+      decoded.content.notifications[1],
+    ]);
+  });
+
   it('turns each row into an inbox row whose entity carries only its notifications', () => {
     const group = toInboxGroup(
       inboxEntry({

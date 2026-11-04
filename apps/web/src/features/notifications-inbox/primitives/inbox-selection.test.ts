@@ -14,10 +14,56 @@ const row = (id: string, revision = 'r1'): NotificationInboxRow => ({
   content: {
     entity: { type: 'document', id, name: id } as never,
     notifications: [],
+    entityAt: () => ({}) as never,
+  },
+});
+
+const stack = (
+  id: string,
+  notificationIds: string[]
+): NotificationInboxRow => ({
+  ...row(id),
+  count: notificationIds.length,
+  content: {
+    ...row(id).content,
+    notifications: notificationIds.map(
+      (notification) => ({ id: notification }) as never
+    ),
   },
 });
 
 describe('createInboxSelection', () => {
+  it('shows a stack at one of its notifications until another is chosen', () => {
+    createRoot((dispose) => {
+      const selection = createInboxSelection(() => [stack('a', ['1', '2'])]);
+
+      selection.select(stack('a', ['1', '2']), '2');
+      expect(selection.selectedNotification()?.id).toBe('2');
+      expect(selection.navigationRequest()).toBe(0);
+
+      selection.select(stack('a', ['1', '2']), '2');
+      expect(selection.navigationRequest()).toBe(1);
+
+      selection.select(stack('a', ['1', '2']));
+      expect(selection.selectedNotification()).toBeUndefined();
+      expect(selection.navigationRequest()).toBe(1);
+      dispose();
+    });
+  });
+
+  it('opens where the row does once the chosen notification leaves the row', () => {
+    createRoot((dispose) => {
+      const [rows, setRows] = createSignal([stack('a', ['1', '2'])]);
+      const selection = createInboxSelection(rows);
+      selection.select(stack('a', ['1', '2']), '1');
+
+      setRows([stack('a', ['3', '2'])]);
+      expect(selection.selected()?.id).toBe('a');
+      expect(selection.selectedNotification()).toBeUndefined();
+      dispose();
+    });
+  });
+
   it('follows the shown row and keeps it once it leaves the list', () => {
     createRoot((dispose) => {
       const [rows, setRows] = createSignal([row('a'), row('b')]);

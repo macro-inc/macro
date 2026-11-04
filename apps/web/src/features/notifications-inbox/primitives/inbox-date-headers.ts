@@ -27,10 +27,32 @@ type InboxDateHeaderItem = {
  */
 type InboxRowItem = { type: 'row'; id: string };
 
-export type InboxListItem = InboxRowItem | InboxDateHeaderItem;
+/**
+ * One notification of an unfolded stack, listed under its row so the keyboard,
+ * hover and the virtual list treat it as a place of its own.
+ */
+export type InboxStackItemPlace = {
+  type: 'stack_item';
+  id: string;
+  rowId: string;
+  notificationId: string;
+};
+
+export type InboxListItem =
+  | InboxRowItem
+  | InboxStackItemPlace
+  | InboxDateHeaderItem;
 
 export const isInboxRow = (item: InboxListItem): item is InboxRowItem =>
   item.type === 'row';
+
+export const isInboxStackItem = (
+  item: InboxListItem
+): item is InboxStackItemPlace => item.type === 'stack_item';
+
+/** Whether an item stands for a notification rather than dividing the list. */
+export const isInboxNotification = (item: InboxListItem) =>
+  item.type !== 'date_header';
 
 export const dateHeaderLabel = (header: InboxDateHeaderItem) =>
   match(header.bucket.key)
@@ -51,12 +73,14 @@ export const dateHeaderLabel = (header: InboxDateHeaderItem) =>
     .otherwise(() => header.bucket.label);
 
 /**
- * A place for each row, with a divider above each date section. Rows arrive
- * newest first, so a section is one run of rows. Dividers are derived from the
- * rows shown, so a section whose rows are filtered out or done has none.
+ * A place for each row, with a divider above each date section and an unfolded
+ * stack's notifications below its row. Rows arrive newest first, so a section
+ * is one run of rows. Dividers are derived from the rows shown, so a section
+ * whose rows are filtered out or done has none.
  */
 export function createInboxListItems(
-  rows: Accessor<readonly NotificationInboxRow[]>
+  rows: Accessor<readonly NotificationInboxRow[]>,
+  isUnfolded: (rowId: string) => boolean = () => false
 ): Accessor<readonly InboxListItem[]> {
   const [now, setNow] = createSignal(homeClock());
   onMount(() => {
@@ -79,12 +103,12 @@ export function createInboxListItems(
     return header;
   };
 
-  let places = new Map<string, InboxRowItem>();
+  let places = new Map<string, InboxRowItem | InboxStackItemPlace>();
 
   return createMemo(() => {
     const reference = new Date(now());
     const items: InboxListItem[] = [];
-    const shown = new Map<string, InboxRowItem>();
+    const shown = new Map<string, InboxRowItem | InboxStackItemPlace>();
     let section: string | undefined;
     for (const row of rows()) {
       const bucket = homeDateBucket(row.latestAt, reference);
@@ -95,6 +119,18 @@ export function createInboxListItems(
       const place = places.get(row.id) ?? { type: 'row', id: row.id };
       shown.set(row.id, place);
       items.push(place);
+      if (row.count <= 1 || !isUnfolded(row.id)) continue;
+      for (const notification of row.content.notifications) {
+        const id = `${row.id}/${notification.id}`;
+        const stackItem = places.get(id) ?? {
+          type: 'stack_item',
+          id,
+          rowId: row.id,
+          notificationId: notification.id,
+        };
+        shown.set(id, stackItem);
+        items.push(stackItem);
+      }
     }
     places = shown;
     return items;

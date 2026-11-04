@@ -22,12 +22,10 @@ export type InboxRowDisplay = {
   subject: string;
 };
 
-/** What a card says: what it is about, then who, and its stack if it has one. */
+/** What a card says: what it is about, then who. */
 export type InboxCardDisplay = {
   title: string;
   detail: string;
-  /** Newest first; empty when the row is not a stack. */
-  items: InboxStackItem[];
 };
 
 type Names = Pick<NotificationsInboxContext, 'userName' | 'senderName'>;
@@ -294,8 +292,7 @@ const rootMessage = (row: NotificationInboxRow) => {
 /**
  * Describe a row's card. A single notification says what it is about and who
  * did it; a stack names what its notifications share (the message, channel,
- * session, document or thread) and everyone in it, and unfolds into the
- * notifications themselves.
+ * session, document or thread) and everyone in it.
  */
 export function describeInboxCard(
   row: NotificationInboxRow,
@@ -304,7 +301,7 @@ export function describeInboxCard(
   const single = describeInboxRow(row, names);
   const latest = row.content.notifications[0];
   if (row.count <= 1 || !latest) {
-    return { title: single.subject, detail: single.action, items: [] };
+    return { title: single.subject, detail: single.action };
   }
 
   const entityName = row.content.entity.name;
@@ -317,7 +314,7 @@ export function describeInboxCard(
   );
   const target = getNotificationTargetName(latest);
 
-  const { title, detail } = match(row.type)
+  return match(row.type)
     .with('channel_thread', 'channel_mention', () => ({
       title: rootMessage(row) ?? single.subject,
       detail: place ? `${who} in ${place}` : who,
@@ -346,15 +343,19 @@ export function describeInboxCard(
     }))
     .with('email', () => ({ title: single.subject, detail: who }))
     .otherwise(() => ({ title: single.subject, detail: single.action }));
+}
 
+/** Describe one notification of a stack, without the place its card names. */
+export function describeStackItem(
+  row: NotificationInboxRow,
+  notification: UnifiedNotification,
+  names: Names
+): InboxStackItem {
+  const sender = senderOf(row, notification, names);
   return {
-    title,
-    detail,
-    items: row.content.notifications.map((notification, index) => ({
-      id: notification.id,
-      by: join(senders[index], stackVerb(notification)),
-      text: describeNotification(row, notification, senders[index]).subject,
-      at: new Date(notification.created_at),
-    })),
+    id: notification.id,
+    by: join(sender, stackVerb(notification)),
+    text: describeNotification(row, notification, sender).subject,
+    at: new Date(notification.created_at),
   };
 }

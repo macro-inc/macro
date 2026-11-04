@@ -17,14 +17,18 @@ pull request, a calendar event, an access request or grant, or an agent session.
 A top-level message that mentions you has its own card, with its thread; an
 entity's comments stay on one card even when one mentions you. The server decides
 all of this (`crates/notification_inbox/src/domain/rows.rs`), so live updates and
-reads stack the same way. A card says what it is about, then who did what (for
-example **&lt;first name&gt; assigned you a task**), with an unread dot. Several
-notifications on a row make a stack, with paper edges and a count: its title is
-what they share (the top-level message when a notification carries it, else the
-newest message; the channel, person, session, document or thread) and its second
-line names who. Choosing a stack also unfolds it in place into its notifications;
-choosing it again folds it, and its count folds or unfolds it without opening it.
-It stays open as new notifications land. The time shows on hover. The author is
+reads stack the same way. A card shows who it is from (an avatar, an initial for a
+sender known only by name such as an email's, or the kind of notification for a
+reminder), then what it is about, then who did what (for example **&lt;first
+name&gt; assigned you a task**), with an unread dot. Several notifications on a row
+make a stack, with paper edges and a count: its title is what they share (the
+top-level message when a notification carries it, else the newest message; the
+channel, person, session, document or thread) and its second line names who.
+Choosing a stack opens it and leaves it folded; only its count button unfolds it,
+as sections of the card, one per notification. Each opens that notification:
+its message or reply, its comment, or an agent's turn. A channel invite and an
+email have no message of their own, so they open the channel or the thread.
+A stack stays open as new notifications land. The time shows on hover. The author is
 the row's actor: a Macro user by first name, an agent by its bot name, or
 **Macro**; a row from outside Macro names its email sender, and GitHub rows
 keep the GitHub login. A row type, author kind, or button this build doesn't
@@ -37,7 +41,10 @@ Click a row or press Enter to preview it beside the list, opened at the
 notification's message, thread, or comment, under a **Notifications >**
 breadcrumb that clears the preview. Previewing marks the row seen, including
 notifications the row hides, and drops its unread dot. With a preview open, `j`/`k` move it along the
-list; choosing the shown row again re-aims it. Calendar events and projects
+list and through unfolded notifications; `l` or the right arrow unfolds the focused
+stack and the left arrow folds it from anywhere inside it. Opening a notification
+marks its whole row seen, and `e` on one marks its whole stack done. Choosing what's
+shown again re-aims it. Calendar events and projects
 open in their own views instead. Shift-click or the alternate key opens a new
 split. Hover a row and choose **Mark done**, or press `e`, to complete that row
 only: the channel thread stays when the channel's top-level row is done, and an
@@ -71,9 +78,9 @@ at all (including push and email).
 On touch devices the dock's bell (**Notifications**) opens this view with the
 flag on, as the list alone under a floating **Notifications** header with a
 filter drawer (Status and Type). Cards keep the same anatomy with 44px targets
-and inline row buttons; tapping a card opens it full-screen in place, tapping a
-stack's count unfolds it, a left swipe marks it done (with the same Undo), and
-pulling down refreshes. Hover controls and the preview pane are desktop-only. The
+and inline row buttons; tapping a card or an unfolded notification opens it
+full-screen in place, tapping a stack's count unfolds it, a left swipe marks it
+done (with the same Undo), and pulling down refreshes. Hover controls and the preview pane are desktop-only. The
 dock keeps the bell active while the view shows.
 
 The list updates live, without a reload, and a live change never remounts a card:
@@ -84,7 +91,9 @@ you're reading doesn't move it.
 Verify with two accounts and the inbox left open: two top-level messages in a
 channel stack on it; two reactions to your message, or a reaction and a reply, stack
 on that message and leave the channel's card; comments in different threads of a
-document share one card. Each appears within a second with no reload. Marking one
+document share one card. Each appears within a second with no reload. Unfold a stack
+with its count and choose each notification: the preview moves to that message or
+comment, and stays there as new ones land. Marking one
 done leaves the others, Undo restores it in place, and a new notification in a done
 row brings it back with only what's new.
 

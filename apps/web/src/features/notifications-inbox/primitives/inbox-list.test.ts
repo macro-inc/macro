@@ -6,6 +6,8 @@ import type {
 } from '../context/notifications-inbox-context';
 import { createInboxList, type InboxDoneNotices } from './inbox-list';
 
+const entityAt = () => ({}) as never;
+
 const row = (id: string): NotificationInboxRow => ({
   id,
   type: 'task',
@@ -17,6 +19,7 @@ const row = (id: string): NotificationInboxRow => ({
   content: {
     entity: { type: 'document', id, name: 'Plan' } as never,
     notifications: [],
+    entityAt,
   },
 });
 

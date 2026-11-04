@@ -22,6 +22,8 @@ export default {
   stackToggle: {
     other: '{{count}} notifications, show or hide them',
   },
+  stackShow: 'Show notifications',
+  stackHide: 'Hide notifications',
   stackMore: {
     one: 'and {{count}} more',
     other: 'and {{count}} more',

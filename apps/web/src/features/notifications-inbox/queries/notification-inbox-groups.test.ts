@@ -13,7 +13,11 @@ const row = (id: string, latestAt: number): NotificationInboxRow => ({
   actions: [],
   unseen: true,
   count: 1,
-  content: { entity: {} as never, notifications: [] },
+  content: {
+    entity: {} as never,
+    notifications: [],
+    entityAt: () => ({}) as never,
+  },
 });
 
 const group = (

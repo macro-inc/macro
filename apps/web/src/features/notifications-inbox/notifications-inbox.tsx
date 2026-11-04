@@ -99,9 +99,10 @@ export function NotificationsInbox() {
         >
           <NotificationsView
             onOpenSettings={() => openSettings('Notifications')}
-            onOpen={(row, { newSplit }) =>
+            onOpen={(row, { newSplit, notification }) =>
               openNotificationInSplit(row, {
                 newSplit,
+                notification,
                 splitHandle: panel.handle,
               })
             }

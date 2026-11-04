@@ -2,7 +2,11 @@ import type { UnifiedNotification } from '@notifications/types';
 import { describe, expect, it } from 'vitest';
 import type { NotificationInboxRow } from '../context/notifications-inbox-context';
 import type { InboxActor } from '../core/inbox-row';
-import { describeInboxCard, describeInboxRow } from './describe-row';
+import {
+  describeInboxCard,
+  describeInboxRow,
+  describeStackItem,
+} from './describe-row';
 
 const taskAssigned = {
   id: 'n-1',
@@ -41,6 +45,7 @@ const row = (
   content: {
     entity: { type: 'task', id: 'task-a', name: 'Task' } as never,
     notifications: [notification],
+    entityAt: () => ({}) as never,
   },
 });
 
@@ -116,6 +121,7 @@ const stack = (
   content: {
     entity: { type: 'channel', id: 'entity', name: 'The entity' } as never,
     notifications,
+    entityAt: () => ({}) as never,
   },
 });
 
@@ -125,6 +131,11 @@ const people: Names = {
 };
 
 const channel = { channelType: 'public', channelName: 'launch' };
+
+const itemsOf = (row: NotificationInboxRow) =>
+  row.content.notifications.map((notification) =>
+    describeStackItem(row, notification, people)
+  );
 
 describe('describeInboxCard', () => {
   it('says what a single notification is about and who did it', () => {
@@ -140,35 +151,32 @@ describe('describeInboxCard', () => {
     expect(card).toMatchObject({
       title: 'Ship it',
       detail: 'Sam sent a message in #launch',
-      items: [],
     });
   });
 
   it('titles a thread stack with its top-level message', () => {
-    const card = describeInboxCard(
-      stack(
-        'channel_thread',
-        [
-          sent('3', 'channel_message_reply', 'Ana', {
-            ...channel,
-            messageId: 'reply',
-            threadId: 'root',
-            messageContent: 'On it',
-          }),
-          sent('2', 'channel_message_reaction', 'Leo', {
-            ...channel,
-            messageId: 'root',
-            messageContent: 'Can we ship Friday?',
-            emoji: '+1',
-          }),
-        ],
-        'root'
-      ),
-      people
+    const row = stack(
+      'channel_thread',
+      [
+        sent('3', 'channel_message_reply', 'Ana', {
+          ...channel,
+          messageId: 'reply',
+          threadId: 'root',
+          messageContent: 'On it',
+        }),
+        sent('2', 'channel_message_reaction', 'Leo', {
+          ...channel,
+          messageId: 'root',
+          messageContent: 'Can we ship Friday?',
+          emoji: '+1',
+        }),
+      ],
+      'root'
     );
+    const card = describeInboxCard(row, people);
     expect(card.title).toBe('Can we ship Friday?');
     expect(card.detail).toBe('Ana and Leo in #launch');
-    expect(card.items.map((item) => item.by)).toEqual([
+    expect(itemsOf(row).map((item) => item.by)).toEqual([
       'Ana replied',
       'Leo reacted',
     ]);
@@ -200,22 +208,20 @@ describe('describeInboxCard', () => {
   });
 
   it('titles a channel stack with the channel and names who posted', () => {
-    const card = describeInboxCard(
-      stack(
-        'channel_messages',
-        ['Sam', 'Noor', 'Sam', 'Mara', 'Leo'].map((sender, index) =>
-          sent(String(index), 'channel_message_send', sender, {
-            ...channel,
-            messageId: `m-${index}`,
-            messageContent: `Message ${index}`,
-          })
-        )
-      ),
-      people
+    const row = stack(
+      'channel_messages',
+      ['Sam', 'Noor', 'Sam', 'Mara', 'Leo'].map((sender, index) =>
+        sent(String(index), 'channel_message_send', sender, {
+          ...channel,
+          messageId: `m-${index}`,
+          messageContent: `Message ${index}`,
+        })
+      )
     );
+    const card = describeInboxCard(row, people);
     expect(card.title).toBe('#launch');
     expect(card.detail).toBe('Sam, Noor and 2 others posted');
-    expect(card.items.map((item) => item.text)).toContain('Message 3');
+    expect(itemsOf(row).map((item) => item.text)).toContain('Message 3');
   });
 
   it('titles a direct message stack with the person and shows the newest message', () => {
@@ -243,13 +249,14 @@ describe('describeInboxCard', () => {
         threadId: id,
         text: `Comment ${id}`,
       });
-    const card = describeInboxCard(
-      stack('discussion_messages', [comment('2', 'Sam'), comment('1', 'Ana')]),
-      people
-    );
+    const row = stack('discussion_messages', [
+      comment('2', 'Sam'),
+      comment('1', 'Ana'),
+    ]);
+    const card = describeInboxCard(row, people);
     expect(card.title).toBe('Launch plan');
     expect(card.detail).toBe('Sam and Ana commented');
-    expect(card.items.map((item) => item.by)).toEqual([
+    expect(itemsOf(row).map((item) => item.by)).toEqual([
       'Sam commented',
       'Ana commented',
     ]);
@@ -272,16 +279,14 @@ describe('describeInboxCard', () => {
           },
         },
       }) as unknown as UnifiedNotification;
-    const card = describeInboxCard(
-      {
-        ...stack('agent', [settled('2'), settled('1')]),
-        actor: { kind: 'agent', name: 'Macro' },
-      },
-      people
-    );
+    const row: NotificationInboxRow = {
+      ...stack('agent', [settled('2'), settled('1')]),
+      actor: { kind: 'agent', name: 'Macro' },
+    };
+    const card = describeInboxCard(row, people);
     expect(card.title).toBe('Build the tracker');
     expect(card.detail).toBe('Macro finished');
-    expect(card.items.map((item) => item.text)).toEqual([
+    expect(itemsOf(row).map((item) => item.text)).toEqual([
       'Update 2',
       'Update 1',
     ]);

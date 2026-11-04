@@ -177,7 +177,11 @@ export function toInboxGroup(
         actions: toActions(row.actions),
         unseen: row.unseen,
         count: row.count,
-        content: { entity: rowEntity(entity, notifications), notifications },
+        content: {
+          entity: rowEntity(entity, notifications),
+          notifications,
+          entityAt: (notification) => rowEntity(entity, [notification]),
+        },
       };
       memo?.next.set(row.id, { wire, row: decoded });
       return [decoded];

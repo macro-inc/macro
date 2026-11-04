@@ -1,15 +1,17 @@
-import { type Accessor, createSignal } from 'solid-js';
+import { type Accessor, batch, createSignal } from 'solid-js';
 import type { NotificationInboxRow } from '../context/notifications-inbox-context';
 
 /**
- * The row shown in the preview. It follows the row's latest version while
- * the list holds it, and keeps its last version once it leaves, so the
- * preview doesn't vanish under the reader.
+ * The row shown in the preview, and which of its notifications when one was
+ * chosen from its stack. It follows the row's latest version while the list
+ * holds it, and keeps its last version once it leaves, so the preview doesn't
+ * vanish under the reader.
  */
 export function createInboxSelection(
   rows: Accessor<readonly NotificationInboxRow[]>
 ) {
   const [snapshot, setSnapshot] = createSignal<NotificationInboxRow>();
+  const [notificationId, setNotificationId] = createSignal<string>();
   const [request, setRequest] = createSignal(0);
 
   const selected = () => {
@@ -18,13 +20,37 @@ export function createInboxSelection(
     return rows().find((row) => row.id === current.id) ?? current;
   };
 
-  /** Show `row`; choosing the shown row again re-aims it at its location. */
-  const select = (row: NotificationInboxRow) => {
-    if (snapshot()?.id === row.id) setRequest((count) => count + 1);
-    setSnapshot(row);
+  /**
+   * The chosen notification of the shown row, while the row still holds it.
+   * Without one the preview opens where the row does.
+   */
+  const selectedNotification = () => {
+    const id = notificationId();
+    if (!id) return undefined;
+    return selected()?.content.notifications.find(
+      (notification) => notification.id === id
+    );
   };
 
-  const clear = () => setSnapshot(undefined);
+  /**
+   * Show `row`, at one of its notifications when one is named; choosing what's
+   * shown again re-aims it at its location.
+   */
+  const select = (row: NotificationInboxRow, notification?: string) => {
+    batch(() => {
+      if (snapshot()?.id === row.id && notificationId() === notification) {
+        setRequest((count) => count + 1);
+      }
+      setSnapshot(row);
+      setNotificationId(notification);
+    });
+  };
+
+  const clear = () =>
+    batch(() => {
+      setSnapshot(undefined);
+      setNotificationId(undefined);
+    });
 
   /**
    * Where to go when `leaving` rows leave the list while one of them is
@@ -48,7 +74,8 @@ export function createInboxSelection(
 
   return {
     selected,
-    /** Bumped when the shown row is chosen again. */
+    selectedNotification,
+    /** Bumped when what's shown is chosen again. */
     navigationRequest: request,
     select,
     clear,

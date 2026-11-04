@@ -5,7 +5,7 @@ import {
   createInboxListItems,
   dateHeaderLabel,
   type InboxListItem,
-  isInboxRow,
+  isInboxNotification,
 } from './inbox-date-headers';
 
 const NOW = new Date(2026, 8, 14, 20, 0);
@@ -21,6 +21,7 @@ const row = (id: string, latestAt: Date): NotificationInboxRow => ({
   content: {
     entity: { type: 'document', id, name: 'Plan' } as never,
     notifications: [],
+    entityAt: () => ({}) as never,
   },
 });
 
@@ -29,7 +30,23 @@ const todayAt = (hour: number, minute = 0) =>
 
 /** Headers by label and rows by id, in list order. */
 const shape = (items: readonly InboxListItem[]) =>
-  items.map((item) => (isInboxRow(item) ? item.id : dateHeaderLabel(item)));
+  items.map((item) =>
+    item.type === 'date_header' ? dateHeaderLabel(item) : item.id
+  );
+
+const stack = (id: string, latestAt: Date, notifications: string[]) => {
+  const base = row(id, latestAt);
+  return {
+    ...base,
+    count: notifications.length,
+    content: {
+      ...base.content,
+      notifications: notifications.map(
+        (notification) => ({ id: notification }) as never
+      ),
+    },
+  };
+};
 
 describe('createInboxListItems', () => {
   beforeEach(() => {
@@ -37,6 +54,46 @@ describe('createInboxListItems', () => {
     vi.setSystemTime(NOW);
   });
   afterEach(() => vi.useRealTimers());
+
+  it('lists an unfolded stack under its row and leaves folded ones alone', () => {
+    createRoot((dispose) => {
+      const [open, setOpen] = createSignal<string>();
+      const items = createInboxListItems(
+        () => [
+          stack('a', todayAt(19, 58), ['a1', 'a2']),
+          stack('b', todayAt(19, 57), ['b1', 'b2']),
+          row('c', todayAt(19, 56)),
+        ],
+        (id) => id === open()
+      );
+      const ids = () =>
+        items()
+          .filter(isInboxNotification)
+          .map((item) => item.id);
+      expect(ids()).toEqual(['a', 'b', 'c']);
+
+      setOpen('b');
+      expect(ids()).toEqual(['a', 'b', 'b/b1', 'b/b2', 'c']);
+      dispose();
+    });
+  });
+
+  it('keeps an unfolded notification in place as its stack grows', () => {
+    createRoot((dispose) => {
+      const [notifications, setNotifications] = createSignal(['a1']);
+      const items = createInboxListItems(
+        () => [stack('a', todayAt(19, 58), ['new', ...notifications()])],
+        () => true
+      );
+      const place = () => items().find((item) => item.id === 'a/a1');
+      const before = place();
+      expect(before).toBeDefined();
+
+      setNotifications(['newer', 'a1']);
+      expect(place()).toBe(before);
+      dispose();
+    });
+  });
 
   it('puts a divider above the first row of each section', () => {
     createRoot((dispose) => {

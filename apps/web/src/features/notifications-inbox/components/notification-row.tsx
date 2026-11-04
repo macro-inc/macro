@@ -1,17 +1,16 @@
 import { t } from '@app/lib/i18n';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import {
-  twoLineClampMarkdownTheme,
-  unifiedListMarkdownTheme,
-} from '@core/component/LexicalMarkdown/theme';
+import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import { Button, cn } from '@ui';
-import { For, type JSX, Show } from 'solid-js';
-import type { InboxStackItem } from '../core/inbox-row';
+import { type JSX, Show } from 'solid-js';
 
 export type NotificationRowProps = {
   /** The row's element id, for `aria-activedescendant`. */
   id: string;
+  /** Who it is from. */
+  icon: JSX.Element;
   /** What the card is about: a subject, message, channel or document. */
   title: string;
   /** Who did what. */
@@ -20,9 +19,6 @@ export type NotificationRowProps = {
   time: string;
   /** How many notifications the row stands for. */
   count: number;
-  /** The notifications a stack unfolds into; may be fewer than `count`. */
-  items: readonly InboxStackItem[];
-  formatTime: (at: Date) => string;
   unfolded: boolean;
   unseen: boolean;
   highlighted: boolean;
@@ -35,13 +31,15 @@ export type NotificationRowProps = {
 };
 
 /**
- * One notification inbox row, as a card: what it is about, then who did what.
- * Several notifications show as a stack with paper edges, which unfolds in
- * place. With a pointer, the time and Mark done appear on hover; touch shows
+ * One notification inbox row, as a card: who it is from, what it is about, then
+ * who did what. Choosing it opens it. Several notifications show as a stack with
+ * paper edges, and its own button unfolds them below the card, which they
+ * continue. With a pointer, the time and Mark done appear on hover; touch shows
  * the time and marks done by swiping the row.
  */
 export function NotificationRow(props: NotificationRowProps) {
   const isStack = () => props.count > 1;
+  const isOpen = () => isStack() && props.unfolded;
   return (
     <div
       id={props.id}
@@ -49,10 +47,11 @@ export function NotificationRow(props: NotificationRowProps) {
       aria-selected={props.highlighted}
       data-notification-row=""
       data-stack={isStack() ? '' : undefined}
-      data-unfolded={props.unfolded ? '' : undefined}
+      data-unfolded={isOpen() ? '' : undefined}
       class={cn(
         'group/notification relative w-full min-w-0 flex-1 px-3',
-        isStack() && !props.unfolded ? 'pb-5' : 'pb-2.5'
+        isStack() && !props.unfolded && 'pb-5',
+        !isStack() && 'pb-2.5'
       )}
       onMouseMove={() => props.onHover()}
       onClick={(event) => props.onClick(event)}
@@ -60,114 +59,103 @@ export function NotificationRow(props: NotificationRowProps) {
       <div
         role="gridcell"
         class={cn(
-          'relative z-1 rounded-xl border',
+          'relative z-1 border',
+          isOpen() ? 'rounded-t-xl border-b-0' : 'rounded-xl',
           props.highlighted
             ? 'border-edge-frame bg-control-raised'
             : 'border-edge-button bg-control not-touch:hover:bg-surface-3'
         )}
       >
-        {/* Leaves room for Mark done, which appears on hover. */}
-        <div class="px-3 py-3 touch:min-h-[44px]">
-          <div class="flex min-w-0 items-center gap-2 not-touch:group-hover/notification:pr-6">
-            <span
-              data-card-title=""
+        <div class="flex gap-2.5 px-3 py-3 touch:min-h-[44px]">
+          <span class="shrink-0" data-card-avatar="">
+            {props.icon}
+          </span>
+          <div class="min-w-0 flex-1">
+            {/* Leaves room for Mark done, which appears on hover. */}
+            <div class="flex min-w-0 items-center gap-2 not-touch:group-hover/notification:pr-6">
+              <span
+                data-card-title=""
+                class={cn(
+                  'min-w-0 flex-1 truncate text-sm',
+                  props.unseen ? 'font-medium text-ink' : 'text-ink-muted'
+                )}
+              >
+                {/* Message and comment text carries mention and link markup. */}
+                <StaticMarkdown
+                  markdown={props.title}
+                  singleLine
+                  theme={unifiedListMarkdownTheme}
+                />
+              </span>
+              <Show when={props.unseen}>
+                <span
+                  aria-label={t('notificationsInbox.unread')}
+                  data-unread-dot=""
+                  class="size-1.5 shrink-0 rounded-full bg-accent not-touch:group-hover/notification:hidden"
+                />
+              </Show>
+            </div>
+            <div
               class={cn(
-                'min-w-0 flex-1 truncate text-sm',
-                props.unseen ? 'font-medium text-ink' : 'text-ink-muted'
+                'mt-[3px] flex min-w-0 items-center gap-2 text-xs',
+                props.unseen
+                  ? 'text-ink-extra-muted'
+                  : 'text-ink-extra-muted/80'
               )}
             >
-              {/* Message and comment text carries mention and link markup. */}
-              <StaticMarkdown
-                markdown={props.title}
-                singleLine
-                theme={unifiedListMarkdownTheme}
-              />
-            </span>
-            <Show when={isStack()}>
-              <Button
-                size="icon-xs"
-                variant="ghost"
-                // Touch sizes it up; it shouldn't make a stack's line taller.
-                class="-my-2"
-                data-stack-count=""
-                aria-expanded={props.unfolded}
-                aria-label={t('notificationsInbox.stackToggle', {
-                  count: props.count,
-                })}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  props.onToggleStack();
-                }}
+              <span data-card-detail="" class="min-w-0 flex-1 truncate">
+                <StaticMarkdown
+                  markdown={props.detail}
+                  singleLine
+                  theme={unifiedListMarkdownTheme}
+                />
+              </span>
+              <span class="hidden shrink-0 touch:block not-touch:group-hover/notification:block">
+                {props.time}
+              </span>
+              <Show when={isStack()}>
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  // Its frame is taller than the line; it shouldn't grow the card.
+                  class="-my-1 -mr-1 shrink-0 touch:-my-3"
+                  data-stack-toggle=""
+                  aria-expanded={props.unfolded}
+                  aria-label={t('notificationsInbox.stackToggle', {
+                    count: props.count,
+                  })}
+                  tooltip={
+                    props.unfolded
+                      ? t('notificationsInbox.stackHide')
+                      : t('notificationsInbox.stackShow')
+                  }
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    props.onToggleStack();
+                  }}
+                >
+                  <span class="font-normal text-ink-extra-muted tabular-nums">
+                    {props.count}
+                  </span>
+                  <CaretDownIcon
+                    class={cn(
+                      'size-3 text-ink-extra-muted',
+                      props.unfolded && 'rotate-180'
+                    )}
+                  />
+                </Button>
+              </Show>
+            </div>
+            <Show when={props.actions}>
+              <div
+                class="mt-2.5 flex flex-wrap gap-2"
+                onClick={(event) => event.stopPropagation()}
               >
-                <span class="text-xs font-normal text-ink-extra-muted tabular-nums">
-                  {props.count}
-                </span>
-              </Button>
-            </Show>
-            <Show when={props.unseen}>
-              <span
-                aria-label={t('notificationsInbox.unread')}
-                data-unread-dot=""
-                class="size-1.5 shrink-0 rounded-full bg-accent not-touch:group-hover/notification:hidden"
-              />
-            </Show>
-          </div>
-          <div
-            class={cn(
-              'mt-[3px] flex min-w-0 gap-2 text-xs',
-              props.unseen ? 'text-ink-extra-muted' : 'text-ink-extra-muted/80'
-            )}
-          >
-            <span data-card-detail="" class="min-w-0 flex-1 truncate">
-              <StaticMarkdown
-                markdown={props.detail}
-                singleLine
-                theme={unifiedListMarkdownTheme}
-              />
-            </span>
-            <span class="hidden shrink-0 touch:block not-touch:group-hover/notification:block">
-              {props.time}
-            </span>
-          </div>
-        </div>
-        <Show when={props.actions}>
-          <div
-            class="flex flex-wrap gap-2 px-3 pb-3"
-            onClick={(event) => event.stopPropagation()}
-          >
-            {props.actions}
-          </div>
-        </Show>
-        <Show when={isStack() && props.unfolded}>
-          <div
-            data-stack-items=""
-            class="mx-3 border-t border-edge-button pt-1 pb-2"
-          >
-            <For each={props.items}>
-              {(item) => (
-                <div class="py-2">
-                  <div class="flex gap-2 text-xs text-ink-extra-muted/80">
-                    <span class="min-w-0 flex-1 truncate">{item.by}</span>
-                    <span class="shrink-0">{props.formatTime(item.at)}</span>
-                  </div>
-                  <div class="mt-[3px] text-sm text-ink-muted">
-                    <StaticMarkdown
-                      markdown={item.text}
-                      theme={twoLineClampMarkdownTheme}
-                    />
-                  </div>
-                </div>
-              )}
-            </For>
-            <Show when={props.count > props.items.length}>
-              <div class="py-1 text-xs text-ink-extra-muted/80">
-                {t('notificationsInbox.stackMore', {
-                  count: props.count - props.items.length,
-                })}
+                {props.actions}
               </div>
             </Show>
           </div>
-        </Show>
+        </div>
         {/* Touch marks done by swiping the row instead. */}
         <div class="absolute top-2 right-2 hidden not-touch:group-hover/notification:block">
           <Button

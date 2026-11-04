@@ -1,4 +1,5 @@
 import {
+  createDisclosureState,
   createListController,
   useListInteractions,
 } from '@app/components/list';
@@ -36,6 +37,7 @@ import { formatTimestamp } from '@entity/utils/timestamp';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import GearSixIcon from '@icon/system/regular/gear-six.svg';
+import type { UnifiedNotification } from '@notifications/types';
 import { useMutationUndoContext } from '@queries/undo';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
@@ -60,7 +62,9 @@ import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { InboxDateHeader } from '../components/inbox-date-header';
 import { InboxFilterDrawer } from '../components/inbox-filter-drawer';
 import { InboxFilterMenu } from '../components/inbox-filter-menu';
+import { InboxSenderAvatar } from '../components/inbox-sender-avatar';
 import { NotificationRow } from '../components/notification-row';
+import { NotificationStackItem } from '../components/notification-stack-item';
 import { RowActionButtons } from '../components/row-action-buttons';
 import {
   type NotificationInboxRow,
@@ -68,23 +72,33 @@ import {
 } from '../context/notifications-inbox-context';
 import { statusIncludes } from '../core/inbox-filters';
 import type { InboxDecision } from '../core/inbox-row';
-import { describeInboxCard } from '../primitives/describe-row';
+import {
+  describeInboxCard,
+  describeStackItem,
+} from '../primitives/describe-row';
 import {
   createInboxListItems,
   dateHeaderLabel,
   type InboxListItem,
+  type InboxStackItemPlace,
+  isInboxNotification,
   isInboxRow,
+  isInboxStackItem,
 } from '../primitives/inbox-date-headers';
 import { createInboxFilters } from '../primitives/inbox-filters';
 import { createInboxList } from '../primitives/inbox-list';
 import { createInboxSelection } from '../primitives/inbox-selection';
+import { agentTurnParams } from '../primitives/notification-location';
 import { createRowActions, rowButtons } from '../primitives/row-actions';
 
 type ActivationMetadata = { event?: MouseEvent; newSplit?: boolean };
 
 export type NotificationsViewProps = {
-  /** Open what a row is about; the host decides where. */
-  onOpen: (row: NotificationInboxRow, options: { newSplit: boolean }) => void;
+  /** Open what a row is about, or one of its notifications; the host decides where. */
+  onOpen: (
+    row: NotificationInboxRow,
+    options: { newSplit: boolean; notification?: UnifiedNotification }
+  ) => void;
   /** Open the settings that decide which notifications are delivered. */
   onOpenSettings: () => void;
 };
@@ -118,6 +132,23 @@ const previewSelection = (
   entity.type === 'calendar_event' || entity.type === 'initiative'
     ? undefined
     : entity;
+
+/**
+ * What the preview shows for a row or one of its notifications; undefined when
+ * it has no inline preview. An agent's notification opens at its turn.
+ */
+const previewTargetFor = (
+  row: NotificationInboxRow,
+  notification?: UnifiedNotification
+) => {
+  const entity = previewSelection(
+    notification ? row.content.entityAt(notification) : row.content.entity
+  );
+  if (!entity) return undefined;
+  const target = previewBlockTarget(entity);
+  const turn = notification && agentTurnParams(notification);
+  return turn ? { ...target, params: turn } : target;
+};
 
 function NotificationsBreadcrumb(props: { onReturn: () => void }) {
   return (
@@ -163,11 +194,12 @@ function ListStatus(props: { children: JSX.Element }) {
 /**
  * The unified notifications list beside a preview of the chosen row: one card
  * per thing that needs the viewer, newest first under Home's date dividers.
- * Several notifications about one thing show as a stack, which unfolds when
- * chosen. `j`/`k` move (and follow in an open preview), Enter previews, `e`
- * marks the focused row done. Touch shows the list alone: a tap opens the row
- * in place, its count unfolds a stack, a left swipe marks it done, and pulling
- * down refreshes.
+ * Several notifications about one thing show as a stack; its button, or the
+ * right arrow, unfolds them below the card, and each opens at its own location.
+ * `j`/`k` move through rows and unfolded notifications (and follow in an open
+ * preview), Enter previews, `e` marks the focused row done. Touch shows the list
+ * alone: a tap opens the row or notification in place, a stack's button unfolds
+ * it, a left swipe marks it done, and pulling down refreshes.
  */
 export function NotificationsView(props: NotificationsViewProps) {
   const panel = useSplitPanelOrThrow();
@@ -223,43 +255,54 @@ export function NotificationsView(props: NotificationsViewProps) {
     const current = view();
     return current.t === 'ready' ? current.rows : [];
   };
-  const listItems = createInboxListItems(rows);
+  // Held by row id, not on the row: a live change replaces the row's object
+  // and a stack stays open through it.
+  const stacks = createDisclosureState();
+  const listItems = createInboxListItems(rows, stacks.isExpanded);
   const rowsById = createMemo(
     () => new Map(rows().map((row) => [row.id, row] as const))
   );
-  const rowOf = (item: InboxListItem | undefined) =>
-    item && isInboxRow(item) ? rowsById().get(item.id) : undefined;
+  /** The row an item stands for, or the row an unfolded notification is on. */
+  const rowOf = (item: InboxListItem | undefined) => {
+    if (!item || !isInboxNotification(item)) return undefined;
+    return rowsById().get(isInboxStackItem(item) ? item.rowId : item.id);
+  };
+  const notificationOf = (item: InboxListItem | undefined) =>
+    item && isInboxStackItem(item)
+      ? rowOf(item)?.content.notifications.find(
+          (notification) => notification.id === item.notificationId
+        )
+      : undefined;
 
   const orchestrator = useGlobalBlockOrchestrator();
   const guard = createPreviewSelectionGuard();
   const selection = createInboxSelection(rows);
   const previewTarget = createMemo(() => {
     const row = selection.selected();
-    const entity = row && previewSelection(row.content.entity);
-    return entity && previewBlockTarget(entity);
+    if (!row) return undefined;
+    return previewTargetFor(row, selection.selectedNotification());
   });
-
-  // Held by row id, not on the row: a live change replaces the row's object
-  // and a stack stays open through it.
-  const [unfolded, setUnfolded] = createSignal<string>();
-  const toggleStack = (id: string) =>
-    setUnfolded((open) => (open === id ? undefined : id));
 
   const markSeen = (row: NotificationInboxRow) => {
     if (!row.unseen) return;
     fireAndForget(feed.markSeen([row]), 'notifications-inbox');
   };
 
-  /** Show a row in the preview, or open it when it has no inline preview. */
-  const preview = (row: NotificationInboxRow) => {
-    const entity = previewSelection(row.content.entity);
-    if (!entity) {
-      props.onOpen(row, { newSplit: false });
+  /**
+   * Show a row in the preview, at one of its notifications when one is named,
+   * or open it when it has no inline preview.
+   */
+  const preview = (
+    row: NotificationInboxRow,
+    notification?: UnifiedNotification
+  ) => {
+    const target = previewTargetFor(row, notification);
+    if (!target) {
+      props.onOpen(row, { newSplit: false, notification });
       return;
     }
-    const target = previewBlockTarget(entity);
     if (!guard.canSelect(target)) return;
-    selection.select(row);
+    selection.select(row, notification?.id);
     guard(target);
     markSeen(row);
   };
@@ -269,29 +312,25 @@ export function NotificationsView(props: NotificationsViewProps) {
   const list = createListController<InboxListItem, ActivationMetadata>({
     items: listItems,
     getKey: (item) => item.id,
-    isNavigable: isInboxRow,
+    isNavigable: isInboxNotification,
     isSelectable: isInboxRow,
     onActivate: ({ item, metadata }) => {
       const row = rowOf(item);
       if (!row) return;
+      const notification = notificationOf(item);
       previewAfterMove.clear();
       // Phones show one pane: open in place.
       if (isTouchDevice()) {
         markSeen(row);
-        props.onOpen(row, { newSplit: false });
+        props.onOpen(row, { newSplit: false, notification });
         return;
       }
       if (metadata?.newSplit === true || metadata?.event?.shiftKey === true) {
         markSeen(row);
-        props.onOpen(row, { newSplit: true });
+        props.onOpen(row, { newSplit: true, notification });
         return;
       }
-      // Choosing a stack unfolds it; choosing it again while shown folds it.
-      if (row.count > 1) {
-        const shown = selection.selected()?.id === row.id;
-        setUnfolded((open) => (open === row.id && shown ? undefined : row.id));
-      }
-      preview(row);
+      preview(row, notification);
     },
   });
 
@@ -303,6 +342,7 @@ export function NotificationsView(props: NotificationsViewProps) {
       markSeen(row);
     },
     complete: (row) => {
+      stacks.collapse(row.id);
       const next = selection.afterLeaving([row.id]);
       if (next === 'none') selection.clear();
       else if (next !== 'stay') preview(next);
@@ -315,6 +355,7 @@ export function NotificationsView(props: NotificationsViewProps) {
   });
 
   const markDone = (done: readonly NotificationInboxRow[]) => {
+    for (const row of done) stacks.collapse(row.id);
     const next = selection.afterLeaving(done.map((row) => row.id));
     if (next === 'none') selection.clear();
     else if (next !== 'stay') preview(next);
@@ -343,7 +384,7 @@ export function NotificationsView(props: NotificationsViewProps) {
         if (!container || container.scrollTop <= 0) return;
         const edge = container.getBoundingClientRect().top;
         for (const row of container.querySelectorAll(
-          '[data-notification-row]'
+          '[data-notification-row],[data-stack-item]'
         )) {
           const { top, bottom } = row.getBoundingClientRect();
           if (bottom > edge) {
@@ -387,7 +428,9 @@ export function NotificationsView(props: NotificationsViewProps) {
       onNavigate: (event) => {
         // An open preview follows the keyboard.
         const moved = rowOf(event.result?.item);
-        if (moved && selection.selected()) previewAfterMove(moved);
+        if (moved && selection.selected()) {
+          previewAfterMove(moved, notificationOf(event.result?.item));
+        }
         if (event.kind !== 'move' || event.direction !== 1) return;
         if (!event.result || list.items.count() - event.result.index <= 4) {
           loadMore();
@@ -397,6 +440,17 @@ export function NotificationsView(props: NotificationsViewProps) {
     activation: {
       createMetadata: (intent) => ({ newSplit: intent === 'alternate' }),
       alternateDescription: t('nav.openInNewSplit'),
+    },
+    disclosure: {
+      isHeader: () => false,
+      // A stack answers for itself and for each notification unfolded from it.
+      getKey: (item) => {
+        const row = rowOf(item);
+        return row && row.count > 1 ? row.id : undefined;
+      },
+      isExpanded: stacks.isExpanded,
+      setExpanded: stacks.setExpanded,
+      getFocusKey: (key) => key,
     },
   });
 
@@ -460,17 +514,26 @@ export function NotificationsView(props: NotificationsViewProps) {
       <SwipeToDone row={card.row()}>
         <NotificationRow
           id={card.row().id}
+          icon={
+            <InboxSenderAvatar
+              notification={card.row().content.notifications[0]}
+              type={card.row().type}
+            />
+          }
           title={display().title}
           detail={display().detail}
           time={formatTimestamp(new Date(card.row().latestAt))}
           count={card.row().count}
-          items={display().items}
-          formatTime={(at) => formatTimestamp(at)}
-          unfolded={unfolded() === card.row().id}
+          unfolded={stacks.isExpanded(card.row().id)}
           unseen={card.row().unseen}
           highlighted={
             list.focus.key() === card.row().id ||
-            selection.selected()?.id === card.row().id
+            (selection.selected()?.id === card.row().id &&
+              // A chosen notification shows on its own line while it's visible.
+              !(
+                selection.selectedNotification() &&
+                stacks.isExpanded(card.row().id)
+              ))
           }
           onHover={() => list.focus.set(card.row().id, { reason: 'hover' })}
           onClick={(event) =>
@@ -480,7 +543,7 @@ export function NotificationsView(props: NotificationsViewProps) {
             })
           }
           onDone={() => markDone([card.row()])}
-          onToggleStack={() => toggleStack(card.row().id)}
+          onToggleStack={() => stacks.toggle(card.row().id)}
           actions={
             rowButtons(card.row()).length > 0 ? (
               <RowActionButtons
@@ -500,6 +563,50 @@ export function NotificationsView(props: NotificationsViewProps) {
     );
   };
 
+  const StackItemCard = (entry: {
+    place: InboxStackItemPlace;
+    row: () => NotificationInboxRow;
+    notification: () => UnifiedNotification;
+  }) => {
+    const item = createMemo(() =>
+      describeStackItem(entry.row(), entry.notification(), context)
+    );
+    const isLast = () =>
+      entry.row().content.notifications.at(-1)?.id ===
+      entry.place.notificationId;
+    return (
+      <NotificationStackItem
+        id={entry.place.id}
+        icon={
+          <InboxSenderAvatar
+            notification={entry.notification()}
+            type={entry.row().type}
+          />
+        }
+        by={item().by}
+        text={item().text}
+        time={formatTimestamp(item().at)}
+        last={isLast()}
+        more={
+          isLast()
+            ? entry.row().count - entry.row().content.notifications.length
+            : 0
+        }
+        highlighted={
+          list.focus.key() === entry.place.id ||
+          selection.selectedNotification()?.id === entry.place.notificationId
+        }
+        onHover={() => list.focus.set(entry.place.id, { reason: 'hover' })}
+        onClick={(event) =>
+          list.activate.key(entry.place.id, {
+            reason: 'pointer',
+            metadata: { event },
+          })
+        }
+      />
+    );
+  };
+
   const listBody = () => (
     <Switch>
       <Match when={!filters.showsNothing() && view().t === 'loading'}>
@@ -512,9 +619,12 @@ export function NotificationsView(props: NotificationsViewProps) {
           </div>
           <For each={[0, 1, 2, 3, 4]}>
             {() => (
-              <ListSkeleton.Row class="mb-2.5 h-[63px] flex-col items-start justify-center gap-2 rounded-xl px-[13px]">
-                <ListSkeleton.Bar class="w-1/2" />
-                <ListSkeleton.Bar class="w-4/5" />
+              <ListSkeleton.Row class="mb-2.5 h-[63px] gap-2.5 rounded-xl px-[13px]">
+                <ListSkeleton.Bar class="size-6 shrink-0 rounded-full" />
+                <div class="flex min-w-0 flex-1 flex-col gap-2">
+                  <ListSkeleton.Bar class="w-1/2" />
+                  <ListSkeleton.Bar class="w-4/5" />
+                </div>
               </ListSkeleton.Row>
             )}
           </For>
@@ -586,17 +696,35 @@ export function NotificationsView(props: NotificationsViewProps) {
               onScroll={checkNearEnd}
             >
               {(item) =>
-                isInboxRow(item) ? (
-                  <Show when={rowsById().get(item.id)}>
-                    {(row) => <RowCard row={row} />}
-                  </Show>
-                ) : (
-                  <InboxDateHeader
-                    id={item.id}
-                    label={dateHeaderLabel(item)}
-                    isFirst={listItems()[0]?.id === item.id}
-                  />
-                )
+                match(item)
+                  .with({ type: 'row' }, (place) => (
+                    <Show when={rowsById().get(place.id)}>
+                      {(row) => <RowCard row={row} />}
+                    </Show>
+                  ))
+                  .with({ type: 'stack_item' }, (place) => (
+                    <Show when={rowOf(place)}>
+                      {(row) => (
+                        <Show when={notificationOf(place)}>
+                          {(notification) => (
+                            <StackItemCard
+                              place={place}
+                              row={row}
+                              notification={notification}
+                            />
+                          )}
+                        </Show>
+                      )}
+                    </Show>
+                  ))
+                  .with({ type: 'date_header' }, (header) => (
+                    <InboxDateHeader
+                      id={header.id}
+                      label={dateHeaderLabel(header)}
+                      isFirst={listItems()[0]?.id === header.id}
+                    />
+                  ))
+                  .exhaustive()
               }
             </Virtualizer>
           </Suspense>

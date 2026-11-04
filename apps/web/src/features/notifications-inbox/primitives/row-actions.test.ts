@@ -64,6 +64,7 @@ const row = (
   content: {
     entity: { type: 'document', id: 'doc-a', name: 'Plan' } as never,
     notifications,
+    entityAt: () => ({}) as never,
   },
 });
 

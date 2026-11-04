@@ -10,6 +10,10 @@ export type InboxRowContent = {
   entity: EntityWithRawNotifications<EntityData>;
   /** The row's notifications, newest first; the first names the row. */
   notifications: UnifiedNotification[];
+  /** The row's entity, opening at one of its notifications. */
+  entityAt: (
+    notification: UnifiedNotification
+  ) => EntityWithRawNotifications<EntityData>;
 };
 
 export type NotificationInboxRow = InboxRow<InboxRowContent>;

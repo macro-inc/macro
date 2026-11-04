@@ -36,7 +36,11 @@ const row = (id: string): NotificationInboxRow => ({
   actions: [],
   unseen: true,
   count: 1,
-  content: { entity: {} as never, notifications: [] },
+  content: {
+    entity: {} as never,
+    notifications: [],
+    entityAt: () => ({}) as never,
+  },
 });
 
 afterEach(() => {
