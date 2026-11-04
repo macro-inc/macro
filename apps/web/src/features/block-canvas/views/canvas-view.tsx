@@ -1,6 +1,6 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSidePanel } from '@components/app/side-panel';
-import { createImageActions } from '@core/component/Lightbox/createImageActions';
+import { createImageActions } from '@core/component/ImageActions';
 import { enableCanvasArtifacts } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import Copy from '@icon/system/regular/copy.svg';
