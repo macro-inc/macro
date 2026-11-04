@@ -142,6 +142,29 @@ describe('command menu search ranking', () => {
     }
   );
 
+  it('reranks dynamic command descriptions without replacing rows', () => {
+    let description = 'Create';
+    const items: CommandMenuItem[] = [
+      {
+        id: 'dynamic-command',
+        kind: 'command',
+        bucket: 'command',
+        searchText: 'create make',
+        sortTimestamp: NOW,
+        timestamps: { viewedAt: new Date(NOW) },
+        data: {
+          description: () => description,
+          scopeId: 'command-menu',
+          runWithInputFocused: true,
+        },
+      },
+      note('plan', 'Create plan'),
+    ];
+    expect(ids(items, 'create')).toEqual(['dynamic-command', 'plan']);
+    description = 'Make';
+    expect(ids(items, 'create')).toEqual(['plan', 'dynamic-command']);
+  });
+
   it('keeps commands and other entities ordered by recency', () => {
     expect(
       ids(

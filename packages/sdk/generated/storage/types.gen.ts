@@ -457,6 +457,21 @@ export type AgentTyping = {
  */
 export type AgentTypingPhase = 'thinking' | 'writing' | 'working' | 'waiting';
 
+/**
+ * Public admission error payload. Handlers with additional fields can reuse the
+ * domain error's code and message and [`admission_status`].
+ */
+export type AiAdmissionErrorBody = {
+    /**
+     * Stable denial or unavailability code.
+     */
+    code: string;
+    /**
+     * Human-readable explanation, without internal billing diagnostics.
+     */
+    error: string;
+};
+
 export type Anchor = PdfAnchor;
 
 export type AnchorId = PdfAnchorId & {
@@ -5411,6 +5426,75 @@ export type DirectAccess = {
      * Recipient.
      */
     userId: string;
+};
+
+/**
+ * The edit failed after it started, so it may have partly applied. Read the
+ * document before retrying.
+ */
+export type DocumentAiEditFailed = {
+    /**
+     * Always `edit_failed`.
+     */
+    error: DocumentAiEditFailedCode;
+    /**
+     * What to do next; the cause is logged, never returned.
+     */
+    message: string;
+};
+
+/**
+ * Error code of an edit that failed after it started.
+ */
+export type DocumentAiEditFailedCode = 'edit_failed';
+
+/**
+ * The editor could not do the edit; nothing changed.
+ */
+export type DocumentAiEditRefused = {
+    /**
+     * Always `edit_refused`.
+     */
+    error: DocumentAiEditRefusedCode;
+    /**
+     * Why, in the editor's words: what it needs to know or cannot do.
+     */
+    reason: string;
+};
+
+/**
+ * Error code of an edit the editor refused.
+ */
+export type DocumentAiEditRefusedCode = 'edit_refused';
+
+/**
+ * What to change, in words.
+ */
+export type DocumentAiEditRequest = {
+    /**
+     * Run the single-model fast pipeline, for one small, contained edit.
+     */
+    fast?: boolean;
+    /**
+     * Natural-language instructions. Name the section or quote the text to
+     * change, describe the outcome, and say what must stay as it is.
+     */
+    instructions: string;
+};
+
+/**
+ * A completed edit by instructions.
+ */
+export type DocumentAiEdited = {
+    /**
+     * What the editor needs to know to finish, when it applied part of the
+     * edit and stopped; the applied part stays.
+     */
+    clarification?: string | null;
+    /**
+     * The document's version after the edit, as sync-service encodes it.
+     */
+    revision: string;
 };
 
 /**
@@ -21515,6 +21599,65 @@ export type SaveDocumentHandlerResponses = {
 };
 
 export type SaveDocumentHandlerResponse = SaveDocumentHandlerResponses[keyof SaveDocumentHandlerResponses];
+
+export type EditDocumentWithAiData = {
+    body: DocumentAiEditRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/ai-edit';
+};
+
+export type EditDocumentWithAiErrors = {
+    /**
+     * Not a markdown document, or empty instructions
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * AI allowance exhausted
+     */
+    402: AiAdmissionErrorBody;
+    /**
+     * Document edit access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The editor could not do the edit; nothing changed
+     */
+    422: DocumentAiEditRefused;
+    /**
+     * The edit could not start
+     */
+    500: ErrorResponse;
+    /**
+     * The edit failed and may have partly applied
+     */
+    502: DocumentAiEditFailed;
+    /**
+     * AI usage validation unavailable; retry later
+     */
+    503: AiAdmissionErrorBody;
+};
+
+export type EditDocumentWithAiError = EditDocumentWithAiErrors[keyof EditDocumentWithAiErrors];
+
+export type EditDocumentWithAiResponses = {
+    200: DocumentAiEdited;
+};
+
+export type EditDocumentWithAiResponse = EditDocumentWithAiResponses[keyof EditDocumentWithAiResponses];
 
 export type GetDocumentBranchNameData = {
     body?: never;

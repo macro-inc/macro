@@ -436,6 +436,7 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
             macro_bundle_updater_plugin::inbound::plugin::grant_bundle_update,
             macro_bundle_updater_plugin::inbound::plugin::perform_update,
             macro_bundle_updater_plugin::inbound::plugin::ack_bundle_update_reload,
+            macro_bundle_updater_plugin::inbound::plugin::set_bundle_reload_hold,
             macro_bundle_updater_plugin::inbound::plugin::check_for_update,
             macro_bundle_updater_plugin::inbound::plugin::get_bundle_debug_info,
             macro_bundle_updater_plugin::inbound::plugin::get_bundle_update_status,
@@ -683,6 +684,7 @@ fn emit_navigate_for_deep_link(url: Url, handle: &AppHandle) -> Result<(), Repor
     let payload = NavigatePayload {
         path: macro_scheme.0.path(),
         query: macro_scheme.0.query().unwrap_or_default(),
+        fragment: macro_scheme.0.fragment(),
     };
     // we send a navigate event instead of calling navigate directly
     // because navigate performs a full browser navigation

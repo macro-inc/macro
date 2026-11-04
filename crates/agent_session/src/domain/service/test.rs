@@ -818,6 +818,10 @@ impl AgentSessionRepo for BlockingPromptLogs {
         self.repo.set_turn_prompter(id, prompter).await
     }
 
+    async fn add_follower(&self, id: AgentSessionId, user: &MacroUserIdStr<'static>) -> Result<()> {
+        self.repo.add_follower(id, user).await
+    }
+
     async fn turn_prompter(
         &self,
         id: AgentSessionId,
