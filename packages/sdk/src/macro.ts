@@ -1,8 +1,8 @@
 import type { MacroOpts } from './config';
+import { AccountManagerNamespace } from './entities/account-managers/namespace';
 import { AgentSessionNamespace } from './entities/agent-sessions/namespace';
 import { AgentNamespace } from './entities/agents/namespace';
 import { AiNamespace } from './entities/ai/namespace';
-import { AccountManagerNamespace } from './entities/account-managers/namespace';
 import { ApiKeyNamespace } from './entities/api-keys/namespace';
 import { BotsNamespace } from './entities/bots/namespace';
 import { CalendarNamespace } from './entities/calendar/namespace';
