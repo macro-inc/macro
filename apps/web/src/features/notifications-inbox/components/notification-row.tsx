@@ -35,7 +35,8 @@ export type NotificationRowProps = {
  * who did what. Choosing it opens it. Several notifications show as a stack with
  * paper edges, and its own button unfolds them below the card, which they
  * continue. With a pointer, the time and Mark done appear on hover; touch shows
- * the time and marks done by swiping the row.
+ * the time and marks done by swiping the row. A phone runs the card edge to edge
+ * with less padding, and larger text.
  */
 export function NotificationRow(props: NotificationRowProps) {
   const isStack = () => props.count > 1;
@@ -49,9 +50,9 @@ export function NotificationRow(props: NotificationRowProps) {
       data-stack={isStack() ? '' : undefined}
       data-unfolded={isOpen() ? '' : undefined}
       class={cn(
-        'group/notification relative w-full min-w-0 flex-1 px-3',
-        isStack() && !props.unfolded && 'pb-5',
-        !isStack() && 'pb-2.5'
+        'group/notification relative w-full min-w-0 flex-1 px-3 mobile:px-0',
+        isStack() && !props.unfolded && 'pb-5 mobile:pb-4.5',
+        !isStack() && 'pb-2.5 mobile:pb-2'
       )}
       onMouseMove={() => props.onHover()}
       onClick={(event) => props.onClick(event)}
@@ -59,14 +60,14 @@ export function NotificationRow(props: NotificationRowProps) {
       <div
         role="gridcell"
         class={cn(
-          'relative z-1 border',
+          'relative z-1 border mobile:rounded-none mobile:border-x-0',
           isOpen() ? 'rounded-t-xl border-b-0' : 'rounded-xl',
           props.highlighted
             ? 'border-edge-frame bg-control-raised'
             : 'border-edge-button bg-control not-touch:hover:bg-surface-3'
         )}
       >
-        <div class="flex gap-2.5 px-3 py-3 touch:min-h-[44px]">
+        <div class="flex gap-2.5 px-3 py-3 touch:min-h-[44px] mobile:py-2">
           <span class="shrink-0" data-card-avatar="">
             {props.icon}
           </span>
@@ -76,7 +77,7 @@ export function NotificationRow(props: NotificationRowProps) {
               <span
                 data-card-title=""
                 class={cn(
-                  'min-w-0 flex-1 truncate text-sm',
+                  'min-w-0 flex-1 truncate text-sm mobile:text-base',
                   props.unseen ? 'font-medium text-ink' : 'text-ink-muted'
                 )}
               >
@@ -97,7 +98,7 @@ export function NotificationRow(props: NotificationRowProps) {
             </div>
             <div
               class={cn(
-                'mt-[3px] flex min-w-0 items-center gap-2 text-xs',
+                'mt-[3px] flex min-w-0 items-center gap-2 text-xs mobile:text-[13px] mobile:leading-[18px]',
                 props.unseen
                   ? 'text-ink-extra-muted'
                   : 'text-ink-extra-muted/80'
@@ -134,7 +135,7 @@ export function NotificationRow(props: NotificationRowProps) {
                     props.onToggleStack();
                   }}
                 >
-                  <span class="font-normal text-ink-extra-muted tabular-nums">
+                  <span class="font-normal text-ink-extra-muted tabular-nums mobile:text-[13px]">
                     {props.count}
                   </span>
                   <CaretDownIcon
@@ -175,11 +176,13 @@ export function NotificationRow(props: NotificationRowProps) {
       <Show when={isStack() && !props.unfolded}>
         <div
           aria-hidden="true"
-          class="absolute inset-x-[19px] h-[5px] rounded-b-[9px] border border-t-0 border-edge-button bg-control/60"
+          data-stack-edge=""
+          class="absolute inset-x-[19px] h-[5px] rounded-b-[9px] border border-t-0 border-edge-button bg-control/60 mobile:inset-x-[7px]"
         />
         <div
           aria-hidden="true"
-          class="absolute inset-x-[26px] mt-[5px] h-[5px] rounded-b-[9px] border border-t-0 border-edge-button bg-control/30"
+          data-stack-edge=""
+          class="absolute inset-x-[26px] mt-[5px] h-[5px] rounded-b-[9px] border border-t-0 border-edge-button bg-control/30 mobile:inset-x-[14px]"
         />
       </Show>
     </div>

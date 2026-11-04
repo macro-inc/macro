@@ -625,15 +625,15 @@ export function NotificationsView(props: NotificationsViewProps) {
       <Match when={!filters.showsNothing() && view().t === 'loading'}>
         <ListSkeleton.Root
           label={t('notificationsInbox.loading')}
-          class="px-3 touch:pt-(--mobile-content-inset-top)"
+          class="px-3 touch:pt-(--mobile-content-inset-top) mobile:px-0"
         >
-          <div class="flex h-7 items-center px-[13px]">
+          <div class="flex h-7 items-center px-[13px] mobile:px-3">
             <ListSkeleton.Bar class="h-2 w-16" />
           </div>
           <For each={[0, 1, 2, 3, 4]}>
             {() => (
-              <ListSkeleton.Row class="mb-2.5 h-[63px] gap-2.5 rounded-xl px-[13px]">
-                <ListSkeleton.Bar class="size-6 shrink-0 rounded-full" />
+              <ListSkeleton.Row class="mb-2.5 h-[63px] gap-2.5 rounded-xl px-[13px] mobile:mb-2 mobile:h-[63px] mobile:rounded-none mobile:px-3">
+                <ListSkeleton.Bar class="size-6 shrink-0 rounded-full mobile:size-10" />
                 <div class="flex min-w-0 flex-1 flex-col gap-2">
                   <ListSkeleton.Bar class="w-1/2" />
                   <ListSkeleton.Bar class="w-4/5" />

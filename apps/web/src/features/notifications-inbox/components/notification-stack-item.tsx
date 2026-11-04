@@ -35,20 +35,23 @@ export function NotificationStackItem(props: NotificationStackItemProps) {
       role="row"
       aria-selected={props.highlighted}
       data-stack-item=""
-      class={cn('relative w-full min-w-0 flex-1 px-3', props.last && 'pb-2.5')}
+      class={cn(
+        'relative w-full min-w-0 flex-1 px-3 mobile:px-0',
+        props.last && 'pb-2.5 mobile:pb-2'
+      )}
       onMouseMove={() => props.onHover()}
       onClick={(event) => props.onClick(event)}
     >
       <div
         role="gridcell"
         class={cn(
-          'overflow-hidden border-x border-t border-edge-button bg-control',
+          'overflow-hidden border-x border-t border-edge-button bg-control mobile:rounded-none mobile:border-x-0',
           props.last && 'rounded-b-xl border-b'
         )}
       >
         <div
           class={cn(
-            'flex gap-2.5 px-3 py-2.5 touch:min-h-[44px]',
+            'flex gap-2.5 px-3 py-2.5 touch:min-h-[44px] mobile:py-2',
             props.highlighted
               ? 'bg-control-raised'
               : 'not-touch:hover:bg-surface-3'
@@ -56,11 +59,11 @@ export function NotificationStackItem(props: NotificationStackItemProps) {
         >
           <span class="shrink-0">{props.icon}</span>
           <div class="min-w-0 flex-1">
-            <div class="flex gap-2 text-xs text-ink-extra-muted/80">
+            <div class="flex gap-2 text-xs text-ink-extra-muted/80 mobile:text-[13px] mobile:leading-[18px]">
               <span class="min-w-0 flex-1 truncate">{props.by}</span>
               <span class="shrink-0">{props.time}</span>
             </div>
-            <div class="mt-[3px] text-sm text-ink-muted">
+            <div class="mt-[3px] text-sm text-ink-muted mobile:text-base">
               {/* An agent's message can run to many paragraphs and lists. */}
               <StaticMarkdown
                 markdown={props.text}

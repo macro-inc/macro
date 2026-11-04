@@ -1,3 +1,4 @@
+import { isMobile } from '@core/mobile/isMobile';
 import {
   getGithubSenderAvatarUrl,
   isGithubNotificationType,
@@ -25,7 +26,7 @@ const hasKnownSender = (notification: UnifiedNotification) =>
 /**
  * Who a notification is from: their avatar, an initial for a sender Macro only
  * knows by name, such as an email's, or the kind of notification for one that
- * comes from no one, such as a reminder.
+ * comes from no one, such as a reminder. A phone shows it larger.
  */
 export function InboxSenderAvatar(props: {
   notification: UnifiedNotification | undefined;
@@ -41,23 +42,24 @@ export function InboxSenderAvatar(props: {
       ?.trim()
       .charAt(0)
       .toUpperCase();
+  const size = () => (isMobile() ? 'lg' : 'md');
 
   return (
     <Switch
       fallback={
-        <span class="flex size-6 items-center justify-center rounded-full border border-edge-button text-ink-extra-muted">
-          <InboxRowIcon type={props.type} class="size-3.5" />
+        <span class="flex size-6 items-center justify-center rounded-full border border-edge-button text-ink-extra-muted mobile:size-10">
+          <InboxRowIcon type={props.type} class="size-3.5 mobile:size-5" />
         </span>
       }
     >
       <Match when={known()}>
         {(notification) => (
-          <NotificationSenderIcon notification={notification()} size="md" />
+          <NotificationSenderIcon notification={notification()} size={size()} />
         )}
       </Match>
       <Match when={initial()}>
         {(letter) => (
-          <Avatar size="md">
+          <Avatar size={size()}>
             <Avatar.Fallback class="font-semibold">{letter()}</Avatar.Fallback>
           </Avatar>
         )}
