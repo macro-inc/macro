@@ -3,7 +3,12 @@
 //! License: CLDR-LICENSE.txt in this directory. Generated territory="001" entries.
 use chrono_tz::Tz;
 
+/// Graph's own name for UTC, which it gives meetings Exchange imported from
+/// another calendar system's invitation. CLDR does not list it.
+const GRAPH_UTC: &str = "tzone://Microsoft/Utc";
+
 pub(super) fn zone(name: &str) -> Option<Tz> {
+    let name = if name == GRAPH_UTC { "UTC" } else { name };
     let iana = match name {
         "Dateline Standard Time" => "Etc/GMT+12",
         "UTC-11" => "Etc/GMT+11",
