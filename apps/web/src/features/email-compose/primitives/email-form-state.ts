@@ -131,11 +131,17 @@ export function createEmailFormState(
   // cannot send from; that default yields to the composer's own-inbox fallback.
   const replyInboxId = () => {
     const inboxId = replyingTo?.link_id;
-    const inboxes = context.inboxes();
-    if (inboxes.length === 0) return inboxId;
-    return inboxes.some((inbox) => inbox.id === inboxId) ? inboxId : undefined;
+    return context.inboxes().some((inbox) => inbox.id === inboxId)
+      ? inboxId
+      : undefined;
   };
   const selectedInboxId = () => chosenInboxId() ?? replyInboxId();
+  // The inbox a reply to a shared thread actually sends from, so recipients
+  // are judged against that inbox's addresses.
+  const sharedReplyInboxId = () =>
+    replyingTo
+      ? (context.primaryInboxId?.() ?? context.inboxes()[0]?.id)
+      : undefined;
   // Reply logic ("did I send this?") must be judged against the inbox the
   // message is sent from, not the account's primary email — otherwise replying
   // from a secondary or delegated inbox misclassifies the sender and picks the
@@ -149,8 +155,7 @@ export function createEmailFormState(
     context
       .inboxes()
       .find(
-        (inbox) =>
-          inbox.id === (chosenInboxId() ?? (draft ?? replyingTo)?.link_id)
+        (inbox) => inbox.id === (selectedInboxId() ?? sharedReplyInboxId())
       );
   const senderEmail = () => {
     const choice = senderChoice();

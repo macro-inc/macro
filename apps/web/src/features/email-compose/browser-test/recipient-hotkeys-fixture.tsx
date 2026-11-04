@@ -190,6 +190,7 @@ function Reply(props: { replyType: ReplyType }) {
             inbox_visible: true,
           }),
           recipientOptions: () => [],
+          ownsThreadInbox: () => true,
           isPersonalReply: () => false,
           onDraftRemoved: () => {},
           exitToThread: () => false,

@@ -110,6 +110,7 @@ export function EmailThreadView(props: EmailThreadViewProps) {
             context={{
               viewerEmail: viewContext.compose.viewerEmail,
               inboxes: viewContext.compose.accounts.inboxes,
+              primaryInboxId: viewContext.compose.accounts.primaryId,
             }}
             formOptions={{
               getMessageById: (id) =>
