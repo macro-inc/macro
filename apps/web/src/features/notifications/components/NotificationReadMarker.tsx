@@ -3,8 +3,11 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { useNonPrimaryEmailLinkIdHeader } from '@queries/email/link';
 import { useMarkThreadAsSeenMutation } from '@queries/email/thread';
 import { debounce } from '@solid-primitives/scheduled';
-import { onMount } from 'solid-js';
-import { markNotificationsForEntityAsReadInBackground } from '../notification-helpers';
+import { onCleanup, onMount } from 'solid-js';
+import {
+  ensureNotificationSourceLoaded,
+  markNotificationsForEntityAsReadInBackground,
+} from '../notification-helpers';
 import type { NotificationSource } from '../notification-source';
 
 const DEFAULT_DEBOUNCE_TIME = 2_000;
@@ -23,7 +26,8 @@ const makeDebouncedMarker = (props: DebouncedMarkerProps): VoidFunction => {
 };
 
 function DebouncedMarker(props: DebouncedMarkerProps) {
-  const triggerDebounce = makeDebouncedMarker(props);
+  const triggerDebounce =
+    props.debounceTime === 0 ? props.debouncedFn : makeDebouncedMarker(props);
 
   onMount(() => {
     triggerDebounce();
@@ -32,51 +36,59 @@ function DebouncedMarker(props: DebouncedMarkerProps) {
   return '';
 }
 
-/**
- * Debounced component that marks a notification as read
- * @param props
- * @returns
- */
-export function DebouncedNotificationReadMarker(props: {
+/** Mark ready content read on mount; channel callers can retain their delay. */
+export function NotificationReadMarker(props: {
   notificationSource: NotificationSource;
   debounceTime?: number;
   entity: Entity;
 }) {
   if (props.entity.type === 'email') {
     return (
-      <EmailDebouncedReadMarker
+      <EmailReadMarker
         notificationSource={props.notificationSource}
-        debounceTime={props.debounceTime}
+        debounceTime={props.debounceTime ?? 0}
         threadId={props.entity.id}
       />
     );
   }
 
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
+  const markRead = async () => {
+    const entity = props.entity;
+    if (props.notificationSource._notificationsQuery.transport === 'rest') {
+      await ensureNotificationSourceLoaded(props.notificationSource);
+    }
+    if (
+      disposed ||
+      props.entity.id !== entity.id ||
+      props.entity.type !== entity.type
+    )
+      return;
+    await markNotificationsForEntityAsReadInBackground(
+      props.notificationSource,
+      entity
+    );
+  };
   return (
     <DebouncedMarker
-      debounceTime={props.debounceTime}
-      debouncedFn={() => {
-        fireAndForget(
-          markNotificationsForEntityAsReadInBackground(
-            props.notificationSource,
-            props.entity
-          ),
-          'notification-read'
-        );
-      }}
+      debounceTime={props.debounceTime ?? 0}
+      debouncedFn={() => fireAndForget(markRead(), 'notification-read')}
     />
   );
 }
 
-export function DocumentDebouncedNotificationReadMarker(props: {
+export function DocumentNotificationReadMarker(props: {
   notificationSource: NotificationSource;
   debounceTime?: number;
   documentId: string;
 }) {
   return (
-    <DebouncedNotificationReadMarker
+    <NotificationReadMarker
       notificationSource={props.notificationSource}
-      debounceTime={props.debounceTime}
+      debounceTime={props.debounceTime ?? 0}
       entity={{
         type: 'document',
         id: props.documentId,
@@ -112,9 +124,9 @@ export function ChannelDebouncedNotificationReadMarker(
   props: ChannelDebouncedNotificationReadMarkerProps
 ) {
   return (
-    <DebouncedNotificationReadMarker
+    <NotificationReadMarker
       notificationSource={props.notificationSource}
-      debounceTime={props.debounceTime}
+      debounceTime={props.debounceTime ?? DEFAULT_DEBOUNCE_TIME}
       entity={{
         type: 'channel',
         id: props.channelId,
@@ -123,7 +135,7 @@ export function ChannelDebouncedNotificationReadMarker(
   );
 }
 
-export function EmailDebouncedReadMarker(props: {
+export function EmailReadMarker(props: {
   notificationSource: NotificationSource;
   debounceTime?: number;
   threadId: string;
@@ -134,24 +146,21 @@ export function EmailDebouncedReadMarker(props: {
   const toHeaderLinkId = useNonPrimaryEmailLinkIdHeader();
 
   return (
-    <DebouncedMarker
-      debounceTime={props.debounceTime}
-      debouncedFn={() => {
-        fireAndForget(
-          markNotificationsForEntityAsReadInBackground(
-            props.notificationSource,
-            {
-              type: 'email_thread',
-              id: props.threadId,
-            }
-          ),
-          'notification-read'
-        );
-        markSeenMutation.mutate({
-          threadId: props.threadId,
-          linkId: toHeaderLinkId(props.linkId),
-        });
-      }}
-    />
+    <>
+      <NotificationReadMarker
+        notificationSource={props.notificationSource}
+        debounceTime={props.debounceTime}
+        entity={{ type: 'email_thread', id: props.threadId }}
+      />
+      <DebouncedMarker
+        debounceTime={props.debounceTime ?? 0}
+        debouncedFn={() =>
+          markSeenMutation.mutate({
+            threadId: props.threadId,
+            linkId: toHeaderLinkId(props.linkId),
+          })
+        }
+      />
+    </>
   );
 }

@@ -1,4 +1,6 @@
 import { usePending } from '@app/observability/flow';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { QueuedSendStatus } from '../../email-compose/queued-send-status';
 import '@entity/composed/ListEntity.css';
 import {
@@ -135,6 +137,7 @@ export function EmailList(props: EmailListProps) {
   } = useEmailView();
   usePending('email.list.items', () => source.isLoading());
   const panel = useSplitPanelOrThrow();
+  const notificationSource = useGlobalNotificationSource();
 
   function openEntity(
     entity: EntityData,
@@ -143,6 +146,7 @@ export function EmailList(props: EmailListProps) {
       openInNewSplit?: boolean;
     } = {}
   ) {
+    markRowNotificationsSeenOnOpen(entity, notificationSource);
     const finishTouchHighlight = options.event
       ? persistSoupNavigationTouchHighlight(options.event)
       : undefined;
