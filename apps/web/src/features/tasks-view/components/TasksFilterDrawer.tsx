@@ -2,13 +2,11 @@ import type { ListControlOption } from '@app/components/view-shell/ListDropdowns
 import { MobileFilterDrawer } from '@app/components/view-shell/MobileFilterDrawer';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import { Accordion } from '@kobalte/core/accordion';
 import { Key } from '@solid-primitives/keyed';
-import { Button, cn, type DialogHandle, Input } from '@ui';
+import { type DialogHandle, Input } from '@ui';
 import {
   type Accessor,
-  batch,
   createMemo,
   createSignal,
   For,
@@ -34,14 +32,6 @@ export function TasksFilterDrawer() {
   const [expandedSections, setExpandedSections] = createSignal<string[]>([
     filters.groups()[0]?.id ?? 'status',
   ]);
-  let assigneeInput: HTMLInputElement | undefined;
-  const navigateAssignees = (onSelect: () => void) => {
-    batch(() => {
-      setAssigneeSearch('');
-      onSelect();
-    });
-    assigneeInput?.focus();
-  };
   const setOpen = (value: boolean) => {
     filters
       .groups()
@@ -227,36 +217,6 @@ export function TasksFilterDrawer() {
                         </MobileFilterDrawer.Option>
                       )}
                     </For>
-                    <Show when={group().action}>
-                      {(action) => (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          class={cn('justify-start', action().class)}
-                          onPointerDown={(event) => event.preventDefault()}
-                          onMouseDown={(event) => event.preventDefault()}
-                          onClick={() => navigateAssignees(action().onSelect)}
-                        >
-                          {action().label}
-                        </Button>
-                      )}
-                    </Show>
-                    <Show when={group().navigation?.back}>
-                      {(back) => (
-                        <div class="border-t border-edge-muted p-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onPointerDown={(event) => event.preventDefault()}
-                            onMouseDown={(event) => event.preventDefault()}
-                            onClick={() => navigateAssignees(back().onSelect)}
-                          >
-                            <ArrowLeftIcon class="size-4" />
-                            {back().label}
-                          </Button>
-                        </div>
-                      )}
-                    </Show>
                     {group().footer}
                   </>
                 );
@@ -270,7 +230,6 @@ export function TasksFilterDrawer() {
                     <Show when={group().id === 'assignees'}>
                       <div class="flex items-center gap-2 px-3 pb-2">
                         <Input
-                          ref={assigneeInput}
                           class="min-w-0 flex-1"
                           aria-label={group().searchPlaceholder}
                           placeholder={group().searchPlaceholder}

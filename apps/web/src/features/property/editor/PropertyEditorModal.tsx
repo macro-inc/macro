@@ -9,7 +9,6 @@ import {
   useListKeyBindings,
 } from '@core/util/useListKeyBindings';
 import { type EntityData, InlineEntity, isTaskEntity } from '@entity';
-import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
 import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import PropertiesIcon from '@icon/system/regular/sliders-horizontal.svg';
@@ -51,7 +50,6 @@ import type { PropertyOptionResponse } from '@service-properties/generated/schem
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
 import { mergeRefs } from '@solid-primitives/refs';
 import {
-  Button,
   CommandMenuEmptyState,
   CommandMenuList,
   CommandMenuSearchInput,
@@ -271,14 +269,6 @@ export function PropertyEditorDialog(props: {
     createSignal<string | null>(null);
   const defaultPlaceholder = 'Choose a property...';
   const [placeholder, setPlaceholder] = createSignal('');
-  const [footerAction, setFooterAction] = createSignal<{
-    label: string;
-    onSelect: () => void;
-  }>();
-  let searchInputRef: HTMLInputElement | undefined;
-  const updateFooterAction = (
-    action: { label: string; onSelect: () => void } | undefined
-  ) => setFooterAction(action);
   let editorRevision = 0;
   onCleanup(() => editorRevision++);
 
@@ -357,7 +347,6 @@ export function PropertyEditorDialog(props: {
       setSearchValue('');
       setPlaceholder('');
       setInputType('text');
-      setFooterAction(undefined);
     })
   );
 
@@ -378,9 +367,6 @@ export function PropertyEditorDialog(props: {
           </span>
           <SearchInput
             placeHolder={placeholder() || defaultPlaceholder}
-            inputRef={(element) => {
-              searchInputRef = element;
-            }}
             value={searchValue}
             setValue={setSearchValue}
             focusedIndex={selectedIndex}
@@ -438,7 +424,6 @@ export function PropertyEditorDialog(props: {
                 setSelectedIndex={setSelectedIndex}
                 setKeybindings={keybindings}
                 setPlaceholder={setPlaceholder}
-                setFooterAction={updateFooterAction}
                 setInputType={setInputType}
                 onSave={handlePropertySave}
                 selectedEntities={props.state.selectedEntities}
@@ -457,26 +442,6 @@ export function PropertyEditorDialog(props: {
             </Match>
           </Switch>
         </CommandMenuShell.Body>
-        <Show when={footerAction()}>
-          {(action) => (
-            <CommandMenuShell.Footer>
-              <Button
-                variant="ghost"
-                size="sm"
-                onPointerDown={(event) => event.preventDefault()}
-                onMouseDown={(event) => event.preventDefault()}
-                onKeyDown={(event) => event.stopPropagation()}
-                onClick={() => {
-                  action().onSelect();
-                  searchInputRef?.focus();
-                }}
-              >
-                <ArrowLeftIcon class="size-4" />
-                {action().label}
-              </Button>
-            </CommandMenuShell.Footer>
-          )}
-        </Show>
       </CommandMenuShell>
       <Show when={createPropertyInitialName()}>
         {(initialName) => (
@@ -501,7 +466,6 @@ function SearchInput(props: {
   setFocusedIndex: Setter<number>;
   onKeyDown?: (e: KeyboardEvent) => void;
   inputType?: 'text' | 'number';
-  inputRef?: (element: HTMLInputElement) => void;
 }) {
   let inputRef: HTMLInputElement | undefined;
 
@@ -511,10 +475,7 @@ function SearchInput(props: {
 
   return (
     <CommandMenuSearchInput
-      ref={(element) => {
-        inputRef = element;
-        props.inputRef?.(element);
-      }}
+      ref={inputRef}
       type={props.inputType ?? 'text'}
       class="text-base"
       placeholder={props.placeHolder}
@@ -1351,9 +1312,6 @@ function PropertyValueEditor(props: {
   setSelectedIndex: Setter<number>;
   setKeybindings: (binding: ListNavActions) => void;
   setPlaceholder: Setter<string>;
-  setFooterAction: (
-    action: { label: string; onSelect: () => void } | undefined
-  ) => void;
   setInputType: Setter<'text' | 'number'>;
   onSave: (
     apiValues: PropertyApiValues,
@@ -1424,13 +1382,11 @@ function PropertyValueEditor(props: {
         <EntityPropertyEditor
           property={resolvedProperty()}
           searchValue={props.searchValue}
-          setSearchValue={props.setSearchValue}
           selectedIndex={props.selectedIndex}
           setSelectedIndex={props.setSelectedIndex}
           onSubmit={handleSubmit}
           setKeybindings={props.setKeybindings}
           setPlaceholder={props.setPlaceholder}
-          setFooterAction={props.setFooterAction}
           selectedEntityCount={
             props.properties ? 1 : props.selectedEntities.length
           }

@@ -40,7 +40,6 @@ function DesktopTasksControls() {
 
   const handleMenuOpenChange =
     (menu: 'filters' | 'sort') => (open: boolean) => {
-      if (menu === 'filters' && !open) filters.resetAssigneeDiscovery();
       setOpenMenu((current) => {
         if (open) return menu;
         return current === menu ? undefined : current;

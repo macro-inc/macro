@@ -37,22 +37,6 @@ vi.mock('@property/queries/agent-assignees', () => ({
     },
   ],
 }));
-vi.mock('@queries/contacts/contacts', () => ({
-  useContacts: () => () => [
-    {
-      id: 'macro|first@example.com',
-      email: 'first@example.com',
-      name: 'First',
-    },
-    {
-      id: 'macro|second@example.com',
-      email: 'second@example.com',
-      name: 'Second',
-    },
-  ],
-  useContactsQuery: () => ({ isSuccess: true }),
-}));
-
 const categories: FilterCategory[] = [
   {
     id: 'type',
@@ -110,22 +94,18 @@ describe('Assignee filter ordering', () => {
     });
   });
 
-  it('keeps contact rows stable until revisiting the contacts view', () => {
+  it('retains selected outsiders without offering unrelated contacts', () => {
     createRoot((dispose) => {
-      const [ids, setIds] = createSignal<string[]>([]);
+      const [ids, setIds] = createSignal(['macro|outside@example.com']);
       const picker = useAssigneePicker(ids, () => true);
       picker.onOpenChange(true);
-      picker.setDiscovering(true);
-      const initial = picker.options().map((option) => option.id);
-      setIds(['macro|second@example.com']);
-      expect(picker.options().map((option) => option.id)).toEqual(initial);
-      picker.setDiscovering(false);
-      expect(picker.options()[0].id).toBe('macro|second@example.com');
-      picker.setDiscovering(true);
-      expect(picker.options().map((option) => option.id)).toEqual([
-        'macro|second@example.com',
-        'macro|first@example.com',
-      ]);
+      expect(picker.options()[0].id).toBe('macro|outside@example.com');
+      setIds([]);
+      expect(
+        picker
+          .options()
+          .some((option) => option.id === 'macro|outside@example.com')
+      ).toBe(false);
       dispose();
     });
   });

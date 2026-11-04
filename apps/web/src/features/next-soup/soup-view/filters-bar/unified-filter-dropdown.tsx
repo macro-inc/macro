@@ -21,7 +21,7 @@ import {
   useSoupView,
 } from '@app/features/next-soup/soup-view/soup-view-context';
 import {
-  AssigneeDiscoveryStatus,
+  AssigneePickerStatus,
   buildContactLabel,
   useAssigneePicker,
 } from '@app/features/soup/assignee-picker';
@@ -553,7 +553,6 @@ export const UnifiedFilterDropdown = (
   const [internalOpen, setInternalOpen] = createSignal(false);
   const open = () => props.open?.() ?? internalOpen();
   const setOpen = (v: boolean) => {
-    if (!v) assigneePicker.setDiscovering(false);
     setInternalOpen(v);
     props.onOpenChange?.(v);
   };
@@ -901,11 +900,7 @@ export const UnifiedFilterDropdown = (
                       onChange={handleAssigneeChange}
                       placeholder={assigneePicker.placeholder()}
                       preserveOrder
-                      action={assigneePicker.action()}
-                      navigation={assigneePicker.navigation()}
-                      footer={
-                        <AssigneeDiscoveryStatus discovery={assigneePicker} />
-                      }
+                      footer={<AssigneePickerStatus picker={assigneePicker} />}
                       onOpenChange={assigneePicker.onOpenChange}
                     />
                   </Show>

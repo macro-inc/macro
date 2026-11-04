@@ -1184,29 +1184,20 @@ with the PR's status, title, `owner/repo#N`, and line changes. Clicking it opens
 Macro in a new split (in place on touch devices); a PR Macro has not synced yet opens on
 GitHub instead.
 
-Assignees initially lists and searches current team members and available agents,
-with the **Search team...** placeholder.
-Selected assignees appear first when opening or revisiting the picker, followed
-by agents, then team members. Rows stay in place while selecting or deselecting.
-Choose the compact **Find contacts** action to switch directly to eligible non-team
-people from the existing contacts pool. That view excludes agents and teammates,
-including selected ones, without removing their assignments. Search changes to
-**Search contacts**; the compact footer **Back to team** action with a left
-arrow returns to the team view.
-Both directions clear the query and keep search focused without animation. An
-empty pool shows **No contacts available.** Selected outsiders remain visible
-and removable in the main view, including references absent from contacts. Each
-opening starts in team mode. Discovery does not invite arbitrary emails or select
-CRM-only contacts.
-Removing an outsider removes their row from team mode; use discovery to add them again.
+Assignees lists and searches current team members and available agents, with the
+**Search team...** placeholder. Selected assignees appear first when opening the
+picker, followed by agents, then team members. Rows stay in place while selecting
+or deselecting. Existing selected outsiders remain visible and removable,
+including references absent from contacts. The picker has no contact discovery;
+a removed outsider cannot be added again unless they join the team.
 
 The same scope applies to task/project creation and editing, bulk Set assignee,
 and desktop/mobile Assignee filters. Existing **Me** and **Unassigned** choices
 keep their semantics; Created by and custom people fields keep their contact lists.
-Check that a teammate absent from contacts appears by default, that an unselected
-outsider requires discovery even when searching by email, and that a selected
-outsider can be removed without discovery. Repeat with keyboard navigation and a
-touch picker sheet; Cancel still discards drafts and Done still applies them.
+Check that a teammate absent from contacts appears and can be selected, that
+searching by email cannot select an unassigned outsider, and that an existing
+outsider can be removed. Repeat with keyboard navigation and a touch picker
+sheet; Cancel still discards drafts and Done still applies them.
 
 The Assignees picker offers people and available agents together. Agent rows show
 their name and an `Agent` label; saved agents also show their `@handle`. Search by

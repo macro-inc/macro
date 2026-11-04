@@ -22,7 +22,7 @@ import {
 } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import {
-  AssigneeDiscoveryStatus,
+  AssigneePickerStatus,
   useAssigneePicker,
 } from '@app/features/soup/assignee-picker';
 import { t } from '@app/lib/i18n';
@@ -169,7 +169,7 @@ export function useFilterRefinements() {
         label: t('viewMenus.unassigned'),
         icon: () => <CircleDashedIcon class="size-3 text-ink-muted" />,
       });
-      for (const option of assigneePicker.allOptions()) {
+      for (const option of assigneePicker.options()) {
         map.set(option.id, { label: option.label, icon: option.icon });
       }
       return map;
@@ -608,10 +608,8 @@ export function useFilterRefinements() {
             values: getValues,
             searchableOptions: assigneePicker.options,
             preserveOptionOrder: true,
-            searchAction: assigneePicker.action,
-            searchNavigation: assigneePicker.navigation,
             get searchFooter() {
-              return <AssigneeDiscoveryStatus discovery={assigneePicker} />;
+              return <AssigneePickerStatus picker={assigneePicker} />;
             },
             activeSearchableIds: assigneeFilter,
             onSearchableChange: handleAssigneeChange,

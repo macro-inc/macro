@@ -19,7 +19,7 @@ import {
 } from '@app/features/next-soup/soup-view/sort-options';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import {
-  AssigneeDiscoveryControls,
+  AssigneePickerStatus,
   useAssigneePicker,
 } from '@app/features/soup/assignee-picker';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -35,7 +35,7 @@ import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { Accordion } from '@kobalte/core/accordion';
 import { useContacts } from '@queries/contacts/contacts';
-import { batch, createMemo, createSignal, For, Show } from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import { ConsolidatedFilterChip } from './consolidated-filter-chip';
 import { useInboxPicker } from './inbox-picker';
 import {
@@ -77,14 +77,6 @@ export const MobileFilterDrawer = (props: {
     assigneeFilter,
     () => currentView() === 'tasks'
   );
-  let assigneeInput: HTMLInputElement | undefined;
-  const navigateAssignees = (discovering: boolean) => {
-    batch(() => {
-      setAssigneeSearch('');
-      assigneePicker.setDiscovering(discovering);
-    });
-    assigneeInput?.focus();
-  };
 
   const categories = createMemo(() => {
     const view = currentView();
@@ -458,7 +450,6 @@ export const MobileFilterDrawer = (props: {
               <div class="flex min-h-11 items-center gap-2 rounded-[20px] px-3 py-2 bg-ink/5 mb-1">
                 <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
                 <input
-                  ref={assigneeInput}
                   type="text"
                   aria-label={assigneePicker.placeholder()}
                   value={assigneeSearch()}
@@ -483,23 +474,12 @@ export const MobileFilterDrawer = (props: {
                   }}
                 </For>
               </div>
-              <Show
-                when={
-                  filteredAssigneeOptions().length === 0 &&
-                  (!assigneePicker.discovering() ||
-                    !assigneePicker.otherPeopleEmpty())
-                }
-              >
+              <Show when={filteredAssigneeOptions().length === 0}>
                 <div class="px-4 py-2 text-sm text-ink-muted">
                   {t('viewMenus.noResults')}
                 </div>
               </Show>
-              <AssigneeDiscoveryControls
-                discovery={assigneePicker}
-                onNavigate={() =>
-                  navigateAssignees(!assigneePicker.discovering())
-                }
-              />
+              <AssigneePickerStatus picker={assigneePicker} />
             </FilterDrawer.Section>
           </Show>
 

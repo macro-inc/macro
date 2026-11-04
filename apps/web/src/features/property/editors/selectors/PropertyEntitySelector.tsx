@@ -18,10 +18,9 @@ import { useSearchInputFocus } from '@property/utils';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { debounce } from '@solid-primitives/scheduled';
-import { Button, cn } from '@ui';
+import { cn } from '@ui';
 import * as EmailValidator from 'email-validator';
 import {
-  batch,
   createEffect,
   createMemo,
   createSignal,
@@ -60,8 +59,6 @@ type EntityInputProps = {
   onCancel?: () => void;
   /** Caller-prioritized ids stay ahead of other matching entities. */
   priorityIds?: ReadonlySet<string>;
-  /** Optional action row, reachable through the same keyboard navigation. */
-  action?: { label: string; icon?: () => JSX.Element; onSelect: () => void };
   /** Override empty-result content; null hides the default message. */
   emptyState?: JSX.Element;
 };
@@ -126,9 +123,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const [inputValue, setInputValue] = createSignal('');
   const [searchTerm, setSearchTerm] = createSignal('');
   const [selectedIndex, setSelectedIndex] = createSignal(0);
-  const [openedSelectedIds, setOpenedSelectedIds] = createSignal(
-    new Set(props.selectedOptions())
-  );
+  const openedSelectedIds = new Set(props.selectedOptions());
   const keyboardMode = useKeyPressed(100);
 
   let scrollContainerRef: HTMLDivElement | undefined;
@@ -141,22 +136,6 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   createEffect(() => debouncedSetSearchTerm(inputValue()));
 
   let searchInputRef!: HTMLInputElement;
-  const navigate = (onSelect: () => void) => {
-    debouncedSetSearchTerm.clear();
-    batch(() => {
-      setInputValue('');
-      setSearchTerm('');
-      setSelectedIndex(0);
-      setOpenedSelectedIds(new Set(props.selectedOptions()));
-      onSelect();
-    });
-    searchInputRef.focus();
-    if (scrollContainerRef) scrollContainerRef.scrollTop = 0;
-  };
-  const runAction = () => {
-    const action = props.action;
-    if (action) navigate(action.onSelect);
-  };
 
   // Get self-filter context from config
   const selfFilterEntityType = () => props.config.selfFilter?.entityType;
@@ -333,7 +312,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       ? prioritizeEntities(
           entitySearch(allEntities, term).map((result) => result.item),
           props.priorityIds,
-          props.priorityIds ? openedSelectedIds() : undefined
+          props.priorityIds ? openedSelectedIds : undefined
         )
           .slice(0, MAX_SEARCH_RESULTS)
           .filter(excludeFilter)
@@ -361,10 +340,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const sortedEntities = useSelectedFirst({
     items: filteredEntities,
     allItems: entities,
-    selectedIds: openedSelectedIds,
+    selectedIds: () => openedSelectedIds,
     searchQuery: searchTerm,
     getId: (e: CombinedEntity) => e.id,
-    sortDeps: [openedSelectedIds],
   });
 
   const toggleEntity = (entity: CombinedEntity) => {
@@ -402,12 +380,11 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   };
 
   const resultCount = () => sortedEntities().length + (customEmail() ? 1 : 0);
-  const totalCount = () => resultCount() + (props.action ? 1 : 0);
 
   // Reset selected index to top when search term or list changes
   createEffect(() => {
     searchTerm(); // track search term changes
-    totalCount(); // track list size changes
+    resultCount(); // track list size changes
     setSelectedIndex(0);
   });
 
@@ -430,7 +407,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       isEditableInput(e.target)
     )
       return;
-    const total = totalCount();
+    const total = resultCount();
     if (total === 0) return;
 
     if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'j')) {
@@ -445,8 +422,6 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       if (idx < sortedEntities().length) {
         const entity = sortedEntities()[idx];
         if (entity) toggleEntity(entity);
-      } else if (props.action && idx === resultCount()) {
-        runAction();
       } else {
         const entity = customEmailEntity();
         if (entity) toggleEntity(entity);
@@ -477,8 +452,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       return (
         previous &&
         current &&
-        openedSelectedIds().has(previous.id) &&
-        !openedSelectedIds().has(current.id)
+        openedSelectedIds.has(previous.id) &&
+        !openedSelectedIds.has(current.id)
       );
     };
 
@@ -665,26 +640,6 @@ export function PropertyEntitySelector(props: EntityInputProps) {
               </Show>
             </div>
           )}
-        </Show>
-        <Show when={props.action}>
-          <div
-            class="shrink-0 border-t border-edge-muted p-1.5"
-            onPointerDown={keepSearchFocus}
-            onMouseDown={keepSearchFocus}
-          >
-            <Button
-              variant="ghost"
-              size="sm"
-              class={cn(selectedIndex() === resultCount() && 'bg-hover')}
-              onClick={runAction}
-              onMouseEnter={() => {
-                if (!keyboardMode()) setSelectedIndex(resultCount());
-              }}
-            >
-              {props.action?.icon?.()}
-              {props.action?.label}
-            </Button>
-          </div>
         </Show>
       </div>
     );

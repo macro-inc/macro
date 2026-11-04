@@ -1,13 +1,11 @@
 import { MobileFilterDrawer } from '@app/components/view-shell/MobileFilterDrawer';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import ChevronDownIcon from '@icon/system/regular/caret-down.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { Accordion } from '@kobalte/core/accordion';
-import { Button, cn } from '@ui';
+import { cn } from '@ui';
 import {
   type Accessor,
-  batch,
   createMemo,
   createSignal,
   For,
@@ -55,14 +53,6 @@ function MultiFacetContent(props: {
 }) {
   const [localQuery, setLocalQuery] = createSignal('');
   const query = () => props.query ?? localQuery();
-  let searchInput: HTMLInputElement | undefined;
-  const navigate = (onSelect: () => void) => {
-    batch(() => {
-      (props.onQueryChange ?? setLocalQuery)('');
-      onSelect();
-    });
-    searchInput?.focus();
-  };
   onMount(() => props.facet.onPickerOpenChange?.(true));
   onCleanup(() => {
     props.onQueryChange?.('');
@@ -125,45 +115,10 @@ function MultiFacetContent(props: {
             );
           }}
         </For>
-        <Show
-          when={
-            options().length === 0 &&
-            (!props.facet.navigation || query().trim())
-          }
-        >
+        <Show when={options().length === 0}>
           <div class="px-4 py-2 text-sm text-ink-muted">No results</div>
         </Show>
       </div>
-      <Show when={props.facet.action?.()}>
-        {(action) => (
-          <Button
-            variant="ghost"
-            size="sm"
-            class={cn('justify-start', action().class)}
-            onPointerDown={(event) => event.preventDefault()}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => navigate(action().onSelect)}
-          >
-            {action().label}
-          </Button>
-        )}
-      </Show>
-      <Show when={props.facet.navigation?.().back}>
-        {(back) => (
-          <div class="border-t border-edge-muted p-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              onPointerDown={(event) => event.preventDefault()}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => navigate(back().onSelect)}
-            >
-              <ArrowLeftIcon class="size-4" />
-              {back().label}
-            </Button>
-          </div>
-        )}
-      </Show>
       {props.facet.footer?.()}
     </>
   );
@@ -205,15 +160,13 @@ function MultiFacetContent(props: {
 
       <Show
         when={
-          props.facet.action ||
-          props.facet.navigation ||
+          props.facet.id === 'task-assignee' ||
           props.facet.options().length > SEARCHABLE_OPTION_COUNT
         }
       >
         <div class="flex min-h-11 items-center gap-2 rounded-[20px] px-3 py-2 bg-ink/5 mb-1">
           <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
           <input
-            ref={searchInput}
             type="text"
             aria-label={props.facet.placeholder}
             value={query()}

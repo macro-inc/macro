@@ -15,8 +15,6 @@ import {
 import {
   SearchableMultiSelectInline,
   type SearchableOption,
-  type SearchableSelectAction,
-  type SearchableSelectNavigation,
 } from './searchable-multi-select';
 
 const mouseTrail: { x: number; y: number; time: number }[] = [];
@@ -387,8 +385,6 @@ export const SearchableFilterSubmenu = (props: {
   onOpenChange?: (v: boolean) => void;
   /** Keep `options` in their given order instead of pinning selected first. */
   preserveOrder?: boolean;
-  action?: SearchableSelectAction;
-  navigation?: SearchableSelectNavigation;
   footer?: JSX.Element;
 }) => {
   const submenu = createFilterSubmenuHover({
@@ -455,8 +451,6 @@ export const SearchableFilterSubmenu = (props: {
             options={props.options}
             inputRef={setInputRef}
             preserveOrder={props.preserveOrder}
-            action={props.action}
-            navigation={props.navigation}
             footer={props.footer}
           />
         </Dropdown.Group>

@@ -2,7 +2,6 @@ import { t } from '@app/lib/i18n';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import type { ListNavActions } from '@core/util/useListKeyBindings';
 import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
-import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import {
   CommandMenuEmptyState,
@@ -11,13 +10,11 @@ import {
 } from '@ui';
 import {
   type Accessor,
-  batch,
   createEffect,
   createMemo,
   createSignal,
   createUniqueId,
   Match,
-  onCleanup,
   type Setter,
   Show,
   Switch,
@@ -30,10 +27,7 @@ import {
   useQuickAccessEntities,
 } from '../editors/selectors/entityUtils';
 import { OptionCheckBox } from '../editors/selectors/OptionCheckBox';
-import {
-  nonTeamUserOptions,
-  scopedUserOptions,
-} from '../editors/selectors/scoped-user-options';
+import { scopedUserOptions } from '../editors/selectors/scoped-user-options';
 import { usePropertyEntityDisplay } from '../hooks/usePropertyEntityDisplay';
 import { useAgentAssignees } from '../queries/agent-assignees';
 import { useTeamMembers } from '../queries/team-members';
@@ -54,7 +48,6 @@ function selectedEntityRefs(
 export function EntityPropertyEditor(props: {
   property?: Property | PropertyDefinitionDomain;
   searchValue: Accessor<string>;
-  setSearchValue: Setter<string>;
   selectedIndex: Accessor<number>;
   setSelectedIndex: Setter<number>;
   onSubmit: (value: EntityReference) => void;
@@ -64,9 +57,6 @@ export function EntityPropertyEditor(props: {
   ) => void;
   setKeybindings: (binding: ListNavActions) => void;
   setPlaceholder: Setter<string>;
-  setFooterAction: (
-    action: { label: string; onSelect: () => void } | undefined
-  ) => void;
   selectedEntityCount: number;
 }) {
   const definitionId = () => {
@@ -79,7 +69,6 @@ export function EntityPropertyEditor(props: {
   const isCompanyOwner = () =>
     definitionId() === SYSTEM_PROPERTY_IDS.COMPANY_OWNER;
   const isAssignees = () => definitionId() === SYSTEM_PROPERTY_IDS.ASSIGNEES;
-  const [findingOtherPeople, setFindingOtherPeople] = createSignal(false);
   const agents = useAgentAssignees(isAssignees);
   const team = useTeamMembers(() => isCompanyOwner() || isAssignees());
   const [localSelectedRefs, setLocalSelectedRefs] = createSignal(
@@ -113,8 +102,6 @@ export function EntityPropertyEditor(props: {
       syncedPropertyId = propertyId;
       syncedSelectionKey = nextSelectionKey;
       setOpenOrderFrozen(false);
-      setFindingOtherPeople(false);
-      props.setFooterAction(undefined);
       setLocalSelectedRefs(refs);
       setOrderedSelectedIds(new Set(refs.map((ref) => ref.entity_id)));
       return;
@@ -129,37 +116,13 @@ export function EntityPropertyEditor(props: {
 
   createEffect(() => {
     if (isAssignees()) {
-      props.setPlaceholder(
-        t(
-          findingOtherPeople()
-            ? 'viewMenus.searchOtherPeople'
-            : 'viewMenus.searchAssignees'
-        )
-      );
+      props.setPlaceholder(t('viewMenus.searchAssignees'));
       return;
     }
     const entityTypeLabel =
       props.property?.specificEntityType?.toLowerCase() || 'entity';
     props.setPlaceholder(`Search for ${entityTypeLabel}...`);
   });
-
-  const navigate = (discovering: boolean) => {
-    batch(() => {
-      props.setSearchValue('');
-      listController.setSelectedIndex(0, { scrollIntoView: true });
-      setOrderedSelectedIds(new Set(localSelectedIds()));
-      setFindingOtherPeople(discovering);
-      props.setFooterAction(
-        discovering
-          ? {
-              label: t('viewMenus.backToAssignees'),
-              onSelect: () => navigate(false),
-            }
-          : undefined
-      );
-    });
-  };
-  onCleanup(() => props.setFooterAction(undefined));
 
   createEffect(() => {
     props.searchValue();
@@ -187,26 +150,15 @@ export function EntityPropertyEditor(props: {
   const localSelectedIds = createMemo(
     () => new Set(localSelectedRefs().map((ref) => ref.entity_id))
   );
-  const { items: people, isLoading: peopleLoading } = useQuickAccessEntities(
-    () => 'USER'
-  );
-  const otherPeople = createMemo(() =>
-    nonTeamUserOptions(
-      [...agents(), ...team.users()],
-      people().map((item) => item.data)
-    )
-  );
+  const { items: people } = useQuickAccessEntities(() => 'USER');
   const users = createMemo(() => {
     if (!isCompanyOwner() && !isAssignees()) return undefined;
     const pool = [...agents(), ...team.users()];
     if (!isAssignees()) return pool;
     return scopedUserOptions(
       pool,
-      findingOtherPeople() && (team.isLoading() || team.isError())
-        ? []
-        : people().map((item) => item.data),
-      localSelectedIds(),
-      findingOtherPeople()
+      people().map((item) => item.data),
+      localSelectedIds()
     );
   });
   const priorityIds = createMemo(
@@ -245,15 +197,12 @@ export function EntityPropertyEditor(props: {
 
   const searchQuery = () => props.searchValue().trim();
   const showClearAllRow = () =>
-    !findingOtherPeople() &&
-    canGroupMultiValues() &&
-    orderedSelectedIds().size > 0;
+    canGroupMultiValues() && orderedSelectedIds().size > 0;
   const showClearAllAtTop = () => showClearAllRow() && !searchQuery();
   const showClearAllAtBottom = () => showClearAllRow() && !!searchQuery();
 
   type EntityPropertyRow =
     | { type: 'clear'; separatorBefore: boolean }
-    | { type: 'discovery'; separatorBefore: boolean }
     | {
         type: 'entity';
         entity: CombinedEntity;
@@ -286,12 +235,6 @@ export function EntityPropertyEditor(props: {
       });
     }
 
-    if (isAssignees() && !findingOtherPeople()) {
-      nextRows.push({
-        type: 'discovery',
-        separatorBefore: nextRows.length > 0,
-      });
-    }
     return nextRows;
   });
 
@@ -345,10 +288,6 @@ export function EntityPropertyEditor(props: {
       return;
     }
 
-    if (row.type === 'discovery') {
-      navigate(true);
-      return;
-    }
     toggleEntity(row.entity, event);
   };
 
@@ -391,12 +330,6 @@ export function EntityPropertyEditor(props: {
               <Match when={isAssignees() && team.isError()}>
                 {t('viewMenus.teamMembersUnavailable')}
               </Match>
-              <Match when={findingOtherPeople() && peopleLoading()}>
-                Loading...
-              </Match>
-              <Match when={findingOtherPeople() && otherPeople().length === 0}>
-                <span role="status">{t('viewMenus.noOtherPeople')}</span>
-              </Match>
             </Switch>
           </CommandMenuEmptyState>
         }
@@ -413,7 +346,6 @@ export function EntityPropertyEditor(props: {
           selectedIndex={props.selectedIndex()}
           scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
           itemId={(_, index) => `${listId}-entity-option-${index}`}
-          itemClass={(row) => (row.type === 'discovery' ? 'w-fit' : undefined)}
           beforeItem={(row) =>
             row.separatorBefore ? (
               <div class="mx-2 my-1 h-px bg-edge-muted/50" />
@@ -431,12 +363,6 @@ export function EntityPropertyEditor(props: {
                 <span class="min-w-0 flex-1 truncate text-ink-muted">
                   Clear all{' '}
                   {props.property?.displayName.toLowerCase() ?? 'entities'}
-                </span>
-              </Match>
-              <Match when={row.type === 'discovery'}>
-                <SearchIcon class="size-4 text-ink-muted" />
-                <span class="min-w-0 flex-1 truncate text-ink-muted">
-                  {t('viewMenus.findOtherPeople')}
                 </span>
               </Match>
               <Match when={row.type === 'entity' && row.entity}>

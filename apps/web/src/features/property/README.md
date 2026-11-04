@@ -92,31 +92,23 @@ title-row tags retain their compact height.
 
 ## Assignee selection
 
-At opening or view navigation, the system Assignees property lists selected
-assignees first, then available agents, then the current team roster. Keep row
-positions stable while selecting. The compact **Find contacts** action
-switches directly to eligible non-team people from the existing Quick Access
-people pool, without teammates or agents. The main search says **Search team...**;
-discovery says **Search contacts**, with a compact footer **Back to team**
-action and a left arrow. Navigation clears the query without animating or
-remounting the focused input. Selections survive both directions.
-An empty non-team pool shows **No contacts available.** Selected outsiders
-remain visible and removable in the main view, including references absent from
-contacts. Closing and reopening starts in team mode.
+The system Assignees property lists selected assignees first at opening, then
+available agents, then the current team roster. Row positions stay stable while
+selecting. **Search team...** searches these options without contact discovery.
+Existing selected outsiders remain visible and removable, including references
+absent from contacts. Removing an outsider removes that row immediately; the
+picker cannot add that person again unless they join the team.
 
 This applies to task/project composers, property pills, side panels, bulk
-editors, and touch picker sheets. References remain `USER` values; discovery
-does not add arbitrary email addresses or CRM-only records. Company owner stays
-strictly team-only, and custom people properties keep their existing pool.
+editors, and touch picker sheets. References remain `USER` values. Company owner
+stays strictly team-only, and custom people properties keep their existing pool.
 `queries/team-members.ts` shares the non-suspending roster with Assignee filters.
-The property-aware wrapper in `editors/popover/EntityEditor.tsx` owns roster and
-contacts switching, outsider retention, and roster-status UI. Keep that policy out
-of `PropertyEntitySelector`; its extension points are generic actions,
-empty-state content, and priority ids. The command-menu composer/bulk editor lives in
+The property-aware wrapper in `editors/popover/EntityEditor.tsx` owns roster
+scope, outsider retention, and roster-status UI. Keep that policy out of
+`PropertyEntitySelector`; its extension points are empty-state content and
+priority ids. The command-menu composer/bulk editor lives in
 `editor/entity-property-editor.tsx`; both editor compositions share
 `editors/selectors/scoped-user-options.ts`.
-Removing an outsider removes that row from team mode immediately; finding that
-person again requires explicit discovery.
 
 ## Side-panel collections
 

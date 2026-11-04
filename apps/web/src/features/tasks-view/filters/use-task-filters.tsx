@@ -4,7 +4,7 @@ import type {
 } from '@app/components/view-shell';
 import { NO_ASSIGNEE } from '@app/features/next-soup/filters';
 import {
-  AssigneeDiscoveryStatus,
+  AssigneePickerStatus,
   useAssigneePicker,
 } from '@app/features/soup/assignee-picker';
 import { addUnique, removeValue } from '@app/lib/signals/store-array-updaters';
@@ -57,7 +57,6 @@ export function useTaskFilters() {
     () => (state.facets.assignees ?? []).filter((id) => id !== TASK_VIEWER),
     () => true
   );
-  const resetAssigneeDiscovery = () => assigneePicker.setDiscovering(false);
   const selectedAssigneesAtViewEntry = createMemo(
     on(
       assigneePicker.selectedIdsAtViewEntry,
@@ -187,10 +186,7 @@ export function useTaskFilters() {
         label: 'Assignee',
         searchPlaceholder: assigneePicker.placeholder(),
         options: [
-          ...peopleOptions().filter(
-            (option) =>
-              !assigneePicker.discovering() && option.id === TASK_VIEWER
-          ),
+          ...peopleOptions().filter((option) => option.id === TASK_VIEWER),
           ...assigneePicker
             .options()
             .filter((option) => option.id !== NO_ASSIGNEE),
@@ -201,9 +197,7 @@ export function useTaskFilters() {
             Number(isBotPrincipalId(b.id)) - Number(isBotPrincipalId(a.id))
         ),
         preserveOrder: true,
-        action: assigneePicker.action(),
-        navigation: assigneePicker.navigation(),
-        footer: <AssigneeDiscoveryStatus discovery={assigneePicker} />,
+        footer: <AssigneePickerStatus picker={assigneePicker} />,
         onOpenChange: assigneePicker.onOpenChange,
       },
       {
@@ -292,7 +286,6 @@ export function useTaskFilters() {
 
   return {
     activeCount,
-    resetAssigneeDiscovery,
     applyDescription,
     clear: () =>
       batch(() => {

@@ -6,7 +6,7 @@ import type {
   TagFilterMode,
 } from '@app/features/next-soup/filters/filter-store/types';
 import {
-  AssigneeDiscoveryStatus,
+  AssigneePickerStatus,
   useAssigneePicker,
 } from '@app/features/soup/assignee-picker';
 import { usePosthog } from '@app/lib/analytics/posthog';
@@ -22,11 +22,7 @@ import {
   TASK_STATUS_OPTIONS,
 } from '../../../core/search-options';
 import { useInboxPicker } from '../inbox-picker';
-import type {
-  SearchableOption,
-  SearchableSelectAction,
-  SearchableSelectNavigation,
-} from '../searchable-multi-select';
+import type { SearchableOption } from '../searchable-multi-select';
 import { useTagOptions } from '../tag-filter';
 import type { TagFilter } from '../tag-filter-state';
 import type {
@@ -143,8 +139,6 @@ export type SearchFacetVM = FacetBase &
         preserveOrder?: boolean;
         onOnly?: (id: string) => void;
         mode?: FacetModeVM;
-        action?: Accessor<SearchableSelectAction | undefined>;
-        navigation?: Accessor<SearchableSelectNavigation>;
         footer?: () => JSX.Element;
         onPickerOpenChange?: (open: boolean) => void;
       }
@@ -456,9 +450,7 @@ export function useSearchFacets(
       neutralLabel: 'Anyone',
       placeholder: 'Search assignees...',
       options: () =>
-        assigneePicker
-          .allOptions()
-          .filter((option) => option.id !== NO_ASSIGNEE),
+        assigneePicker.options().filter((option) => option.id !== NO_ASSIGNEE),
       activeIds: controller.taskAssignees,
       onChange: controller.setTaskAssignees,
     }),
@@ -468,9 +460,7 @@ export function useSearchFacets(
       return assigneePicker.placeholder();
     },
     preserveOrder: true,
-    action: assigneePicker.action,
-    navigation: assigneePicker.navigation,
-    footer: () => <AssigneeDiscoveryStatus discovery={assigneePicker} />,
+    footer: () => <AssigneePickerStatus picker={assigneePicker} />,
     onPickerOpenChange: assigneePicker.onOpenChange,
   };
 

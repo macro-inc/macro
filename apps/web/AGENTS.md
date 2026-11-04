@@ -1084,16 +1084,12 @@ away leaves focus where the user put it. The backend-free regression is
 
 ### Assignee people scope
 
-Use the current team roster for Assignees in property editors and filters.
-Keep eligible non-team people behind the compact **Find contacts** action;
-that view excludes teammates, agents, and filter-only Me/Unassigned choices.
-Preserve selections across views and show an explicit empty state.
-Order selected assignees first at opening or view navigation, then agents, then
-team members; keep row positions stable while selecting.
-Label the main search **Search team...**, discovery **Search contacts**, and the
-compact footer return **Back to team** with a left arrow. Clear the query on
-navigation without animating or remounting the input.
-Keep company owners team-only and unrelated people/contact fields unchanged.
+Use only the current team roster and available agents for new Assignee selections.
+Keep existing selected outsiders visible and removable, without contact discovery.
+Order selected assignees first at opening, then agents, then team members;
+keep row positions stable while selecting and label the search **Search team...**.
+Preserve filter-only Me/Unassigned choices, company-owner scope, and unrelated
+people/contact fields.
 Keep the shared filter Assignee picker in `src/features/soup/assignee-picker.tsx`;
 import it directly from Tasks and legacy `next-soup` consumers.
 

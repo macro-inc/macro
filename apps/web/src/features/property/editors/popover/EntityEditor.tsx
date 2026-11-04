@@ -2,7 +2,6 @@ import { t } from '@app/lib/i18n';
 import { PickerSheet } from '@components/app/mobile/PickerSheet';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import {
   entityReferencesToIdSet,
@@ -18,10 +17,7 @@ import type { EntityProperty, PropertyApiValues } from '../../types';
 import { isEntityProperty } from '../../utils';
 import { useQuickAccessEntities } from '../selectors/entityUtils';
 import { PropertyEntitySelector } from '../selectors/PropertyEntitySelector';
-import {
-  nonTeamUserOptions,
-  scopedUserOptions,
-} from '../selectors/scoped-user-options';
+import { scopedUserOptions } from '../selectors/scoped-user-options';
 import { EditorPopover } from './EditorPopover';
 
 type EntityEditorProps = {
@@ -122,25 +118,13 @@ function EntityEditorSelector(
     property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES;
   const agents = useAgentAssignees(() => isAssignees);
   const team = useTeamMembers(() => isCompanyOwner || isAssignees);
-  const [findingOtherPeople, setFindingOtherPeople] = createSignal(false);
-  const { items: people, isLoading: peopleLoading } = useQuickAccessEntities(
-    () => 'USER'
-  );
-  const otherPeople = createMemo(() =>
-    nonTeamUserOptions(
-      [...agents(), ...team.users()],
-      people().map((item) => item.data)
-    )
-  );
+  const { items: people } = useQuickAccessEntities(() => 'USER');
   const users = createMemo(() => {
     if (!isAssignees) return team.users();
     return scopedUserOptions(
       [...agents(), ...team.users()],
-      findingOtherPeople() && (team.isLoading() || team.isError())
-        ? []
-        : people().map((item) => item.data),
-      entityReferencesToIdSet(props.draft.selectedRefs()),
-      findingOtherPeople()
+      people().map((item) => item.data),
+      entityReferencesToIdSet(props.draft.selectedRefs())
     );
   });
   const priorityIds = createMemo(
@@ -154,19 +138,6 @@ function EntityEditorSelector(
   const showRosterStatus = () =>
     (isCompanyOwner || isAssignees) && (team.isLoading() || team.isError());
 
-  const emptyState = () => {
-    if (showRosterStatus()) return null;
-    if (!isAssignees || !findingOtherPeople()) return undefined;
-    if (peopleLoading()) {
-      return <div class="px-3 py-4 text-sm text-ink-muted">Loading...</div>;
-    }
-    if (otherPeople().length > 0) return undefined;
-    return (
-      <div role="status" class="px-3 py-4 text-sm text-ink-muted">
-        {t('viewMenus.noOtherPeople')}
-      </div>
-    );
-  };
   return (
     <>
       <Suspense
@@ -178,11 +149,7 @@ function EntityEditorSelector(
           config={{
             isMultiSelect: property.isMultiSelect,
             placeholder: isAssignees
-              ? t(
-                  findingOtherPeople()
-                    ? 'viewMenus.searchOtherPeople'
-                    : 'viewMenus.searchAssignees'
-                )
+              ? t('viewMenus.searchAssignees')
               : `${property.isMultiSelect ? 'Add' : 'Change'} ${property.displayName.toLowerCase()}...`,
             specificEntityType: property.specificEntityType,
             selfFilter: props.selfFilter,
@@ -190,22 +157,7 @@ function EntityEditorSelector(
             fillHeight: props.fillHeight,
           }}
           priorityIds={isAssignees ? priorityIds() : undefined}
-          action={
-            isAssignees
-              ? {
-                  label: t(
-                    findingOtherPeople()
-                      ? 'viewMenus.backToAssignees'
-                      : 'viewMenus.findOtherPeople'
-                  ),
-                  icon: findingOtherPeople()
-                    ? () => <ArrowLeftIcon class="size-4" />
-                    : undefined,
-                  onSelect: () => setFindingOtherPeople((finding) => !finding),
-                }
-              : undefined
-          }
-          emptyState={emptyState()}
+          emptyState={showRosterStatus() ? null : undefined}
           selectedOptions={() =>
             entityReferencesToIdSet(props.draft.selectedRefs())
           }
@@ -233,7 +185,6 @@ function EntityEditorSelector(
       <Show
         when={
           props.selfFilter?.entityType === 'INITIATIVE' &&
-          !findingOtherPeople() &&
           property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES
         }
       >

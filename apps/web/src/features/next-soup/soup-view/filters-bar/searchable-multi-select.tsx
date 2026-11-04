@@ -1,10 +1,9 @@
 import { useSelectedFirst } from '@core/util/useSelectedFirst';
-import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Combobox, useComboboxContext } from '@kobalte/core/combobox';
 import { makeEventListener } from '@solid-primitives/event-listener';
-import { Button, cn, Layer } from '@ui';
+import { cn, Layer } from '@ui';
 import { MultiSelectItemContent } from '@ui/components/MultiSelectItemContent';
 import {
   applyMultiSelectSelection,
@@ -12,7 +11,6 @@ import {
 } from '@ui/utils/multiSelectSelection';
 import {
   type Accessor,
-  batch,
   createMemo,
   createSignal,
   type JSX,
@@ -35,12 +33,6 @@ export type SearchableSelectAction = {
   label: string;
   icon?: () => JSX.Element;
   onSelect: () => void;
-  /** Keep discovery actions in the open picker without changing its value. */
-  closeOnSelect?: boolean;
-};
-
-export type SearchableSelectNavigation = {
-  back?: { label: string; onSelect: () => void };
 };
 
 /**
@@ -76,7 +68,6 @@ type SearchableMultiSelectProps = {
   onOnly?: (id: string) => void;
   /** Non-toggling action row appended after the options. */
   action?: SearchableSelectAction;
-  navigation?: SearchableSelectNavigation;
   open?: Accessor<boolean>;
   onOpenChange?: (open: boolean) => void;
   children: JSX.Element;
@@ -90,12 +81,11 @@ const keepComboboxFocus = (event: Event) => event.preventDefault();
 function PickerSearchInput(props: {
   placeholder?: string;
   onKeyDown?: (event: KeyboardEvent) => void;
-  onReady: (input: HTMLInputElement, clear: () => void) => void;
+  onReady?: (input: HTMLInputElement) => void;
 }) {
-  const combobox = useComboboxContext();
   return (
     <Combobox.Input
-      ref={(input) => props.onReady(input, () => combobox.setInputValue(''))}
+      ref={props.onReady}
       onKeyDown={props.onKeyDown}
       class="flex-1 min-w-0 text-sm bg-transparent outline-none caret-accent placeholder:text-ink-placeholder"
       placeholder={props.placeholder ?? 'Search...'}
@@ -327,17 +317,6 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
   const selectionIntent = createMultiSelectIntent();
   const [internalOpen, setInternalOpen] = createSignal(false);
   const [searchQuery, setSearchQuery] = createSignal('');
-  let searchInput: HTMLInputElement | undefined;
-  let clearSearch: (() => void) | undefined;
-  const navigate = (onSelect: () => void) => {
-    batch(() => {
-      clearSearch?.();
-      setSearchQuery('');
-      onSelect();
-    });
-    searchInput?.focus();
-  };
-
   const isOpen = () => props.open?.() ?? internalOpen();
   const setIsOpen = (v: boolean) => {
     if (props.onOpenChange) props.onOpenChange(v);
@@ -368,7 +347,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
     ];
   });
   const matches = useHasMatches(displayOptions, searchQuery);
-  const hasMatches = () => !!props.action || matches();
+  const hasMatches = matches;
 
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open);
@@ -378,9 +357,8 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
   const handleChange = (selected: SearchableOption[]) => {
     const action = props.action;
     if (action && selected.some((o) => o.id === ACTION_ID)) {
-      if (action.closeOnSelect !== false) handleOpenChange(false);
-      if (props.navigation) navigate(action.onSelect);
-      else action.onSelect();
+      handleOpenChange(false);
+      action.onSelect();
       return;
     }
     const id =
@@ -459,29 +437,17 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
           >
             <div class="flex items-center gap-2 px-3 py-2 border-b border-edge-muted">
               <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
-              <PickerSearchInput
-                onReady={(element, clear) => {
-                  searchInput = element;
-                  clearSearch = clear;
-                }}
-                placeholder={props.placeholder}
-              />
+              <PickerSearchInput placeholder={props.placeholder} />
             </div>
             <div class="p-1">
               <Show
                 when={hasMatches()}
                 fallback={
-                  <Show
-                    when={
-                      !props.navigation || !props.footer || searchQuery().trim()
-                    }
-                  >
-                    <div class="py-3 px-2 text-center text-xs text-ink-muted">
-                      {searchQuery().trim()
-                        ? `No options match "${searchQuery()}"`
-                        : 'No options available'}
-                    </div>
-                  </Show>
+                  <div class="py-3 px-2 text-center text-xs text-ink-muted">
+                    {searchQuery().trim()
+                      ? `No options match "${searchQuery()}"`
+                      : 'No options available'}
+                  </div>
                 }
               >
                 <VirtualizedListbox
@@ -492,23 +458,6 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
                 />
               </Show>
             </div>
-            <Show when={props.navigation?.back}>
-              {(back) => (
-                <div class="border-t border-edge-muted p-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onPointerDown={keepComboboxFocus}
-                    onMouseDown={keepComboboxFocus}
-                    onKeyDown={(event) => event.stopPropagation()}
-                    onClick={() => navigate(back().onSelect)}
-                  >
-                    <ArrowLeftIcon class="size-4" />
-                    {back().label}
-                  </Button>
-                </div>
-              )}
-            </Show>
             {props.footer}
           </Combobox.Content>
         </Layer>
@@ -528,8 +477,6 @@ type SearchableMultiSelectInlineProps = {
   listboxClass?: string;
   /** Keep `options` in their given order instead of pinning selected first. */
   preserveOrder?: boolean;
-  action?: SearchableSelectAction;
-  navigation?: SearchableSelectNavigation;
   footer?: JSX.Element;
 };
 
@@ -544,20 +491,9 @@ export const SearchableMultiSelectInline = (
 ) => {
   const selectionIntent = createMultiSelectIntent();
   const [searchQuery, setSearchQuery] = createSignal('');
-  let searchInput: HTMLInputElement | undefined;
-  let clearSearch: (() => void) | undefined;
-  const navigate = (onSelect: () => void) => {
-    batch(() => {
-      clearSearch?.();
-      setSearchQuery('');
-      onSelect();
-    });
-    searchInput?.focus();
-  };
-
   const activeOptions = useActiveOptions(props.options, props.activeIds);
   const matches = useHasMatches(props.options, searchQuery);
-  const hasMatches = () => !!props.action || matches();
+  const hasMatches = matches;
   // Inline variant is freshly mounted each time the parent submenu opens,
   // so we don't need an explicit "menu opened" trigger — the memo's first
   // run captures the current selection ordering.
@@ -569,28 +505,9 @@ export const SearchableMultiSelectInline = (
   });
   const sortedOptions = () =>
     props.preserveOrder ? props.options() : selectedFirstOptions();
-  const displayOptions = createMemo(() => {
-    const action = props.action;
-    if (!action) return sortedOptions();
-    return [
-      ...sortedOptions(),
-      {
-        id: ACTION_ID,
-        label: action.label,
-        icon: action.icon,
-        class: action.class,
-      },
-    ];
-  });
+  const displayOptions = sortedOptions;
 
   const handleChange = (selected: SearchableOption[]) => {
-    const action = props.action;
-    if (action && selected.some((option) => option.id === ACTION_ID)) {
-      if (props.navigation) navigate(action.onSelect);
-      else action.onSelect();
-      if (action.closeOnSelect !== false) props.onSelectionComplete?.();
-      return;
-    }
     const id =
       selected.find((option) => !props.activeIds().includes(option.id))?.id ??
       activeOptions().find(
@@ -615,12 +532,6 @@ export const SearchableMultiSelectInline = (
         // At the start of the input (no caret movement possible), collapse
         // back to the parent menu. Otherwise let the input move the caret.
         if (input.selectionStart === 0 && input.selectionEnd === 0) {
-          if (props.navigation?.back) {
-            e.preventDefault();
-            e.stopPropagation();
-            navigate(props.navigation.back.onSelect);
-            return;
-          }
           props.onRequestClose?.();
           return;
         }
@@ -658,7 +569,6 @@ export const SearchableMultiSelectInline = (
       onInputChange={setSearchQuery}
       optionValue="id"
       optionTextValue="label"
-      defaultFilter={props.action ? filterWithAction : undefined}
       optionLabel="label"
       optionDisabled="disabled"
       allowsEmptyCollection
@@ -671,9 +581,7 @@ export const SearchableMultiSelectInline = (
       >
         <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
         <PickerSearchInput
-          onReady={(element, clear) => {
-            searchInput = element;
-            clearSearch = clear;
+          onReady={(element) => {
             props.inputRef?.(element);
           }}
           onKeyDown={handleInputKeyDown}
@@ -684,13 +592,9 @@ export const SearchableMultiSelectInline = (
         <Show
           when={hasMatches()}
           fallback={
-            <Show
-              when={!props.navigation || !props.footer || searchQuery().trim()}
-            >
-              <div class="py-3 px-2 text-center text-xs text-ink-muted">
-                No options match "{searchQuery()}"
-              </div>
-            </Show>
+            <div class="py-3 px-2 text-center text-xs text-ink-muted">
+              No options match "{searchQuery()}"
+            </div>
           }
         >
           <VirtualizedListbox
@@ -700,23 +604,6 @@ export const SearchableMultiSelectInline = (
           />
         </Show>
       </div>
-      <Show when={props.navigation?.back}>
-        {(back) => (
-          <div class="border-t border-edge-muted p-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              onPointerDown={keepComboboxFocus}
-              onMouseDown={keepComboboxFocus}
-              onKeyDown={(event) => event.stopPropagation()}
-              onClick={() => navigate(back().onSelect)}
-            >
-              <ArrowLeftIcon class="size-4" />
-              {back().label}
-            </Button>
-          </div>
-        )}
-      </Show>
       {props.footer}
     </Combobox>
   );
