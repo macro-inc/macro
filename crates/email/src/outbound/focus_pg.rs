@@ -2,7 +2,7 @@
 
 use std::{collections::HashMap, str::FromStr};
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use sqlx::PgPool;
@@ -10,8 +10,8 @@ use uuid::Uuid;
 
 use crate::domain::focus::{
     CalendarPart, FOCUS_RULE_VERSION, FocusAnswers, FocusCategory, FocusInbox, FocusMail,
-    FocusMessage, FocusRecord, FocusStore, SentNote, StaleThread, StoredClassification,
-    ThreadFocus,
+    FocusMessage, FocusRecord, FocusStore, RECENT_CONTACT_DAYS, SentNote, StaleThread,
+    StoredClassification, ThreadFocus,
 };
 
 /// Most recent messages read per thread.
@@ -328,6 +328,21 @@ impl FocusStore for FocusPgRepository {
                   OR t.has_calendar_attachment
                   OR t.latest_outbound_message_ts > t.latest_inbound_message_ts
                   OR f.rule_version < $4
+                  -- A sender the owner has written to lately. The service judges
+                  -- whether it really is a recent contact; mail no event covers,
+                  -- such as an initial sync, only arrives this way.
+                  OR EXISTS (
+                      SELECT 1
+                      FROM email_messages inbound
+                      JOIN email_message_recipients r ON r.contact_id = inbound.from_contact_id
+                      JOIN email_messages sent ON sent.id = r.message_id
+                      WHERE inbound.thread_id = t.id
+                        AND NOT inbound.is_sent
+                        AND NOT inbound.is_draft
+                        AND sent.is_sent
+                        AND NOT sent.is_draft
+                        AND sent.internal_date_ts >= $5
+                  )
               )
               AND (
                   f.thread_id IS NULL
@@ -342,6 +357,7 @@ impl FocusStore for FocusPgRepository {
             domains,
             limit,
             FOCUS_RULE_VERSION,
+            since - Duration::days(RECENT_CONTACT_DAYS),
         )
         .fetch_all(&self.0)
         .await?;

@@ -52,8 +52,6 @@ const CLOSING_PHRASES: [&str; 20] = [
 ];
 /// Words a closing line can carry after its phrase: a name, as in "Thanks Ava!".
 const CLOSING_LINE_EXTRA_WORDS: usize = 1;
-/// Words a later line can have and still read as a signature rather than a request.
-const SIGNATURE_LINE_WORDS: usize = 3;
 
 /// The part of a plain-text body above the quoted history.
 pub fn new_text(body: &str) -> String {
@@ -121,10 +119,12 @@ pub(super) fn is_closing_reply(text: &str) -> bool {
             is_whole_phrase && extra_words <= CLOSING_LINE_EXTRA_WORDS
         })
     });
+    // A name or sign-off on a line of its own, or anything past a signature
+    // delimiter. A short line can be a request ("Please confirm"), so no more.
     closes
-        && lines.all(|line| {
-            !line.ends_with(['.', '!']) && line.split_whitespace().count() <= SIGNATURE_LINE_WORDS
-        })
+        && lines
+            .take_while(|line| !line.starts_with("--"))
+            .all(|line| line.split_whitespace().count() == 1)
 }
 
 /// `phrase` appears in `text` as whole words.

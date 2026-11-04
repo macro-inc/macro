@@ -54,7 +54,9 @@ fn closing_replies_owe_nobody_an_answer() {
         "thx",
         "Got it, thanks",
         "Sounds good.",
-        "Thanks Ava!\n\nOwner\nFounder, Acme",
+        "Thanks Ava!\n\nOwner",
+        "Thanks,\nBest,\nOwner",
+        "Thanks!\n\n-- \nOwner Name\nFounder, Acme",
         "No thanks",
     ] {
         assert!(is_closing_reply(reply), "{reply}");
@@ -65,6 +67,8 @@ fn closing_replies_owe_nobody_an_answer() {
         "Thanks!\n\nAlso, when can you start?",
         "Thanks, please send pricing",
         "Thanks!\nPlease send the signed contract.",
+        "Thanks!\nPlease confirm",
+        "Thanks!\nPlease send pricing",
         "Ok, send me the contract",
         "Thanks for the intro. I would love to hear how the pilot went and what you would change.",
         "Thanksgiving works for us",

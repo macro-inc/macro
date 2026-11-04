@@ -27,6 +27,7 @@ const RESCHEDULE: Uuid = uuid::uuid!("00000000-0000-0000-0000-00000000f306");
 const RSVP: Uuid = uuid::uuid!("00000000-0000-0000-0000-00000000f307");
 const NOISE: Uuid = uuid::uuid!("00000000-0000-0000-0000-00000000f308");
 const CALENDAR_FILE: Uuid = uuid::uuid!("00000000-0000-0000-0000-00000000f309");
+const RECENT_CONTACT: Uuid = uuid::uuid!("00000000-0000-0000-0000-00000000f30a");
 /// Answers that earn nothing: only key mail and the wait bring a thread in.
 const LOW_ANSWERS: [f32; 8] = [0.05, 0.0, 0.9, 0.0, 0.0, 0.0, 0.0, 0.0];
 
@@ -120,6 +121,7 @@ async fn project_threads(pool: &Pool<Postgres>) -> Result<(), Report> {
         RSVP,
         NOISE,
         CALENDAR_FILE,
+        RECENT_CONTACT,
     ] {
         email_db_client::threads::update::recompute_thread_metadata(&mut conn, thread, OWNER_LINK)
             .await?;
@@ -635,6 +637,42 @@ async fn calendar_mail_reaches_focus_from_outside_the_signal_inbox(
     assert_eq!(
         focus.get(&RESCHEDULE).expect("stored").category,
         FocusCategory::Calendar
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_waiting")
+    )
+)]
+async fn mail_from_a_recent_contact_is_found_and_pinned_outside_the_signal_inbox(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    project_threads(&pool).await?;
+    let repo = FocusPgRepository(pool);
+    let now = Utc::now();
+    let since = now - Duration::days(30);
+
+    // No event covers mail from before an inbox was enabled: the sweep finds it.
+    let thread = load_thread(&repo, RECENT_CONTACT).await?.expect("thread");
+    assert!(!thread.is_signal);
+    let stale = repo
+        .stale_threads(since, &["acme.example".to_owned()], 100)
+        .await?;
+    assert!(stale.iter().any(|stale| stale.thread_id == RECENT_CONTACT));
+
+    let worker = worker(&repo, Ok(vec![0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]));
+    let ClassifyOutcome::Classified(verdict) = worker.classify_thread(RECENT_CONTACT).await? else {
+        panic!("expected the recent contact's mail to be classified");
+    };
+    assert!(verdict.is_focus && verdict.pinned);
+    assert!(
+        repo.focus_thread_ids(&owner(), since, now, 100)
+            .await?
+            .contains(&RECENT_CONTACT)
     );
     Ok(())
 }

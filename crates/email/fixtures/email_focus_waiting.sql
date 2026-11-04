@@ -10,8 +10,12 @@
 -- Thread f305: only the owner's own message, sent 5 days ago.
 -- Thread f306: a reschedule (METHOD:REQUEST) filed under Updates.
 -- Thread f307: an RSVP (METHOD:REPLY) filed under Updates.
--- Thread f308: plain mail filed under Updates.
+-- Thread f308: plain mail filed under Updates, from someone the owner never wrote to.
 -- Thread f309: a calendar file nothing parsed, filed under Updates.
+-- Thread f30a: mail from Casey, whom the owner wrote to lately, filed under Updates.
+
+INSERT INTO email_contacts (id, link_id, email_address, name, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-0000000cf006', '00000000-0000-0000-0000-000000000f01', 'weekly@numbers.example', NULL, NOW(), NOW());
 
 INSERT INTO email_labels (id, link_id, provider_label_id, name, created_at)
 VALUES ('00000000-0000-0000-0000-0000000bf002', '00000000-0000-0000-0000-000000000f01', 'INBOX', 'INBOX', NOW()),
@@ -20,7 +24,7 @@ VALUES ('00000000-0000-0000-0000-0000000bf002', '00000000-0000-0000-0000-0000000
 
 INSERT INTO email_threads (id, link_id, inbox_visible, is_read, is_signal, created_at, updated_at)
 SELECT ('00000000-0000-0000-0000-00000000f30' || n)::uuid, '00000000-0000-0000-0000-000000000f01', false, true, false, NOW(), NOW()
-FROM generate_series(1, 9) AS n;
+FROM unnest(ARRAY['1', '2', '3', '4', '5', '6', '7', '8', '9', 'a']) AS n;
 
 INSERT INTO email_messages (id, thread_id, link_id, provider_id, global_id, is_sent, from_contact_id, internal_date_ts,
                             subject, body_text, has_attachments, is_read, is_starred, is_draft, created_at, updated_at)
@@ -58,8 +62,11 @@ VALUES ('00000000-0000-0000-0000-00000000f611', '00000000-0000-0000-0000-0000000
         'p-f671', 'g-f671', false, '00000000-0000-0000-0000-0000000cf004', NOW() - INTERVAL '1 day',
         'Aceptada: Demo', '', false, true, false, false, NOW(), NOW()),
        ('00000000-0000-0000-0000-00000000f681', '00000000-0000-0000-0000-00000000f308', '00000000-0000-0000-0000-000000000f01',
-        'p-f681', 'g-f681', false, '00000000-0000-0000-0000-0000000cf004', NOW() - INTERVAL '1 day',
+        'p-f681', 'g-f681', false, '00000000-0000-0000-0000-0000000cf006', NOW() - INTERVAL '1 day',
         'Weekly numbers', 'Up and to the right.', false, true, false, false, NOW(), NOW()),
+       ('00000000-0000-0000-0000-00000000f6a1', '00000000-0000-0000-0000-00000000f30a', '00000000-0000-0000-0000-000000000f01',
+        'p-f6a1', 'g-f6a1', false, '00000000-0000-0000-0000-0000000cf001', NOW() - INTERVAL '1 day',
+        'Quarterly summary', 'For your records.', false, true, false, false, NOW(), NOW()),
        ('00000000-0000-0000-0000-00000000f691', '00000000-0000-0000-0000-00000000f309', '00000000-0000-0000-0000-000000000f01',
         'p-f691', 'g-f691', false, '00000000-0000-0000-0000-0000000cf004', NOW() - INTERVAL '1 day',
         'See you there', '', true, true, false, false, NOW(), NOW());
@@ -92,7 +99,9 @@ VALUES ('00000000-0000-0000-0000-00000000f611', '00000000-0000-0000-0000-0000000
        ('00000000-0000-0000-0000-00000000f681', '00000000-0000-0000-0000-0000000bf002'),
        ('00000000-0000-0000-0000-00000000f681', '00000000-0000-0000-0000-0000000bf004'),
        ('00000000-0000-0000-0000-00000000f691', '00000000-0000-0000-0000-0000000bf002'),
-       ('00000000-0000-0000-0000-00000000f691', '00000000-0000-0000-0000-0000000bf004');
+       ('00000000-0000-0000-0000-00000000f691', '00000000-0000-0000-0000-0000000bf004'),
+       ('00000000-0000-0000-0000-00000000f6a1', '00000000-0000-0000-0000-0000000bf002'),
+       ('00000000-0000-0000-0000-00000000f6a1', '00000000-0000-0000-0000-0000000bf004');
 
 INSERT INTO email_message_calendar_invites (message_id, component_id, snapshot)
 VALUES ('00000000-0000-0000-0000-00000000f661', 'request-1', '{"method": "request"}'::jsonb),
