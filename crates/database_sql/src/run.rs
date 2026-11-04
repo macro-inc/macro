@@ -497,7 +497,9 @@ pub struct Outcome {
     pub rows: Table,
     /// For a row-shaped result, the row entity id behind each result row.
     pub row_ids: Vec<RowId>,
-    /// The tables read, so a caller can watch them for changes.
+    /// The tables read, so a caller can watch them for changes. Built-in IDs
+    /// are UUID-shaped constants, not RFC-versioned UUIDs.
+    #[cfg_attr(feature = "schema", schemars(with = "Vec<String>"))]
     pub read_tables: Vec<TableId>,
     /// Whether the read hit [`ROW_CAP`], making aggregates partial.
     pub truncated: bool,
@@ -533,11 +535,13 @@ pub struct OutcomeColumn {
     pub name: String,
     /// The column behind the values, when there is one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     pub column: Option<Uuid>,
     /// What the values are.
     pub kind: OutcomeKind,
     /// For `row_id`, the table whose rows its cells are.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     pub table: Option<TableId>,
 }
 

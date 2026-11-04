@@ -98,12 +98,14 @@ pub fn project(
             value,
         });
     }
-    Ok(Some(ProjectionState::Complete(IndexDocument {
+    let mut document = IndexDocument {
         record_key,
         profile,
         partition,
         exact_facts,
         integer_facts: vec![],
         sort_facts: vec![],
-    })))
+    };
+    document.canonicalize();
+    Ok(Some(ProjectionState::Complete(document)))
 }

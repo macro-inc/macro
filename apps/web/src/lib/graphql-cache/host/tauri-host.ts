@@ -92,6 +92,7 @@ type NativeHydrationResult = HydrationResult & { revisionAdvanced?: boolean };
 const PEOPLE_CONTEXT_COMMAND = 'graphql_cache_people_context';
 const PEOPLE_SEARCH_COMMAND = 'graphql_cache_people_search';
 const PEOPLE_REFERENCES_COMMAND = 'graphql_cache_people_resolve_references';
+const PEOPLE_SQL_COMMAND = 'graphql_cache_people_read_sql';
 const PEOPLE_UPDATE_COMMAND = 'graphql_cache_people_update';
 
 export interface TauriHostOptions {
@@ -183,6 +184,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   // Binaries before incremental watches still serve full reads.
   let watchUnavailable = false;
   let peopleUnavailable = false;
+  let peopleSqlUnavailable = false;
   let referencesUnavailable = false;
   let scopedHydrationSupported: Promise<boolean> | undefined;
   // Native binaries before the calendar range index answer `unsupported`, so
@@ -438,6 +440,20 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     clientId,
     liveQueries: true,
     people: createPeopleCache({
+      async readSql(args, traceparent) {
+        await ready;
+        if (peopleSqlUnavailable) return { kind: 'unsupported' };
+        try {
+          return await request(PEOPLE_SQL_COMMAND, {
+            request: args,
+            traceparent,
+          });
+        } catch (error) {
+          if (!isMissingCommand(error, PEOPLE_SQL_COMMAND)) throw error;
+          peopleSqlUnavailable = true;
+          return { kind: 'unsupported' };
+        }
+      },
       async resolveReferences(args, traceparent) {
         await ready;
         if (referencesUnavailable) return { kind: 'unsupported' };

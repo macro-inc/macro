@@ -159,6 +159,7 @@ it.each(['completion', 'context'] as const)(
         return () => {};
       },
       people: {
+        readSql: async () => ({ kind: 'unsupported' }),
         context: async () =>
           ready ? { kind: 'ready', epoch: GENERATION } : { kind: 'missing' },
         resolveReferences: async () => ({ kind: 'unsupported' }),
@@ -230,6 +231,7 @@ it('does not refetch after a readiness probe completes past disposal', async () 
     ...createNoopCacheHost(),
     disabled: false,
     people: {
+      readSql: async () => ({ kind: 'unsupported' }),
       context: async () => {
         entered.resolve();
         await ready.promise;

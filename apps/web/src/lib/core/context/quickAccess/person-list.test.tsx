@@ -50,6 +50,9 @@ it('replaces ranked windows, forwards queries, excludes inboxes and retains no q
       data: { user: { id: viewer } },
     }),
     people: {
+      readSql: vi
+        .fn<PeopleCache['readSql']>()
+        .mockResolvedValue({ kind: 'unsupported' }),
       resolveReferences: vi.fn<PeopleCache['resolveReferences']>(),
       search,
       context: vi.fn<PeopleCache['context']>(),

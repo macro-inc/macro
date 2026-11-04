@@ -339,9 +339,17 @@ and first-name ambiguity. The bound viewer and generation are checked without
 binding an unowned cache; foreign-viewer keys are ignored before private-name
 matching. Inbox exclusions additionally require ready context. Callers still
 check hydration completeness before assuming uniqueness; cached absence is not
-an authoritative server omission. Coordinator protocol 15 and a dedicated native
+an authoritative server omission. Coordinator protocol 16 and a dedicated native
 command carry the generated contract. Missing reference support is independently
 unsupported, and captured reads become unsupported after host retirement.
+
+`CacheHost.people.readSql` exposes parameterized local SQL over a disposable profile
+in the existing predicate index. Only viewer-scoped normalized contacts supply facts;
+public profiles and context stubs do not. Counts, grouping, DISTINCT and ordering
+run in Turso before the 500-row/64-column/512-KiB result window is materialized.
+The host checks account/generation under its engine lock. Callers still require a
+complete backfill checkpoint; unsupported/incomplete reads never fetch a directory
+or execute SQL on a server. Browser query composition is still being cut over.
 
 ## Browser OPFS writes
 

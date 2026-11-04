@@ -27,6 +27,8 @@ pub enum PeopleSqlError {
     Unsupported(&'static str),
 }
 
+/// Maximum UTF-8 statement bytes accepted by the shared SQL grammar.
+pub const MAX_PEOPLE_SQL_TEXT_BYTES: usize = MAX_STATEMENT_LENGTH;
 /// Maximum materialized result window, independent of directory size.
 pub const MAX_PEOPLE_SQL_ROWS: usize = 500;
 /// Maximum select-list width, including repeated columns.

@@ -137,6 +137,7 @@ describe('createRetirableCacheHost', () => {
       matches: [{ complete: true, people: [] }],
     };
     const transport = {
+      readSql: vi.fn().mockResolvedValue({ kind: 'unsupported' }),
       resolveReferences: vi.fn().mockResolvedValue(resolved),
       context: vi.fn().mockResolvedValue({ kind: 'ready', epoch }),
       update: vi.fn().mockResolvedValue('1'),
@@ -193,6 +194,7 @@ describe('createRetirableCacheHost', () => {
     const host = createRetirableCacheHost({
       ...createNoopCacheHost(),
       people: createPeopleCache({
+        readSql: vi.fn().mockRejectedValue(error),
         resolveReferences: vi.fn().mockRejectedValue(error),
         context: vi.fn().mockRejectedValue(error),
         search: vi.fn().mockRejectedValue(error),

@@ -516,6 +516,7 @@ export function operationCategoryForRequest(
       'search',
       'people-search',
       'people-references',
+      'people-sql',
       'people-context',
       'entity-filter',
       'calendar-range',

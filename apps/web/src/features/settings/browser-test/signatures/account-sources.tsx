@@ -40,6 +40,7 @@ export function AccountSources() {
     currentStorageGeneration: async () =>
       '00000000-0000-4000-8000-000000000001',
     people: createPeopleCache({
+      readSql: async () => ({ kind: 'unsupported' }),
       resolveReferences: async () => ({ kind: 'unsupported' }),
       context: async (scope) =>
         owner === scope.identity ? state : { kind: 'missing' },

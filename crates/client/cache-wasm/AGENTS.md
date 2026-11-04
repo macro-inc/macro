@@ -11,7 +11,7 @@ wasm-bindgen shell exposing `cache-core` + `cache-turso` + `turso-opfs` as a
 
 - `src/shell.rs`: the `CacheEngine` wasm-bindgen class — translates JS calls
   into `cache-core` engine calls behind an async mutex.
-- `src/shell/people.rs`: scoped person-context state/update/search and bounded label-reference reads under the same engine lock; `shell/test/people.rs` exercises the real browser ABI and stale-generation rejection.
+- `src/shell/people.rs`: scoped person-context state/update/search, bounded label-reference reads and local Turso SQL (`peopleReadSql`) under the same engine lock; `shell/test/people.rs` exercises the real browser ABI and stale-generation rejection.
 - `src/query_telemetry.rs`: slow-query callback exposed to JS.
 - `apps/web/src/lib/graphql-cache/`: the JS/TS worker that owns this engine.
 
@@ -59,7 +59,7 @@ wasm-bindgen shell exposing `cache-core` + `cache-turso` + `turso-opfs` as a
 - Email send persistence and cancellation belong to the frontend email journal, not the normalized cache or its mutation queue.
 
 - Search uses the shared core's bounded ranker over streamed Turso matches; browser parity coverage lives in `cache-turso/tests/web.rs`.
-- Hydration forwards an optional shared-core `HydrationScope`; stale pages reject before persistence without changing identity. `shell/test/hydration_scope.rs` covers the real browser ABI. Coordinator protocol 15 also carries bounded reference requests without dropping hydration/person-policy scopes. Missing reference support is independent of existing person search support.
+- Hydration forwards an optional shared-core `HydrationScope`; stale pages reject before persistence without changing identity. `shell/test/hydration_scope.rs` covers the real browser ABI. Coordinator protocol 16 also carries local people SQL without dropping hydration/person-policy scopes. Missing SQL or reference support is independent of existing person search support; neither may fall back to directory enumeration or remote query execution.
 - The engine is guarded by an async mutex so overlapping JS calls serialize
   instead of causing reentrancy — don't bypass it with a second entry point.
 - Compiles to an empty shell off-wasm specifically so plain `cargo test` across

@@ -9,7 +9,7 @@ uses the wasm build directly).
 
 ## Start here
 
-- `openapi` feature: optional derives for the HTTP result contract; keep native transport dependencies out of the engine.
+- `openapi` feature: optional derives for the HTTP result contract; keep native transport dependencies out of the engine. The `schema` feature also generates local SQL result contracts; built-in table/column IDs are UUID-shaped constants, not RFC-versioned UUIDs, so validate them as strings.
 - `src/lib.rs`: the pipeline diagram and the public re-exports — read this
   before any other file.
 - `run::describe_read` / `describe_select` return compiler-bound table and column metadata without fetching rows; `run_select` executes a resolved read without a write sink. Browser routing must use this metadata, never SQL-text matching. The wasm shell exposes `describeRead` / `describeView`.

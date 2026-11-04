@@ -50,6 +50,10 @@ pub async fn read<S: Storage>(
     scope: &HydrationScope,
     sql: &str,
 ) -> Outcome {
+    #[cfg(not(target_arch = "wasm32"))]
+    let started = std::time::Instant::now();
+    #[cfg(not(target_arch = "wasm32"))]
+    eprintln!("local SQL start: {sql}");
     let PeopleSqlResult::Result { outcome } = engine
         .read_people_sql(&PeopleSqlRequest {
             scope: scope.clone(),
@@ -60,6 +64,12 @@ pub async fn read<S: Storage>(
     else {
         panic!("expected local SQL result");
     };
+    #[cfg(not(target_arch = "wasm32"))]
+    eprintln!(
+        "local SQL result: {:?}, rows={}",
+        started.elapsed(),
+        outcome.rows.len()
+    );
     outcome
 }
 

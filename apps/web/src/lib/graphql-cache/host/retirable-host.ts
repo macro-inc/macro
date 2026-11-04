@@ -31,6 +31,10 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
   // retirement. A retired publisher must never acknowledge a dropped write.
   const people: PeopleCache | undefined = inner.people
     ? {
+        async readSql(request) {
+          if (!current.people) return { kind: 'unsupported' };
+          return current.people.readSql(request);
+        },
         async resolveReferences(request) {
           if (!current.people) return { kind: 'unsupported' };
           return current.people.resolveReferences(request);

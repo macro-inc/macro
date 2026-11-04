@@ -30,6 +30,19 @@ fn native_person_policy_preserves_scope_and_publication() {
             serde_json::json!({"user":{"id":viewer,"contacts":{"nodes":[{"__typename":"GraphqlContact","id":contact,"userId":user,"name":"Private label","email":"person@example.com"}],"nextCursor":null}}}),
             Some(viewer.into()), Some(scope.clone()),
         ).await.unwrap();
+        let sql = cache_core::people::sql::PeopleSqlRequest {
+            scope: scope.clone(),
+            input: cache_core::people::sql::PeopleSqlInput::Statement {
+                sql: "SELECT name, row_position FROM macro.people".into(),
+            },
+        };
+        let answer =
+            serde_json::to_value(handle.people_read_sql(sql.clone()).await.unwrap()).unwrap();
+        assert_eq!(answer["kind"], "result");
+        assert_eq!(
+            answer["outcome"]["rows"],
+            serde_json::json!([[{"type":"text","value":"Private label"},null]])
+        );
         let references = PeopleReferenceRequest {
             scope: scope.clone(),
             labels: vec!["Private".into(), "Private label".into(), "missing".into()],
@@ -103,6 +116,10 @@ fn native_person_policy_preserves_scope_and_publication() {
             format!("GraphqlContact:{contact}")
         );
         handle.clear().await.unwrap();
+        assert_eq!(
+            handle.people_read_sql(sql).await.err().as_deref(),
+            Some("cache hydration scope changed")
+        );
         assert_eq!(
             handle
                 .people_resolve_references(references)

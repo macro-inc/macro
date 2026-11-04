@@ -10,6 +10,14 @@ export const MAX_PEOPLE_BATCH = 500;
 
 export const MAX_PEOPLE_QUERY_BYTES = 512;
 
+export const MAX_PEOPLE_SQL_ROWS = 500;
+
+export const MAX_PEOPLE_SQL_COLUMNS = 64;
+
+export const MAX_PEOPLE_SQL_BYTES = 524288;
+
+export const MAX_PEOPLE_SQL_INPUT_BYTES = 262144;
+
 export const PeopleContextStateSchema = z.union([
   z.object({ kind: z.literal('missing') }),
   z.object({ epoch: z.string().uuid(), kind: z.literal('building') }),
@@ -180,3 +188,99 @@ export const PeopleSearchResultSchema = z.union([
 ]);
 
 export type PeopleSearchResult = z.infer<typeof PeopleSearchResultSchema>;
+
+export const PeopleSqlRequestSchema = z
+  .object({
+    input: z.union([
+      z.object({ kind: z.literal('statement'), sql: z.string() }).strict(),
+      z
+        .object({
+          ids: z.array(z.string()).max(500),
+          kind: z.literal('identities'),
+        })
+        .strict(),
+    ]),
+    scope: z
+      .object({ identity: z.string(), storageGeneration: z.string().uuid() })
+      .strict(),
+  })
+  .strict();
+
+export type PeopleSqlRequest = z.infer<typeof PeopleSqlRequestSchema>;
+
+export const PeopleSqlResultSchema = z.union([
+  z.object({ kind: z.literal('unsupported') }),
+  z.object({ kind: z.literal('incomplete') }),
+  z.object({ kind: z.literal('resultTooLarge') }),
+  z.object({
+    kind: z.literal('result'),
+    outcome: z.object({
+      alteredColumn: z
+        .union([
+          z.object({
+            column: z.string().uuid(),
+            table: z.string().uuid(),
+            to: z.string(),
+          }),
+          z.null(),
+        ])
+        .optional(),
+      changesApplied: z.number().int().gte(0),
+      columns: z.array(
+        z.object({
+          column: z.union([z.string(), z.null()]).optional(),
+          kind: z.union([
+            z.literal('text'),
+            z.literal('number'),
+            z.literal('boolean'),
+            z.literal('date'),
+            z.literal('dateRange'),
+            z.literal('select'),
+            z.literal('entity'),
+            z.literal('row'),
+          ]),
+          name: z.string(),
+          table: z.union([z.string(), z.null()]).optional(),
+        })
+      ),
+      insertedRowIds: z.array(z.string().uuid()),
+      readTables: z.array(z.string()),
+      rowIds: z.array(z.string().uuid()),
+      rows: z.array(
+        z.array(
+          z.union([
+            z.union([
+              z.object({ type: z.literal('text'), value: z.string() }),
+              z.object({ type: z.literal('number'), value: z.number() }),
+              z.object({ type: z.literal('bool'), value: z.boolean() }),
+              z.object({
+                type: z.literal('date'),
+                value: z.string().datetime({ offset: true }),
+              }),
+              z.object({
+                type: z.literal('dateRange'),
+                value: z.object({
+                  end: z.string().datetime({ offset: true }),
+                  start: z.string().datetime({ offset: true }),
+                }),
+              }),
+              z.object({
+                type: z.literal('options'),
+                value: z.array(z.string().uuid()),
+              }),
+              z.object({
+                type: z.literal('entities'),
+                value: z.array(z.string()),
+              }),
+              z.object({ type: z.literal('row'), value: z.string().uuid() }),
+            ]),
+            z.null(),
+          ])
+        )
+      ),
+      truncated: z.boolean(),
+    }),
+  }),
+]);
+
+export type PeopleSqlResult = z.infer<typeof PeopleSqlResultSchema>;

@@ -26,7 +26,10 @@ export type {
   PeopleScope,
   PeopleSearch,
   PeopleSearchResult,
+  PeopleSqlRequest,
+  PeopleSqlResult,
 } from './generated';
+export { isPeopleSqlRequest, parsePeopleSqlResult } from './sql-protocol';
 
 export const PEOPLE_UNSUPPORTED = 'Contact search context is unsupported';
 const UTF8 = new TextEncoder();

@@ -6,6 +6,9 @@ use cache_core::people::sql::{
 };
 use cache_core::value::CacheValue;
 
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod test;
+
 const VERSION_KEY: &str = "people_sql_projection_version";
 fn statement(plan: &PeopleSqlPlan) -> String {
     let mut sql = "WITH __people AS (SELECT d.id AS __document, NULL AS row_position".to_owned();
@@ -18,7 +21,7 @@ fn statement(plan: &PeopleSqlPlan) -> String {
         } else {
             sql.push_str(&format!(", f{index}.value AS {attribute}"));
         }
-        joins.push_str(&format!(" JOIN exact_facts AS f{index} ON f{index}.document_id = d.id AND f{index}.attribute = '{attribute}'"));
+        joins.push_str(&format!(" CROSS JOIN exact_facts AS f{index} INDEXED BY sqlite_autoindex_exact_facts_1 ON f{index}.document_id = d.id AND f{index}.attribute = '{attribute}'"));
     }
     sql.push_str(" FROM index_documents AS d");
     sql.push_str(&joins);
@@ -142,9 +145,24 @@ pub(super) fn write(
         return Ok(());
     }
     if let Some(viewer) = viewer {
+        let mut projected = std::collections::BTreeMap::new();
         for entry in entries {
             if let Some(record) = &entry.contact {
-                project(connection, &viewer, &entry.key, record)?;
+                let key = entry.key.clone().into_entity()?;
+                let state = projection::project(&viewer, &key, record).map_err(|_| invariant())?;
+                projected.insert(
+                    PredicateRecordKey::new(key.as_ref()).map_err(|_| invariant())?,
+                    state,
+                );
+            }
+        }
+        let keys = projected.keys().cloned().collect::<Vec<_>>();
+        let previous = load_projection_states(connection, &keys)?;
+        // Ranking-context patches do not change SQL facts. Avoid rewriting six
+        // facts per contact while background publication holds the engine lock.
+        for ((key, next), previous) in projected.into_iter().zip(previous) {
+            if next != previous {
+                write_projection_state(connection, &key, next.as_ref())?;
             }
         }
     }

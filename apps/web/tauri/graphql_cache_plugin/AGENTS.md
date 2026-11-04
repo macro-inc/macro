@@ -9,7 +9,7 @@ one locked engine across webviews; cache policy belongs in `cache-core`.
 
 - `src/commands.rs`: IPC parsing and change notifications.
 - `src/engine.rs`: engine locking, schema installation, and shared-core calls.
-- `src/engine/people.rs`: scoped context, bounded person search and label-reference reads; distinct `graphql_cache_people_*` commands make native capability explicit. Missing `graphql_cache_people_resolve_references` does not disable existing context/search commands. JS emits only hydration hints after committed context writes; it never substitutes an unscoped write. Person search replies include `nextCursor`; rebuild native code when updating that contract, and do not interpret an older missing cursor as exhaustion.
+- `src/engine/people.rs`: scoped context, bounded person search, label-reference reads and local SQL (`graphql_cache_people_read_sql`); distinct `graphql_cache_people_*` commands make native capability explicit. Missing SQL or reference commands do not disable existing context/search commands. SQL returns only final storage-side results and never emits hydration hints or invokes a server query. JS emits only hydration hints after committed context writes; it never substitutes an unscoped write. Person search replies include `nextCursor`; rebuild native code when updating that contract, and do not interpret an older missing cursor as exhaustion.
 - `src/engine/soup.rs`: composition of Soup-specific projection adapters.
 - `src/engine/test.rs` and `src/engine/test/`: native persistence and IPC contracts.
 

@@ -25,6 +25,18 @@ async fn people_abi_preserves_scope_publication_and_winning_identity() {
         js(serde_json::json!({"user":{"id":viewer,"contacts":{"nodes":[{"__typename":"GraphqlContact","id":contact,"userId":user,"name":"Private label","email":"person@example.com"}],"nextCursor":null}}})),
         Some(viewer.into()), js(scope.clone()),
     )).await;
+    let sql = serde_json::json!({"scope":scope,"input":{"kind":"statement","sql":"SELECT name, row_position FROM macro.people"}});
+    let answer: serde_json::Value =
+        from_js(resolved(engine.people_read_sql(js(sql.clone()))).await);
+    assert_eq!(answer["kind"], "result");
+    assert_eq!(
+        answer["outcome"]["rows"],
+        serde_json::json!([[{"type":"text","value":"Private label"},null]])
+    );
+    assert_eq!(
+        answer["outcome"]["readTables"],
+        serde_json::json!(["6d616372-6f00-0000-0000-000070656f70"])
+    );
     let references = serde_json::json!({"scope":scope,"labels":["Private", "Private label", "missing"],"matching":"preferFullName","excludeSecondaryInboxes":false});
     let matched: serde_json::Value =
         from_js(resolved(engine.people_resolve_references(js(references.clone()))).await);
@@ -51,6 +63,11 @@ async fn people_abi_preserves_scope_publication_and_winning_identity() {
         format!("GraphqlContact:{contact}")
     );
     resolved(engine.clear()).await;
+    assert!(
+        JsFuture::from(engine.people_read_sql(js(sql)))
+            .await
+            .is_err()
+    );
     assert!(
         JsFuture::from(engine.people_update(js(commit)))
             .await

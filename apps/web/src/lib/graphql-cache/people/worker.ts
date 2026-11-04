@@ -20,6 +20,10 @@ export function executePeopleRequest(
       span.setAttr('upstream.traceparent', request.traceparent);
     try {
       return await match(request)
+        .with({ kind: 'people-sql' }, async ({ request }) => {
+          if (!engine.peopleReadSql) return { kind: 'unsupported' };
+          return await engine.peopleReadSql(request);
+        })
         .with({ kind: 'people-references' }, async ({ request }) => {
           if (!engine.peopleResolveReferences) return { kind: 'unsupported' };
           return await engine.peopleResolveReferences(request);

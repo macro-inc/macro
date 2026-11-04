@@ -13,6 +13,7 @@ import type {
   PeopleReferenceRequest,
   PeopleScope,
   PeopleSearch,
+  PeopleSqlRequest,
 } from './people/generated';
 
 /**
@@ -98,6 +99,7 @@ export function isStaleHydrationScopeError(error: unknown): boolean {
 }
 
 export type PeopleRequest =
+  | { kind: 'people-sql'; request: PeopleSqlRequest; traceparent?: string }
   | {
       kind: 'people-references';
       request: PeopleReferenceRequest;

@@ -151,7 +151,8 @@ transitions. Source data is scoped and immediately collected, not a people pool.
 Execute browser `macro.people` SQL in the existing local Turso cache, including
 offline; authorized synchronization supplies records, not a server query endpoint.
 Use actual wasm compiler metadata to distinguish the built-in relation from ordinary
-tables named people. Filter, aggregate and limit before materializing results; never
+tables named people. `CacheHost.people.readSql` exposes the scoped local capability;
+missing native support must not disable other person methods or trigger remote SQL. Filter, aggregate and limit before materializing results; never
 enumerate contacts or fall back to remote SQL execution. Validate result metadata and
 fence account/session, storage generation, input transitions and disposal. Require
 complete synchronization before treating local results as directory-wide evidence;
