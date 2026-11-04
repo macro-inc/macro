@@ -229,6 +229,7 @@ deny = [
     "document_storage_service",  # GraphQL telemetry span and log tests only (dev-dependency)
     "documents",                 # Dev logging only
     "email",                     # Dev logging only
+    "email_api_client",          # Outlook transport span tests only
     "email_db_client",           # Purge phase span tests only
     "forms",                     # Anonymous-response span and log leak tests only (dev-dependency)
     "genai_telemetry",           # GenAI span tests

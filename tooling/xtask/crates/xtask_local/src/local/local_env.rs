@@ -799,7 +799,6 @@ impl BootStubEnv {
         // email_service's GCP pubsub queue (gmail watch notifications) and
         // its own CloudFront signer for attachment presigned URLs.
         env.insert("GMAIL_GCP_QUEUE".into(), "gmail-gcp-queue-local".into());
-        env.insert("APOLLO_API_KEY".into(), "local".into());
         env.insert(
             "EMAIL_SERVICE_CLOUDFRONT_DISTRIBUTION_URL".into(),
             "http://localhost:8100".into(),

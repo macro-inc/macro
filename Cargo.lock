@@ -5409,7 +5409,6 @@ dependencies = [
  "models_properties",
  "properties",
  "rdkafka",
- "reqwest 0.13.4",
  "rootcause",
  "schemars 1.2.1",
  "serde",
@@ -5423,7 +5422,6 @@ dependencies = [
  "unfurl",
  "utoipa",
  "uuid",
- "wiremock",
  "workspace-hack",
 ]
 

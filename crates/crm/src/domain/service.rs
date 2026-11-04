@@ -671,7 +671,7 @@ where
 
 /// Pending directory entries one [`CrmServiceImpl::enrich_pending_domains`]
 /// pass claims. Passes run on a fixed interval, so this caps the resolver
-/// (Apollo) call rate.
+/// call rate.
 const ENRICHMENT_BATCH_SIZE: i64 = 10;
 
 /// Enrichment attempts after which a pending directory entry is left alone.
